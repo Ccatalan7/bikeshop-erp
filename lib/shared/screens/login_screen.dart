@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
+import '../themes/vinabike_theme_roles.dart';
 import '../utils/auth_input_validation.dart';
 import '../widgets/app_button.dart';
 import '../widgets/forgot_password_dialog.dart';
@@ -337,8 +339,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
+    // **El login declara el contraste de la barra de estado (2026-08-03).**
+    // Al dejar de ocultarse la barra en iOS, esta pantalla quedaba con
+    // contenido CLARO sobre un fondo claro —la hora casi ilegible—, porque
+    // vive fuera del `WorkspaceShellScope`, que es quien declara el estilo
+    // dentro de la app. Se usa el mismo owner canónico
+    // (`vinabikeSystemOverlayStyleFor`), que deriva el brillo del color que la
+    // pantalla realmente pinta arriba; no se elige un estilo a mano.
+    final background = Theme.of(context).scaffoldBackgroundColor;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: vinabikeSystemOverlayStyleFor(background),
+      child: Scaffold(
+        body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(32.0),
           child: ConstrainedBox(
@@ -537,8 +549,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 32),
-                ],
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
           ),

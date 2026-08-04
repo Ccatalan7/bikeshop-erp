@@ -242,18 +242,25 @@ void main() {
 
   test('generic editor routes universal controls through canonical widgets',
       () {
-    final panelSource =
-        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final panelSource = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
     final rendererSource =
         File('lib/modules/website/widgets/website_block_renderer.dart')
             .readAsStringSync();
+    final mediaBindingSource = File(
+      'lib/modules/website/widgets/website_responsive_media_binding.dart',
+    ).readAsStringSync();
 
-    expect(panelSource, contains('field.hasFocalPointControl'));
+    // Focal capability is owned by the canonical responsive media binding,
+    // while the schema editor only mounts that binding. Keeping this assertion
+    // on the panel would require the panel to re-interpret the same capability.
+    expect(panelSource, contains('WebsiteResponsiveMediaBinding.root('));
+    expect(mediaBindingSource, contains('field.hasFocalPointControl'));
     expect(panelSource, contains('field.hasAltTextControl'));
     expect(panelSource, contains('field.resolvedFormattingKey'));
     expect(panelSource, contains('TextFormattingToolbar('));
     expect(panelSource, contains("'titleFormatting'"));
-    expect(panelSource, contains("'mobileFocalPointX'"));
+    expect(mediaBindingSource, contains('field.mobileFocalPointXKey'));
     expect(rendererSource, contains('_resolveFocalAlignment('));
     expect(rendererSource, contains('_resolveTextFormatting('));
     expect(
@@ -268,12 +275,38 @@ void main() {
         File('lib/modules/website/widgets/add_block_dialog.dart')
             .readAsStringSync();
 
-    expect(addDialogSource, contains('WebsiteBlockRegistry.all()'));
-    expect(addDialogSource, contains('definition.type.name'));
-    final panelSource =
-        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
-    expect(panelSource,
-        contains('for (final definition in WebsiteBlockRegistry.all())'));
+    // The guard's invariant is unchanged — the picker may not hand-maintain a
+    // list — but it now has ONE owner instead of a copy per surface. Asserting
+    // the registry call inside each surface would force those copies back.
+    final catalogSource =
+        File('lib/modules/website/models/website_block_catalog.dart')
+            .readAsStringSync();
+    expect(catalogSource, contains('WebsiteBlockRegistry.all()'));
+    expect(catalogSource, contains('type: type'));
+
+    expect(addDialogSource, contains('WebsiteBlockCatalog.entries('));
+    expect(addDialogSource, contains('entry.type.name'));
+    expect(
+      addDialogSource,
+      isNot(contains('WebsiteBlockRegistry.all()')),
+      reason: 'el diálogo consume el catálogo, no re-deriva el registro',
+    );
+
+    final panelSource = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
+    expect(panelSource, contains('WebsiteBlockCatalog.filtered('));
+    expect(
+      panelSource,
+      isNot(contains('for (final definition in WebsiteBlockRegistry.all())')),
+      reason: 'la pestaña Insertar consume el catálogo, no el registro directo',
+    );
+
+    // And the sheet is the third consumer of the same owner.
+    final catalogSheetSource =
+        File('lib/modules/website/widgets/website_block_catalog_sheet.dart')
+            .readAsStringSync();
+    expect(catalogSheetSource, contains('WebsiteBlockCatalog.filtered('));
+    expect(catalogSheetSource, isNot(contains('WebsiteBlockRegistry')));
     for (final legacyPath in [
       'lib/modules/website/widgets/inline_edit_toolbar.dart',
       'lib/public_store/widgets/editable_website.dart',
@@ -327,8 +360,8 @@ void main() {
   });
 
   test('editor button links use the canonical link editor', () {
-    final panelSource =
-        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final panelSource = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
     final inlineActionSource =
         File('lib/modules/website/widgets/website_inline_action_editor.dart')
             .readAsStringSync();
@@ -370,26 +403,32 @@ void main() {
   });
 
   test('theme font picker and renderers use the central font registry', () {
-    final panelSource =
-        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final panelSource = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
     final themeBuilderSource =
         File('lib/modules/website/theme/website_theme_builder.dart')
+            .readAsStringSync();
+    final resolvedThemeSource =
+        File('lib/modules/website/theme/website_resolved_theme.dart')
             .readAsStringSync();
     final blockRendererSource =
         File('lib/modules/website/widgets/website_block_renderer.dart')
             .readAsStringSync();
 
     expect(panelSource, contains('WebsiteFontRegistry.supportedFamilies'));
-    expect(panelSource, contains('WebsiteFontRegistry.resolveHeadingFont'));
-    expect(panelSource, contains('WebsiteFontRegistry.resolveBodyFont'));
+    expect(panelSource, contains('WebsiteResolvedTheme.resolve('));
+    expect(panelSource, contains('_headingFont = resolved.headingFont'));
+    expect(panelSource, contains('_bodyFont = resolved.bodyFont'));
     expect(
-      themeBuilderSource,
+      resolvedThemeSource,
       contains('WebsiteFontRegistry.resolveHeadingFont'),
     );
     expect(
-      themeBuilderSource,
+      resolvedThemeSource,
       contains('WebsiteFontRegistry.resolveBodyFont'),
     );
+    expect(themeBuilderSource, isNot(contains('WebsiteFontRegistry')),
+        reason: 'The ThemeData projector consumes the already resolved owner.');
     expect(
       blockRendererSource,
       contains('WebsiteFontRegistry.resolveOptionalHeadingFont'),
@@ -429,8 +468,8 @@ void main() {
   });
 
   test('backup restore reloads editor state instead of invoking save', () {
-    final panelSource =
-        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final panelSource = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
     final shellSource =
         File('lib/public_store/widgets/persistent_editor_shell.dart')
             .readAsStringSync();

@@ -385,6 +385,53 @@ class _GenericBlockControls extends StatelessWidget {
     );
   }
 
+  /// `F-06` · the density the editor chrome publishes for this host.
+  WebsiteAuthoringHostClass _hostClass(BuildContext context) =>
+      WebsiteEditorChromeScope.maybeOf(context)?.hostClass ??
+      WebsiteAuthoringHostClass.desktop;
+
+  /// The one binding every non-media schema field uses.
+  ///
+  /// `sharedCompanionKeys` carries the duplicates the product still reads for
+  /// the same value; the binding writes them on a shared write only.
+  WebsiteResponsiveScalarBinding<T> _scalarBinding<T>({
+    required BuildContext context,
+    required WebsiteBlockFieldSchema field,
+    required WebsiteResponsiveFieldOwner owner,
+    required WebsiteResponsiveDecoder<T> decode,
+    T? fallback,
+    List<String> sharedCompanionKeys = const <String>[],
+  }) {
+    return WebsiteResponsiveScalarBinding<T>.forField(
+      provider: provider,
+      blockId: blockId,
+      field: field,
+      owner: owner,
+      decode: decode,
+      fallback: fallback,
+      hostClass: _hostClass(context),
+      sharedCompanionKeys: sharedCompanionKeys,
+    );
+  }
+
+  /// Mounts a control under the canonical inheritance shell.
+  ///
+  /// The shell owns label, help, status badge, scope sentence and the
+  /// customize/reset action, so the control inside is given an EMPTY label and
+  /// no help line: two labels for one field is the duplication this protocol
+  /// exists to remove.
+  Widget _responsiveField<T>({
+    required WebsiteResponsiveScalarBinding<T> binding,
+    required Widget child,
+  }) {
+    return ResponsiveFieldShell<T>(
+      state: binding.state,
+      onCustomize: binding.customize,
+      onReset: binding.reset,
+      child: child,
+    );
+  }
+
   Widget _buildTextFormattingInspector({
     required WebsiteBlockFieldSchema field,
     required Map<String, dynamic> currentData,
@@ -424,12 +471,20 @@ class _GenericBlockControls extends StatelessWidget {
     required void Function(String key, dynamic value) setRelatedValue,
     required void Function(Map<String, dynamic> values) setRelatedValues,
     WebsiteBlockFieldSchema? actionLabelField,
+    // Which document node this field belongs to. Explicit and required in
+    // spirit: a nested field that fell back to the root used to write the
+    // block instead of the item.
+    WebsiteResponsiveFieldOwner owner = const WebsiteResponsiveRootField(),
   }) {
     dynamic raw = currentData[field.key];
     for (final alias in field.migrationAliases) {
       raw ??= currentData[alias];
     }
     final label = field.label;
+    // A property that may diverge per viewport is read through the resolver and
+    // written through the binding. Reading `currentData` for it would show the
+    // shared value while the canvas renders the override.
+    final isResponsive = field.allowsViewportOverride;
 
     switch (field.type) {
       case WebsiteBlockFieldType.text:
@@ -574,6 +629,25 @@ class _GenericBlockControls extends StatelessWidget {
           onChanged: (v) => setValue(v),
         );
       case WebsiteBlockFieldType.color:
+        if (isResponsive) {
+          final binding = _scalarBinding<String>(
+            context: context,
+            field: field,
+            owner: owner,
+            decode: WebsiteResponsiveScalarBinding.decodeColor,
+          );
+          final resolvedColor =
+              binding.value ?? (field.defaultValue?.toString() ?? '');
+          return _responsiveField<String>(
+            binding: binding,
+            child: WebsiteColorPickerField(
+              label: '',
+              value: resolvedColor.isEmpty ? '#000000' : resolvedColor,
+              allowAlpha: true,
+              onChanged: binding.write,
+            ),
+          );
+        }
         final current =
             raw?.toString() ?? (field.defaultValue?.toString() ?? '');
         return WebsiteColorPickerField(
@@ -584,56 +658,52 @@ class _GenericBlockControls extends StatelessWidget {
           onChanged: (value) => setValue(value),
         );
       case WebsiteBlockFieldType.image:
-        final currentUrl = raw?.toString();
-        final focalX =
-            (currentData[field.focalPointXKey] as num?)?.toDouble() ?? 0.5;
-        final focalY =
-            (currentData[field.focalPointYKey] as num?)?.toDouble() ?? 0.5;
-        final mobileFocalX =
-            (currentData[field.mobileFocalPointXKey] as num?)?.toDouble() ??
-                focalX;
-        final mobileFocalY =
-            (currentData[field.mobileFocalPointYKey] as num?)?.toDouble() ??
-                focalY;
+        // ONE media owner. The picker plus a desktop focal editor plus a
+        // separate "Foco móvil" used to be mounted at the same time, each with
+        // its own inheritance rule; the framing now belongs to the viewport
+        // being previewed and opens only on demand.
+        // The owner decides which factory, and therefore which node is
+        // written. A nested image used to reach `root` here and write the
+        // block's own `imageUrl` while the user was editing an item.
+        final binding = switch (owner) {
+          WebsiteResponsiveRootField() => WebsiteResponsiveMediaBinding.root(
+              provider: provider,
+              blockId: blockId,
+              field: field,
+              hostClass: _hostClass(context),
+            ),
+          WebsiteResponsiveRepeaterField(
+            collectionKeys: final collectionKeys,
+            itemIndex: final itemIndex,
+            identityKey: final identityKey,
+            identityValue: final identityValue,
+          ) =>
+            WebsiteResponsiveMediaBinding.repeaterItem(
+              provider: provider,
+              blockId: blockId,
+              field: field,
+              collectionKeys: collectionKeys,
+              itemIndex: itemIndex,
+              identityKey: identityKey,
+              identityValue: identityValue,
+              hostClass: _hostClass(context),
+            ),
+        };
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: const TextStyle(color: Colors.white70, fontSize: 12)),
-            const SizedBox(height: 8),
-            _ImagePicker(
-              currentUrl: currentUrl,
-              onChanged: (url) => setValue(url),
+            ResponsiveMediaField(
+              state: binding.urlState,
+              focalState: binding.focalState,
+              onChanged: binding.writeUrl,
+              onFocalChanged: binding.writeFocal,
+              onCustomize: binding.customizeUrl,
+              onReset: binding.resetUrl,
+              onFocalCustomize: binding.customizeFocal,
+              onFocalReset: binding.resetFocal,
             ),
-            if (field.hasFocalPointControl &&
-                currentUrl?.isNotEmpty == true) ...[
-              const SizedBox(height: 12),
-              const _SectionHeader('Foco de imagen'),
-              const SizedBox(height: 8),
-              FocalPointPicker(
-                imageUrl: currentUrl,
-                focalX: focalX,
-                focalY: focalY,
-                onChanged: (x, y) {
-                  setRelatedValue(field.focalPointXKey, x);
-                  setRelatedValue(field.focalPointYKey, y);
-                },
-              ),
-              if (field.isCoverMedia) ...[
-                const SizedBox(height: 12),
-                const _SectionHeader('Foco móvil'),
-                const SizedBox(height: 8),
-                FocalPointPicker(
-                  imageUrl: currentUrl,
-                  focalX: mobileFocalX,
-                  focalY: mobileFocalY,
-                  onChanged: (x, y) {
-                    setRelatedValue(field.mobileFocalPointXKey, x);
-                    setRelatedValue(field.mobileFocalPointYKey, y);
-                  },
-                ),
-              ],
-            ],
+            // Alt text stays shared-only and appears exactly once: one subject,
+            // one description.
             if (field.hasAltTextControl) ...[
               const SizedBox(height: 12),
               _EditorTextField(
@@ -671,12 +741,68 @@ class _GenericBlockControls extends StatelessWidget {
         final min = field.min?.toDouble();
         final max = field.max?.toDouble();
         final step = field.step?.toDouble();
-        final currentNum = (raw is num)
-            ? raw.toDouble()
-            : double.tryParse(raw?.toString() ?? '') ??
+        final numberBinding = isResponsive
+            ? _scalarBinding<num>(
+                context: context,
+                field: field,
+                owner: owner,
+                decode: WebsiteResponsiveScalarBinding.decodeNumber,
+              )
+            : null;
+        final currentNum = numberBinding != null
+            ? (numberBinding.value?.toDouble() ??
                 (field.defaultValue is num
                     ? (field.defaultValue as num).toDouble()
-                    : 0.0);
+                    : 0.0))
+            : (raw is num)
+                ? raw.toDouble()
+                : double.tryParse(raw?.toString() ?? '') ??
+                    (field.defaultValue is num
+                        ? (field.defaultValue as num).toDouble()
+                        : 0.0);
+        void writeNumber(num value) {
+          if (numberBinding != null) {
+            numberBinding.write(value);
+            return;
+          }
+          setValue(value);
+        }
+
+        if (numberBinding != null) {
+          if (min != null && max != null) {
+            int? divisions;
+            if (step != null && step > 0) {
+              final rawDiv = ((max - min) / step).round();
+              if (rawDiv > 0 && rawDiv <= 200) divisions = rawDiv;
+            }
+            final clamped = currentNum.clamp(min, max);
+            return _responsiveField<num>(
+              binding: numberBinding,
+              child: _EditorSlider(
+                label: '',
+                value: clamped,
+                min: min,
+                max: max,
+                divisions: divisions,
+                valueLabel: clamped.toStringAsFixed(0),
+                onChanged: writeNumber,
+              ),
+            );
+          }
+          return _responsiveField<num>(
+            binding: numberBinding,
+            child: _EditorTextField(
+              label: '',
+              value: numberBinding.value?.toString() ??
+                  (field.defaultValue?.toString() ?? ''),
+              hint: '0',
+              onChanged: (v) {
+                final parsed = num.tryParse(v);
+                if (parsed != null) writeNumber(parsed);
+              },
+            ),
+          );
+        }
 
         if (min != null && max != null) {
           int? divisions;
@@ -718,6 +844,22 @@ class _GenericBlockControls extends StatelessWidget {
           ],
         );
       case WebsiteBlockFieldType.toggle:
+        if (isResponsive) {
+          final binding = _scalarBinding<bool>(
+            context: context,
+            field: field,
+            owner: owner,
+            decode: WebsiteResponsiveScalarBinding.decodeBoolean,
+          );
+          return _responsiveField<bool>(
+            binding: binding,
+            child: _EditorToggle(
+              label: '',
+              value: binding.value ?? (field.defaultValue == true),
+              onChanged: binding.write,
+            ),
+          );
+        }
         final currentBool =
             (raw is bool) ? raw : (raw?.toString().toLowerCase() == 'true');
         return Column(
@@ -735,6 +877,25 @@ class _GenericBlockControls extends StatelessWidget {
         final options = field.options
             .map((opt) => (opt.value, opt.label))
             .toList(growable: false);
+        if (isResponsive) {
+          final binding = _scalarBinding<String>(
+            context: context,
+            field: field,
+            owner: owner,
+            decode: WebsiteResponsiveScalarBinding.decodeOption,
+          );
+          return _responsiveField<String>(
+            binding: binding,
+            child: _EditorDropdown(
+              label: '',
+              value: binding.value ??
+                  (field.defaultValue?.toString() ??
+                      (options.isNotEmpty ? options.first.$1 : '')),
+              options: options,
+              onChanged: binding.write,
+            ),
+          );
+        }
         final current = raw?.toString() ??
             (field.defaultValue?.toString() ??
                 (options.isNotEmpty ? options.first.$1 : ''));
@@ -751,6 +912,24 @@ class _GenericBlockControls extends StatelessWidget {
           ],
         );
       case WebsiteBlockFieldType.chips:
+        if (isResponsive) {
+          final binding = _scalarBinding<List<String>>(
+            context: context,
+            field: field,
+            owner: owner,
+            decode: WebsiteResponsiveScalarBinding.decodeStringList,
+          );
+          return _responsiveField<List<String>>(
+            binding: binding,
+            child: _EditorTextField(
+              label: '',
+              value: (binding.value ?? const <String>[]).join(', '),
+              hint: 'separado por comas',
+              onChanged: (v) => binding.write(_toStringList(v)),
+              maxLines: 2,
+            ),
+          );
+        }
         final chips = _toStringList(raw);
         final display = chips.join(', ');
         return Column(
@@ -855,6 +1034,17 @@ class _GenericBlockControls extends StatelessWidget {
                         onItemChanged(nextItem);
                       },
                       actionLabelField: actionLabelField,
+                      // The item is the owner of everything below it. Identity
+                      // is used when the item already has one; otherwise the
+                      // explicit index addresses it, and nothing is invented.
+                      owner: WebsiteResponsiveRepeaterField.forItem(
+                        collectionKeys: <String>[
+                          field.key,
+                          ...field.migrationAliases,
+                        ],
+                        itemIndex: index,
+                        item: itemData,
+                      ),
                     ),
                   );
                 }

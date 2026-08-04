@@ -5,12 +5,12 @@ import 'package:provider/provider.dart';
 
 import '../../modules/website/models/website_block_public_visibility.dart';
 import '../../modules/website/models/website_editor_capability.dart';
-import '../../modules/website/models/website_font_registry.dart';
 import '../../modules/website/models/website_page_composition.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/models/website_seo_settings_aliases.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/theme/website_resolved_theme.dart';
 import '../../modules/website/widgets/website_editor_document_binding.dart';
 import '../../shared/services/tenant_service.dart';
 import '../../shared/utils/seo_helper.dart';
@@ -62,17 +62,6 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   WebsiteService? _observedWebsiteService;
   bool _cmsRevalidationPending = false;
   bool _cmsRevalidationScheduled = false;
-
-  // Theme settings
-  Color _primaryColor = const Color(0xFF2E7D32);
-  Color _accentColor = const Color(0xFFFF6F00);
-  Color _textColor = Colors.black87;
-  String _headingFont = 'Oswald';
-  String _bodyFont = 'Barlow';
-  double _headingSize = 48.0;
-  double _bodySize = 16.0;
-  double _sectionSpacing = 64.0;
-  double _containerPadding = 24.0;
 
   // Kept alive: the storefront shell keeps ONE stable content anchor
   // across Public|Preview|Edit, so the old element-activation conflicts
@@ -225,34 +214,6 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
 
   String _currentBreakpoint(BuildContext context) {
     return websitePublicBreakpointForWidth(MediaQuery.sizeOf(context).width);
-  }
-
-  Color? _tryParseColor(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-
-    int? intValue;
-    var cleaned = trimmed.toLowerCase();
-
-    if (cleaned.startsWith('color(')) {
-      final inside = cleaned.replaceAll(RegExp(r'color\(|\)'), '');
-      intValue = int.tryParse(inside);
-    }
-
-    intValue ??= int.tryParse(cleaned);
-    if (intValue == null && cleaned.startsWith('0x')) {
-      intValue = int.tryParse(cleaned);
-    }
-
-    if (intValue == null) {
-      cleaned = cleaned.replaceAll('#', '');
-      intValue = int.tryParse(cleaned, radix: 16);
-      if (intValue != null && cleaned.length <= 6) {
-        intValue = 0xFF000000 | intValue;
-      }
-    }
-
-    return intValue != null ? Color(intValue) : null;
   }
 
   Future<void> _loadPageData() async {
@@ -456,10 +417,6 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       final didContentChange = _snapshotFingerprint != snapshot.fingerprint ||
           _pageId != snapshot.page.id ||
           _blocksAudience != adoptedAudience;
-      _loadThemeFromSettings(
-        websiteService,
-        editProvider: editProvider,
-      );
       if (didContentChange || _isLoading || _error != null) {
         setState(() {
           _page = snapshot.page;
@@ -467,10 +424,9 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
           _snapshotFingerprint = snapshot.fingerprint;
           _blocks = nextBlocks;
           _blocksAudience = adoptedAudience;
-          _blocksLease =
-              adoptedAudience == WebsitePageContentAudience.editor
-                  ? requestLease
-                  : null;
+          _blocksLease = adoptedAudience == WebsitePageContentAudience.editor
+              ? requestLease
+              : null;
           _isLoading = false;
           _error = null;
         });
@@ -650,67 +606,6 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     });
   }
 
-  void _loadThemeFromSettings(
-    WebsiteService service, {
-    WebsiteEditModeProvider? editProvider,
-  }) {
-    String eff(String key, String fallback) {
-      if (editProvider != null && editProvider.isInEditorContext) {
-        return editProvider.getEffectiveThemeSetting(key, fallback);
-      }
-      return fallback;
-    }
-
-    final primary =
-        eff('theme_primary_color', service.getSetting('theme_primary_color'));
-    final accent =
-        eff('theme_accent_color', service.getSetting('theme_accent_color'));
-    final text =
-        eff('theme_text_color', service.getSetting('theme_text_color'));
-    final headingFont =
-        eff('theme_heading_font', service.getSetting('theme_heading_font'));
-    final bodyFont =
-        eff('theme_body_font', service.getSetting('theme_body_font'));
-    final headingSize =
-        eff('theme_heading_size', service.getSetting('theme_heading_size'));
-    final bodySize =
-        eff('theme_body_size', service.getSetting('theme_body_size'));
-    final sectionSpacing = eff(
-        'theme_section_spacing', service.getSetting('theme_section_spacing'));
-    final containerPadding = eff('theme_container_padding',
-        service.getSetting('theme_container_padding'));
-
-    final parsedPrimary = _tryParseColor(primary);
-    final parsedAccent = _tryParseColor(accent);
-    final parsedText = _tryParseColor(text);
-
-    if (parsedPrimary != null) _primaryColor = parsedPrimary;
-    if (parsedAccent != null) _accentColor = parsedAccent;
-    if (parsedText != null) _textColor = parsedText;
-    if (headingFont.isNotEmpty) {
-      _headingFont = WebsiteFontRegistry.resolveHeadingFont(headingFont);
-    }
-    if (bodyFont.isNotEmpty) {
-      _bodyFont = WebsiteFontRegistry.resolveBodyFont(bodyFont);
-    }
-
-    final parsedHeadingSize = double.tryParse(headingSize);
-    final parsedBodySize = double.tryParse(bodySize);
-    final parsedSectionSpacing = double.tryParse(sectionSpacing);
-    final parsedContainerPadding = double.tryParse(containerPadding);
-
-    if (parsedHeadingSize != null) {
-      _headingSize = parsedHeadingSize.clamp(24.0, 72.0);
-    }
-    if (parsedBodySize != null) _bodySize = parsedBodySize.clamp(12.0, 24.0);
-    _sectionSpacing = WebsitePageComposition.resolveSectionSpacing(
-      parsedSectionSpacing,
-    );
-    if (parsedContainerPadding != null) {
-      _containerPadding = parsedContainerPadding.clamp(16.0, 64.0);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
@@ -718,6 +613,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     // Watch edit mode provider for changes
     final editProvider = context.watch<WebsiteEditModeProvider>();
     final isInEditorContext = editProvider.isInEditorContext;
+    final resolvedTheme = WebsiteResolvedTheme.of(context);
 
     // Audience guard: editor-provenance content must never render a single
     // frame beyond its authorizing lease. On revoke/suspend the snapshot is
@@ -759,9 +655,10 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       _bindEditorDocument(editProvider);
     }
 
-    // Watch website service so theme changes can apply without full reload
-    final websiteService = context.watch<WebsiteService>();
-    _loadThemeFromSettings(websiteService, editProvider: editProvider);
+    // Watch website service so page data changes can apply without full reload.
+    // Theme values are resolved once by PublicStoreLayout and published via
+    // WebsiteResolvedTheme.
+    context.watch<WebsiteService>();
 
     // Get tenant ID for product loading (try public store provider or use cached)
     String? tenantId;
@@ -788,7 +685,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     }
 
     if (_error != null) {
-      return _buildErrorView();
+      return _buildErrorView(resolvedTheme);
     }
     if (isInEditorContext && !matchesPage) {
       return const FullPageLoading();
@@ -803,19 +700,19 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       blocks: blocksToRender,
       mode: mode,
       breakpoint: _currentBreakpoint(context),
-      sectionSpacing: _sectionSpacing,
+      sectionSpacing: resolvedTheme.sectionSpacing,
     );
 
     return PageComposition(
       composition: composition,
-      primaryColor: _primaryColor,
-      accentColor: _accentColor,
-      textColor: _textColor,
-      containerPadding: _containerPadding,
-      headingFont: _headingFont,
-      bodyFont: _bodyFont,
-      headingSize: _headingSize,
-      bodySize: _bodySize,
+      primaryColor: resolvedTheme.primaryColor,
+      accentColor: resolvedTheme.accentColor,
+      textColor: resolvedTheme.textColor,
+      containerPadding: resolvedTheme.containerPadding,
+      headingFont: resolvedTheme.headingFont,
+      bodyFont: resolvedTheme.bodyFont,
+      headingSize: resolvedTheme.headingSize,
+      bodySize: resolvedTheme.bodySize,
       tenantId: tenantId,
       onNavigate: (route) => PublicStoreLayout.navigateToHref(context, route),
       isNavigationEligible: (href) =>
@@ -826,13 +723,17 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
           editProvider.updateBlockData(blockId, 'spacingAfter', spacing),
       emptyState: _buildEmptyState(
         mode == WebsitePageCompositionMode.edit,
+        resolvedTheme,
       ),
     );
   }
 
-  Widget _buildEmptyState(bool isEditMode) {
+  Widget _buildEmptyState(
+    bool isEditMode,
+    WebsiteResolvedTheme resolvedTheme,
+  ) {
     return Container(
-      padding: EdgeInsets.all(_containerPadding),
+      padding: EdgeInsets.all(resolvedTheme.containerPadding),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -840,7 +741,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
             Icon(
               Icons.web_stories_outlined,
               size: 64,
-              color: _textColor.withValues(alpha: 0.3),
+              color: resolvedTheme.textColor.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
@@ -848,9 +749,9 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
                   ? 'Esta página no tiene bloques'
                   : 'Esta página está en construcción',
               style: TextStyle(
-                fontSize: _headingSize * 0.5,
-                fontFamily: _headingFont,
-                color: _textColor.withValues(alpha: 0.6),
+                fontSize: resolvedTheme.headingSize * 0.5,
+                fontFamily: resolvedTheme.headingFont,
+                color: resolvedTheme.textColor.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 8),
@@ -859,9 +760,9 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
                   ? 'Usa el panel de la derecha para agregar bloques'
                   : 'Vuelve pronto para ver el contenido',
               style: TextStyle(
-                fontSize: _bodySize,
-                fontFamily: _bodyFont,
-                color: _textColor.withValues(alpha: 0.4),
+                fontSize: resolvedTheme.bodySize,
+                fontFamily: resolvedTheme.bodyFont,
+                color: resolvedTheme.textColor.withValues(alpha: 0.4),
               ),
             ),
           ],
@@ -870,7 +771,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     );
   }
 
-  Widget _buildErrorView() {
+  Widget _buildErrorView(WebsiteResolvedTheme resolvedTheme) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -888,7 +789,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: _textColor,
+                color: resolvedTheme.textColor,
               ),
             ),
             const SizedBox(height: 8),
@@ -897,7 +798,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
-                color: _textColor.withValues(alpha: 0.6),
+                color: resolvedTheme.textColor.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 24),

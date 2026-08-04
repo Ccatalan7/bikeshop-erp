@@ -5,16 +5,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../modules/website/models/website_font_registry.dart';
 import '../../modules/website/models/website_page_composition.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/models/website_editor_capability.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/theme/website_resolved_theme.dart';
 import '../../modules/website/widgets/website_editor_document_binding.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../../shared/services/tenant_service.dart';
-import '../theme/public_store_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
 import '../services/public_store_scroll_state.dart';
@@ -377,11 +376,9 @@ class _PublicHomePageState extends State<PublicHomePage>
           currentLease.fingerprint != leaseFingerprint ||
           currentLease.authorityEpoch != leaseEpoch ||
           generation != editProvider.editorEntryLeaseGeneration ||
-          identityRevision !=
-              editProvider.editorEntryLeaseIdentityRevision ||
+          identityRevision != editProvider.editorEntryLeaseIdentityRevision ||
           serviceEpoch != websiteService.identityEpoch ||
-          requestIdentity !=
-              websiteService.editorCapabilityRequestIdentity) {
+          requestIdentity != websiteService.editorCapabilityRequestIdentity) {
         return; // The identity context moved: never adopt this result.
       }
       if (snapshot == null) return; // No HOME page row yet.
@@ -533,7 +530,6 @@ class _PublicHomePageState extends State<PublicHomePage>
     });
   }
 
-
   String _currentBreakpoint(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     if (width < 640) {
@@ -586,74 +582,16 @@ class _PublicHomePageState extends State<PublicHomePage>
       _ensureTenantId();
     }
 
-    String eff(String key, String fallback) {
-      if (editProvider.isInEditorContext) {
-        return editProvider.getEffectiveThemeSetting(key, fallback);
-      }
-      return fallback;
-    }
-
-    final primarySetting = websiteService.getSetting('theme_primary_color', '');
-    final accentSetting = websiteService.getSetting('theme_accent_color', '');
-    final headingFontSetting = websiteService.getSetting(
-      'theme_heading_font',
-      '',
-    );
-    final bodyFontSetting = websiteService.getSetting('theme_body_font', '');
-    final headingSizeSetting = websiteService.getSetting(
-      'theme_heading_size',
-      '',
-    );
-    final bodySizeSetting = websiteService.getSetting('theme_body_size', '');
-    final textColorSetting = websiteService.getSetting('theme_text_color', '');
-    final sectionSpacingSetting = websiteService.getSetting(
-      'theme_section_spacing',
-      '',
-    );
-    final containerPaddingSetting = websiteService.getSetting(
-      'theme_container_padding',
-      '',
-    );
-
-    final primaryColor = _resolveColor(
-      eff('theme_primary_color', primarySetting),
-      PublicStoreTheme.primaryBlue,
-    );
-    final accentColor = _resolveColor(
-      eff('theme_accent_color', accentSetting),
-      PublicStoreTheme.accentGreen,
-    );
-    final headingFont = WebsiteFontRegistry.resolveHeadingFont(
-      eff('theme_heading_font', headingFontSetting),
-    );
-    final bodyFont = WebsiteFontRegistry.resolveBodyFont(
-      eff('theme_body_font', bodyFontSetting),
-    );
-    final headingSize = _resolveDouble(
-      eff('theme_heading_size', headingSizeSetting),
-      48.0,
-      min: 24.0,
-      max: 72.0,
-    );
-    final bodySize = _resolveDouble(
-      eff('theme_body_size', bodySizeSetting),
-      16.0,
-      min: 12.0,
-      max: 24.0,
-    );
-    final textColor = _resolveColor(
-      eff('theme_text_color', textColorSetting),
-      PublicStoreTheme.textPrimary,
-    );
-    final sectionSpacing = WebsitePageComposition.resolveSectionSpacing(
-      eff('theme_section_spacing', sectionSpacingSetting),
-    );
-    final containerPadding = _resolveDouble(
-      eff('theme_container_padding', containerPaddingSetting),
-      24.0,
-      min: 16.0,
-      max: 64.0,
-    );
+    final resolvedTheme = WebsiteResolvedTheme.of(context);
+    final primaryColor = resolvedTheme.primaryColor;
+    final accentColor = resolvedTheme.accentColor;
+    final headingFont = resolvedTheme.headingFont;
+    final bodyFont = resolvedTheme.bodyFont;
+    final headingSize = resolvedTheme.headingSize;
+    final bodySize = resolvedTheme.bodySize;
+    final textColor = resolvedTheme.textColor;
+    final sectionSpacing = resolvedTheme.sectionSpacing;
+    final containerPadding = resolvedTheme.containerPadding;
 
     // Debug: verify live theme preview values are applied
     if (editProvider.isInEditorContext &&
@@ -843,63 +781,5 @@ class _PublicHomePageState extends State<PublicHomePage>
         ),
       ),
     );
-  }
-
-  Color _resolveColor(String raw, Color fallback) {
-    final value = raw.trim();
-    if (value.isEmpty) return fallback;
-
-    Color? parsed;
-    int? intValue;
-
-    String cleaned = value.toLowerCase();
-    if (cleaned.startsWith('color(')) {
-      final inside = cleaned.replaceAll(RegExp(r'color\(|\)'), '');
-      intValue = int.tryParse(inside);
-    }
-
-    intValue ??= int.tryParse(cleaned);
-    if (intValue == null && cleaned.startsWith('0x')) {
-      intValue = int.tryParse(cleaned);
-    }
-    if (intValue == null) {
-      cleaned = cleaned.replaceAll('#', '');
-      intValue = int.tryParse(cleaned, radix: 16);
-      if (intValue != null && cleaned.length <= 6) {
-        intValue = 0xFF000000 | intValue;
-      }
-    }
-
-    if (intValue != null) {
-      parsed = Color(intValue);
-    }
-
-    return parsed ?? fallback;
-  }
-
-  double _resolveDouble(
-    String raw,
-    double fallback, {
-    double? min,
-    double? max,
-  }) {
-    final value = raw.trim();
-    if (value.isEmpty) {
-      return fallback;
-    }
-
-    final parsed = double.tryParse(value);
-    if (parsed == null) {
-      return fallback;
-    }
-
-    var result = parsed;
-    if (min != null && result < min) {
-      result = min;
-    }
-    if (max != null && result > max) {
-      result = max;
-    }
-    return result;
   }
 }

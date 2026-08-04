@@ -4,6 +4,14 @@ import '../../../shared/widgets/safe_layout_builder.dart';
 /// A widget that displays an image with a draggable focal point crosshair.
 /// Used to set where the image should be centered when cropped on mobile.
 class FocalPointPicker extends StatefulWidget {
+  /// The title the picker has always printed above itself.
+  ///
+  /// It names the phone because that is the only viewport the legacy callers
+  /// ever reframed. A host that already states which viewport it is editing —
+  /// and whether the value is inherited or its own — passes `label: null` and
+  /// owns that sentence itself, instead of contradicting it here.
+  static const String defaultLabel = 'Punto focal (móvil)';
+
   /// URL of the image to display
   final String? imageUrl;
 
@@ -13,11 +21,37 @@ class FocalPointPicker extends StatefulWidget {
   /// Current Y focal point (0.0 = top, 0.5 = center, 1.0 = bottom)
   final double focalY;
 
-  /// Called when the focal point changes
+  /// Called when the focal point CHANGES for the host: it is the persistence
+  /// callback.
+  ///
+  /// With [continuousUpdates] it fires on every pointer event, as it always
+  /// has. Without it, it fires once per gesture — at the end — and once per
+  /// discrete `Centrar`.
   final void Function(double x, double y) onChanged;
 
   /// Height of the picker widget
   final double height;
+
+  /// Header title, or null for a host that owns the label itself.
+  final String? label;
+
+  /// Whether [onChanged] fires on every pointer move.
+  ///
+  /// True is the historical behaviour and stays the default, so no existing
+  /// caller changes. False makes a drag ONE change for the host: the crosshair
+  /// still follows the pointer locally — identical feedback — but the value is
+  /// published when the gesture ends, and a cancelled gesture publishes
+  /// nothing at all.
+  final bool continuousUpdates;
+
+  /// Live position during a drag, for a host that wants feedback without
+  /// persisting. Never called when [continuousUpdates] is true, because there
+  /// [onChanged] already reports every move.
+  final void Function(double x, double y)? onPreview;
+
+  /// A gesture that ended without publishing, so the host can drop whatever
+  /// preview it was showing. Only reachable when [continuousUpdates] is false.
+  final VoidCallback? onCancel;
 
   const FocalPointPicker({
     super.key,
@@ -26,6 +60,10 @@ class FocalPointPicker extends StatefulWidget {
     this.focalY = 0.5,
     required this.onChanged,
     this.height = 150,
+    this.label = defaultLabel,
+    this.continuousUpdates = true,
+    this.onPreview,
+    this.onCancel,
   });
 
   @override
@@ -53,29 +91,68 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
     }
   }
 
+  /// Moves the crosshair, and reports it the way this host asked to be told.
+  void _moveTo(double x, double y) {
+    setState(() {
+      _localX = x;
+      _localY = y;
+    });
+    if (widget.continuousUpdates) {
+      // Values are passed directly rather than read back from state, which is
+      // applied asynchronously.
+      widget.onChanged(x, y);
+      return;
+    }
+    widget.onPreview?.call(x, y);
+  }
+
+  void _endGesture({required bool cancelled}) {
+    if (!_isDragging) return;
+    _isDragging = false;
+    if (widget.continuousUpdates) return;
+    if (cancelled) {
+      setState(() {
+        _localX = widget.focalX;
+        _localY = widget.focalY;
+      });
+      widget.onCancel?.call();
+      return;
+    }
+    widget.onChanged(_localX, _localY);
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasImage = widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
+    final label = widget.label;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Label
-        Row(
-          children: [
-            Icon(Icons.crop_free, size: 16, color: Colors.grey.shade400),
-            const SizedBox(width: 6),
-            Text(
-              'Punto focal (móvil)',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade400,
-                fontWeight: FontWeight.w500,
+        // Label. The text flexes so a narrow host — the picker also opens
+        // inside a repeater's indented section, where it gets about 250 px —
+        // ellipsizes instead of overflowing. Same icon, gap and typography.
+        if (label != null) ...[
+          Row(
+            children: [
+              Icon(Icons.crop_free, size: 16, color: Colors.grey.shade400),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade400,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
 
         // Image with focal point crosshair
         Container(
@@ -92,41 +169,24 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
                     return Listener(
                       onPointerDown: (event) {
                         _isDragging = true;
-                        // Calculate new values directly
-                        final newX =
-                            (event.localPosition.dx / constraints.maxWidth)
-                                .clamp(0.0, 1.0);
-                        final newY =
-                            (event.localPosition.dy / constraints.maxHeight)
-                                .clamp(0.0, 1.0);
-                        setState(() {
-                          _localX = newX;
-                          _localY = newY;
-                        });
-                        // Pass calculated values directly (not from state which is async)
-                        widget.onChanged(newX, newY);
+                        _moveTo(
+                          (event.localPosition.dx / constraints.maxWidth)
+                              .clamp(0.0, 1.0),
+                          (event.localPosition.dy / constraints.maxHeight)
+                              .clamp(0.0, 1.0),
+                        );
                       },
                       onPointerMove: (event) {
-                        if (_isDragging) {
-                          final newX =
-                              (event.localPosition.dx / constraints.maxWidth)
-                                  .clamp(0.0, 1.0);
-                          final newY =
-                              (event.localPosition.dy / constraints.maxHeight)
-                                  .clamp(0.0, 1.0);
-                          setState(() {
-                            _localX = newX;
-                            _localY = newY;
-                          });
-                          widget.onChanged(newX, newY);
-                        }
+                        if (!_isDragging) return;
+                        _moveTo(
+                          (event.localPosition.dx / constraints.maxWidth)
+                              .clamp(0.0, 1.0),
+                          (event.localPosition.dy / constraints.maxHeight)
+                              .clamp(0.0, 1.0),
+                        );
                       },
-                      onPointerUp: (event) {
-                        _isDragging = false;
-                      },
-                      onPointerCancel: (event) {
-                        _isDragging = false;
-                      },
+                      onPointerUp: (event) => _endGesture(cancelled: false),
+                      onPointerCancel: (event) => _endGesture(cancelled: true),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
@@ -227,14 +287,26 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
 
         const SizedBox(height: 6),
 
-        // Coordinates display
-        Row(
+        // Coordinates display. `Wrap` with `spaceBetween` reproduces exactly
+        // what the old `Spacer` did while both halves fit on one line — chips
+        // left, `Centrar` right — and lets the button drop to a second line
+        // when the host is too narrow, instead of overflowing. Same chips,
+        // same button, same 8 gap.
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            _buildCoordChip('X', (_localX * 100).round()),
-            const SizedBox(width: 8),
-            _buildCoordChip('Y', (_localY * 100).round()),
-            const Spacer(),
-            // Reset button
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildCoordChip('X', (_localX * 100).round()),
+                const SizedBox(width: 8),
+                _buildCoordChip('Y', (_localY * 100).round()),
+              ],
+            ),
+            // Reset button. Discrete in both modes: one press is one change.
             TextButton.icon(
               onPressed: () {
                 setState(() {

@@ -8,6 +8,8 @@ import 'package:vinabike_erp/modules/website/models/website_editor_capability.da
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
+import 'package:vinabike_erp/modules/website/theme/website_resolved_theme.dart';
+import 'package:vinabike_erp/modules/website/theme/website_theme_builder.dart';
 import 'package:vinabike_erp/public_store/pages/static_policy_page.dart';
 import 'package:vinabike_erp/public_store/providers/public_store_tenant_provider.dart';
 import 'package:vinabike_erp/shared/models/tenant.dart';
@@ -66,6 +68,70 @@ void main() {
       );
     },
   );
+
+  testWidgets('Policy shell and unavailable state consume one resolved theme',
+      (tester) async {
+    final snapshot = _policySnapshot(isPublished: true);
+    final resolved = WebsiteResolvedTheme.fallback.copyWith(
+      backgroundColor: const Color(0xFF142119),
+      textColor: const Color(0xFFF2F3EF),
+    );
+    final projected = WebsiteThemeBuilder.build(
+      base: ThemeData.light(useMaterial3: true),
+      resolved: resolved,
+    );
+
+    await _pumpPolicy(
+      tester,
+      mode: _PolicyMode.public,
+      publicResult: PageSnapshotLoadResult.origin(snapshot),
+      editorSnapshot: snapshot,
+      resolvedTheme: resolved,
+    );
+
+    expect(
+      tester
+          .widget<Container>(
+            find.byKey(const ValueKey<String>('static-policy-public-view')),
+          )
+          .color,
+      resolved.backgroundColor,
+    );
+    expect(
+      tester.widget<Text>(find.text('Condiciones verificadas')).style?.color,
+      resolved.textColor,
+    );
+    expect(
+      tester
+          .widget<Text>(find.text('Resumen configurado por el editor.'))
+          .style
+          ?.color,
+      projected.colorScheme.onSurfaceVariant,
+    );
+
+    await _pumpPolicy(
+      tester,
+      mode: _PolicyMode.public,
+      publicResult: const PageSnapshotLoadResult.originMissing(),
+      editorSnapshot: null,
+      resolvedTheme: resolved,
+    );
+
+    expect(
+      tester
+          .widget<Container>(
+            find.byKey(
+              const ValueKey<String>('static-policy-unavailable-view'),
+            ),
+          )
+          .color,
+      resolved.backgroundColor,
+    );
+    expect(
+      tester.widget<Text>(find.text(_fallbackTitle)).style?.color,
+      resolved.textColor,
+    );
+  });
 
   testWidgets(
     'stale public snapshot stays visible with warning and remains noindex',
@@ -469,6 +535,7 @@ Future<WebsiteEditModeProvider> _pumpPolicy(
   required CachedPageSnapshot? editorSnapshot,
   CachedPageSnapshot? peekSnapshot,
   Object? editorLoadError,
+  WebsiteResolvedTheme? resolvedTheme,
   bool settle = true,
 }) async {
   await tester.binding.setSurfaceSize(const Size(1280, 2400));
@@ -562,7 +629,17 @@ Future<WebsiteEditModeProvider> _pumpPolicy(
   addTearDown(editMode.dispose);
   addTearDown(tenant.dispose);
 
-  await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+  await tester.pumpWidget(
+    MaterialApp.router(
+      theme: resolvedTheme == null
+          ? null
+          : WebsiteThemeBuilder.build(
+              base: ThemeData.light(useMaterial3: true),
+              resolved: resolvedTheme,
+            ),
+      routerConfig: router,
+    ),
+  );
   if (settle) {
     await tester.pumpAndSettle();
   } else {

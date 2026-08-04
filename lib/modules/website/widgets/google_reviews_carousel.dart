@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'text_formatting_toolbar.dart';
+
+/// One review that passed the block's own filters, with the rating already
+/// read once. Filter and stars therefore agree by construction.
+typedef _VisibleReview = ({Map<String, dynamic> data, int rating});
+
 class GoogleReviewsCarousel extends StatelessWidget {
   final Map<String, dynamic> data;
   final Color primaryColor;
@@ -23,17 +29,22 @@ class GoogleReviewsCarousel extends StatelessWidget {
     // 1. Parse Settings
     final title =
         (data['title'] ?? 'Lo que dicen nuestros clientes').toString();
+    final titleFormatting = _resolveFormatting(data['titleFormatting']);
     final backgroundColor = _parseColor(data['backgroundColor']);
     final isDark =
         backgroundColor != null && backgroundColor.computeLuminance() < 0.5;
     final textColor = isDark ? Colors.white : Colors.black87;
     final subTextColor = isDark ? Colors.white70 : Colors.black54;
 
-    // 2. Get Reviews (or Mocks)
-    final reviews = _getReviews();
+    // 2. Reviews: only what Google really returned, filtered by the block's
+    // own settings. An empty source stays empty — no sample people.
+    final reviews = _visibleReviews();
+    // The aggregate is business truth: an explicit value wins, and the
+    // computed fallback reads the COMPLETE real list, so narrowing the cards
+    // with `minRating`/`maxItems` cannot inflate the score.
     final displayedRating = _readDouble(data['rating']) ??
         _readDouble(data['google_rating']) ??
-        _calculateAverageRating(reviews);
+        _averageRating(_sourceReviews());
     final totalReviews = _readInt(data['totalReviews']) ??
         _readInt(data['user_ratings_total']) ??
         _readInt(data['reviewsTotal']);
@@ -52,159 +63,170 @@ class GoogleReviewsCarousel extends StatelessWidget {
               children: [
                 Text(
                   title.toUpperCase(),
-                  style: TextStyle(
-                    fontFamily: headingFont,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.5,
-                    color: textColor,
-                    height: 1.2,
+                  style: titleFormatting.applyTo(
+                    TextStyle(
+                      fontFamily: headingFont,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      color: textColor,
+                      height: 1.2,
+                    ),
                   ),
-                  textAlign: TextAlign.center,
+                  // Same alignment semantics as every other block: persisted
+                  // formatting wins, and `start` means "not set".
+                  textAlign: titleFormatting.textAlign == TextAlign.start
+                      ? TextAlign.center
+                      : titleFormatting.textAlign,
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      displayedRating.toStringAsFixed(1),
-                      style: TextStyle(
-                        fontFamily: bodyFont,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
+                // Without an aggregate there is nothing true to show: a 0,0
+                // with five empty stars would be a score the shop never got.
+                if (displayedRating != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        displayedRating.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontFamily: bodyFont,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Row(
-                      children: List.generate(5, (index) {
-                        return Icon(
-                          index < displayedRating.round()
-                              ? Icons.star
-                              : Icons.star_border,
-                          color: const Color(0xFFFBBC04),
-                          size: 20,
-                        );
-                      }),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      totalReviews == null
-                          ? 'en Google'
-                          : 'en Google ($totalReviews reseñas)',
-                      style: TextStyle(
-                        fontFamily: bodyFont,
-                        fontSize: 16,
-                        color: subTextColor,
+                      const SizedBox(width: 8),
+                      Row(
+                        children: List.generate(5, (index) {
+                          return Icon(
+                            index < displayedRating.round()
+                                ? Icons.star
+                                : Icons.star_border,
+                            color: const Color(0xFFFBBC04),
+                            size: 20,
+                          );
+                        }),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 8),
+                      Text(
+                        totalReviews == null
+                            ? 'en Google'
+                            : 'en Google ($totalReviews reseñas)',
+                        style: TextStyle(
+                          fontFamily: bodyFont,
+                          fontSize: 16,
+                          color: subTextColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 48),
 
-          // Scrollable List
-          SizedBox(
-            height: 280,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              scrollDirection: Axis.horizontal,
-              itemCount: reviews.length,
-              separatorBuilder: (c, i) => const SizedBox(width: 24),
-              itemBuilder: (context, index) {
-                final review = reviews[index];
-                return _ReviewCard(
-                  review: review,
-                  bodyFont: bodyFont,
-                );
-              },
+          // Scrollable List. The same geometry as always; with nothing real to
+          // show it simply does not mount.
+          if (reviews.isNotEmpty) ...[
+            const SizedBox(height: 48),
+            SizedBox(
+              height: 280,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                scrollDirection: Axis.horizontal,
+                itemCount: reviews.length,
+                separatorBuilder: (c, i) => const SizedBox(width: 24),
+                itemBuilder: (context, index) {
+                  final review = reviews[index];
+                  return _ReviewCard(
+                    review: review.data,
+                    rating: review.rating,
+                    bodyFont: bodyFont,
+                  );
+                },
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 
-  List<Map<String, dynamic>> _getReviews() {
-    // Check if we have real data (later phase)
-    final rawList = data['reviews'] as List?;
-    if (rawList != null && rawList.isNotEmpty) {
-      return List<Map<String, dynamic>>.from(rawList);
-    }
-
-    // Return Mocks
-    return [
-      {
-        'author_name': 'Carlos Rivera',
-        'rating': 5,
-        'relative_time': 'hace 2 semanas',
-        'text':
-            'Excelente servicio. Llevé mi bicicleta para un ajuste completo y quedó como nueva. Muy profesionales y rápidos.',
-        'photo_url': 'https://randomuser.me/api/portraits/men/32.jpg',
-      },
-      {
-        'author_name': 'Maria José Soto',
-        'rating': 5,
-        'relative_time': 'hace 1 mes',
-        'text':
-            'La mejor tienda de Viña. Tienen gran variedad de repuestos y la atención es de primera. 100% recomendados.',
-        'photo_url': 'https://randomuser.me/api/portraits/women/44.jpg',
-      },
-      {
-        'author_name': 'Felipe Andrés',
-        'rating': 5,
-        'relative_time': 'hace 3 semanas',
-        'text':
-            'Compré mi Trek aquí y me asesoraron en todo momento. El servicio post-venta también ha sido impecable.',
-        'photo_url': 'https://randomuser.me/api/portraits/men/85.jpg',
-      },
-      {
-        'author_name': 'Andrea Pvez',
-        'rating': 4,
-        'relative_time': 'hace 2 meses',
-        'text':
-            'Muy buen taller mecánico. Solucionaron un ruido que nadie más había podido arreglar.',
-        'photo_url': 'https://randomuser.me/api/portraits/women/68.jpg',
-      },
-    ];
+  /// Every review Google really returned, in the order it returned them.
+  ///
+  /// The source is never sorted, never mutated and never completed with
+  /// samples: an empty or absent list is an empty list.
+  List<Map<String, dynamic>> _sourceReviews() {
+    final rawList = data['reviews'];
+    if (rawList is! List) return const <Map<String, dynamic>>[];
+    return rawList
+        .whereType<Map>()
+        .map((review) => Map<String, dynamic>.from(review))
+        .toList(growable: false);
   }
 
-  /// Calculate average rating from reviews list
-  double _calculateAverageRating(List<Map<String, dynamic>> reviews) {
-    if (reviews.isEmpty) return 0.0;
+  /// The reviews this block actually shows.
+  ///
+  /// `minRating` and `maxItems` are the block's own business filters: keep the
+  /// reviews that reach the minimum score, in source order, up to the visible
+  /// limit. A review whose rating cannot be read is not shown, because nothing
+  /// proves it reaches the minimum the shop asked for.
+  List<_VisibleReview> _visibleReviews() {
+    final minRating = _clampedSetting(
+      data['minRating'],
+      fallback: 4,
+      min: 1,
+      max: 5,
+    );
+    final maxItems = _clampedSetting(
+      data['maxItems'],
+      fallback: 8,
+      min: 1,
+      max: 20,
+    );
 
-    double total = 0;
-    for (final review in reviews) {
-      final ratingValue = review['rating'] ?? review['starRating'];
-      if (ratingValue is int) {
-        total += ratingValue;
-      } else if (ratingValue is String) {
-        switch (ratingValue.toUpperCase()) {
-          case 'FIVE':
-            total += 5;
-            break;
-          case 'FOUR':
-            total += 4;
-            break;
-          case 'THREE':
-            total += 3;
-            break;
-          case 'TWO':
-            total += 2;
-            break;
-          case 'ONE':
-            total += 1;
-            break;
-          default:
-            total += 5; // Assume 5 if unknown
-        }
-      } else {
-        total += 5; // Default to 5 if no rating
-      }
+    final visible = <_VisibleReview>[];
+    for (final review in _sourceReviews()) {
+      final rating = _ratingOf(review);
+      if (rating == null || rating < minRating) continue;
+      visible.add((data: review, rating: rating));
+      if (visible.length == maxItems) break;
     }
-    return total / reviews.length;
+    return List<_VisibleReview>.unmodifiable(visible);
+  }
+
+  /// Average of the ratings that can be read, over the COMPLETE real list.
+  ///
+  /// Returns null when there is no readable rating: an average of nothing is
+  /// not zero stars.
+  double? _averageRating(List<Map<String, dynamic>> reviews) {
+    var total = 0;
+    var counted = 0;
+    for (final review in reviews) {
+      final rating = _ratingOf(review);
+      if (rating == null) continue;
+      total += rating;
+      counted++;
+    }
+    if (counted == 0) return null;
+    return total / counted;
+  }
+
+  static int _clampedSetting(
+    Object? raw, {
+    required int fallback,
+    required int min,
+    required int max,
+  }) {
+    final value = _readInt(raw) ?? fallback;
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+  }
+
+  static TextFormatting _resolveFormatting(Object? raw) {
+    if (raw is! Map) return const TextFormatting();
+    return TextFormatting.fromJson(Map<String, dynamic>.from(raw));
   }
 
   static Color? _parseColor(dynamic value) {
@@ -233,14 +255,49 @@ class GoogleReviewsCarousel extends StatelessWidget {
     if (value is String) return int.tryParse(value.trim());
     return null;
   }
+
+  /// The star rating of ONE review, or null when the payload has none we can
+  /// read.
+  ///
+  /// Both payload shapes are supported — the numeric `rating` and the Google
+  /// Business enum `starRating` (`FIVE`…`ONE`). An unrecognised value stays
+  /// unknown: promoting it to five stars would publish a score nobody gave.
+  static int? _ratingOf(Map<String, dynamic> review) =>
+      _parseRating(review['rating'] ?? review['starRating']);
+
+  static int? _parseRating(Object? raw) {
+    if (raw is num) return raw.round();
+    if (raw is String) {
+      switch (raw.trim().toUpperCase()) {
+        case 'FIVE':
+          return 5;
+        case 'FOUR':
+          return 4;
+        case 'THREE':
+          return 3;
+        case 'TWO':
+          return 2;
+        case 'ONE':
+          return 1;
+      }
+      final numeric = num.tryParse(raw.trim());
+      if (numeric != null) return numeric.round();
+    }
+    return null;
+  }
 }
 
 class _ReviewCard extends StatelessWidget {
   final Map<String, dynamic> review;
+
+  /// Already read by the filter, so the stars cannot disagree with the reason
+  /// this card is on screen.
+  final int rating;
   final String? bodyFont;
 
   const _ReviewCard({
     required this.review,
+    required this.rating,
     this.bodyFont,
   });
 
@@ -277,31 +334,6 @@ class _ReviewCard extends StatelessWidget {
         } catch (_) {
           relativeTime = '';
         }
-      }
-    }
-
-    // Extract rating (mock: int, Google API: string like "FIVE", "FOUR", etc)
-    int rating = 5;
-    final ratingValue = review['rating'] ?? review['starRating'];
-    if (ratingValue is int) {
-      rating = ratingValue;
-    } else if (ratingValue is String) {
-      switch (ratingValue.toUpperCase()) {
-        case 'FIVE':
-          rating = 5;
-          break;
-        case 'FOUR':
-          rating = 4;
-          break;
-        case 'THREE':
-          rating = 3;
-          break;
-        case 'TWO':
-          rating = 2;
-          break;
-        case 'ONE':
-          rating = 1;
-          break;
       }
     }
 
@@ -386,7 +418,7 @@ class _ReviewCard extends StatelessWidget {
                     fontFamily: bodyFont,
                     fontWeight: FontWeight.w900,
                     fontSize: 20,
-                    color: Color(0xFF4285F4), // Google Blue
+                    color: const Color(0xFF4285F4), // Google Blue
                   ),
                 ),
               ),

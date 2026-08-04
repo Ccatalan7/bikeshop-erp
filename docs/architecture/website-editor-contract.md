@@ -62,7 +62,7 @@ Every change must satisfy all four parts of the editor-owned contract:
 | Layered campaign inspector | `_CanvasBlockControls` |
 | Typed CTA destinations | `WebsiteLinkValueEditor`, `WebsiteDestination` |
 | CTA value and rendering | `WebsiteActionValue`, `WebsiteActionEditor`, `WebsiteActionButton` |
-| Global site theme | `WebsiteThemeBuilder` plus saved `website_settings` |
+| Global site theme | shell-owned `WebsiteResolvedTheme`, projected by `WebsiteThemeBuilder` from saved/staged `website_settings` |
 | Page/catalog/navigation management | Website Builder management workspaces registered in `canonical-ui-surfaces.md` |
 | Persistence orchestration | `WebsiteSaveCoordinator` through global `Guardar` |
 | Atomic page-block replacement | `replace_page_blocks` through `WebsiteService.replacePageBlocks(...)` |
@@ -654,6 +654,29 @@ defaults. A local override is valid only when the editor exposes a deliberate,
 visible opt-out such as `inheritTheme = false`; the override value must remain
 editable and round-trip like every other editor value.
 
+`PublicStoreLayout` is the one runtime resolver. It builds one immutable
+`WebsiteResolvedTheme` with `pending > saved > canonical fallback` precedence
+and publishes that exact value as a `ThemeExtension`; `WebsiteThemeBuilder`
+only projects the resolved value into `ThemeData`. Home, dynamic, contact,
+policy and commerce consumers read the extension and must not parse colors,
+fonts, sizes or defaults from `WebsiteService` again. Reopening `Tema` uses the
+same effective-setting reader, so an unsaved draft cannot disagree with the
+canvas. The resolved `theme_text_color` is a real visual token and therefore
+must equal `ThemeData.colorScheme.onSurface` and the base `TextTheme` color;
+background contrast may derive component roles but may not silently replace
+the owner's text color. `Tema > Colores > Color de texto` is its canonical
+visible control; a resolved theme key without a visible editor control violates
+the Owner → Control contract. `Tema > Espaciado` visibly owns both
+`theme_section_spacing` (the inherited gap for blocks without an override) and
+`theme_container_padding` (the page-content inset), using the canonical bounds
+already enforced by composition. Both stage through `WebsiteEditModeProvider`
+and global `Guardar`; there is no direct service writer that bypasses the draft.
+
+The minimum regression covers absent/malformed settings, every accepted legacy
+color encoding (including bare six/eight-character hex), staged-over-saved
+precedence, font/size/spacing bounds, identical extension/ThemeData projection,
+and a source guard that rejects renderer-local `theme_*` readers/parsers.
+
 The header owns one site-wide contrast policy. `Automático` is the safe default:
 solid headers derive their foreground from the configured background luminance,
 while headers over page content use one restrained tonal protection and tint the
@@ -873,6 +896,20 @@ A Website Editor change is complete only when:
 - Retorno OAuth: intent único tipado con nonce; take-before-await; restauración
   sólo por fallo transitorio clasificado del mismo nonce; validación de
   identidad/tenant/fingerprint antes de cualquier mutación del provider.
+  `GoogleBusinessService` instala un single-flight antes de cambiar loading o
+  notificar listeners, porque un listener puede reentrar sincrónicamente. Cada
+  invocación dueña guarda su nonce en una variable local y sólo hace
+  compare-and-clear de ese nonce; el gating de botones es UX secundaria, no el
+  lock. La regresión debe cubrir llamadas concurrentes y reentrantes, un solo
+  launcher/intent/loading lifecycle, false/cancel/excepción y la supervivencia
+  de un intent posterior ajeno.
 - Shell del storefront: un Scaffold estable y un anchor de contenido de cadena
   constante para public|preview|edit y todos los device previews; el chrome del
-  editor es overlay hermano, nunca padre del contenido enrutado.
+  editor es overlay hermano, nunca padre del contenido enrutado. La cadena
+  estable incluye el `PopScope` persistente del guard de navegación y wrappers
+  explícitos `SizedBox > DecoratedBox > ClipRect` en el viewport: insertar el
+  guard condicionalmente o variar `Container.decoration/clipBehavior` puede
+  cambiar la composición interna y remontar un GoRoute aunque el anchor tenga
+  la misma key. La regresión obligatoria usa un GoRoute plano, sin shell ni
+  keep-alive, y exige State idéntico, texto/foco/scroll preservados y cero
+  disposals en Public→Preview→Edit y desktop/tablet/mobile.

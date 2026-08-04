@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/website_font_registry.dart';
 import 'website_commerce_theme.dart';
+import 'website_resolved_theme.dart';
 
 class WebsiteThemeBuilder {
   const WebsiteThemeBuilder._();
@@ -44,24 +44,26 @@ class WebsiteThemeBuilder {
 
   static ThemeData build({
     required ThemeData base,
-    required Color primaryColor,
-    required Color accentColor,
-    required Color backgroundColor,
-    String? headingFont,
-    String? bodyFont,
-    double? headingSize,
-    double? bodySize,
-    String buttonStyle = 'rounded',
-    String buttonSize = 'medium',
-    Color? commerceAccentColor,
-    Color? commerceTextColor,
-    Color? commerceLineColor,
+    required WebsiteResolvedTheme resolved,
   }) {
+    final primaryColor = resolved.primaryColor;
+    final accentColor = resolved.accentColor;
+    final backgroundColor = resolved.backgroundColor;
+    final headingFont = resolved.headingFont;
+    final bodyFont = resolved.bodyFont;
+    final headingSize = resolved.headingSize;
+    final bodySize = resolved.bodySize;
+    final buttonStyle = resolved.buttonStyle;
+    final buttonSize = resolved.buttonSize;
     final baseTextTheme = base.textTheme;
     final onPrimary = _readableForeground(primaryColor);
     final onSecondary = _readableForeground(accentColor);
-    final onSurface = _readableForeground(backgroundColor);
-    final isDark = onSurface == Colors.white;
+    // `theme_text_color` is an editor-owned value, not metadata: project the
+    // exact resolved color into ThemeData and every text role. Background
+    // contrast still determines brightness and component tone direction; it
+    // never silently replaces the configured text color.
+    final onSurface = resolved.textColor;
+    final isDark = _readableForeground(backgroundColor) == Colors.white;
     final brightness = isDark ? Brightness.dark : Brightness.light;
     final surfaceContainerLow = _surfaceTone(backgroundColor, onSurface, 0.035);
     final surfaceContainer = _surfaceTone(backgroundColor, onSurface, 0.065);
@@ -70,25 +72,16 @@ class WebsiteThemeBuilder {
     final outline = _surfaceTone(backgroundColor, onSurface, 0.30);
     final outlineVariant = _surfaceTone(backgroundColor, onSurface, 0.16);
     final onSurfaceVariant = _surfaceTone(onSurface, backgroundColor, 0.24);
-    final inheritedCommerce = base.extension<WebsiteCommerceTheme>();
-    final commerceAccent =
-        commerceAccentColor ?? inheritedCommerce?.accent ?? primaryColor;
-    final commerceText =
-        commerceTextColor ?? inheritedCommerce?.textPrimary ?? onSurface;
-    final commerceLine =
-        commerceLineColor ?? inheritedCommerce?.line ?? outlineVariant;
+    final commerceAccent = resolved.commerceAccentColor;
+    final commerceText = resolved.commerceTextColor;
+    final commerceLine = resolved.commerceLineColor;
     final primaryContainer =
         Color.alphaBlend(primaryColor.withValues(alpha: 0.14), backgroundColor);
     final secondaryContainer =
         Color.alphaBlend(accentColor.withValues(alpha: 0.14), backgroundColor);
 
-    final effectiveHeadingFont =
-        WebsiteFontRegistry.resolveHeadingFont(headingFont);
-    final effectiveBodyFont = WebsiteFontRegistry.resolveBodyFont(bodyFont);
-
-    final headingTextTheme =
-        _safeGetTextTheme(effectiveHeadingFont, baseTextTheme);
-    final bodyTextTheme = _safeGetTextTheme(effectiveBodyFont, baseTextTheme);
+    final headingTextTheme = _safeGetTextTheme(headingFont, baseTextTheme);
+    final bodyTextTheme = _safeGetTextTheme(bodyFont, baseTextTheme);
 
     // Compose a single TextTheme: headings from heading font, body from body font.
     final composedTextTheme = baseTextTheme
@@ -104,13 +97,14 @@ class WebsiteThemeBuilder {
           titleMedium: headingTextTheme.titleMedium,
           titleSmall: headingTextTheme.titleSmall,
           bodyLarge: _withFontSize(
-              bodyTextTheme.bodyLarge,
-              bodySize != null
-                  ? (bodySize + 2).clamp(10, 40).toDouble()
-                  : null),
+            bodyTextTheme.bodyLarge,
+            (bodySize + 2).clamp(10, 40).toDouble(),
+          ),
           bodyMedium: _withFontSize(bodyTextTheme.bodyMedium, bodySize),
-          bodySmall: _withFontSize(bodyTextTheme.bodySmall,
-              bodySize != null ? (bodySize - 2).clamp(8, 34).toDouble() : null),
+          bodySmall: _withFontSize(
+            bodyTextTheme.bodySmall,
+            (bodySize - 2).clamp(8, 34).toDouble(),
+          ),
           labelLarge: bodyTextTheme.labelLarge,
           labelMedium: bodyTextTheme.labelMedium,
           labelSmall: bodyTextTheme.labelSmall,
@@ -192,8 +186,10 @@ class WebsiteThemeBuilder {
       scaffoldBackgroundColor: backgroundColor,
       colorScheme: colorScheme,
       extensions: [
-        ...base.extensions.values
-            .where((extension) => extension is! WebsiteCommerceTheme),
+        ...base.extensions.values.where((extension) =>
+            extension is! WebsiteCommerceTheme &&
+            extension is! WebsiteResolvedTheme),
+        resolved,
         WebsiteCommerceTheme(
           accent: commerceAccent,
           onAccent: _readableForeground(commerceAccent),

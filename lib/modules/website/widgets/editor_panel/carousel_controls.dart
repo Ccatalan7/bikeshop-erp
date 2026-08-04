@@ -74,143 +74,39 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     }
   }
 
+  /// "Diseño avanzado por capas".
+  ///
+  /// Turning it on for the first time is a document INITIALISATION, and it
+  /// belongs to the provider: one atomic command, one history entry, one
+  /// identity per semantic element with its phone geometry recorded as a typed
+  /// `responsive.mobile` override. This surface no longer injects an `elements`
+  /// list of its own, and it can no longer generate the `_desktop`/`_mobile`
+  /// twins — with their contradictory `hideOnMobile`/`showOnMobile` flags —
+  /// that the canonical model replaced.
+  ///
+  /// On an already composed slide the toggle is just a property of the Canvas
+  /// document, so it goes through the same Canvas command as every other one.
   void _setCompositionEnabled(Map<String, dynamic> slide, bool enabled) {
-    if (!enabled) {
-      _updateSlide(_selectedSlideIndex, 'useComposition', false);
-      return;
-    }
-
     final existing = slide['elements'];
-    if (existing is List && existing.isNotEmpty) {
-      _updateSlide(_selectedSlideIndex, 'useComposition', true);
+    final composed = slide['useComposition'] == true ||
+        (existing is List && existing.isNotEmpty);
+
+    if (composed) {
+      widget.provider.setCanvasRootProperties(
+        widget.blockId,
+        <String, Object?>{'useComposition': enabled},
+        slideIndex: _selectedSlideIndex,
+        scope: WebsiteWriteScope.shared,
+        viewport: widget.provider.previewViewport,
+      );
       return;
     }
+    if (!enabled) return;
 
-    final title = (slide['title'] ?? 'Título del banner').toString();
-    final subtitle = (slide['subtitle'] ?? '').toString();
-    final action = WebsiteActionValue.resolvePrimary(
-          slide,
-          labelKeys: const ['ctaText', 'buttonText'],
-          hrefKeys: const ['ctaLink', 'buttonLink'],
-          defaultLabel: 'Ver más',
-          defaultHref: '/productos',
-          defaultVariant: WebsiteActionVariant.outline,
-        ) ??
-        const WebsiteActionValue(
-          label: 'Ver más',
-          href: '/productos',
-          variant: WebsiteActionVariant.outline,
-        );
-    Map<String, dynamic> textElement({
-      required String id,
-      required String text,
-      required double x,
-      required double y,
-      required double w,
-      required double h,
-      required double size,
-      required bool mobile,
-      String role = 'heading',
-      String weight = 'w700',
-    }) =>
-        {
-          'id': id,
-          'type': 'text',
-          'text': text,
-          'x': x,
-          'y': y,
-          'w': w,
-          'h': h,
-          'fontSize': size,
-          'fontWeight': weight,
-          'fontRole': role,
-          'color': '#FFFFFF',
-          'align': 'left',
-          'lineHeight': 1.05,
-          'letterSpacing': role == 'heading' ? 1.0 : 0.0,
-          'hideOnMobile': !mobile,
-          'showOnMobile': mobile,
-        };
-    Map<String, dynamic> buttonElement({
-      required String id,
-      required double x,
-      required double y,
-      required bool mobile,
-    }) =>
-        {
-          'id': id,
-          'type': 'button',
-          'x': x,
-          'y': y,
-          'w': 220.0,
-          'h': 56.0,
-          'label': action.label,
-          'link': action.href,
-          'style': action.variant.storageValue,
-          'inheritTheme': true,
-          'actions': WebsiteActionValue.mergePrimary(null, action),
-          'hideOnMobile': !mobile,
-          'showOnMobile': mobile,
-        };
-
-    final elements = <Map<String, dynamic>>[
-      textElement(
-        id: 'title_desktop',
-        text: title,
-        x: 120,
-        y: 190,
-        w: 620,
-        h: 130,
-        size: 58,
-        mobile: false,
-      ),
-      if (subtitle.isNotEmpty)
-        textElement(
-          id: 'subtitle_desktop',
-          text: subtitle,
-          x: 120,
-          y: 330,
-          w: 560,
-          h: 80,
-          size: 22,
-          mobile: false,
-          role: 'body',
-          weight: 'w400',
-        ),
-      buttonElement(id: 'button_desktop', x: 120, y: 430, mobile: false),
-      textElement(
-        id: 'title_mobile',
-        text: title,
-        x: 28,
-        y: 160,
-        w: 334,
-        h: 150,
-        size: 42,
-        mobile: true,
-      ),
-      if (subtitle.isNotEmpty)
-        textElement(
-          id: 'subtitle_mobile',
-          text: subtitle,
-          x: 28,
-          y: 320,
-          w: 334,
-          h: 90,
-          size: 18,
-          mobile: true,
-          role: 'body',
-          weight: 'w400',
-        ),
-      buttonElement(id: 'button_mobile', x: 28, y: 440, mobile: true),
-    ];
-
-    _updateSlideMultiple(_selectedSlideIndex, {
-      'useComposition': true,
-      'designWidth': 1200.0,
-      'mobileDesignWidth': 390.0,
-      'constrainElementsToSafeArea': true,
-      'elements': elements,
-    });
+    widget.provider.initializeCanvasComposition(
+      widget.blockId,
+      slideIndex: _selectedSlideIndex,
+    );
   }
 
   void _addSlide() {
@@ -252,9 +148,20 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
 
   /// Build slide fields inline (same pattern as VideoBanner)
   Widget _buildSlideFields(Map<String, dynamic> slide) {
-    final showOverlay = slide['showOverlay'] ?? true;
-    final overlayOpacity =
-        (slide['overlayOpacity'] as num?)?.toDouble() ?? 0.55;
+    // Both overlay properties resolve through the canonical binding, so the
+    // inspector shows — and gates on — the value the renderer will use for the
+    // previewed viewport, not the shared one.
+    final overlayToggle = _slideScalarBinding<bool>(
+      slide: slide,
+      fieldPath: 'slides.showOverlay',
+      decode: WebsiteResponsiveScalarBinding.decodeBoolean,
+    );
+    final overlayOpacityBinding = _slideScalarBinding<num>(
+      slide: slide,
+      fieldPath: 'slides.overlayOpacity',
+      decode: WebsiteResponsiveScalarBinding.decodeNumber,
+    );
+    final showOverlay = overlayToggle?.value ?? true;
     final hasVideoFile = (slide['videoFileUrl']?.toString() ?? '').isNotEmpty;
     final titleFormatting = TextFormatting.fromJson(
       slide['titleFormatting'] is Map
@@ -266,14 +173,12 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           ? Map<String, dynamic>.from(slide['subtitleFormatting'] as Map)
           : null,
     );
-    final compositionElements = slide['elements'] is List
-        ? (slide['elements'] as List)
-            .whereType<Map>()
-            .map((element) => Map<String, dynamic>.from(element))
-            .toList()
-        : <Map<String, dynamic>>[];
-    final usesComposition =
-        slide['useComposition'] == true || compositionElements.isNotEmpty;
+    // Whether this slide is a Canvas at all — the same condition the Canvas
+    // commands validate. The layers themselves are read by the inspector from
+    // the document, never copied out into this widget.
+    final slideLayers = slide['elements'];
+    final usesComposition = slide['useComposition'] == true ||
+        (slideLayers is List && slideLayers.isNotEmpty);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,28 +202,14 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             ),
             const SizedBox(height: 16),
             if (usesComposition) ...[
+              // The Canvas inspector owns its own document: it addresses this
+              // exact slide and writes through the Canvas commands, so nothing
+              // here rebuilds `elements` or `slides` on its behalf.
               _CanvasBlockControls(
-                data: <String, dynamic>{
-                  ...slide,
-                  'elements': compositionElements,
-                  'blockHeight':
-                      (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
-                },
                 blockId: widget.blockId,
                 provider: widget.provider,
                 slideIndex: _selectedSlideIndex,
                 elementsOnly: true,
-                onElementsChanged: (elements) =>
-                    _updateSlide(_selectedSlideIndex, 'elements', elements),
-                onCanvasSettingChanged: (key, value) =>
-                    _updateSlide(_selectedSlideIndex, key, value),
-                onActiveElementChanged: (elementId) =>
-                    widget.provider.selectCanvasElement(
-                  widget.blockId,
-                  elementId,
-                  slideIndex: _selectedSlideIndex,
-                  slideCount: _slides.length,
-                ),
               ),
               _buildNestedLayers(widget.provider.blocks),
               const SizedBox(height: 20),
@@ -398,40 +289,11 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           icon: Icons.image_outlined,
           initiallyExpanded: !usesComposition,
           children: [
-            _ImagePicker(
-              currentUrl: slide['imageUrl']?.toString(),
-              onChanged: (url) =>
-                  _updateSlide(_selectedSlideIndex, 'imageUrl', url),
-            ),
-            const SizedBox(height: 12),
-            const _SectionHeader('Foco de imagen'),
-            const SizedBox(height: 8),
-            FocalPointPicker(
-              imageUrl: slide['imageUrl']?.toString(),
-              focalX: (slide['focalPointX'] as num?)?.toDouble() ?? 0.5,
-              focalY: (slide['focalPointY'] as num?)?.toDouble() ?? 0.5,
-              onChanged: (x, y) {
-                _updateSlideMultiple(_selectedSlideIndex, {
-                  'focalPointX': x,
-                  'focalPointY': y,
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-            const _SectionHeader('Foco móvil'),
-            const SizedBox(height: 8),
-            FocalPointPicker(
-              imageUrl: slide['imageUrl']?.toString(),
-              focalX: (slide['mobileFocalPointX'] as num?)?.toDouble() ?? 0.5,
-              focalY: (slide['mobileFocalPointY'] as num?)?.toDouble() ?? 0.5,
-              onChanged: (x, y) {
-                // Update both values atomically
-                _updateSlideMultiple(_selectedSlideIndex, {
-                  'mobileFocalPointX': x,
-                  'mobileFocalPointY': y,
-                });
-              },
-            ),
+            // Same owner as the generic schema path: one media row, one focal
+            // editor on demand, for the viewport being previewed. The separate
+            // "Foco móvil" editor is gone, and with it the divergent rule that
+            // made the inspector disagree with the renderer.
+            _buildSlideMedia(slide),
             const SizedBox(height: 12),
             _EditorTextField(
               label: 'Texto alternativo',
@@ -529,22 +391,35 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           icon: Icons.gradient_outlined,
           initiallyExpanded: false,
           children: [
-            _EditorToggle(
-              label: 'Mostrar overlay oscuro',
-              value: showOverlay,
-              onChanged: (v) =>
-                  _updateSlide(_selectedSlideIndex, 'showOverlay', v),
+            // Same protocol as the generic inspector: the slide's overlay is a
+            // presentation property of THIS item, so it resolves and writes
+            // through the canonical repeater binding instead of `_updateSlide`,
+            // which always wrote the shared value.
+            _mountSlideField<bool>(
+              overlayToggle,
+              (binding) => _EditorToggle(
+                label: '',
+                value: binding.value ?? true,
+                onChanged: binding.write,
+              ),
             ),
             if (showOverlay) ...[
               const SizedBox(height: 12),
-              _EditorSlider(
-                label: 'Opacidad del overlay',
-                value: overlayOpacity,
-                min: 0.0,
-                max: 1.0,
-                divisions: 20,
-                onChanged: (v) =>
-                    _updateSlide(_selectedSlideIndex, 'overlayOpacity', v),
+              _mountSlideField<num>(
+                overlayOpacityBinding,
+                (binding) {
+                  final value =
+                      (binding.value?.toDouble() ?? 0.55).clamp(0.0, 1.0);
+                  return _EditorSlider(
+                    label: '',
+                    value: value,
+                    min: 0.0,
+                    max: 1.0,
+                    divisions: 20,
+                    valueLabel: value.toStringAsFixed(2),
+                    onChanged: binding.write,
+                  );
+                },
               ),
             ],
           ],
@@ -565,8 +440,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     final data = Map<String, dynamic>.from(
       block['block_data'] as Map? ?? const <String, dynamic>{},
     );
-    var slideIndex = 0;
-    List<dynamic> rawElements;
+    int? slideIndex;
     if (type == WebsiteBlockType.carousel.name) {
       final slides = List<dynamic>.from(data['slides'] as List? ?? const []);
       if (slides.isEmpty) return const SizedBox.shrink();
@@ -576,21 +450,26 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       );
       final slide = Map<String, dynamic>.from(slides[slideIndex] as Map? ?? {});
       if (slide['useComposition'] != true) return const SizedBox.shrink();
-      rawElements = List<dynamic>.from(slide['elements'] as List? ?? const []);
-    } else if (type == WebsiteBlockType.canvas.name) {
-      rawElements = List<dynamic>.from(data['elements'] as List? ?? const []);
-    } else {
+    } else if (type != WebsiteBlockType.canvas.name) {
       return const SizedBox.shrink();
     }
 
-    final elements = rawElements
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-    if (elements.isEmpty) return const SizedBox.shrink();
+    // The list is the PROJECTED one: the rows show what the previewed viewport
+    // resolves, in the z-order that viewport really draws.
+    final document = editProvider.canvasDocument(
+      selectedId,
+      slideIndex: slideIndex,
+    );
+    if (document == null) return const SizedBox.shrink();
+    final legacy = WebsiteCanvasLegacyInventory.of(document);
+    final layers = WebsiteCanvasResponsiveDocument.projectLayers(
+      data: document,
+      viewport: editProvider.previewViewport,
+    );
+    if (layers.isEmpty) return const SizedBox.shrink();
     final selectedElementId = editProvider.canvasElementSelection(
       selectedId,
-      slideIndex: type == WebsiteBlockType.carousel.name ? slideIndex : null,
+      slideIndex: slideIndex,
     );
 
     return Container(
@@ -607,9 +486,9 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           Padding(
             padding: const EdgeInsets.fromLTRB(6, 2, 6, 6),
             child: Text(
-              type == WebsiteBlockType.carousel.name
-                  ? 'CAPAS · SLIDE ${slideIndex + 1}'
-                  : 'CAPAS DEL CANVAS',
+              slideIndex == null
+                  ? 'CAPAS DEL CANVAS'
+                  : 'CAPAS · SLIDE ${slideIndex + 1}',
               style: const TextStyle(
                 color: Colors.white38,
                 fontSize: 10,
@@ -618,14 +497,13 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
               ),
             ),
           ),
-          for (var index = elements.length - 1; index >= 0; index--)
+          for (var index = layers.length - 1; index >= 0; index--)
             _buildNestedLayerRow(
               blockId: selectedId,
-              type: type,
               slideIndex: slideIndex,
-              elements: elements,
-              index: index,
-              selected: elements[index]['id']?.toString() == selectedElementId,
+              legacy: legacy,
+              layer: layers[index],
+              selected: layers[index].id == selectedElementId,
             ),
         ],
       ),
@@ -634,23 +512,52 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
 
   Widget _buildNestedLayerRow({
     required String blockId,
-    required String type,
-    required int slideIndex,
-    required List<Map<String, dynamic>> elements,
-    required int index,
+    required int? slideIndex,
+    required WebsiteCanvasLegacyInventory legacy,
+    required WebsiteCanvasLayerProjection layer,
     required bool selected,
   }) {
-    final element = elements[index];
-    final id = element['id']?.toString() ?? '';
+    final id = layer.id;
+    final element = layer.data;
     final elementType = element['type']?.toString() ?? 'element';
-    final hidden = element['hidden'] == true;
     final locked = element['locked'] == true;
+    // Visibility is the typed property, resolved for the previewed viewport.
+    // The old `hidden` flag was written by this row and read by nothing.
+    final hidden = !layer.visible;
     final label = (element['name'] ??
             element['text'] ??
             element['label'] ??
             element['title'] ??
             _canvasElementLabel(elementType))
         .toString();
+
+    WebsiteCanvasFieldBinding<bool>? toggle(String propertyKey, String label) {
+      return WebsiteCanvasFieldBinding.resolve<bool>(
+        provider: editProvider,
+        blockId: blockId,
+        slideIndex: slideIndex,
+        layerId: id,
+        propertyKey: propertyKey,
+        label: label,
+        decode: WebsiteResponsiveScalarBinding.decodeBoolean,
+        type: WebsiteBlockFieldType.toggle,
+        legacyInventory: legacy,
+      );
+    }
+
+    final visibility = toggle(
+      WebsiteCanvasResponsivePolicy.visibleKey,
+      'Mostrar esta capa',
+    );
+    final lock = toggle('locked', 'Bloquear ajustes directos');
+    // A value that still reaches this layer through a legacy twin or alias is
+    // readable, not writable: which branch the write belongs in is exactly the
+    // ambiguity the deliberate migration resolves.
+    final visibilityBlocked = visibility == null ||
+        visibility.state.status == WebsiteResponsiveFieldStatus.unavailable;
+    final lockBlocked = lock == null ||
+        lock.state.status == WebsiteResponsiveFieldStatus.unavailable;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
@@ -663,8 +570,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
         onTap: () => editProvider.selectCanvasElement(
           blockId,
           id,
-          slideIndex:
-              type == WebsiteBlockType.carousel.name ? slideIndex : null,
+          slideIndex: slideIndex,
         ),
         borderRadius: BorderRadius.circular(7),
         child: Padding(
@@ -688,65 +594,36 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                tooltip: hidden ? 'Mostrar capa' : 'Ocultar capa',
-                onPressed: () => _patchNestedLayer(
-                  blockId: blockId,
-                  type: type,
-                  slideIndex: slideIndex,
-                  elements: elements,
-                  index: index,
-                  key: 'hidden',
-                  value: !hidden,
-                ),
+                tooltip: visibilityBlocked
+                    ? 'Esta capa viene de una configuración anterior. '
+                        'Revísala en la migración antes de cambiarla.'
+                    : hidden
+                        ? 'Mostrar capa'
+                        : 'Ocultar capa',
+                onPressed:
+                    visibilityBlocked ? null : () => visibility.write(hidden),
                 icon: Icon(hidden ? Icons.visibility_off : Icons.visibility,
-                    size: 15, color: Colors.white38),
+                    size: 15,
+                    color: visibilityBlocked ? Colors.white24 : Colors.white38),
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                tooltip: locked ? 'Desbloquear capa' : 'Bloquear capa',
-                onPressed: () => _patchNestedLayer(
-                  blockId: blockId,
-                  type: type,
-                  slideIndex: slideIndex,
-                  elements: elements,
-                  index: index,
-                  key: 'locked',
-                  value: !locked,
-                ),
+                tooltip: lockBlocked
+                    ? 'Esta capa viene de una configuración anterior. '
+                        'Revísala en la migración antes de cambiarla.'
+                    : locked
+                        ? 'Desbloquear capa'
+                        : 'Bloquear capa',
+                onPressed: lockBlocked ? null : () => lock.write(!locked),
                 icon: Icon(locked ? Icons.lock : Icons.lock_open,
-                    size: 15, color: Colors.white38),
+                    size: 15,
+                    color: lockBlocked ? Colors.white24 : Colors.white38),
               ),
             ],
           ),
         ),
       ),
     );
-  }
-
-  void _patchNestedLayer({
-    required String blockId,
-    required String type,
-    required int slideIndex,
-    required List<Map<String, dynamic>> elements,
-    required int index,
-    required String key,
-    required dynamic value,
-  }) {
-    final updated =
-        elements.map((element) => Map<String, dynamic>.from(element)).toList();
-    updated[index][key] = value;
-    if (type == WebsiteBlockType.canvas.name) {
-      editProvider.updateBlockData(blockId, 'elements', updated);
-      return;
-    }
-    final block = editProvider.blocks.firstWhere(
-      (candidate) => candidate['id']?.toString() == blockId,
-    );
-    final data = Map<String, dynamic>.from(block['block_data'] as Map? ?? {});
-    final slides = List<dynamic>.from(data['slides'] as List? ?? const []);
-    final slide = Map<String, dynamic>.from(slides[slideIndex] as Map? ?? {});
-    slides[slideIndex] = {...slide, 'elements': updated};
-    editProvider.updateBlockData(blockId, 'slides', slides);
   }
 
   static IconData _canvasElementIcon(String type) => switch (type) {
@@ -841,6 +718,103 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
         );
       }
     }
+  }
+
+  /// The active slide's image and framing, through the shared binding.
+  ///
+  /// The slide is addressed by its stable `id` when it has one, with the index
+  /// as the positional fallback, so a reorder cannot land a write on the wrong
+  /// slide. Everything else about the slide — Canvas, video, CTA, add/remove
+  /// and reorder — is untouched.
+  /// The selected slide as a responsive owner.
+  ///
+  /// Identity is used when the slide already has one; otherwise the explicit
+  /// index addresses it. Nothing is invented and no document is migrated.
+  WebsiteResponsiveRepeaterField _slideOwner(Map<String, dynamic> slide) {
+    return WebsiteResponsiveRepeaterField.forItem(
+      collectionKeys: const <String>['slides'],
+      itemIndex: _selectedSlideIndex,
+      item: slide,
+    );
+  }
+
+  WebsiteAuthoringHostClass get _hostClass =>
+      WebsiteEditorChromeScope.maybeOf(context)?.hostClass ??
+      WebsiteAuthoringHostClass.desktop;
+
+  /// Binds one non-media slide property through the canonical scalar owner.
+  ///
+  /// Null only when the registry has no such field, which would be a schema
+  /// bug rather than a state to render.
+  WebsiteResponsiveScalarBinding<T>? _slideScalarBinding<T>({
+    required Map<String, dynamic> slide,
+    required String fieldPath,
+    required WebsiteResponsiveDecoder<T> decode,
+  }) {
+    final field = WebsiteBlockRegistry.fieldForPath(
+      WebsiteBlockType.carousel,
+      fieldPath,
+    );
+    if (field == null) return null;
+
+    return WebsiteResponsiveScalarBinding<T>.forField(
+      provider: widget.provider,
+      blockId: widget.blockId,
+      field: field,
+      owner: _slideOwner(slide),
+      decode: decode,
+      hostClass: _hostClass,
+    );
+  }
+
+  /// Mounts a slide control under the canonical inheritance shell.
+  ///
+  /// The control carries an EMPTY label: `ResponsiveFieldShell` owns label,
+  /// help, status, scope sentence and the customize/reset action, and a second
+  /// label for the same field is exactly the duplication the protocol removes.
+  Widget _mountSlideField<T>(
+    WebsiteResponsiveScalarBinding<T>? binding,
+    Widget Function(WebsiteResponsiveScalarBinding<T> binding) build,
+  ) {
+    if (binding == null) return const SizedBox.shrink();
+    return ResponsiveFieldShell<T>(
+      state: binding.state,
+      onCustomize: binding.customize,
+      onReset: binding.reset,
+      child: build(binding),
+    );
+  }
+
+  Widget _buildSlideMedia(Map<String, dynamic> slide) {
+    final field = WebsiteBlockRegistry.fieldForPath(
+      WebsiteBlockType.carousel,
+      'slides.imageUrl',
+    );
+    if (field == null) return const SizedBox.shrink();
+
+    final owner = _slideOwner(slide);
+
+    final binding = WebsiteResponsiveMediaBinding.repeaterItem(
+      provider: widget.provider,
+      blockId: widget.blockId,
+      field: field,
+      collectionKeys: owner.collectionKeys,
+      itemIndex: owner.itemIndex,
+      identityKey: owner.identityKey,
+      identityValue: owner.identityValue,
+      hostClass: _hostClass,
+    );
+
+    return ResponsiveMediaField(
+      state: binding.urlState,
+      focalState: binding.focalState,
+      onChanged: binding.writeUrl,
+      onFocalChanged: binding.writeFocal,
+      onCustomize: binding.customizeUrl,
+      onReset: binding.resetUrl,
+      onFocalCustomize: binding.customizeFocal,
+      onFocalReset: binding.resetFocal,
+    );
   }
 
   @override

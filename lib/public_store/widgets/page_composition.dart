@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../modules/website/models/website_block_catalog.dart';
 import '../../modules/website/models/website_editor_drag_payload.dart';
 import '../../modules/website/models/website_page_composition.dart';
+import '../../modules/website/models/website_responsive_authoring.dart';
+import '../../modules/website/models/website_responsive_projection.dart';
 import '../../modules/website/widgets/add_block_dialog.dart';
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
+import '../../modules/website/widgets/website_block_catalog_sheet.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
+import '../../modules/website/widgets/website_editor_chrome_geometry.dart';
 import '../../shared/models/product.dart';
 
 typedef WebsitePageAddBlock = void Function(
@@ -76,6 +81,20 @@ class PageComposition extends StatelessWidget {
 
   bool get _isEditMode => composition.mode == WebsitePageCompositionMode.edit;
 
+  /// Whether this host edits from a dock and sheets instead of a pane.
+  ///
+  /// One owner decides it — [WebsiteEditorChromeScope] — and an absent scope
+  /// keeps the historical pointer composition, so Preview, the public
+  /// storefront and any host that publishes no geometry are untouched.
+  bool _usesContextualHost(BuildContext context) =>
+      !(WebsiteEditorChromeScope.maybeOf(context)?.usesPane ?? true);
+
+  /// The in-page insert affordance exists only in Edit, only when the page can
+  /// actually accept a block, and only on the contextual host. With a pane the
+  /// operator drags from the panel onto the drop zones that already exist.
+  bool _showsInlineInsert(BuildContext context) =>
+      _isEditMode && onAddBlock != null && _usesContextualHost(context);
+
   @override
   Widget build(BuildContext context) {
     final limit = visibleBlockLimit;
@@ -85,11 +104,21 @@ class PageComposition extends StatelessWidget {
             : composition.blocks
                 .take(limit.clamp(0, composition.blocks.length))
                 .toList(growable: false);
+    final showsInlineInsert = _showsInlineInsert(context);
     if (blocks.isEmpty) {
       return Column(
         children: [
           emptyState ?? const SizedBox.shrink(),
-          if (_isEditMode && onAddBlock != null)
+          // An empty page gets exactly ONE affordance: there is no gap to
+          // disambiguate and no anchor to be before or after.
+          if (showsInlineInsert)
+            WebsiteInsertBlockAffordance(
+              anchor: null,
+              fallbackIndex: 0,
+              presentBlockTypes: const <String>[],
+              onAddBlock: onAddBlock!,
+            )
+          else if (_isEditMode && onAddBlock != null)
             Padding(
               padding: const EdgeInsets.only(top: 24, bottom: 32),
               child: _AddBlockButtonLarge(
@@ -111,20 +140,45 @@ class PageComposition extends StatelessWidget {
         final chromeWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
+        final presentBlockTypes = <String>[
+          for (final block in composition.blocks) block.blockType,
+        ];
         return Stack(
           clipBehavior: Clip.none,
           children: [
             Column(
               children: [
-                for (var index = 0; index < blocks.length; index++)
+                // Start of the page: `Antes de` the first block.
+                if (showsInlineInsert)
+                  WebsiteInsertBlockAffordance(
+                    anchor:
+                        _anchorFor(blocks.first, WebsiteBlockInsertSide.before),
+                    presentBlockTypes: presentBlockTypes,
+                    onAddBlock: onAddBlock!,
+                  ),
+                for (var index = 0; index < blocks.length; index++) ...[
                   _buildBlockEntry(
                     context: context,
                     block: blocks[index],
+                    canvasWidth: chromeWidth,
                     isLast: index == blocks.length - 1,
                     leadingChromeLink: index == 0 ? leadingChromeLink : null,
                     gapChromeLink: gapChromeLinks[blocks[index].id],
                   ),
-                if (_isEditMode && onAddBlock != null)
+                  // Between blocks and at the end: `Después de` this block.
+                  if (showsInlineInsert)
+                    WebsiteInsertBlockAffordance(
+                      anchor: _anchorFor(
+                          blocks[index], WebsiteBlockInsertSide.after),
+                      presentBlockTypes: presentBlockTypes,
+                      onAddBlock: onAddBlock!,
+                    ),
+                ],
+                // The pointer host keeps its large end-of-page button; the
+                // contextual host already has a named affordance in every gap,
+                // including the last one, so a second entry point there would
+                // be two ways to do the same thing.
+                if (_isEditMode && onAddBlock != null && !showsInlineInsert)
                   Padding(
                     padding: const EdgeInsets.only(top: 24, bottom: 32),
                     child: _AddBlockButtonLarge(
@@ -133,7 +187,10 @@ class PageComposition extends StatelessWidget {
                   ),
               ],
             ),
-            if (_isEditMode)
+            // Pointer drag/drop chrome. It is untouched on the pane host and
+            // absent on the contextual one, where a drop target has no touch
+            // equivalent and the affordance above is the accessible path.
+            if (_isEditMode && !showsInlineInsert)
               Positioned.fill(
                 child: Stack(
                   clipBehavior: Clip.none,
@@ -164,16 +221,37 @@ class PageComposition extends StatelessWidget {
     );
   }
 
+  /// Names the gap the way the operator reads it: a side plus a real block.
+  ///
+  /// The index comes from [WebsitePageCompositionBlock.sourceIndex], which is
+  /// the block's position in the page's own order, so a composition that ever
+  /// filters rows cannot shift where an insert lands.
+  WebsiteBlockInsertionAnchor _anchorFor(
+    WebsitePageCompositionBlock block,
+    WebsiteBlockInsertSide side,
+  ) {
+    return WebsiteBlockInsertionAnchor(
+      anchorIndex: block.sourceIndex,
+      anchorTitle: WebsiteBlockCatalog.entries()
+              .where((entry) => entry.type == block.type)
+              .map((entry) => entry.title)
+              .firstOrNull ??
+          block.blockType,
+      initialSide: side,
+    );
+  }
+
   Widget _buildBlockEntry({
     required BuildContext context,
     required WebsitePageCompositionBlock block,
+    required double canvasWidth,
     required bool isLast,
     required LayerLink? leadingChromeLink,
     required LayerLink? gapChromeLink,
   }) {
     final keyedBlock = KeyedSubtree(
       key: ValueKey<String>('page-composition-block-${block.id}'),
-      child: _buildBlock(context, block),
+      child: _buildBlock(context, block, canvasWidth: canvasWidth),
     );
     final hasGap = !isLast;
     final spacing = block.geometry.spacingAfter;
@@ -235,10 +313,23 @@ class PageComposition extends StatelessWidget {
 
   Widget _buildBlock(
     BuildContext context,
-    WebsitePageCompositionBlock block,
-  ) {
-    final data = Map<String, dynamic>.from(block.blockData)
+    WebsitePageCompositionBlock block, {
+    required double canvasWidth,
+  }) {
+    final sourceData = Map<String, dynamic>.from(block.blockData)
       ..remove('visibility');
+    final type = block.type;
+    final viewport = WebsiteResponsiveDataCodec.viewportForDocumentWidth(
+      sourceData,
+      canvasWidth,
+    );
+    final data = type == null
+        ? sourceData
+        : WebsiteResponsiveBlockProjection.project(
+            type: type,
+            data: sourceData,
+            viewport: viewport,
+          );
     final baseTheme = Theme.of(context);
     final themedText = baseTheme.textTheme.apply(
       bodyColor: textColor,

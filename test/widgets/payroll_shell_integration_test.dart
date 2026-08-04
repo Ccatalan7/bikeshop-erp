@@ -575,6 +575,76 @@ void main() {
     },
   );
 
+  /// El buscador del drawer contestaba «No encontramos módulos o páginas» a
+  /// `Nomina`, es decir, negaba un módulo que existe, sólo porque en un teléfono
+  /// nadie teclea la tilde. Lo que se afirma acá es que la tilde deja de ser
+  /// requisito **sin** que el buscador deje de filtrar.
+  testWidgets(
+    'compact drawer search ignores accents and keeps filtering',
+    (tester) async {
+      final harness = await _ShellHarness.create();
+      addTearDown(harness.dispose);
+
+      await harness.pump(
+        tester,
+        size: const Size(390, 844),
+        chromeMode: NavigationChromeMode.rail,
+        routeAware: true,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('main-layout-mobile-menu')),
+      );
+      await tester.pumpAndSettle();
+
+      final search = find.byKey(const ValueKey('mobile-drawer-search'));
+      final results = find.byKey(
+        const ValueKey('mobile-drawer-search-results'),
+      );
+
+      await tester.enterText(search, 'Nomina');
+      await tester.pumpAndSettle();
+      expect(results, findsOneWidget);
+      expect(
+        find.descendant(of: results, matching: find.text('Nóminas')),
+        findsOneWidget,
+        reason: 'Nobody types the accent on a phone.',
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-drawer-navigation-mode')),
+        findsNothing,
+        reason: 'An active query replaces the navigation tree.',
+      );
+
+      await tester.enterText(search, 'NÓMINA');
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: results, matching: find.text('Nóminas')),
+        findsOneWidget,
+        reason: 'Accent and case must reach the same result.',
+      );
+
+      await tester.enterText(search, 'Inventario');
+      await tester.pumpAndSettle();
+      expect(results, findsOneWidget);
+      expect(
+        find.descendant(of: results, matching: find.text('Nóminas')),
+        findsNothing,
+        reason: 'Folding accents must not turn the filter into a catalogue.',
+      );
+
+      await tester.enterText(search, 'zzzz');
+      await tester.pumpAndSettle();
+      expect(results, findsNothing);
+      expect(
+        find.textContaining('No encontramos módulos o páginas'),
+        findsOneWidget,
+        reason: 'A query with no match still says so.',
+      );
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'compact drawer exposes 48px Navigation and Tools mode targets',
     (tester) async {

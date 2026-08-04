@@ -10,7 +10,9 @@ import 'package:vinabike_erp/modules/website/widgets/block_resize_handle.dart';
 import 'package:vinabike_erp/modules/website/widgets/deferred_editable_block_renderer.dart';
 import 'package:vinabike_erp/modules/website/widgets/inline_editable_text_v2.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_action_button.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_inline_action_editor.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_link_value_editor.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_hero_block_content.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_text_block_content.dart';
 import 'package:vinabike_erp/public_store/widgets/page_composition.dart';
 
@@ -73,6 +75,56 @@ Future<void> _pumpEditableHost(
 }
 
 void main() {
+  testWidgets(
+    'Edit Preview and Public project responsive data from the canvas width',
+    (tester) async {
+      final composition = WebsitePageComposition.project(
+        blocks: [
+          _block(
+            id: 'responsive-hero',
+            type: 'hero',
+            order: 0,
+            data: {
+              'title': 'Hero responsive',
+              'alignment': 'left',
+              'responsive': {
+                'version': 2,
+                'mobile': {'alignment': 'right'},
+              },
+            },
+          ),
+        ],
+        mode: WebsitePageCompositionMode.public,
+        breakpoint: 'desktop',
+      );
+
+      await tester.binding.setSurfaceSize(const Size(390, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(_host(composition: composition));
+      await tester.pump();
+      expect(
+        tester
+            .widget<Align>(
+              find.byKey(WebsiteHeroBlockContent.contentKey),
+            )
+            .alignment,
+        Alignment.centerRight,
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1200, 800));
+      await tester.pumpWidget(_host(composition: composition));
+      await tester.pump();
+      expect(
+        tester
+            .widget<Align>(
+              find.byKey(WebsiteHeroBlockContent.contentKey),
+            )
+            .alignment,
+        Alignment.centerLeft,
+      );
+    },
+  );
+
   testWidgets(
     'public composition paints canonical order, visibility and one gap only',
     (tester) async {
@@ -919,6 +971,147 @@ void main() {
       final previewTop = tester.getTopLeft(find.byKey(firstKey)).dy;
 
       expect(editTop, previewTop);
+    },
+  );
+
+  // --- Preview visitor-navigation contract -------------------------------
+  //
+  // Preview keeps PREVIEW DATA (drafts, unpublished hints) but VISITOR
+  // interactions: a CTA must navigate exactly like the public build. Only
+  // Edit is inert, via its injected presenters. These tests mount the REAL
+  // PageComposition dispatch for the three modes.
+
+  List<Map<String, dynamic>> ctaBlocks() => [
+        _block(
+          id: 'hero-1',
+          type: 'hero',
+          order: 0,
+          data: {
+            'title': 'Hero título',
+            'ctaText': 'Ver catálogo',
+            'ctaLink': '/productos',
+            'showOverlay': false,
+          },
+        ),
+        _block(
+          id: 'carousel-1',
+          type: 'carousel',
+          order: 1,
+          data: {
+            'autoPlay': false,
+            'showArrows': false,
+            'showIndicators': false,
+            'slides': [
+              {
+                'title': 'Campaña',
+                'ctaText': 'Ver cámaras',
+                'ctaLink': '/productos/categoria/camaras',
+              },
+            ],
+          },
+        ),
+      ];
+
+  testWidgets(
+    'PREVIEW: hero and carousel CTAs navigate with visitor semantics',
+    (tester) async {
+      WidgetController.hitTestWarningShouldBeFatal = true;
+      addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+      await tester.binding.setSurfaceSize(const Size(1280, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final navigations = <String>[];
+      final composition = WebsitePageComposition.project(
+        blocks: ctaBlocks(),
+        mode: WebsitePageCompositionMode.preview,
+        breakpoint: 'desktop',
+      );
+      await tester.pumpWidget(
+        _host(composition: composition, onNavigate: navigations.add),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('VER CATÁLOGO'));
+      await tester.pump();
+      expect(navigations, ['/productos'],
+          reason: 'the hero CTA navigates in Preview like a visitor');
+
+      await tester.tap(find.text('VER CÁMARAS'));
+      await tester.pump();
+      expect(
+        navigations,
+        ['/productos', '/productos/categoria/camaras'],
+        reason: 'the carousel slide CTA navigates in Preview like a visitor',
+      );
+    },
+  );
+
+  testWidgets(
+    'PUBLIC parity: the same CTAs navigate to the same routes',
+    (tester) async {
+      WidgetController.hitTestWarningShouldBeFatal = true;
+      addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+      await tester.binding.setSurfaceSize(const Size(1280, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final navigations = <String>[];
+      final composition = WebsitePageComposition.project(
+        blocks: ctaBlocks(),
+        mode: WebsitePageCompositionMode.public,
+        breakpoint: 'desktop',
+      );
+      await tester.pumpWidget(
+        _host(composition: composition, onNavigate: navigations.add),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('VER CATÁLOGO'));
+      await tester.pump();
+      await tester.tap(find.text('VER CÁMARAS'));
+      await tester.pump();
+      expect(
+        navigations,
+        ['/productos', '/productos/categoria/camaras'],
+        reason: 'Preview and public share identical visitor navigation',
+      );
+    },
+  );
+
+  testWidgets(
+    'EDIT stays inert: the CTA selects its inline editor and never navigates',
+    (tester) async {
+      WidgetController.hitTestWarningShouldBeFatal = true;
+      addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+      await tester.binding.setSurfaceSize(const Size(1280, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final navigations = <String>[];
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(ctaBlocks(), const <String, dynamic>{});
+      addTearDown(provider.dispose);
+      final composition = WebsitePageComposition.project(
+        blocks: ctaBlocks(),
+        mode: WebsitePageCompositionMode.edit,
+        breakpoint: 'desktop',
+      );
+      await _pumpEditableHost(
+        tester,
+        _host(
+          composition: composition,
+          provider: provider,
+          onNavigate: navigations.add,
+        ),
+      );
+
+      expect(find.byType(WebsiteInlineActionEditor), findsWidgets);
+      expect(find.byIcon(Icons.edit_outlined), findsNothing);
+      await tester.tap(find.byType(WebsiteInlineActionEditor).first);
+      await tester.pump();
+
+      expect(find.byIcon(Icons.edit_outlined), findsOneWidget,
+          reason: 'the tap selected the inline action editor');
+      expect(navigations, isEmpty,
+          reason: 'Edit never navigates from a CTA tap');
     },
   );
 }

@@ -14,21 +14,14 @@ import '../../crm/services/customer_service.dart';
 import '../../inventory/services/inventory_service.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../../sales/services/sales_service.dart';
+import '../../tasks/services/task_service.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/right_toolbar_service.dart';
+import '../models/ai_assistant_destination.dart';
+import '../models/ai_assistant_session_state.dart';
+import '../services/ai_assistant_context_service.dart';
+import '../services/ai_assistant_session_service.dart';
 import '../services/ai_service.dart';
-
-class _AIChatMessage {
-  const _AIChatMessage({
-    required this.role,
-    required this.text,
-    this.cards = const [],
-  });
-
-  final String role;
-  final String text;
-  final List<AIAssistantActionCard> cards;
-}
 
 class AIAssistantButton extends StatelessWidget {
   final List<MechanicJob> jobs;
@@ -69,8 +62,6 @@ class AIChatPanel extends StatefulWidget {
 
 class _AIChatPanelState extends State<AIChatPanel> {
   final TextEditingController _controller = TextEditingController();
-  final List<_AIChatMessage> _messages = [];
-  late AIAssistantService _aiService;
   final ScrollController _scrollController = ScrollController();
   final SpeechToText _speechToText = SpeechToText();
 
@@ -93,92 +84,78 @@ class _AIChatPanelState extends State<AIChatPanel> {
     return null;
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _aiService = AIAssistantService();
-    _aiService.initialize();
+  // Opening the assistant performs no work of its own — no `initState`
+  // override at all. It used to kick off an embeddings backfill on mount,
+  // against an RPC that does not exist in production, so every open logged a
+  // failure loop the operator never asked for. Backfilling is catalog
+  // maintenance, not a side effect of looking at a panel.
 
-    // Backfill product embeddings in the background (only generates missing ones)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        if (mounted) {
-          context.read<InventoryService>().backfillEmbeddings();
-        }
-      } catch (e) {
-        debugPrint('⚠️ [AIChatPanel] Backfill trigger failed: $e');
-      }
-    });
-
-    // Add welcome message
-    _messages.add(const _AIChatMessage(
-      role: 'assistant',
-      text:
-          'Hola! Soy tu asistente de taller. Puedo ayudarte a analizar trabajos, buscar productos en el inventario, y más. ¿Qué necesitas?',
-    ));
-  }
-
-  /// Called by the AI when it wants to navigate somewhere inside the app.
-  void _handleAINavigation(String route, {String? searchTerm}) {
-    debugPrint(
-        '🧭 [AIChatPanel] AI navigation requested: $route (search: $searchTerm)');
-
-    // Use WorkspaceManager to navigate since we are now a global side panel
+  /// Performs the effect registered for a card's destination.
+  ///
+  /// The card supplies an identifier from a closed set; the resolver owns the
+  /// route table and the toolbar table. An unregistered identifier produces no
+  /// effect at all rather than a guessed route.
+  void _handleDestination(AIAssistantDestination destination) {
     final workspaceManager = context.read<WorkspaceManager>();
+    final toolbar = context.read<RightToolbarService>();
+    final resolver = AIAssistantDestinationResolver(
+      navigateWorkspace: (route) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          workspaceManager.navigateActiveWorkspace(route);
+        });
+      },
+      openToolbarTool: toolbar.openTool,
+    );
 
-    // Defer the navigation slightly so the UI doesn't stutter while animating the chat response
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      workspaceManager.navigateActiveWorkspace(route);
-    });
+    final dispatched = resolver.dispatch(destination);
+    if (!dispatched && !kReleaseMode) {
+      debugPrint(
+        '🧭 [AIChatPanel] Destination $destination has no registered effect; '
+        'ignored.',
+      );
+    }
   }
 
+  /// Hands the turn to the session service, which is the only sequencer.
+  ///
+  /// The panel no longer keeps its own message list. Transcript and model
+  /// input come from one place, so the two cannot drift apart the way they did
+  /// when closing the panel emptied the visible thread while the engine kept
+  /// answering from it.
   Future<void> _sendMessage({String? overrideText}) async {
+    final session = context.read<AIAssistantSessionService>();
+    if (!session.canSend) return;
+
     final text = (overrideText ?? _controller.text).trim();
     if (text.isEmpty) return;
 
     await _stopListening(sendTranscript: false);
     if (!mounted) return;
 
-    setState(() {
-      _messages.add(_AIChatMessage(role: 'user', text: text));
-      _controller.clear();
-    });
-
+    _controller.clear();
     _scrollToBottom();
 
-    final inventoryService = context.read<InventoryService>();
-    final customerService = context.read<CustomerService>();
-    final bikeshopService = context.read<BikeshopService>();
-    final purchaseService = context.read<PurchaseService>();
-    final salesService = context.read<SalesService>();
-    debugPrint(
-      '[AI_CTX][AIChatPanel.send] currentView=${widget.jobsAreCurrentView} '
-      'allowFallback=${widget.allowJobCacheFallback} '
-      'count=${widget.jobs.length} scope="${widget.jobsScopeLabel}" '
-      'jobs=[${_debugJobNumbers(widget.jobs)}] message="$text"',
+    final aiContext = context.read<AIAssistantContextService>();
+    final services = AIAssistantTurnServices(
+      customerService: context.read<CustomerService>(),
+      inventoryService: context.read<InventoryService>(),
+      bikeshopService: context.read<BikeshopService>(),
+      purchaseService: context.read<PurchaseService>(),
+      salesService: context.read<SalesService>(),
+      taskService: context.read<TaskService>(),
     );
-    final response = await _aiService.sendMessage(
+
+    await session.send(
       text,
-      jobs: widget.jobs,
-      customerService: customerService,
-      inventoryService: inventoryService,
-      bikeshopService: bikeshopService,
+      services: services,
+      visibleJobs: widget.jobs,
+      hasVisibleJobsContext: aiContext.hasVisibleJobsContext,
+      visibleJobsScopeLabel: widget.jobsScopeLabel,
       jobsAreCurrentView: widget.jobsAreCurrentView,
-      jobSummaryScopeLabel: widget.jobsScopeLabel,
-      purchaseService: purchaseService,
-      salesService: salesService,
       allowJobCacheFallback: widget.allowJobCacheFallback,
-      onNavigate: _handleAINavigation,
     );
 
     if (mounted) {
-      setState(() {
-        _messages.add(_AIChatMessage(
-          role: 'assistant',
-          text: response.text,
-          cards: response.cards,
-        ));
-      });
       _scrollToBottom();
     }
   }
@@ -217,7 +194,7 @@ class _AIChatPanelState extends State<AIChatPanel> {
       return;
     }
 
-    if (_aiService.isLoading) {
+    if (!context.read<AIAssistantSessionService>().canSend) {
       return;
     }
 
@@ -382,6 +359,21 @@ class _AIChatPanelState extends State<AIChatPanel> {
     super.dispose();
   }
 
+  /// Why the composer is closed, in the operator's words. Never shows data
+  /// from a previous authority.
+  static String _composerBlockedHint(AIAssistantSessionStatus status) {
+    switch (status) {
+      case AIAssistantSessionStatus.signedOut:
+        return 'Inicia sesión para usar el asistente.';
+      case AIAssistantSessionStatus.resolving:
+        return 'Preparando tu sesión...';
+      case AIAssistantSessionStatus.unavailable:
+        return 'No pude confirmar tu taller. Vuelve a entrar para usar el asistente.';
+      case AIAssistantSessionStatus.ready:
+        return 'Pregunta o pide algo al asistente...';
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -394,20 +386,11 @@ class _AIChatPanelState extends State<AIChatPanel> {
     });
   }
 
-  String _debugJobNumbers(List<MechanicJob> jobs) {
-    final numbers = jobs
-        .take(12)
-        .map((job) => job.jobNumber ?? job.id ?? 'sin-numero')
-        .join(', ');
-    if (jobs.length <= 12) {
-      return numbers;
-    }
-    return '$numbers, ... +${jobs.length - 12}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final session = context.watch<AIAssistantSessionService>();
+    final transcript = session.transcript;
 
     return Container(
       width: widget.embedded ? double.infinity : 400,
@@ -459,37 +442,44 @@ class _AIChatPanelState extends State<AIChatPanel> {
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              itemCount: _messages.length,
+              itemCount: transcript.length,
               itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final isUser = msg.role == 'user';
+                final msg = transcript[index];
+                final isUser = msg.role == AIAssistantTranscriptRole.user;
+                final bubbleColor = isUser
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.surfaceContainerHighest;
+                final bubbleForeground = isUser
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.onSurface;
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   alignment:
                       isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
+                    key: ValueKey('ai-chat-${msg.role.name}-bubble-$index'),
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     constraints: const BoxConstraints(maxWidth: 400),
                     decoration: BoxDecoration(
-                      color: isUser
-                          ? Theme.of(context).primaryColor
-                          : Colors.grey[200],
+                      color: bubbleColor,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: isUser
-                        ? Text(msg.text,
-                            style: const TextStyle(color: Colors.white))
+                        ? Text(
+                            msg.text,
+                            style: TextStyle(color: bubbleForeground),
+                          )
                         : _AssistantMessageBody(
                             message: msg,
-                            onNavigate: _handleAINavigation,
+                            onDestination: _handleDestination,
                           ),
                   ),
                 );
               },
             ),
           ),
-          if (_aiService.isLoading)
+          if (session.isSending)
             const Padding(
               padding: EdgeInsets.all(8.0),
               child: LinearProgressIndicator(),
@@ -546,40 +536,65 @@ class _AIChatPanelState extends State<AIChatPanel> {
                     },
                   },
                   child: TextField(
+                    key: const ValueKey<String>('ai-assistant-message-input'),
                     controller: _controller,
                     minLines: 1,
                     maxLines: 4,
-                    decoration: const InputDecoration(
-                      hintText: 'Pregunta o pide algo al asistente...',
-                      border: OutlineInputBorder(),
+                    // Fail-closed: while the authority is unresolved, or a
+                    // turn is already in flight, there is nothing coherent to
+                    // send a message against.
+                    enabled: session.canSend,
+                    textInputAction: TextInputAction.send,
+                    decoration: InputDecoration(
+                      hintText: session.canSend
+                          ? 'Pregunta o pide algo al asistente...'
+                          : _composerBlockedHint(session.status),
+                      border: const OutlineInputBorder(),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              Tooltip(
-                message: _isListening
-                    ? 'Detener y enviar audio'
-                    : (_voiceInputBlockedReason ?? 'Hablar con el asistente'),
-                child: IconButton(
-                  icon: Icon(
-                    _isListening
-                        ? Icons.stop_circle_outlined
-                        : Icons.mic_none_rounded,
+              Semantics(
+                button: true,
+                enabled: session.canSend,
+                // A tooltip alone is announced as a hint, not as the control's
+                // name, so the dictation button needs an explicit label.
+                label: _isListening
+                    ? 'Detener el dictado y enviar el audio'
+                    : 'Dictar un mensaje al asistente',
+                child: Tooltip(
+                  message: _isListening
+                      ? 'Detener y enviar audio'
+                      : (_voiceInputBlockedReason ?? 'Hablar con el asistente'),
+                  child: IconButton(
+                    key: const ValueKey<String>('ai-assistant-voice-input'),
+                    icon: Icon(
+                      _isListening
+                          ? Icons.stop_circle_outlined
+                          : Icons.mic_none_rounded,
+                    ),
+                    onPressed: session.canSend ? _toggleVoiceInput : null,
+                    color: _isListening
+                        ? Theme.of(context).colorScheme.error
+                        : _voiceInputBlockedReason != null
+                            ? Theme.of(context).disabledColor
+                            : Theme.of(context).colorScheme.primary,
                   ),
-                  onPressed: _toggleVoiceInput,
-                  color: _isListening
-                      ? Theme.of(context).colorScheme.error
-                      : _voiceInputBlockedReason != null
-                          ? Theme.of(context).disabledColor
-                          : Theme.of(context).colorScheme.primary,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.send),
-                onPressed: _sendMessage,
-                color: Theme.of(context).primaryColor,
+              Semantics(
+                button: true,
+                enabled: session.canSend,
+                label: 'Enviar mensaje al asistente',
+                child: IconButton(
+                  key: const ValueKey<String>('ai-assistant-send-message'),
+                  icon: const Icon(Icons.send),
+                  onPressed: session.canSend ? _sendMessage : null,
+                  tooltip: 'Enviar mensaje',
+                  color: Theme.of(context).primaryColor,
+                ),
               ),
             ],
           ),
@@ -592,18 +607,43 @@ class _AIChatPanelState extends State<AIChatPanel> {
 class _AssistantMessageBody extends StatelessWidget {
   const _AssistantMessageBody({
     required this.message,
-    required this.onNavigate,
+    required this.onDestination,
   });
 
-  final _AIChatMessage message;
-  final void Function(String route, {String? searchTerm}) onNavigate;
+  final AIAssistantTranscriptEntry message;
+  final void Function(AIAssistantDestination destination) onDestination;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isNotice = message.role == AIAssistantTranscriptRole.notice;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (message.text.trim().isNotEmpty) MarkdownBody(data: message.text),
+        if (message.text.trim().isNotEmpty)
+          if (isNotice)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 16,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    message.text,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            MarkdownBody(data: message.text),
         if (message.cards.isNotEmpty)
           Padding(
             padding: EdgeInsets.only(top: message.text.trim().isEmpty ? 0 : 10),
@@ -613,7 +653,7 @@ class _AssistantMessageBody extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: _AssistantActionCard(
                           card: card,
-                          onTap: () => onNavigate(card.route),
+                          onTap: () => onDestination(card.destination),
                         ),
                       ))
                   .toList(),
@@ -636,19 +676,39 @@ class _AssistantActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final accent = _accentFor(card.kind, theme);
-    final background = Color.lerp(accent, Colors.white, 0.9) ?? Colors.white;
+    // The card used to be tinted white regardless of theme, so in dark mode a
+    // panel of white islands sat inside the app's dark chrome. The surface now
+    // comes from the scheme and the accent only tints it, which keeps the
+    // per-kind cue in both brightnesses.
+    final surface = scheme.surfaceContainerHigh;
+    final background =
+        Color.alphaBlend(accent.withValues(alpha: 0.08), surface);
+    // The accent is decorative only — tint, border, shadow, icon wash. It used
+    // to paint the eyebrow, the icon, the CTA and its arrow, and those hues
+    // were chosen against a white card: `job` (#6D4C41) on the dark surface
+    // measures roughly 1.8:1, which nobody can read. Every foreground now
+    // comes from a role defined against this surface in both brightnesses.
+    final onCard = scheme.onSurface;
+    final onCardMuted = scheme.onSurfaceVariant;
+
+    // Two cards of the same kind can appear in one answer, so the key carries
+    // the destination too.
+    final cardKey = 'ai-action-card-${card.kind}-${card.destination.name}';
 
     return Material(
+      key: ValueKey<String>(cardKey),
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Ink(
+          key: ValueKey<String>('$cardKey-ink'),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             gradient: LinearGradient(
-              colors: [background, Colors.white],
+              colors: [background, surface],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -673,7 +733,7 @@ class _AssistantActionCard extends StatelessWidget {
                     color: accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(_iconFor(card.kind), color: accent, size: 22),
+                  child: Icon(_iconFor(card.kind), color: onCard, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -684,7 +744,7 @@ class _AssistantActionCard extends StatelessWidget {
                         Text(
                           card.eyebrow!.toUpperCase(),
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: accent,
+                            color: onCardMuted,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.4,
                           ),
@@ -693,7 +753,7 @@ class _AssistantActionCard extends StatelessWidget {
                         card.title,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: const Color(0xFF162033),
+                          color: scheme.onSurface,
                         ),
                       ),
                       if ((card.subtitle ?? '').isNotEmpty) ...[
@@ -701,7 +761,7 @@ class _AssistantActionCard extends StatelessWidget {
                         Text(
                           card.subtitle!,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[700],
+                            color: scheme.onSurfaceVariant,
                             height: 1.35,
                           ),
                         ),
@@ -711,7 +771,7 @@ class _AssistantActionCard extends StatelessWidget {
                         Text(
                           card.description!,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF25324A),
+                            color: scheme.onSurface,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -726,7 +786,7 @@ class _AssistantActionCard extends StatelessWidget {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: Colors.white,
+                                      color: scheme.surface,
                                       borderRadius: BorderRadius.circular(999),
                                       border: Border.all(
                                           color:
@@ -736,7 +796,7 @@ class _AssistantActionCard extends StatelessWidget {
                                       chip,
                                       style:
                                           theme.textTheme.labelSmall?.copyWith(
-                                        color: const Color(0xFF2F3B52),
+                                        color: scheme.onSurface,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
@@ -750,13 +810,13 @@ class _AssistantActionCard extends StatelessWidget {
                           Text(
                             card.ctaLabel,
                             style: theme.textTheme.labelLarge?.copyWith(
-                              color: accent,
+                              color: onCard,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
                           const SizedBox(width: 6),
                           Icon(Icons.arrow_outward_rounded,
-                              color: accent, size: 18),
+                              color: onCard, size: 18),
                         ],
                       ),
                     ],
@@ -782,6 +842,8 @@ class _AssistantActionCard extends StatelessWidget {
         return Icons.inventory_2_rounded;
       case 'sales_invoice':
         return Icons.point_of_sale_rounded;
+      case 'task':
+        return Icons.checklist_rounded;
       case 'supplier':
         return Icons.local_shipping_rounded;
       default:
@@ -797,6 +859,8 @@ class _AssistantActionCard extends StatelessWidget {
         return const Color(0xFF6D4C41);
       case 'purchase_invoice':
         return const Color(0xFFBF6A02);
+      case 'task':
+        return theme.colorScheme.tertiary;
       case 'inventory':
         return const Color(0xFF1565C0);
       case 'sales_invoice':

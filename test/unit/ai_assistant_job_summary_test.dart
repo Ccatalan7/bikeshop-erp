@@ -1,6 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/ai_assistant/services/ai_service.dart';
 import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
+import 'package:vinabike_erp/shared/services/authority_scoped_cache.dart';
+
+/// Every turn now carries the authority its rows must belong to. These jobs are
+/// built for tenant `tenant`, so the summaries below are asked for under that
+/// same authority; a mismatch is what the isolation suites cover.
+final _authority = AIAssistantTurnAuthority(
+  ErpAuthorityScopeKey.from(userId: 'user-test', tenantId: 'tenant')!,
+);
 
 void main() {
   group('AIAssistantService job summaries', () {
@@ -10,6 +18,7 @@ void main() {
       final service = AIAssistantService();
 
       final response = await service.sendMessage(
+        authority: _authority,
         'puedes hacerme un resumen de los trabajos del día?',
         jobs: [
           MechanicJob(
@@ -47,6 +56,7 @@ void main() {
       final service = AIAssistantService();
 
       final response = await service.sendMessage(
+        authority: _authority,
         'dame un resumen de los trabajos activos',
         jobs: [
           MechanicJob(
@@ -98,6 +108,7 @@ void main() {
       final service = AIAssistantService();
 
       final response = await service.sendMessage(
+        authority: _authority,
         'dame un resumen de los trabajos activos',
         jobs: const [],
         jobsAreCurrentView: true,
@@ -115,6 +126,7 @@ void main() {
       final service = AIAssistantService();
 
       final response = await service.sendMessage(
+        authority: _authority,
         'dame un resumen de los trabajos activos',
         jobs: const [],
         allowJobCacheFallback: false,
@@ -133,6 +145,7 @@ void main() {
       final service = AIAssistantService();
 
       final response = await service.sendMessage(
+        authority: _authority,
         'hazme un resumen de los trabajos activos',
         jobs: [
           MechanicJob(
@@ -168,6 +181,7 @@ void main() {
       final service = AIAssistantService();
 
       final response = await service.sendMessage(
+        authority: _authority,
         'dame un resumen de los trabajos activos',
         jobs: [
           MechanicJob(

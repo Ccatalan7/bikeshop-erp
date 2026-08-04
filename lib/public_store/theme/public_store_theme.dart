@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../modules/website/theme/website_resolved_theme.dart';
+
 /// Professional light theme for the public-facing store
 /// Inspired by vinabike.cl - clean, trustworthy, modern
 class PublicStoreTheme {
@@ -17,17 +19,17 @@ class PublicStoreTheme {
 
   // Brand Colors (Professional Blues & Grays)
   static const Color logoBlue = Color(0xFF093357);
-  static const Color primaryBlue = Color(0xFF2563EB); // Professional blue
+  static const Color primaryBlue = WebsiteResolvedTheme.defaultPrimaryColor;
   static const Color secondaryGray = Color(0xFF64748B); // Elegant gray
-  static const Color accentGreen = Color(0xFF25D366); // WhatsApp green
+  static const Color accentGreen = WebsiteResolvedTheme.defaultAccentColor;
 
   // Background Colors (Light & Clean)
-  static const Color background = Color(0xFFFFFFFF); // Pure white
+  static const Color background = WebsiteResolvedTheme.defaultBackgroundColor;
   static const Color surface = Color(0xFFF8FAFC); // Subtle off-white
   static const Color cardBackground = Colors.white;
 
   // Text Colors (Easy to Read)
-  static const Color textPrimary = Color(0xFF1E293B); // Dark gray
+  static const Color textPrimary = WebsiteResolvedTheme.defaultTextColor;
   static const Color textSecondary = Color(0xFF64748B); // Medium gray
   static const Color textMuted = Color(0xFF94A3B8); // Light gray
 

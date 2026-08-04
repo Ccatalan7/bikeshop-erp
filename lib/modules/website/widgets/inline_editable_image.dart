@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
 
+import 'website_block_content_presenters.dart';
 import 'website_media_picker.dart';
 
 /// Inline editable image widget for Odoo-style editing.
 /// When edit mode is active, clicking on image shows upload options.
+///
+/// [editAffordance] selects the edit-mode interaction policy:
+/// [WebsiteInlineMediaEditAffordance.hoverOverlay] (default) keeps the
+/// classic full-surface hover/tap picker for simple images, while
+/// [WebsiteInlineMediaEditAffordance.inspectorOnly] renders the image
+/// completely passively — no hover overlay, no gesture surface, no inline
+/// chrome — because the image is an interactive background under real
+/// content (hero/carousel CTA, arrows, dots, nested selection) and its
+/// canonical editing control lives in the block/slide inspector.
 class InlineEditableImage extends StatefulWidget {
   final String? imageUrl;
   final double? width;
@@ -15,6 +25,7 @@ class InlineEditableImage extends StatefulWidget {
   final String? tenantId;
   final Widget? placeholder;
   final BorderRadius? borderRadius;
+  final WebsiteInlineMediaEditAffordance editAffordance;
 
   const InlineEditableImage({
     super.key,
@@ -28,7 +39,13 @@ class InlineEditableImage extends StatefulWidget {
     this.tenantId,
     this.placeholder,
     this.borderRadius,
+    this.editAffordance = WebsiteInlineMediaEditAffordance.hoverOverlay,
   });
+
+  /// The classic full-surface hover overlay (hoverOverlay policy only).
+  @visibleForTesting
+  static const hoverOverlayKey =
+      ValueKey<String>('website-inline-media-hover-overlay');
 
   @override
   State<InlineEditableImage> createState() => _InlineEditableImageState();
@@ -94,6 +111,16 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
       return imageWidget;
     }
 
+    if (widget.editAffordance ==
+        WebsiteInlineMediaEditAffordance.inspectorOnly) {
+      // Interactive-background policy: the image renders exactly like the
+      // public build — no hover overlay, no gesture surface, no inline
+      // chrome — so the content above (CTA, arrows, dots, selection) keeps
+      // its full surface. The canonical "change image" control is the
+      // block/slide inspector's picker.
+      return imageWidget;
+    }
+
     // Edit mode - show upload overlay on hover/tap
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -108,6 +135,7 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
             // Hover overlay
             if (_isHovering)
               Positioned.fill(
+                key: InlineEditableImage.hoverOverlayKey,
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.5),

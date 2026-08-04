@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
+import 'package:vinabike_erp/modules/website/theme/website_resolved_theme.dart';
+import 'package:vinabike_erp/modules/website/theme/website_theme_builder.dart';
 import 'package:vinabike_erp/public_store/pages/contact_page.dart';
 import 'package:vinabike_erp/public_store/providers/public_store_tenant_provider.dart';
 import 'package:vinabike_erp/shared/models/tenant.dart';
@@ -37,6 +39,7 @@ void main() {
     WidgetTester tester, {
     required bool isEditMode,
     String? tenantId = 'tenant-contact-test',
+    ThemeData? theme,
   }) async {
     final preferences = await SharedPreferences.getInstance();
     WebsiteService.setSharedPreferences(preferences);
@@ -73,8 +76,9 @@ void main() {
             value: tenant,
           ),
         ],
-        child: const MaterialApp(
-          home: Scaffold(
+        child: MaterialApp(
+          theme: theme,
+          home: const Scaffold(
             body: SingleChildScrollView(child: ContactPage()),
           ),
         ),
@@ -138,6 +142,110 @@ void main() {
     // The info panel's address row is value-driven, so with no configured
     // address it must not render its label either.
     expect(find.text('Dirección'), findsNothing);
+  });
+
+  testWidgets(
+      'a dark custom theme drives the REAL rendered surfaces and text, '
+      'not the old hardcoded light palette', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    // Custom dark storefront: explicit background and text, distinctive
+    // primary. The page must consume the PROJECTED ThemeData roles, so every
+    // asserted value below is the exact rendered color, not token presence.
+    const customBackground = Color(0xFF10141C);
+    const customText = Color(0xFFE6EDF3);
+    const customPrimary = Color(0xFF7BD1FF);
+    final resolved = WebsiteResolvedTheme.fallback.copyWith(
+      backgroundColor: customBackground,
+      textColor: customText,
+      primaryColor: customPrimary,
+    );
+    final theme = WebsiteThemeBuilder.build(
+      base: ThemeData.light(),
+      resolved: resolved,
+    );
+    final colorScheme = theme.colorScheme;
+    expect(colorScheme.surface, customBackground,
+        reason: 'harness sanity: the builder projects the custom background');
+    expect(colorScheme.onSurface, customText,
+        reason: 'harness sanity: the builder projects the custom text color');
+
+    await pumpContact(tester, isEditMode: true, theme: theme);
+
+    Container containerWithColorAround(String text) {
+      final candidates = tester
+          .widgetList<Container>(
+            find.ancestor(
+              of: find.text(text),
+              matching: find.byType(Container),
+            ),
+          )
+          .where((c) => c.color != null || c.decoration is BoxDecoration);
+      expect(candidates, isNotEmpty,
+          reason: 'no painted Container found around "$text"');
+      return candidates.first;
+    }
+
+    Color? containerFill(Container container) =>
+        container.color ?? (container.decoration as BoxDecoration?)?.color;
+
+    // Hero: themed surface with the custom text color, never white-on-light.
+    final hero = containerWithColorAround('Contáctanos');
+    expect(containerFill(hero), colorScheme.surface);
+    final heroTitle = tester.widget<Text>(find.text('Contáctanos'));
+    expect(heroTitle.style?.color, customText);
+
+    // Main content band: themed container tone derived from the dark
+    // background, not Colors.grey.shade50.
+    final mainBand = containerWithColorAround('Envíanos un mensaje');
+    final mainBandFill = containerFill(mainBand);
+    expect(mainBandFill, isNotNull);
+    expect(mainBandFill, isNot(Colors.white));
+    expect(
+      mainBandFill == colorScheme.surface ||
+          mainBandFill == colorScheme.surfaceContainerLow,
+      isTrue,
+      reason: 'the form region paints projected surface roles, got '
+          '$mainBandFill',
+    );
+
+    // Form card: themed surface plus themed outline border.
+    final formCard = tester
+        .widgetList<Container>(
+          find.ancestor(
+            of: find.text('Envíanos un mensaje'),
+            matching: find.byType(Container),
+          ),
+        )
+        .firstWhere((c) =>
+            c.decoration is BoxDecoration &&
+            (c.decoration as BoxDecoration).border != null);
+    final formDecoration = formCard.decoration as BoxDecoration;
+    expect(formDecoration.color, colorScheme.surface);
+    expect(
+      (formDecoration.border as Border).top.color,
+      colorScheme.outlineVariant,
+    );
+    final formTitle = tester.widget<Text>(find.text('Envíanos un mensaje'));
+    expect(formTitle.style?.color, customText);
+
+    // Inputs: themed fill and themed muted hint, readable over dark.
+    final field = tester.widget<TextField>(find.byType(TextField).first);
+    expect(field.decoration?.fillColor, colorScheme.surfaceContainerLow);
+    expect(
+      field.decoration?.hintStyle?.color,
+      colorScheme.onSurfaceVariant,
+    );
+
+    // Info panel card and its heading follow the same projected roles.
+    final infoCard = containerWithColorAround('Información de Contacto');
+    expect(containerFill(infoCard), colorScheme.surfaceContainerLow,
+        reason: 'the info card paints the themed container tone');
+    final infoTitle = tester.widget<Text>(find.text('Información de Contacto'));
+    expect(infoTitle.style?.color, customText);
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the send action is disabled without a configured mailbox',

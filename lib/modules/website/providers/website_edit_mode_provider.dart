@@ -6,9 +6,13 @@ import '../models/website_page_models.dart';
 import '../models/website_action.dart';
 import '../models/website_editor_capability.dart';
 import '../models/website_block_document_sanitizer.dart';
+import '../models/website_block_definition.dart';
 import '../models/canvas_element_factory.dart';
+import '../models/website_canvas_responsive_document.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
+import '../models/website_responsive_authoring.dart';
+import '../models/website_responsive_field_state.dart';
 
 const _uuid = Uuid();
 
@@ -30,7 +34,6 @@ enum WebsiteEditorMode {
   preview,
   edit,
 }
-
 
 /// The active task surface inside the Website Builder.
 ///
@@ -104,6 +107,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   WebsiteWorkspaceMode _workspaceMode = WebsiteWorkspaceMode.pageEditor;
   DevicePreviewMode _devicePreviewMode =
       DevicePreviewMode.desktop; // Persist preview options
+  WebsiteWriteScope _writeScope = WebsiteWriteScope.shared;
+  final Map<String, WebsiteWriteScope> _fieldWriteScopes = {};
 
   String? _selectedBlockId;
   int _selectionVersion = 0; // Tracks explicit selection events
@@ -259,8 +264,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   bool revokeEditorEntryLease() {
     _entryLeaseGeneration++;
     _entryLeaseIdentityRevision++;
-    final hadLease =
-        _entryLease != null || _suspendedLeaseFingerprint != null;
+    final hadLease = _entryLease != null || _suspendedLeaseFingerprint != null;
     _entryLease = null;
     _suspendedLease = null;
     // An identity change orphans BOTH owners unconditionally, session and
@@ -276,6 +280,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     if (hadLease) _notifyAfterFrame();
     return hadLease;
   }
+
   bool get isPreviewMode => _mode == WebsiteEditorMode.preview;
   bool get isEditMode => _mode == WebsiteEditorMode.edit;
   bool get isInEditorContext => _mode != WebsiteEditorMode.public;
@@ -284,6 +289,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       _workspaceMode == WebsiteWorkspaceMode.pageEditor;
   bool get isManagementWorkspace => !isPageEditorWorkspace;
   DevicePreviewMode get devicePreviewMode => _devicePreviewMode;
+  WebsiteViewport get previewViewport => switch (_devicePreviewMode) {
+        DevicePreviewMode.desktop => WebsiteViewport.desktop,
+        DevicePreviewMode.tablet => WebsiteViewport.tablet,
+        DevicePreviewMode.mobile => WebsiteViewport.mobile,
+      };
+  WebsiteWriteScope get writeScope => _writeScope;
   String? get selectedBlockId => _selectedBlockId;
   int get selectionVersion => _selectionVersion;
 
@@ -461,6 +472,21 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         hasUnsavedChanges: _pageDraft.hasUnsavedChanges,
         ownerTenantId: documentOwnerTenantId,
         ownerLeaseFingerprint: documentOwnerLeaseFingerprint,
+      );
+
+  /// Immutable saved/loaded baseline for durable-draft conflict detection.
+  ///
+  /// The live [document] may contain unsaved edits. Persisting its digest as
+  /// the baseline would make every local draft appear compatible with any
+  /// server state. History slot zero is the owner already used by Discard;
+  /// exposing a detached copy lets [WebsiteEditorDraftStore] bind recovery to
+  /// that exact document without gaining write access to provider internals.
+  List<Map<String, dynamic>> get pageDraftBaselineBlocks =>
+      List<Map<String, dynamic>>.unmodifiable(
+        (_pageDraft.history.isEmpty
+                ? _pageDraft.blocks
+                : _pageDraft.history.first)
+            .map(_deepUnmodifiableMap),
       );
 
   /// Switch task surfaces without reloading or clearing the current page draft.
@@ -1008,6 +1034,19 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Get effective header setting (pending value if exists, otherwise from
+  /// settings). Mirrors [getEffectiveThemeSetting] so header consumers
+  /// (storefront logo, header controls) preview the staged draft in Edit
+  /// and Preview while Public keeps saved values.
+  String getEffectiveHeaderSetting(String key, String defaultValue) {
+    if (_sitewideDraft.pendingHeaderSettings.containsKey(key)) {
+      return _sitewideDraft.pendingHeaderSettings[key]!;
+    }
+    final saved = _settings[key];
+    if (saved != null) return saved.toString();
+    return defaultValue;
+  }
+
   /// Get effective theme setting (pending value if exists, otherwise from settings)
   String getEffectiveThemeSetting(String key, String defaultValue) {
     // First check pending theme settings (live preview)
@@ -1106,6 +1145,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _selectedFooterNavId = null;
     _carouselSlideSelections.clear();
     _canvasElementSelections.clear();
+    _fieldWriteScopes.clear();
+    _canvasFieldScopes.clear();
   }
 
   void _clearSitewideAndSeoDrafts() {
@@ -1472,9 +1513,200 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Set device preview mode (desktop, tablet, mobile)
   void setDevicePreviewMode(DevicePreviewMode mode) {
-    if (_devicePreviewMode == mode) return;
+    final scopeChanged = mode == DevicePreviewMode.desktop &&
+        _writeScope != WebsiteWriteScope.shared;
+    if (_devicePreviewMode == mode && !scopeChanged) return;
     _devicePreviewMode = mode;
+    if (scopeChanged) _writeScope = WebsiteWriteScope.shared;
     notifyListeners();
+  }
+
+  /// Sets the default attribution shown by responsive field shells.
+  ///
+  /// Each field remains authoritative and applies its schema policy when it
+  /// writes. Desktop is the shared/base value, so a desktop viewport can never
+  /// retain a viewport-scoped default.
+  void setWriteScope(WebsiteWriteScope scope) {
+    final next = previewViewport == WebsiteViewport.desktop
+        ? WebsiteWriteScope.shared
+        : scope;
+    if (_writeScope == next) return;
+    _writeScope = next;
+    notifyListeners();
+  }
+
+  String _fieldWriteScopeKey(
+    String blockId,
+    String propertyKey,
+    WebsiteViewport viewport,
+  ) =>
+      '$blockId|${viewport.name}|$propertyKey';
+
+  /// Effective attribution for one field.
+  ///
+  /// The editor-level [writeScope] is only a default. Once the user chooses a
+  /// scope in a ResponsiveFieldShell, that exact block/property/viewport owns
+  /// its next writes independently from every neighbouring control.
+  WebsiteWriteScope fieldWriteScope({
+    required String blockId,
+    required String propertyKey,
+    required WebsiteResponsivePropertyPolicy policy,
+    WebsiteViewport? viewport,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    if (!policy.supportsViewportOverride ||
+        targetViewport == WebsiteViewport.desktop) {
+      return WebsiteWriteScope.shared;
+    }
+    return _fieldWriteScopes[
+            _fieldWriteScopeKey(blockId, propertyKey, targetViewport)] ??
+        _writeScope;
+  }
+
+  /// Changes only the transient attribution of one field.
+  ///
+  /// This is UI state: it never creates history, dirty state or serialized
+  /// data. The first actual value mutation still flows through
+  /// [setBlockResponsiveProperty].
+  void setFieldWriteScope({
+    required String blockId,
+    required String propertyKey,
+    required WebsiteResponsivePropertyPolicy policy,
+    required WebsiteWriteScope scope,
+    WebsiteViewport? viewport,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    final next = !policy.supportsViewportOverride ||
+            targetViewport == WebsiteViewport.desktop
+        ? WebsiteWriteScope.shared
+        : scope;
+    final key = _fieldWriteScopeKey(blockId, propertyKey, targetViewport);
+    if (_fieldWriteScopes[key] == next) return;
+    _fieldWriteScopes[key] = next;
+    notifyListeners();
+  }
+
+  WebsiteResponsiveFieldState<T> responsiveFieldState<T>({
+    required String blockId,
+    required WebsiteBlockFieldSchema schema,
+    required WebsiteResponsiveDecoder<T> decode,
+    WebsiteAuthoringHostClass hostClass = WebsiteAuthoringHostClass.desktop,
+    WebsiteViewport? viewport,
+    T? fallback,
+    WebsiteLegacyResponsiveReader<T>? readLegacyOverride,
+    String? unavailableReason,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    final resolved = resolveBlockProperty<T>(
+      blockId,
+      schema.key,
+      viewport: targetViewport,
+      decode: decode,
+      fallback: fallback,
+      readLegacyOverride: readLegacyOverride,
+    );
+    final context = WebsiteAuthoringContext(
+      hostClass: hostClass,
+      previewViewport: targetViewport,
+      writeScope: fieldWriteScope(
+        blockId: blockId,
+        propertyKey: schema.key,
+        policy: schema.responsivePolicy,
+        viewport: targetViewport,
+      ),
+    );
+    return WebsiteResponsiveFieldState<T>.resolve(
+      schema: schema,
+      context: context,
+      resolved: resolved,
+      unavailableReason: unavailableReason,
+    );
+  }
+
+  /// Installs a previously validated durable page draft above the current
+  /// authoritative baseline.
+  ///
+  /// Storage parsing, retention and baseline-digest checks belong to
+  /// `WebsiteEditorDraftStore`. This final mutation boundary repeats the
+  /// authority and page checks immediately before touching state, refuses to
+  /// overwrite a newer in-memory draft, and rebuilds history as
+  /// `server baseline -> recovered draft`. A recovery therefore remains fully
+  /// undoable and Discard still returns to the latest loaded/saved document.
+  bool restoreDurablePageDraft({
+    required WebsiteEditorCapabilitySnapshot authority,
+    required List<Map<String, dynamic>> recoveredBlocks,
+    required WebsiteViewport recoveredViewport,
+    required WebsiteWriteScope recoveredWriteScope,
+    String? recoveredSelectedBlockId,
+    String? pageId,
+    String? pageSlug,
+  }) {
+    final liveLease = _entryLease;
+    final documentLease = _documentOwnerLease;
+    if (liveLease == null ||
+        documentLease == null ||
+        !liveLease.granted ||
+        liveLease.fingerprint != authority.fingerprint ||
+        liveLease.authorityEpoch != authority.authorityEpoch ||
+        documentLease.fingerprint != authority.fingerprint ||
+        documentLease.authorityEpoch != authority.authorityEpoch) {
+      throw const WebsiteEditorAuthorityException(
+        'El borrador local pertenece a otra autoridad de edición.',
+      );
+    }
+    if (!_matchesActivePage(pageId, pageSlug)) {
+      throw StateError('El borrador local pertenece a otra página.');
+    }
+    if (_pageDraft.hasUnsavedChanges) {
+      throw StateError(
+        'No se puede reemplazar un borrador en memoria con otro local.',
+      );
+    }
+
+    final baseline = _deepCopyBlocks(
+      _pageDraft.history.isEmpty ? _pageDraft.blocks : _pageDraft.history.first,
+    );
+    final recovered = _deepCopyBlocks(
+      sanitizeWebsiteBlocksForPersistence(recoveredBlocks),
+    );
+    final contentChanged = !_deepEquals(baseline, recovered);
+
+    _pageDraft.blocks = recovered;
+    _pageDraft.history
+      ..clear()
+      ..add(_deepCopyBlocks(baseline));
+    if (contentChanged) {
+      _pageDraft.history.add(_deepCopyBlocks(recovered));
+      _pageDraft.historyIndex = 1;
+    } else {
+      _pageDraft.historyIndex = 0;
+    }
+    _pageDraft.hasUnsavedChanges = contentChanged;
+
+    _devicePreviewMode = switch (recoveredViewport) {
+      WebsiteViewport.desktop => DevicePreviewMode.desktop,
+      WebsiteViewport.tablet => DevicePreviewMode.tablet,
+      WebsiteViewport.mobile => DevicePreviewMode.mobile,
+    };
+    _writeScope = recoveredViewport == WebsiteViewport.desktop
+        ? WebsiteWriteScope.shared
+        : recoveredWriteScope;
+
+    _carouselSlideSelections.clear();
+    _canvasElementSelections.clear();
+    final selectedId = recoveredSelectedBlockId?.trim();
+    _selectedBlockId = _mode == WebsiteEditorMode.edit &&
+            selectedId != null &&
+            selectedId.isNotEmpty &&
+            _pageDraft.blocks.any(
+              (block) => block['id']?.toString() == selectedId,
+            )
+        ? selectedId
+        : null;
+    _selectionVersion++;
+    _reconcileTransientCanvasSelections();
+    notifyListeners();
+    return contentChanged;
   }
 
   /// Closes the editor session completely (back to the visitor view).
@@ -1566,6 +1798,718 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     debugPrint(
         '👉 [EditProvider] Block Selected: $blockId (v$_selectionVersion)');
     notifyListeners();
+  }
+
+  WebsiteResolvedResponsiveValue<T> resolveBlockProperty<T>(
+    String blockId,
+    String propertyKey, {
+    WebsiteViewport? viewport,
+    required WebsiteResponsiveDecoder<T> decode,
+    T? fallback,
+    WebsiteLegacyResponsiveReader<T>? readLegacyOverride,
+  }) {
+    return WebsiteResponsiveDataCodec.resolve<T>(
+      data: getBlockData(blockId),
+      propertyKey: propertyKey,
+      viewport: viewport ?? previewViewport,
+      decode: decode,
+      fallback: fallback,
+      readLegacyOverride: readLegacyOverride,
+    );
+  }
+
+  bool hasBlockResponsiveOverride(
+    String blockId,
+    String propertyKey, {
+    WebsiteViewport? viewport,
+  }) {
+    return WebsiteResponsiveDataCodec.hasOverride(
+      getBlockData(blockId),
+      propertyKey,
+      viewport ?? previewViewport,
+    );
+  }
+
+  String _repeaterResponsivePropertyKey({
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required String propertyKey,
+    String? identityKey,
+    Object? identityValue,
+  }) {
+    final collection =
+        collectionKeys.isEmpty ? 'collection' : collectionKeys[0];
+    final item = identityKey != null && identityValue != null
+        ? '$identityKey:${identityValue.toString()}'
+        : 'index:$itemIndex';
+    return '$collection[$item].$propertyKey';
+  }
+
+  Map<String, dynamic>? _blockRepeaterItemData(
+    String blockId, {
+    required List<String> collectionKeys,
+    required int itemIndex,
+    String? identityKey,
+    Object? identityValue,
+  }) {
+    if (collectionKeys.isEmpty) return null;
+    final blockIndex = _pageDraft.blocks.indexWhere((b) => b['id'] == blockId);
+    if (blockIndex == -1) return null;
+    final rawData = _pageDraft.blocks[blockIndex]['block_data'];
+    if (rawData is! Map) return null;
+
+    Object? source;
+    for (final key in collectionKeys) {
+      if (rawData.containsKey(key)) {
+        source = rawData[key];
+        break;
+      }
+    }
+    if (source is! List) return null;
+
+    var resolvedIndex = itemIndex;
+    if (identityKey != null && identityValue != null) {
+      final identityIndex = source.indexWhere(
+        (item) => item is Map && item[identityKey] == identityValue,
+      );
+      if (identityIndex != -1) resolvedIndex = identityIndex;
+    }
+    if (resolvedIndex < 0 || resolvedIndex >= source.length) return null;
+    final rawItem = source[resolvedIndex];
+    return rawItem is Map ? Map<String, dynamic>.from(rawItem) : null;
+  }
+
+  WebsiteWriteScope repeaterFieldWriteScope({
+    required String blockId,
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required String propertyKey,
+    required WebsiteResponsivePropertyPolicy policy,
+    WebsiteViewport? viewport,
+    String? identityKey,
+    Object? identityValue,
+  }) {
+    return fieldWriteScope(
+      blockId: blockId,
+      propertyKey: _repeaterResponsivePropertyKey(
+        collectionKeys: collectionKeys,
+        itemIndex: itemIndex,
+        propertyKey: propertyKey,
+        identityKey: identityKey,
+        identityValue: identityValue,
+      ),
+      policy: policy,
+      viewport: viewport,
+    );
+  }
+
+  void setRepeaterFieldWriteScope({
+    required String blockId,
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required String propertyKey,
+    required WebsiteResponsivePropertyPolicy policy,
+    required WebsiteWriteScope scope,
+    WebsiteViewport? viewport,
+    String? identityKey,
+    Object? identityValue,
+  }) {
+    setFieldWriteScope(
+      blockId: blockId,
+      propertyKey: _repeaterResponsivePropertyKey(
+        collectionKeys: collectionKeys,
+        itemIndex: itemIndex,
+        propertyKey: propertyKey,
+        identityKey: identityKey,
+        identityValue: identityValue,
+      ),
+      policy: policy,
+      scope: scope,
+      viewport: viewport,
+    );
+  }
+
+  /// Resolves one responsive property owned by a slide/repeater item.
+  ///
+  /// The item itself owns the canonical `responsive` container. Tablet and
+  /// mobile therefore inherit directly from that item's shared value, exactly
+  /// like root block properties, without leaking an override to neighbouring
+  /// slides that happen to use the same field key.
+  WebsiteResolvedResponsiveValue<T> resolveBlockRepeaterItemProperty<T>(
+    String blockId, {
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required String propertyKey,
+    required WebsiteResponsiveDecoder<T> decode,
+    WebsiteViewport? viewport,
+    T? fallback,
+    WebsiteLegacyResponsiveReader<T>? readLegacyOverride,
+    String? identityKey,
+    Object? identityValue,
+  }) {
+    final item = _blockRepeaterItemData(
+          blockId,
+          collectionKeys: collectionKeys,
+          itemIndex: itemIndex,
+          identityKey: identityKey,
+          identityValue: identityValue,
+        ) ??
+        const <String, dynamic>{};
+    return WebsiteResponsiveDataCodec.resolve<T>(
+      data: item,
+      propertyKey: propertyKey,
+      viewport: viewport ?? previewViewport,
+      decode: decode,
+      fallback: fallback,
+      readLegacyOverride: readLegacyOverride,
+    );
+  }
+
+  WebsiteResponsiveFieldState<T> responsiveRepeaterFieldState<T>({
+    required String blockId,
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required WebsiteBlockFieldSchema schema,
+    required WebsiteResponsiveDecoder<T> decode,
+    WebsiteAuthoringHostClass hostClass = WebsiteAuthoringHostClass.desktop,
+    WebsiteViewport? viewport,
+    T? fallback,
+    WebsiteLegacyResponsiveReader<T>? readLegacyOverride,
+    String? unavailableReason,
+    String? identityKey,
+    Object? identityValue,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    final resolved = resolveBlockRepeaterItemProperty<T>(
+      blockId,
+      collectionKeys: collectionKeys,
+      itemIndex: itemIndex,
+      propertyKey: schema.key,
+      viewport: targetViewport,
+      decode: decode,
+      fallback: fallback,
+      readLegacyOverride: readLegacyOverride,
+      identityKey: identityKey,
+      identityValue: identityValue,
+    );
+    return WebsiteResponsiveFieldState<T>.resolve(
+      schema: schema,
+      context: WebsiteAuthoringContext(
+        hostClass: hostClass,
+        previewViewport: targetViewport,
+        writeScope: repeaterFieldWriteScope(
+          blockId: blockId,
+          collectionKeys: collectionKeys,
+          itemIndex: itemIndex,
+          propertyKey: schema.key,
+          policy: schema.responsivePolicy,
+          viewport: targetViewport,
+          identityKey: identityKey,
+          identityValue: identityValue,
+        ),
+      ),
+      resolved: resolved,
+      unavailableReason: unavailableReason,
+    );
+  }
+
+  bool setBlockRepeaterItemResponsiveProperty(
+    String blockId, {
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required String propertyKey,
+    required Object? value,
+    required WebsiteResponsivePropertyPolicy policy,
+    WebsiteViewport? viewport,
+    WebsiteWriteScope? scope,
+    Set<String> displayCopyWhitelist = const {},
+    String? identityKey,
+    Object? identityValue,
+    bool saveHistory = true,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    final requestedScope = scope ??
+        repeaterFieldWriteScope(
+          blockId: blockId,
+          collectionKeys: collectionKeys,
+          itemIndex: itemIndex,
+          propertyKey: propertyKey,
+          policy: policy,
+          viewport: targetViewport,
+          identityKey: identityKey,
+          identityValue: identityValue,
+        );
+    final effectiveScope = WebsiteAuthoringContext(
+      hostClass: WebsiteAuthoringHostClass.desktop,
+      previewViewport: targetViewport,
+      writeScope: requestedScope,
+    ).effectiveWriteScope(policy);
+
+    return _transformBlockRepeaterItemData(
+      blockId,
+      collectionKeys: collectionKeys,
+      itemIndex: itemIndex,
+      identityKey: identityKey,
+      identityValue: identityValue,
+      saveHistory: saveHistory,
+      operation: 'setBlockRepeaterItemResponsiveProperty',
+      transform: (item) => effectiveScope == WebsiteWriteScope.shared
+          ? WebsiteResponsiveDataCodec.setShared(
+              data: item,
+              propertyKey: propertyKey,
+              value: value,
+              policies: {propertyKey: policy},
+              displayCopyWhitelist: displayCopyWhitelist,
+            )
+          : WebsiteResponsiveDataCodec.setForViewport(
+              data: item,
+              propertyKey: propertyKey,
+              value: value,
+              viewport: targetViewport,
+              policy: policy,
+              displayCopyWhitelist: displayCopyWhitelist,
+            ),
+    );
+  }
+
+  /// Atomically writes a related set of responsive properties on one repeater
+  /// item. Focal X/Y is the primary consumer: one drag must create one history
+  /// entry and one undo step, never two partially-applied coordinates.
+  bool setBlockRepeaterItemResponsiveProperties(
+    String blockId, {
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required Map<String, Object?> values,
+    required Map<String, WebsiteResponsivePropertyPolicy> policies,
+    WebsiteViewport? viewport,
+    WebsiteWriteScope? scope,
+    Set<String> displayCopyWhitelist = const {},
+    String? identityKey,
+    Object? identityValue,
+    bool saveHistory = true,
+  }) {
+    if (values.isEmpty) return false;
+    final targetViewport = viewport ?? previewViewport;
+    return _transformBlockRepeaterItemData(
+      blockId,
+      collectionKeys: collectionKeys,
+      itemIndex: itemIndex,
+      identityKey: identityKey,
+      identityValue: identityValue,
+      saveHistory: saveHistory,
+      operation: 'setBlockRepeaterItemResponsiveProperties',
+      transform: (item) {
+        var next = item;
+        for (final entry in values.entries) {
+          final policy = policies[entry.key];
+          if (policy == null) {
+            throw ArgumentError(
+              'Missing responsive policy for ${entry.key}.',
+            );
+          }
+          final requestedScope = scope ??
+              repeaterFieldWriteScope(
+                blockId: blockId,
+                collectionKeys: collectionKeys,
+                itemIndex: itemIndex,
+                propertyKey: entry.key,
+                policy: policy,
+                viewport: targetViewport,
+                identityKey: identityKey,
+                identityValue: identityValue,
+              );
+          final effectiveScope = WebsiteAuthoringContext(
+            hostClass: WebsiteAuthoringHostClass.desktop,
+            previewViewport: targetViewport,
+            writeScope: requestedScope,
+          ).effectiveWriteScope(policy);
+          next = effectiveScope == WebsiteWriteScope.shared
+              ? WebsiteResponsiveDataCodec.setShared(
+                  data: next,
+                  propertyKey: entry.key,
+                  value: entry.value,
+                  policies: policies,
+                  displayCopyWhitelist: displayCopyWhitelist,
+                )
+              : WebsiteResponsiveDataCodec.setForViewport(
+                  data: next,
+                  propertyKey: entry.key,
+                  value: entry.value,
+                  viewport: targetViewport,
+                  policy: policy,
+                  displayCopyWhitelist: displayCopyWhitelist,
+                );
+        }
+        return next;
+      },
+    );
+  }
+
+  bool clearBlockRepeaterItemResponsiveOverride(
+    String blockId, {
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required String propertyKey,
+    WebsiteViewport? viewport,
+    Map<String, WebsiteResponsivePropertyPolicy> policies = const {},
+    Set<String> displayCopyWhitelist = const {},
+    Iterable<String> legacyPropertyKeys = const <String>[],
+    String? identityKey,
+    Object? identityValue,
+    bool saveHistory = true,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    final changed = _transformBlockRepeaterItemData(
+      blockId,
+      collectionKeys: collectionKeys,
+      itemIndex: itemIndex,
+      identityKey: identityKey,
+      identityValue: identityValue,
+      saveHistory: saveHistory,
+      operation: 'clearBlockRepeaterItemResponsiveOverride',
+      transform: (item) {
+        final next = WebsiteResponsiveDataCodec.clearOverride(
+          data: item,
+          propertyKey: propertyKey,
+          viewport: targetViewport,
+          policies: policies,
+          displayCopyWhitelist: displayCopyWhitelist,
+        );
+        if (targetViewport == WebsiteViewport.mobile) {
+          for (final legacyKey in legacyPropertyKeys) {
+            next.remove(legacyKey);
+          }
+        }
+        return next;
+      },
+    );
+    if (changed) {
+      setRepeaterFieldWriteScope(
+        blockId: blockId,
+        collectionKeys: collectionKeys,
+        itemIndex: itemIndex,
+        propertyKey: propertyKey,
+        policy: policies[propertyKey] ??
+            WebsiteResponsivePropertyPolicy.responsiveOptional,
+        scope: WebsiteWriteScope.shared,
+        viewport: targetViewport,
+        identityKey: identityKey,
+        identityValue: identityValue,
+      );
+    }
+    return changed;
+  }
+
+  /// Clears a related set of repeater overrides and legacy aliases as one
+  /// transaction/history entry.
+  bool clearBlockRepeaterItemResponsiveOverrides(
+    String blockId, {
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required Iterable<String> propertyKeys,
+    required Map<String, WebsiteResponsivePropertyPolicy> policies,
+    WebsiteViewport? viewport,
+    Set<String> displayCopyWhitelist = const {},
+    Map<String, Iterable<String>> legacyPropertyKeys = const {},
+    String? identityKey,
+    Object? identityValue,
+    bool saveHistory = true,
+  }) {
+    final keys = propertyKeys.toList(growable: false);
+    if (keys.isEmpty) return false;
+    final targetViewport = viewport ?? previewViewport;
+    final changed = _transformBlockRepeaterItemData(
+      blockId,
+      collectionKeys: collectionKeys,
+      itemIndex: itemIndex,
+      identityKey: identityKey,
+      identityValue: identityValue,
+      saveHistory: saveHistory,
+      operation: 'clearBlockRepeaterItemResponsiveOverrides',
+      transform: (item) {
+        var next = item;
+        for (final propertyKey in keys) {
+          next = WebsiteResponsiveDataCodec.clearOverride(
+            data: next,
+            propertyKey: propertyKey,
+            viewport: targetViewport,
+            policies: policies,
+            displayCopyWhitelist: displayCopyWhitelist,
+          );
+          if (targetViewport == WebsiteViewport.mobile) {
+            for (final legacyKey
+                in legacyPropertyKeys[propertyKey] ?? const <String>[]) {
+              next.remove(legacyKey);
+            }
+          }
+        }
+        return next;
+      },
+    );
+    if (changed) {
+      for (final propertyKey in keys) {
+        setRepeaterFieldWriteScope(
+          blockId: blockId,
+          collectionKeys: collectionKeys,
+          itemIndex: itemIndex,
+          propertyKey: propertyKey,
+          policy: policies[propertyKey] ??
+              WebsiteResponsivePropertyPolicy.responsiveOptional,
+          scope: WebsiteWriteScope.shared,
+          viewport: targetViewport,
+          identityKey: identityKey,
+          identityValue: identityValue,
+        );
+      }
+    }
+    return changed;
+  }
+
+  /// Writes one responsive field through the existing document transaction,
+  /// history, dirty-state and save pipeline.
+  ///
+  /// [scope] is normally supplied by the field shell. When omitted, the
+  /// editor-level value is only a default; the property policy still coerces
+  /// shared-only and desktop writes to the shared/base value.
+  bool setBlockResponsiveProperty(
+    String blockId,
+    String propertyKey,
+    dynamic value, {
+    required WebsiteResponsivePropertyPolicy policy,
+    WebsiteViewport? viewport,
+    WebsiteWriteScope? scope,
+    Set<String> displayCopyWhitelist = const {},
+    bool saveHistory = true,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    final requestedScope = scope ??
+        fieldWriteScope(
+          blockId: blockId,
+          propertyKey: propertyKey,
+          policy: policy,
+          viewport: targetViewport,
+        );
+    final effectiveScope = WebsiteAuthoringContext(
+      hostClass: WebsiteAuthoringHostClass.desktop,
+      previewViewport: targetViewport,
+      writeScope: requestedScope,
+    ).effectiveWriteScope(policy);
+
+    return _transformBlockData(
+      blockId,
+      (current) {
+        if (effectiveScope == WebsiteWriteScope.shared) {
+          return WebsiteResponsiveDataCodec.setShared(
+            data: current,
+            propertyKey: propertyKey,
+            value: value,
+            policies: {propertyKey: policy},
+            displayCopyWhitelist: displayCopyWhitelist,
+          );
+        }
+        return WebsiteResponsiveDataCodec.setForViewport(
+          data: current,
+          propertyKey: propertyKey,
+          value: value,
+          viewport: targetViewport,
+          policy: policy,
+          displayCopyWhitelist: displayCopyWhitelist,
+        );
+      },
+      sharedPropertyKey:
+          effectiveScope == WebsiteWriteScope.shared ? propertyKey : null,
+      saveHistory: saveHistory,
+    );
+  }
+
+  /// Atomically writes a related set of root responsive properties.
+  bool setBlockResponsiveProperties(
+    String blockId,
+    Map<String, Object?> values, {
+    required Map<String, WebsiteResponsivePropertyPolicy> policies,
+    WebsiteViewport? viewport,
+    WebsiteWriteScope? scope,
+    Set<String> displayCopyWhitelist = const {},
+    bool saveHistory = true,
+  }) {
+    if (values.isEmpty) return false;
+    final targetViewport = viewport ?? previewViewport;
+    return _transformBlockData(
+      blockId,
+      (current) {
+        var next = current;
+        for (final entry in values.entries) {
+          final policy = policies[entry.key];
+          if (policy == null) {
+            throw ArgumentError(
+              'Missing responsive policy for ${entry.key}.',
+            );
+          }
+          final requestedScope = scope ??
+              fieldWriteScope(
+                blockId: blockId,
+                propertyKey: entry.key,
+                policy: policy,
+                viewport: targetViewport,
+              );
+          final effectiveScope = WebsiteAuthoringContext(
+            hostClass: WebsiteAuthoringHostClass.desktop,
+            previewViewport: targetViewport,
+            writeScope: requestedScope,
+          ).effectiveWriteScope(policy);
+          next = effectiveScope == WebsiteWriteScope.shared
+              ? WebsiteResponsiveDataCodec.setShared(
+                  data: next,
+                  propertyKey: entry.key,
+                  value: entry.value,
+                  policies: policies,
+                  displayCopyWhitelist: displayCopyWhitelist,
+                )
+              : WebsiteResponsiveDataCodec.setForViewport(
+                  data: next,
+                  propertyKey: entry.key,
+                  value: entry.value,
+                  viewport: targetViewport,
+                  policy: policy,
+                  displayCopyWhitelist: displayCopyWhitelist,
+                );
+        }
+        return next;
+      },
+      saveHistory: saveHistory,
+    );
+  }
+
+  bool clearBlockResponsiveOverride(
+    String blockId,
+    String propertyKey, {
+    WebsiteViewport? viewport,
+    Map<String, WebsiteResponsivePropertyPolicy> policies = const {},
+    Set<String> displayCopyWhitelist = const {},
+    Iterable<String> legacyPropertyKeys = const <String>[],
+    bool saveHistory = true,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    final changed = _transformBlockData(
+      blockId,
+      (current) {
+        final next = WebsiteResponsiveDataCodec.clearOverride(
+          data: current,
+          propertyKey: propertyKey,
+          viewport: targetViewport,
+          policies: policies,
+          displayCopyWhitelist: displayCopyWhitelist,
+        );
+        if (targetViewport == WebsiteViewport.mobile) {
+          for (final legacyKey in legacyPropertyKeys) {
+            next.remove(legacyKey);
+          }
+        }
+        return next;
+      },
+      saveHistory: saveHistory,
+    );
+    if (changed) {
+      setFieldWriteScope(
+        blockId: blockId,
+        propertyKey: propertyKey,
+        policy: policies[propertyKey] ??
+            WebsiteResponsivePropertyPolicy.responsiveOptional,
+        scope: WebsiteWriteScope.shared,
+        viewport: targetViewport,
+      );
+    }
+    return changed;
+  }
+
+  /// Clears a related set of root overrides and legacy aliases atomically.
+  bool clearBlockResponsiveOverrides(
+    String blockId,
+    Iterable<String> propertyKeys, {
+    required Map<String, WebsiteResponsivePropertyPolicy> policies,
+    WebsiteViewport? viewport,
+    Set<String> displayCopyWhitelist = const {},
+    Map<String, Iterable<String>> legacyPropertyKeys = const {},
+    bool saveHistory = true,
+  }) {
+    final keys = propertyKeys.toList(growable: false);
+    if (keys.isEmpty) return false;
+    final targetViewport = viewport ?? previewViewport;
+    final changed = _transformBlockData(
+      blockId,
+      (current) {
+        var next = current;
+        for (final propertyKey in keys) {
+          next = WebsiteResponsiveDataCodec.clearOverride(
+            data: next,
+            propertyKey: propertyKey,
+            viewport: targetViewport,
+            policies: policies,
+            displayCopyWhitelist: displayCopyWhitelist,
+          );
+          if (targetViewport == WebsiteViewport.mobile) {
+            for (final legacyKey
+                in legacyPropertyKeys[propertyKey] ?? const <String>[]) {
+              next.remove(legacyKey);
+            }
+          }
+        }
+        return next;
+      },
+      saveHistory: saveHistory,
+    );
+    if (changed) {
+      for (final propertyKey in keys) {
+        setFieldWriteScope(
+          blockId: blockId,
+          propertyKey: propertyKey,
+          policy: policies[propertyKey] ??
+              WebsiteResponsivePropertyPolicy.responsiveOptional,
+          scope: WebsiteWriteScope.shared,
+          viewport: targetViewport,
+        );
+      }
+    }
+    return changed;
+  }
+
+  bool _transformBlockData(
+    String blockId,
+    Map<String, dynamic> Function(Map<String, dynamic> current) transform, {
+    String? sharedPropertyKey,
+    bool saveHistory = true,
+  }) {
+    final blockIndex = _pageDraft.blocks.indexWhere((b) => b['id'] == blockId);
+    if (blockIndex == -1) return false;
+
+    final block = _pageDraft.blocks[blockIndex];
+    final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
+    final current = _deepCopyMap(
+      Map<String, dynamic>.from(block['block_data'] ?? const {}),
+    );
+    final nextData = transform(current);
+    if (sharedPropertyKey != null) {
+      _syncDerivedActions(
+        blockType: blockType,
+        updatedKey: sharedPropertyKey,
+        blockData: nextData,
+      );
+    }
+    final nextBlock = sanitizeWebsiteBlockForPersistence({
+      ...block,
+      'block_data': nextData,
+    });
+    if (_deepEquals(nextBlock, block)) return false;
+
+    _pageDraft.blocks[blockIndex] = nextBlock;
+    _reconcileTransientCanvasSelections();
+    if (saveHistory) {
+      _saveToHistory();
+    } else {
+      _refreshPageDirtyState();
+    }
+    notifyListeners();
+    return true;
   }
 
   /// Update block data without notifying listeners (for real-time drag preview)
@@ -1711,29 +2655,26 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   ///
   /// Legacy repeaters are index-owned. A stable [identityKey]/[identityValue]
   /// may be supplied only when the payload already persists that identity.
-  bool updateBlockRepeaterItemMultiple(
+  bool _transformBlockRepeaterItemData(
     String blockId, {
     required List<String> collectionKeys,
     required int itemIndex,
-    required Map<String, dynamic> updates,
+    required Map<String, dynamic> Function(Map<String, dynamic> item) transform,
+    required String operation,
     String? identityKey,
     Object? identityValue,
     bool saveHistory = true,
   }) {
-    if (collectionKeys.isEmpty || updates.isEmpty) return false;
+    if (collectionKeys.isEmpty) return false;
 
     final blockIndex = _pageDraft.blocks.indexWhere((b) => b['id'] == blockId);
     if (blockIndex == -1) {
-      debugPrint(
-        '⚠️ [EditProvider] updateBlockRepeaterItemMultiple: '
-        'block $blockId not found',
-      );
+      debugPrint('⚠️ [EditProvider] $operation: block $blockId not found');
       return false;
     }
 
     final block = _pageDraft.blocks[blockIndex];
     final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
-
     Object? source;
     for (final key in collectionKeys) {
       if (blockData.containsKey(key)) {
@@ -1743,7 +2684,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     }
     if (source is! List) {
       debugPrint(
-        '⚠️ [EditProvider] updateBlockRepeaterItemMultiple: '
+        '⚠️ [EditProvider] $operation: '
         'no list found for ${collectionKeys.join(", ")}',
       );
       return false;
@@ -1757,10 +2698,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       );
       if (identityIndex != -1) resolvedIndex = identityIndex;
     }
-
     if (resolvedIndex < 0 || resolvedIndex >= next.length) {
       debugPrint(
-        '⚠️ [EditProvider] updateBlockRepeaterItemMultiple: '
+        '⚠️ [EditProvider] $operation: '
         'item $resolvedIndex is outside collection bounds ${next.length}',
       );
       return false;
@@ -1768,37 +2708,68 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     final rawItem = next[resolvedIndex];
     if (rawItem is! Map) {
       debugPrint(
-        '⚠️ [EditProvider] updateBlockRepeaterItemMultiple: '
-        'item $resolvedIndex is not an object',
+        '⚠️ [EditProvider] $operation: item $resolvedIndex is not an object',
       );
       return false;
     }
 
-    final item = Map<String, dynamic>.from(rawItem);
-    for (final entry in updates.entries) {
-      item[entry.key] = _deepCopyValue(entry.value);
+    final currentItem = Map<String, dynamic>.from(rawItem);
+    final nextItem = transform(currentItem);
+    if (_deepEquals(currentItem, nextItem)) {
+      debugPrint(
+        'ℹ️ [EditProvider] $operation: blockId=$blockId, '
+        'item=$resolvedIndex ignored (no persisted change)',
+      );
+      return false;
     }
-    next[resolvedIndex] = item;
-
+    next[resolvedIndex] = nextItem;
     for (final key in collectionKeys) {
       blockData[key] = _deepCopyValue(next);
     }
-    _pageDraft.blocks[blockIndex] = sanitizeWebsiteBlockForPersistence({
+    final nextBlock = sanitizeWebsiteBlockForPersistence({
       ...block,
       'block_data': blockData,
     });
+    if (_deepEquals(nextBlock, block)) return false;
+
+    _pageDraft.blocks[blockIndex] = nextBlock;
     _reconcileTransientCanvasSelections();
     _pageDraft.hasUnsavedChanges = true;
-    if (saveHistory) {
-      _saveToHistory();
-    }
+    if (saveHistory) _saveToHistory();
     debugPrint(
-      '✅ [EditProvider] updateBlockRepeaterItemMultiple: '
-      'blockId=$blockId, collections=${collectionKeys.join(", ")}, '
-      'item=$resolvedIndex, keys=${updates.keys.join(", ")}',
+      '✅ [EditProvider] $operation: blockId=$blockId, '
+      'collections=${collectionKeys.join(", ")}, item=$resolvedIndex',
     );
     notifyListeners();
     return true;
+  }
+
+  bool updateBlockRepeaterItemMultiple(
+    String blockId, {
+    required List<String> collectionKeys,
+    required int itemIndex,
+    required Map<String, dynamic> updates,
+    String? identityKey,
+    Object? identityValue,
+    bool saveHistory = true,
+  }) {
+    if (collectionKeys.isEmpty || updates.isEmpty) return false;
+    return _transformBlockRepeaterItemData(
+      blockId,
+      collectionKeys: collectionKeys,
+      itemIndex: itemIndex,
+      identityKey: identityKey,
+      identityValue: identityValue,
+      saveHistory: saveHistory,
+      operation: 'updateBlockRepeaterItemMultiple',
+      transform: (item) {
+        final next = Map<String, dynamic>.from(item);
+        for (final entry in updates.entries) {
+          next[entry.key] = _deepCopyValue(entry.value);
+        }
+        return next;
+      },
+    );
   }
 
   void _syncDerivedActions({
@@ -1879,65 +2850,728 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Add a Canvas element to a specific Canvas block by id.
   /// Returns true if successful.
-  bool addCanvasElementToCanvasBlock(String canvasBlockId, String elementType) {
+  ///
+  /// This is the "Agregar capa" entry point of the editor panel, and it is a
+  /// structural command like every other one: it resolves the addressed
+  /// document, mints an id that collides with none of its identities and
+  /// inserts through [insertCanvasLayer]. It never rebuilds `elements` or
+  /// `slides`, because rebuilding a whole list overwrites the responsive
+  /// overrides that live inside the layers it replaces.
+  ///
+  /// [slideIndex] addresses one exact slide. A surface that already knows which
+  /// slide it is editing passes it instead of letting the command re-derive the
+  /// selection, so an inspector mounted on slide 2 can never insert into
+  /// whatever slide the shared selection happens to point at.
+  bool addCanvasElementToCanvasBlock(
+    String canvasBlockId,
+    String elementType, {
+    int? slideIndex,
+  }) {
     final blockIndex =
         _pageDraft.blocks.indexWhere((b) => b['id'] == canvasBlockId);
     if (blockIndex == -1) return false;
     final block = _pageDraft.blocks[blockIndex];
     final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
+
+    int? targetSlide;
+    int? slideCount;
     if (blockType == WebsiteBlockType.carousel.name) {
-      final data = Map<String, dynamic>.from(block['block_data'] ?? const {});
-      final rawSlides = data['slides'];
-      if (rawSlides is! List || rawSlides.isEmpty) return false;
-      final slides = rawSlides
-          .whereType<Map>()
-          .map((slide) => Map<String, dynamic>.from(slide))
-          .toList();
-      if (slides.isEmpty) return false;
-      final slideIndex = carouselSlideSelection(canvasBlockId, slides.length);
-      final slide = Map<String, dynamic>.from(slides[slideIndex]);
-      final rawElements = slide['elements'];
-      final elements = rawElements is List
-          ? rawElements
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList()
-          : <Map<String, dynamic>>[];
-      final id = 'el_${DateTime.now().microsecondsSinceEpoch}';
-      elements.add(createCanvasElement(id: id, type: elementType));
-      slides[slideIndex] = {
-        ...slide,
-        'useComposition': true,
-        'elements': elements,
-      };
-      updateBlockData(canvasBlockId, 'slides', slides);
-      selectCanvasElement(
-        canvasBlockId,
-        id,
-        slideIndex: slideIndex,
-        slideCount: slides.length,
-      );
+      final data = block['block_data'];
+      final slides = data is Map ? data['slides'] : null;
+      if (slides is! List || slides.isEmpty) return false;
+      slideCount = slides.length;
+      targetSlide =
+          slideIndex ?? carouselSlideSelection(canvasBlockId, slides.length);
+    } else if (blockType != WebsiteBlockType.canvas.name) {
+      return false;
+    } else if (slideIndex != null) {
+      // A standalone Canvas block owns no slides; an explicit index addresses
+      // nothing and must not silently fall back to the block document.
+      return false;
+    }
+
+    // The document decides which identities are taken; the target validation
+    // inside it is the same one every Canvas command uses.
+    final document = canvasDocument(canvasBlockId, slideIndex: targetSlide);
+    if (document == null) return false;
+
+    final id = WebsiteCanvasResponsiveDocument.nextLayerId(
+      document,
+      seed: 'el_${DateTime.now().microsecondsSinceEpoch}',
+    );
+    final elements = document[WebsiteCanvasResponsivePolicy.elementsKey];
+    final index = elements is List ? elements.length : 0;
+
+    final inserted = insertCanvasLayer(
+      canvasBlockId,
+      createCanvasElement(id: id, type: elementType),
+      slideIndex: targetSlide,
+      index: index,
+    );
+    // Selection follows only a command that landed.
+    if (!inserted) return false;
+
+    selectCanvasElement(
+      canvasBlockId,
+      id,
+      slideIndex: targetSlide,
+      slideCount: slideCount,
+    );
+    return true;
+  }
+
+  // ------------------------------------------------- Canvas atomic commands
+  //
+  // The single write path for a Canvas document. Every command is one
+  // transaction: the owner produces the next document purely, the draft
+  // records one change, listeners are notified once and history gets one
+  // entry. `slideIndex == null` addresses a standalone Canvas block, whose
+  // document is `block_data`; any other value addresses the Canvas of that
+  // carousel slide, whose document is the slide map itself. Both run the same
+  // owner operation, so the resulting Canvas documents are identical.
+
+  /// Whether this command really addresses a Canvas document.
+  ///
+  /// A block is a Canvas because its registered type says so, and a slide is a
+  /// Canvas because it is genuinely composed — never because its JSON happens
+  /// to carry an `elements` or `slides` key. Without this gate an accidental
+  /// payload on an unrelated block would become writable through the Canvas
+  /// policy, which is exactly the drift the block registry exists to prevent.
+  bool _canvasCommandTargetIsValid(
+    String blockId,
+    int? slideIndex,
+    String operation,
+  ) {
+    final blockIndex = _pageDraft.blocks.indexWhere((b) => b['id'] == blockId);
+    if (blockIndex == -1) {
+      debugPrint('⚠️ [EditProvider] $operation: block $blockId not found');
+      return false;
+    }
+    final block = _pageDraft.blocks[blockIndex];
+    final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
+
+    if (slideIndex == null) {
+      if (blockType != WebsiteBlockType.canvas.name) {
+        debugPrint(
+          '⚠️ [EditProvider] $operation: block $blockId is "$blockType"; '
+          'only a Canvas block owns a Canvas document',
+        );
+        return false;
+      }
       return true;
     }
-    if (blockType != WebsiteBlockType.canvas.name) return false;
 
-    final data = Map<String, dynamic>.from(block['block_data'] ?? {});
-    final rawElements = data['elements'];
-    final elements = rawElements is List
-        ? rawElements
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList()
-        : <Map<String, dynamic>>[];
-
-    final now = DateTime.now().microsecondsSinceEpoch;
-    final id = 'el_$now';
-    final next = createCanvasElement(id: id, type: elementType);
-
-    elements.add(next);
-    updateBlockData(canvasBlockId, 'elements', elements);
-    selectCanvasElement(canvasBlockId, id);
+    if (blockType != WebsiteBlockType.carousel.name) {
+      debugPrint(
+        '⚠️ [EditProvider] $operation: block $blockId is "$blockType"; '
+        'a slide index only addresses a carousel',
+      );
+      return false;
+    }
+    final blockData = block['block_data'];
+    final slides = blockData is Map ? blockData['slides'] : null;
+    if (slides is! List || slideIndex < 0 || slideIndex >= slides.length) {
+      debugPrint(
+        '⚠️ [EditProvider] $operation: slide $slideIndex is outside '
+        'block $blockId',
+      );
+      return false;
+    }
+    final slide = slides[slideIndex];
+    if (slide is! Map) {
+      debugPrint(
+        '⚠️ [EditProvider] $operation: slide $slideIndex of $blockId '
+        'is not an object',
+      );
+      return false;
+    }
+    final elements = slide['elements'];
+    final composed = slide['useComposition'] == true ||
+        (elements is List && elements.isNotEmpty);
+    if (!composed) {
+      debugPrint(
+        '⚠️ [EditProvider] $operation: slide $slideIndex of $blockId '
+        'is not a composed Canvas',
+      );
+      return false;
+    }
     return true;
+  }
+
+  /// Runs [operation] against the Canvas document this command addresses.
+  ///
+  /// The target is validated before anything is transformed, and a contract
+  /// violation the owner refuses — an unusable, unknown or duplicated layer
+  /// identity, or a base write of the z-order — fails closed too: the draft is
+  /// not touched, no history entry is created, no listener is notified and the
+  /// command reports `false` instead of tearing down the editor mid-gesture.
+  bool _runCanvasCommand(
+    String blockId,
+    int? slideIndex,
+    String operation,
+    Map<String, dynamic> Function(Map<String, dynamic> document) transform,
+  ) {
+    if (!_canvasCommandTargetIsValid(blockId, slideIndex, operation)) {
+      return false;
+    }
+
+    Map<String, dynamic>? failure;
+    Map<String, dynamic> guarded(Map<String, dynamic> document) {
+      try {
+        return transform(document);
+      } on StateError catch (error) {
+        debugPrint('⚠️ [EditProvider] $operation: ${error.message}');
+        failure = document;
+        return document;
+      }
+    }
+
+    final changed = slideIndex == null
+        ? _transformBlockData(blockId, guarded)
+        : _transformBlockRepeaterItemData(
+            blockId,
+            collectionKeys: const <String>['slides'],
+            itemIndex: slideIndex,
+            operation: operation,
+            transform: guarded,
+          );
+    return failure == null && changed;
+  }
+
+  /// Writes several root properties of a Canvas document at once.
+  bool setCanvasRootProperties(
+    String blockId,
+    Map<String, Object?> values, {
+    int? slideIndex,
+    required WebsiteWriteScope scope,
+    required WebsiteViewport viewport,
+  }) {
+    if (values.isEmpty) return false;
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'setCanvasRootProperties',
+      (document) => WebsiteCanvasResponsiveDocument.setRootProperties(
+        data: document,
+        values: values,
+        scope: scope,
+        viewport: viewport,
+      ),
+    );
+  }
+
+  /// Resets several root viewport overrides of a Canvas document at once.
+  bool clearCanvasRootOverrides(
+    String blockId,
+    Iterable<String> keys, {
+    int? slideIndex,
+    required WebsiteViewport viewport,
+  }) {
+    final ordered = keys.toList(growable: false);
+    if (ordered.isEmpty) return false;
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'clearCanvasRootOverrides',
+      (document) => WebsiteCanvasResponsiveDocument.clearRootOverrides(
+        data: document,
+        keys: ordered,
+        viewport: viewport,
+      ),
+    );
+  }
+
+  /// Writes several properties of ONE layer, addressed by its id.
+  bool setCanvasLayerProperties(
+    String blockId,
+    String layerId,
+    Map<String, Object?> values, {
+    int? slideIndex,
+    required WebsiteWriteScope scope,
+    required WebsiteViewport viewport,
+  }) {
+    if (values.isEmpty) return false;
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'setCanvasLayerProperties',
+      (document) => WebsiteCanvasResponsiveDocument.setLayerProperties(
+        data: document,
+        layerId: layerId,
+        values: values,
+        scope: scope,
+        viewport: viewport,
+      ),
+    );
+  }
+
+  /// Resets several viewport overrides of ONE layer, addressed by its id.
+  bool clearCanvasLayerOverrides(
+    String blockId,
+    String layerId,
+    Iterable<String> keys, {
+    int? slideIndex,
+    required WebsiteViewport viewport,
+  }) {
+    final ordered = keys.toList(growable: false);
+    if (ordered.isEmpty) return false;
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'clearCanvasLayerOverrides',
+      (document) => WebsiteCanvasResponsiveDocument.clearLayerOverrides(
+        data: document,
+        layerId: layerId,
+        keys: ordered,
+        viewport: viewport,
+      ),
+    );
+  }
+
+  /// Moves ONE layer in the z-order.
+  bool reorderCanvasLayer(
+    String blockId,
+    String layerId,
+    int targetIndex, {
+    int? slideIndex,
+    required WebsiteWriteScope scope,
+    required WebsiteViewport viewport,
+  }) {
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'reorderCanvasLayer',
+      (document) => WebsiteCanvasResponsiveDocument.reorderLayer(
+        data: document,
+        layerId: layerId,
+        targetIndex: targetIndex,
+        scope: scope,
+        viewport: viewport,
+      ),
+    );
+  }
+
+  /// Per-field write attribution for the Canvas inspector.
+  ///
+  /// Transient like the selection: switching a field to "Personalizar" is an
+  /// authoring intention, not a document change, so it never dirties the draft
+  /// or creates history. The key is per block + slide + root/layer + property
+  /// so promoting one field never promotes the next write of another.
+  final Map<String, WebsiteWriteScope> _canvasFieldScopes =
+      <String, WebsiteWriteScope>{};
+
+  /// The viewport belongs to the identity: promoting a field on the phone must
+  /// not promote the same field on the tablet.
+  String canvasFieldScopeKey({
+    required String blockId,
+    int? slideIndex,
+    String? layerId,
+    required String propertyKey,
+    required WebsiteViewport viewport,
+  }) {
+    return '$blockId|${viewport.name}|${slideIndex ?? 'block'}'
+        '|${layerId ?? 'root'}|$propertyKey';
+  }
+
+  /// Effective attribution for one Canvas field.
+  ///
+  /// The editor-level [writeScope] is the default; a field that the user
+  /// promoted overrides that default for itself only. Same contract as
+  /// [fieldWriteScope], so the two inspectors cannot drift apart.
+  WebsiteWriteScope canvasFieldScope(
+    String scopeKey, {
+    required WebsiteResponsivePropertyPolicy policy,
+    WebsiteViewport? viewport,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    if (!policy.supportsViewportOverride ||
+        targetViewport == WebsiteViewport.desktop) {
+      return WebsiteWriteScope.shared;
+    }
+    return _canvasFieldScopes[scopeKey] ?? _writeScope;
+  }
+
+  /// Changes only the transient attribution of one Canvas field. Never
+  /// history, dirty state or serialized data.
+  void setCanvasFieldScope(
+    String scopeKey,
+    WebsiteWriteScope scope, {
+    required WebsiteResponsivePropertyPolicy policy,
+    WebsiteViewport? viewport,
+  }) {
+    final targetViewport = viewport ?? previewViewport;
+    final next = !policy.supportsViewportOverride ||
+            targetViewport == WebsiteViewport.desktop
+        ? WebsiteWriteScope.shared
+        : scope;
+    // The entry is kept even when it equals the current default: an explicit
+    // "shared" has to survive the editor default being switched to viewport.
+    if (_canvasFieldScopes[scopeKey] == next) return;
+    _canvasFieldScopes[scopeKey] = next;
+    notifyListeners();
+  }
+
+  /// The Canvas document a command addresses, or null when the target is not
+  /// one. Read-only: it exists so a caller can mint a collision-safe id
+  /// against the identities that document currently carries.
+  Map<String, dynamic>? canvasDocument(String blockId, {int? slideIndex}) {
+    if (!_canvasCommandTargetIsValid(blockId, slideIndex, 'canvasDocument')) {
+      return null;
+    }
+    final block = _pageDraft.blocks.firstWhere((b) => b['id'] == blockId);
+    final blockData =
+        Map<String, dynamic>.from(block['block_data'] ?? const {});
+    if (slideIndex == null) return blockData;
+    final slides = blockData['slides'] as List;
+    return Map<String, dynamic>.from(slides[slideIndex] as Map);
+  }
+
+  /// Adds one canonical layer. Structure is shared across viewports.
+  bool insertCanvasLayer(
+    String blockId,
+    Map<String, dynamic> layer, {
+    int? slideIndex,
+    int index = 1 << 30,
+  }) {
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'insertCanvasLayer',
+      (document) => WebsiteCanvasResponsiveDocument.insertLayer(
+        data: document,
+        layer: layer,
+        index: index,
+      ),
+    );
+  }
+
+  /// Removes one identity and every responsive branch it owned.
+  bool removeCanvasLayer(
+    String blockId,
+    String layerId, {
+    int? slideIndex,
+  }) {
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'removeCanvasLayer',
+      (document) => WebsiteCanvasResponsiveDocument.removeLayer(
+        data: document,
+        layerId: layerId,
+      ),
+    );
+  }
+
+  /// Deep-copies one layer, overrides included, under a new identity.
+  bool duplicateCanvasLayer(
+    String blockId,
+    String layerId,
+    String newLayerId, {
+    int? slideIndex,
+  }) {
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'duplicateCanvasLayer',
+      (document) => WebsiteCanvasResponsiveDocument.duplicateLayer(
+        data: document,
+        layerId: layerId,
+        newLayerId: newLayerId,
+      ),
+    );
+  }
+
+  // ------------------------------------------------ Canvas legacy migration
+  //
+  // Reading never migrates. Every transition is an explicit operation with one
+  // history entry, and none of them saves: the draft is what changes, and the
+  // owner decides when a draft becomes a published page.
+
+  /// The read-only verdict for the Canvas this command addresses.
+  ///
+  /// Pure: it inspects, it never normalises, dirties or notifies. Null when the
+  /// target is not a Canvas document at all.
+  WebsiteCanvasMigrationStatus? canvasMigrationStatus(
+    String blockId, {
+    int? slideIndex,
+  }) {
+    final document = canvasDocument(blockId, slideIndex: slideIndex);
+    if (document == null) return null;
+    return WebsiteCanvasMigration.inspect(document);
+  }
+
+  /// Merges the legacy twins of a document that needs NO judgement call.
+  ///
+  /// Fails closed on anything else. A partial migration is a real capability of
+  /// the pure owner, but persisting one would stamp provenance — and therefore
+  /// silence a later `analyze` — on a document whose ambiguous layers still
+  /// carry their legacy flags. The operator resolves those deliberately with
+  /// [migrateCanvasDocumentKeepingLayers].
+  bool migrateCanvasDocument(String blockId, {int? slideIndex}) {
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'migrateCanvasDocument',
+      (document) {
+        final result = WebsiteCanvasMigration.migrate(document);
+        if (result.issues.isNotEmpty) {
+          throw StateError(
+            'this Canvas needs a decision first: '
+            '${result.issues.map((issue) => issue.code.name).join(", ")}',
+          );
+        }
+        if (WebsiteCanvasMigration.carriesLegacyLayerFlags(result.document)) {
+          throw StateError(
+            'the migrated document still carries legacy visibility flags',
+          );
+        }
+        return result.document;
+      },
+    );
+  }
+
+  /// The deliberate resolution of an AMBIGUOUS document: merge what is safe and
+  /// keep every ambiguous layer as its own canonical identity.
+  ///
+  /// Nothing is chosen for the operator — no winning copy, destination, type or
+  /// order — and no legacy flag survives, so the canonical marker this stamps
+  /// is true. Refuses a conflicting identity, where addressing and rollback
+  /// cannot be guaranteed.
+  bool migrateCanvasDocumentKeepingLayers(String blockId, {int? slideIndex}) {
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'migrateCanvasDocumentKeepingLayers',
+      (document) {
+        final result = WebsiteCanvasMigration.migrateKeepDistinct(document);
+        if (!result.changed) {
+          throw StateError(
+            'this Canvas cannot be migrated from here: '
+            '${result.issues.map((issue) => issue.code.name).join(", ")}',
+          );
+        }
+        if (WebsiteCanvasMigration.carriesLegacyLayerFlags(result.document)) {
+          throw StateError(
+            'the migrated document still carries legacy visibility flags',
+          );
+        }
+        return result.document;
+      },
+    );
+  }
+
+  /// Restores the exact document a migration came from.
+  ///
+  /// Requires provenance: without it there is nothing to restore, and inventing
+  /// a legacy shape would be a second migration in the opposite direction.
+  bool restoreCanvasLegacyDocument(String blockId, {int? slideIndex}) {
+    return _runCanvasCommand(
+      blockId,
+      slideIndex,
+      'restoreCanvasLegacyDocument',
+      (document) {
+        if (WebsiteCanvasMigration.inspect(document).state !=
+            WebsiteCanvasMigrationState.migrated) {
+          throw StateError('this Canvas has no migration to undo');
+        }
+        return WebsiteCanvasMigration.expandToLegacy(document);
+      },
+    );
+  }
+
+  /// Turns a Carousel slide into a CANONICAL composed Canvas, in one operation.
+  ///
+  /// "Diseño avanzado por capas" used to inject a whole `elements` list holding
+  /// a `_desktop`/`_mobile` twin per semantic element, each one arbitrated by
+  /// the contradictory `hideOnMobile`/`showOnMobile` pair. That is exactly the
+  /// model 7A replaced, and generating more of it would mean authoring new
+  /// documents that immediately need a migration.
+  ///
+  /// So the slide starts life canonical: one identity per semantic element —
+  /// title, subtitle, call to action — carrying the desktop values as its
+  /// shared base and the phone values as a typed `responsive.mobile` override.
+  /// No value is invented; the two geometries are the ones the twin generator
+  /// already used, now attributed to one identity instead of two.
+  ///
+  /// It fails closed on a slide that already has layers: overwriting an
+  /// authored composition is a destructive rewrite, not an initialisation.
+  bool initializeCanvasComposition(
+    String blockId, {
+    required int slideIndex,
+  }) {
+    final blockIndex = _pageDraft.blocks.indexWhere((b) => b['id'] == blockId);
+    if (blockIndex == -1) {
+      debugPrint(
+        '⚠️ [EditProvider] initializeCanvasComposition: '
+        'block $blockId not found',
+      );
+      return false;
+    }
+    final block = _pageDraft.blocks[blockIndex];
+    final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
+    if (blockType != WebsiteBlockType.carousel.name) {
+      debugPrint(
+        '⚠️ [EditProvider] initializeCanvasComposition: block $blockId is '
+        '"$blockType"; only a carousel slide is composed into a Canvas',
+      );
+      return false;
+    }
+    final blockData = block['block_data'];
+    final slides = blockData is Map ? blockData['slides'] : null;
+    if (slides is! List || slideIndex < 0 || slideIndex >= slides.length) {
+      debugPrint(
+        '⚠️ [EditProvider] initializeCanvasComposition: slide $slideIndex is '
+        'outside block $blockId',
+      );
+      return false;
+    }
+    final slide = slides[slideIndex];
+    if (slide is! Map) return false;
+    final existing = slide[WebsiteCanvasResponsivePolicy.elementsKey];
+    if (existing is List && existing.isNotEmpty) {
+      debugPrint(
+        'ℹ️ [EditProvider] initializeCanvasComposition: slide $slideIndex of '
+        '$blockId already owns layers',
+      );
+      return false;
+    }
+
+    return _transformBlockRepeaterItemData(
+      blockId,
+      collectionKeys: const <String>['slides'],
+      itemIndex: slideIndex,
+      operation: 'initializeCanvasComposition',
+      transform: _composedCanvasSlide,
+    );
+  }
+
+  /// The canonical composed document for [slide]. Pure.
+  static Map<String, dynamic> _composedCanvasSlide(Map<String, dynamic> slide) {
+    final title = (slide['title'] ?? 'Título del banner').toString();
+    final subtitle = (slide['subtitle'] ?? '').toString();
+    final action = WebsiteActionValue.resolvePrimary(
+          slide,
+          labelKeys: const ['ctaText', 'buttonText'],
+          hrefKeys: const ['ctaLink', 'buttonLink'],
+          defaultLabel: 'Ver más',
+          defaultHref: '/productos',
+          defaultVariant: WebsiteActionVariant.outline,
+        ) ??
+        const WebsiteActionValue(
+          label: 'Ver más',
+          href: '/productos',
+          variant: WebsiteActionVariant.outline,
+        );
+
+    Map<String, dynamic> textLayer({
+      required String id,
+      required String text,
+      required double x,
+      required double y,
+      required double w,
+      required double h,
+      required double fontSize,
+      String fontRole = 'heading',
+      String fontWeight = 'w700',
+    }) {
+      return <String, dynamic>{
+        ...createCanvasElement(id: id, type: 'text', x: x, y: y),
+        'w': w,
+        'h': h,
+        'text': text,
+        'fontSize': fontSize,
+        'fontWeight': fontWeight,
+        'fontRole': fontRole,
+        'color': '#FFFFFF',
+        'align': 'left',
+        'lineHeight': 1.05,
+        'letterSpacing': fontRole == 'heading' ? 1.0 : 0.0,
+      };
+    }
+
+    const titleId = 'title';
+    const subtitleId = 'subtitle';
+    const ctaId = 'cta';
+
+    final layers = <Map<String, dynamic>>[
+      textLayer(
+        id: titleId,
+        text: title,
+        x: 120,
+        y: 190,
+        w: 620,
+        h: 130,
+        fontSize: 58,
+      ),
+      if (subtitle.isNotEmpty)
+        textLayer(
+          id: subtitleId,
+          text: subtitle,
+          x: 120,
+          y: 330,
+          w: 560,
+          h: 80,
+          fontSize: 22,
+          fontRole: 'body',
+          fontWeight: 'w400',
+        ),
+      <String, dynamic>{
+        ...createCanvasElement(id: ctaId, type: 'button', x: 120, y: 430),
+        'w': 220.0,
+        'h': 56.0,
+        'label': action.label,
+        'link': action.href,
+        'style': action.variant.storageValue,
+        'inheritTheme': true,
+        'actions': WebsiteActionValue.mergePrimary(null, action),
+      },
+    ];
+
+    var document = <String, dynamic>{
+      ...slide,
+      'useComposition': true,
+      'designWidth': 1200.0,
+      'constrainElementsToSafeArea': true,
+      WebsiteCanvasResponsivePolicy.elementsKey: layers,
+    };
+
+    // The phone geometry is an EXCEPTION of the same identity, written through
+    // the owner so it lands where the projection reads it.
+    document = WebsiteCanvasResponsiveDocument.setRootProperties(
+      data: document,
+      values: const <String, Object?>{'designWidth': 390.0},
+      scope: WebsiteWriteScope.viewport,
+      viewport: WebsiteViewport.mobile,
+    );
+    const mobileGeometry = <String, Map<String, Object?>>{
+      titleId: <String, Object?>{
+        'x': 28.0,
+        'y': 160.0,
+        'w': 334.0,
+        'h': 150.0,
+        'fontSize': 42.0,
+      },
+      subtitleId: <String, Object?>{
+        'x': 28.0,
+        'y': 320.0,
+        'w': 334.0,
+        'h': 90.0,
+        'fontSize': 18.0,
+      },
+      ctaId: <String, Object?>{'x': 28.0, 'y': 440.0},
+    };
+    for (final entry in mobileGeometry.entries) {
+      if (!layers.any((layer) => layer['id'] == entry.key)) continue;
+      document = WebsiteCanvasResponsiveDocument.setLayerProperties(
+        data: document,
+        layerId: entry.key,
+        values: entry.value,
+        scope: WebsiteWriteScope.viewport,
+        viewport: WebsiteViewport.mobile,
+      );
+    }
+
+    return WebsiteCanvasResponsiveDocument.markCanonical(document);
   }
 
   /// Save current state to history
@@ -1963,6 +3597,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       _pageDraft.historyIndex--;
     }
 
+    _refreshPageDirtyState();
+
     debugPrint('💾 [EditProvider] Saved to history: '
         'index=${_pageDraft.historyIndex}, '
         'total=${_pageDraft.history.length}, '
@@ -1977,7 +3613,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _pageDraft.blocks =
         _deepCopyBlocks(_pageDraft.history[_pageDraft.historyIndex]);
     _reconcileTransientCanvasSelections();
-    _pageDraft.hasUnsavedChanges = _pageDraft.historyIndex != 0;
+    _refreshPageDirtyState();
     debugPrint(
       '⏪ [EditProvider] Undo: index=${_pageDraft.historyIndex}',
     );
@@ -1992,11 +3628,20 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _pageDraft.blocks =
         _deepCopyBlocks(_pageDraft.history[_pageDraft.historyIndex]);
     _reconcileTransientCanvasSelections();
-    _pageDraft.hasUnsavedChanges = true;
+    _refreshPageDirtyState();
     debugPrint(
       '⏩ [EditProvider] Redo: index=${_pageDraft.historyIndex}',
     );
     notifyListeners();
+  }
+
+  void _refreshPageDirtyState() {
+    if (_pageDraft.history.isEmpty) {
+      _pageDraft.hasUnsavedChanges = _pageDraft.blocks.isNotEmpty;
+      return;
+    }
+    _pageDraft.hasUnsavedChanges =
+        !_deepEquals(_pageDraft.blocks, _pageDraft.history.first);
   }
 
   /// Get block by ID

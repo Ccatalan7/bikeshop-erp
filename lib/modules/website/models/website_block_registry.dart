@@ -5,6 +5,7 @@ import '../block_marketplace/block_marketplace_loader.dart';
 import 'website_block_capabilities.dart';
 import 'website_block_definition.dart';
 import 'website_block_type.dart';
+import 'website_responsive_authoring.dart';
 
 /// Central catalogue of website block definitions used across the editor and
 /// the public storefront. This enables declarative registration of block
@@ -75,6 +76,8 @@ class WebsiteBlockRegistry {
           label: 'Pantalla completa',
           type: WebsiteBlockFieldType.toggle,
           defaultValue: false,
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
         ),
         WebsiteBlockFieldSchema(
           key: 'alignment',
@@ -86,6 +89,8 @@ class WebsiteBlockRegistry {
             WebsiteBlockFieldOption(value: 'center', label: 'Centro'),
             WebsiteBlockFieldOption(value: 'right', label: 'Derecha'),
           ],
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
         ),
         WebsiteBlockFieldSchema(
           key: 'imageUrl',
@@ -96,12 +101,22 @@ class WebsiteBlockRegistry {
           supportsAltText: true,
           altTextKey: 'imageAltText',
           migrationAliases: ['backgroundImage'],
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.media,
+          authoringSurfaces: {
+            WebsiteAuthoringSurface.inline,
+            WebsiteAuthoringSurface.contextSheet,
+            WebsiteAuthoringSurface.inspector,
+          },
+          legacyResponsiveAliases: ['mobileImageUrl'],
         ),
         WebsiteBlockFieldSchema(
           key: 'showOverlay',
           label: 'Mostrar overlay',
           type: WebsiteBlockFieldType.toggle,
           defaultValue: true,
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.color,
         ),
         WebsiteBlockFieldSchema(
           key: 'overlayOpacity',
@@ -111,6 +126,8 @@ class WebsiteBlockRegistry {
           max: 1,
           step: 0.1,
           defaultValue: 0.5,
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.color,
         ),
       ],
       controlSections: [
@@ -157,6 +174,89 @@ class WebsiteBlockRegistry {
           },
         ],
       },
+      fields: [
+        WebsiteBlockFieldSchema(
+          key: 'slides',
+          label: 'Slides',
+          type: WebsiteBlockFieldType.repeater,
+          itemLabel: 'Slide',
+          minItems: 1,
+          propertyFamily: WebsiteResponsivePropertyFamily.collection,
+          itemFields: [
+            WebsiteBlockFieldSchema(
+              key: 'title',
+              label: 'Título',
+              type: WebsiteBlockFieldType.text,
+              textRole: WebsiteTextRole.heading,
+              supportsFormatting: true,
+              formattingKey: 'titleFormatting',
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'subtitle',
+              label: 'Subtítulo',
+              type: WebsiteBlockFieldType.textarea,
+              textRole: WebsiteTextRole.paragraph,
+              supportsFormatting: true,
+              formattingKey: 'subtitleFormatting',
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'ctaText',
+              label: 'Texto del botón',
+              type: WebsiteBlockFieldType.text,
+              textRole: WebsiteTextRole.buttonLabel,
+              migrationAliases: ['buttonText'],
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'ctaLink',
+              label: 'Enlace del botón',
+              type: WebsiteBlockFieldType.link,
+              actionRole: WebsiteActionRole.primary,
+              actionLabelKey: 'ctaText',
+              actionVariantKey: 'actionVariant',
+              migrationAliases: ['buttonLink'],
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'imageUrl',
+              label: 'Imagen de fondo',
+              type: WebsiteBlockFieldType.image,
+              mediaRole: WebsiteMediaRole.cover,
+              supportsFocalPoint: true,
+              supportsAltText: true,
+              altTextKey: 'altText',
+              responsivePolicy:
+                  WebsiteResponsivePropertyPolicy.responsiveOptional,
+              propertyFamily: WebsiteResponsivePropertyFamily.media,
+              authoringSurfaces: {
+                WebsiteAuthoringSurface.inline,
+                WebsiteAuthoringSurface.contextSheet,
+                WebsiteAuthoringSurface.inspector,
+              },
+              legacyResponsiveAliases: ['mobileImageUrl'],
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'showOverlay',
+              label: 'Mostrar overlay',
+              type: WebsiteBlockFieldType.toggle,
+              defaultValue: true,
+              responsivePolicy:
+                  WebsiteResponsivePropertyPolicy.responsiveOptional,
+              propertyFamily: WebsiteResponsivePropertyFamily.color,
+            ),
+            WebsiteBlockFieldSchema(
+              key: 'overlayOpacity',
+              label: 'Opacidad overlay',
+              type: WebsiteBlockFieldType.number,
+              min: 0,
+              max: 1,
+              step: 0.05,
+              defaultValue: 0.55,
+              responsivePolicy:
+                  WebsiteResponsivePropertyPolicy.responsiveOptional,
+              propertyFamily: WebsiteResponsivePropertyFamily.color,
+            ),
+          ],
+        ),
+      ],
       usesCustomEditor: true,
     ),
 
@@ -227,6 +327,8 @@ class WebsiteBlockRegistry {
             WebsiteBlockFieldOption(value: 'caption', label: 'Texto pequeño'),
           ],
           group: 'layout',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.typography,
         ),
         WebsiteBlockFieldSchema(
           key: 'maxWidth',
@@ -237,6 +339,8 @@ class WebsiteBlockRegistry {
           step: 10,
           defaultValue: 800,
           group: 'layout',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
         ),
       ],
       controlSections: [
@@ -291,6 +395,8 @@ class WebsiteBlockRegistry {
             WebsiteBlockFieldOption(value: 'text', label: 'Texto'),
           ],
           group: 'design',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.action,
         ),
       ],
       controlSections: [
@@ -316,6 +422,11 @@ class WebsiteBlockRegistry {
         'color': '#E5E7EB',
       },
       fields: [
+        // A divider is pure presentation: it carries no copy, no destination
+        // and no business data, so all three of its properties may differ per
+        // viewport. A hairline that reads correctly on a 1440 canvas is often
+        // too heavy at 390, and the width percentage is geometry by
+        // definition.
         WebsiteBlockFieldSchema(
           key: 'thickness',
           label: 'Grosor',
@@ -324,6 +435,8 @@ class WebsiteBlockRegistry {
           max: 12,
           step: 1,
           defaultValue: 1,
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
         ),
         WebsiteBlockFieldSchema(
           key: 'widthPct',
@@ -333,12 +446,16 @@ class WebsiteBlockRegistry {
           max: 1.0,
           step: 0.05,
           defaultValue: 1.0,
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
         ),
         WebsiteBlockFieldSchema(
           key: 'color',
           label: 'Color',
           type: WebsiteBlockFieldType.color,
           defaultValue: '#E5E7EB',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.color,
         ),
       ],
       controlSections: [
@@ -371,8 +488,47 @@ class WebsiteBlockRegistry {
           }
         ],
       },
+      // Only the presentation properties that a renderer actually consumes are
+      // declared. Everything else this block owns — catalogue source, category,
+      // selected ids, maxProducts, the "view all" copy and destination — is
+      // business identity and stays shared, edited by the custom controls.
+      fields: [
+        // SHARED on purpose. The storefront computes the column count itself:
+        // below 700 it mounts the mobile auto carousel, which shows one card at
+        // a time and never reads this value, and between 700 and 900 the grid
+        // forces two columns. A per-viewport override would be a control the
+        // renderer cannot honour, so the property stays the desktop base and
+        // the inspector states — in words — why it is not editable elsewhere.
+        WebsiteBlockFieldSchema(
+          key: 'itemsPerRow',
+          label: 'Productos por fila',
+          type: WebsiteBlockFieldType.number,
+          min: 2,
+          max: 4,
+          step: 1,
+          defaultValue: 3,
+          group: 'layout',
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'showViewAll',
+          label: 'Mostrar botón "Ver todos"',
+          type: WebsiteBlockFieldType.toggle,
+          defaultValue: true,
+          group: 'layout',
+          // Presentation of the action; its label and destination stay shared.
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.action,
+        ),
+      ],
       usesCustomEditor: true,
     ),
+    // Servicios es deliberadamente auto-layout: el renderer elige lista
+    // compacta bajo 600 y filas de escritorio sobre ese ancho, sin leer
+    // ninguna propiedad persistida para hacerlo. No hay nada que personalizar
+    // por viewport, y no se inventa una propiedad para fingir que sí. Ícono,
+    // título y descripción de cada servicio son contenido. Matriz:
+    // `website_content_responsive_policies_test.dart`.
     WebsiteBlockType.services: const WebsiteBlockDefinition(
       type: WebsiteBlockType.services,
       title: 'Servicios',
@@ -471,16 +627,36 @@ class WebsiteBlockRegistry {
           textRole: WebsiteTextRole.paragraph,
           supportsFormatting: true,
         ),
+        // Art direction real: el marco de esta imagen cambia de 4:3 en
+        // escritorio a 16:9 en tablet y 3:2 en móvil, así que un recorte
+        // centrado que funciona en uno corta mal en otro. Se permite otro
+        // asset del MISMO sujeto y, sobre todo, su reencuadre por viewport,
+        // que el renderer compartido resuelve en la alineación de la imagen.
+        // El texto alternativo de abajo sigue compartido: un sujeto, una
+        // descripción.
         WebsiteBlockFieldSchema(
           key: 'imageUrl',
           label: 'Imagen',
           type: WebsiteBlockFieldType.image,
           group: 'media',
           mediaRole: WebsiteMediaRole.inline,
+          supportsFocalPoint: true,
           supportsAltText: true,
           altTextKey: 'imageAltText',
           migrationAliases: ['image'],
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.media,
+          authoringSurfaces: {
+            WebsiteAuthoringSurface.inline,
+            WebsiteAuthoringSurface.contextSheet,
+            WebsiteAuthoringSurface.inspector,
+          },
         ),
+        // COMPARTIDA a propósito. Sólo la composición horizontal la honra, y
+        // esa composición existe únicamente desde 900 px, donde Escritorio ES
+        // la base: bajo ese ancho el bloque apila y la imagen va siempre
+        // primero. Un override de tablet o móvil no podría cambiar nada, así
+        // que el inspector dice «siempre común» en vez de ofrecerlo.
         WebsiteBlockFieldSchema(
           key: 'imagePosition',
           label: 'Posición de la imagen',
@@ -511,6 +687,12 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
+    // Testimonios no declara ninguna propiedad responsive, y no es un olvido:
+    // su renderer calcula el ancho de tarjeta desde el ancho disponible y no
+    // lee ninguna otra propiedad de presentación. Nombre, rol, comentario y
+    // valoración son contenido del cliente. Un override aquí sería un control
+    // que no cambia nada en la tienda. Matriz: `website_collections_
+    // responsive_policies_test.dart`.
     WebsiteBlockType.testimonials: const WebsiteBlockDefinition(
       type: WebsiteBlockType.testimonials,
       title: 'Testimonios',
@@ -596,6 +778,11 @@ class WebsiteBlockRegistry {
           defaultValue: 'Por qué elegirnos',
           group: 'content',
         ),
+        // El renderer monta dos árboles distintos con este valor —cuadrícula
+        // o lista— y lo lee igual en los tres anchos, así que un override es
+        // una composición realmente distinta y no un control decorativo. Las
+        // columnas de la cuadrícula las sigue calculando el propio renderer
+        // por ancho: eso no se declara.
         WebsiteBlockFieldSchema(
           key: 'layout',
           label: 'Diseño',
@@ -606,6 +793,8 @@ class WebsiteBlockRegistry {
             WebsiteBlockFieldOption(value: 'list', label: 'Lista'),
           ],
           group: 'layout',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
         ),
         WebsiteBlockFieldSchema(
           key: 'features',
@@ -729,12 +918,23 @@ class WebsiteBlockRegistry {
           supportsAltText: true,
           altTextKey: 'backgroundImageAltText',
           migrationAliases: ['imageUrl'],
+          // Art direction of the SAME subject; the alt text below stays
+          // shared because one subject has one description.
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.media,
+          authoringSurfaces: {
+            WebsiteAuthoringSurface.inline,
+            WebsiteAuthoringSurface.contextSheet,
+            WebsiteAuthoringSurface.inspector,
+          },
         ),
         WebsiteBlockFieldSchema(
           key: 'overlayColor',
           label: 'Color de superposición',
           type: WebsiteBlockFieldType.color,
           defaultValue: '#000000',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.color,
         ),
         WebsiteBlockFieldSchema(
           key: 'overlayOpacity',
@@ -744,6 +944,8 @@ class WebsiteBlockRegistry {
           max: 1,
           step: 0.05,
           defaultValue: 0.5,
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.color,
         ),
       ],
       controlSections: [
@@ -775,6 +977,10 @@ class WebsiteBlockRegistry {
           label: 'Título',
           type: WebsiteBlockFieldType.text,
         ),
+        // El renderer decide la proporción de cada tile con este valor —
+        // mosaico alterna 1.2 / 0.8 / 1.0 y cuadrícula es 1.0— en los tres
+        // viewports, así que un override cambia la composición visible. Las
+        // columnas las calcula el propio renderer por ancho y no se declaran.
         WebsiteBlockFieldSchema(
           key: 'layout',
           label: 'Diseño',
@@ -784,6 +990,8 @@ class WebsiteBlockRegistry {
             WebsiteBlockFieldOption(value: 'grid', label: 'Cuadrícula'),
             WebsiteBlockFieldOption(value: 'masonry', label: 'Mosaico'),
           ],
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
         ),
         WebsiteBlockFieldSchema(
           key: 'images',
@@ -799,6 +1007,19 @@ class WebsiteBlockRegistry {
               supportsFocalPoint: true,
               supportsAltText: true,
               altTextKey: 'altText',
+              // Art direction de la MISMA foto, por item: el tile pasa de un
+              // tercio del ancho en escritorio a la pantalla completa en
+              // móvil, y con `layout` personalizado también cambia su
+              // proporción. El alt de abajo sigue compartido: un sujeto, una
+              // descripción.
+              responsivePolicy:
+                  WebsiteResponsivePropertyPolicy.responsiveOptional,
+              propertyFamily: WebsiteResponsivePropertyFamily.media,
+              authoringSurfaces: {
+                WebsiteAuthoringSurface.inline,
+                WebsiteAuthoringSurface.contextSheet,
+                WebsiteAuthoringSurface.inspector,
+              },
             ),
             WebsiteBlockFieldSchema(
               key: 'caption',
@@ -823,6 +1044,14 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
+    // Contacto cierra compartido. La composición ya es automática —el propio
+    // renderer elige escritorio, media o compacta desde el ancho disponible— y
+    // los dos interruptores que quedan no son presentación: `showForm` y
+    // `showMap` deciden si existe una vía de contacto, y el renderer los honra
+    // igual en los tres anchos. Ocultar el formulario sólo en el teléfono es
+    // una decisión de negocio del dueño, no un ajuste de composición; si algún
+    // día se quiere, entra como `responsiveVisibility` con esa decisión
+    // tomada, no por conveniencia técnica.
     WebsiteBlockType.contact: const WebsiteBlockDefinition(
       type: WebsiteBlockType.contact,
       title: 'Contacto',
@@ -870,6 +1099,9 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
+    // FAQ tampoco declara propiedades responsive: el tamaño del título ya lo
+    // deriva el renderer del ancho útil, y pregunta y respuesta son contenido
+    // indexable que debe ser el mismo en los tres dispositivos.
     WebsiteBlockType.faq: const WebsiteBlockDefinition(
       type: WebsiteBlockType.faq,
       title: 'Preguntas Frecuentes',
@@ -934,6 +1166,13 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
+    // Planes y Precios cierra compartido. La composición es automática —un
+    // `Wrap` cuyo ancho de tarjeta sale del ancho disponible— y todo lo demás
+    // es negocio: precio, beneficios, copy y destino del botón. `highlighted`
+    // se evaluó como candidato y se descartó: el renderer lo honra idéntico en
+    // los tres anchos, así que destacar un plan distinto según el dispositivo
+    // sería una decisión comercial disfrazada de presentación. Matriz:
+    // `website_conversion_responsive_policies_test.dart`.
     WebsiteBlockType.pricing: const WebsiteBlockDefinition(
       type: WebsiteBlockType.pricing,
       title: 'Planes y Precios',
@@ -1078,6 +1317,16 @@ class WebsiteBlockRegistry {
           textRole: WebsiteTextRole.heading,
           supportsFormatting: true,
         ),
+        // The renderer has always read a block-level subtitle; the schema
+        // simply never exposed it, so the editor could not reach a value the
+        // storefront was already printing. This declares the existing
+        // contract — no renderer or business semantics change.
+        WebsiteBlockFieldSchema(
+          key: 'subtitle',
+          label: 'Subtítulo',
+          type: WebsiteBlockFieldType.textarea,
+          textRole: WebsiteTextRole.paragraph,
+        ),
         WebsiteBlockFieldSchema(
           key: 'categories',
           label: 'Categorías',
@@ -1107,6 +1356,16 @@ class WebsiteBlockRegistry {
               supportsFocalPoint: true,
               supportsAltText: true,
               altTextKey: 'altText',
+              // Art direction of the same category, per item. The alt text
+              // below stays shared: one subject, one description.
+              responsivePolicy:
+                  WebsiteResponsivePropertyPolicy.responsiveOptional,
+              propertyFamily: WebsiteResponsivePropertyFamily.media,
+              authoringSurfaces: {
+                WebsiteAuthoringSurface.inline,
+                WebsiteAuthoringSurface.contextSheet,
+                WebsiteAuthoringSurface.inspector,
+              },
             ),
             WebsiteBlockFieldSchema(
               key: 'link',
@@ -1123,7 +1382,7 @@ class WebsiteBlockRegistry {
         WebsiteBlockControlSection(
           id: 'content',
           label: 'Contenido',
-          fieldKeys: ['title', 'categories'],
+          fieldKeys: ['title', 'subtitle', 'categories'],
         ),
       ],
     ),
@@ -1173,7 +1432,18 @@ class WebsiteBlockRegistry {
           supportsFocalPoint: true,
           supportsAltText: true,
           altTextKey: 'imageAltText',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.media,
+          authoringSurfaces: {
+            WebsiteAuthoringSurface.inline,
+            WebsiteAuthoringSurface.contextSheet,
+            WebsiteAuthoringSurface.inspector,
+          },
         ),
+        // The two video sources stay SHARED. A video is the block's subject,
+        // not its presentation: a per-viewport source would be a second piece
+        // of content, and the fallback image above already covers the case the
+        // help text describes.
         WebsiteBlockFieldSchema(
           key: 'videoUrl',
           label: 'URL de YouTube',
@@ -1193,6 +1463,11 @@ class WebsiteBlockRegistry {
           label: 'Mostrar botón',
           type: WebsiteBlockFieldType.toggle,
           defaultValue: true,
+          // Presentation of the action, not the action: whether the button is
+          // shown may differ per viewport, while its label and destination
+          // below stay shared.
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.action,
         ),
         WebsiteBlockFieldSchema(
           key: 'ctaText',
@@ -1217,6 +1492,8 @@ class WebsiteBlockRegistry {
           max: 1,
           step: 0.1,
           defaultValue: 0.5,
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.color,
         ),
       ],
       controlSections: [
@@ -1286,6 +1563,13 @@ class WebsiteBlockRegistry {
           supportsFocalPoint: true,
           supportsAltText: true,
           altTextKey: 'imageAltText',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.media,
+          authoringSurfaces: {
+            WebsiteAuthoringSurface.inline,
+            WebsiteAuthoringSurface.contextSheet,
+            WebsiteAuthoringSurface.inspector,
+          },
         ),
       ],
       controlSections: [
@@ -1329,6 +1613,12 @@ class WebsiteBlockRegistry {
             WebsiteBlockFieldOption(value: 'large', label: 'Grande'),
             WebsiteBlockFieldOption(value: 'xlarge', label: 'Extra grande'),
           ],
+          // How big the row of logos reads is geometry, and a size that works
+          // on a wide canvas is often wrong at 390. The brands themselves —
+          // name, logo, link — stay shared: a logo identifies the brand, it is
+          // not art direction.
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
         ),
         WebsiteBlockFieldSchema(
           key: 'brands',
@@ -1373,6 +1663,11 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
+    // Google Reviews queda entero compartido. `minRating` y `maxItems` son
+    // filtros del negocio sobre una fuente externa —no presentación—: el
+    // carrusel los aplica a las reseñas reales, y el resultado tiene que ser
+    // el mismo en los tres dispositivos. El bloque tampoco tiene propiedad de
+    // composición por dispositivo: tarjeta de 320 y alto de 280 fijos.
     WebsiteBlockType.googleReviews: const WebsiteBlockDefinition(
       type: WebsiteBlockType.googleReviews,
       title: 'Google Reviews',
@@ -1420,6 +1715,12 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
+    // Equipo se revisó como candidato a media responsive y se descartó con
+    // razón verdadera: la foto se dibuja en un círculo de 96 px con
+    // `BoxFit.cover` y alineación central en escritorio, tablet y móvil, así
+    // que no hay reencuadre que resolver; un asset por viewport sólo podría
+    // cambiar de sujeto, y el alt de la persona es compartido. Sigue
+    // compartida hasta que el marco cambie por dispositivo.
     WebsiteBlockType.team: const WebsiteBlockDefinition(
       type: WebsiteBlockType.team,
       title: 'Equipo',
@@ -1522,6 +1823,11 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
+    // Indicadores también es auto-layout: el `Wrap` deriva el ancho de cada
+    // tarjeta del ancho disponible —una columna bajo 600— y no persiste
+    // ninguna propiedad de composición. Etiqueta, valor, sufijo e ícono son el
+    // dato del logro; personalizarlos por dispositivo sería publicar tres
+    // cifras distintas.
     WebsiteBlockType.stats: const WebsiteBlockDefinition(
       type: WebsiteBlockType.stats,
       title: 'Indicadores',
@@ -1605,6 +1911,15 @@ class WebsiteBlockRegistry {
         ),
       ],
     ),
+    // El footer de la tienda NO es este bloque. El pie real es chrome del
+    // sitio: lo compone `PublicStoreLayout` desde los settings del sitio
+    // (pending→saved) y `WebsiteNavigation`, y elige su versión de escritorio
+    // o de teléfono sólo por ancho. Este tipo de bloque existe en el registro
+    // como cierre de página y su renderer sólo reserva alto; sus campos no
+    // llegan a la tienda. Por eso queda entero compartido: declarar aquí una
+    // propiedad responsive crearía un segundo dueño del pie y una superficie
+    // persistida que nadie dibuja. Contratos:
+    // `website_conversion_responsive_policies_test.dart`.
     WebsiteBlockType.footer: WebsiteBlockDefinition(
       type: WebsiteBlockType.footer,
       title: 'Footer',
@@ -1810,4 +2125,85 @@ class WebsiteBlockRegistry {
 
   static WebsiteBlockCapabilityProfile capabilitiesFor(WebsiteBlockType type) =>
       WebsiteBlockCapabilityRegistry.profileFor(type);
+
+  /// Resolves one schema field by its owner path.
+  ///
+  /// Custom editors use the same registry metadata as generic controls instead
+  /// of recreating a local field contract. Repeater items are addressed with a
+  /// dotted path such as `slides.imageUrl`; collection indexes and persisted
+  /// item identities deliberately do not belong to the schema path.
+  static WebsiteBlockFieldSchema? fieldForPath(
+    WebsiteBlockType type,
+    String path,
+  ) {
+    final segments = path
+        .split('.')
+        .map((segment) => segment.trim())
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: false);
+    if (segments.isEmpty) return null;
+
+    Iterable<WebsiteBlockFieldSchema> candidates = definitionFor(type).fields;
+    WebsiteBlockFieldSchema? resolved;
+    for (final segment in segments) {
+      resolved = null;
+      for (final field in candidates) {
+        if (field.key == segment) {
+          resolved = field;
+          break;
+        }
+      }
+      if (resolved == null) return null;
+      candidates = resolved.itemFields;
+    }
+    return resolved;
+  }
+
+  /// Registry-derived responsive capability matrix.
+  ///
+  /// Nested repeater fields use dotted schema paths. Custom editors still
+  /// receive an entry (possibly empty), so the matrix remains total across the
+  /// complete block catalogue instead of becoming a second hand-maintained
+  /// list that can drift from [WebsiteBlockType.values].
+  static Map<WebsiteBlockType, Map<String, WebsiteResponsivePropertyPolicy>>
+      responsivePolicyMatrix() {
+    return Map<WebsiteBlockType,
+        Map<String, WebsiteResponsivePropertyPolicy>>.unmodifiable({
+      for (final type in WebsiteBlockType.values)
+        type: Map<String, WebsiteResponsivePropertyPolicy>.unmodifiable(
+          _responsivePoliciesFor(definitionFor(type).fields),
+        ),
+    });
+  }
+
+  static Map<String, WebsiteResponsivePropertyPolicy> _responsivePoliciesFor(
+    Iterable<WebsiteBlockFieldSchema> fields, {
+    String prefix = '',
+  }) {
+    final result = <String, WebsiteResponsivePropertyPolicy>{};
+    for (final field in fields) {
+      final path = prefix.isEmpty ? field.key : '$prefix.${field.key}';
+      result[path] = field.responsivePolicy;
+      if (field.supportsFocalPoint) {
+        result[prefix.isEmpty
+                ? field.focalPointXKey
+                : '$prefix.${field.focalPointXKey}'] =
+            WebsiteResponsivePropertyPolicy.perViewportGeometry;
+        result[prefix.isEmpty
+                ? field.focalPointYKey
+                : '$prefix.${field.focalPointYKey}'] =
+            WebsiteResponsivePropertyPolicy.perViewportGeometry;
+      }
+      if (field.supportsAltText) {
+        result[prefix.isEmpty
+                ? field.altTextKey
+                : '$prefix.${field.altTextKey}'] =
+            WebsiteResponsivePropertyPolicy.sharedOnly;
+      }
+      result.addAll(
+        _responsivePoliciesFor(field.itemFields, prefix: path),
+      );
+    }
+    return result;
+  }
 }

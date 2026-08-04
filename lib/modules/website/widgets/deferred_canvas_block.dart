@@ -66,8 +66,11 @@ class _DeferredCanvasBlockState extends State<DeferredCanvasBlock> {
           data: widget.data,
           editable: widget.editorBinding != null,
           accentColor: widget.accentColor,
+          // The whole binding travels, so the Canvas can reach the atomic
+          // commands; the individual callbacks below stay for direct
+          // consumers and tests that build a Canvas without one.
+          editorBinding: widget.editorBinding,
           activeElementId: widget.editorBinding?.activeElementId,
-          onElementsChanged: widget.editorBinding?.onElementsChanged,
           onActiveElementChanged: widget.editorBinding?.onActiveElementChanged,
           onCanvasSizeChanged: widget.editorBinding?.onCanvasSizeChanged,
           onBackgroundTap: widget.editorBinding?.onBackgroundTap,

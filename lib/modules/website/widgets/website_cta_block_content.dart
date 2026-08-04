@@ -154,17 +154,27 @@ class WebsiteCtaBlockContent extends StatelessWidget {
 
     Widget? actionContent;
     if (visibleAction != null) {
-      final publicCanNavigate = visibleAction.href.trim().isNotEmpty &&
-          onNavigate != null &&
-          !previewMode &&
-          presenters == null;
+      // Preview keeps VISITOR interaction semantics: navigation is inert
+      // only in Edit, and Edit is identified by its injected presenters —
+      // never by `previewMode`, which owns preview DATA semantics.
+      final actionHref = visibleAction.href.trim();
       final button = WebsiteActionButton(
         action: visibleAction,
-        onPressed: publicCanNavigate
-            ? () => onNavigate!(visibleAction.href)
-            : previewMode && visibleAction.href.trim().isNotEmpty
+        // Mirrors the standalone-button contract: editor chrome owns the
+        // pointer boundary, so a VALID destination stays enabled-looking
+        // in Edit through a no-op — Material must never repaint the
+        // authored foreground as disabled. Visitors navigate when a
+        // handler exists; the legacy preview no-op survives only for a
+        // missing handler. Empty hrefs stay truly disabled.
+        onPressed: actionHref.isEmpty
+            ? null
+            : presenters != null
                 ? () {}
-                : null,
+                : onNavigate != null
+                    ? () => onNavigate!(visibleAction.href)
+                    : previewMode
+                        ? () {}
+                        : null,
         backgroundColor: accentColor,
         foregroundColor: Colors.white,
         outlineColor: Colors.white,

@@ -284,8 +284,9 @@ void main() {
       expect(navigations, ['/mapa']);
     });
 
-    testWidgets('preview and Edit presenters keep the map action inert',
-        (tester) async {
+    testWidgets(
+        'Preview navigates the map action as a visitor; Edit presenters '
+        'keep it inert', (tester) async {
       final previewNavigations = <String>[];
       await _pumpContact(
         tester,
@@ -297,7 +298,8 @@ void main() {
       await tester.tap(
         find.byKey(WebsiteContactBlockContent.mapActionKey),
       );
-      expect(previewNavigations, isEmpty);
+      expect(previewNavigations, ['/mapa'],
+          reason: 'Preview keeps visitor navigation semantics');
 
       final slots = <WebsiteInlineTextSlot>[];
       final editNavigations = <String>[];

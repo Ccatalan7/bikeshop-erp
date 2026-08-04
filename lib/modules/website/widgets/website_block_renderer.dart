@@ -20,6 +20,8 @@ import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_font_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_action.dart';
+import '../models/website_canvas_responsive_document.dart';
+import '../models/website_responsive_authoring.dart';
 import 'website_action_button.dart';
 import 'deferred_canvas_block.dart';
 import 'premium_product_card.dart';
@@ -123,6 +125,11 @@ class WebsiteBlockRenderer {
     String? tenantId,
   }) {
     final type = parseWebsiteBlockType(blockType);
+    // ONE visitor-interaction boundary for the private consumers below that
+    // never see presenters: Edit (injected contentPresenters) is inert;
+    // Preview and Public keep visitor navigation. `previewMode` keeps ONLY
+    // data/draft/hints/autoplay/publication semantics.
+    final visitorInteractionsEnabled = contentPresenters == null;
     headingFont = WebsiteFontRegistry.resolveOptionalHeadingFont(headingFont);
     bodyFont = WebsiteFontRegistry.resolveOptionalBodyFont(bodyFont);
 
@@ -206,6 +213,7 @@ class WebsiteBlockRenderer {
           featuredProducts: featuredProducts,
           featuredProductsReady: featuredProductsReady,
           previewMode: previewMode,
+          visitorInteractionsEnabled: visitorInteractionsEnabled,
           bodyFont: bodyFont,
           onNavigate: onNavigate,
           isNavigationEligible: isNavigationEligible,
@@ -377,6 +385,7 @@ class WebsiteBlockRenderer {
           headingFont: headingFont,
           bodyFont: bodyFont,
           previewMode: previewMode,
+          visitorInteractionsEnabled: visitorInteractionsEnabled,
           onNavigate: onNavigate,
         );
       case WebsiteBlockType.videoBanner:
@@ -388,6 +397,7 @@ class WebsiteBlockRenderer {
           headingFont: headingFont,
           bodyFont: bodyFont,
           previewMode: previewMode,
+          visitorInteractionsEnabled: visitorInteractionsEnabled,
           onNavigate: onNavigate,
           isNavigationEligible: isNavigationEligible,
         );
@@ -407,6 +417,7 @@ class WebsiteBlockRenderer {
           headingFont: headingFont,
           bodyFont: bodyFont,
           previewMode: previewMode,
+          visitorInteractionsEnabled: visitorInteractionsEnabled,
           onNavigate: onNavigate,
           isNavigationEligible: isNavigationEligible,
         );
@@ -1006,6 +1017,7 @@ class WebsiteBlockRenderer {
     List<Product>? featuredProducts,
     bool featuredProductsReady = true,
     bool previewMode = false,
+    bool visitorInteractionsEnabled = true,
     String? bodyFont,
     void Function(String route)? onNavigate,
     bool Function(String href)? isNavigationEligible,
@@ -1019,6 +1031,7 @@ class WebsiteBlockRenderer {
       featuredProducts: featuredProducts,
       featuredProductsReady: featuredProductsReady,
       previewMode: previewMode,
+      visitorInteractionsEnabled: visitorInteractionsEnabled,
       bodyFont: bodyFont,
       onNavigate: onNavigate,
       isNavigationEligible: isNavigationEligible,
@@ -1034,6 +1047,7 @@ class WebsiteBlockRenderer {
     String? headingFont,
     String? bodyFont,
     bool previewMode = false,
+    bool visitorInteractionsEnabled = true,
     void Function(String route)? onNavigate,
     bool Function(String href)? isNavigationEligible,
   }) {
@@ -1093,6 +1107,7 @@ class WebsiteBlockRenderer {
       headingFont: headingFont,
       bodyFont: bodyFont,
       previewMode: previewMode,
+      visitorInteractionsEnabled: visitorInteractionsEnabled,
       onNavigate: onNavigate,
       hasPlayableVideo: hasPlayableVideo,
       focalAlignment: _resolveFocalAlignment(
@@ -1280,6 +1295,7 @@ class WebsiteBlockRenderer {
     String? headingFont,
     String? bodyFont,
     bool previewMode = false,
+    bool visitorInteractionsEnabled = true,
     void Function(String route)? onNavigate,
     bool Function(String href)? isNavigationEligible,
   }) {
@@ -1383,7 +1399,7 @@ class WebsiteBlockRenderer {
                     bodyFont: bodyFont,
                     logoHeight: logoHeight,
                     gap: gap,
-                    previewMode: previewMode,
+                    visitorInteractionsEnabled: visitorInteractionsEnabled,
                     onNavigate: onNavigate,
                     isNavigationEligible: isNavigationEligible,
                   ),
@@ -1406,7 +1422,7 @@ class _BrandLogosCarousel extends StatefulWidget {
   final String? bodyFont;
   final double logoHeight;
   final double gap;
-  final bool previewMode;
+  final bool visitorInteractionsEnabled;
   final void Function(String route)? onNavigate;
   final bool Function(String href)? isNavigationEligible;
 
@@ -1415,7 +1431,7 @@ class _BrandLogosCarousel extends StatefulWidget {
     this.bodyFont,
     this.logoHeight = 90,
     this.gap = 40,
-    required this.previewMode,
+    this.visitorInteractionsEnabled = true,
     this.onNavigate,
     this.isNavigationEligible,
   });
@@ -1478,7 +1494,8 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
                             bodyFont: widget.bodyFont,
                             width: double.infinity,
                             height: widget.logoHeight,
-                            previewMode: widget.previewMode,
+                            visitorInteractionsEnabled:
+                                widget.visitorInteractionsEnabled,
                             onNavigate: widget.onNavigate,
                             isNavigationEligible: widget.isNavigationEligible,
                           ),
@@ -1536,7 +1553,7 @@ class _BrandLogoItem extends StatelessWidget {
   final String? bodyFont;
   final double width;
   final double height;
-  final bool previewMode;
+  final bool visitorInteractionsEnabled;
   final void Function(String route)? onNavigate;
   final bool Function(String href)? isNavigationEligible;
 
@@ -1545,7 +1562,7 @@ class _BrandLogoItem extends StatelessWidget {
     this.bodyFont,
     this.width = 140,
     this.height = 90,
-    required this.previewMode,
+    this.visitorInteractionsEnabled = true,
     this.onNavigate,
     this.isNavigationEligible,
   });
@@ -1577,7 +1594,10 @@ class _BrandLogoItem extends StatelessWidget {
       content = MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
-          onTap: previewMode ? null : () => onNavigate?.call(link),
+          // Visitor navigation works in Preview and Public; only Edit
+          // (visitorInteractionsEnabled=false) is inert.
+          onTap:
+              visitorInteractionsEnabled ? () => onNavigate?.call(link) : null,
           child: content,
         ),
       );
@@ -1619,6 +1639,7 @@ class _AutoCategoryGrid extends StatefulWidget {
   final String? headingFont;
   final String? bodyFont;
   final bool previewMode;
+  final bool visitorInteractionsEnabled;
   final void Function(String route)? onNavigate;
 
   const _AutoCategoryGrid({
@@ -1628,6 +1649,7 @@ class _AutoCategoryGrid extends StatefulWidget {
     this.headingFont,
     this.bodyFont,
     required this.previewMode,
+    this.visitorInteractionsEnabled = true,
     this.onNavigate,
   });
 
@@ -1827,7 +1849,7 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
             primaryColor: widget.primaryColor,
             accentColor: widget.accentColor,
             bodyFont: widget.bodyFont,
-            previewMode: widget.previewMode,
+            visitorInteractionsEnabled: widget.visitorInteractionsEnabled,
             onNavigate: widget.onNavigate,
           ),
         ],
@@ -1845,7 +1867,7 @@ class _CategoryGridLayout extends StatelessWidget {
   final Color primaryColor;
   final Color accentColor;
   final String? bodyFont;
-  final bool previewMode;
+  final bool visitorInteractionsEnabled;
   final void Function(String route)? onNavigate;
 
   const _CategoryGridLayout({
@@ -1853,7 +1875,7 @@ class _CategoryGridLayout extends StatelessWidget {
     required this.primaryColor,
     required this.accentColor,
     this.bodyFont,
-    required this.previewMode,
+    required this.visitorInteractionsEnabled,
     this.onNavigate,
   });
 
@@ -1881,7 +1903,7 @@ class _CategoryGridLayout extends StatelessWidget {
               primaryColor: primaryColor,
               accentColor: accentColor,
               bodyFont: bodyFont,
-              previewMode: previewMode,
+              visitorInteractionsEnabled: visitorInteractionsEnabled,
               onNavigate: onNavigate,
             ),
             const SizedBox(height: cardGap),
@@ -1909,7 +1931,8 @@ class _CategoryGridLayout extends StatelessWidget {
                             primaryColor: primaryColor,
                             accentColor: accentColor,
                             bodyFont: bodyFont,
-                            previewMode: previewMode,
+                            visitorInteractionsEnabled:
+                                visitorInteractionsEnabled,
                             onNavigate: onNavigate,
                           ),
                         ),
@@ -1922,7 +1945,8 @@ class _CategoryGridLayout extends StatelessWidget {
                                   primaryColor: primaryColor,
                                   accentColor: accentColor,
                                   bodyFont: bodyFont,
-                                  previewMode: previewMode,
+                                  visitorInteractionsEnabled:
+                                      visitorInteractionsEnabled,
                                   onNavigate: onNavigate,
                                 )
                               : const SizedBox.shrink(),
@@ -1955,7 +1979,7 @@ class _CategoryGridLayout extends StatelessWidget {
                       primaryColor: primaryColor,
                       accentColor: accentColor,
                       bodyFont: bodyFont,
-                      previewMode: previewMode,
+                      visitorInteractionsEnabled: visitorInteractionsEnabled,
                       onNavigate: onNavigate,
                     ),
                   ),
@@ -1980,7 +2004,7 @@ class _CategoryGridLayout extends StatelessWidget {
                       primaryColor: primaryColor,
                       accentColor: accentColor,
                       bodyFont: bodyFont,
-                      previewMode: previewMode,
+                      visitorInteractionsEnabled: visitorInteractionsEnabled,
                       onNavigate: onNavigate,
                     ),
                   ),
@@ -2004,7 +2028,7 @@ class _CategoryCard extends StatelessWidget {
   final Color primaryColor;
   final Color accentColor;
   final String? bodyFont;
-  final bool previewMode;
+  final bool visitorInteractionsEnabled;
   final void Function(String route)? onNavigate;
 
   const _CategoryCard({
@@ -2013,7 +2037,7 @@ class _CategoryCard extends StatelessWidget {
     required this.primaryColor,
     required this.accentColor,
     this.bodyFont,
-    required this.previewMode,
+    required this.visitorInteractionsEnabled,
     this.onNavigate,
   });
 
@@ -2068,7 +2092,11 @@ class _CategoryCard extends StatelessWidget {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: previewMode ? null : () => onNavigate?.call(href),
+              // Visitor navigation works in Preview and Public; only Edit
+              // (visitorInteractionsEnabled=false) is inert.
+              onTap: visitorInteractionsEnabled
+                  ? () => onNavigate?.call(href)
+                  : null,
               hoverColor: Colors.black.withValues(alpha: 0.2),
               splashColor: Colors.white.withValues(alpha: 0.1),
               highlightColor: Colors.white.withValues(alpha: 0.05),
@@ -2197,6 +2225,17 @@ class WebsiteCarouselBlockContent extends StatefulWidget {
   static const previousButtonKey =
       ValueKey<String>('website-carousel-previous');
   static const nextButtonKey = ValueKey<String>('website-carousel-next');
+
+  /// ONE owner for the visitor arrow-navigation affordance over arbitrary
+  /// photography, identical in Edit/Preview/Public: the scrim disc separates
+  /// the control on light media while the hairline boundary ring separates
+  /// it on dark media (a background-colored scrim alone vanishes there).
+  /// The values reuse this component's own overlay grammar — the dots
+  /// already pair [Colors.white] with white at 40% alpha — so no new
+  /// visual token is introduced.
+  static const arrowSurfaceColor = Colors.black45;
+  static const arrowForegroundColor = Colors.white;
+  static final arrowBoundaryColor = Colors.white.withValues(alpha: 0.4);
 
   static ValueKey<String> slideKey(int index) =>
       ValueKey<String>('website-carousel-slide-$index');
@@ -2495,6 +2534,69 @@ class _WebsiteCarouselBlockContentState
     );
   }
 
+  /// The slide's canonical Canvas contract, forwarded into the nested
+  /// composition document so a nested Canvas is classified and projected
+  /// exactly like a standalone one.
+  ///
+  /// Two deliberate limits:
+  ///
+  /// - It is forwarded ONLY when the slide declares the canonical contract,
+  ///   through the marker or a versioned container. `overrideEntry` reads a
+  ///   branch without checking its version, so carrying an unversioned legacy
+  ///   container would let a `mobile` branch reach a legacy Canvas and move
+  ///   pixels. A legacy slide contributes nothing and its composition data
+  ///   stays byte-for-byte what it was.
+  /// - Only keys the Canvas owner accepts at its ROOT travel. A slide's own
+  ///   responsive copy and media keys are not this document's vocabulary, and
+  ///   the base `designHeight` -> `blockHeight` mapping below stays the base
+  ///   mapping: inside the container the height override is the owner's own
+  ///   `blockHeight`, not a second alias.
+  static Map<String, dynamic> _slideCanvasResponsiveContract(
+    Map<String, dynamic> slide,
+  ) {
+    final marker = slide[WebsiteCanvasResponsiveDocument.schemaVersionKey];
+    final rawContainer = slide[WebsiteResponsiveDataCodec.containerKey];
+    final containerVersion = rawContainer is Map
+        ? rawContainer[WebsiteResponsiveDataCodec.versionKey]
+        : null;
+    final declaresCanonical = (marker is num &&
+            marker.toInt() >= WebsiteCanvasResponsiveDocument.schemaVersion) ||
+        (containerVersion is num &&
+            containerVersion.toInt() >=
+                WebsiteResponsiveDataCodec.schemaVersion);
+    if (!declaresCanonical) return const <String, dynamic>{};
+
+    final contract = <String, dynamic>{};
+    if (marker is num) {
+      contract[WebsiteCanvasResponsiveDocument.schemaVersionKey] =
+          marker.toInt();
+    }
+    if (rawContainer is! Map) return contract;
+
+    final allowed = WebsiteCanvasResponsivePolicy.allowedRootOverrideKeys();
+    final container = <String, dynamic>{};
+    for (final viewport in WebsiteViewport.values) {
+      if (!viewport.supportsOverride) continue;
+      final branch = rawContainer[viewport.wireName];
+      if (branch is! Map) continue;
+      final values = <String, dynamic>{};
+      for (final entry in branch.entries) {
+        final key = entry.key.toString();
+        if (!allowed.contains(key)) continue;
+        values[key] = entry.value;
+      }
+      if (values.isNotEmpty) container[viewport.wireName] = values;
+    }
+    if (container.isEmpty) return contract;
+
+    if (containerVersion is num) {
+      container[WebsiteResponsiveDataCodec.versionKey] =
+          containerVersion.toInt();
+    }
+    contract[WebsiteResponsiveDataCodec.containerKey] = container;
+    return contract;
+  }
+
   Widget _buildSlide(
     BuildContext context,
     Map<String, dynamic> slide,
@@ -2667,12 +2769,20 @@ class _WebsiteCarouselBlockContentState
                     builder: (context) {
                       final button = WebsiteActionButton(
                         action: action,
-                        onPressed: !widget.previewMode &&
-                                widget.presenters == null &&
-                                action.href.trim().isNotEmpty &&
-                                widget.onNavigate != null
-                            ? () => widget.onNavigate!(action.href)
-                            : null,
+                        // Preview keeps VISITOR navigation; only Edit is
+                        // inert. Mirrors the standalone-button contract:
+                        // editor chrome owns the pointer boundary, so a
+                        // VALID destination stays enabled-looking in Edit
+                        // through a no-op — Material must never repaint the
+                        // authored foreground as disabled. Empty hrefs stay
+                        // truly disabled.
+                        onPressed: action.href.trim().isEmpty
+                            ? null
+                            : widget.presenters != null
+                                ? () {}
+                                : widget.onNavigate != null
+                                    ? () => widget.onNavigate!(action.href)
+                                    : null,
                         backgroundColor: widget.accentColor,
                         foregroundColor: Colors.white,
                         outlineColor: Colors.white,
@@ -2720,6 +2830,7 @@ class _WebsiteCarouselBlockContentState
             slide['constrainElementsToSafeArea'] != false,
         'blockHeight': (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
         'elements': compositionElements,
+        ..._slideCanvasResponsiveContract(slide),
       };
       contentWidget = Stack(
         fit: StackFit.expand,
@@ -2740,7 +2851,9 @@ class _WebsiteCarouselBlockContentState
           DeferredCanvasBlock(
             data: compositionData,
             accentColor: widget.accentColor,
-            onNavigate: widget.previewMode ? null : widget.onNavigate,
+            // Preview keeps VISITOR navigation; only Edit is inert, and
+            // Edit is identified by its injected presenters.
+            onNavigate: widget.presenters == null ? widget.onNavigate : null,
             isNavigationEligible: widget.isNavigationEligible,
             tenantId: widget.tenantId,
             headingFont: widget.headingFont,
@@ -2859,6 +2972,11 @@ class _WebsiteCarouselBlockContentState
               semanticLabel:
                   (slide['imageAltText'] ?? slide['altText'])?.toString(),
               repeaterTarget: repeaterTarget,
+              // The slide background sits under the CTA, arrows, dots and
+              // nested selection: it renders passively, and its canonical
+              // editing control is the slide inspector's
+              // `Imagen y encuadre` picker.
+              editAffordance: WebsiteInlineMediaEditAffordance.inspectorOnly,
             ),
           ),
           contentWidget,
@@ -2953,9 +3071,14 @@ class _WebsiteCarouselBlockContentState
       },
       customBorder: const CircleBorder(),
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.black45,
+        decoration: BoxDecoration(
+          color: WebsiteCarouselBlockContent.arrowSurfaceColor,
           shape: BoxShape.circle,
+          // Boundary independent of the photo underneath: keeps the disc
+          // visible when the media is as dark as the scrim itself.
+          border: Border.all(
+            color: WebsiteCarouselBlockContent.arrowBoundaryColor,
+          ),
         ),
         padding: const EdgeInsets.all(8),
         child: SizedBox(
@@ -2966,10 +3089,14 @@ class _WebsiteCarouselBlockContentState
                   padding: EdgeInsets.all(5),
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    color: Colors.white,
+                    color: WebsiteCarouselBlockContent.arrowForegroundColor,
                   ),
                 )
-              : Icon(icon, color: Colors.white, size: 28),
+              : Icon(
+                  icon,
+                  color: WebsiteCarouselBlockContent.arrowForegroundColor,
+                  size: 28,
+                ),
         ),
       ),
     );
@@ -3114,6 +3241,7 @@ class _ProductsBlockWidget extends StatefulWidget {
   final List<Product>? featuredProducts;
   final bool featuredProductsReady;
   final bool previewMode;
+  final bool visitorInteractionsEnabled;
   final String? bodyFont;
   final void Function(String route)? onNavigate;
   final bool Function(String href)? isNavigationEligible;
@@ -3126,6 +3254,7 @@ class _ProductsBlockWidget extends StatefulWidget {
     this.featuredProducts,
     this.featuredProductsReady = true,
     this.previewMode = false,
+    this.visitorInteractionsEnabled = true,
     this.bodyFont,
     this.onNavigate,
     this.isNavigationEligible,
@@ -3662,6 +3791,11 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
           widget.data['style']?['backgroundColor']?.toString(),
         ) ??
         Colors.white;
+    // Auto-layout, unchanged. Below 700 this grid is not even mounted — the
+    // mobile auto carousel is — so a per-viewport `itemsPerRow` would be a
+    // control the storefront cannot honour. The property is therefore declared
+    // shared in the registry and the inspector says so, instead of the renderer
+    // pretending to consume an override.
     if (screenWidth < 450) {
       itemsPerRow = 1;
     } else if (screenWidth < 900) {
@@ -3768,7 +3902,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                   ? _MobileProductAutoCarousel(
                       products: displayProducts,
                       bodyFont: widget.bodyFont,
-                      previewMode: widget.previewMode,
+                      interactionsEnabled: widget.visitorInteractionsEnabled,
                       onNavigate: widget.onNavigate,
                     )
                   : layout == 'carousel'
@@ -3799,7 +3933,8 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                                   price: product.price,
                                   imageUrl: product.imageUrl,
                                   bodyFont: widget.bodyFont,
-                                  previewMode: widget.previewMode,
+                                  interactionsEnabled:
+                                      widget.visitorInteractionsEnabled,
                                   onNavigate: widget.onNavigate,
                                 ),
                               );
@@ -3826,7 +3961,8 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                               price: product.price,
                               imageUrl: product.imageUrl,
                               bodyFont: widget.bodyFont,
-                              previewMode: widget.previewMode,
+                              interactionsEnabled:
+                                  widget.visitorInteractionsEnabled,
                               onNavigate: widget.onNavigate,
                             );
                           },
@@ -3836,13 +3972,15 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                 Center(
                   child: WebsiteActionButton(
                     action: viewAllAction,
-                    onPressed: widget.previewMode
-                        ? () {}
-                        : () {
+                    // Visitor navigation works in Preview and Public; Edit
+                    // keeps its enabled-looking inert affordance.
+                    onPressed: widget.visitorInteractionsEnabled
+                        ? () {
                             if (widget.onNavigate != null) {
                               widget.onNavigate!(viewAllAction.href);
                             }
-                          },
+                          }
+                        : () {},
                     backgroundColor: widget.accentColor,
                     foregroundColor: Colors.black,
                     outlineColor: Colors.black,
@@ -3917,6 +4055,7 @@ class _VideoBannerWidget extends StatefulWidget {
   final String? headingFont;
   final String? bodyFont;
   final bool previewMode;
+  final bool visitorInteractionsEnabled;
   final void Function(String route)? onNavigate;
   final bool hasPlayableVideo;
   final Alignment focalAlignment;
@@ -3936,6 +4075,7 @@ class _VideoBannerWidget extends StatefulWidget {
     this.headingFont,
     this.bodyFont,
     required this.previewMode,
+    this.visitorInteractionsEnabled = true,
     this.onNavigate,
     required this.hasPlayableVideo,
     required this.focalAlignment,
@@ -4056,9 +4196,11 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                               href: widget.ctaLink,
                               variant: widget.actionVariant,
                             ),
-                            onPressed: widget.previewMode
-                                ? null
-                                : () => widget.onNavigate?.call(widget.ctaLink),
+                            // Visitor navigation works in Preview and
+                            // Public; only Edit is inert.
+                            onPressed: widget.visitorInteractionsEnabled
+                                ? () => widget.onNavigate?.call(widget.ctaLink)
+                                : null,
                             backgroundColor: widget.accentColor,
                             foregroundColor: Colors.white,
                             outlineColor: Colors.white,
@@ -4097,13 +4239,13 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
 class _MobileProductAutoCarousel extends StatefulWidget {
   final List<Product> products;
   final String? bodyFont;
-  final bool previewMode;
+  final bool interactionsEnabled;
   final Function(String)? onNavigate;
 
   const _MobileProductAutoCarousel({
     required this.products,
     this.bodyFont,
-    this.previewMode = false,
+    this.interactionsEnabled = true,
     this.onNavigate,
   });
 
@@ -4185,7 +4327,7 @@ class _MobileProductAutoCarouselState
                   price: product.price,
                   imageUrl: product.imageUrl,
                   bodyFont: widget.bodyFont,
-                  previewMode: widget.previewMode,
+                  interactionsEnabled: widget.interactionsEnabled,
                   onNavigate: widget.onNavigate,
                 ),
               );

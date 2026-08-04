@@ -13,36 +13,120 @@ import '../../purchases/models/purchase_invoice.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
+import '../../tasks/services/task_service.dart';
 import '../../../shared/models/supplier.dart';
+import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/gemini_proxy_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../models/ai_assistant_destination.dart';
+import '../models/ai_attention_report.dart';
+import '../models/ai_inventory_reply.dart';
+import 'ai_attention_read_model.dart';
 
-/// Callback type for navigation actions the AI can trigger.
-/// The [route] is the path to navigate to (e.g. '/inventory/products').
-/// The [searchTerm] is an optional pre-filled search query.
-typedef AINavigationCallback = void Function(String route,
-    {String? searchTerm});
+/// Raised when a shared service returned rows that could not be proven to
+/// belong to the turn's authority.
+class AIAssistantSourceUnavailable implements Exception {
+  const AIAssistantSourceUnavailable(this.source, this.reason);
 
+  final String source;
+  final String reason;
+
+  @override
+  String toString() => 'AI source "$source" unavailable: $reason';
+}
+
+/// The one authority a turn may answer from.
+///
+/// The session boundary already refuses jobs a page published for another
+/// tenant, but the assistant reads five more sources straight out of shared
+/// caches and services. Those caches are keyed by their own lifecycle, not by
+/// this turn, so a stale one can outlive a tenant switch. Every row is checked
+/// against this key before it reaches a prompt or a card.
+///
+/// A source that cannot be proven is reported unavailable. It is never
+/// silently filtered, and never degraded into "0 resultados" — an empty answer
+/// and an unverifiable answer mean opposite things to whoever reads them.
+/// An unresolved authority is not representable: [scope] is non-null, so a
+/// turn either has one coherent user + tenant or is never constructed. The
+/// nullable version invited a "no authority" branch in every consumer, and a
+/// branch that must never be taken is a branch that eventually is.
+@immutable
+class AIAssistantTurnAuthority {
+  const AIAssistantTurnAuthority(this.scope);
+
+  final ErpAuthorityScopeKey scope;
+
+  String get tenantId => scope.tenantId;
+
+  /// Returns [rows] only when every row belongs to this authority.
+  List<T> verifyRows<T>(
+    String source,
+    Iterable<T> rows,
+    String? Function(T row) tenantOf,
+  ) {
+    final expected = scope.tenantId;
+
+    final verified = <T>[];
+    for (final row in rows) {
+      final rowTenant = tenantOf(row)?.trim();
+      if (rowTenant == null || rowTenant.isEmpty) {
+        throw AIAssistantSourceUnavailable(source, 'a row carries no tenant');
+      }
+      if (rowTenant != expected) {
+        throw AIAssistantSourceUnavailable(
+          source,
+          'a row belongs to another tenant',
+        );
+      }
+      verified.add(row);
+    }
+    return verified;
+  }
+
+  /// Requires a service whose cache publishes its own authority to be bound to
+  /// exactly this one. Checked before and after a read, because a read can
+  /// await across a tenant switch.
+  void requireServiceScope(String source, ErpAuthorityScopeKey? serviceScope) {
+    if (serviceScope == null) {
+      throw AIAssistantSourceUnavailable(source, 'service has no bound scope');
+    }
+    if (serviceScope != scope) {
+      throw AIAssistantSourceUnavailable(
+        source,
+        'service is bound to another authority',
+      );
+    }
+  }
+}
+
+/// A card the assistant offers after answering.
+///
+/// The card carries a [destination] identifier, never a route and never an
+/// entity id. Nothing the model emits can widen where a click lands: the
+/// closed registry in [AIAssistantDestination] decides that, and every entry
+/// in it is an aggregate surface rather than an editor.
 class AIAssistantActionCard {
   const AIAssistantActionCard({
     required this.kind,
     required this.title,
-    required this.route,
+    required this.destination,
     this.eyebrow,
     this.subtitle,
     this.description,
-    this.ctaLabel = 'Abrir',
     this.chips = const [],
   });
 
   final String kind;
   final String title;
-  final String route;
+  final AIAssistantDestination destination;
   final String? eyebrow;
   final String? subtitle;
   final String? description;
-  final String ctaLabel;
   final List<String> chips;
+
+  /// Names the surface the click opens, so the operator reads the destination
+  /// before choosing it.
+  String get ctaLabel => destination.ctaLabel;
 }
 
 class AIAssistantResponse {
@@ -171,9 +255,15 @@ class _WidthComparisonCandidate {
 }
 
 class AIAssistantService extends ChangeNotifier {
-  static final AIAssistantService _instance = AIAssistantService._internal();
-  factory AIAssistantService() => _instance;
-  AIAssistantService._internal();
+  /// One engine per authority, never a process-wide singleton.
+  ///
+  /// This used to be `factory AIAssistantService() => _instance`, so every
+  /// caller shared one chat history, one set of matched SKUs and one
+  /// `_lastSearchResults`. A panel that looked brand new answered "tomé la
+  /// búsqueda anterior" about a search made in someone else's session, and
+  /// closing the panel cleared what the operator saw without clearing what the
+  /// model remembered. The session boundary owns the lifetime now.
+  AIAssistantService();
 
   GeminiProxyService? _geminiProxyInstance;
   GeminiProxyService get _geminiProxy =>
@@ -183,14 +273,12 @@ class AIAssistantService extends ChangeNotifier {
 
   List<Map<String, dynamic>> _toolDeclarations = [];
 
-  /// SKUs from the last searchStock call, used to sync with inventory page.
-  List<String>? _lastSearchSkus;
+  // `_lastSearchSkus` and the stock-filter indices lived here to hand a
+  // pre-filtered selection to the inventory screen when the assistant drove
+  // navigation. Nothing drives navigation any more, so both are gone rather
+  // than kept as state nobody reads.
   List<Map<String, dynamic>> _lastSearchResults = [];
   String? _lastInventorySearchTerm;
-
-  static const int _stockFilterAll = 0;
-  static const int _stockFilterInStock = 1;
-  static const int _stockFilterOutOfStock = 3;
 
   bool get isLoading => _isLoading;
   List<Map<String, dynamic>> get history => _history;
@@ -218,22 +306,6 @@ class AIAssistantService extends ChangeNotifier {
                 },
               },
               'required': ['query'],
-            },
-          },
-          {
-            'name': 'navigateToInventory',
-            'description':
-                'Navigates the app to the Inventory module and pre-fills the search box. WARNING: The inventory screen uses KEYWORD text matching, NOT semantic search. You MUST simplify and translate the user\'s request into the shortest possible keyword that will match product names. Examples: "llantas mtb" → "llanta", "cámaras para mountain bike" → "camara", "ruedas para BMX" → "llanta 20". NEVER pass conversational phrases, categories like "mtb", or connector words like "para", "de", "con".',
-            'parameters': {
-              'type': 'OBJECT',
-              'properties': {
-                'searchTerm': {
-                  'type': 'STRING',
-                  'description':
-                      'The simplified keyword for the inventory text filter. Must match actual product names. Use the shortest effective keyword (e.g., "llanta", "camara 29", "cassette shimano").',
-                },
-              },
-              'required': ['searchTerm'],
             },
           },
           {
@@ -714,12 +786,40 @@ ${hintLines.join('\n')}
     PurchaseService? purchaseService,
     SalesService? salesService,
     bool allowJobCacheFallback = true,
-    AINavigationCallback? onNavigate,
+    bool visibleJobsSourceUnavailable = false,
+    TaskService? taskService,
+    required AIAssistantTurnAuthority authority,
   }) async {
     _isLoading = true;
     notifyListeners();
 
     try {
+      // Ahead of the job summary and ahead of the model: the operational
+      // briefing is answered from the read model or not at all.
+      final horizon = detectAttentionHorizon(message);
+      if (horizon != null) {
+        final report = await const AIAttentionReadModel().build(
+          horizon: horizon,
+          authority: authority,
+          bikeshopService: bikeshopService,
+          taskService: taskService,
+        );
+        return _recordDeterministic(
+          message,
+          _attentionResponse(report),
+        );
+      }
+
+      if (visibleJobsSourceUnavailable) {
+        // The caller published rows it could not vouch for. Answering "no
+        // encontré trabajos" here would report a verified zero from a source
+        // that was never read, so the engine declines the job path instead.
+        final unavailable = _tryHandleJobSummaryUnavailable(message);
+        if (unavailable != null) {
+          return _recordDeterministic(message, unavailable);
+        }
+      }
+
       final jobSummaryResponse = await _tryHandleJobSummary(
         message,
         jobs: jobs,
@@ -728,9 +828,10 @@ ${hintLines.join('\n')}
         jobsAreCurrentView: jobsAreCurrentView,
         jobSummaryScopeLabel: jobSummaryScopeLabel,
         allowJobCacheFallback: allowJobCacheFallback,
+        authority: authority,
       );
       if (jobSummaryResponse != null) {
-        return jobSummaryResponse;
+        return _recordDeterministic(message, jobSummaryResponse);
       }
 
       final entityCardResponse = await _tryHandleEntityCards(
@@ -739,32 +840,38 @@ ${hintLines.join('\n')}
         bikeshopService: bikeshopService,
         purchaseService: purchaseService,
         salesService: salesService,
+        authority: authority,
       );
       if (entityCardResponse != null) {
-        return entityCardResponse;
+        return _recordDeterministic(message, entityCardResponse);
       }
 
       final inventoryRefinement = _tryHandleInventoryRefinement(
         message,
         inventoryService: inventoryService,
-        onNavigate: onNavigate,
       );
       if (inventoryRefinement != null) {
-        return _textResponse(inventoryRefinement);
+        return _recordDeterministic(
+          message,
+          _textResponse(inventoryRefinement),
+        );
       }
 
       final inventoryComparison = _tryHandleInventoryComparison(message);
       if (inventoryComparison != null) {
-        return _textResponse(inventoryComparison);
+        return _recordDeterministic(
+          message,
+          _textResponse(inventoryComparison),
+        );
       }
 
       final directInventorySearch = await _tryHandleDirectInventorySearch(
         message,
         inventoryService: inventoryService,
-        onNavigate: onNavigate,
+        authority: authority,
       );
       if (directInventorySearch != null) {
-        return directInventorySearch;
+        return _recordDeterministic(message, directInventorySearch);
       }
 
       initialize();
@@ -796,7 +903,6 @@ ${hintLines.join('\n')}
         final functionCalls = response.functionCalls;
         final functionResponses = <Map<String, dynamic>>[];
         Map<String, Object?>? inventorySearchResult;
-        Map<String, Object?>? inventoryNavigateResult;
 
         workingHistory.add({
           'role': 'model',
@@ -822,15 +928,11 @@ ${hintLines.join('\n')}
 
           if (name == 'searchStock') {
             result = await _toolSearchStock(
-                args['query'] as String?, inventoryService);
-            inventorySearchResult = result;
-          } else if (name == 'navigateToInventory') {
-            result = _toolNavigateToInventory(
-              args['searchTerm'] as String?,
-              inventoryService: inventoryService,
-              onNavigate: onNavigate,
+              args['query'] as String?,
+              inventoryService,
+              authority,
             );
-            inventoryNavigateResult = result;
+            inventorySearchResult = result;
           } else if (name == 'searchInternet') {
             result = await _toolSearchInternet(args['query'] as String?);
           } else {
@@ -845,25 +947,21 @@ ${hintLines.join('\n')}
           });
         }
 
-        final shouldAutoNavigateToInventory = inventorySearchResult != null &&
-            inventoryNavigateResult == null &&
-            inventorySearchResult.containsKey('products') &&
-            ((inventorySearchResult['count'] as num?)?.toInt() ?? 0) > 0 &&
-            _lastInventorySearchTerm != null &&
-            _lastInventorySearchTerm!.isNotEmpty &&
-            onNavigate != null;
+        // The tool results close the call the model just made. They are
+        // appended before anything can return, because a history whose last
+        // model turn is a functionCall with no matching functionResponse is
+        // malformed, and the next turn sends it back to Gemini exactly as it
+        // was left.
+        workingHistory.add({
+          'role': 'user',
+          'parts': functionResponses,
+        });
 
-        if (shouldAutoNavigateToInventory) {
-          inventoryNavigateResult = _toolNavigateToInventory(
-            _lastInventorySearchTerm,
-            inventoryService: inventoryService,
-            onNavigate: onNavigate,
-          );
-        }
-
+        // No auto-navigation. A search used to move the operator's active
+        // workspace on its own, which could replace an unrelated surface they
+        // were working in. The reply offers a card; the click is theirs.
         final deterministicInventoryReply = _buildDeterministicInventoryReply(
           inventorySearchResult,
-          inventoryNavigateResult,
         );
         if (deterministicInventoryReply != null) {
           _history
@@ -880,11 +978,6 @@ ${hintLines.join('\n')}
             cards: _buildInventoryCardsFromSearchResult(inventorySearchResult),
           );
         }
-
-        workingHistory.add({
-          'role': 'user',
-          'parts': functionResponses,
-        });
 
         response = await _geminiProxy.generateContent(
           model: 'gemini-2.5-flash-lite',
@@ -916,6 +1009,18 @@ ${hintLines.join('\n')}
         ..addAll(workingHistory);
 
       return _textResponse(text);
+    } on AIAssistantSourceUnavailable catch (e) {
+      // Never degraded into "no encontré nada": an empty answer and an
+      // unverifiable one mean opposite things at the counter.
+      debugPrint('⛔ [AI] $e');
+      return _recordDeterministic(
+        message,
+        _textResponse(
+          'No pude responder eso con datos verificados de este taller. La '
+          'fuente que necesitaba no se pudo confirmar, así que preferí no '
+          'darte una cifra. Vuelve a intentarlo en unos segundos.',
+        ),
+      );
     } on GeminiProxyException catch (e) {
       debugPrint('Error sending message via Gemini proxy: $e');
       return _textResponse(_friendlyGeminiErrorMessage(e));
@@ -928,6 +1033,58 @@ ${hintLines.join('\n')}
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Records a turn that a deterministic handler answered without the model.
+  ///
+  /// These handlers used to return before touching [_history], so the model
+  /// never learned that the operator had asked anything. That produced two
+  /// divergent memories in one panel: the assistant could not recall a search
+  /// it had just performed, and separately narrated searches from turns the
+  /// operator could no longer see. Every produced turn is recorded here.
+  AIAssistantResponse _recordDeterministic(
+    String message,
+    AIAssistantResponse response,
+  ) {
+    _history
+      ..add({
+        'role': 'user',
+        'parts': [
+          {'text': message},
+        ],
+      })
+      ..add({
+        'role': 'model',
+        'parts': [
+          {'text': response.text},
+        ],
+      });
+    return response;
+  }
+
+  /// Declines the job path when the published rows could not be trusted.
+  ///
+  /// Returning a count here would report a verified zero from a source that
+  /// was never read, which is exactly the failure the session boundary
+  /// rejected the rows to avoid.
+  AIAssistantResponse? _tryHandleJobSummaryUnavailable(String message) {
+    if (!_looksLikeJobSummaryRequest(message)) {
+      return null;
+    }
+    return _textResponse(
+      'No puedo responder por los trabajos en este momento: la lista que '
+      'tenías en pantalla no se pudo verificar como de este taller. Abre '
+      'Taller para verla directamente.',
+      cards: const [
+        AIAssistantActionCard(
+          kind: 'job',
+          eyebrow: 'Fuente no disponible',
+          title: 'Trabajos del taller',
+          description: 'No se pudo verificar la lista visible.',
+          destination: AIAssistantDestination.workshopJobs,
+        ),
+      ],
+    );
   }
 
   AIAssistantResponse _textResponse(
@@ -961,15 +1118,175 @@ ${hintLines.join('\n')}
     return 'El asistente IA no pudo responder ahora. Intenta de nuevo en unos segundos.';
   }
 
-  Future<AIAssistantResponse?> _tryHandleJobSummary(
-    String message, {
-    List<MechanicJob>? jobs,
-    CustomerService? customerService,
-    BikeshopService? bikeshopService,
-    bool jobsAreCurrentView = false,
-    String? jobSummaryScopeLabel,
-    bool allowJobCacheFallback = true,
-  }) async {
+  /// Which day an operational-briefing request is about, or null.
+  ///
+  /// Matched deterministically on normalised text — accents and case removed —
+  /// because the model must not decide whether a question counts as a
+  /// briefing. Tomorrow is checked first: "prioridades de mañana" also
+  /// contains a today-shaped phrase.
+  @visibleForTesting
+  AIAttentionHorizon? detectAttentionHorizon(String message) {
+    final normalized = _normalizeText(message);
+    if (normalized.isEmpty) return null;
+
+    const tomorrowPhrases = <String>[
+      'ayudame a organizar el trabajo para manana',
+      'organiza manana',
+      'organizar manana',
+      'planifica manana',
+      'planificar manana',
+      'prioridades de manana',
+      'que hay para manana',
+      'que necesita atencion manana',
+      'resumen operativo de manana',
+    ];
+    for (final phrase in tomorrowPhrases) {
+      if (normalized.contains(phrase)) return AIAttentionHorizon.tomorrow;
+    }
+
+    const todayPhrases = <String>[
+      'que necesita atencion hoy',
+      'que necesito atender hoy',
+      'que debo resolver hoy',
+      'que tengo que resolver hoy',
+      'prioridades de hoy',
+      'prioridades para hoy',
+      'resumen operativo',
+    ];
+    for (final phrase in todayPhrases) {
+      if (normalized.contains(phrase)) return AIAttentionHorizon.today;
+    }
+
+    return null;
+  }
+
+  /// Renders the briefing. Every sentence is built from the report's own
+  /// counters, so what the operator reads is what was measured.
+  AIAssistantResponse _attentionResponse(AIAttentionReport report) {
+    // Markdown blocks, not lines. The panel renders through `MarkdownBody`,
+    // where a single newline is a soft break and collapses: joining sentences
+    // with "\n" turned the whole briefing into one run-on paragraph and the
+    // "•" bullets into inline dots. Paragraphs are separated by a blank line
+    // and the items are a real Markdown list.
+    final blocks = <String>[];
+    final period = report.horizon.label;
+
+    // Only ever the fixed sentences from the enum: an exception string in this
+    // panel would put a stack trace, a tenant id or a Postgres message in front
+    // of whoever is at the counter.
+    String missingClause() => report.unavailableSources
+        .map((o) => '${o.source.label} ${o.reason?.label ?? 'no respondió'}')
+        .join(' · ');
+
+    String stamp() =>
+        'Al ${AIAttentionReadModel.formatChileStamp(report.generatedAt)}, '
+        'hora de Chile.';
+
+    if (report.isUnavailable) {
+      // Even a briefing that could read nothing says when it tried: without
+      // the stamp the operator cannot tell a failure from a stale panel.
+      return _textResponse(
+        [
+          'No pude armar el resumen de $period: ${missingClause()}. No quiere '
+              'decir que no haya nada pendiente — quiere decir que no pude '
+              'mirar.',
+          stamp(),
+        ].join('\n\n'),
+      );
+    }
+
+    final available = report.outcomes.where((o) => o.isAvailable).toList();
+    final examinedParts =
+        available.map((o) => '${o.source.label} ${o.examined}').join(', ');
+    // With a source missing, a bare "no hay nada" would be a claim about the
+    // whole business made from half of it.
+    final verifiedScope = report.isPartial
+        ? 'en ${available.map((o) => o.source.label).join(' y ')}'
+        : '';
+
+    if (report.items.isEmpty) {
+      blocks.add(
+        report.isPartial
+            ? 'Para $period no encontré nada comprometido $verifiedScope. '
+                'Revisé $examinedParts registros.'
+            : 'Para $period no encontré entregas ni tareas comprometidas. '
+                'Revisé $examinedParts registros.',
+      );
+    } else {
+      // The headline states what was found, not what fits on screen. Saying
+      // "hay 6" and correcting it two lines later is how a briefing loses the
+      // four items nobody scrolled to.
+      final head = report.isTruncated
+          ? 'Para $period detecté ${report.selectedBeforeTruncation} cosas que '
+              'necesitan atención; te muestro las ${report.items.length} más '
+              'urgentes.'
+          : 'Para $period hay ${report.items.length} '
+              '${report.items.length == 1 ? 'cosa' : 'cosas'} que necesitan '
+              'atención.';
+      blocks.add('$head Revisé $examinedParts registros.');
+      blocks.add(
+        report.items
+            .map((item) =>
+                '- ${item.reason.label} · ${item.title} — ${item.detail}')
+            .join('\n'),
+      );
+    }
+
+    if (report.isPartial) {
+      blocks.add(
+        'Resumen parcial: ${missingClause()}, así que puede faltar algo.',
+      );
+    }
+
+    blocks.add(stamp());
+
+    // Deliberately not `_cardResponse`: it collapses every run of whitespace
+    // into a single space, which would flatten the blocks above back into the
+    // paragraph this method exists to avoid.
+    return _textResponse(
+      blocks.join('\n\n'),
+      cards: _attentionCards(report),
+    );
+  }
+
+  List<AIAssistantActionCard> _attentionCards(AIAttentionReport report) {
+    // A source that could not be read gets no card: offering a way into a
+    // module the briefing never managed to look at implies it did.
+    final availableSources = report.outcomes
+        .where((o) => o.isAvailable)
+        .map((o) => o.source)
+        .toSet();
+
+    // Every available source gets a card, not only the ones that survived the
+    // top six. Deriving them from the truncated list meant that six workshop
+    // items pushing one task to seventh place removed "Abrir Tareas" — the
+    // module with a pending commitment became the one with no way in.
+    final sources = availableSources;
+
+    return [
+      for (final source in AIAttentionSource.values)
+        if (sources.contains(source))
+          AIAssistantActionCard(
+            kind: source == AIAttentionSource.workshop ? 'job' : 'task',
+            eyebrow: source.label,
+            title: source == AIAttentionSource.workshop
+                ? 'Entregas y trabajos abiertos'
+                : 'Tareas pendientes',
+            description: report.items
+                .where((item) => item.source == source)
+                .map((item) => item.title)
+                .take(3)
+                .join(' · '),
+            destination: source.destination,
+          ),
+    ];
+  }
+
+  /// Whether a message is asking the assistant to summarise workshop jobs.
+  ///
+  /// Shared so the normal summary path and the "source could not be verified"
+  /// path answer the same question about the same messages.
+  bool _looksLikeJobSummaryRequest(String message) {
     final normalized = _normalizeText(message);
     final mentionsJobs = normalized.contains('trabajo') ||
         normalized.contains('trabajos') ||
@@ -978,11 +1295,10 @@ ${hintLines.join('\n')}
         normalized.contains('job') ||
         normalized.contains('jobs');
     if (!mentionsJobs) {
-      return null;
+      return false;
     }
 
-    final asksForToday = _mentionsTodayScope(normalized);
-    final wantsSummary = asksForToday ||
+    return _mentionsTodayScope(normalized) ||
         normalized.contains('resumen') ||
         normalized.contains('resume') ||
         normalized.contains('sumario') ||
@@ -994,15 +1310,31 @@ ${hintLines.join('\n')}
         normalized.contains('en curso') ||
         normalized.contains('como vamos') ||
         normalized.contains('como esta');
-    if (!wantsSummary) {
+  }
+
+  Future<AIAssistantResponse?> _tryHandleJobSummary(
+    String message, {
+    List<MechanicJob>? jobs,
+    CustomerService? customerService,
+    BikeshopService? bikeshopService,
+    bool jobsAreCurrentView = false,
+    String? jobSummaryScopeLabel,
+    bool allowJobCacheFallback = true,
+    required AIAssistantTurnAuthority authority,
+  }) async {
+    final normalized = _normalizeText(message);
+    if (!_looksLikeJobSummaryRequest(message)) {
       return null;
     }
+
+    final asksForToday = _mentionsTodayScope(normalized);
 
     final sourceJobs = await _loadJobsForSummary(
       jobs,
       bikeshopService: bikeshopService,
       useProvidedJobsOnly: jobsAreCurrentView,
       allowJobCacheFallback: allowJobCacheFallback,
+      authority: authority,
     );
     debugPrint(
       '[AI_CTX][AIService.summary.source] provided=${jobs?.length ?? 'null'} '
@@ -1020,7 +1352,8 @@ ${hintLines.join('\n')}
       return _textResponse('No encontré trabajos para resumir ahora mismo.');
     }
 
-    final customerNamesById = await _loadCustomerNamesById(customerService);
+    final customerNamesById =
+        await _loadCustomerNamesById(customerService, authority);
     final includeTestJobs = _mentionsTestScope(normalized);
     final summarySourceJobs = jobsAreCurrentView || includeTestJobs
         ? sourceJobs
@@ -1280,6 +1613,7 @@ ${hintLines.join('\n')}
     BikeshopService? bikeshopService,
     bool useProvidedJobsOnly = false,
     bool allowJobCacheFallback = true,
+    required AIAssistantTurnAuthority authority,
   }) async {
     if (jobs != null && (jobs.isNotEmpty || useProvidedJobsOnly)) {
       final providedJobs = jobs.where((job) => job.id != null).toList();
@@ -1312,10 +1646,23 @@ ${hintLines.join('\n')}
       'hasCache=${bikeshopService.hasJobsCache} useProvidedOnly=$useProvidedJobsOnly '
       'allowFallback=$allowJobCacheFallback',
     );
-    final loadedJobs = bikeshopService.hasJobsCache
+    // The cache belongs to the service's own lifecycle, not to this turn. It
+    // is checked before being *consumed*, and again after any read: a fetch
+    // can span a tenant switch and come back holding the previous taller's
+    // rows. The pre-check is deliberately skipped when there is no cache to
+    // consume, because a first load legitimately starts with no bound scope.
+    final usesCache = bikeshopService.hasJobsCache;
+    if (usesCache) {
+      authority.requireServiceScope('taller', bikeshopService.authorityScope);
+    }
+    final loadedJobs = usesCache
         ? bikeshopService.cachedJobs
         : await bikeshopService.getJobs();
-    final fallbackJobs = loadedJobs.where((job) => job.id != null).toList();
+    authority.requireServiceScope('taller', bikeshopService.authorityScope);
+    final fallbackJobs = authority
+        .verifyRows('taller', loadedJobs, (job) => job.tenantId)
+        .where((job) => job.id != null)
+        .toList();
     debugPrint(
       '[AI_CTX][AIService.loadJobs] fallback loaded=${fallbackJobs.length} '
       'jobs=[${_debugJobNumbers(fallbackJobs)}]',
@@ -1325,19 +1672,28 @@ ${hintLines.join('\n')}
 
   Future<Map<String, String>> _loadCustomerNamesById(
     CustomerService? customerService,
+    AIAssistantTurnAuthority authority,
   ) async {
     if (customerService == null) {
       return const <String, String>{};
     }
 
     try {
-      final customers = await _loadCustomersForAi(customerService);
+      final customers = await _loadCustomersForAi(customerService, authority);
       return {
         for (final customer in customers)
           if (customer.id != null) customer.id!: customer.name,
       };
+    } on AIAssistantSourceUnavailable {
+      // A tenant mismatch is not a degradable enrichment failure. Swallowing
+      // it here would let the summary print job numbers whose customer names
+      // came from a source that just failed its authority check, and the
+      // operator would never know.
+      rethrow;
     } catch (e) {
-      debugPrint('⚠️ [AI] Failed to load customers for job summary: $e');
+      // Anything else only costs the names: the summary still answers, and it
+      // answers about jobs that did pass verification.
+      debugPrint('⚠️ [AI] Customer names unavailable for job summary: $e');
       return const <String, String>{};
     }
   }
@@ -1422,10 +1778,12 @@ ${hintLines.join('\n')}
     BikeshopService? bikeshopService,
     PurchaseService? purchaseService,
     SalesService? salesService,
+    required AIAssistantTurnAuthority authority,
   }) async {
     final purchaseInvoiceResponse = await _tryHandlePurchaseInvoiceCards(
       message,
       purchaseService: purchaseService,
+      authority: authority,
     );
     if (purchaseInvoiceResponse != null) {
       return purchaseInvoiceResponse;
@@ -1434,6 +1792,7 @@ ${hintLines.join('\n')}
     final salesInvoiceResponse = await _tryHandleSalesInvoiceCards(
       message,
       salesService: salesService,
+      authority: authority,
     );
     if (salesInvoiceResponse != null) {
       return salesInvoiceResponse;
@@ -1442,6 +1801,7 @@ ${hintLines.join('\n')}
     final customerResponse = await _tryHandleCustomerCards(
       message,
       customerService: customerService,
+      authority: authority,
     );
     if (customerResponse != null) {
       return customerResponse;
@@ -1450,6 +1810,7 @@ ${hintLines.join('\n')}
     final supplierResponse = await _tryHandleSupplierCards(
       message,
       purchaseService: purchaseService,
+      authority: authority,
     );
     if (supplierResponse != null) {
       return supplierResponse;
@@ -1459,6 +1820,7 @@ ${hintLines.join('\n')}
       message,
       customerService: customerService,
       bikeshopService: bikeshopService,
+      authority: authority,
     );
     if (jobResponse != null) {
       return jobResponse;
@@ -1470,6 +1832,7 @@ ${hintLines.join('\n')}
   Future<AIAssistantResponse?> _tryHandleCustomerCards(
     String message, {
     CustomerService? customerService,
+    required AIAssistantTurnAuthority authority,
   }) async {
     if (customerService == null) {
       return null;
@@ -1504,7 +1867,7 @@ ${hintLines.join('\n')}
       return null;
     }
 
-    final allCustomers = await _loadCustomersForAi(customerService);
+    final allCustomers = await _loadCustomersForAi(customerService, authority);
     var customers = searchTerm.isNotEmpty
         ? allCustomers
             .where(
@@ -1559,6 +1922,7 @@ ${hintLines.join('\n')}
   Future<AIAssistantResponse?> _tryHandleSupplierCards(
     String message, {
     PurchaseService? purchaseService,
+    required AIAssistantTurnAuthority authority,
   }) async {
     if (purchaseService == null) {
       return null;
@@ -1594,7 +1958,26 @@ ${hintLines.join('\n')}
       return null;
     }
 
-    var suppliers = await purchaseService.getSuppliers();
+    // The pre-check guards a cache about to be *consumed*, so it keys off the
+    // cache itself. Keying off the scope instead let a stale detached scope
+    // block a legitimate cold load, which is a refusal to answer a question
+    // nothing was wrong with.
+    if (purchaseService.hasSuppliersCache) {
+      authority.requireServiceScope(
+        'proveedores',
+        purchaseService.supplierAuthorityScope,
+      );
+    }
+    final loadedSuppliers = await purchaseService.getSuppliers();
+    authority.requireServiceScope(
+      'proveedores',
+      purchaseService.supplierAuthorityScope,
+    );
+    var suppliers = authority.verifyRows(
+      'proveedores',
+      loadedSuppliers,
+      (supplier) => supplier.tenantId,
+    );
 
     if (searchTerm.isNotEmpty) {
       suppliers = suppliers
@@ -1645,6 +2028,7 @@ ${hintLines.join('\n')}
     String message, {
     CustomerService? customerService,
     BikeshopService? bikeshopService,
+    required AIAssistantTurnAuthority authority,
   }) async {
     if (bikeshopService == null) {
       return null;
@@ -1684,15 +2068,19 @@ ${hintLines.join('\n')}
       return null;
     }
 
+    // Names come only from the verified snapshot below. Seeding them from the
+    // raw cache first put unverified rows on a card the moment a job happened
+    // to reference one of them, which is the same leak the verification
+    // exists to stop.
+    final allCustomers = customerService != null
+        ? await _loadCustomersForAi(customerService, authority)
+        : const <Customer>[];
+
     final customerNamesById = <String, String>{
-      for (final customer
-          in customerService?.cachedCustomers ?? const <Customer>[])
+      for (final customer in allCustomers)
         if (customer.id != null) customer.id!: customer.name,
     };
 
-    final allCustomers = customerService != null
-        ? await _loadCustomersForAi(customerService)
-        : const <Customer>[];
     final matchingCustomers = searchTerm.isNotEmpty
         ? allCustomers
             .where(
@@ -1701,15 +2089,31 @@ ${hintLines.join('\n')}
             .toList()
         : const <Customer>[];
 
+    // Same rule as the summary path: the scope pre-check guards a cache about
+    // to be consumed, never a first load that has none yet.
+    if (bikeshopService.hasJobsCache) {
+      authority.requireServiceScope('taller', bikeshopService.authorityScope);
+    }
+
     List<MechanicJob> candidateJobs;
     if (searchTerm.isEmpty) {
-      candidateJobs = bikeshopService.hasJobsCache
+      final loaded = bikeshopService.hasJobsCache
           ? bikeshopService.cachedJobs
           : await bikeshopService.getJobs();
+      authority.requireServiceScope('taller', bikeshopService.authorityScope);
+      candidateJobs = authority.verifyRows(
+        'taller',
+        loaded,
+        (job) => job.tenantId,
+      );
     } else {
-      final cachedJobs = bikeshopService.hasJobsCache
-          ? bikeshopService.cachedJobs
-          : const <MechanicJob>[];
+      final cachedJobs = authority.verifyRows(
+        'taller',
+        bikeshopService.hasJobsCache
+            ? bikeshopService.cachedJobs
+            : const <MechanicJob>[],
+        (job) => job.tenantId,
+      );
       final customerLinkedJobs = <MechanicJob>[];
       final seenCustomerLinkedJobIds = <String>{};
 
@@ -1718,9 +2122,25 @@ ${hintLines.join('\n')}
         if (customerId == null) continue;
         customerNamesById[customerId] = customer.name;
 
-        final jobsForCustomer = cachedJobs.isNotEmpty
-            ? cachedJobs.where((job) => job.customerId == customerId).toList()
-            : await bikeshopService.getJobs(customerId: customerId);
+        List<MechanicJob> jobsForCustomer;
+        if (cachedJobs.isNotEmpty) {
+          jobsForCustomer =
+              cachedJobs.where((job) => job.customerId == customerId).toList();
+        } else {
+          final loaded = await bikeshopService.getJobs(customerId: customerId);
+          // Post-check after every filtered read. Without it, a read that
+          // spanned a tenant switch comes back empty and that emptiness gets
+          // reported as a verified zero for this taller.
+          authority.requireServiceScope(
+            'taller',
+            bikeshopService.authorityScope,
+          );
+          jobsForCustomer = authority.verifyRows(
+            'taller',
+            loaded,
+            (job) => job.tenantId,
+          );
+        }
 
         for (final job in jobsForCustomer) {
           final jobId = job.id;
@@ -1734,8 +2154,14 @@ ${hintLines.join('\n')}
 
       candidateJobs = customerLinkedJobs;
 
-      final textMatchedJobs =
+      final textMatchedLoaded =
           await bikeshopService.getJobs(searchTerm: searchTerm);
+      authority.requireServiceScope('taller', bikeshopService.authorityScope);
+      final textMatchedJobs = authority.verifyRows(
+        'taller',
+        textMatchedLoaded,
+        (job) => job.tenantId,
+      );
       final seenJobIds =
           candidateJobs.map((job) => job.id).whereType<String>().toSet();
       for (final job in textMatchedJobs) {
@@ -1972,39 +2398,47 @@ ${hintLines.join('\n')}
 
   Future<List<Customer>> _loadCustomersForAi(
     CustomerService customerService,
+    AIAssistantTurnAuthority authority,
   ) async {
+    // CustomerService publishes no authority of its own, so every row it hands
+    // back is checked individually.
     if (customerService.hasCustomersCache &&
         customerService.cachedCustomers.isNotEmpty) {
-      return customerService.cachedCustomers
+      return authority
+          .verifyRows(
+            'clientes',
+            customerService.cachedCustomers,
+            (customer) => customer.tenantId,
+          )
           .where((customer) => customer.id != null)
           .toList();
     }
 
-    final customers = await customerService.getCustomers(forceRefresh: false);
-    return customers.where((customer) => customer.id != null).toList();
+    // An *empty* cache carries no rows, so it carries no evidence of whose
+    // customers it holds — and `getCustomers(forceRefresh: false)` would hand
+    // that same empty cache straight back. A current read is forced so the
+    // difference between "this taller has no customers" and "nobody asked the
+    // database" stays visible.
+    final customers = await customerService.getCustomers(
+      forceRefresh: customerService.hasCustomersCache,
+    );
+    return authority
+        .verifyRows('clientes', customers, (customer) => customer.tenantId)
+        .where((customer) => customer.id != null)
+        .toList();
   }
 
   AIAssistantActionCard _buildCustomerCard(Customer customer) {
-    final subtitleParts = <String>[
-      if (customer.rut.trim().isNotEmpty) customer.rut.trim(),
-      if ((customer.email ?? '').trim().isNotEmpty) customer.email!.trim(),
-      if ((customer.phone ?? '').trim().isNotEmpty) customer.phone!.trim(),
-    ];
-
-    final descriptionParts = <String>[
-      if ((customer.address ?? '').trim().isNotEmpty) customer.address!.trim(),
-      if ((customer.region ?? '').trim().isNotEmpty) customer.region!.trim(),
-    ];
-
+    // Name and destination only. The card used to print RUT, e-mail, phone,
+    // address and region — a personal-data dump, rendered in a panel that
+    // sits open beside whatever else is on screen, to answer a question that
+    // never asked for any of it. Whoever needs those fields opens Clientes,
+    // where access is the module's to govern.
     return AIAssistantActionCard(
       kind: 'customer',
       eyebrow: 'Cliente',
       title: customer.name,
-      subtitle: subtitleParts.isEmpty ? null : subtitleParts.join(' • '),
-      description:
-          descriptionParts.isEmpty ? null : descriptionParts.join(' • '),
-      route: '/clientes/${customer.id}',
-      ctaLabel: 'Abrir cliente',
+      destination: AIAssistantDestination.customers,
       chips: [customer.isActive ? 'Activo' : 'Inactivo'],
     );
   }
@@ -2068,8 +2502,7 @@ ${hintLines.join('\n')}
       description: (supplier.address ?? '').trim().isEmpty
           ? null
           : supplier.address!.trim(),
-      route: '/purchases/suppliers/${supplier.id}/edit',
-      ctaLabel: 'Abrir proveedor',
+      destination: AIAssistantDestination.suppliers,
       chips: [supplier.isActive ? 'Activo' : 'Inactivo'],
     );
   }
@@ -2164,8 +2597,7 @@ ${hintLines.join('\n')}
       title: _jobCardTitle(job),
       subtitle: subtitleParts.join(' • '),
       description: descriptionParts.join(' • '),
-      route: '/taller/pegas/${job.id}',
-      ctaLabel: 'Abrir trabajo',
+      destination: AIAssistantDestination.workshopJobs,
       chips: [
         _jobStatusLabel(job),
         if (job.isInvoiced) 'Facturada',
@@ -2177,6 +2609,7 @@ ${hintLines.join('\n')}
   Future<AIAssistantResponse?> _tryHandleSalesInvoiceCards(
     String message, {
     SalesService? salesService,
+    required AIAssistantTurnAuthority authority,
   }) async {
     if (salesService == null) {
       return null;
@@ -2223,8 +2656,25 @@ ${hintLines.join('\n')}
       await salesService.loadInvoices();
     }
 
+    // `loadInvoices` swallows its own failure and leaves the list empty, so
+    // without this the assistant would answer "no tienes facturas" to a read
+    // that never happened.
+    final invoiceError = salesService.invoiceError;
+    if (invoiceError != null) {
+      throw AIAssistantSourceUnavailable('facturas de venta', invoiceError);
+    }
+
+    // SalesService publishes no authority, so every invoice it holds is
+    // checked. An invoice from another taller must stop the answer, not be
+    // quietly dropped from a total.
+    final verifiedSalesInvoices = authority.verifyRows(
+      'facturas de venta',
+      salesService.invoices,
+      (invoice) => invoice.tenantId,
+    );
+
     final now = DateTime.now();
-    var filtered = salesService.invoices.where((invoice) {
+    var filtered = verifiedSalesInvoices.where((invoice) {
       if (invoice.status == InvoiceStatus.cancelled) return false;
       if (wantsUnpaid && invoice.balance <= 0.01) return false;
       if (wantsOverdue) {
@@ -2495,8 +2945,7 @@ ${hintLines.join('\n')}
       title: invoice.invoiceNumber,
       subtitle: subtitle,
       description: description,
-      route: '/sales/invoices/${invoice.id}',
-      ctaLabel: 'Abrir factura',
+      destination: AIAssistantDestination.salesInvoices,
       chips: [
         _salesInvoiceStatusLabel(invoice.status),
         if (invoice.balance > 0.01) 'Pendiente',
@@ -2525,6 +2974,7 @@ ${hintLines.join('\n')}
   Future<AIAssistantResponse?> _tryHandlePurchaseInvoiceCards(
     String message, {
     PurchaseService? purchaseService,
+    required AIAssistantTurnAuthority authority,
   }) async {
     if (purchaseService == null) {
       return null;
@@ -2562,7 +3012,11 @@ ${hintLines.join('\n')}
       return null;
     }
 
-    final invoices = await purchaseService.getPurchaseInvoices();
+    final invoices = authority.verifyRows(
+      'facturas de compra',
+      await purchaseService.getPurchaseInvoices(),
+      (invoice) => invoice.tenantId,
+    );
     final now = DateTime.now();
 
     var filtered = invoices.where((invoice) {
@@ -2691,8 +3145,7 @@ ${hintLines.join('\n')}
       title: invoice.invoiceNumber,
       subtitle: subtitle,
       description: description,
-      route: '/purchases/${invoice.id}',
-      ctaLabel: 'Abrir factura',
+      destination: AIAssistantDestination.purchases,
       chips: [
         invoice.status.displayName,
         if (invoice.balance > 0.01) 'Pendiente',
@@ -2701,29 +3154,36 @@ ${hintLines.join('\n')}
     );
   }
 
+  /// Builds the sentence the operator reads about a search.
+  ///
+  /// The stock ratio is the defect this method exists to prevent: it used to
+  /// count in-stock rows over the truncated sample it displays while printing
+  /// the total match count as the denominator, so a search of 27 products
+  /// reported "3 de 27 con stock" when the real answer was 5 of 26. Both
+  /// numbers now come from the same set, computed by the search tool over the
+  /// complete result.
   String? _buildDeterministicInventoryReply(
     Map<String, Object?>? searchResult,
-    Map<String, Object?>? navigateResult,
   ) {
-    if (searchResult == null && navigateResult == null) {
+    if (searchResult == null) {
       return null;
     }
 
-    if (searchResult != null && searchResult.containsKey('error')) {
+    if (searchResult.containsKey('error')) {
       return 'Error buscando en inventario: ${searchResult['error']}';
     }
 
-    if (searchResult != null && searchResult.containsKey('result')) {
+    if (searchResult.containsKey('result')) {
       final raw = searchResult['result']?.toString();
       if (raw != null && raw.isNotEmpty) {
         return raw;
       }
     }
 
-    final productsRaw = searchResult?['products'];
-    final count = (searchResult?['count'] as num?)?.toInt() ?? 0;
+    final productsRaw = searchResult['products'];
+    final count = (searchResult['count'] as num?)?.toInt() ?? 0;
     if (productsRaw is! List || productsRaw.isEmpty) {
-      return navigateResult?['message']?.toString();
+      return null;
     }
 
     final products = productsRaw
@@ -2733,45 +3193,16 @@ ${hintLines.join('\n')}
         .cast<Map<String, dynamic>>()
         .toList();
 
-    final queryLabel = (() {
-      final raw = (navigateResult?['searchTerm'] ?? _lastInventorySearchTerm)
-          ?.toString()
-          .trim();
-      if (raw == null || raw.isEmpty) {
-        return 'tu búsqueda';
-      }
-      return '"$raw"';
-    })();
-
-    final inStockCount = products.where((product) {
-      final stock = _availableInventoryStock(product);
-      return stock > 0;
-    }).length;
-
-    final sampleNames = products
-        .take(2)
-        .map((product) => (product['name'] ?? 'Producto').toString().trim())
-        .where((name) => name.isNotEmpty)
-        .toList();
-
-    final stockSentence = inStockCount == 0
-        ? 'Ahora mismo todos aparecen sin stock.'
-        : inStockCount == count
-            ? 'Todos aparecen con stock.'
-            : '$inStockCount de $count aparecen con stock ahora.';
-
-    final sampleSentence = sampleNames.isEmpty
-        ? 'Te dejé algunas coincidencias abajo.'
-        : sampleNames.length == 1
-            ? 'La principal coincidencia es ${sampleNames.first}.'
-            : 'Entre las primeras coincidencias están ${sampleNames.first} y ${sampleNames[1]}.';
-
-    final navigationSentence = navigateResult?['searchTerm'] != null
-        ? ' Ya abrí inventario con ese filtro.'
-        : '';
-
-    return 'Encontré $count resultados para $queryLabel. '
-        '$stockSentence $sampleSentence$navigationSentence';
+    // Counted by the search tool over every match, not over the sample below.
+    // Absent means the ratio cannot be stated honestly, so it is not stated.
+    return buildInventorySearchSentence(
+      count: count,
+      inStockCount: (searchResult['inStockCount'] as num?)?.toInt(),
+      sampleNames: products
+          .map((product) => (product['name'] ?? '').toString())
+          .toList(),
+      searchTerm: _lastInventorySearchTerm,
+    );
   }
 
   double _availableInventoryStock(Map<String, dynamic> product) {
@@ -2809,9 +3240,9 @@ ${hintLines.join('\n')}
     final category =
         (product['category'] ?? product['category_name'] ?? '').toString();
     final stock = _availableInventoryStock(product);
-    final location =
-        (product['location'] ?? product['warehouse_location'] ?? 'Unknown')
-            .toString();
+    final locationFragment = buildProductLocationFragment(
+      product['location'] ?? product['warehouse_location'],
+    );
     final stockLabel =
         stock % 1 == 0 ? stock.toInt().toString() : stock.toStringAsFixed(2);
 
@@ -2826,18 +3257,27 @@ ${hintLines.join('\n')}
       eyebrow: 'Producto',
       title: (product['name'] ?? 'Producto').toString(),
       subtitle: subtitle.isEmpty ? null : subtitle,
-      description:
-          'Precio ${ChileanUtils.formatCurrency((product['price'] as num?)?.toDouble() ?? 0)} • Stock $stockLabel • Ubicación $location',
-      route: '/inventory/products/${product['id']}/edit',
-      ctaLabel: 'Abrir producto',
+      description: [
+        'Precio ${ChileanUtils.formatCurrency((product['price'] as num?)?.toDouble() ?? 0)}',
+        'Stock $stockLabel',
+        if (locationFragment != null) locationFragment,
+      ].join(' • '),
+      destination: AIAssistantDestination.inventoryProducts,
       chips: [
         if (stock > 0) 'Con stock' else 'Sin stock',
       ],
     );
   }
 
+  /// Drops every trace of the current conversation.
+  ///
+  /// The refinement state matters as much as the history: `_lastSearchResults`
+  /// is what makes the assistant say "tomé la búsqueda anterior", so leaving it
+  /// behind lets one session narrate another session's search.
   void resetChat() {
     _history.clear();
+    _lastSearchResults = [];
+    _lastInventorySearchTerm = null;
     notifyListeners();
   }
 
@@ -3049,23 +3489,6 @@ ${hintLines.join('\n')}
     return queries.toList();
   }
 
-  String _resolveNavigationSearchTerm(String requestedSearchTerm) {
-    final normalizedRequested =
-        _simplifyInventorySearchTerm(requestedSearchTerm);
-
-    if (normalizedRequested.isNotEmpty) {
-      return normalizedRequested;
-    }
-
-    if (_lastSearchResults.isNotEmpty &&
-        _lastInventorySearchTerm != null &&
-        _lastInventorySearchTerm!.isNotEmpty) {
-      return _lastInventorySearchTerm!;
-    }
-
-    return normalizedRequested;
-  }
-
   bool _messageLooksLikeDirectInventorySearch(String message) {
     final normalized = _normalizeText(message);
     if (!_containsExplicitInventoryTarget(normalized)) {
@@ -3088,7 +3511,7 @@ ${hintLines.join('\n')}
   Future<AIAssistantResponse?> _tryHandleDirectInventorySearch(
     String message, {
     InventoryService? inventoryService,
-    AINavigationCallback? onNavigate,
+    required AIAssistantTurnAuthority authority,
   }) async {
     if (inventoryService == null) {
       return null;
@@ -3099,20 +3522,9 @@ ${hintLines.join('\n')}
       return null;
     }
 
-    final searchResult = await _toolSearchStock(message, inventoryService);
-    Map<String, Object?>? navigateResult;
-
-    final count = (searchResult['count'] as num?)?.toInt() ?? 0;
-    if (count > 0 && onNavigate != null && _lastInventorySearchTerm != null) {
-      navigateResult = _toolNavigateToInventory(
-        _lastInventorySearchTerm,
-        inventoryService: inventoryService,
-        onNavigate: onNavigate,
-      );
-    }
-
-    final text =
-        _buildDeterministicInventoryReply(searchResult, navigateResult);
+    final searchResult =
+        await _toolSearchStock(message, inventoryService, authority);
+    final text = _buildDeterministicInventoryReply(searchResult);
     if (text == null) {
       return null;
     }
@@ -3260,7 +3672,6 @@ ${hintLines.join('\n')}
   String? _tryHandleInventoryRefinement(
     String message, {
     InventoryService? inventoryService,
-    AINavigationCallback? onNavigate,
   }) {
     if (_lastSearchResults.isEmpty || _lastInventorySearchTerm == null) {
       return null;
@@ -3292,27 +3703,14 @@ ${hintLines.join('\n')}
       return stock > 0;
     }).toList();
 
-    _lastSearchSkus = filtered
-        .map((r) => (r['sku'] ?? '').toString())
-        .where((sku) => sku.isNotEmpty)
-        .toList();
-
     if (filtered.isNotEmpty) {
       _lastSearchResults =
           filtered.map((item) => Map<String, dynamic>.from(item)).toList();
     }
 
-    if (inventoryService != null && onNavigate != null) {
-      final stockFilterIndex =
-          wantsOutOfStock ? _stockFilterOutOfStock : _stockFilterInStock;
-      inventoryService.applyExternalSearch(
-        _lastInventorySearchTerm!,
-        matchedSkus: _lastSearchSkus,
-        stockFilterIndex: stockFilterIndex,
-      );
-      onNavigate('/inventory/products', searchTerm: _lastInventorySearchTerm);
-    }
-
+    // Refining a result set no longer drives the operator's workspace. The
+    // inventory surface is reached by clicking the card, never as a side
+    // effect of asking a question.
     if (filtered.isEmpty) {
       return wantsOutOfStock
           ? 'Tomé la búsqueda anterior y la dejé solo en productos sin stock. No encontré coincidencias con ese criterio.'
@@ -3337,7 +3735,10 @@ ${hintLines.join('\n')}
   }
 
   Future<Map<String, Object?>> _toolSearchStock(
-      String? query, InventoryService? inventory) async {
+    String? query,
+    InventoryService? inventory,
+    AIAssistantTurnAuthority authority,
+  ) async {
     if (query == null || query.isEmpty) return {'error': 'Query is empty'};
     if (inventory == null) return {'error': 'Inventory service not available'};
 
@@ -3350,7 +3751,12 @@ ${hintLines.join('\n')}
       final List<Map<String, dynamic>> semanticResults = [];
       final List<Map<String, dynamic>> keywordResults = [];
 
-      // 1. Semantic search (high threshold = only relevant results)
+      // 1. Semantic search (high threshold = only relevant results).
+      //
+      // This one may degrade: it is an enrichment over the catalog, and it
+      // only degrades because the keyword read below is authoritative. If that
+      // read fails too, the whole source fails — an unanswered query must not
+      // become "no encontré nada".
       try {
         final vector = await generateEmbedding(lookupQuery);
         if (vector != null) {
@@ -3360,10 +3766,13 @@ ${hintLines.join('\n')}
               '🧠 [AI] Semantic: ${results.length} results for "$lookupQuery"');
         }
       } catch (e) {
-        debugPrint('⚠️ [AI] Semantic search failed: $e');
+        debugPrint('⚠️ [AI] Semantic search degraded: $e');
       }
 
-      // 2. Keyword search
+      // 2. Keyword search — the authoritative catalog read.
+      //
+      // Its failure is not a smaller result set, it is the absence of an
+      // answer. Zero is only ever reported after this completed.
       try {
         final keywordQueries = _buildKeywordSearchQueries(lookupQuery);
         for (final keywordQuery in keywordQueries) {
@@ -3382,14 +3791,22 @@ ${hintLines.join('\n')}
                 'available_stock_quantity': p.availableStockQuantity,
                 'is_set': p.isSet,
                 'parent_set_id': p.parentSetId,
-                'warehouse_location': p.warehouseLocation ?? 'Unknown',
+                'warehouse_location': p.warehouseLocation,
+                'is_active': p.isActive,
+                'tenant_id': p.tenantId,
                 'source': 'keyword',
               }));
         }
         debugPrint(
             '🔤 [AI] Keyword: ${keywordResults.length} raw results for "$lookupQuery"');
+      } on AIAssistantSourceUnavailable {
+        rethrow;
       } catch (e) {
-        debugPrint('⚠️ [AI] Keyword search failed: $e');
+        debugPrint('⛔ [AI] Keyword catalog read failed: $e');
+        throw AIAssistantSourceUnavailable(
+          'inventario',
+          'the catalog read failed: $e',
+        );
       }
 
       // 3. Merge results: deduplicate by SKU, prefer semantic ordering
@@ -3406,9 +3823,19 @@ ${hintLines.join('\n')}
       // Semantic RPC rows predate set availability. Rehydrate their catalog
       // identity so every subsequent AI filter/card uses the same sellable
       // quantity shown by inventory and POS.
+      // `match_products_semantic` returns neither the sellable quantity nor
+      // `is_active`, so semantic rows are rehydrated from the catalog before
+      // any count or card is built from them.
       await Future.wait(merged.map((result) async {
         final productId = result['id']?.toString() ?? '';
-        if (productId.isEmpty || result['available_stock_quantity'] != null) {
+        // A missing tenant forces the rehydration on its own, even when
+        // availability and status are already present: a row that cannot name
+        // its taller is exactly the row the check below must reject, and the
+        // catalog is the only place that can supply it.
+        if (productId.isEmpty ||
+            (result['available_stock_quantity'] != null &&
+                result['is_active'] != null &&
+                result['tenant_id'] != null)) {
           return;
         }
         final product = await inventory.getProductById(productId);
@@ -3417,7 +3844,18 @@ ${hintLines.join('\n')}
         result['inventory_qty'] = product.availableStockQuantity;
         result['is_set'] = product.isSet;
         result['parent_set_id'] = product.parentSetId;
+        result['is_active'] = product.isActive;
+        result['warehouse_location'] = product.warehouseLocation;
+        result['tenant_id'] = product.tenantId;
       }));
+
+      _verifyInventoryTenancy(merged, authority);
+
+      // Discontinued products are not part of the catalog the operator sells
+      // from. The inventory screen excludes them, and the assistant used to
+      // include them: a search reported 27 products where the screen it sat
+      // next to reported 26. Only rows proven inactive are dropped.
+      merged = filterSellableCatalog(merged);
 
       // 4. Post-filter: ONLY filter by numeric tokens (sizes).
       // Embeddings can't distinguish 29" from 27.5" — all bike wheel parts
@@ -3451,7 +3889,6 @@ ${hintLines.join('\n')}
       merged = _applyInventoryIntentFilters(query, merged);
 
       if (merged.isEmpty) {
-        _lastSearchSkus = null;
         _lastSearchResults = [];
         return {'result': 'No products found for "$query".'};
       }
@@ -3459,24 +3896,27 @@ ${hintLines.join('\n')}
       debugPrint(
           '✅ [AI] Combined: ${merged.length} unique results for "$query"');
 
-      // Save matched SKUs so navigateToInventory can pass them to the list
-      _lastSearchSkus = merged
-          .map((r) => (r['sku'] ?? '').toString())
-          .where((sku) => sku.isNotEmpty)
-          .toList();
       _lastInventorySearchTerm = _simplifyInventorySearchTerm(lookupQuery);
+
+      // Counted over every match, because the payload below is truncated and
+      // a ratio built from two different sets is a false statement about
+      // stock.
+      final inStockCount = countRowsInStock(merged, _availableInventoryStock);
 
       final summary = merged
           .take(15)
           .map((r) => {
                 'id': r['id'],
-                'name': r['name'] ?? 'Unknown',
+                'name': r['name'] ?? 'Producto',
                 'sku': r['sku'] ?? '',
                 'brand': r['brand'] ?? '',
                 'category': r['category_name'] ?? '',
                 'price': r['price'] ?? 0,
                 'stock': _availableInventoryStock(r),
-                'location': r['warehouse_location'] ?? 'Unknown',
+                // Null rather than the literal "Unknown": warehouse_location
+                // is unpopulated for the whole catalog today, so printing a
+                // placeholder put an English non-fact on every single card.
+                'location': r['warehouse_location'],
               })
           .toList();
 
@@ -3485,11 +3925,40 @@ ${hintLines.join('\n')}
 
       return {
         'count': merged.length,
+        'inStockCount': inStockCount,
         'products': summary,
       };
+    } on AIAssistantSourceUnavailable {
+      // A tenant mismatch, or a catalog read that never completed, must reach
+      // the turn boundary. Collapsing it into an error map here is how "no
+      // pude leer el catálogo" became "no encontré nada" — the two look
+      // identical to whoever is standing at the counter, and only one of them
+      // is true.
+      rethrow;
     } catch (e) {
       return {'error': 'Failed to search inventory: $e'};
     }
+  }
+
+  /// Checks that every inventory row belongs to the turn's authority.
+  ///
+  /// Keyword rows carry the tenant straight from the catalog: `Product` in
+  /// `inventory_models.dart` has `tenantId` and `listPreviewSelect` selects
+  /// `tenant_id`. Semantic rows do not — `match_products_semantic` returns no
+  /// tenant column — so they are rehydrated by id before reaching here.
+  ///
+  /// The database already isolates by tenant. This is the client proving it
+  /// rather than assuming it, so a stale cache or a phantom vector match
+  /// cannot put another taller's product on a card.
+  void _verifyInventoryTenancy(
+    List<Map<String, dynamic>> rows,
+    AIAssistantTurnAuthority authority,
+  ) {
+    authority.verifyRows(
+      'inventario',
+      rows,
+      (row) => row['tenant_id']?.toString(),
+    );
   }
 
   /// Generates a vector embedding for the given text.
@@ -3643,43 +4112,6 @@ ${hintLines.join('\n')}
     return numericValue.clamp(0, 1).toDouble();
   }
 
-  Map<String, Object?> _toolNavigateToInventory(
-    String? searchTerm, {
-    InventoryService? inventoryService,
-    AINavigationCallback? onNavigate,
-  }) {
-    if (searchTerm == null || searchTerm.isEmpty) {
-      return {'error': 'Search term is required'};
-    }
-
-    if (onNavigate == null) {
-      return {'error': 'Navigation is not available in this context'};
-    }
-
-    final resolvedSearchTerm = _resolveNavigationSearchTerm(searchTerm);
-
-    debugPrint(
-        '🧭 [AI] Navigating to inventory with search: "$resolvedSearchTerm"');
-    _lastInventorySearchTerm = resolvedSearchTerm;
-
-    // Set the saved search term AND signal any active listeners
-    if (inventoryService != null) {
-      inventoryService.applyExternalSearch(resolvedSearchTerm,
-          matchedSkus: _lastSearchSkus, stockFilterIndex: _stockFilterAll);
-    }
-
-    // Trigger navigation (closes the dialog and navigates)
-    onNavigate('/inventory/products', searchTerm: resolvedSearchTerm);
-
-    return {
-      'success': true,
-      'navigatedTo': '/inventory/products',
-      'searchTerm': resolvedSearchTerm,
-      'message':
-          'Navigated to inventory and searched for "$resolvedSearchTerm". The results are now displayed on screen.',
-    };
-  }
-
   Future<Map<String, Object?>> _toolSearchInternet(String? query) async {
     if (query == null || query.isEmpty) return {'error': 'Query is empty'};
 
@@ -3778,17 +4210,12 @@ TOOL STRATEGY:
    - Use `searchInternet` to find the technical specifications or compatibility information online. This performs a live web search. Read the snippet results carefully to answer the user's question, but do NOT hallucinate info that is not actually in the snippets.
    - Do NOT just tell the user "I couldn't find it in the inventory". If it's a general question about a bike or part, search the internet!
 
-4. AFTER presenting results, ALWAYS use `navigateToInventory` to open the inventory screen.
-   - CRITICAL: The inventory screen uses KEYWORD text matching, NOT semantic search.
-   - You MUST simplify and translate the search term for navigation:
-     - "llantas mtb" → navigate with "llanta"
-     - "llantas 29 32h" → navigate with "llanta 29"
-     - "cámaras para mountain bike" → navigate with "camara 29"
-     - "repuestos de freno shimano" → navigate with "freno shimano"
-     - "ruedas para BMX" → navigate with "llanta 20"
-   - NEVER pass the raw user query to navigateToInventory. Always extract the simplest keyword.
-  - If the user is refining a previous inventory result set, keep the previous keyword and narrow the current result set instead of replacing it with a different loose search.
-   - After navigating, briefly confirm (e.g., "También te llevé al inventario buscando 'llanta 29'").
+4. NAVIGATION IS NOT YOURS TO TRIGGER.
+   - You have no tool that moves the user around the app, and you must never
+     claim you opened, filtered or navigated to any screen.
+   - The application attaches its own cards under your answer. The user clicks
+     one if they want to go somewhere.
+   - Never invent a route, a screen path or a record id in your text.
 
 Current Jobs Context:
 $jobSummaries

@@ -419,7 +419,9 @@ class WebsiteTeamBlockContent extends StatelessWidget {
   }
 
   VoidCallback? _navigationCallback(String href) {
-    if (previewMode || presenters != null || onNavigate == null) return null;
+    // Visitor navigation works in Preview and Public; only Edit
+    // (presenters) is inert.
+    if (presenters != null || onNavigate == null) return null;
     return () => onNavigate!(href);
   }
 

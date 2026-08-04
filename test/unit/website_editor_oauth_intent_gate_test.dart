@@ -43,8 +43,7 @@ WebsiteEditorOAuthIntentStore _store(_MemoryBackend backend) =>
 void main() {
   group('issue + sanitize', () {
     test('an issued intent carries nonce/issuer and a sanitized path', () {
-      final intent =
-          WebsiteEditorOAuthIntentGate.decode(_issue(), nowMs: _now);
+      final intent = WebsiteEditorOAuthIntentGate.decode(_issue(), nowMs: _now);
       expect(intent, isNotNull);
       expect(intent!.nonce, 'nonce-1');
       expect(intent.issuerIdentity, 'user-a');
@@ -88,7 +87,8 @@ void main() {
   });
 
   group('strict decode (fail closed)', () {
-    test('legacy, malformed, wrong-version, missing-field and expired are '
+    test(
+        'legacy, malformed, wrong-version, missing-field and expired are '
         'null', () {
       expect(WebsiteEditorOAuthIntentGate.decode('true', nowMs: _now), isNull);
       expect(WebsiteEditorOAuthIntentGate.decode(null, nowMs: _now), isNull);
@@ -106,9 +106,8 @@ void main() {
       expect(
         WebsiteEditorOAuthIntentGate.decode(
           _issue(),
-          nowMs: _now +
-              WebsiteEditorOAuthIntentGate.timeToLive.inMilliseconds +
-              1,
+          nowMs:
+              _now + WebsiteEditorOAuthIntentGate.timeToLive.inMilliseconds + 1,
         ),
         isNull,
         reason: 'An expired intent can never be redeemed.',
@@ -182,14 +181,32 @@ void main() {
     });
 
     test('take consumes malformed/legacy payloads fail-closed', () {
-      final backend = _MemoryBackend()..value = 'true';
+      final backend = _MemoryBackend();
       final store = _store(backend);
-      expect(store.take(nowMs: _now), isNull);
-      expect(backend.value, isNull,
-          reason: 'The unusable payload is removed, not left behind.');
+      for (final raw in ['true', '{no-json']) {
+        backend.value = raw;
+        expect(store.take(nowMs: _now), isNull, reason: raw);
+        expect(backend.value, isNull,
+            reason: 'The unusable payload is removed, not left behind.');
+      }
     });
 
-    test('restoreIfNonce restores ONLY the same unexpired nonce and never '
+    test('take consumes an expired payload fail-closed', () {
+      final backend = _MemoryBackend()..value = _issue();
+      final store = _store(backend);
+      expect(
+        store.take(
+          nowMs:
+              _now + WebsiteEditorOAuthIntentGate.timeToLive.inMilliseconds + 1,
+        ),
+        isNull,
+      );
+      expect(backend.value, isNull,
+          reason: 'An expired payload is consumed, not left to replay.');
+    });
+
+    test(
+        'restoreIfNonce restores ONLY the same unexpired nonce and never '
         'overwrites a newer intent', () {
       final backend = _MemoryBackend()..value = _issue();
       final store = _store(backend);
@@ -220,7 +237,8 @@ void main() {
       expect(backend.value, isNull);
     });
 
-    test('clearIfNonce clears only its own nonce (a failed connect never '
+    test(
+        'clearIfNonce clears only its own nonce (a failed connect never '
         'destroys a newer intent)', () {
       final backend = _MemoryBackend()..value = _issue(nonce: 'nonce-2');
       final store = _store(backend);

@@ -28,6 +28,73 @@ import 'right_toolbar_glass_surface.dart';
 import 'toolbar_tool_presentation.dart';
 import 'workspace_shell_scope.dart';
 
+/// One tool button of the right toolbar rail.
+///
+/// Both rails render it: the collapsed rail and the mini-rail that stays
+/// visible while a panel is open. They used to be two copies of the same
+/// tree, and the accessibility fix only reached one of them — the collapsed
+/// one, which is not the rail an operator is looking at while using the
+/// assistant.
+///
+/// The name lives here because a `Tooltip` contributes a semantics *hint*, not
+/// a *name*: with only the tooltip, every tool in the rail was an unnamed
+/// button, and the assistant had no reachable label at all.
+class RightToolbarToolButton extends StatelessWidget {
+  const RightToolbarToolButton({
+    super.key,
+    required this.tool,
+    required this.selected,
+    required this.waitDuration,
+    required this.onTap,
+    required this.decoration,
+    required this.icon,
+  });
+
+  final ToolbarTool tool;
+  final bool selected;
+  final Duration waitDuration;
+  final VoidCallback onTap;
+  final BoxDecoration decoration;
+  final Widget icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: tool.toolbarPresentation.title,
+      preferBelow: false,
+      waitDuration: waitDuration,
+      // The Semantics below already names the control; leaving the tooltip in
+      // the tree too announces the same words twice, as name and as hint.
+      excludeFromSemantics: true,
+      child: Material(
+        color: Colors.transparent,
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: '${tool.toolbarPresentation.title}, herramienta',
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            hoverColor: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+            focusColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+            child: Container(
+              width: 40,
+              height: 40,
+              margin: const EdgeInsets.symmetric(
+                vertical: 4,
+                horizontal: 4,
+              ),
+              decoration: decoration,
+              child: icon,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 enum RightToolbarPresentation {
   desktopRail,
   compactWorkspace,
@@ -507,38 +574,21 @@ class _RightToolbarState extends State<RightToolbar> {
             ),
           // Tool icons
           for (final tool in visibleTools)
-            Tooltip(
-              message: tool.toolbarPresentation.title,
-              preferBelow: false,
+            RightToolbarToolButton(
+              tool: tool,
+              selected: false,
               waitDuration: const Duration(milliseconds: 400),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _selectTool(tool),
-                  borderRadius: BorderRadius.circular(8),
-                  hoverColor:
-                      theme.colorScheme.onSurface.withValues(alpha: 0.06),
-                  focusColor: theme.colorScheme.primary.withValues(alpha: 0.12),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    margin: const EdgeInsets.symmetric(
-                      vertical: 4,
-                      horizontal: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: _buildToolIcon(
-                      theme,
-                      tool,
-                      chatProvider,
-                      iconSize: 22,
-                      iconColor: theme.colorScheme.onSurfaceVariant,
-                      badgeBorderColor: railSurface,
-                    ),
-                  ),
-                ),
+              onTap: () => _selectTool(tool),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              icon: _buildToolIcon(
+                theme,
+                tool,
+                chatProvider,
+                iconSize: 22,
+                iconColor: theme.colorScheme.onSurfaceVariant,
+                badgeBorderColor: railSurface,
               ),
             ),
         ],
@@ -674,49 +724,29 @@ class _RightToolbarState extends State<RightToolbar> {
                       desktopUpdateService,
                     ),
                   for (final t in visibleTools)
-                    Tooltip(
-                      message: t.toolbarPresentation.title,
-                      preferBelow: false,
+                    RightToolbarToolButton(
+                      tool: t,
+                      selected: t == tool,
                       waitDuration: const Duration(milliseconds: 300),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => _selectTool(t),
-                          borderRadius: BorderRadius.circular(8),
-                          hoverColor: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.06),
-                          focusColor:
-                              theme.colorScheme.primary.withValues(alpha: 0.12),
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            margin: const EdgeInsets.symmetric(
-                              vertical: 4,
-                              horizontal: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: t == tool
-                                  ? theme.colorScheme.primaryContainer
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
-                              border: t == tool
-                                  ? Border.all(
-                                      color: theme.colorScheme.primary,
-                                    )
-                                  : null,
-                            ),
-                            child: _buildToolIcon(
-                              theme,
-                              t,
-                              chatProvider,
-                              iconSize: 20,
-                              iconColor: t == tool
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurfaceVariant,
-                              badgeBorderColor: railSurface,
-                            ),
-                          ),
-                        ),
+                      onTap: () => _selectTool(t),
+                      decoration: BoxDecoration(
+                        color: t == tool
+                            ? theme.colorScheme.primaryContainer
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: t == tool
+                            ? Border.all(color: theme.colorScheme.primary)
+                            : null,
+                      ),
+                      icon: _buildToolIcon(
+                        theme,
+                        t,
+                        chatProvider,
+                        iconSize: 20,
+                        iconColor: t == tool
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                        badgeBorderColor: railSurface,
                       ),
                     ),
                 ],

@@ -94,27 +94,33 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 
   void _loadSettings() {
     final service = context.read<WebsiteService>();
-    _storeNameController.text = service.getSetting('store_name', '');
-    _logoUrlController.text = service.getSetting('logo_url', '');
-    _topBannerController.text =
-        service.getSetting('top_banner_text', 'Envíos a Chile continental');
-    _headerBgColorController.text =
-        service.getSetting('header_bg_color', '#FFFFFF');
-    _headerMenuSurfaceColorController.text =
-        service.getSetting('header_menu_surface_color', '#000000');
-    _headerMenuRailColorController.text =
-        service.getSetting('header_menu_rail_color', '#64748B');
+    // Reopening the control hydrates PENDING over saved: an unsaved staged
+    // draft must never disagree with the canvas it is previewing.
+    String effective(String key, String defaultValue) =>
+        widget.provider.getEffectiveHeaderSetting(
+          key,
+          service.getSetting(key, defaultValue),
+        );
 
-    _headerStyle = service.getSetting('header_style', 'solid');
-    _headerColorMode = service.getSetting('header_color_mode', 'auto');
+    _storeNameController.text = effective('store_name', '');
+    _logoUrlController.text = effective('logo_url', '');
+    _topBannerController.text =
+        effective('top_banner_text', 'Envíos a Chile continental');
+    _headerBgColorController.text = effective('header_bg_color', '#FFFFFF');
+    _headerMenuSurfaceColorController.text =
+        effective('header_menu_surface_color', '#000000');
+    _headerMenuRailColorController.text =
+        effective('header_menu_rail_color', '#64748B');
+
+    _headerStyle = effective('header_style', 'solid');
+    _headerColorMode = effective('header_color_mode', 'auto');
     _navigationUppercase =
-        service.getSetting('header_navigation_uppercase', 'true') == 'true';
-    final rawBannerValue =
-        service.getSetting('header_show_top_banner', 'false');
+        effective('header_navigation_uppercase', 'true') == 'true';
+    final rawBannerValue = effective('header_show_top_banner', 'false');
     _showTopBanner = rawBannerValue == 'true';
     debugPrint(
         '🔧 [HeaderSettings] _loadSettings: rawBannerValue="$rawBannerValue" → _showTopBanner=$_showTopBanner');
-    _headerShadow = service.getSetting('header_shadow', 'true') == 'true';
+    _headerShadow = effective('header_shadow', 'true') == 'true';
   }
 
   @override

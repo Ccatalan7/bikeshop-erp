@@ -10,8 +10,11 @@ import '../models/website_action.dart';
 import '../models/website_block_capabilities.dart';
 import '../models/website_block_geometry.dart';
 import '../models/website_block_type.dart';
+import '../models/website_responsive_authoring.dart';
 import 'website_block_content_presenters.dart';
+import 'website_responsive_scalar_binding.dart';
 import 'website_block_renderer.dart';
+import 'website_editor_chrome_geometry.dart';
 import 'website_canvas_editor_binding.dart';
 import 'website_carousel_edit_binding.dart';
 import 'website_inline_action_editor.dart';
@@ -210,6 +213,22 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             ? null
             : configuredHeight;
 
+    // Which chrome this block may paint is a composition decision, and it has
+    // one owner. With a pane the floating action bar and the drag handles are
+    // the pointer affordances they have always been. Below the pane threshold
+    // the dock already carries identity, reorder, duplicate, visibility and
+    // delete at 48 px, so repeating them in a floating 18 px bar would be a
+    // second owner AND a sub-target one; a drag handle sized for a pointer has
+    // no touch alternative at all, and `Diseño > Altura` in the sheet is the
+    // accessible path to the same value.
+    //
+    // Absent scope keeps the historical behaviour: a host that publishes no
+    // geometry (standalone storefront, isolated widget tests) is treated as
+    // the pane composition it has always been.
+    final usesPane =
+        WebsiteEditorChromeScope.maybeOf(context)?.usesPane ?? true;
+    final showsPointerBlockChrome = widget.isSelected && usesPane;
+
     // Build the editable content based on block type
     Widget blockContent = _buildEditableBlock(context);
 
@@ -311,8 +330,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               ),
             ),
 
-          // Action bar when selected
-          if (widget.isSelected)
+          // Action bar when selected (pointer composition only)
+          if (showsPointerBlockChrome)
             Positioned(
               top: 8,
               right: 8,
@@ -332,7 +351,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             ),
 
           // Top resize handle - positioned INSIDE the block at top edge
-          if (widget.isSelected &&
+          if (showsPointerBlockChrome &&
               heightBehavior != WebsitePageBlockHeightBehavior.intrinsic)
             Positioned(
               top: 0,
@@ -360,7 +379,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             ),
 
           // Bottom resize handle - positioned INSIDE the block at bottom edge
-          if (widget.isSelected &&
+          if (showsPointerBlockChrome &&
               heightBehavior != WebsitePageBlockHeightBehavior.intrinsic)
             Positioned(
               bottom: 0,
@@ -693,27 +712,51 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
   Widget _buildSharedContent(BuildContext context) {
     final editProvider = context.read<WebsiteEditModeProvider>();
 
-    void updateBoundValues(
-      WebsiteInlineRepeaterTarget? target,
-      List<String> keys,
-      Object? value,
-    ) {
-      if (keys.isEmpty) return;
-      final updates = <String, dynamic>{
-        for (final key in keys) key: value,
-      };
-      if (target == null) {
-        editProvider.updateBlockDataMultiple(widget.blockId, updates);
-        return;
-      }
-      editProvider.updateBlockRepeaterItemMultiple(
-        widget.blockId,
+    // The inline half of the responsive protocol. Every schema-bound gesture
+    // below goes through it, so an edit made on a phone canvas lands where the
+    // visible scope says it will — instead of always rewriting the base.
+    final inlineWriter = WebsiteInlineResponsiveWriter(
+      provider: editProvider,
+      blockId: widget.blockId,
+      blockType: _registeredBlockType(widget.blockType),
+      hostClass: WebsiteEditorChromeScope.maybeOf(context)?.hostClass ??
+          WebsiteAuthoringHostClass.desktop,
+    );
+
+    WebsiteResponsiveFieldOwner ownerFor(WebsiteInlineRepeaterTarget? target) {
+      if (target == null) return const WebsiteResponsiveRootField();
+      // The item's own identity when it already persists one; otherwise the
+      // explicit index. Nothing is invented, and a sibling is never touched.
+      return WebsiteResponsiveRepeaterField(
         collectionKeys: target.collectionKeys,
         itemIndex: target.itemIndex,
         identityKey: target.identityKey,
         identityValue: target.identityValue,
-        updates: updates,
       );
+    }
+
+    void writeInline(
+      WebsiteInlineRepeaterTarget? target,
+      List<WebsiteInlinePropertyWrite> writes,
+    ) {
+      if (writes.isEmpty) return;
+      inlineWriter.write(owner: ownerFor(target), writes: writes);
+    }
+
+    void updateBoundValue(
+      WebsiteInlineRepeaterTarget? target,
+      List<String> keys,
+      Object? value, {
+      List<String> policyKeys = const <String>[],
+    }) {
+      if (keys.isEmpty) return;
+      writeInline(target, <WebsiteInlinePropertyWrite>[
+        WebsiteInlinePropertyWrite(
+          keys: keys,
+          value: value,
+          policyKeys: policyKeys,
+        ),
+      ]);
     }
 
     Map<String, dynamic>? currentRepeaterItem(
@@ -767,21 +810,28 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           allowWidthResize: slot.widthKeys.isNotEmpty,
           editorPadding: EdgeInsets.zero,
           displayTransform: slot.displayTransform,
-          onTextChanged: (value) => updateBoundValues(
+          onTextChanged: (value) => updateBoundValue(
             slot.repeaterTarget,
             slot.valueKeys,
             value,
           ),
+          // Formatting and width are companions of the text property: the
+          // registry says which one owns them (`formattingKey`), so they
+          // follow ITS policy instead of inventing one.
           onFormattingChanged: slot.formattingKeys.isEmpty
               ? null
-              : (formatting) => updateBoundValues(
+              : (formatting) => updateBoundValue(
                     slot.repeaterTarget,
                     slot.formattingKeys,
                     formatting.toJson(),
+                    policyKeys: slot.valueKeys,
                   ),
+          // Width is a declared property of its own where the schema has one
+          // (`Text.maxWidth`), so it resolves — and can be per viewport — by
+          // itself.
           onWidthChanged: slot.widthKeys.isEmpty
               ? null
-              : (width) => updateBoundValues(
+              : (width) => updateBoundValue(
                     slot.repeaterTarget,
                     slot.widthKeys,
                     width,
@@ -801,7 +851,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         tenantId: widget.tenantId,
         placeholder: slot.fallback,
         borderRadius: slot.borderRadius,
-        onChanged: (url) => updateBoundValues(
+        editAffordance: slot.editAffordance,
+        onChanged: (url) => updateBoundValue(
           slot.repeaterTarget,
           slot.valueKeys,
           url,
@@ -816,28 +867,38 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           final target = slot.repeaterTarget;
           final actionOwner =
               target == null ? widget.data : currentRepeaterItem(target);
-          final updates = <String, dynamic>{
-            for (final key in slot.labelKeys) key: action.label,
-            for (final key in slot.hrefKeys) key: action.href,
-            for (final key in slot.variantKeys)
-              key: action.variant.storageValue,
-            slot.actionsKey: WebsiteActionValue.mergePrimary(
-              actionOwner?[slot.actionsKey],
-              action,
+          // One gesture, one history entry. Label, destination and variant are
+          // three declared properties of the same action: each resolves its
+          // own policy — today all shared — and the composite `actions` mirror
+          // stays common so the three never drift apart.
+          writeInline(target, <WebsiteInlinePropertyWrite>[
+            WebsiteInlinePropertyWrite(
+              keys: slot.labelKeys,
+              value: action.label,
             ),
-          };
-          if (target == null) {
-            editProvider.updateBlockDataMultiple(widget.blockId, updates);
-          } else {
-            editProvider.updateBlockRepeaterItemMultiple(
-              widget.blockId,
-              collectionKeys: target.collectionKeys,
-              itemIndex: target.itemIndex,
-              identityKey: target.identityKey,
-              identityValue: target.identityValue,
-              updates: updates,
-            );
-          }
+            WebsiteInlinePropertyWrite(
+              keys: slot.hrefKeys,
+              value: action.href,
+            ),
+            if (slot.variantKeys.isNotEmpty)
+              WebsiteInlinePropertyWrite(
+                keys: slot.variantKeys,
+                value: action.variant.storageValue,
+                // Presentation of the action, persisted next to it. Where a
+                // family declares it as a field it resolves like any other;
+                // where it does not, it stays common with the destination it
+                // belongs to.
+                mayLackSchema: true,
+              ),
+            WebsiteInlinePropertyWrite(
+              keys: <String>[slot.actionsKey],
+              value: WebsiteActionValue.mergePrimary(
+                actionOwner?[slot.actionsKey],
+                action,
+              ),
+              mayLackSchema: true,
+            ),
+          ]);
         },
         onOpen: widget.onNavigate == null ||
                 widget.blockType == 'hero' ||
@@ -882,14 +943,83 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                   widget.blockId,
                   slideIndex: slideIndex,
                 ),
-          onElementsChanged: (elements) {
-            editProvider.updateBlockRepeaterItemMultiple(
-              widget.blockId,
-              collectionKeys: const <String>['slides'],
-              itemIndex: slideIndex,
-              updates: <String, dynamic>{'elements': elements},
-            );
-          },
+          // Read at write time, so changing the attribution between two
+          // gestures does not need this binding rebuilt.
+          writeScope: () => editProvider.writeScope,
+          readDocument: () => editProvider.canvasDocument(
+            widget.blockId,
+            slideIndex: slideIndex,
+          ),
+          insertLayer: (layer, {required index}) =>
+              editProvider.insertCanvasLayer(
+            widget.blockId,
+            layer,
+            slideIndex: slideIndex,
+            index: index,
+          ),
+          removeLayer: (layerId) => editProvider.removeCanvasLayer(
+            widget.blockId,
+            layerId,
+            slideIndex: slideIndex,
+          ),
+          duplicateLayer: (layerId, newLayerId) =>
+              editProvider.duplicateCanvasLayer(
+            widget.blockId,
+            layerId,
+            newLayerId,
+            slideIndex: slideIndex,
+          ),
+          setRootProperties: (values, {required scope, required viewport}) =>
+              editProvider.setCanvasRootProperties(
+            widget.blockId,
+            values,
+            slideIndex: slideIndex,
+            scope: scope,
+            viewport: viewport,
+          ),
+          clearRootOverrides: (keys, {required viewport}) =>
+              editProvider.clearCanvasRootOverrides(
+            widget.blockId,
+            keys,
+            slideIndex: slideIndex,
+            viewport: viewport,
+          ),
+          setLayerProperties: (
+            layerId,
+            values, {
+            required scope,
+            required viewport,
+          }) =>
+              editProvider.setCanvasLayerProperties(
+            widget.blockId,
+            layerId,
+            values,
+            slideIndex: slideIndex,
+            scope: scope,
+            viewport: viewport,
+          ),
+          clearLayerOverrides: (layerId, keys, {required viewport}) =>
+              editProvider.clearCanvasLayerOverrides(
+            widget.blockId,
+            layerId,
+            keys,
+            slideIndex: slideIndex,
+            viewport: viewport,
+          ),
+          reorderLayer: (
+            layerId,
+            targetIndex, {
+            required scope,
+            required viewport,
+          }) =>
+              editProvider.reorderCanvasLayer(
+            widget.blockId,
+            layerId,
+            targetIndex,
+            slideIndex: slideIndex,
+            scope: scope,
+            viewport: viewport,
+          ),
           onActiveElementChanged: (elementId) {
             editProvider.selectCanvasElement(
               widget.blockId,
@@ -910,13 +1040,72 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       );
       canvasEditBinding = WebsiteCanvasEditorBinding(
         activeElementId: selectedCanvasElement,
-        onElementsChanged: (elements) {
-          editProvider.updateBlockData(
-            widget.blockId,
-            'elements',
-            elements,
-          );
-        },
+        // Read at write time, so changing the attribution between two
+        // gestures does not need this binding rebuilt.
+        writeScope: () => editProvider.writeScope,
+        readDocument: () => editProvider.canvasDocument(widget.blockId),
+        insertLayer: (layer, {required index}) =>
+            editProvider.insertCanvasLayer(
+          widget.blockId,
+          layer,
+          index: index,
+        ),
+        removeLayer: (layerId) => editProvider.removeCanvasLayer(
+          widget.blockId,
+          layerId,
+        ),
+        duplicateLayer: (layerId, newLayerId) =>
+            editProvider.duplicateCanvasLayer(
+          widget.blockId,
+          layerId,
+          newLayerId,
+        ),
+        setRootProperties: (values, {required scope, required viewport}) =>
+            editProvider.setCanvasRootProperties(
+          widget.blockId,
+          values,
+          scope: scope,
+          viewport: viewport,
+        ),
+        clearRootOverrides: (keys, {required viewport}) =>
+            editProvider.clearCanvasRootOverrides(
+          widget.blockId,
+          keys,
+          viewport: viewport,
+        ),
+        setLayerProperties: (
+          layerId,
+          values, {
+          required scope,
+          required viewport,
+        }) =>
+            editProvider.setCanvasLayerProperties(
+          widget.blockId,
+          layerId,
+          values,
+          scope: scope,
+          viewport: viewport,
+        ),
+        clearLayerOverrides: (layerId, keys, {required viewport}) =>
+            editProvider.clearCanvasLayerOverrides(
+          widget.blockId,
+          layerId,
+          keys,
+          viewport: viewport,
+        ),
+        reorderLayer: (
+          layerId,
+          targetIndex, {
+          required scope,
+          required viewport,
+        }) =>
+            editProvider.reorderCanvasLayer(
+          widget.blockId,
+          layerId,
+          targetIndex,
+          scope: scope,
+          viewport: viewport,
+        ),
         onActiveElementChanged: (elementId) {
           editProvider.selectCanvasElement(widget.blockId, elementId);
         },

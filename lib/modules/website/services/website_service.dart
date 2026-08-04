@@ -3796,50 +3796,6 @@ class WebsiteService extends ChangeNotifier {
     );
   }
 
-  /// Update theme colors
-  Future<void> updateThemeColors({
-    required int primaryColor,
-    required int accentColor,
-  }) async {
-    await _upsertSettings(
-      {
-        'theme_primary_color': primaryColor,
-        'theme_accent_color': accentColor,
-      },
-      errorContext: 'Error al actualizar colores',
-    );
-  }
-
-  /// Update complete theme configuration
-  Future<void> updateThemeSettings({
-    required int primaryColor,
-    required int accentColor,
-    required int backgroundColor,
-    required int textColor,
-    required String headingFont,
-    required String bodyFont,
-    required double headingSize,
-    required double bodySize,
-    required double sectionSpacing,
-    required double containerPadding,
-  }) async {
-    await _upsertSettings(
-      {
-        'theme_primary_color': primaryColor,
-        'theme_accent_color': accentColor,
-        'theme_background_color': backgroundColor,
-        'theme_text_color': textColor,
-        'theme_heading_font': headingFont,
-        'theme_body_font': bodyFont,
-        'theme_heading_size': headingSize,
-        'theme_body_size': bodySize,
-        'theme_section_spacing': sectionSpacing,
-        'theme_container_padding': containerPadding,
-      },
-      errorContext: 'Error al actualizar configuración de tema',
-    );
-  }
-
   /// Update contact information
   Future<void> updateContactInfo({
     required String phone,
@@ -4810,7 +4766,6 @@ class WebsiteService extends ChangeNotifier {
     return saved;
   }
 
-
   Future<void> deleteNavigationForTenant(
     String navId,
     String tenantId, {
@@ -5384,8 +5339,7 @@ class WebsiteService extends ChangeNotifier {
   void recordEditorAuthorityRejectionForTenant(String tenantId) {
     final current = editorCapabilitySync(tenantId);
     if (current != null && current.granted) {
-      _editorAuthorityDenialFingerprints[tenantId.trim()] =
-          current.fingerprint;
+      _editorAuthorityDenialFingerprints[tenantId.trim()] = current.fingerprint;
     }
   }
 
@@ -5477,8 +5431,7 @@ class WebsiteService extends ChangeNotifier {
           .eq('tenant_id', tenantId)
           .eq('slug', normalizedSlug);
       // Structurally public: ONLY published rows can leave this loader.
-      response =
-          await query.eq('is_published', true).limit(1).maybeSingle();
+      response = await query.eq('is_published', true).limit(1).maybeSingle();
     }
 
     if (response == null) return null;

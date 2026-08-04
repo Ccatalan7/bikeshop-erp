@@ -258,7 +258,7 @@ foto de la pantalla: no lo ensucia otra ventana encima ni el cursor del dueño.
 
 ```bash
 P=$(scripts/dev/app_control.sh geometry | sed -n 's/^pid \([0-9]*\).*/\1/p')
-osascript -e "tell application \"System Events\" to tell (first process whose unix id is $P) to set size of front window to {430, 928}"
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $P) to set size of window \"Viñabike ERP\" to {430, 928}"
 ```
 
 Anchos útiles: **430** (compacto/teléfono) · **880** (tablet) · **1180**
@@ -429,11 +429,20 @@ sigue con un frame que no dependa del oscuro y vuelve después.
 
 ```bash
 P=$(scripts/dev/app_control.sh geometry | sed -n 's/^pid \([0-9]*\).*/\1/p')
-osascript -e "tell application \"System Events\" to tell (first process whose unix id is $P) to set size of front window to {430, 928}"
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $P) to set size of window \"Viñabike ERP\" to {430, 928}"
 ```
 
 **430** compacto · **880** tablet · **1180** sidebar expandido · **1672**
 escritorio. Devuélvela como estaba al terminar.
+
+> **La ventana se nombra, no se toma como «la de adelante».** El proceso expone
+> **dos** ventanas —la real y una auxiliar de 66×20—, y `front window` resuelve
+> a veces a la auxiliar: el `set size` **devuelve sin error y no pasa nada**.
+> El 2026-08-02 costó tres intentos y un desvío diagnosticando permisos de
+> Accesibilidad que estaban bien. Compruébalo con
+> `... to get {name, size} of every window`, y redimensiona siempre
+> `window "Viñabike ERP"`. Un `geometry` después del resize es la confirmación
+> barata de que la ventana que cambió es la que estás mirando.
 
 ### Si un panel ignora `scroll`, usa `drag`
 
@@ -774,6 +783,28 @@ el de la opción más larga. Una restricción con un solo extremo no es la regla
 Al escribir un aserto sobre una medida, pregúntate qué valor absurdo lo pasaría.
 Si existe uno, acota por los dos lados. Y compruébalo con una mutación: si el
 aserto no se pone rojo al romper el código, no está midiendo nada.
+
+### Medir un ancho en la captura y denunciarlo como defecto
+
+**2026-08-02, falso positivo mío.** El panel de respaldo de pago declara
+`desktopWidth: 520` y en la captura medía ~416. Lo reporté como divergencia y me
+puse a buscar la causa en el código del panel. **No había defecto:** la sesión
+corre bajo `WindowZoomScope` con `appliedScale 0.8`, así que **520 lógicos son
+416 físicos** — el valor observado era el correcto.
+
+Dos causas, y las dos se repiten sin querer:
+
+1. **Un píxel de la captura no es un píxel lógico.** Antes de restar anchos,
+   averigua a qué escala corre la sesión; con zoom aplicado, toda medida de una
+   PNG está multiplicada por ese factor.
+2. **El ancho semántico de un `Text` no mide su contenedor.** `find` devuelve el
+   tamaño del `RenderParagraph` —el texto pintado—, no el ancho disponible.
+   Deducir el ancho del panel sumando padding a un rótulo da un número que
+   parece riguroso y no lo es.
+
+Si de verdad quieres el ancho de un contenedor, mídelo por su propio nodo o
+compruébalo en el código del owner; y **antes de abrir un defecto de layout,
+descarta la escala**.
 
 ### Auditar evidencia en la carpeta equivocada, y declararla falsa
 

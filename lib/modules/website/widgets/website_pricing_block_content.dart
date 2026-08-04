@@ -382,13 +382,21 @@ class _PricingPlanCard extends StatelessWidget {
     required bool highlighted,
   }) {
     final href = action.href.trim();
-    final canNavigate = presenters == null &&
-        !previewMode &&
-        href.isNotEmpty &&
-        onNavigate != null;
     final button = WebsiteActionButton(
       action: action,
-      onPressed: canNavigate ? () => onNavigate!(href) : null,
+      // Visitor navigation works in Preview and Public; only Edit
+      // (presenters) is inert. Mirrors the standalone-button contract:
+      // editor chrome owns the pointer boundary, so a VALID plan CTA stays
+      // enabled-looking in Edit through a no-op — Material must never
+      // repaint the authored foreground as disabled. Empty hrefs stay
+      // truly disabled.
+      onPressed: href.isEmpty
+          ? null
+          : presenters != null
+              ? () {}
+              : onNavigate != null
+                  ? () => onNavigate!(href)
+                  : null,
       backgroundColor: highlighted ? accentColor : primaryColor,
       foregroundColor: Colors.white,
       outlineColor: highlighted ? accentColor : primaryColor,

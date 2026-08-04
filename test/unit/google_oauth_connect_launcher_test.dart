@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -39,8 +41,88 @@ void main() {
         writeRaw: (raw) => backend.value = raw,
         removeRaw: () => backend.value = null,
       );
+    addTearDown(service.dispose);
     return (service: service, backend: backend);
   }
+
+  test('concurrent connect calls are one single-flight launch and Future',
+      () async {
+    final harness = buildService();
+    final launcher = Completer<bool>();
+    var launchCount = 0;
+    String? firstNonce;
+    harness.service.oauthLaunchOverride = (stage) {
+      launchCount++;
+      firstNonce = WebsiteEditorOAuthIntentGate.decode(
+        harness.backend.value,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      )?.nonce;
+      return launcher.future;
+    };
+
+    final first = harness.service.connect(editorCapability: _cap());
+    final second = harness.service.connect(editorCapability: _cap());
+
+    expect(identical(first, second), isTrue,
+        reason: 'Every concurrent caller joins the same service Future.');
+    expect(launchCount, 1,
+        reason: 'Only the first caller may persist and launch OAuth.');
+    expect(firstNonce, isNotNull);
+    expect(harness.service.isLoading, isTrue);
+
+    launcher.complete(false);
+    await Future.wait([first, second]);
+
+    expect(harness.backend.value, isNull,
+        reason: 'The single aborted launch consumes its own intent.');
+    expect(harness.service.isLoading, isFalse);
+
+    harness.service.oauthLaunchOverride = (stage) async {
+      launchCount++;
+      return true;
+    };
+    final nextAttempt = harness.service.connect(editorCapability: _cap());
+    expect(identical(first, nextAttempt), isFalse,
+        reason: 'A completed flight releases the service for a new attempt.');
+    await nextAttempt;
+    expect(launchCount, 2);
+    final nextIntent = WebsiteEditorOAuthIntentGate.decode(
+      harness.backend.value,
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    expect(nextIntent, isNotNull);
+    expect(nextIntent!.nonce, isNot(firstNonce));
+  });
+
+  test('listener reentry during the loading notification joins the flight',
+      () async {
+    final harness = buildService();
+    final launcher = Completer<bool>();
+    var launchCount = 0;
+    Future<void>? reentrantCall;
+    harness.service.oauthLaunchOverride = (stage) {
+      launchCount++;
+      return launcher.future;
+    };
+    harness.service.addListener(() {
+      if (harness.service.isLoading && reentrantCall == null) {
+        reentrantCall = harness.service.connect(editorCapability: _cap());
+      }
+    });
+
+    final first = harness.service.connect(editorCapability: _cap());
+
+    expect(reentrantCall, isNotNull);
+    expect(identical(first, reentrantCall), isTrue,
+        reason: 'The lock is installed before listeners can synchronously '
+            'reenter connect().');
+    expect(launchCount, 1);
+
+    launcher.complete(true);
+    await Future.wait([first, reentrantCall!]);
+    expect(harness.service.isLoading, isFalse);
+    expect(harness.backend.value, isNotNull);
+  });
 
   test(
       'a launcher that returns FALSE is a failed/aborted launch: the OWN '
@@ -87,6 +169,77 @@ void main() {
     );
     expect(surviving?.nonce, 'nonce-newer',
         reason: 'clearIfNonce protects the newer intent.');
+    expect(harness.service.error, isNotNull);
+  });
+
+  test('a launcher exception clears only its invocation nonce', () async {
+    final harness = buildService();
+    harness.service.oauthLaunchOverride = (stage) async {
+      harness.backend.value = WebsiteEditorOAuthIntentGate.issue(
+        capability: _cap(),
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+        nonce: 'nonce-external-newer',
+        returnPath: '/tienda/config',
+        openIntegrations: true,
+      );
+      throw StateError('launcher failed');
+    };
+
+    await harness.service.connect(editorCapability: _cap());
+
+    final surviving = WebsiteEditorOAuthIntentGate.decode(
+      harness.backend.value,
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    expect(surviving?.nonce, 'nonce-external-newer');
+    expect(harness.service.error, isNotNull);
+  });
+
+  test('a launcher exception consumes its own nonce and releases loading',
+      () async {
+    final harness = buildService();
+    harness.service.oauthLaunchOverride = (stage) async {
+      throw StateError('launcher failed');
+    };
+
+    await harness.service.connect(editorCapability: _cap());
+
+    expect(harness.backend.value, isNull,
+        reason: 'The failed invocation consumes its own pending intent.');
+    expect(harness.service.error, isNotNull);
+    expect(harness.service.isLoading, isFalse);
+  });
+
+  test('linked signIn FALSE is treated as an aborted launch', () async {
+    final harness = buildService();
+    harness.service.isLinkedOverride = () => true;
+    String? launchedStage;
+    harness.service.oauthLaunchOverride = (stage) async {
+      launchedStage = stage;
+      return false;
+    };
+
+    await harness.service.connect(editorCapability: _cap());
+
+    expect(launchedStage, 'signIn');
+    expect(harness.backend.value, isNull);
+    expect(harness.service.error, isNotNull);
+  });
+
+  test('already-linked fallback FALSE is treated as an aborted launch',
+      () async {
+    final harness = buildService();
+    final launchedStages = <String>[];
+    harness.service.oauthLaunchOverride = (stage) async {
+      launchedStages.add(stage);
+      if (stage == 'link') throw StateError('already linked');
+      return false;
+    };
+
+    await harness.service.connect(editorCapability: _cap());
+
+    expect(launchedStages, ['link', 'signInFallback']);
+    expect(harness.backend.value, isNull);
     expect(harness.service.error, isNotNull);
   });
 

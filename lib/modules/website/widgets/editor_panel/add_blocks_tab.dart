@@ -26,27 +26,22 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
   @override
   Widget build(BuildContext context) {
     final blocks = editProvider.blocks;
-    const categoryOrder = [
-      'Estructura',
-      'Elementos',
-      'Contenido',
-      'Media',
-      'Social',
-      'Conversión',
-    ];
+    // One catalog for every add-block surface. This tab used to build its own
+    // list from the registry, with its own search and its own silent drop of
+    // the footer; `AddBlockDialog` built a third. `WebsiteBlockCatalog` is now
+    // the single owner, so a family cannot be present here and missing there.
+    const categoryOrder = WebsiteBlockCatalog.categoryOrder;
     final blockOptionsByCategory = <String, List<_BlockOption>>{};
-    for (final definition in WebsiteBlockRegistry.all()) {
-      if (definition.type == WebsiteBlockType.footer) continue;
-      final query = _insertQuery.trim().toLowerCase();
-      if (query.isNotEmpty &&
-          !definition.title.toLowerCase().contains(query) &&
-          !definition.type.name.toLowerCase().contains(query) &&
-          !definition.type.editorCategory.toLowerCase().contains(query)) {
-        continue;
-      }
+    for (final entry in WebsiteBlockCatalog.filtered(
+      presentBlockTypes: <String>[
+        for (final block in blocks)
+          (block['block_type'] ?? block['type'] ?? '').toString(),
+      ],
+      query: _insertQuery,
+    )) {
       blockOptionsByCategory
-          .putIfAbsent(definition.type.editorCategory, () => [])
-          .add(_BlockOption(definition.type.name));
+          .putIfAbsent(entry.category, () => [])
+          .add(_BlockOption.fromCatalog(entry));
     }
 
     return SingleChildScrollView(
@@ -389,6 +384,21 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
   }
 
   Widget _buildBlockCard(_BlockOption option) {
+    if (!option.enabled) {
+      // Visible, inert and explained — never removed from the list.
+      return Tooltip(
+        message: option.disabledReason ?? 'No disponible en esta página',
+        child: Opacity(
+          opacity: 0.55,
+          child: Semantics(
+            enabled: false,
+            label: '${option.label}. '
+                '${option.disabledReason ?? 'No disponible en esta página'}',
+            child: _buildCardContent(option),
+          ),
+        ),
+      );
+    }
     return Builder(
       builder: (context) => Draggable<WebsiteEditorDragPayload>(
         data: option.type.startsWith('canvas_el:')
@@ -534,19 +544,21 @@ class _ActionCard extends StatelessWidget {
   final String description;
   final IconData icon;
   final VoidCallback? onTap;
+  final bool enabled;
 
   const _ActionCard({
     required this.title,
     required this.description,
     required this.icon,
     this.onTap,
+    this.enabled = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isEnabled = onTap != null;
+    final isEnabled = enabled && onTap != null;
     return InkWell(
-      onTap: onTap,
+      onTap: isEnabled ? onTap : null,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -603,11 +615,29 @@ class _BlockOption {
   final String? labelOverride;
   final IconData? iconOverride;
 
+  /// Non-insertable families stay listed and explain themselves (`O-01`).
+  final bool enabled;
+  final String? disabledReason;
+
   const _BlockOption(
     this.type, {
     this.labelOverride,
     this.iconOverride,
+    this.enabled = true,
+    this.disabledReason,
   });
+
+  /// The catalog entry as this tab's card model. Canvas elements keep the
+  /// plain constructor: they are not page blocks and are not in the catalog.
+  factory _BlockOption.fromCatalog(WebsiteBlockCatalogEntry entry) {
+    return _BlockOption(
+      entry.type.name,
+      labelOverride: entry.title,
+      iconOverride: entry.icon,
+      enabled: entry.isInsertable,
+      disabledReason: entry.unavailableReason,
+    );
+  }
 
   WebsiteBlockType? get _blockType {
     if (type.startsWith('canvas_el:')) return null;

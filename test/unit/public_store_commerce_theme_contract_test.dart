@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/theme/website_commerce_theme.dart';
+import 'package:vinabike_erp/modules/website/theme/website_resolved_theme.dart';
 import 'package:vinabike_erp/modules/website/theme/website_theme_builder.dart';
 import 'package:vinabike_erp/public_store/theme/public_store_surface_theme.dart';
 import '../support/library_source.dart';
@@ -105,12 +106,14 @@ void main() {
     const line = Color(0xFFE8E2D8);
     final theme = WebsiteThemeBuilder.build(
       base: ThemeData.light(),
-      primaryColor: const Color(0xFF2E7D32),
-      accentColor: const Color(0xFFFF6F00),
-      backgroundColor: Colors.white,
-      commerceAccentColor: accent,
-      commerceTextColor: text,
-      commerceLineColor: line,
+      resolved: WebsiteResolvedTheme.fallback.copyWith(
+        primaryColor: const Color(0xFF2E7D32),
+        accentColor: const Color(0xFFFF6F00),
+        backgroundColor: Colors.white,
+        commerceAccentColor: accent,
+        commerceTextColor: text,
+        commerceLineColor: line,
+      ),
     );
     final commerce = theme.extension<WebsiteCommerceTheme>();
 
@@ -119,8 +122,15 @@ void main() {
     expect(commerce.textPrimary, text);
     expect(commerce.line, line);
 
-    final editorSource = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
-    final layoutSource = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final editorSource = readLibrarySource(
+      'lib/modules/website/widgets/website_editor_panel.dart',
+    );
+    final layoutSource = readLibrarySource(
+      'lib/public_store/widgets/public_store_layout.dart',
+    );
+    final resolvedThemeSource = File(
+      'lib/modules/website/theme/website_resolved_theme.dart',
+    ).readAsStringSync();
     final detailSource = File(
       'lib/public_store/pages/product_detail_page.dart',
     ).readAsStringSync();
@@ -130,8 +140,9 @@ void main() {
       'theme_product_detail_line_color',
     ]) {
       expect(editorSource, contains(key), reason: key);
-      expect(layoutSource, contains(key), reason: key);
+      expect(resolvedThemeSource, contains(key), reason: key);
     }
+    expect(layoutSource, contains('WebsiteResolvedTheme.resolve'));
     expect(detailSource, contains('commerceAccent'));
     expect(detailSource, contains('commerceTextPrimary'));
     expect(detailSource, contains('commerceLine'));

@@ -303,3 +303,204 @@ directorio **ignorado por `.gitignore:110`**: no cuentan como árbol sucio.
   `LayoutBuilder` en tabla.
 - **`PayrollAbility`** — la autorización real es binaria
   (`canAccessAccounting`). No se fabrica una UI de permisos que no existen.
+
+---
+
+## FREEZE · auditoría final del módulo (2026-08-02, tras `61cbf978`)
+
+**No se encontró ningún defecto reproducible.** Esta ronda no reimplementó
+nada: verificó. Lo que sigue es la evidencia ejecutada, no el relato.
+
+### Verificación automática
+
+| Compuerta | Resultado |
+|---|---|
+| Batería completa de Nóminas (`test/unit/payroll_*` + `test/widgets/payroll_*` + `test/widgets/vb_*`) | **587 pasadas · 2 opt-in saltadas · 0 fallidas** (`All tests passed!`) |
+| Analyzer de `lib/modules/hr/payroll/`, `lib/modules/hr/widgets/` y `payroll_reconciliation_page.dart` | **0 errores · 1 `info`** (ver residual) |
+
+### Smoke real contra producción, sólo lectura
+
+Sesión canónica **existente** `43256.payroll` / app `45814` (la anterior murió
+con el apagado del Mac; **no se abrió una segunda**). Nada se escribió: no se
+pulsó `Confirmar semana`, ni `Aplicar`, ni `Registrar corrección`.
+
+| Superficie | Comprobado |
+|---|---|
+| Semanas | escritorio 1631, tablet 834, teléfono 430 · oscuro. Cuatro registros reales, barra de dinero y valla de borrador |
+| Historial | maestro-detalle a 1631 (oscuro y **claro**) y lista-primero a 430; el detalle derecho cambia de verdad al elegir otra semana |
+| Anticipos | ledger de la persona con `VIGENTE`/`APLICADO`, explicador de 4 reglas y salida `Nuevo para esta persona` |
+| Evidencia de pago | 1631 y 430, **oscuro y claro**: banda de dinero, movimientos, `ASIENTO CONTABLE` con debe/haber y folio |
+| Corregir pago | diálogo abierto y **cancelado**; dice que el original no se borra, que la reversa lleva asiento inverso y que el saldo se reabre |
+| OCR / conciliación | paso 1 con los cuatro pasos, copy de Veryfi, tope de 12 MB y `Continuar` deshabilitado |
+
+**Comprobado en vivo, no por contrato:** el CTA apilado de la barra de dinero
+mide **802 × 48** a 834 — el `touchMobile` que `F-06` exigió sobre el 46 del
+frame—, y el tramo de tarjetas/tabla cruza en `720` como manda `_isTabletBand`
+(667 → tarjetas, 834 → tabla densa de cuatro columnas).
+
+### Dos hallazgos que NO eran defectos, anotados para que no se re-abran
+
+1. **Ancho del panel de respaldo.** Medía ~416 px en la captura contra
+   `desktopWidth: 520`. **Conforme:** la sesión corre con `appliedScale 0.8`,
+   así que 520 lógicos son 416 físicos. No se compensa localmente y el owner
+   queda intacto. La causa del error de lectura está en el workflow §5.c.
+2. **`Motivo obligatorio` con el botón habilitado.** No es una valla ausente:
+   `submit()` exige ≥ 3 caracteres y pinta `errorText` sin cerrar el diálogo.
+   Botón habilitado + error en línea dice **por qué** no se puede; un botón
+   muerto no.
+
+### Residual externo exacto
+
+Nada de esto es de Nóminas y nada bloquea el módulo:
+
+- `employee_advance_dialog.dart:37` — 1 `info` de analyzer: la clase
+  `@deprecated` se referencia a sí misma. Es la ruta legacy v2 **sin
+  consumidores** ya marcada para retiro junto a `payroll_list_page.dart` y
+  `payroll_payment_dialog.dart`. Borrarla es una decisión de limpieza, no una
+  corrección: se deja al dueño del retiro.
+- **iOS · la barra de estado estaba OCULTA y ya está CORREGIDA (2026-08-03).**
+  `ios/Runner/Info.plist` declaraba `UIStatusBarHidden = true`, así que en
+  iPhone no existía la banda de **47** que `6a` compone dentro del header
+  (`47 + 56 + 48 = 151`) y el operador no veía reloj, wifi ni batería. **No se
+  aceptó «no existe el inset» como cierre:** se corrigió el dueño nativo.
+  `UIStatusBarHidden` pasa a `false`, y `UIViewControllerBasedStatusBarAppearance`
+  a `true` para que **el contraste lo pida cada pantalla** —esta app tiene
+  pantallas claras y un header navy, y ningún estilo global sirve para las dos—.
+  Sin compensaciones locales. Fijado por
+  `test/unit/ios_status_bar_contract_test.dart` (**3 casos**, verificado por
+  mutación: al volver a `true` la suite se pone roja).
+- **iOS · contraste, corregido en el mismo owner canónico.** Al dejar de
+  ocultarse, el login quedó con contenido **claro sobre fondo claro** —la hora
+  casi ilegible—, porque esa pantalla vive fuera del `WorkspaceShellScope`, que
+  es quien declara el estilo dentro de la app. Se le puso un `AnnotatedRegion`
+  con **`vinabikeSystemOverlayStyleFor`**, el helper que ya existía y que deriva
+  el brillo del color que la pantalla realmente pinta arriba. Evidencia real, en
+  un iPhone 17 Pro del simulador con `simctl status_bar override --time 9:41`:
+  `ios-07` (barra ausente) → `ios-09` (visible, claro sobre claro, ilegible) →
+  `ios-10` (visible, **oscuro sobre claro, legible**). Inset superior consumido
+  **una sola vez**: el contenido arranca bajo la isla, sin solape ni recorte.
+- **Escrituras de producción** que ninguna sesión de agente puede ejercer:
+  `Confirmar semana`, `Aplicar` del paso 4 y `Registrar corrección`. Sus
+  contratos están probados en código y en pgTAP; su ejecución real es del dueño.
+
+**Con eso el módulo queda CONGELADO.** Reabrirlo pide un defecto reproducible
+citado con su comando y su salida, no una impresión.
+
+---
+
+## iOS desbloqueado: lo que costaba la ronda y no era de Nóminas (2026-08-03)
+
+Con el permiso de Simulador otorgado, el residual iOS dejó de ser una incógnita.
+Se compiló, instaló, lanzó y condujo la app en un **iPhone 17 Pro real del
+simulador (402×874 puntos)**. Tres cosas salieron a la luz, y ninguna se sabía:
+
+**1. El dispositivo que el proyecto designaba no puede mostrar nada en este
+Mac.** `Vinabike iPhone 17 Pro x86` es un dispositivo **forzado a x86** y en un
+M1 Pro arranca sin *display port*: `simctl io … screenshot` responde
+`Device does not have a 'default' display port` y el panel falla con
+`Could not find the Main Screen Surface`. **Ésa era la causa real** del
+«toolchain bloqueado» de rondas anteriores — no faltaba la plataforma iOS.
+Un dispositivo de stock captura sin problema, así que la verificación se hizo en
+uno creado al efecto (`Claude iPhone 17 Pro`), que **se deja instalado** justo
+para que nadie vuelva a diagnosticar esto desde cero. El binario, además, es
+**x86_64 puro** (`lipo -archs` → `x86_64`), así que corre bajo Rosetta y el
+primer arranque es lento de verdad.
+
+**2. Defecto P1 encontrado y CORREGIDO: arranque en frío sin sesión se colgaba
+en «Cargando…» para siempre.** Reproducido en un simulador limpio con red
+comprobada (`curl` a Supabase, **200 en 0,66 s**): proceso vivo, spinner
+girando, **6+ minutos**, y la pantalla de login **nunca** aparecía. La causa no
+era lentitud: `gotrue` abre la suscripción con `AuthChangeEvent.initialSession`,
+que **no** está en la lista de eventos «significativos» del listener; la bandera
+`isInitializing` se apagaba **sin notificar**, el árbol no se reconstruía y
+`main.dart` sigue pintando «Cargando…» mientras esa bandera esté arriba. En
+escritorio no se veía porque ahí ya hay sesión y la bandera se apaga antes del
+primer build. **Afecta también a release** (`kDebugMode` sólo controla el
+auto-login, no el filtro).
+
+*Corrección:* terminar de inicializar ahora **avisa**, sin reabrir lo que el
+filtro protegía —`tokenRefreshed` sigue sin reconstruir, que es lo que salvaba
+los formularios a medio llenar—. La regla vive en
+`AuthService.shouldNotifyAuthListeners` para que se pueda probar sin Supabase, y
+la fija `test/unit/auth_initialization_notify_contract_test.dart` (**6 casos**,
+las dos mitades). **Demostrado en vivo**, no sólo en prueba: misma build, mismo
+simulador, antes «Cargando…» y después la pantalla de login.
+
+**3. El `47` de `5l` diverge por configuración de iOS**, con archivo y línea —
+ver el residual de arriba. Entregado a Codex, no corregido acá.
+
+**Estado del simulador al cerrar:** override de barra de estado limpiado, app
+terminada, todos los dispositivos apagados.
+
+---
+
+## FREEZE · iOS corregido en el dueño nativo (2026-08-03)
+
+**El residual iOS dejó de ser un residual: era un defecto y está arreglado.**
+
+| Corrección | Evidencia |
+|---|---|
+| `UIStatusBarHidden` `true` → `false` (`ios/Runner/Info.plist`) | Barra visible en iPhone 17 Pro real del simulador: `9:41`, wifi y batería, con `simctl status_bar override` |
+| `UIViewControllerBasedStatusBarAppearance` `false` → `true` | El contraste lo pide cada pantalla; ningún estilo global sirve para claras y navy a la vez |
+| `AnnotatedRegion` en `login_screen.dart` con `vinabikeSystemOverlayStyleFor` | Antes claro-sobre-claro (ilegible); ahora **oscuro sobre claro**, legible |
+| `AuthService.shouldNotifyAuthListeners` | Arranque en frío llega al login en vez de colgarse en «Cargando…» |
+
+Pruebas: `ios_status_bar_contract_test.dart` (3, **verificada por mutación**) ·
+`auth_initialization_notify_contract_test.dart` (6). Batería de Nóminas + estas
+dos + suites de auth: **618 pasadas · 2 opt-in · 0 fallidas**. Analyzer de todo
+lo tocado: **0 issues**. `git diff --check`: limpio.
+
+**El residual de autenticación queda ELIMINADO (2026-08-03).** El dueño importó
+la sesión Supabase local al contenedor del Simulator, y el smoke se completó con
+datos reales de producción en el iPhone 17 Pro nativo, sólo lectura. Ver el
+bloque «Smoke iOS completo» al final.
+
+**Estado del simulador al cerrar:** apariencia devuelta a claro, override de
+barra de estado limpiado, app terminada, todos los dispositivos apagados. El
+dispositivo `Claude iPhone 17 Pro` **se deja creado** a propósito: el
+`Vinabike iPhone 17 Pro x86` del proyecto no puede mostrar pantalla en este M1.
+
+---
+
+## FREEZE FINAL · smoke iOS completo con datos reales (2026-08-03)
+
+**iPhone 17 Pro nativo** (`Claude iPhone 17 Pro`, 402×874 puntos), app
+autenticada contra producción, **sólo lectura**: no se pulsó `Confirmar semana`,
+ni `Aplicar`, ni `Registrar corrección`, ni ninguna escritura financiera o de
+base de datos.
+
+| Recorrido | Resultado |
+|---|---|
+| Dashboard → drawer → RR.HH. → Nóminas | entra limpio |
+| **Semanas** | claro y **oscuro**: cuatro registros reales (S27, $225.000), tira de semanas S27–S30, barra de dinero y CTA |
+| **Historial list-first** | claro y oscuro: la lista **es** el control, agrupada por mes, `25+ semanas cerradas · solo lectura` |
+| **Detalle de semana** | ledger completo (TOTAL / ANTICIPOS / A PAGAR / PAGADO / SALDO) y `PERSONAS` con su método y fecha |
+| **Evidencia full sheet** | claro y oscuro: banda de dinero, movimiento, `ASIENTO CONTABLE AC-01910` con debe/haber y `Corregir pago` |
+| **Navegación atrás** | `✕` del sheet devuelve al detalle **con su estado**, y `← Todas las semanas` vuelve a la lista |
+
+**El `151` de `5l`, verificado en hardware simulado real.** La barra de estado
+**existe, es visible y es parte del header**: se pinta navy como el resto del
+cromo y su contenido va en claro —hora, wifi y batería legibles— sobre ese
+navy, en los dos temas. Debajo van la banda de navegación (☰ + `Nóminas` +
+contexto `S27 · 4 por resolver · $225.000` + campana) y la banda de alcance
+(`Semanas 4 · Historial • · Anticipos •` + `•••`). **Inset superior consumido
+una sola vez**: ningún contenido queda bajo la barra, no hay recorte ni doble
+margen. Esto es lo que la fila `5l` pedía y no se había podido fotografiar.
+
+### Hallazgos reproducibles FUERA de Nóminas (no corregidos acá)
+
+Los dos se reproducen en el iPhone y ninguno es del módulo; se entregan con su
+evidencia en vez de arreglarlos por el camino:
+
+1. **La búsqueda del drawer no ignora acentos.** Escribir `Nomina` —como se
+   teclea en un teléfono— devuelve «No encontramos módulos o páginas para
+   "Nomina"», aunque el módulo se llame `Nóminas`. Owner: la navegación global,
+   no Payroll.
+2. **Botones que parten la palabra en `Configuración → Apariencia`.**
+   `Cambiar Logo` se dibuja «Cam/biar/Logo» y `Eliminar` como «Elimi/nar», en
+   claro y en oscuro. Ya se había visto en macOS a 430; **se confirma que no era
+   del ancho de ventana**: es de esa pantalla. En la misma pantalla, en oscuro,
+   los chevrons y el chip `4 accesos` quedan con fondo claro sobre tarjeta
+   oscura.
+
+**Con esto el módulo Nóminas queda CONGELADO, sin residual propio.**

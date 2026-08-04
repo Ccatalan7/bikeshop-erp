@@ -109,6 +109,19 @@ void main() {
     await tester.pump();
   }
 
+  /// Reads the rendered weight of a rail tab's label: the section tab's own
+  /// contract renders w800 when active and w600 when inactive, so this is a
+  /// direct semantic read of the active state — no new visual literal.
+  FontWeight? railTabWeight(WidgetTester tester, String label) {
+    final text = tester.widget<Text>(
+      find.descendant(
+        of: find.widgetWithText(TextButton, label),
+        matching: find.text(label),
+      ),
+    );
+    return text.style?.fontWeight;
+  }
+
   Future<void> revealBranch(
     WidgetTester tester, {
     String label = 'TRANSMISIÓN',
@@ -134,7 +147,11 @@ void main() {
 
     expect(find.text('VER TODO'), findsOneWidget);
     expect(find.text('TRANSMISIÓN'), findsOneWidget);
-    expect(find.text('Cadenas'), findsNothing);
+    // The structured root opens with its default active branch already
+    // expanded, so the panel is full-height and click targets are stable
+    // from the first frame.
+    expect(find.text('Cadenas'), findsOneWidget,
+        reason: 'the first root branch is deterministically active on open');
     final panelFinder = find.byKey(const ValueKey<String>('mega-menu-panel'));
     expect(panelFinder, findsOneWidget);
     expect(
@@ -539,6 +556,93 @@ void main() {
     expect(panelTop, closeTo(renderedHeaderBottom, 0.5));
   });
 
+  testWidgets(
+      'panel starts below the rendered header under a 0.8 topLeft window '
+      'zoom (ERP Preview owner)', (tester) async {
+    WidgetController.hitTestWarningShouldBeFatal = true;
+    addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+    await tester.binding.setSurfaceSize(const Size(1200, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const hostOffset = 86.0;
+    const headerInset = 18.0;
+    const headerHeight = 72.0;
+    const zoomScale = 0.8;
+    const headerKey = ValueKey<String>('zoomed-host-header');
+
+    // Reproduces the real owner: the ERP Preview WindowZoomScope wraps the
+    // WHOLE storefront — its Navigator/Overlay included — in a topLeft
+    // Transform.scale(0.8). The panel must convert every global point
+    // through the Overlay's own RenderBox so the transform is inverted
+    // exactly once; the old manual origin subtraction double-scaled and
+    // overlapped the header.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Transform.scale(
+            scale: zoomScale,
+            alignment: Alignment.topLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(top: hostOffset),
+              child: Navigator(
+                onGenerateRoute: (_) => MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    body: Padding(
+                      padding: const EdgeInsets.only(top: headerInset),
+                      child: MegaMenuHeaderWrapper(
+                        key: headerKey,
+                        openBackgroundColor: const Color(0xFF000000),
+                        child: SizedBox(
+                          height: headerHeight,
+                          child: Align(
+                            alignment: Alignment.center,
+                            child: MegaMenuButton(
+                              parent: parent,
+                              children: children,
+                              isEditMode: false,
+                              textColor: const Color(0xFF17231C),
+                              panelBackgroundColor: const Color(0xFF000000),
+                              panelForegroundColor: Colors.white,
+                              panelRailBackgroundColor: const Color(0xFF64748B),
+                              panelRailForegroundColor: Colors.white,
+                              onNavigate: (_, __) {},
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.text('Componentes'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+
+    final panelFinder = find.byKey(const ValueKey<String>('mega-menu-panel'));
+    expect(panelFinder, findsOneWidget);
+
+    // GLOBAL coordinates: under the zoom the rendered header ends at
+    // 0.8 * (host + inset + height); the panel's first painted row must
+    // start exactly there — never 0.8 * that again.
+    final renderedHeaderBottom = tester.getBottomLeft(find.byKey(headerKey)).dy;
+    final panelTop = tester.getTopLeft(panelFinder).dy;
+    expect(
+      renderedHeaderBottom,
+      closeTo(zoomScale * (hostOffset + headerInset + headerHeight), 0.5),
+    );
+    expect(panelTop, closeTo(renderedHeaderBottom, 0.5),
+        reason: 'the panel opens flush under the zoomed header, with no '
+            'overlap and no double-scaled gap');
+  });
+
   testWidgets('hovering the editorial rail swaps the visible branch',
       (tester) async {
     final wheels = navigation(
@@ -573,7 +677,10 @@ void main() {
     await mouse.moveTo(tester.getCenter(find.text('Componentes')));
     await tester.pump(const Duration(milliseconds: 120));
     await tester.pump(const Duration(milliseconds: 220));
-    expect(find.text('Cadenas'), findsNothing);
+    // Deterministic default branch on open: the FIRST root (Transmisión)
+    // shows its detail; the other branch stays hidden until hovered.
+    expect(find.text('Cadenas'), findsOneWidget,
+        reason: 'the first root branch is deterministically active on open');
     expect(find.text('Aros'), findsNothing);
 
     await mouse.moveTo(tester.getCenter(find.text('TRANSMISIÓN')));
@@ -615,8 +722,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 240));
     await tester.pumpAndSettle();
 
+    // Hovering the blank rail NO LONGER collapses the body: the panel keeps
+    // its stable full-height topology and the content returns to the
+    // deterministic default (first structured) branch.
     expect(find.text('Aros'), findsNothing);
-    expect(find.text('Cadenas'), findsNothing);
+    expect(find.text('Cadenas'), findsOneWidget,
+        reason: 'blank rail returns to the default branch, never a collapse '
+            'that moves hit targets mid-gesture');
+    // Rail highlight follows the SAME effective branch on the blank-rail
+    // return: default tab active again, the previously hovered one not.
+    expect(railTabWeight(tester, 'TRANSMISIÓN'), FontWeight.w800,
+        reason: 'the rail marks the default branch after the blank-rail '
+            'return');
+    expect(railTabWeight(tester, 'RUEDAS'), FontWeight.w600);
   });
 
   testWidgets('visual cards preview children, drill down and return',
@@ -874,6 +992,127 @@ void main() {
     expect(navigations.last, '/productos');
   });
 
+  testWidgets(
+      'a structured root opens full-height with its active branch visible '
+      'and the FIRST rail click navigates', (tester) async {
+    // Hit-test misses are fatal: a moving hit target (the old mid-gesture
+    // body insertion) must fail loudly, never degrade to a warning.
+    WidgetController.hitTestWarningShouldBeFatal = true;
+    addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+
+    final navigations = <String>[];
+    await pumpMenu(tester, onNavigate: navigations.add);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(find.text('Componentes')));
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pumpAndSettle();
+
+    // The branch detail exists deterministically from opening — no branch
+    // hover happened yet.
+    expect(find.text('Cadenas'), findsOneWidget,
+        reason: 'the default active branch exposes its detail from the '
+            'first frame');
+    expect(find.text('VER TODO'), findsOneWidget);
+    // Body and rail consume the SAME effective active branch: the default
+    // branch's tab is highlighted from the first frame.
+    expect(railTabWeight(tester, 'TRANSMISIÓN'), FontWeight.w800,
+        reason: 'the rail marks the default active branch from opening');
+
+    // ONE click on the rail tab navigates: the topology did not shift under
+    // the pointer.
+    await tester.tap(find.widgetWithText(TextButton, 'TRANSMISIÓN'));
+    await tester.pumpAndSettle();
+    expect(navigations, ['/productos/categoria/transmision']);
+  });
+
+  testWidgets(
+      'a mixed rail defaults to the first STRUCTURED branch and the flat '
+      'link keeps its navigation', (tester) async {
+    WidgetController.hitTestWarningShouldBeFatal = true;
+    addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+
+    // Flat link FIRST, structured branch AFTER: the deterministic default
+    // must be the first root that actually has visible children, never
+    // blindly roots.first.
+    final offers = navigation(
+      id: 'offers',
+      label: 'Ofertas',
+      linkValue: '/ofertas',
+    );
+    final chains = navigation(
+      id: 'chains',
+      label: 'Cadenas',
+      linkValue: '/productos/categoria/cadenas',
+    );
+    final drivetrain = navigation(
+      id: 'drivetrain',
+      label: 'Transmisión',
+      linkValue: '/productos/categoria/transmision',
+      children: [chains],
+    );
+    parent = navigation(
+      id: 'components',
+      label: 'Componentes',
+      linkValue: '/productos',
+      children: [offers, drivetrain],
+    );
+    children = parent.children;
+
+    final navigations = <String>[];
+    await pumpMenu(tester, onNavigate: navigations.add);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(find.text('Componentes')));
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pumpAndSettle();
+
+    // The structured branch owns the default detail and its tab is active;
+    // the flat link is not marked active.
+    expect(find.text('Cadenas'), findsOneWidget,
+        reason: 'the first STRUCTURED root owns the default detail');
+    expect(railTabWeight(tester, 'TRANSMISIÓN'), FontWeight.w800);
+    expect(railTabWeight(tester, 'OFERTAS'), FontWeight.w600);
+
+    // The flat link still navigates on its own click.
+    await tester.tap(find.widgetWithText(TextButton, 'OFERTAS'));
+    await tester.pumpAndSettle();
+    expect(navigations, ['/ofertas'],
+        reason: 'a flat rail link keeps visitor navigation');
+  });
+
+  testWidgets('a nested visual card navigates on its FIRST click after opening',
+      (tester) async {
+    WidgetController.hitTestWarningShouldBeFatal = true;
+    addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+
+    final navigations = <String>[];
+    await pumpMenu(tester, onNavigate: navigations.add);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(find.text('Componentes')));
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('mega-menu-card-navigate-chains')),
+    );
+    await tester.pump(const Duration(milliseconds: 320));
+
+    expect(navigations, ['/productos/categoria/cadenas']);
+    expect(find.text('VER TODO'), findsNothing,
+        reason: 'navigation closes the overlay');
+  });
+
   testWidgets('keyboard opens, exposes links and Escape dismisses the menu',
       (tester) async {
     final navigations = <String>[];
@@ -885,7 +1124,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 320));
 
     expect(find.text('VER TODO'), findsOneWidget);
-    expect(find.text('Cadenas'), findsNothing);
+    // A structured root opens with its default active branch ALREADY
+    // expanded: keyboard users see the same deterministic full-height panel
+    // as pointer users, from the first frame.
+    expect(find.text('Cadenas'), findsOneWidget,
+        reason: 'the branch detail is present from opening, never gated on '
+            'a second hover/Tab');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pumpAndSettle();

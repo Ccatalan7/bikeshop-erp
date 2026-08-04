@@ -206,8 +206,9 @@ void main() {
       expect(action.action.variant, WebsiteActionVariant.text);
     });
 
-    testWidgets('Public navigates once while Preview and ineligible do not',
-        (tester) async {
+    testWidgets(
+        'Preview and Public navigate as a visitor; Edit presenters and '
+        'ineligible do not', (tester) async {
       final routes = <String>[];
       const data = <String, dynamic>{
         'plans': <Map<String, dynamic>>[_plan],
@@ -225,6 +226,7 @@ void main() {
       );
       expect(routes, <String>['/reservar']);
 
+      // Preview keeps VISITOR navigation semantics: same tap, same route.
       await tester.pumpWidget(
         _host(
           data: data,
@@ -236,11 +238,30 @@ void main() {
       final previewButton = tester.widget<OutlinedButton>(
         find.byType(OutlinedButton),
       );
-      expect(previewButton.onPressed, isNull);
+      expect(previewButton.onPressed, isNotNull,
+          reason: 'Preview keeps the visitor CTA active');
       await tester.tap(
         find.byKey(WebsitePricingBlockContent.actionKey(0)),
       );
-      expect(routes, <String>['/reservar']);
+      expect(routes, <String>['/reservar', '/reservar'],
+          reason: 'Preview navigates exactly like Public');
+
+      // Edit is identified by its injected presenters and stays inert.
+      await tester.pumpWidget(
+        _host(
+          data: data,
+          onNavigate: routes.add,
+          isNavigationEligible: (_) => true,
+          presenters: WebsiteBlockContentPresenters(
+            action: (context, slot) => slot.child,
+          ),
+        ),
+      );
+      await tester.tap(
+        find.byKey(WebsitePricingBlockContent.actionKey(0)),
+      );
+      expect(routes, <String>['/reservar', '/reservar'],
+          reason: 'Edit (presenters) never navigates');
 
       await tester.pumpWidget(
         _host(

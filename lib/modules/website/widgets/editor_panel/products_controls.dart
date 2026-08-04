@@ -86,6 +86,69 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
     widget.provider.updateBlockData(widget.blockId, field, value);
   }
 
+  /// Binds one presentation property of this block through the canonical
+  /// owner, using the registry schema instead of a hand-written key.
+  ///
+  /// The catalogue source, category, selected ids, `maxProducts` and the "view
+  /// all" copy/destination are business identity: they keep writing shared
+  /// through [_updateField] and the existing pickers, untouched.
+  WebsiteResponsiveScalarBinding<T>? _presentationBinding<T>(
+    String key,
+    WebsiteResponsiveDecoder<T> decode, {
+    String? unavailableReason,
+  }) {
+    final field = WebsiteBlockRegistry.fieldForPath(
+      WebsiteBlockType.products,
+      key,
+    );
+    if (field == null) return null;
+    return WebsiteResponsiveScalarBinding<T>.forField(
+      provider: widget.provider,
+      blockId: widget.blockId,
+      field: field,
+      owner: const WebsiteResponsiveRootField(),
+      decode: decode,
+      hostClass: WebsiteEditorChromeScope.maybeOf(context)?.hostClass ??
+          WebsiteAuthoringHostClass.desktop,
+      unavailableReason: unavailableReason,
+    );
+  }
+
+  /// Why `Productos por fila` cannot be edited for the previewed viewport.
+  ///
+  /// Null on Desktop, where the value IS the base and is editable. On the other
+  /// two the storefront computes the columns itself, so the control stays
+  /// visible and inert with the real reason instead of offering a change that
+  /// would not reach the page.
+  String? get _itemsPerRowUnavailableReason {
+    return switch (widget.provider.previewViewport) {
+      WebsiteViewport.desktop => null,
+      WebsiteViewport.mobile =>
+        'En móvil los productos se muestran en un carrusel automático, '
+            'de a uno. Este número sólo aplica en escritorio.',
+      WebsiteViewport.tablet =>
+        'En tablet las columnas se calculan solas para que las tarjetas '
+            'queden legibles. Este número sólo aplica en escritorio.',
+    };
+  }
+
+  /// Mounts a presentation control under the canonical inheritance shell.
+  ///
+  /// The shell owns label, status, scope sentence and the customize/reset
+  /// action, so the control inside carries no second label.
+  Widget _mountPresentationField<T>(
+    WebsiteResponsiveScalarBinding<T>? binding,
+    Widget Function(WebsiteResponsiveScalarBinding<T> binding) build,
+  ) {
+    if (binding == null) return const SizedBox.shrink();
+    return ResponsiveFieldShell<T>(
+      state: binding.state,
+      onCustomize: binding.customize,
+      onReset: binding.reset,
+      child: build(binding),
+    );
+  }
+
   List<String> get _selectedProductIds {
     final raw = widget.data['selectedProducts'];
     if (raw is List) return raw.cast<String>();
@@ -150,47 +213,55 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
             ),
             const SizedBox(height: 12),
 
-            // Items per row
-            const Text('Productos por fila',
-                style: TextStyle(
-                    color: Colors.white54,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Row(
-              children: [2, 3, 4].map((count) {
-                final isSelected = _itemsPerRow == count;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () => _updateField('itemsPerRow', count),
-                    child: Container(
-                      width: 44,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF00A09D)
-                            : const Color(0xFF2D2D2D),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: isSelected
-                              ? const Color(0xFF00A09D)
-                              : Colors.white24,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$count',
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.white70,
-                            fontWeight: FontWeight.w600,
+            // Items per row — same chips as before, now resolved through the
+            // canonical binding. It is a SHARED base value: on mobile and
+            // tablet the shell renders it inert with its reason, because the
+            // storefront decides the columns there by itself.
+            _mountPresentationField<num>(
+              _presentationBinding<num>(
+                'itemsPerRow',
+                WebsiteResponsiveScalarBinding.decodeNumber,
+                unavailableReason: _itemsPerRowUnavailableReason,
+              ),
+              (binding) {
+                final selectedCount = binding.value?.toInt() ?? _itemsPerRow;
+                return Row(
+                  children: [2, 3, 4].map((count) {
+                    final isSelected = selectedCount == count;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () => binding.write(count),
+                        child: Container(
+                          width: 44,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF00A09D)
+                                : const Color(0xFF2D2D2D),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF00A09D)
+                                  : Colors.white24,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$count',
+                              style: TextStyle(
+                                color:
+                                    isSelected ? Colors.white : Colors.white70,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  }).toList(),
                 );
-              }).toList(),
+              },
             ),
 
             const SizedBox(height: 16),
@@ -215,10 +286,16 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
               onChanged: (v) => _updateField('showPrice', v),
             ),
             const SizedBox(height: 8),
-            _EditorToggle(
-              label: 'Mostrar botón "Ver todos"',
-              value: widget.data['showViewAll'] ?? true,
-              onChanged: (v) => _updateField('showViewAll', v),
+            _mountPresentationField<bool>(
+              _presentationBinding<bool>(
+                'showViewAll',
+                WebsiteResponsiveScalarBinding.decodeBoolean,
+              ),
+              (binding) => _EditorToggle(
+                label: '',
+                value: binding.value ?? true,
+                onChanged: binding.write,
+              ),
             ),
             const SizedBox(height: 8),
             _EditorToggle(

@@ -131,6 +131,21 @@ void registerAgentInputExtensions() {
     return _ok({'tapped': result['tapped']});
   });
 
+  developer.registerExtension('ext.vinabike.input.enterText',
+      (_, params) async {
+    await _pumpFrames(frames: _settleFrames);
+    final result = await enterTextAgentInputTargetForTesting(params);
+    if (result['ok'] != true) {
+      return _err(result['error']?.toString() ?? 'objetivo no editable');
+    }
+    await _pumpFrames(frames: _settleFrames);
+    return _ok({
+      'target': result['target'],
+      'text': result['text'],
+      'length': result['length'],
+    });
+  });
+
   developer.registerExtension('ext.vinabike.input.scroll', (_, params) async {
     final at = _offset(params);
     if (at == null) return _err('x and y are required');
@@ -328,39 +343,132 @@ Future<Map<String, Object?>> tapAgentInputTargetForTesting(
   Map<String, String> params, {
   Future<void> Function(Offset)? tap,
 }) async {
+  final resolution = _resolveAgentInputTarget(params);
+  final target = resolution.target;
+  if (target == null) {
+    return {'ok': false, 'error': resolution.error};
+  }
+  await (tap ?? _tap)(target.tapPoint);
+  return {'ok': true, 'tapped': target.toJson()};
+}
+
+/// Enters text through Flutter's real [EditableTextState] instead of mutating
+/// the macOS accessibility proxy.
+///
+/// Flutter's macOS accessibility bridge can accept an AX value without
+/// forwarding that value to the Dart [TextEditingController]. That produces a
+/// dangerous false positive for automation: VoiceOver/AX reports the text,
+/// while the rendered field and the submit callback still see an empty value.
+/// This debug-only path uses the same user-edit pipeline as platform input, so
+/// formatters, `onChanged`, selection and the controller stay coherent.
+@visibleForTesting
+Future<Map<String, Object?>> enterTextAgentInputTargetForTesting(
+  Map<String, String> params,
+) async {
+  if (!params.containsKey('text')) {
+    return const {'ok': false, 'error': 'text es requerido'};
+  }
+
+  final resolution = _resolveAgentInputTarget(params);
+  final target = resolution.target;
+  if (target == null) {
+    return {'ok': false, 'error': resolution.error};
+  }
+
+  final editable = _findEditableTextState(target.element);
+  if (editable == null) {
+    return const {
+      'ok': false,
+      'error': 'el objetivo no contiene un campo de texto editable',
+    };
+  }
+  if (editable.widget.readOnly) {
+    return const {'ok': false, 'error': 'el campo es de solo lectura'};
+  }
+
+  final requestedText = params['text']!;
+  editable.userUpdateTextEditingValue(
+    TextEditingValue(
+      text: requestedText,
+      selection: TextSelection.collapsed(offset: requestedText.length),
+    ),
+    SelectionChangedCause.keyboard,
+  );
+
+  final actual = editable.textEditingValue;
+  return {
+    'ok': true,
+    'target': target.toJson(),
+    'text': actual.text,
+    'length': actual.text.length,
+  };
+}
+
+class _AgentInputTargetResolution {
+  const _AgentInputTargetResolution._({this.target, this.error});
+
+  const _AgentInputTargetResolution.found(_LocatedAgentInputTarget target)
+      : this._(target: target);
+
+  const _AgentInputTargetResolution.rejected(String error)
+      : this._(error: error);
+
+  final _LocatedAgentInputTarget? target;
+  final String? error;
+}
+
+_AgentInputTargetResolution _resolveAgentInputTarget(
+  Map<String, String> params,
+) {
   final matches = _locateAgentInputTargets(params['key'], params['label']);
   if (matches.isEmpty) {
-    return const {'ok': false, 'error': 'sin coincidencias: nada que tocar'};
+    return const _AgentInputTargetResolution.rejected(
+      'sin coincidencias: nada que controlar',
+    );
   }
 
   final rawIndex = params['index'];
   final int index;
   if (rawIndex == null || rawIndex.trim().isEmpty) {
     if (matches.length > 1) {
-      return {
-        'ok': false,
-        'error': '${matches.length} coincidencias; pasa index=N. '
-            '${matches.map((match) => match.label ?? match.key).toList()}',
-      };
+      return _AgentInputTargetResolution.rejected(
+        '${matches.length} coincidencias; pasa index=N. '
+        '${matches.map((match) => match.label ?? match.key).toList()}',
+      );
     }
     index = 0;
   } else {
     final parsed = int.tryParse(rawIndex);
     if (parsed == null) {
-      return {'ok': false, 'error': 'index debe ser un entero'};
+      return const _AgentInputTargetResolution.rejected(
+        'index debe ser un entero',
+      );
     }
     index = parsed;
   }
+
   if (index < 0 || index >= matches.length) {
-    return {
-      'ok': false,
-      'error': 'index $index fuera de rango (${matches.length})',
-    };
+    return _AgentInputTargetResolution.rejected(
+      'index $index fuera de rango (${matches.length})',
+    );
+  }
+  return _AgentInputTargetResolution.found(matches[index]);
+}
+
+EditableTextState? _findEditableTextState(Element target) {
+  EditableTextState? found;
+
+  void visit(Element element) {
+    if (found != null) return;
+    if (element is StatefulElement && element.state is EditableTextState) {
+      found = element.state as EditableTextState;
+      return;
+    }
+    element.visitChildren(visit);
   }
 
-  final target = matches[index];
-  await (tap ?? _tap)(target.tapPoint);
-  return {'ok': true, 'tapped': target.toJson()};
+  visit(target);
+  return found;
 }
 
 /// Recorre el árbol vivo buscando por `ValueKey<String>` o por etiqueta de
@@ -462,6 +570,7 @@ bool _widgetBlocksAgentInput(Widget widget) {
   if (widget is Semantics && widget.properties.enabled == false) return true;
   if (widget is ButtonStyleButton && !widget.enabled) return true;
   if (widget is IconButton && widget.onPressed == null) return true;
+  if (widget is TextField && widget.enabled == false) return true;
   return false;
 }
 

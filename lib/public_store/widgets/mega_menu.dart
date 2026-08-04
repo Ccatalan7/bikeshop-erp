@@ -276,8 +276,6 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
     final overlayState = Overlay.of(context);
     final overlayRenderBox =
         overlayState.context.findRenderObject() as RenderBox?;
-    final overlayGlobalOrigin =
-        overlayRenderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
     final screenHeight = overlayRenderBox?.hasSize == true
         ? overlayRenderBox!.size.height
         : MediaQuery.sizeOf(context).height;
@@ -287,11 +285,19 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
         _buttonKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
 
-    final buttonPosition =
-        renderBox.localToGlobal(Offset.zero) - overlayGlobalOrigin;
-    final buttonSize = renderBox.size;
+    // The Overlay's RenderBox is the ONE owner of coordinate conversion:
+    // every global point maps into overlay space through globalToLocal, so
+    // ancestor transforms (e.g. the ERP Preview 0.8 window zoom) are
+    // inverted exactly once. Subtracting overlay/global origins by hand
+    // reuses a transformed physical delta as an overlay-local logical
+    // coordinate (double-scaling under zoom), and adding an untransformed
+    // size.height to such a delta compounds the error.
+    Offset toOverlay(Offset global) =>
+        overlayRenderBox?.globalToLocal(global) ?? global;
 
-    final buttonBottom = buttonPosition.dy + buttonSize.height;
+    final buttonBottom = toOverlay(
+      renderBox.localToGlobal(Offset(0, renderBox.size.height)),
+    ).dy;
 
     // Panel placement: Prefer exact Header Bottom, fallback to Button Bottom
     double panelTop;
@@ -302,7 +308,7 @@ class _MegaMenuButtonState extends State<MegaMenuButton> {
       // Header geometry is reported globally, while Positioned uses the
       // nearest Overlay's coordinate space. Convert before placing the panel.
       final headerBottomInOverlay =
-          reportedHeaderBottom - overlayGlobalOrigin.dy;
+          toOverlay(Offset(0, reportedHeaderBottom)).dy;
       // A stale measurement must never place the panel over its own trigger.
       panelTop = headerBottomInOverlay > buttonBottom
           ? headerBottomInOverlay
@@ -1133,8 +1139,24 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     final hasStructuredBranches = roots.any(
       (root) => _visibleDesktopNodes(root.children).isNotEmpty,
     );
-    final active = roots.contains(_currentHoveredCategory)
+    // A structured rail ALWAYS has a visible active branch: the hovered one
+    // when it exists, otherwise deterministically the FIRST root that
+    // actually has visible children (a mixed rail may start with a flat
+    // link, which cannot own the detail body). The panel therefore opens
+    // full-height with stable topology from its first frame — a body
+    // appearing mid-gesture used to move the rail's hit targets and swallow
+    // the first click. The blank-rail collapse timer now returns to this
+    // default branch instead of collapsing the body. This SAME effective
+    // branch drives body and rail highlight: deriving them separately let
+    // the body show a branch while no tab was marked active.
+    final hovered = roots.contains(_currentHoveredCategory)
         ? _currentHoveredCategory
+        : null;
+    final active = hasStructuredBranches
+        ? hovered ??
+            roots.firstWhere(
+              (root) => _visibleDesktopNodes(root.children).isNotEmpty,
+            )
         : null;
     final drilldownKey = _drilldownPath.map((node) => node.id).join('/');
 
@@ -1160,6 +1182,7 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
           context,
           roots: roots,
           showSections: hasStructuredBranches,
+          activeBranch: active,
         ),
         if (body != null)
           Flexible(
@@ -1173,6 +1196,9 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
     BuildContext context, {
     required List<WebsiteNavigation> roots,
     required bool showSections,
+    // The ONE effective active branch shared with the panel body — never a
+    // second derivation from transient hover state.
+    WebsiteNavigation? activeBranch,
   }) {
     final theme = Theme.of(context);
     final foreground = widget.panelRailForegroundColor;
@@ -1197,8 +1223,7 @@ class _MegaMenuOverlayState extends State<_MegaMenuOverlay>
                             .map(
                               (root) => _MegaMenuSectionTab(
                                 label: root.label,
-                                isActive:
-                                    _currentHoveredCategory?.id == root.id,
+                                isActive: activeBranch?.id == root.id,
                                 foregroundColor: foreground,
                                 onHoverChanged: (isHovered) =>
                                     _handleSectionHover(root, isHovered),

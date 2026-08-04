@@ -13,6 +13,7 @@ import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/models/website_seo_settings_aliases.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/theme/website_resolved_theme.dart';
 import '../../modules/website/widgets/website_editor_document_binding.dart';
 import '../../shared/utils/seo_helper.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -52,12 +53,9 @@ class _PublicPolicyView extends StatelessWidget {
     required this.isStale,
   });
 
-  static const _ink = PublicStoreTheme.textPrimary;
-  static const _muted = PublicStoreTheme.textSecondary;
-  static const _line = PublicStoreTheme.divider;
-
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final meta = _PolicyMeta.forSlug(slug, fallbackTitle);
     final configuredTitle = page?.title.trim() ?? '';
     final configuredSummary = page?.metaDescription?.trim() ?? '';
@@ -73,7 +71,7 @@ class _PublicPolicyView extends StatelessWidget {
     return Container(
       key: const ValueKey<String>('static-policy-public-view'),
       width: double.infinity,
-      color: Colors.white,
+      color: colorScheme.surface,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1120),
@@ -287,6 +285,7 @@ class _PolicyHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -302,22 +301,22 @@ class _PolicyHero extends StatelessWidget {
         const SizedBox(height: 24),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: null,
             fontSize: 32,
             fontWeight: FontWeight.w800,
             height: 1.1,
             letterSpacing: -0.5,
-            color: _PublicPolicyView._ink,
+            color: colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 12),
         Text(
           summary,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             height: 1.5,
-            color: _PublicPolicyView._muted,
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -380,6 +379,7 @@ class _PolicyNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     const orderedSlugs = [
       'nosotros',
       'envios',
@@ -424,17 +424,17 @@ class _PolicyNav extends StatelessWidget {
                     _PolicyMeta.forSlug(slug, slug).icon,
                     size: 16,
                     color: currentSlug == slug
-                        ? _PublicPolicyView._ink
-                        : _PublicPolicyView._muted,
+                        ? colorScheme.onSurface
+                        : colorScheme.onSurfaceVariant,
                   ),
                   onSelected: (_) =>
                       PublicStoreLayout.navigateToHref(context, '/$slug'),
-                  selectedColor: const Color(0xFFF1F5F9),
-                  backgroundColor: Colors.white,
+                  selectedColor: colorScheme.surfaceContainerLow,
+                  backgroundColor: colorScheme.surface,
                   side: BorderSide(
                     color: currentSlug == slug
                         ? Colors.transparent
-                        : _PublicPolicyView._line,
+                        : colorScheme.outlineVariant,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
@@ -444,8 +444,8 @@ class _PolicyNav extends StatelessWidget {
                     fontWeight:
                         currentSlug == slug ? FontWeight.w700 : FontWeight.w500,
                     color: currentSlug == slug
-                        ? _PublicPolicyView._ink
-                        : _PublicPolicyView._muted,
+                        ? colorScheme.onSurface
+                        : colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -470,15 +470,17 @@ class _NavButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final meta = _PolicyMeta.forSlug(slug, slug);
+    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
-      hoverColor: const Color(0xFFF8FAFC),
+      hoverColor: colorScheme.surfaceContainerLow,
       child: Container(
         constraints: const BoxConstraints(minHeight: 48),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFF1F5F9) : Colors.transparent,
+          color:
+              isSelected ? colorScheme.surfaceContainerLow : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -487,8 +489,8 @@ class _NavButton extends StatelessWidget {
               meta.icon,
               size: 18,
               color: isSelected
-                  ? _PublicPolicyView._ink
-                  : _PublicPolicyView._muted,
+                  ? colorScheme.onSurface
+                  : colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -498,8 +500,8 @@ class _NavButton extends StatelessWidget {
                   fontSize: 15,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   color: isSelected
-                      ? _PublicPolicyView._ink
-                      : _PublicPolicyView._muted,
+                      ? colorScheme.onSurface
+                      : colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -517,6 +519,7 @@ class _PolicyContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -524,11 +527,11 @@ class _PolicyContent extends StatelessWidget {
           if (i > 0) const SizedBox(height: 48),
           Text(
             sections[i].title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.3,
-              color: _PublicPolicyView._ink,
+              color: colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 16),
@@ -537,10 +540,10 @@ class _PolicyContent extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 16),
               child: Text(
                 paragraph,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   height: 1.65,
-                  color: _PublicPolicyView._muted,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -573,11 +576,12 @@ class _PolicyItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -586,10 +590,10 @@ class _PolicyItemCard extends StatelessWidget {
           if (item.title.isNotEmpty)
             Text(
               item.title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: _PublicPolicyView._ink,
+                color: colorScheme.onSurface,
               ),
             ),
           if (item.title.isNotEmpty && item.body.isNotEmpty)
@@ -597,10 +601,10 @@ class _PolicyItemCard extends StatelessWidget {
           if (item.body.isNotEmpty)
             Text(
               item.body,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 height: 1.5,
-                color: Color(0xFF475569),
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
         ],
@@ -616,10 +620,11 @@ class _PublicPolicyUnavailableView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       key: const ValueKey<String>('static-policy-unavailable-view'),
       width: double.infinity,
-      color: Colors.white,
+      color: colorScheme.surface,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
@@ -628,31 +633,31 @@ class _PublicPolicyUnavailableView extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
+                Icon(
                   Icons.info_outline,
                   size: 48,
-                  color: PublicStoreTheme.textSecondary,
+                  color: colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(height: 20),
                 Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
                     height: 1.15,
-                    color: PublicStoreTheme.textPrimary,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   'Esta página no tiene contenido público disponible en este '
                   'momento.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
                     height: 1.5,
-                    color: PublicStoreTheme.textSecondary,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -1279,9 +1284,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
           // too would double the reload.
           if (mounted) {
             try {
-              context
-                  .read<WebsiteEditModeProvider>()
-                  .revokeEditorEntryLease();
+              context.read<WebsiteEditModeProvider>().revokeEditorEntryLease();
             } catch (_) {}
           }
         }
@@ -1294,8 +1297,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
               requestLease == null ||
               currentLease.fingerprint != requestLease.fingerprint ||
               currentLease.authorityEpoch != requestLease.authorityEpoch ||
-              requestGeneration !=
-                  editProvider?.editorEntryLeaseGeneration ||
+              requestGeneration != editProvider?.editorEntryLeaseGeneration ||
               requestIdentityRevision !=
                   editProvider?.editorEntryLeaseIdentityRevision ||
               requestServiceEpoch != websiteService.identityEpoch ||
@@ -1661,7 +1663,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
     final editProvider = context.watch<WebsiteEditModeProvider>();
-    final websiteService = context.watch<WebsiteService>();
+    context.watch<WebsiteService>();
     final isEditMode = editProvider.isEditMode;
 
     // Audience guard: editor-provenance content must never render a single
@@ -1686,8 +1688,8 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     // transition); while the desired editor audience is still pending, this
     // page keeps rendering its safe state and never binds a public snapshot
     // into the editor session.
-    final desiredEditorAudience = editProvider.isInEditorContext &&
-        editProvider.editorEntryLeaseGranted;
+    final desiredEditorAudience =
+        editProvider.isInEditorContext && editProvider.editorEntryLeaseGranted;
     final audienceSatisfied = desiredEditorAudience
         ? (_retainedProvenance == StaticPolicyRetainedProvenance.editor &&
             _editorLease != null &&
@@ -1718,52 +1720,16 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
         ? editProvider.blocks
         : _blocks;
 
-    String eff(String key, String fallback) {
-      if (editProvider.isInEditorContext) {
-        return editProvider.getEffectiveThemeSetting(key, fallback);
-      }
-      return fallback;
-    }
-
-    // Get theme from WebsiteService (already cached), with live-preview overrides
-    final primaryColor = _parseColor(eff('theme_primary_color',
-            websiteService.getSetting('theme_primary_color', ''))) ??
-        const Color(0xFF2E7D32);
-    final accentColor = _parseColor(eff('theme_accent_color',
-            websiteService.getSetting('theme_accent_color', ''))) ??
-        const Color(0xFFFF6F00);
-    final headingFont = eff(
-      'theme_heading_font',
-      websiteService.getSetting('theme_heading_font', 'Oswald'),
-    );
-    final bodyFont = eff(
-      'theme_body_font',
-      websiteService.getSetting('theme_body_font', 'Barlow'),
-    );
-    final headingSize = double.tryParse(
-          eff('theme_heading_size',
-              websiteService.getSetting('theme_heading_size', '48')),
-        ) ??
-        48.0;
-    final bodySize = double.tryParse(
-          eff('theme_body_size',
-              websiteService.getSetting('theme_body_size', '16')),
-        ) ??
-        16.0;
-    final sectionSpacing = WebsitePageComposition.resolveSectionSpacing(
-      eff(
-        'theme_section_spacing',
-        websiteService.getSetting('theme_section_spacing', '64'),
-      ),
-    );
-    final containerPadding = double.tryParse(
-          eff('theme_container_padding',
-              websiteService.getSetting('theme_container_padding', '24')),
-        ) ??
-        24.0;
-    final textColor = _parseColor(eff('theme_text_color',
-            websiteService.getSetting('theme_text_color', ''))) ??
-        Colors.black87;
+    final resolvedTheme = WebsiteResolvedTheme.of(context);
+    final primaryColor = resolvedTheme.primaryColor;
+    final accentColor = resolvedTheme.accentColor;
+    final headingFont = resolvedTheme.headingFont;
+    final bodyFont = resolvedTheme.bodyFont;
+    final headingSize = resolvedTheme.headingSize;
+    final bodySize = resolvedTheme.bodySize;
+    final sectionSpacing = resolvedTheme.sectionSpacing;
+    final containerPadding = resolvedTheme.containerPadding;
+    final textColor = resolvedTheme.textColor;
 
     if (_loading && !_canRenderRetainedPublicContent) {
       final minHeight = MediaQuery.sizeOf(context).height * 0.55;
@@ -1913,30 +1879,5 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       availablePolicySlugs: _availablePolicySlugs,
       isStale: false,
     );
-  }
-
-  Color? _parseColor(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return null;
-    try {
-      var cleaned = trimmed.toLowerCase();
-      if (cleaned.startsWith('color(')) {
-        cleaned = cleaned.replaceAll(RegExp(r'color\(|\)'), '');
-      }
-      int? intValue = int.tryParse(cleaned);
-      if (intValue == null && cleaned.startsWith('0x')) {
-        intValue = int.tryParse(cleaned);
-      }
-      if (intValue == null) {
-        cleaned = cleaned.replaceAll('#', '');
-        intValue = int.tryParse(cleaned, radix: 16);
-        if (intValue != null && cleaned.length <= 6) {
-          intValue = 0xFF000000 | intValue;
-        }
-      }
-      return intValue != null ? Color(intValue) : null;
-    } catch (_) {
-      return null;
-    }
   }
 }

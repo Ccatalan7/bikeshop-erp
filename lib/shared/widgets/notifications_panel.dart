@@ -150,7 +150,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
   _ActivityFilter _activityFilter = _ActivityFilter.all;
   List<Map<String, dynamic>> _periodNotifications = const [];
   List<AppStoredFile> _files = const [];
-  List<CurrentAttendanceBriefingEntry> _currentAttendances = const [];
+  List<DailyAttendanceBriefingEntry> _dailyAttendances = const [];
   StreamSubscription<AppStoredFile>? _savedFileSubscription;
   Timer? _briefingClock;
   final GlobalKey _activitySectionKey = GlobalKey();
@@ -196,7 +196,9 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       final nextDay = NotificationDigestWindow.businessToday(now: nextNow);
       setState(() => _briefingNow = nextNow);
       if (!_loadingAttendances) {
-        unawaited(_loadAttendances(silent: true));
+        unawaited(
+          _loadAttendances(silent: previousDay == nextDay),
+        );
       }
       if (previousDay != nextDay) {
         unawaited(_loadPeriodNotifications(silent: true));
@@ -292,12 +294,20 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       });
     }
     try {
+      final referenceNow = DateTime.now();
+      final todayWindow = NotificationDigestWindow.resolve(
+        period: NotificationDigestPeriod.today,
+        now: referenceNow,
+      );
       final entries =
-          await context.read<HRService>().getCurrentAttendanceBriefing();
+          await context.read<HRService>().getDailyAttendanceBriefing(
+                startsAt: todayWindow.startsAt,
+                endsAt: todayWindow.endsAt,
+              );
       if (!mounted || loadEpoch != _attendanceLoadEpoch) return;
       setState(() {
-        _currentAttendances = entries;
-        _briefingNow = DateTime.now();
+        _dailyAttendances = entries;
+        _briefingNow = referenceNow;
         _loadingAttendances = false;
         _attendancesError = null;
       });
@@ -555,7 +565,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                             child: _AttendanceNowSection(
-                              entries: _currentAttendances,
+                              entries: _dailyAttendances,
                               now: _briefingNow,
                               loading: _loadingAttendances,
                               hasError: _attendancesError != null,
@@ -2112,19 +2122,55 @@ class _AttendanceNowSection extends StatelessWidget {
     required this.onOpenEntry,
   });
 
-  final List<CurrentAttendanceBriefingEntry> entries;
+  final List<DailyAttendanceBriefingEntry> entries;
   final DateTime now;
   final bool loading;
   final bool hasError;
   final Future<void> Function() onRetry;
   final VoidCallback onOpenAll;
-  final ValueChanged<CurrentAttendanceBriefingEntry> onOpenEntry;
+  final ValueChanged<DailyAttendanceBriefingEntry> onOpenEntry;
 
   @override
   Widget build(BuildContext context) {
-    final visibleEntries = entries.take(4).toList(growable: false);
-    final peopleLabel =
-        entries.length == 1 ? '1 persona' : '${entries.length} personas';
+    final currentEntries = entries
+        .where((entry) => entry.attendance.isOngoing)
+        .toList(growable: false)
+      ..sort(
+        (first, second) {
+          final byCheckIn =
+              first.attendance.checkIn.compareTo(second.attendance.checkIn);
+          if (byCheckIn != 0) return byCheckIn;
+          return (first.attendance.id ?? '')
+              .compareTo(second.attendance.id ?? '');
+        },
+      );
+    final completedEntries = entries.where((entry) {
+      final attendance = entry.attendance;
+      return attendance.checkOut != null &&
+          (attendance.status == AttendanceStatus.completed ||
+              attendance.status == AttendanceStatus.approved);
+    }).toList(growable: false)
+      ..sort((first, second) {
+        final byCheckOut =
+            second.attendance.checkOut!.compareTo(first.attendance.checkOut!);
+        if (byCheckOut != 0) return byCheckOut;
+        final byCheckIn =
+            first.attendance.checkIn.compareTo(second.attendance.checkIn);
+        if (byCheckIn != 0) return byCheckIn;
+        return (first.attendance.id ?? '')
+            .compareTo(second.attendance.id ?? '');
+      });
+    final visibleCurrentEntries =
+        currentEntries.take(4).toList(growable: false);
+    final visibleCompletedEntries =
+        completedEntries.take(4).toList(growable: false);
+    final hiddenCount = currentEntries.length +
+        completedEntries.length -
+        visibleCurrentEntries.length -
+        visibleCompletedEntries.length;
+    final peopleLabel = currentEntries.length == 1
+        ? '1 persona'
+        : '${currentEntries.length} personas';
 
     return _OpenSection(
       title: 'Ahora en el local',
@@ -2145,44 +2191,105 @@ class _AttendanceNowSection extends StatelessWidget {
                   color: _attendanceAccent,
                   backgroundColor: _attendanceAccent.withValues(alpha: 0.12),
                 )
-              : entries.isEmpty
-                  ? const _QuietState(
-                      icon: Icons.person_off_outlined,
-                      text: 'Nadie ha marcado entrada.',
-                      accent: _attendanceAccent,
-                    )
-                  : Column(
-                      children: [
-                        for (var index = 0;
-                            index < visibleEntries.length;
-                            index++) ...[
-                          _AttendanceNowRow(
-                            entry: visibleEntries[index],
-                            now: now,
-                            onTap: () => onOpenEntry(visibleEntries[index]),
-                          ),
-                          if (index < visibleEntries.length - 1)
-                            Divider(
-                              height: 1,
-                              indent: 40,
-                              color: Theme.of(context)
-                                  .dividerColor
-                                  .withValues(alpha: 0.45),
-                            ),
-                        ],
-                        if (entries.length > visibleEntries.length)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
-                              onPressed: onOpenAll,
-                              child: Text(
-                                'Ver ${entries.length - visibleEntries.length} '
-                                'más',
-                              ),
-                            ),
+              : Column(
+                  children: [
+                    if (visibleCurrentEntries.isEmpty)
+                      _QuietState(
+                        icon: Icons.person_off_outlined,
+                        text: completedEntries.isEmpty
+                            ? 'Nadie ha marcado entrada hoy.'
+                            : 'Nadie está en el local ahora.',
+                        accent: _attendanceAccent,
+                      )
+                    else
+                      for (var index = 0;
+                          index < visibleCurrentEntries.length;
+                          index++) ...[
+                        _AttendanceNowRow(
+                          entry: visibleCurrentEntries[index],
+                          now: now,
+                          onTap: () =>
+                              onOpenEntry(visibleCurrentEntries[index]),
+                        ),
+                        if (index < visibleCurrentEntries.length - 1)
+                          Divider(
+                            height: 1,
+                            indent: 40,
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withValues(alpha: 0.45),
                           ),
                       ],
-                    ),
+                    if (visibleCompletedEntries.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Divider(
+                        height: 1,
+                        color: Theme.of(context)
+                            .dividerColor
+                            .withValues(alpha: 0.45),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 9, bottom: 2),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Turnos finalizados hoy',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ),
+                            Text(
+                              '${completedEntries.length}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      for (var index = 0;
+                          index < visibleCompletedEntries.length;
+                          index++) ...[
+                        _AttendanceNowRow(
+                          entry: visibleCompletedEntries[index],
+                          now: now,
+                          onTap: () =>
+                              onOpenEntry(visibleCompletedEntries[index]),
+                        ),
+                        if (index < visibleCompletedEntries.length - 1)
+                          Divider(
+                            height: 1,
+                            indent: 40,
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withValues(alpha: 0.45),
+                          ),
+                      ],
+                    ],
+                    if (hiddenCount > 0)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: onOpenAll,
+                          child: Text('Ver $hiddenCount más en Asistencias'),
+                        ),
+                      ),
+                  ],
+                ),
     );
   }
 }
@@ -2237,23 +2344,37 @@ class _AttendanceNowRow extends StatelessWidget {
     required this.onTap,
   });
 
-  final CurrentAttendanceBriefingEntry entry;
+  final DailyAttendanceBriefingEntry entry;
   final DateTime now;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final elapsed = _attendanceElapsed(entry.attendance.checkIn, now);
-    final needsReview = elapsed >= const Duration(hours: 18);
+    final attendance = entry.attendance;
+    final checkOut = attendance.checkOut;
+    final isCurrent = attendance.isOngoing;
+    final elapsed = _attendanceElapsed(attendance.checkIn, checkOut ?? now);
+    final needsReview = isCurrent && elapsed >= const Duration(hours: 18);
     final accent = needsReview ? _warningAccent : _attendanceAccent;
     final title = entry.employee.fullName.trim();
     final jobTitle = entry.employee.jobTitle.trim();
+    final statusLabel = isCurrent
+        ? (needsReview ? 'Revisar marcación' : 'Jornada en curso')
+        : 'Turno finalizado';
+    final timeLabel = isCurrent
+        ? 'Entrada ${_chileClockTime(attendance.checkIn)}'
+            ' · ${_attendanceDuration(elapsed)}'
+        : '${_chileClockTime(attendance.checkIn)}–'
+            '${_chileClockTime(checkOut!)} · ${_attendanceDuration(elapsed)}';
+    final semanticsTiming = isCurrent
+        ? 'entrada ${_chileClockTime(attendance.checkIn)}'
+        : 'entrada ${_chileClockTime(attendance.checkIn)}, salida '
+            '${_chileClockTime(checkOut!)}';
 
     return Semantics(
       button: true,
-      label: '${title.isEmpty ? 'Trabajador' : title}, entrada '
-          '${_chileClockTime(entry.attendance.checkIn)}, '
+      label: '${title.isEmpty ? 'Trabajador' : title}, $semanticsTiming, '
           '${_attendanceDuration(elapsed)}',
       child: InkWell(
         onTap: onTap,
@@ -2279,27 +2400,30 @@ class _AttendanceNowRow extends StatelessWidget {
                       child: Text(
                         _employeeInitials(entry.employee),
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: accent,
+                          color: isCurrent
+                              ? accent
+                              : theme.colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
-                    Positioned(
-                      right: 0,
-                      bottom: 1,
-                      child: Container(
-                        width: 9,
-                        height: 9,
-                        decoration: BoxDecoration(
-                          color: accent,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: theme.colorScheme.surface,
-                            width: 2,
+                    if (isCurrent)
+                      Positioned(
+                        right: 0,
+                        bottom: 1,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: accent,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: theme.colorScheme.surface,
+                              width: 2,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -2318,7 +2442,11 @@ class _AttendanceNowRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 1),
                     Text(
-                      jobTitle.isEmpty ? 'Jornada en curso' : jobTitle,
+                      jobTitle.isEmpty
+                          ? (isCurrent
+                              ? 'Jornada en curso'
+                              : 'Asistencia del día')
+                          : jobTitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -2347,13 +2475,13 @@ class _AttendanceNowRow extends StatelessWidget {
                         ],
                         Flexible(
                           child: Text(
-                            needsReview
-                                ? 'Revisar marcación'
-                                : 'Jornada en curso',
+                            statusLabel,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: accent,
+                              color: isCurrent
+                                  ? accent
+                                  : theme.colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -2362,8 +2490,7 @@ class _AttendanceNowRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Entrada ${_chileClockTime(entry.attendance.checkIn)}'
-                      ' · ${_attendanceDuration(elapsed)}',
+                      timeLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -3674,7 +3801,7 @@ String _attendanceDayRoute(DateTime value) {
   ).toString();
 }
 
-String _attendanceEntryRoute(CurrentAttendanceBriefingEntry entry) {
+String _attendanceEntryRoute(DailyAttendanceBriefingEntry entry) {
   final attendance = entry.attendance;
   final base = Uri.parse(_attendanceDayRoute(attendance.checkIn));
   final query = <String, String>{

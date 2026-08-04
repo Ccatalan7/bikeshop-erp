@@ -32,6 +32,10 @@ class WebsiteAboutBlockContent extends StatelessWidget {
     final imageUrl = _nonEmptyString(data['imageUrl'] ?? data['image']);
     final imageAltText = _nonEmptyString(data['imageAltText']);
     final imageOnLeft = data['imagePosition']?.toString() == 'left';
+    // The frame changes shape with the viewport — 4:3, 16:9, 3:2 — so the crop
+    // is authored per viewport. The value arrives already resolved by the
+    // projection, which is why Edit, Preview and Public frame identically.
+    final focalAlignment = _resolveFocalAlignment(data);
     final titleFormatting = _resolveFormatting(data['titleFormatting']);
     final contentFormatting = _resolveFormatting(
       data['contentFormatting'] ?? data['descriptionFormatting'],
@@ -131,6 +135,7 @@ class WebsiteAboutBlockContent extends StatelessWidget {
               context,
               imageUrl: imageUrl,
               imageAltText: imageAltText,
+              alignment: focalAlignment,
             ),
           );
 
@@ -196,6 +201,7 @@ class WebsiteAboutBlockContent extends StatelessWidget {
     BuildContext context, {
     required String? imageUrl,
     required String? imageAltText,
+    required Alignment alignment,
   }) {
     final fallback = _AboutImageFallback(
       editable: presenters?.media != null,
@@ -206,7 +212,7 @@ class WebsiteAboutBlockContent extends StatelessWidget {
       url: imageUrl,
       valueKeys: const ['imageUrl', 'image'],
       fit: BoxFit.cover,
-      alignment: Alignment.center,
+      alignment: alignment,
       fallback: fallback,
       borderRadius: BorderRadius.circular(16),
       semanticLabel: imageAltText,
@@ -233,6 +239,22 @@ class WebsiteAboutBlockContent extends StatelessWidget {
   static TextFormatting _resolveFormatting(Object? raw) {
     if (raw is! Map) return const TextFormatting();
     return TextFormatting.fromJson(Map<String, dynamic>.from(raw));
+  }
+
+  /// The authored crop, in the same 0..1 contract every other framed image in
+  /// the product uses. An absent value keeps the historical centred crop.
+  static Alignment _resolveFocalAlignment(Map<String, dynamic> data) {
+    final focalX = _finiteDouble(data['focalPointX']) ?? 0.5;
+    final focalY = _finiteDouble(data['focalPointY']) ?? 0.5;
+    return Alignment(
+      (focalX.clamp(0.0, 1.0) * 2) - 1,
+      (focalY.clamp(0.0, 1.0) * 2) - 1,
+    );
+  }
+
+  static double? _finiteDouble(Object? raw) {
+    final value = raw is num ? raw.toDouble() : double.tryParse('$raw');
+    return value != null && value.isFinite ? value : null;
   }
 
   static String? _nonEmptyString(Object? raw) {

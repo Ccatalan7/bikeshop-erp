@@ -84,6 +84,7 @@ import 'shared/services/tenant_detection_service.dart';
 import 'shared/services/backup_service.dart';
 import 'modules/spreadsheets/services/spreadsheet_service.dart';
 import 'modules/ai_assistant/services/ai_assistant_context_service.dart';
+import 'modules/ai_assistant/services/ai_assistant_session_service.dart';
 import 'shared/services/window_zoom_service.dart';
 import 'shared/services/right_toolbar_service.dart';
 import 'shared/utils/responsive_viewport.dart';
@@ -434,6 +435,28 @@ class VinabikeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => WindowZoomService()),
         ChangeNotifierProvider(create: (_) => RightToolbarService()),
         ChangeNotifierProvider(create: (_) => AIAssistantContextService()),
+        // The assistant session binds to one coherent authority. Auth alone is
+        // not enough: the ERP profile carries the tenant, role and permissions
+        // the answers are scoped by, so all three services gate it and any
+        // disagreement between them leaves the session fail-closed.
+        ChangeNotifierProxyProvider3<AuthService, TenantService,
+            CurrentUserProfileService, AIAssistantSessionService>(
+          create: (_) => AIAssistantSessionService(),
+          update: (_, authService, tenantService, currentUserProfile, session) {
+            final service = session ?? AIAssistantSessionService();
+            unawaited(
+              service.synchronize(
+                authUserId: authService.currentUser?.id,
+                profile: currentUserProfile.profile,
+                profileIsLoading: currentUserProfile.isLoading,
+                profileLoadIssue: currentUserProfile.loadIssue,
+                cachedTenantId: tenantService.currentTenantId,
+                resolveTenantId: tenantService.getTenantId,
+              ),
+            );
+            return service;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => OcrFileHandoffService()),
         ChangeNotifierProvider(create: (_) => SmartScreenshotService()),
         ChangeNotifierProvider(create: (_) => DesktopUpdateService()),

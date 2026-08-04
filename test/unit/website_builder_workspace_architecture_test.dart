@@ -7,6 +7,7 @@ import 'package:vinabike_erp/modules/website/models/website_block_capabilities.d
 import 'package:vinabike_erp/modules/website/models/website_destination.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_destination_audit_service.dart';
+import 'package:vinabike_erp/modules/website/theme/website_resolved_theme.dart';
 import 'package:vinabike_erp/modules/website/theme/website_theme_builder.dart';
 import '../support/library_source.dart';
 
@@ -72,7 +73,8 @@ void main() {
   test(
       'website top bar exposes task workspaces instead of duplicate publishers',
       () {
-    final source = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final source =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
     expect(source, contains("label: 'Editar página'"));
     expect(source, contains("label: 'Catálogo web'"));
@@ -87,10 +89,80 @@ void main() {
   test('persistent block inspector only belongs to page composition', () {
     final shell = File('lib/public_store/widgets/persistent_editor_shell.dart')
         .readAsStringSync();
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
+    final normalizedShell = shell.replaceAll(RegExp(r'\s+'), ' ');
+
+    // 1. Ownership is unchanged: the inspector belongs to Page Composition and
+    //    to no other workspace.
     expect(shell, contains('editProvider.isPageEditorWorkspace'));
-    expect(shell, contains('if (showEditorPanel)'));
+    expect(
+      normalizedShell,
+      contains(
+        'final showEditorPanel = isEditMode && '
+        'editProvider.isPageEditorWorkspace;',
+      ),
+      reason: 'Page Composition remains the only workspace that owns the '
+          'persistent block inspector.',
+    );
+
+    // 2. Ownership alone no longer materializes a pane: the geometry must also
+    //    be able to host one. The conjunction is the contract.
+    expect(
+      normalizedShell,
+      contains('final mountsPane = showEditorPanel && paneWidth != null;'),
+      reason: 'A pane requires BOTH page-composition ownership and a geometry '
+          'that supports it.',
+    );
+    expect(
+      normalizedShell,
+      contains('WebsiteEditorChromeGeometry.paneWidthFor(editorWidth)'),
+      reason: 'The pane width comes from the one geometry owner, never from a '
+          'literal decided in the shell.',
+    );
+
+    // 3. The pane is materialized only under that conjunction.
+    final paneBranch = normalizedShell.indexOf('if (mountsPane)');
+    expect(
+      paneBranch,
+      greaterThanOrEqualTo(0),
+      reason: 'The pane must be mounted under the conjunction.',
+    );
+    expect(
+      normalizedShell.indexOf('_PersistentEditorPanel(', paneBranch),
+      greaterThan(paneBranch),
+      reason: 'The inspector panel is the child of the pane branch.',
+    );
+
+    // 4. A host that cannot afford a pane mounts a contextual anchor instead,
+    //    and never the compressed side panel.
+    final contextualBranch =
+        normalizedShell.indexOf('if (showEditorPanel && paneWidth == null)');
+    expect(
+      contextualBranch,
+      greaterThan(paneBranch),
+      reason: 'The contextual host is the sibling of the pane branch.',
+    );
+    // Bounded at the end of the shell's widget tree: past it lies the panel's
+    // own class declaration, which is not a mount.
+    final buildEnd = normalizedShell.indexOf(
+      'class _PersistentEditorPanel',
+      contextualBranch,
+    );
+    expect(
+      buildEnd,
+      greaterThan(contextualBranch),
+      reason: 'The contextual branch closes the shell build method.',
+    );
+    expect(
+      normalizedShell
+          .substring(contextualBranch, buildEnd)
+          .contains('_PersistentEditorPanel('),
+      isFalse,
+      reason: 'A compact host never mounts the side panel.',
+    );
+
     expect(layout, contains('!_isConfigHubOpen'));
     expect(layout, contains("'Borrador de página preservado'"));
   });
@@ -128,7 +200,8 @@ void main() {
   });
 
   test('category publication has one website-builder owner', () {
-    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final panel = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
     final visibility =
         File('lib/modules/website/pages/product_website_visibility_page.dart')
             .readAsStringSync();
@@ -148,7 +221,8 @@ void main() {
 
   test('catalog workspace separates publication, filtering, and homepage order',
       () {
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final visibility =
         File('lib/modules/website/pages/product_website_visibility_page.dart')
             .readAsStringSync();
@@ -331,7 +405,8 @@ void main() {
   test('ERP Preview mounts canonical product detail routes', () {
     final appRouter =
         File('lib/shared/routes/app_router.dart').readAsStringSync();
-    final storeLayout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final storeLayout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final productDetail = File(
       'lib/public_store/pages/product_detail_page.dart',
     ).readAsStringSync();
@@ -377,7 +452,8 @@ void main() {
   });
 
   test('Edit and Preview keep routed Navigator ancestors stable', () {
-    final storeLayout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final storeLayout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
     expect(
       storeLayout,
@@ -539,7 +615,8 @@ void main() {
     final workspace = File(
       'lib/modules/website/pages/product_website_visibility_page.dart',
     ).readAsStringSync();
-    final service = readLibrarySource('lib/modules/website/services/website_service.dart');
+    final service =
+        readLibrarySource('lib/modules/website/services/website_service.dart');
     final catalog = File(
       'lib/public_store/pages/product_catalog_page.dart',
     ).readAsStringSync();
@@ -553,7 +630,8 @@ void main() {
         File('lib/shared/utils/seo_helper.dart').readAsStringSync();
     final seoHelperWeb =
         File('lib/shared/utils/seo_helper_web.dart').readAsStringSync();
-    final storeLayout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final storeLayout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final router = File('lib/shared/routes/app_router.dart').readAsStringSync();
 
     expect(model, contains('class WebsiteCatalogPresentation'));
@@ -739,8 +817,10 @@ void main() {
   });
 
   test('header and legacy content no longer compete with canonical owners', () {
-    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final panel = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final router = File('lib/shared/routes/app_router.dart').readAsStringSync();
 
     expect(panel, isNot(contains('header_nav_links')));
@@ -769,7 +849,8 @@ void main() {
     final catalog =
         File('lib/modules/website/pages/product_website_visibility_page.dart')
             .readAsStringSync();
-    final service = readLibrarySource('lib/modules/website/services/website_service.dart');
+    final service =
+        readLibrarySource('lib/modules/website/services/website_service.dart');
 
     expect(catalog, contains('updateProductWebsiteVisibilityBatch'));
     expect(catalog, contains('replaceWebsiteCategoryVisibility'));
@@ -882,19 +963,23 @@ void main() {
     final base = ThemeData.light();
     final pillLargeTheme = WebsiteThemeBuilder.build(
       base: base,
-      primaryColor: base.colorScheme.primary,
-      accentColor: base.colorScheme.secondary,
-      backgroundColor: base.colorScheme.surface,
-      buttonStyle: 'pill',
-      buttonSize: 'large',
+      resolved: WebsiteResolvedTheme.fallback.copyWith(
+        primaryColor: base.colorScheme.primary,
+        accentColor: base.colorScheme.secondary,
+        backgroundColor: base.colorScheme.surface,
+        buttonStyle: 'pill',
+        buttonSize: 'large',
+      ),
     );
     final sharpSmallTheme = WebsiteThemeBuilder.build(
       base: base,
-      primaryColor: base.colorScheme.primary,
-      accentColor: base.colorScheme.secondary,
-      backgroundColor: base.colorScheme.surface,
-      buttonStyle: 'sharp',
-      buttonSize: 'small',
+      resolved: WebsiteResolvedTheme.fallback.copyWith(
+        primaryColor: base.colorScheme.primary,
+        accentColor: base.colorScheme.secondary,
+        backgroundColor: base.colorScheme.surface,
+        buttonStyle: 'sharp',
+        buttonSize: 'small',
+      ),
     );
     final pillLargeStyle = pillLargeTheme.elevatedButtonTheme.style!;
     final sharpSmallStyle = sharpSmallTheme.elevatedButtonTheme.style!;
@@ -919,6 +1004,22 @@ void main() {
     );
   });
 
+  test('theme values have no direct service writer bypassing the staged draft',
+      () {
+    final service =
+        readLibrarySource('lib/modules/website/services/website_service.dart');
+
+    // Theme settings stage through WebsiteEditModeProvider and persist only
+    // via the global save pipeline. A direct upsert writer on the service is
+    // a second save owner and must not come back.
+    expect(service, isNot(contains('updateThemeColors')),
+        reason: 'updateThemeColors was a dead direct theme writer; theme '
+            'values stage through the provider draft and global Guardar.');
+    expect(service, isNot(contains('updateThemeSettings')),
+        reason: 'updateThemeSettings was a dead direct theme writer; theme '
+            'values stage through the provider draft and global Guardar.');
+  });
+
   test('carousel campaigns reuse the universal Canvas layer system', () {
     final publicRenderer =
         File('lib/modules/website/widgets/website_block_renderer.dart')
@@ -926,7 +1027,8 @@ void main() {
     final editableRenderer =
         File('lib/modules/website/widgets/editable_block_renderer.dart')
             .readAsStringSync();
-    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final panel = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
     final canvas = File('lib/modules/website/widgets/canvas_block.dart')
         .readAsStringSync();
 
@@ -945,10 +1047,28 @@ void main() {
       contains('carouselEditBinding: carouselEditBinding'),
     );
     expect(editableRenderer, contains('canvasEditBinding: canvasEditBinding'));
+    // 7B: the renderer no longer hands a rebuilt `elements` list to a repeater
+    // writer. Every Canvas mutation is an atomic command addressed by layer
+    // identity, so a whole-list writer is now a defect, not the contract.
     expect(
       editableRenderer,
-      contains("updates: <String, dynamic>{'elements': elements}"),
+      isNot(contains("updates: <String, dynamic>{'elements': elements}")),
+      reason: 'reemplazar la lista pisa los overrides que viven en las capas',
     );
+    expect(
+      RegExp(r"updateBlockRepeaterItemMultiple[^;]*'elements'", dotAll: true)
+          .hasMatch(editableRenderer),
+      isFalse,
+    );
+    for (final command in const <String>[
+      'editProvider.insertCanvasLayer(',
+      'editProvider.removeCanvasLayer(',
+      'editProvider.duplicateCanvasLayer(',
+      'editProvider.setCanvasLayerProperties(',
+      'editProvider.reorderCanvasLayer(',
+    ]) {
+      expect(editableRenderer, contains(command));
+    }
     expect(editableRenderer, contains('selectBlock(widget.blockId)'));
     expect(editableRenderer, contains('onBackgroundTap:'));
     // Slide media editing stays on the canonical picker workflow in the
@@ -956,7 +1076,10 @@ void main() {
     expect(panel, contains("slide['imageUrl']"));
     expect(panel, contains("label: 'Diseño avanzado por capas'"));
     expect(panel, contains('elementsOnly: true'));
-    expect(panel, contains("_addElement('shape')"));
+    // "Agregar capa" is a provider command that addresses the exact slide, and
+    // it needs the context to say so when a target cannot take a layer.
+    expect(panel, contains("_addElement(context, 'shape')"));
+    expect(panel, contains('provider.addCanvasElementToCanvasBlock('));
     expect(canvas, contains("case 'shape':"));
     expect(canvas, contains('WebsiteActionButton('));
     expect(canvas, contains("'constrainElementsToSafeArea'"));
@@ -973,8 +1096,8 @@ void main() {
             .readAsStringSync();
     final canvas = File('lib/modules/website/widgets/canvas_block.dart')
         .readAsStringSync();
-    final inspector =
-        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final inspector = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
 
     expect(factory, contains("'imageSource': 'manual'"));
     expect(canvas, contains("imageSource != 'manual'"));
@@ -988,8 +1111,8 @@ void main() {
     final toolbar =
         File('lib/modules/website/widgets/canvas_block_toolbar.dart')
             .readAsStringSync();
-    final inspector =
-        readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final inspector = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
     final dialog = File(
       'lib/modules/website/widgets/website_background_removal_dialog.dart',
     ).readAsStringSync();
@@ -1028,7 +1151,8 @@ void main() {
   });
 
   test('inspector uses task navigation and progressive control groups', () {
-    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final panel = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
 
     expect(
         panel, contains('enum _InspectorSection { content, layout, style }'));
@@ -1038,6 +1162,15 @@ void main() {
     expect(panel, contains('_scrollController.jumpTo(0)'));
     expect(panel, contains("title: 'Comportamiento del carrusel'"));
     expect(panel, contains("title: 'Imagen y encuadre'"));
+    // The carousel slide background renders passively in the canvas
+    // (inspectorOnly affordance), so the inspector must consume the canonical
+    // responsive media owner instead of rebuilding a local picker/focal pair.
+    expect(
+      panel,
+      contains('WebsiteResponsiveMediaBinding.repeaterItem('),
+      reason: 'the passive carousel background is edited through the shared '
+          'responsive media binding',
+    );
     expect(panel, contains("title: 'Contenido y origen'"));
     expect(panel, contains("title: 'Información visible'"));
     expect(panel, contains('class _SchemaRepeaterEditor'));
@@ -1052,6 +1185,10 @@ void main() {
             .readAsStringSync();
     expect(editableRenderer,
         contains('onPointerDown: (_) => editProvider.selectBlock'));
+    // Complements (never replaces) the behavioural end-to-end guard in
+    // carousel_hero_background_edit_affordance_test.dart: the productive
+    // media presenter must forward the slot's affordance policy.
+    expect(editableRenderer, contains('editAffordance: slot.editAffordance'));
   });
 
   test('carousel slide selection is transient and shared with the canvas', () {
@@ -1089,12 +1226,17 @@ void main() {
   });
 
   test('rotation is one persisted transform for every Canvas element type', () {
-    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final panel = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
     final canvas = File('lib/modules/website/widgets/canvas_block.dart')
         .readAsStringSync();
 
     expect(RegExp("label: 'Rotación'").allMatches(panel).length, 1);
-    expect(panel, contains("_updateElement(activeId!, {'rotation': v})"));
+    // 7B-3A: rotation is a per-viewport geometry property like any other, so
+    // the inspector resolves and writes it through the canonical Canvas
+    // binding instead of patching the layer map itself.
+    expect(panel, contains("surface.number('rotation'"));
+    expect(panel, isNot(contains('_updateElement(')));
     expect(panel, contains('Restablecer rotación'));
     expect(canvas, contains("final rotationDegrees = (el['rotation']"));
     expect(canvas, contains('Transform.rotate('));
@@ -1109,7 +1251,8 @@ void main() {
     final factory =
         File('lib/modules/website/models/canvas_element_factory.dart')
             .readAsStringSync();
-    final panel = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final panel = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
     final provider =
         File('lib/modules/website/providers/website_edit_mode_provider.dart')
             .readAsStringSync();
@@ -1128,11 +1271,17 @@ void main() {
     expect(toolbar, contains("ValueKey('toolbar_align_left')"));
     expect(toolbar, isNot(contains('PopupMenuButton')));
     expect(toolbar, isNot(contains('Tooltip(')));
-    expect(panel, contains("label: 'Encuadre horizontal'"));
+    // 7B-3A: the pair of axis sliders became ONE focal control, contextual to
+    // the previewed viewport and written as a single x+y transaction.
+    expect(panel, contains("label: 'Encuadre de la imagen'"));
+    expect(panel, isNot(contains("label: 'Encuadre horizontal'")));
+    expect(panel, isNot(contains("label: 'Encuadre vertical'")));
     expect(panel, contains("label: 'Bloquear ajustes directos'"));
     expect(factory, contains("'rotation': 0.0"));
     expect(factory, contains("'focalPointX': 0.5"));
-    expect(panel, contains('createCanvasElement(id: id, type: type)'));
+    // The inspector no longer mints layers itself: the provider command owns
+    // the identity, the insertion and the selection that follows it.
+    expect(panel, isNot(contains('createCanvasElement(')));
     expect(
         provider, contains('createCanvasElement(id: id, type: elementType)'));
   });

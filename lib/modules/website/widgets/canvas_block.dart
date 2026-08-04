@@ -8,9 +8,12 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_action.dart';
 import '../models/canvas_element_factory.dart';
+import '../models/website_canvas_responsive_document.dart';
 import '../models/website_editor_drag_payload.dart';
+import '../models/website_responsive_authoring.dart';
 import '../services/website_background_removal_service.dart';
 import 'canvas_block_toolbar.dart';
+import 'website_canvas_editor_binding.dart';
 import 'website_background_removal_dialog.dart';
 import 'website_action_button.dart';
 import 'website_media_picker.dart';
@@ -59,11 +62,19 @@ class CanvasBlock extends StatefulWidget {
   final bool fillAvailableHeight;
   final bool clipContentToBounds;
 
+  /// The editor's atomic command surface.
+  ///
+  /// When present, every property change goes through it and the whole-list
+  /// [onElementsChanged] is never used for one. It stays null for Preview,
+  /// Public and for direct consumers that only wire the legacy callbacks.
+  final WebsiteCanvasEditorBinding? editorBinding;
+
   const CanvasBlock({
     super.key,
     required this.data,
     required this.editable,
     required this.accentColor,
+    this.editorBinding,
     this.activeElementId,
     this.onElementsChanged,
     this.onActiveElementChanged,
@@ -401,10 +412,190 @@ class _CanvasBlockState extends State<CanvasBlock> {
   /// Both modes scale to/from this, so element positions stay consistent.
   static const double _kReferenceWidth = 1200.0;
 
+  // ------------------------------------------------------- effective document
+  //
+  // Presentation is read through `WebsiteCanvasResponsiveDocument`. This file
+  // no longer resolves `mobileDesignWidth`, `mobileFocalPointX/Y`,
+  // `hideOnMobile` or `showOnMobile` itself, and no longer classifies from the
+  // ERP window: the owner resolves them from the CANVAS's own logical width.
+  // The projection is read-only — `_elements` stays the raw authoring list and
+  // nothing here writes a document back.
+
+  Map<String, dynamic>? _projectedData;
+  List<WebsiteCanvasLayerProjection> _projectedLayers =
+      const <WebsiteCanvasLayerProjection>[];
+  double? _projectedForWidth;
+  WebsiteViewport _projectedViewport = WebsiteViewport.desktop;
+
+  /// Ephemeral per-layer patches for the gesture in flight.
+  ///
+  /// They are applied AFTER the projection, so a drag on the phone moves the
+  /// layer from its EFFECTIVE position instead of snapping back to the base
+  /// one. Nothing here is persisted: the gesture ends with one atomic command
+  /// and the draft is dropped, and a cancel drops it without writing.
+  final Map<String, Map<String, dynamic>> _layerDrafts =
+      <String, Map<String, dynamic>>{};
+
+  /// What the owner projects: persisted block data with the live authoring
+  /// layer list, so a drag in progress renders from the same source it edits.
+  Map<String, dynamic> _sourceDocument() {
+    return <String, dynamic>{
+      ...widget.data,
+      WebsiteCanvasResponsivePolicy.elementsKey: _elements,
+    };
+  }
+
+  /// The viewport this Canvas renders for, classified from the canvas width.
+  ///
+  /// A canonical document is classified by its owner (600/900). A legacy
+  /// document is deliberately NOT reclassified by the document bands: 640/1024
+  /// would move the compact boundary this file has always drawn at
+  /// [WebsiteCanvasResponsiveDocument.legacyCanvasCompactWidth], so every
+  /// legacy site with a `hideOnMobile`/`showOnMobile` layer or a
+  /// `mobileDesignWidth` would change appearance between 600 and 639 px.
+  /// Legacy data carries no other per-viewport value — its mobile aliases and
+  /// flags are all it has — so tablet and desktop resolve identically for it.
+  WebsiteViewport _viewportForCanvasWidth(
+    Map<String, dynamic> document,
+    double canvasW,
+  ) {
+    if (WebsiteCanvasResponsiveDocument.isCanonical(document)) {
+      return WebsiteCanvasResponsiveDocument.viewportForCanvasWidth(
+        document,
+        canvasW,
+      );
+    }
+    return canvasW < WebsiteCanvasResponsiveDocument.legacyCanvasCompactWidth
+        ? WebsiteViewport.mobile
+        : WebsiteViewport.desktop;
+  }
+
+  /// Recomputes the effective document for [canvasW].
+  ///
+  /// Called once per layout, before anything reads a presentation value,
+  /// because the geometry helpers below also serve gesture math between
+  /// builds.
+  void _refreshProjection(double canvasW) {
+    final document = _sourceDocument();
+    final viewport = _viewportForCanvasWidth(document, canvasW);
+    _projectedForWidth = canvasW;
+    _projectedViewport = viewport;
+    _projectedData = WebsiteCanvasResponsiveDocument.project(
+      data: document,
+      viewport: viewport,
+    );
+    final projected = WebsiteCanvasResponsiveDocument.projectLayers(
+      data: document,
+      viewport: viewport,
+    );
+    _projectedLayers = _layerDrafts.isEmpty
+        ? projected
+        : <WebsiteCanvasLayerProjection>[
+            for (final layer in projected)
+              if (_layerDrafts[layer.id] case final draft?)
+                WebsiteCanvasLayerProjection(
+                  id: layer.id,
+                  kind: layer.kind,
+                  data: <String, dynamic>{...layer.data, ...draft},
+                  visible: layer.visible,
+                  order: layer.order,
+                )
+              else
+                layer,
+          ];
+  }
+
+  /// The effective values of one layer for this viewport, gesture draft
+  /// included. Every gesture, the toolbar, the handles, the snapping targets
+  /// and the keyboard read geometry from here — never from the raw base list.
+  ///
+  /// The draft is merged HERE as well as in [_refreshProjection], and that is
+  /// deliberate rather than redundant: two pointer events can arrive before
+  /// the next frame, and a reader that only saw the projection would hand the
+  /// second one the value from before the first, silently dropping a delta.
+  /// Re-applying the same draft is idempotent.
+  Map<String, dynamic> _layerFor(String id) {
+    for (final layer in _projectedLayers) {
+      if (layer.id != id) continue;
+      final draft = _layerDrafts[id];
+      if (draft == null || draft.isEmpty) return layer.data;
+      return <String, dynamic>{...layer.data, ...draft};
+    }
+    return const <String, dynamic>{};
+  }
+
+  /// The attribution of the next write, read at write time.
+  WebsiteWriteScope get _writeScope =>
+      widget.editorBinding?.writeScope?.call() ?? WebsiteWriteScope.shared;
+
+  /// One atomic property write for one layer.
+  ///
+  /// Returns false only when no command is wired, which is the legacy path
+  /// kept for direct consumers and tests.
+  bool _commandSetLayer(String id, Map<String, Object?> patch) {
+    final command = widget.editorBinding?.setLayerProperties;
+    if (command == null || patch.isEmpty) return false;
+    command(id, patch, scope: _writeScope, viewport: _projectedViewport);
+    return true;
+  }
+
+  bool _commandReorder(String id, int targetIndex) {
+    final command = widget.editorBinding?.reorderLayer;
+    if (command == null) return false;
+    command(id, targetIndex, scope: _writeScope, viewport: _projectedViewport);
+    return true;
+  }
+
+  /// Starts or extends the ephemeral draft for [id].
+  void _draftPatch(String id, Map<String, dynamic> patch) {
+    setState(() {
+      _layerDrafts[id] = <String, dynamic>{...?_layerDrafts[id], ...patch};
+      _projectedForWidth = null;
+    });
+  }
+
+  /// Ends a gesture: one command with the exact patch, then the draft goes.
+  ///
+  /// Without a command wired the same patch is applied to the legacy list, so
+  /// a direct consumer keeps working.
+  void _commitDraft(String id, Iterable<String> keys) {
+    final draft = _layerDrafts[id];
+    if (draft == null) {
+      setState(() => _projectedForWidth = null);
+      return;
+    }
+    final patch = <String, Object?>{
+      for (final key in keys)
+        if (draft.containsKey(key)) key: draft[key],
+    };
+    setState(() {
+      _layerDrafts.remove(id);
+      _projectedForWidth = null;
+    });
+    if (patch.isEmpty) return;
+    if (_commandSetLayer(id, patch)) return;
+    _legacyPatchElement(id, patch);
+  }
+
+  /// Drops the gesture draft without writing anything.
+  void _cancelDraft(String id) {
+    if (!_layerDrafts.containsKey(id)) return;
+    setState(() {
+      _layerDrafts.remove(id);
+      _projectedForWidth = null;
+    });
+  }
+
+  /// The effective block values for the width laid out last.
+  Map<String, dynamic> _effectiveData() => _projectedData ?? widget.data;
+
   double _computeDesignWidth(double canvasW) {
-    final raw = canvasW < 600 && widget.data['mobileDesignWidth'] != null
-        ? widget.data['mobileDesignWidth']
-        : widget.data['designWidth'];
+    // Gesture math can ask before the first layout, or after the canvas was
+    // resized without a rebuild of this subtree.
+    if (_projectedData == null || _projectedForWidth != canvasW) {
+      _refreshProjection(canvasW);
+    }
+    final raw = _effectiveData()['designWidth'];
     final explicit = raw is num ? raw.toDouble() : double.tryParse('$raw');
     if (explicit != null && explicit > 0) return explicit;
 
@@ -471,7 +662,18 @@ class _CanvasBlockState extends State<CanvasBlock> {
     return x * scale + offsetX;
   }
 
-  String _newElementId() => 'el_${DateTime.now().microsecondsSinceEpoch}';
+  /// A layer id no current identity uses.
+  ///
+  /// A bare microsecond stamp is not enough: two layers born in the same
+  /// microsecond, or a pasted document that already carries the stamp, would
+  /// collide — and by the fail-closed identity rule a single duplicate makes
+  /// the whole document unwritable.
+  String _newElementId() {
+    final seed = 'el_${DateTime.now().microsecondsSinceEpoch}';
+    final document =
+        widget.editorBinding?.readDocument?.call() ?? _sourceDocument();
+    return WebsiteCanvasResponsiveDocument.nextLayerId(document, seed: seed);
+  }
 
   Map<String, dynamic> _defaultElement(String type) {
     return createCanvasElement(id: _newElementId(), type: type);
@@ -503,15 +705,36 @@ class _CanvasBlockState extends State<CanvasBlock> {
     el['x'] = pointerX.clamp(0.0, maxX);
     el['y'] = pointerY.clamp(0.0, maxY);
 
+    final id = el['id']?.toString();
+    final insert = widget.editorBinding?.insertLayer;
+    if (insert != null) {
+      // Selection follows only a command that actually landed.
+      if (!insert(el, index: _projectedLayers.length)) return;
+      setState(() => _activeElementIdLocal = id);
+      widget.onActiveElementChanged?.call(id);
+      return;
+    }
+
     setState(() {
       _elements.add(el);
-      _activeElementIdLocal = el['id']?.toString();
+      _activeElementIdLocal = id;
+      _projectedForWidth = null;
     });
     widget.onActiveElementChanged?.call(_activeElementIdLocal);
     _commitElements();
   }
 
+  /// One property change for one layer.
+  ///
+  /// The single funnel for the toolbar, the keyboard, inline text, image
+  /// replacement, crop reset and background removal. With a binding it is one
+  /// atomic command; without one it falls back to the legacy whole-list write.
   void _patchElement(String elementId, Map<String, dynamic> patch) {
+    if (_commandSetLayer(elementId, patch)) return;
+    _legacyPatchElement(elementId, patch);
+  }
+
+  void _legacyPatchElement(String elementId, Map<String, Object?> patch) {
     final idx = _elements.indexWhere((e) => e['id']?.toString() == elementId);
     if (idx == -1) return;
     setState(() {
@@ -519,6 +742,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
         ..._elements[idx],
         ...patch,
       };
+      _projectedForWidth = null;
     });
     _commitElements();
   }
@@ -531,10 +755,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
   }
 
   void _rotateQuarterTurn(String elementId) {
-    final element = _elements.firstWhere(
-      (item) => item['id']?.toString() == elementId,
-      orElse: () => <String, dynamic>{},
-    );
+    final element = _layerFor(elementId);
     if (element.isEmpty || element['locked'] == true) return;
     final current = (element['rotation'] as num?)?.toDouble() ?? 0;
     _patchElement(elementId, {
@@ -543,27 +764,22 @@ class _CanvasBlockState extends State<CanvasBlock> {
   }
 
   void _toggleCropMode(String elementId) {
-    final index =
-        _elements.indexWhere((item) => item['id']?.toString() == elementId);
-    if (index == -1 || _elements[index]['type'] != 'image') return;
-    if (_elements[index]['locked'] == true) return;
+    final layer = _layerFor(elementId);
+    if (layer.isEmpty || layer['type'] != 'image') return;
+    if (layer['locked'] == true) return;
     final enabling = _croppingElementId != elementId;
     setState(() {
       _croppingElementId = enabling ? elementId : null;
       _reframingElementId = null;
-      if (enabling) {
-        _elements[index] = {
-          ..._elements[index],
-          'fit': 'cover',
-          'focalPointX':
-              (_elements[index]['focalPointX'] as num?)?.toDouble() ?? 0.5,
-          'focalPointY':
-              (_elements[index]['focalPointY'] as num?)?.toDouble() ?? 0.5,
-        };
-      }
     });
     _setActive(elementId);
-    if (enabling) _commitElements();
+    if (!enabling) return;
+    // Entering crop persists the frame it starts from, as one command.
+    _patchElement(elementId, <String, dynamic>{
+      'fit': 'cover',
+      'focalPointX': (layer['focalPointX'] as num?)?.toDouble() ?? 0.5,
+      'focalPointY': (layer['focalPointY'] as num?)?.toDouble() ?? 0.5,
+    });
   }
 
   void _resetImageFrame(String elementId) {
@@ -575,10 +791,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
   }
 
   Future<void> _replaceImage(String elementId) async {
-    final element = _elements.firstWhere(
-      (item) => item['id']?.toString() == elementId,
-      orElse: () => <String, dynamic>{},
-    );
+    final element = _layerFor(elementId);
     if (element.isEmpty || element['locked'] == true) return;
     final selection = await showWebsiteMediaPicker(
       context: context,
@@ -601,10 +814,11 @@ class _CanvasBlockState extends State<CanvasBlock> {
   }
 
   Future<void> _removeImageBackground(String elementId) async {
-    final index =
-        _elements.indexWhere((item) => item['id']?.toString() == elementId);
-    if (index == -1 || _elements[index]['type'] != 'image') return;
-    final element = _elements[index];
+    // The EFFECTIVE image, like replace and restore: `imageUrl` is
+    // art-directable, so on a phone this must process the phone's picture and
+    // never the desktop one.
+    final element = _layerFor(elementId);
+    if (element.isEmpty || element['type'] != 'image') return;
     if (element['locked'] == true) return;
     final imageUrl = (element['imageUrl'] ?? '').toString().trim();
     if (imageUrl.isEmpty || _backgroundRemovalElementId != null) return;
@@ -660,10 +874,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
   }
 
   void _restoreImageBeforeBackgroundRemoval(String elementId) {
-    final element = _elements.firstWhere(
-      (item) => item['id']?.toString() == elementId,
-      orElse: () => <String, dynamic>{},
-    );
+    final element = _layerFor(elementId);
     final originalUrl =
         (element['backgroundRemovalOriginalUrl'] ?? '').toString().trim();
     if (originalUrl.isEmpty) return;
@@ -674,25 +885,31 @@ class _CanvasBlockState extends State<CanvasBlock> {
     });
   }
 
-  void _moveForward(String id) {
+  /// The layer's slot in the EFFECTIVE z-order, which is what the operator
+  /// sees and what a per-viewport override may have moved.
+  int _effectiveOrderOf(String id) {
+    for (final layer in _projectedLayers) {
+      if (layer.id == id) return layer.order;
+    }
+    return -1;
+  }
+
+  void _reorderTo(String id, int targetIndex) {
+    if (targetIndex < 0 || targetIndex >= _projectedLayers.length) return;
+    if (_commandReorder(id, targetIndex)) return;
     final index = _elements.indexWhere((element) => element['id'] == id);
-    if (index == -1 || index >= _elements.length - 1) return;
+    if (index == -1) return;
     setState(() {
       final element = _elements.removeAt(index);
-      _elements.insert(index + 1, element);
+      _elements.insert(targetIndex.clamp(0, _elements.length), element);
+      _projectedForWidth = null;
     });
     _commitElements();
   }
 
-  void _moveBackward(String id) {
-    final index = _elements.indexWhere((element) => element['id'] == id);
-    if (index <= 0) return;
-    setState(() {
-      final element = _elements.removeAt(index);
-      _elements.insert(index - 1, element);
-    });
-    _commitElements();
-  }
+  void _moveForward(String id) => _reorderTo(id, _effectiveOrderOf(id) + 1);
+
+  void _moveBackward(String id) => _reorderTo(id, _effectiveOrderOf(id) - 1);
 
   void _alignElement(
     String id,
@@ -700,10 +917,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
     double canvasW,
     double canvasH,
   ) {
-    final index =
-        _elements.indexWhere((element) => element['id']?.toString() == id);
-    if (index == -1 || _elements[index]['locked'] == true) return;
-    final element = _elements[index];
+    final element = _layerFor(id);
+    if (element.isEmpty || element['locked'] == true) return;
     final width = (element['w'] as num?)?.toDouble() ?? 200;
     final height = (element['h'] as num?)?.toDouble() ?? 56;
     final scale = _calculateScale(canvasW);
@@ -750,10 +965,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
     _CanvasFrameHandle handle,
     Offset globalPosition,
   ) {
-    final element = _elements.firstWhere(
-      (item) => item['id']?.toString() == id,
-      orElse: () => <String, dynamic>{},
-    );
+    final element = _layerFor(id);
     final pointer = _canvasPointer(globalPosition);
     if (element.isEmpty || pointer == null || element['locked'] == true) return;
     setState(() {
@@ -868,22 +1080,17 @@ class _CanvasBlockState extends State<CanvasBlock> {
       nextY = nextY.clamp(0.0, math.max(0.0, designHeight - nextHeight));
     }
 
-    setState(() {
-      final index =
-          _elements.indexWhere((item) => item['id']?.toString() == id);
-      if (index == -1) return;
-      _elements[index] = {
-        ..._elements[index],
-        'x': nextX,
-        'y': nextY,
-        'w': nextWidth,
-        'h': nextHeight,
-      };
+    _draftPatch(id, <String, dynamic>{
+      'x': nextX,
+      'y': nextY,
+      'w': nextWidth,
+      'h': nextHeight,
     });
   }
 
-  void _endFrameGesture() {
-    if (_resizingElementId == null) return;
+  void _endFrameGesture({bool cancelled = false}) {
+    final id = _resizingElementId;
+    if (id == null) return;
     setState(() {
       _resizingElementId = null;
       _activeFrameHandle = null;
@@ -891,7 +1098,11 @@ class _CanvasBlockState extends State<CanvasBlock> {
       _frameStartPointer = null;
       _frameStartRotation = null;
     });
-    _commitElements();
+    if (cancelled) {
+      _cancelDraft(id);
+      return;
+    }
+    _commitDraft(id, const <String>['x', 'y', 'w', 'h']);
   }
 
   void _startRotation(
@@ -900,10 +1111,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
     double canvasW,
     double canvasH,
   ) {
-    final element = _elements.firstWhere(
-      (item) => item['id']?.toString() == id,
-      orElse: () => <String, dynamic>{},
-    );
+    final element = _layerFor(id);
     final pointer = _canvasPointer(globalPosition);
     if (element.isEmpty || pointer == null || element['locked'] == true) return;
     final x = (element['x'] as num?)?.toDouble() ?? 0;
@@ -955,23 +1163,23 @@ class _CanvasBlockState extends State<CanvasBlock> {
     if (_isShiftPressed()) {
       degrees = (degrees / 15).round() * 15.0;
     }
-    setState(() {
-      final index =
-          _elements.indexWhere((item) => item['id']?.toString() == id);
-      if (index == -1) return;
-      _elements[index] = {..._elements[index], 'rotation': degrees};
-    });
+    _draftPatch(id, <String, dynamic>{'rotation': degrees});
   }
 
-  void _endRotation() {
-    if (_rotatingElementId == null) return;
+  void _endRotation({bool cancelled = false}) {
+    final id = _rotatingElementId;
+    if (id == null) return;
     setState(() {
       _rotatingElementId = null;
       _rotationCenter = null;
       _rotationStartPointerAngle = null;
       _rotationStartDegrees = null;
     });
-    _commitElements();
+    if (cancelled) {
+      _cancelDraft(id);
+      return;
+    }
+    _commitDraft(id, const <String>['rotation']);
   }
 
   KeyEventResult _handleCanvasKeyEvent(FocusNode node, KeyEvent event) {
@@ -1021,9 +1229,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
       _ => 0.0,
     };
     if (dx == 0 && dy == 0) return KeyEventResult.ignored;
-    final index = _elements
-        .indexWhere((element) => element['id']?.toString() == activeId);
-    if (index == -1 || _elements[index]['locked'] == true) {
+    final element = _layerFor(activeId);
+    if (element.isEmpty || element['locked'] == true) {
       return KeyEventResult.handled;
     }
     final renderBox =
@@ -1032,7 +1239,6 @@ class _CanvasBlockState extends State<CanvasBlock> {
       return KeyEventResult.ignored;
     }
     final step = _isShiftPressed() ? 10.0 : 1.0;
-    final element = _elements[index];
     final x = (element['x'] as num?)?.toDouble() ?? 0;
     final y = (element['y'] as num?)?.toDouble() ?? 0;
     final scale = _calculateScale(renderBox.size.width);
@@ -1049,18 +1255,19 @@ class _CanvasBlockState extends State<CanvasBlock> {
         applySnap: false,
       );
     });
-    _commitElements();
+    // A nudge is a complete move: one atomic command, one undo.
+    _commitDraft(activeId, const <String>['x', 'y']);
     return KeyEventResult.handled;
   }
 
   void _updateElementPosition(
       String elementId, double x, double y, double maxW, double maxH,
       {bool applySnap = true}) {
-    final idx = _elements.indexWhere((e) => e['id']?.toString() == elementId);
-    if (idx == -1) return;
+    final layer = _layerFor(elementId);
+    if (layer.isEmpty) return;
 
-    final w = (_elements[idx]['w'] as num?)?.toDouble() ?? 200;
-    final h = (_elements[idx]['h'] as num?)?.toDouble() ?? 56;
+    final w = (layer['w'] as num?)?.toDouble() ?? 200;
+    final h = (layer['h'] as num?)?.toDouble() ?? 56;
 
     // NOTE: x/y are provided in *render space* (after any preview scaling).
     // We clamp/snap in render space, then store x back in design space.
@@ -1099,11 +1306,14 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final designX = (nextX - offsetX) / scaleX;
     final designY = nextY / scaleX;
 
-    _elements[idx] = {
-      ..._elements[idx],
+    // The move lives in the gesture draft until the gesture ends; nothing is
+    // persisted per frame.
+    _layerDrafts[elementId] = <String, dynamic>{
+      ...?_layerDrafts[elementId],
       'x': designX,
       'y': designY,
     };
+    _projectedForWidth = null;
   }
 
   SnapResult _calculateSnappedPosition({
@@ -1137,7 +1347,12 @@ class _CanvasBlockState extends State<CanvasBlock> {
     ];
     final xTargets = <double>[...canvasTargetsX];
 
-    for (final e in _elements) {
+    // Snap against what is EFFECTIVELY on screen for this viewport. A layer
+    // this viewport hides is not a magnetic target: the operator cannot see
+    // it, so an edge they cannot see must not pull their drag.
+    for (final e in _projectedLayers
+        .where((layer) => layer.visible)
+        .map((layer) => layer.data)) {
       final id = e['id']?.toString();
       if (id == null || id == elementId) continue;
       final ex = (e['x'] as num?)?.toDouble() ?? 0;
@@ -1196,7 +1411,12 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final canvasTargetsY = [0.0, canvasH / 2, canvasH];
     final yTargets = <double>[...canvasTargetsY];
 
-    for (final e in _elements) {
+    // Snap against what is EFFECTIVELY on screen for this viewport. A layer
+    // this viewport hides is not a magnetic target: the operator cannot see
+    // it, so an edge they cannot see must not pull their drag.
+    for (final e in _projectedLayers
+        .where((layer) => layer.visible)
+        .map((layer) => layer.data)) {
       final id = e['id']?.toString();
       if (id == null || id == elementId) continue;
       final ey = (e['y'] as num?)?.toDouble() ?? 0;
@@ -1310,7 +1530,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
       return const SizedBox.shrink();
     }
 
-    final el = _elements.firstWhere((e) => e['id'] == id, orElse: () => {});
+    final el = _layerFor(id);
     if (el.isEmpty) return const SizedBox.shrink();
 
     final type = (el['type'] ?? 'text').toString();
@@ -1401,50 +1621,6 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
   @override
   Widget build(BuildContext context) {
-    final heightMode = (widget.data['heightMode'] ?? 'fixed').toString();
-    final vhPct = (widget.data['vhPct'] as num?)?.toDouble() ?? 0.7;
-    final rawBlockHeight = heightMode == 'viewport'
-        ? (MediaQuery.sizeOf(context).height * vhPct.clamp(0.2, 1.0).toDouble())
-        : (widget.data['blockHeight'] as num?)?.toDouble() ??
-            (widget.data['height'] as num?)?.toDouble() ??
-            420.0;
-    final bg =
-        _parseHexColor(widget.data['backgroundColor'] as String?, Colors.white);
-    final showGrid = (widget.data['showGrid'] as bool?) ?? true;
-    final elements = _elements;
-
-    final backgroundImageUrl =
-        (widget.data['backgroundImageUrl'] ?? '').toString().trim();
-    final backgroundVideoUrl =
-        (widget.data['backgroundVideoUrl'] ?? '').toString().trim();
-    final backgroundYoutubeId =
-        (widget.data['backgroundYoutubeId'] ?? '').toString().trim();
-    final overlayEnabled = (widget.data['overlayEnabled'] as bool?) ?? false;
-    final overlayOpacity =
-        (widget.data['overlayOpacity'] as num?)?.toDouble() ?? 0.35;
-    final overlayColor = _parseHexColor(
-      (widget.data['overlayColor'] ?? '#000000').toString(),
-      Colors.black,
-    );
-    final backgroundFit =
-        (widget.data['backgroundFit'] ?? 'cover').toString().toLowerCase();
-    final fit = backgroundFit == 'contain' ? BoxFit.contain : BoxFit.cover;
-    final isMobile = MediaQuery.sizeOf(context).width < 600;
-    final focalX =
-        (widget.data[isMobile ? 'mobileFocalPointX' : 'focalPointX'] as num?)
-                ?.toDouble() ??
-            (widget.data['focalPointX'] as num?)?.toDouble() ??
-            0.5;
-    final focalY =
-        (widget.data[isMobile ? 'mobileFocalPointY' : 'focalPointY'] as num?)
-                ?.toDouble() ??
-            (widget.data['focalPointY'] as num?)?.toDouble() ??
-            0.5;
-    final focalAlignment = Alignment(
-      (focalX.clamp(0.0, 1.0) * 2) - 1,
-      (focalY.clamp(0.0, 1.0) * 2) - 1,
-    );
-
     // Use ConstraintLayoutBuilder OUTSIDE SizedBox to get actual available width first
     // Then scale the block height proportionally
     return Focus(
@@ -1453,6 +1629,52 @@ class _CanvasBlockState extends State<CanvasBlock> {
       child: ConstraintLayoutBuilder(
         builder: (context, outerConstraints) {
           final availableWidth = outerConstraints.maxWidth;
+          // The effective document for THIS canvas width. Everything below
+          // reads it, so Edit, Preview and Public consume exactly the same
+          // values for the same document and width; authoring mode only adds
+          // selection and gestures on top.
+          _refreshProjection(availableWidth);
+          final data = _effectiveData();
+          final layers = _projectedLayers;
+
+          final heightMode = (data['heightMode'] ?? 'fixed').toString();
+          final vhPct = (data['vhPct'] as num?)?.toDouble() ?? 0.7;
+          final rawBlockHeight = heightMode == 'viewport'
+              ? (MediaQuery.sizeOf(context).height *
+                  vhPct.clamp(0.2, 1.0).toDouble())
+              : (data['blockHeight'] as num?)?.toDouble() ??
+                  (data['height'] as num?)?.toDouble() ??
+                  420.0;
+          final bg =
+              _parseHexColor(data['backgroundColor'] as String?, Colors.white);
+          final showGrid = (data['showGrid'] as bool?) ?? true;
+
+          final backgroundImageUrl =
+              (data['backgroundImageUrl'] ?? '').toString().trim();
+          final backgroundVideoUrl =
+              (data['backgroundVideoUrl'] ?? '').toString().trim();
+          final backgroundYoutubeId =
+              (data['backgroundYoutubeId'] ?? '').toString().trim();
+          final overlayEnabled = (data['overlayEnabled'] as bool?) ?? false;
+          final overlayOpacity =
+              (data['overlayOpacity'] as num?)?.toDouble() ?? 0.35;
+          final overlayColor = _parseHexColor(
+            (data['overlayColor'] ?? '#000000').toString(),
+            Colors.black,
+          );
+          final backgroundFit =
+              (data['backgroundFit'] ?? 'cover').toString().toLowerCase();
+          final fit =
+              backgroundFit == 'contain' ? BoxFit.contain : BoxFit.cover;
+          // The owner already resolved the mobile focal alias from the canvas
+          // width; the ERP window is not an input.
+          final focalX = (data['focalPointX'] as num?)?.toDouble() ?? 0.5;
+          final focalY = (data['focalPointY'] as num?)?.toDouble() ?? 0.5;
+          final focalAlignment = Alignment(
+            (focalX.clamp(0.0, 1.0) * 2) - 1,
+            (focalY.clamp(0.0, 1.0) * 2) - 1,
+          );
+
           final designW = _computeDesignWidth(availableWidth);
           final scaleX = designW > 0 ? availableWidth / designW : 1.0;
 
@@ -1654,16 +1876,16 @@ class _CanvasBlockState extends State<CanvasBlock> {
                               ? Clip.hardEdge
                               : Clip.none,
                           children: [
-                            for (final el in elements)
-                              if (!((canvasW < 600 &&
-                                      el['hideOnMobile'] == true) ||
-                                  (canvasW >= 600 &&
-                                      el['showOnMobile'] == true)))
+                            // Effective z-order and visibility come from the
+                            // owner. A layer hidden for this viewport leaves
+                            // the render, never the document.
+                            for (final layer in layers)
+                              if (layer.visible)
                                 _buildElement(
                                   context: context,
-                                  el: el,
+                                  el: layer.data,
                                   isActive: _activeElementIdLocal != null &&
-                                      el['id'] == _activeElementIdLocal,
+                                      layer.id == _activeElementIdLocal,
                                   canvasW: canvasW,
                                   canvasH: canvasH,
                                 ),
@@ -1714,11 +1936,22 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
   void _deleteElement(String id) {
     final shouldClearActive = _activeElementIdLocal == id;
+    final remove = widget.editorBinding?.removeLayer;
+    if (remove != null) {
+      if (!remove(id)) return;
+      if (shouldClearActive) {
+        setState(() => _activeElementIdLocal = null);
+        widget.onActiveElementChanged?.call(null);
+      }
+      return;
+    }
+
     setState(() {
       _elements.removeWhere((e) => e['id'] == id);
       if (shouldClearActive) {
         _activeElementIdLocal = null;
       }
+      _projectedForWidth = null;
     });
     if (shouldClearActive) {
       widget.onActiveElementChanged?.call(null);
@@ -1727,6 +1960,17 @@ class _CanvasBlockState extends State<CanvasBlock> {
   }
 
   void _duplicateElement(String id) {
+    final duplicate = widget.editorBinding?.duplicateLayer;
+    if (duplicate != null) {
+      final newId = _newElementId();
+      // The owner deep-copies content, bindings and every override, and
+      // offsets the base plus each viewport that already declares a position.
+      if (!duplicate(id, newId)) return;
+      setState(() => _activeElementIdLocal = newId);
+      widget.onActiveElementChanged?.call(newId);
+      return;
+    }
+
     final original =
         _elements.firstWhere((e) => e['id'] == id, orElse: () => {});
     if (original.isEmpty) return;
@@ -1734,36 +1978,22 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final newId = _newElementId();
     final newEl = Map<String, dynamic>.from(original);
     newEl['id'] = newId;
-    newEl['x'] = (newEl['x'] as double) + 20;
-    newEl['y'] = (newEl['y'] as double) + 20;
+    newEl['x'] = ((newEl['x'] as num?)?.toDouble() ?? 0) + 20;
+    newEl['y'] = ((newEl['y'] as num?)?.toDouble() ?? 0) + 20;
 
     setState(() {
       _elements.add(newEl);
       _activeElementIdLocal = newId;
+      _projectedForWidth = null;
     });
     widget.onActiveElementChanged?.call(newId);
     _commitElements();
   }
 
-  void _bringToFront(String id) {
-    final idx = _elements.indexWhere((e) => e['id'] == id);
-    if (idx == -1 || idx == _elements.length - 1) return;
-    setState(() {
-      final el = _elements.removeAt(idx);
-      _elements.add(el);
-    });
-    _commitElements();
-  }
+  void _bringToFront(String id) =>
+      _reorderTo(id, math.max(0, _projectedLayers.length - 1));
 
-  void _sendToBack(String id) {
-    final idx = _elements.indexWhere((e) => e['id'] == id);
-    if (idx == -1 || idx == 0) return;
-    setState(() {
-      final el = _elements.removeAt(idx);
-      _elements.insert(0, el);
-    });
-    _commitElements();
-  }
+  void _sendToBack(String id) => _reorderTo(id, 0);
 
   Widget _buildFrameHandle({
     required String id,
@@ -1800,7 +2030,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
               cropMode: cropMode,
             ),
             onPanEnd: (_) => _endFrameGesture(),
-            onPanCancel: _endFrameGesture,
+            onPanCancel: () => _endFrameGesture(cancelled: true),
             child: SizedBox(
               width: 24,
               height: 24,
@@ -1865,7 +2095,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
               onPanUpdate: (details) =>
                   _updateRotation(id, details.globalPosition),
               onPanEnd: (_) => _endRotation(),
-              onPanCancel: _endRotation,
+              onPanCancel: () => _endRotation(cancelled: true),
               child: Container(
                 width: 24,
                 height: 24,
@@ -1895,10 +2125,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
       return const SizedBox.shrink();
     }
     final id = _activeElementIdLocal!;
-    final element = _elements.firstWhere(
-      (item) => item['id']?.toString() == id,
-      orElse: () => <String, dynamic>{},
-    );
+    // The chrome sits on the EFFECTIVE layer, so it stays on the element while
+    // a viewport override or a gesture draft is moving it.
+    final element = _layerFor(id);
     if (element.isEmpty || _editingElementId == id) {
       return const SizedBox.shrink();
     }
@@ -2259,7 +2488,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
             price: price,
             imageUrl: imageUrl,
             bodyFont: widget.bodyFont,
-            previewMode: widget.editable,
+            interactionsEnabled: !widget.editable,
             onNavigate: widget.onNavigate,
           );
         }
@@ -2341,7 +2570,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                     price: price,
                     imageUrl: imageUrl,
                     bodyFont: widget.bodyFont,
-                    previewMode: widget.editable,
+                    interactionsEnabled: !widget.editable,
                     onNavigate: widget.onNavigate,
                   ),
                 );
@@ -2379,7 +2608,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                   price: price,
                   imageUrl: imageUrl,
                   bodyFont: widget.bodyFont,
-                  previewMode: widget.editable,
+                  interactionsEnabled: !widget.editable,
                   onNavigate: widget.onNavigate,
                 );
               },
@@ -2604,27 +2833,18 @@ class _CanvasBlockState extends State<CanvasBlock> {
                         d.delta.dx * math.sin(radians) +
                             d.delta.dy * math.cos(radians),
                       );
-                      setState(() {
-                        final index = _elements.indexWhere(
-                          (item) => item['id']?.toString() == id,
-                        );
-                        if (index == -1) return;
-                        final currentX =
-                            (_elements[index]['focalPointX'] as num?)
-                                    ?.toDouble() ??
-                                0.5;
-                        final currentY =
-                            (_elements[index]['focalPointY'] as num?)
-                                    ?.toDouble() ??
-                                0.5;
-                        _elements[index] = {
-                          ..._elements[index],
-                          'focalPointX': (currentX - localDelta.dx / effectiveW)
-                              .clamp(0.0, 1.0),
-                          'focalPointY':
-                              (currentY - localDelta.dy / resolvedHeight)
-                                  .clamp(0.0, 1.0),
-                        };
+                      final current = _layerFor(id);
+                      if (current.isEmpty) return;
+                      final currentX =
+                          (current['focalPointX'] as num?)?.toDouble() ?? 0.5;
+                      final currentY =
+                          (current['focalPointY'] as num?)?.toDouble() ?? 0.5;
+                      _draftPatch(id, <String, dynamic>{
+                        'focalPointX': (currentX - localDelta.dx / effectiveW)
+                            .clamp(0.0, 1.0),
+                        'focalPointY':
+                            (currentY - localDelta.dy / resolvedHeight)
+                                .clamp(0.0, 1.0),
                       });
                       return;
                     }
@@ -2632,10 +2852,8 @@ class _CanvasBlockState extends State<CanvasBlock> {
                     if (_dragAnchorInElement == null ||
                         _pointerCanvasPos == null) {
                       // Fallback: delta-based movement (should be rare)
-                      final current = _elements.firstWhere(
-                        (e) => e['id']?.toString() == id,
-                        orElse: () => el,
-                      );
+                      final effective = _layerFor(id);
+                      final current = effective.isEmpty ? el : effective;
                       final cx = (current['x'] as num?)?.toDouble() ?? x;
                       final cy = (current['y'] as num?)?.toDouble() ?? y;
                       final cxRender =
@@ -2709,7 +2927,10 @@ class _CanvasBlockState extends State<CanvasBlock> {
                   onPanEnd: (_) {
                     if (_reframingElementId == id) {
                       setState(() => _reframingElementId = null);
-                      _commitElements();
+                      _commitDraft(
+                        id,
+                        const <String>['focalPointX', 'focalPointY'],
+                      );
                       return;
                     }
                     // Commit selection now that drag is done
@@ -2724,12 +2945,12 @@ class _CanvasBlockState extends State<CanvasBlock> {
                       _guideY = null;
                       // No need to update position here, it's already snapped by onPanUpdate
                     });
-                    _commitElements();
+                    _commitDraft(id, const <String>['x', 'y']);
                   },
                   onPanCancel: () {
                     if (_reframingElementId == id) {
                       setState(() => _reframingElementId = null);
-                      _commitElements();
+                      _cancelDraft(id);
                     } else if (_draggingElementId == id) {
                       setState(() {
                         _draggingElementId = null;
@@ -2739,7 +2960,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
                         _guideX = null;
                         _guideY = null;
                       });
-                      _commitElements();
+                      _cancelDraft(id);
                     }
                   },
                   child: editorTransformed,

@@ -3415,6 +3415,31 @@ class _RailBadge extends StatelessWidget {
   }
 }
 
+/// Pliega una cadena para comparar en el buscador del drawer: minúsculas y sin
+/// tildes.
+///
+/// **Causa del defecto:** el filtro comparaba con `toLowerCase()` a secas y en
+/// un teléfono nadie teclea la tilde. `Nomina` no encontraba `Nóminas` y el
+/// drawer contestaba «No encontramos módulos o páginas», es decir, afirmaba que
+/// el módulo no existe. Se pliegan **los dos lados** de la comparación, así que
+/// `Nomina`, `nómina` y `NÓMINA` llegan al mismo resultado.
+///
+/// Vive acá, junto a la navegación compartida, y no en un util de negocio: la
+/// tabla es la misma que ya usan los buscadores del ERP
+/// (`normalizeBikeFinderSearch`, catálogo público), pero el drawer no puede
+/// depender de un módulo para saber buscar.
+String _foldForNavigationSearch(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll('á', 'a')
+      .replaceAll('é', 'e')
+      .replaceAll('í', 'i')
+      .replaceAll('ó', 'o')
+      .replaceAll('ú', 'u')
+      .replaceAll('ü', 'u')
+      .replaceAll('ñ', 'n');
+}
+
 class AppDrawer extends StatefulWidget {
   const AppDrawer({
     super.key,
@@ -3845,7 +3870,7 @@ class _AppDrawerState extends State<AppDrawer> {
     required List<AppDestinationModule> fixedModules,
     required WorkspaceChromeStyleData chrome,
   }) {
-    final normalizedQuery = _searchQuery.toLowerCase();
+    final normalizedQuery = _foldForNavigationSearch(_searchQuery);
     final results =
         <({String label, String module, String route, IconData icon})>[
       (
@@ -3864,8 +3889,8 @@ class _AppDrawerState extends State<AppDrawer> {
               icon: item.icon,
             ),
     ].where((result) {
-      return result.label.toLowerCase().contains(normalizedQuery) ||
-          result.module.toLowerCase().contains(normalizedQuery);
+      return _foldForNavigationSearch(result.label).contains(normalizedQuery) ||
+          _foldForNavigationSearch(result.module).contains(normalizedQuery);
     }).toList(growable: false);
 
     if (results.isEmpty) {

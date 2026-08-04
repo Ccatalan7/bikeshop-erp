@@ -281,8 +281,11 @@ void main() {
     );
 
     testWidgets(
-      'preserves the action variant and only Public activates navigation',
+      'preserves the action variant; Preview and Public navigate as a '
+      'visitor while Edit (presenters) stays inert',
       (tester) async {
+        WidgetController.hitTestWarningShouldBeFatal = true;
+        addTearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
         final routes = <String>[];
         const data = <String, dynamic>{
           'title': 'Explora',
@@ -301,6 +304,7 @@ void main() {
         await tester.tap(find.byKey(WebsiteCtaBlockContent.actionKey));
         expect(routes, <String>['/productos?origen=cta']);
 
+        // Preview keeps VISITOR navigation semantics: same tap, same route.
         await tester.pumpWidget(
           _host(
             data: data,
@@ -309,7 +313,28 @@ void main() {
           ),
         );
         await tester.tap(find.byKey(WebsiteCtaBlockContent.actionKey));
-        expect(routes, <String>['/productos?origen=cta']);
+        expect(
+          routes,
+          <String>['/productos?origen=cta', '/productos?origen=cta'],
+          reason: 'Preview navigates exactly like Public',
+        );
+
+        // Edit is identified by its injected presenters and stays inert.
+        await tester.pumpWidget(
+          _host(
+            data: data,
+            onNavigate: routes.add,
+            presenters: WebsiteBlockContentPresenters(
+              action: (context, slot) => slot.child,
+            ),
+          ),
+        );
+        await tester.tap(find.byKey(WebsiteCtaBlockContent.actionKey));
+        expect(
+          routes,
+          <String>['/productos?origen=cta', '/productos?origen=cta'],
+          reason: 'Edit (presenters) never navigates',
+        );
 
         await tester.pumpWidget(
           _host(

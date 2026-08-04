@@ -212,12 +212,29 @@ void main() {
                         editorBinding: WebsiteCanvasEditorBinding(
                           activeElementId: currentProvider
                               .canvasElementSelection('canvas-block'),
-                          onElementsChanged: (elements) {
+                          // 7B-2B2: the whole-list write is gone from the
+                          // production binding. Selection must still trigger
+                          // no document command at all.
+                          setLayerProperties: (
+                            layerId,
+                            values, {
+                            required scope,
+                            required viewport,
+                          }) {
                             elementWrites++;
-                            currentProvider.updateBlockData(
+                            return currentProvider.setCanvasLayerProperties(
                               'canvas-block',
-                              'elements',
-                              elements,
+                              layerId,
+                              values,
+                              scope: scope,
+                              viewport: viewport,
+                            );
+                          },
+                          removeLayer: (layerId) {
+                            elementWrites++;
+                            return currentProvider.removeCanvasLayer(
+                              'canvas-block',
+                              layerId,
                             );
                           },
                           onActiveElementChanged: (elementId) {

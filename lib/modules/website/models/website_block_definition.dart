@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'website_block_type.dart';
+import 'website_responsive_authoring.dart';
 
 /// Supported input widget types for generic block editors.
 /// Complex blocks can opt out and implement a bespoke editor UI.
@@ -84,6 +85,11 @@ class WebsiteBlockFieldSchema {
     this.actionLabelKey,
     this.actionVariantKey,
     this.migrationAliases = const [],
+    this.responsivePolicy = WebsiteResponsivePropertyPolicy.sharedOnly,
+    this.propertyFamily,
+    this.authoringSurfaces = const {WebsiteAuthoringSurface.inspector},
+    this.supportsResponsiveReset = true,
+    this.legacyResponsiveAliases = const [],
   });
 
   final String key;
@@ -120,6 +126,35 @@ class WebsiteBlockFieldSchema {
   /// Optional legacy field that stores filled/outline/text presentation.
   final String? actionVariantKey;
   final List<String> migrationAliases;
+  final WebsiteResponsivePropertyPolicy responsivePolicy;
+  final WebsiteResponsivePropertyFamily? propertyFamily;
+  final Set<WebsiteAuthoringSurface> authoringSurfaces;
+  final bool supportsResponsiveReset;
+  final List<String> legacyResponsiveAliases;
+
+  bool get allowsViewportOverride => responsivePolicy.supportsViewportOverride;
+
+  bool get canResetResponsiveOverride =>
+      allowsViewportOverride && supportsResponsiveReset;
+
+  WebsiteResponsivePropertyFamily get resolvedPropertyFamily {
+    if (propertyFamily != null) return propertyFamily!;
+    if (resolvedMediaRole != null) return WebsiteResponsivePropertyFamily.media;
+    if (resolvedActionRole != null) {
+      return WebsiteResponsivePropertyFamily.action;
+    }
+    if (type == WebsiteBlockFieldType.color) {
+      return WebsiteResponsivePropertyFamily.color;
+    }
+    if (type == WebsiteBlockFieldType.repeater ||
+        type == WebsiteBlockFieldType.chips) {
+      return WebsiteResponsivePropertyFamily.collection;
+    }
+    if (supportsFormatting) {
+      return WebsiteResponsivePropertyFamily.typography;
+    }
+    return WebsiteResponsivePropertyFamily.content;
+  }
 
   WebsiteTextRole get resolvedTextRole {
     if (textRole != WebsiteTextRole.plain) return textRole;

@@ -4,12 +4,12 @@ enum _InspectorSection { content, layout, style }
 
 class _CanvasSelectionContext {
   const _CanvasSelectionContext({
-    required this.canvasData,
     required this.element,
     this.slideIndex,
   });
 
-  final Map<String, dynamic> canvasData;
+  /// The selected layer as the previewed viewport resolves it, so the header
+  /// names what is on screen rather than the shared base.
   final Map<String, dynamic> element;
   final int? slideIndex;
 
@@ -44,7 +44,25 @@ class _CanvasSelectionContext {
 class _EditBlockTab extends StatefulWidget {
   final WebsiteEditModeProvider editProvider;
 
-  const _EditBlockTab({required this.editProvider});
+  /// The pane keeps its own identity row. The contextual sheet already names
+  /// the block in its header and in the dock, so it opts out instead of
+  /// stacking a third identity.
+  final bool showBlockHeader;
+
+  /// The pane owns the capsule it has always shown. A host that supplies its
+  /// own `T-04` navigation passes false and drives [section] from outside.
+  final bool showSectionNavigation;
+
+  /// External section, for a host that renders the sub-tabs itself. Null keeps
+  /// the internal state the pane has always used.
+  final _InspectorSection? section;
+
+  const _EditBlockTab({
+    required this.editProvider,
+    this.showBlockHeader = true,
+    this.showSectionNavigation = true,
+    this.section,
+  });
 
   @override
   State<_EditBlockTab> createState() => _EditBlockTabState();
@@ -52,10 +70,30 @@ class _EditBlockTab extends StatefulWidget {
 
 class _EditBlockTabState extends State<_EditBlockTab> {
   final ScrollController _scrollController = ScrollController();
-  _InspectorSection _section = _InspectorSection.content;
+  _InspectorSection _internalSection = _InspectorSection.content;
   String? _lastSelectedId;
 
   WebsiteEditModeProvider get editProvider => widget.editProvider;
+
+  /// One reader for both hosts: the pane's own state, or the section the
+  /// contextual host is showing.
+  _InspectorSection get _section => widget.section ?? _internalSection;
+
+  set _section(_InspectorSection value) => _internalSection = value;
+
+  @override
+  void didUpdateWidget(covariant _EditBlockTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A host-driven section change restarts the reading position for the same
+    // reason a selection change does: the previous offset belongs to content
+    // that is no longer on screen.
+    if (widget.section != null && widget.section != oldWidget.section) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        _scrollController.jumpTo(0);
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -125,17 +163,20 @@ class _EditBlockTabState extends State<_EditBlockTab> {
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: _buildBlockHeader(
-            blockType,
-            isVisible,
-            selectedId,
-            canvasSelection: canvasSelection,
+        if (widget.showBlockHeader)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: _buildBlockHeader(
+              blockType,
+              isVisible,
+              selectedId,
+              canvasSelection: canvasSelection,
+            ),
           ),
-        ),
-        _buildSectionNavigation(),
-        const Divider(height: 1, color: Colors.white12),
+        if (widget.showSectionNavigation) ...[
+          _buildSectionNavigation(),
+          const Divider(height: 1, color: Colors.white12),
+        ],
         Expanded(
           child: SingleChildScrollView(
             controller: _scrollController,
@@ -246,32 +287,18 @@ class _EditBlockTabState extends State<_EditBlockTab> {
             .heightBehavior;
 
     if (canvasSelection != null) {
-      void updateSlideValue(String key, dynamic value) {
-        final rawSlides = blockData['slides'];
-        if (canvasSelection.slideIndex == null || rawSlides is! List) {
-          editProvider.updateBlockData(blockId, key, value);
-          return;
-        }
-        final slides = rawSlides
-            .whereType<Map>()
-            .map((slide) => Map<String, dynamic>.from(slide))
-            .toList();
-        final index = canvasSelection.slideIndex!;
-        if (index < 0 || index >= slides.length) return;
-        slides[index] = {...slides[index], key: value};
-        editProvider.updateBlockData(blockId, 'slides', slides);
-      }
-
+      // The Canvas inspector addresses its document by identity — block plus
+      // the exact slide — and writes through the Canvas commands. There is no
+      // host callback that rebuilds `elements` or `slides` any more: replacing
+      // a whole list overwrites the responsive overrides inside the layers it
+      // replaces.
       return _CanvasBlockControls(
-        data: canvasSelection.canvasData,
         blockId: blockId,
         provider: editProvider,
         slideIndex: canvasSelection.slideIndex,
         elementsOnly: true,
         selectedElementOnly: true,
         inspectorSection: _section,
-        onElementsChanged: (elements) => updateSlideValue('elements', elements),
-        onCanvasSettingChanged: updateSlideValue,
       );
     }
 
@@ -340,7 +367,6 @@ class _EditBlockTabState extends State<_EditBlockTab> {
     required String blockId,
   }) {
     int? slideIndex;
-    Map<String, dynamic> canvasData = blockData;
     if (blockType == WebsiteBlockType.carousel.name) {
       final rawSlides = blockData['slides'];
       if (rawSlides is! List || rawSlides.isEmpty) return null;
@@ -348,9 +374,6 @@ class _EditBlockTabState extends State<_EditBlockTab> {
         blockId,
         rawSlides.length,
       );
-      final slide = rawSlides[slideIndex];
-      if (slide is! Map) return null;
-      canvasData = Map<String, dynamic>.from(slide);
     } else if (blockType != WebsiteBlockType.canvas.name) {
       return null;
     }
@@ -360,13 +383,21 @@ class _EditBlockTabState extends State<_EditBlockTab> {
       slideIndex: slideIndex,
     );
     if (elementId == null) return null;
-    final rawElements = canvasData['elements'];
-    if (rawElements is! List) return null;
-    for (final raw in rawElements) {
-      if (raw is Map && raw['id']?.toString() == elementId) {
+
+    // The document is resolved by the same owner every Canvas command uses, so
+    // a selection can only ever address the exact slide it belongs to.
+    final document = editProvider.canvasDocument(
+      blockId,
+      slideIndex: slideIndex,
+    );
+    if (document == null) return null;
+    for (final layer in WebsiteCanvasResponsiveDocument.projectLayers(
+      data: document,
+      viewport: editProvider.previewViewport,
+    )) {
+      if (layer.id == elementId) {
         return _CanvasSelectionContext(
-          canvasData: canvasData,
-          element: Map<String, dynamic>.from(raw),
+          element: layer.data,
           slideIndex: slideIndex,
         );
       }
@@ -558,8 +589,7 @@ class _EditBlockTabState extends State<_EditBlockTab> {
         return _CarouselBlockControls(
             data: data, blockId: blockId, provider: editProvider);
       case 'canvas':
-        return _CanvasBlockControls(
-            data: data, blockId: blockId, provider: editProvider);
+        return _CanvasBlockControls(blockId: blockId, provider: editProvider);
       case 'products':
         return _ProductsBlockControls(
             data: data, blockId: blockId, provider: editProvider);

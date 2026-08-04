@@ -125,7 +125,7 @@ create a second copy of its settings inside a block inspector.
 | Public commerce identity and offer projection | Product/category owners through `PublicCommerceProductProjection` and its equivalent shared TypeScript contract | Product `Tienda Online` controls plus catalog/SEO readiness surfaces |
 | Site SEO identity and canonical origin | Normalized `website_settings`; `store_url` is canonical and `seo_canonical_url` is a compatibility mirror | Site settings |
 | Cross-owner SEO diagnosis | Read-only `WebsiteSeoCenterProjection` with separate app, deployed-build and Google evidence | `/website/seo`, with handoffs to the owning site/page/product/category surface |
-| Global fonts, colors, background, buttons and header/footer tokens | saved `website_settings`, consumed through `WebsiteThemeBuilder` | `Tema` / site settings |
+| Global fonts, colors, background, buttons and header/footer tokens | `PublicStoreLayout` resolves saved/staged `website_settings` once into immutable `WebsiteResolvedTheme`; `WebsiteThemeBuilder` projects it | `Tema` / site settings |
 | Website media | shared website media service and picker | Biblioteca / Productos / Subir / URL avanzada |
 | Layered campaign composition | `CanvasBlock`, `_CanvasBlockControls`, registered Canvas element factory | Canvas inline controls + inspector |
 | Public catalog products and counts | `PublicInventoryService` and current public visibility/availability rules | `ProductCatalogPage` and other catalog consumers |
@@ -151,6 +151,13 @@ FSM (`public | preview | edit`); the URL is an entry command plus write-through
 projection and can never compete as a second owner. Do not recreate a bespoke
 editable renderer, a runtime migration flag, or a URL/provider mode
 synchronizer.
+
+Resolved 2026-08-02: global storefront theme values now have one immutable
+runtime owner, `WebsiteResolvedTheme`. The shell resolves saved/staged values;
+Home, Policy, Dynamic and Contact consume the published extension, the `Tema`
+control reopens against the same pending-aware reader, and
+`WebsiteThemeBuilder` projects the exact owner value into `ThemeData`. Do not
+restore page-local theme readers, parsers or fallback palettes.
 
 ## Rules by capability
 
@@ -336,6 +343,21 @@ release claim.
   and explicit modes. Do not recolor descendants or repair slides one by one.
 - Moving a Canvas layer behind the header must not require manual recoloring of
   each header control.
+- Theme resolution has one runtime owner: `PublicStoreLayout` supplies the
+  `pending > saved > fallback` reader to `WebsiteResolvedTheme` and publishes
+  that exact immutable extension through `WebsiteThemeBuilder`. Home, Policy,
+  Dynamic, Contact and commerce consume `WebsiteResolvedTheme.of(context)`;
+  they do not read or parse `theme_*` settings locally. Reopening `Tema` uses
+  the same effective reader so unsaved values remain visible in the control.
+- `theme_text_color` projects exactly into `ColorScheme.onSurface` and the base
+  `TextTheme`, and `Tema > Colores > Color de texto` is its visible canonical
+  control. `Tema > Espaciado` owns the global inherited section gap and content
+  padding within the existing composition bounds; those controls stage through
+  `WebsiteEditModeProvider`, never a direct `WebsiteService` writer. A resolved
+  theme key may not exist as a hidden editor key. Regression must also cover
+  missing/malformed values, legacy decimal/`0x`/`Color(...)`/hex encodings,
+  digit-only six/eight-character hex, bounded typography/spacing, control
+  visibility and consumer convergence.
 
 ### Edit, Preview, public parity and clipping
 
@@ -373,6 +395,12 @@ release claim.
   Successful block replacement rebaselines undo/discard history.
 - Operational publication, OAuth, sync, import, and destructive actions may
   persist immediately only when the UI clearly presents them as operations.
+- `GoogleBusinessService.connect` owns one service-boundary single-flight
+  installed before loading notification, so synchronous listener reentry joins
+  the same Future. The owning invocation holds its nonce locally and may only
+  compare-clear that nonce; button disabling is secondary UX. Regression must
+  include concurrent and listener-reentrant connects, one launcher/intent,
+  false/cancel/error cleanup and preservation of a newer unrelated intent.
 - Discard restores every staged bucket, including blocks, theme, header/footer,
   navigation, category visibility, and SEO.
 - A successful write is not a round-trip proof. Reload and read back through
@@ -391,6 +419,14 @@ release claim.
   `leaveEditor`. Local route history closes before either draft guard, and a
   checkout authorization always captures the editor revision even when the
   editor was clean at the start.
+- Stable routed identity includes more than the named content key. The outer
+  navigation guard keeps one persistent `PopScope` and varies only `canPop`;
+  the device viewport keeps explicit `SizedBox > DecoratedBox > ClipRect`
+  wrappers and varies only their values. Conditional guard insertion and
+  `Container`'s conditional decoration/clip internals can remount a plain
+  GoRoute subtree. The minimum matrix proves identical State, retained text,
+  focus and scroll, and zero disposals across Public/Preview/Edit plus
+  desktop/tablet/mobile, without StatefulShellRoute or keep-alive shielding.
 - A browser reload/assignment is always an editor exit, including same-page
   Home refresh in Preview. Never classify a document replacement from URL
   equality alone.

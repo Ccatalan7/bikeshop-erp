@@ -1,41 +1,181 @@
 part of '../website_editor_panel.dart';
 
+/// One Canvas document, resolved once for the surface that is editing it.
+///
+/// Everything the inspector shows comes from here: the effective root values
+/// and the layers already placed in the previewed viewport's own z-order,
+/// never the raw persisted map. The legacy inventory is resolved once too —
+/// a full migration analysis per field would otherwise run dozens of times per
+/// rebuild for one answer that belongs to the document, not to the field.
+class _CanvasSurface {
+  _CanvasSurface({
+    required this.provider,
+    required this.blockId,
+    required this.slideIndex,
+    required this.document,
+  })  : viewport = provider.previewViewport,
+        legacy = WebsiteCanvasLegacyInventory.of(document),
+        root = WebsiteCanvasResponsiveDocument.project(
+          data: document,
+          viewport: provider.previewViewport,
+        ),
+        layers = WebsiteCanvasResponsiveDocument.projectLayers(
+          data: document,
+          viewport: provider.previewViewport,
+        );
+
+  final WebsiteEditModeProvider provider;
+  final String blockId;
+
+  /// Null addresses a standalone Canvas block; any other value addresses the
+  /// Canvas of that exact carousel slide.
+  final int? slideIndex;
+
+  final Map<String, dynamic> document;
+  final WebsiteViewport viewport;
+  final WebsiteCanvasLegacyInventory legacy;
+
+  /// Root values already resolved for [viewport].
+  final Map<String, dynamic> root;
+
+  /// Layers in the EFFECTIVE order of [viewport], values already resolved.
+  final List<WebsiteCanvasLayerProjection> layers;
+
+  WebsiteCanvasLayerProjection? layer(String? layerId) {
+    final id = layerId?.trim() ?? '';
+    if (id.isEmpty) return null;
+    for (final layer in layers) {
+      if (layer.id == id) return layer;
+    }
+    return null;
+  }
+
+  /// The layer's slot in the effective order, or -1.
+  int slotOf(String layerId) =>
+      layers.indexWhere((layer) => layer.id == layerId.trim());
+
+  /// The layer exactly as persisted — no override applied.
+  ///
+  /// Reserved for the companions that must stay COMMON while a viewport is
+  /// previewed: rebuilding the `actions` mirror from the projected variant
+  /// would record the phone's presentation as the shared one.
+  Map<String, dynamic>? sharedLayer(String layerId) {
+    final raw = document[WebsiteCanvasResponsivePolicy.elementsKey];
+    if (raw is! List) return null;
+    final id = layerId.trim();
+    for (final item in raw) {
+      if (item is Map && item['id']?.toString().trim() == id) {
+        return Map<String, dynamic>.from(
+          item.map((key, value) => MapEntry(key.toString(), value)),
+        );
+      }
+    }
+    return null;
+  }
+
+  double rootNumber(String key, double fallback) =>
+      (root[key] as num?)?.toDouble() ?? fallback;
+
+  /// The one authority for a Canvas property, root or layer.
+  WebsiteCanvasFieldBinding<T>? field<T>(
+    String propertyKey, {
+    required String label,
+    required WebsiteResponsiveDecoder<T> decode,
+    String? layerId,
+    WebsiteBlockFieldType type = WebsiteBlockFieldType.text,
+  }) {
+    return WebsiteCanvasFieldBinding.resolve<T>(
+      provider: provider,
+      blockId: blockId,
+      slideIndex: slideIndex,
+      layerId: layerId,
+      propertyKey: propertyKey,
+      label: label,
+      decode: decode,
+      type: type,
+      legacyInventory: legacy,
+    );
+  }
+
+  WebsiteCanvasFieldBinding<num>? number(
+    String propertyKey, {
+    required String label,
+    String? layerId,
+  }) =>
+      field<num>(
+        propertyKey,
+        label: label,
+        layerId: layerId,
+        decode: WebsiteResponsiveScalarBinding.decodeNumber,
+        type: WebsiteBlockFieldType.number,
+      );
+
+  WebsiteCanvasFieldBinding<bool>? boolean(
+    String propertyKey, {
+    required String label,
+    String? layerId,
+  }) =>
+      field<bool>(
+        propertyKey,
+        label: label,
+        layerId: layerId,
+        decode: WebsiteResponsiveScalarBinding.decodeBoolean,
+        type: WebsiteBlockFieldType.toggle,
+      );
+
+  WebsiteCanvasFieldBinding<String>? text(
+    String propertyKey, {
+    required String label,
+    String? layerId,
+    WebsiteBlockFieldType type = WebsiteBlockFieldType.text,
+  }) =>
+      field<String>(
+        propertyKey,
+        label: label,
+        layerId: layerId,
+        decode: WebsiteResponsiveScalarBinding.decodeText,
+        type: type,
+      );
+
+  WebsiteCanvasFieldBinding<String>? color(
+    String propertyKey, {
+    required String label,
+    String? layerId,
+  }) =>
+      field<String>(
+        propertyKey,
+        label: label,
+        layerId: layerId,
+        decode: WebsiteResponsiveScalarBinding.decodeColor,
+        type: WebsiteBlockFieldType.color,
+      );
+}
+
 /// Controls for the free-position Canvas block (Wix-like).
+///
+/// The inspector owns no document of its own: it addresses one Canvas by
+/// `blockId` + `slideIndex`, reads every visible value from the 7A projection
+/// for the previewed viewport, and writes exclusively through
+/// [WebsiteCanvasFieldBinding] and the provider's atomic Canvas commands.
+/// There is deliberately no callback that hands a rebuilt `elements` or
+/// `slides` list back to a host: replacing a list overwrites the responsive
+/// overrides that live inside the layers it replaces.
 class _CanvasBlockControls extends StatelessWidget {
-  final Map<String, dynamic> data;
   final String blockId;
   final WebsiteEditModeProvider provider;
   final int? slideIndex;
   final bool elementsOnly;
   final bool selectedElementOnly;
   final _InspectorSection? inspectorSection;
-  final ValueChanged<List<Map<String, dynamic>>>? onElementsChanged;
-  final ValueChanged<String?>? onActiveElementChanged;
-  final void Function(String key, dynamic value)? onCanvasSettingChanged;
 
   const _CanvasBlockControls({
-    required this.data,
     required this.blockId,
     required this.provider,
     this.slideIndex,
     this.elementsOnly = false,
     this.selectedElementOnly = false,
     this.inspectorSection,
-    this.onElementsChanged,
-    this.onActiveElementChanged,
-    this.onCanvasSettingChanged,
   });
-
-  List<Map<String, dynamic>> _elements() {
-    final raw = data['elements'];
-    if (raw is List) {
-      return raw
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-    }
-    return <Map<String, dynamic>>[];
-  }
 
   String? _activeElementId() {
     final id = provider
@@ -45,121 +185,107 @@ class _CanvasBlockControls extends StatelessWidget {
     return id.trim();
   }
 
-  void _setActive(String? id) {
-    if (onActiveElementChanged != null) {
-      onActiveElementChanged!(id);
-      return;
-    }
+  int? _slideCount() {
+    if (slideIndex == null) return null;
     final block = provider.getBlock(blockId);
-    final blockData = Map<String, dynamic>.from(
-      block?['block_data'] ?? const <String, dynamic>{},
-    );
-    final slides = blockData['slides'];
+    final slides = (block?['block_data'] as Map?)?['slides'];
+    return slides is List ? slides.length : null;
+  }
+
+  void _setActive(String? id) {
     provider.selectCanvasElement(
       blockId,
       id,
       slideIndex: slideIndex,
-      slideCount: slideIndex == null || slides is! List ? null : slides.length,
+      slideCount: _slideCount(),
     );
   }
 
-  void _setElements(List<Map<String, dynamic>> elements) {
-    if (onElementsChanged != null) {
-      onElementsChanged!(elements);
-      return;
-    }
-    provider.updateBlockData(blockId, 'elements', elements);
-  }
-
-  void _setCanvasSetting(String key, dynamic value) {
-    if (onCanvasSettingChanged != null) {
-      onCanvasSettingChanged!(key, value);
-      return;
-    }
-    provider.updateBlockData(blockId, key, value);
-  }
-
-  void _updateElement(
-    String elementId,
-    Map<String, dynamic> patch,
+  /// Mounts one control under the canonical inheritance shell.
+  ///
+  /// The control carries an EMPTY label: `ResponsiveFieldShell` owns label,
+  /// status, scope sentence and the customize/reset action, and a second label
+  /// for the same field is exactly the duplication the protocol removes.
+  Widget _mount<T>(
+    WebsiteCanvasFieldBinding<T>? binding,
+    Widget Function(WebsiteCanvasFieldBinding<T> binding) build,
   ) {
-    final elements = _elements();
-    final idx = elements.indexWhere((e) => e['id']?.toString() == elementId);
-    if (idx == -1) return;
-    elements[idx] = {
-      ...elements[idx],
-      ...patch,
-    };
-    _setElements(elements);
+    if (binding == null) return const SizedBox.shrink();
+    return ResponsiveFieldShell<T>(
+      state: binding.state,
+      onCustomize: binding.customize,
+      onReset: binding.reset,
+      child: build(binding),
+    );
   }
 
-  void _deleteElement(String elementId) {
-    final elements = _elements()
-      ..removeWhere((e) => e['id']?.toString() == elementId);
-    _setElements(elements);
-    if (_activeElementId() == elementId) {
-      _setActive(null);
+  /// The two framing axes presented as ONE value.
+  ///
+  /// The status is the strongest of the two, so a single overridden axis still
+  /// reads as customised instead of looking inherited.
+  WebsiteResponsiveFieldState<Offset> _framingState({
+    required WebsiteCanvasFieldBinding<num> x,
+    required WebsiteCanvasFieldBinding<num> y,
+    required String label,
+  }) {
+    Offset? pair(num? a, num? b) {
+      if (a == null && b == null) return null;
+      return Offset(a?.toDouble() ?? 0.5, b?.toDouble() ?? 0.5);
     }
+
+    return WebsiteResponsiveFieldState<Offset>.resolve(
+      schema: WebsiteBlockFieldSchema(
+        key: 'focalPoint',
+        label: label,
+        type: WebsiteBlockFieldType.number,
+        responsivePolicy: WebsiteResponsivePropertyPolicy.perViewportGeometry,
+      ),
+      context: x.state.context,
+      resolved: WebsiteResolvedResponsiveValue<Offset>(
+        shared: pair(x.state.resolved.shared, y.state.resolved.shared),
+        value: pair(x.state.resolved.value, y.state.resolved.value),
+        viewport: x.state.resolved.viewport,
+        isOverride: x.state.resolved.isOverride || y.state.resolved.isOverride,
+        isLegacyOverride: x.state.resolved.isLegacyOverride ||
+            y.state.resolved.isLegacyOverride,
+      ),
+      unavailableReason: x.state.unavailableReason ?? y.state.unavailableReason,
+    );
   }
 
-  void _moveElement(String elementId, int delta) {
-    final elements = _elements();
-    final idx = elements.indexWhere((e) => e['id']?.toString() == elementId);
-    if (idx == -1) return;
-    final nextIdx = (idx + delta).clamp(0, elements.length - 1);
-    if (nextIdx == idx) return;
-    final item = elements.removeAt(idx);
-    elements.insert(nextIdx, item);
-    _setElements(elements);
-  }
+  /// The ONE focal control, always contextual to the previewed viewport.
+  ///
+  /// There is no second "Foco móvil" editor and no separate desktop/mobile
+  /// pair: the phone's framing IS this control while the phone is previewed,
+  /// and the shell's badge says whether the value is inherited or its own.
+  /// `x` and `y` travel in a single [WebsiteCanvasFieldBinding.writeMany], so
+  /// one reframe is one history entry and one undo.
+  Widget _focalControl({
+    required _CanvasSurface surface,
+    required String imageUrl,
+    required String label,
+    String? layerId,
+  }) {
+    final x = surface.number('focalPointX', label: label, layerId: layerId);
+    final y = surface.number('focalPointY', label: label, layerId: layerId);
+    if (x == null || y == null) return const SizedBox.shrink();
 
-  void _moveElementToEdge(String elementId, {required bool front}) {
-    final elements = _elements();
-    final idx = elements.indexWhere((e) => e['id']?.toString() == elementId);
-    if (idx == -1 || elements.length < 2) return;
-    final target = front ? elements.length - 1 : 0;
-    if (idx == target) return;
-    final item = elements.removeAt(idx);
-    elements.insert(front ? elements.length : 0, item);
-    _setElements(elements);
-  }
-
-  void _alignElementToCanvas(String elementId, String alignment) {
-    final elements = _elements();
-    final idx = elements.indexWhere((e) => e['id']?.toString() == elementId);
-    if (idx == -1 || elements[idx]['locked'] == true) return;
-
-    final element = elements[idx];
-    final width = (element['w'] as num?)?.toDouble() ?? 200;
-    final height = (element['h'] as num?)?.toDouble() ?? 56;
-    final designWidth = (data['designWidth'] as num?)?.toDouble() ?? 1200.0;
-    final designHeight = (data['designHeight'] as num?)?.toDouble() ??
-        (data['blockHeight'] as num?)?.toDouble() ??
-        750.0;
-    var x = (element['x'] as num?)?.toDouble() ?? 0;
-    var y = (element['y'] as num?)?.toDouble() ?? 0;
-
-    switch (alignment) {
-      case 'left':
-        x = 0;
-        break;
-      case 'hCenter':
-        x = (designWidth - width) / 2;
-        break;
-      case 'right':
-        x = designWidth - width;
-        break;
-      case 'top':
-        y = 0;
-        break;
-      case 'vCenter':
-        y = (designHeight - height) / 2;
-        break;
-      case 'bottom':
-        y = designHeight - height;
-        break;
-    }
-    _updateElement(elementId, {'x': x, 'y': y});
+    return _CanvasFocalField(
+      state: _framingState(x: x, y: y, label: label),
+      imageUrl: imageUrl,
+      onChanged: (nextX, nextY) => x.writeMany(<String, Object?>{
+        'focalPointX': nextX,
+        'focalPointY': nextY,
+      }),
+      onCustomize: () {
+        x.customize();
+        y.customize();
+      },
+      onReset: () {
+        x.reset();
+        y.reset();
+      },
+    );
   }
 
   Widget _inspectorLayoutAction({
@@ -188,15 +314,85 @@ class _CanvasBlockControls extends StatelessWidget {
     );
   }
 
-  Widget _buildElementArrangeControls(
-    Map<String, dynamic> active,
-    List<Map<String, dynamic>> elements,
+  /// Moves the active layer to [slot] of the EFFECTIVE order.
+  ///
+  /// Shared scope moves it in the persisted list; a promoted phone or tablet
+  /// field records the typed `order` exception instead and leaves the base
+  /// order — and every other viewport — exactly where it was.
+  void _reorder(
+    _CanvasSurface surface,
+    WebsiteCanvasFieldBinding<num> order,
+    String layerId,
+    int slot,
   ) {
-    final activeId = active['id']?.toString() ?? '';
-    final index = elements.indexWhere((e) => e['id']?.toString() == activeId);
-    final locked = active['locked'] == true;
-    final canMoveBackward = index > 0;
-    final canMoveForward = index >= 0 && index < elements.length - 1;
+    provider.reorderCanvasLayer(
+      blockId,
+      layerId,
+      slot,
+      slideIndex: slideIndex,
+      scope: order.state.effectiveWriteScope,
+      viewport: surface.viewport,
+    );
+  }
+
+  void _alignToCanvas(
+    _CanvasSurface surface,
+    WebsiteCanvasLayerProjection active,
+    String alignment,
+  ) {
+    final geometry = surface.number('x', label: 'X', layerId: active.id);
+    if (geometry == null) return;
+
+    final width = (active.data['w'] as num?)?.toDouble() ?? 200;
+    final height = (active.data['h'] as num?)?.toDouble() ?? 56;
+    final designWidth = surface.rootNumber('designWidth', 1200);
+    final designHeight = surface.rootNumber(
+      'designHeight',
+      surface.rootNumber('blockHeight', 750),
+    );
+    var x = (active.data['x'] as num?)?.toDouble() ?? 0;
+    var y = (active.data['y'] as num?)?.toDouble() ?? 0;
+
+    switch (alignment) {
+      case 'left':
+        x = 0;
+        break;
+      case 'hCenter':
+        x = (designWidth - width) / 2;
+        break;
+      case 'right':
+        x = designWidth - width;
+        break;
+      case 'top':
+        y = 0;
+        break;
+      case 'vCenter':
+        y = (designHeight - height) / 2;
+        break;
+      case 'bottom':
+        y = designHeight - height;
+        break;
+    }
+    geometry.writeMany(<String, Object?>{'x': x, 'y': y});
+  }
+
+  Widget _buildElementArrangeControls(
+    _CanvasSurface surface,
+    WebsiteCanvasLayerProjection active,
+  ) {
+    final order = surface.number(
+      WebsiteCanvasResponsivePolicy.orderKey,
+      label: 'Orden de capas',
+      layerId: active.id,
+    );
+    if (order == null) return const SizedBox.shrink();
+
+    final slot = surface.slotOf(active.id);
+    final locked = active.data['locked'] == true;
+    final canMoveBackward = slot > 0;
+    final canMoveForward = slot >= 0 && slot < surface.layers.length - 1;
+    final blocked =
+        order.state.status == WebsiteResponsiveFieldStatus.unavailable;
 
     return _CollapsibleSection(
       title: 'Alinear y ordenar',
@@ -208,46 +404,61 @@ class _CanvasBlockControls extends StatelessWidget {
           style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.3),
         ),
         const SizedBox(height: 14),
-        const _SectionHeader('Orden de capas'),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _inspectorLayoutAction(
-              key: const ValueKey('inspector_layer_backward'),
-              label: 'Una atrás',
-              icon: Icons.flip_to_back_rounded,
-              onPressed:
-                  canMoveBackward ? () => _moveElement(activeId, -1) : null,
-            ),
-            const SizedBox(width: 8),
-            _inspectorLayoutAction(
-              key: const ValueKey('inspector_layer_forward'),
-              label: 'Una adelante',
-              icon: Icons.flip_to_front_rounded,
-              onPressed:
-                  canMoveForward ? () => _moveElement(activeId, 1) : null,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _inspectorLayoutAction(
-              label: 'Al fondo',
-              icon: Icons.vertical_align_bottom_rounded,
-              onPressed: canMoveBackward
-                  ? () => _moveElementToEdge(activeId, front: false)
-                  : null,
-            ),
-            const SizedBox(width: 8),
-            _inspectorLayoutAction(
-              label: 'Al frente',
-              icon: Icons.vertical_align_top_rounded,
-              onPressed: canMoveForward
-                  ? () => _moveElementToEdge(activeId, front: true)
-                  : null,
-            ),
-          ],
+        ResponsiveFieldShell<num>(
+          state: order.state,
+          onCustomize: order.customize,
+          onReset: order.reset,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _inspectorLayoutAction(
+                    key: const ValueKey('inspector_layer_backward'),
+                    label: 'Una atrás',
+                    icon: Icons.flip_to_back_rounded,
+                    onPressed: canMoveBackward && !blocked
+                        ? () => _reorder(surface, order, active.id, slot - 1)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _inspectorLayoutAction(
+                    key: const ValueKey('inspector_layer_forward'),
+                    label: 'Una adelante',
+                    icon: Icons.flip_to_front_rounded,
+                    onPressed: canMoveForward && !blocked
+                        ? () => _reorder(surface, order, active.id, slot + 1)
+                        : null,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _inspectorLayoutAction(
+                    label: 'Al fondo',
+                    icon: Icons.vertical_align_bottom_rounded,
+                    onPressed: canMoveBackward && !blocked
+                        ? () => _reorder(surface, order, active.id, 0)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _inspectorLayoutAction(
+                    label: 'Al frente',
+                    icon: Icons.vertical_align_top_rounded,
+                    onPressed: canMoveForward && !blocked
+                        ? () => _reorder(
+                              surface,
+                              order,
+                              active.id,
+                              surface.layers.length - 1,
+                            )
+                        : null,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         const _SectionHeader('Alinear al lienzo'),
@@ -265,7 +476,7 @@ class _CanvasBlockControls extends StatelessWidget {
               label: 'Izquierda',
               icon: Icons.align_horizontal_left_rounded,
               onPressed:
-                  locked ? null : () => _alignElementToCanvas(activeId, 'left'),
+                  locked ? null : () => _alignToCanvas(surface, active, 'left'),
             ),
             const SizedBox(width: 6),
             _inspectorLayoutAction(
@@ -273,7 +484,7 @@ class _CanvasBlockControls extends StatelessWidget {
               icon: Icons.align_horizontal_center_rounded,
               onPressed: locked
                   ? null
-                  : () => _alignElementToCanvas(activeId, 'hCenter'),
+                  : () => _alignToCanvas(surface, active, 'hCenter'),
             ),
             const SizedBox(width: 6),
             _inspectorLayoutAction(
@@ -281,7 +492,7 @@ class _CanvasBlockControls extends StatelessWidget {
               icon: Icons.align_horizontal_right_rounded,
               onPressed: locked
                   ? null
-                  : () => _alignElementToCanvas(activeId, 'right'),
+                  : () => _alignToCanvas(surface, active, 'right'),
             ),
           ],
         ),
@@ -292,7 +503,7 @@ class _CanvasBlockControls extends StatelessWidget {
               label: 'Arriba',
               icon: Icons.align_vertical_top_rounded,
               onPressed:
-                  locked ? null : () => _alignElementToCanvas(activeId, 'top'),
+                  locked ? null : () => _alignToCanvas(surface, active, 'top'),
             ),
             const SizedBox(width: 6),
             _inspectorLayoutAction(
@@ -300,7 +511,7 @@ class _CanvasBlockControls extends StatelessWidget {
               icon: Icons.align_vertical_center_rounded,
               onPressed: locked
                   ? null
-                  : () => _alignElementToCanvas(activeId, 'vCenter'),
+                  : () => _alignToCanvas(surface, active, 'vCenter'),
             ),
             const SizedBox(width: 6),
             _inspectorLayoutAction(
@@ -308,7 +519,7 @@ class _CanvasBlockControls extends StatelessWidget {
               icon: Icons.align_vertical_bottom_rounded,
               onPressed: locked
                   ? null
-                  : () => _alignElementToCanvas(activeId, 'bottom'),
+                  : () => _alignToCanvas(surface, active, 'bottom'),
             ),
           ],
         ),
@@ -316,54 +527,84 @@ class _CanvasBlockControls extends StatelessWidget {
     );
   }
 
-  void _addElement(String type) {
-    final now = DateTime.now().microsecondsSinceEpoch;
-    final id = 'el_$now';
-    final elements = _elements();
-    final next = createCanvasElement(id: id, type: type);
-    elements.add(next);
-    _setElements(elements);
-    _setActive(id);
+  /// "Agregar capa". The command is the only writer, and a target that cannot
+  /// take a layer says so instead of looking like it worked.
+  void _addElement(BuildContext context, String type) {
+    final added = provider.addCanvasElementToCanvasBlock(
+      blockId,
+      type,
+      slideIndex: slideIndex,
+    );
+    if (added) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Esta diapositiva todavía no usa capas. Activa "Diseño avanzado '
+          'por capas" para empezar la composición.',
+        ),
+        duration: Duration(seconds: 3),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
+  void _duplicateElement(_CanvasSurface surface, String layerId) {
+    provider.duplicateCanvasLayer(
+      blockId,
+      layerId,
+      WebsiteCanvasResponsiveDocument.nextLayerId(
+        surface.document,
+        seed: '${layerId}_copia',
+      ),
+      slideIndex: slideIndex,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final height = (data['blockHeight'] as num?)?.toDouble() ?? 420.0;
-    final heightMode = (data['heightMode'] ?? 'fixed').toString();
-    final vhPct = (data['vhPct'] as num?)?.toDouble() ?? 0.7;
-    final fullBleed = (data['fullBleed'] as bool?) ?? false;
-    final bg = (data['backgroundColor'] ?? '#FFFFFF').toString();
-    final backgroundImageUrl = (data['backgroundImageUrl'] ?? '').toString();
-    final focalPointX = (data['focalPointX'] as num?)?.toDouble() ?? 0.5;
-    final focalPointY = (data['focalPointY'] as num?)?.toDouble() ?? 0.5;
-    final mobileFocalPointX =
-        (data['mobileFocalPointX'] as num?)?.toDouble() ?? focalPointX;
-    final mobileFocalPointY =
-        (data['mobileFocalPointY'] as num?)?.toDouble() ?? focalPointY;
-    final backgroundVideoUrl = (data['backgroundVideoUrl'] ?? '').toString();
-    final backgroundYoutubeId = (data['backgroundYoutubeId'] ?? '').toString();
-    final overlayEnabled = (data['overlayEnabled'] as bool?) ?? false;
-    final overlayOpacity = (data['overlayOpacity'] as num?)?.toDouble() ?? 0.35;
-    final overlayColor = (data['overlayColor'] ?? '#000000').toString();
-    final backgroundFit = (data['backgroundFit'] ?? 'cover').toString();
-    final showGrid = (data['showGrid'] as bool?) ?? true;
-    final snap = (data['snap'] as bool?) ?? true;
-    final gridSize = (data['gridSize'] as num?)?.toDouble() ?? 8.0;
-    final snapDistance = (data['snapDistance'] as num?)?.toDouble() ?? 6.0;
+    final document = provider.canvasDocument(blockId, slideIndex: slideIndex);
+    if (document == null) {
+      return const _CanvasNotComposedNotice();
+    }
 
-    final elements = _elements();
-    final activeId = _activeElementId();
-    final active = activeId == null
-        ? null
-        : elements.cast<Map<String, dynamic>?>().firstWhere(
-              (e) => e?['id']?.toString() == activeId,
-              orElse: () => null,
-            );
-    final activeType = (active?['type'] ?? '').toString();
+    final surface = _CanvasSurface(
+      provider: provider,
+      blockId: blockId,
+      slideIndex: slideIndex,
+      document: document,
+    );
+    final active = surface.layer(_activeElementId());
+    final activeId = active?.id;
+    final activeType = (active?.data['type'] ?? '').toString();
+    final heightMode = (surface.root['heightMode'] ?? 'fixed').toString();
+    final backgroundImageUrl =
+        (surface.root['backgroundImageUrl'] ?? '').toString();
+    final overlayEnabled = (surface.root['overlayEnabled'] as bool?) ?? false;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ========== LEGACY / MIGRATION STATE ==========
+        // Anchored to the content and shown before anything else: an operator
+        // editing a document that still speaks the old model has to know it
+        // before spending a decision on a field.
+        if (!selectedElementOnly)
+          _CanvasMigrationNotice(
+            status: WebsiteCanvasMigration.inspect(document),
+            onMigrate: () => provider.migrateCanvasDocument(
+              blockId,
+              slideIndex: slideIndex,
+            ),
+            onMigrateKeepingLayers: () =>
+                provider.migrateCanvasDocumentKeepingLayers(
+              blockId,
+              slideIndex: slideIndex,
+            ),
+            onRestore: () => provider.restoreCanvasLegacyDocument(
+              blockId,
+              slideIndex: slideIndex,
+            ),
+          ),
         if (!elementsOnly) ...[
           // ========== BLOCK SETTINGS ==========
           _CollapsibleSection(
@@ -372,54 +613,75 @@ class _CanvasBlockControls extends StatelessWidget {
             initiallyExpanded:
                 active == null, // Only expanded when no element selected
             children: [
-              _EditorToggle(
-                label: 'Full-bleed (sin padding)',
-                value: fullBleed,
-                onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'fullBleed', v),
+              _mount<bool>(
+                surface.boolean('fullBleed', label: 'Full-bleed (sin padding)'),
+                (binding) => _EditorToggle(
+                  label: '',
+                  value: binding.value ?? false,
+                  onChanged: binding.write,
+                ),
               ),
               const SizedBox(height: 12),
-              _EditorDropdown(
-                label: 'Altura',
-                value: heightMode,
-                options: const [
-                  ('fixed', 'Fija'),
-                  ('viewport', 'Viewport (pantalla)'),
-                ],
-                onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'heightMode', v),
+              _mount<String>(
+                surface.text(
+                  'heightMode',
+                  label: 'Altura',
+                  type: WebsiteBlockFieldType.select,
+                ),
+                (binding) => _EditorDropdown(
+                  label: '',
+                  value: binding.value ?? 'fixed',
+                  options: const [
+                    ('fixed', 'Fija'),
+                    ('viewport', 'Viewport (pantalla)'),
+                  ],
+                  onChanged: binding.write,
+                ),
               ),
               const SizedBox(height: 12),
-              if (heightMode == 'viewport') ...[
-                _EditorSlider(
-                  label: 'Viewport height',
-                  value: vhPct.clamp(0.2, 1.0),
-                  min: 0.2,
-                  max: 1.0,
-                  divisions: 16,
-                  valueLabel: '${(vhPct * 100).toStringAsFixed(0)}%',
-                  onChanged: (v) =>
-                      provider.updateBlockData(blockId, 'vhPct', v),
+              if (heightMode == 'viewport')
+                _mount<num>(
+                  surface.number('vhPct', label: 'Viewport height'),
+                  (binding) {
+                    final value =
+                        (binding.value?.toDouble() ?? 0.7).clamp(0.2, 1.0);
+                    return _EditorSlider(
+                      label: '',
+                      value: value,
+                      min: 0.2,
+                      max: 1.0,
+                      divisions: 16,
+                      valueLabel: '${(value * 100).toStringAsFixed(0)}%',
+                      onChanged: binding.write,
+                    );
+                  },
+                )
+              else
+                _mount<num>(
+                  surface.number('blockHeight', label: 'Altura del canvas'),
+                  (binding) {
+                    final value =
+                        (binding.value?.toDouble() ?? 420.0).clamp(220, 1600);
+                    return _EditorSlider(
+                      label: '',
+                      value: value.toDouble(),
+                      min: 220,
+                      max: 1600,
+                      divisions: 69,
+                      valueLabel: '${value.toStringAsFixed(0)}px',
+                      onChanged: binding.write,
+                    );
+                  },
                 ),
-              ] else ...[
-                _EditorSlider(
-                  label: 'Altura del canvas',
-                  value: height.clamp(220, 1600),
-                  min: 220,
-                  max: 1600,
-                  divisions: 69,
-                  valueLabel: '${height.toStringAsFixed(0)}px',
-                  onChanged: (v) =>
-                      provider.updateBlockData(blockId, 'blockHeight', v),
-                ),
-              ],
               const SizedBox(height: 12),
-              WebsiteColorPickerField(
-                label: 'Color de fondo',
-                value: bg,
-                allowAlpha: true,
-                onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'backgroundColor', v),
+              _mount<String>(
+                surface.color('backgroundColor', label: 'Color de fondo'),
+                (binding) => WebsiteColorPickerField(
+                  label: '',
+                  value: binding.value ?? '#FFFFFF',
+                  allowAlpha: true,
+                  onChanged: binding.write,
+                ),
               ),
             ],
           ),
@@ -430,58 +692,52 @@ class _CanvasBlockControls extends StatelessWidget {
             icon: Icons.image_rounded,
             initiallyExpanded: false, // Always collapsed unless manually opened
             children: [
-              _ImagePicker(
-                currentUrl: backgroundImageUrl,
-                onChanged: (url) => provider.updateBlockData(
-                    blockId, 'backgroundImageUrl', url),
+              _mount<String>(
+                surface.text(
+                  'backgroundImageUrl',
+                  label: 'Imagen de fondo',
+                  type: WebsiteBlockFieldType.image,
+                ),
+                (binding) => _ImagePicker(
+                  currentUrl: binding.value ?? '',
+                  onChanged: binding.write,
+                ),
               ),
               if (backgroundImageUrl.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                const _SectionHeader('Foco de imagen'),
-                const SizedBox(height: 8),
-                FocalPointPicker(
+                _focalControl(
+                  surface: surface,
                   imageUrl: backgroundImageUrl,
-                  focalX: focalPointX,
-                  focalY: focalPointY,
-                  onChanged: (x, y) => provider.updateBlockDataMultiple(
-                    blockId,
-                    {'focalPointX': x, 'focalPointY': y},
-                  ),
+                  label: 'Foco de imagen',
                 ),
                 const SizedBox(height: 12),
-                const _SectionHeader('Foco móvil'),
-                const SizedBox(height: 8),
-                FocalPointPicker(
-                  imageUrl: backgroundImageUrl,
-                  focalX: mobileFocalPointX,
-                  focalY: mobileFocalPointY,
-                  onChanged: (x, y) => provider.updateBlockDataMultiple(
-                    blockId,
-                    {'mobileFocalPointX': x, 'mobileFocalPointY': y},
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _EditorTextField(
-                  label: 'Texto alternativo',
-                  value: (data['backgroundImageAltText'] ?? '').toString(),
-                  onChanged: (value) => provider.updateBlockData(
-                    blockId,
+                _mount<String>(
+                  surface.text(
                     'backgroundImageAltText',
-                    value,
+                    label: 'Texto alternativo',
+                  ),
+                  (binding) => _EditorTextField(
+                    label: '',
+                    value: binding.value ?? '',
+                    onChanged: binding.write,
                   ),
                 ),
               ],
               const SizedBox(height: 12),
               const _SectionHeader('Video de fondo'),
               const SizedBox(height: 8),
-              _VideoPicker(
-                currentUrl: backgroundVideoUrl,
-                onChanged: (url) => provider.updateBlockDataMultiple(
-                  blockId,
-                  {
+              _mount<String>(
+                surface.text(
+                  'backgroundVideoUrl',
+                  label: 'Archivo de video',
+                  type: WebsiteBlockFieldType.video,
+                ),
+                (binding) => _VideoPicker(
+                  currentUrl: binding.value ?? '',
+                  onChanged: (url) => binding.writeMany(<String, Object?>{
                     'backgroundVideoUrl': url,
                     if (url.isNotEmpty) 'backgroundYoutubeId': '',
-                  },
+                  }),
                 ),
               ),
               const SizedBox(height: 12),
@@ -499,80 +755,85 @@ class _CanvasBlockControls extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _EditorTextField(
-                    label: 'URL directa de video (mp4/webm)',
-                    value: backgroundVideoUrl,
-                    onChanged: (v) => provider.updateBlockData(
-                      blockId,
+                  _mount<String>(
+                    surface.text(
                       'backgroundVideoUrl',
-                      v,
+                      label: 'URL directa de video (mp4/webm)',
+                    ),
+                    (binding) => _EditorTextField(
+                      label: '',
+                      value: binding.value ?? '',
+                      onChanged: binding.write,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _EditorTextField(
-                    label: 'YouTube URL / ID',
-                    value: backgroundYoutubeId,
-                    onChanged: (v) {
-                      String id = v;
-                      if (v.contains('youtube.com') || v.contains('youtu.be')) {
-                        final regExp = RegExp(
-                          r'^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*',
-                        );
-                        final match = regExp.firstMatch(v);
-                        if (match != null && match.groupCount >= 7) {
-                          final extracted = match.group(7);
-                          if (extracted != null && extracted.isNotEmpty) {
-                            id = extracted;
-                          }
-                        }
-                      }
-                      provider.updateBlockData(
-                        blockId,
-                        'backgroundYoutubeId',
-                        id,
-                      );
-                    },
-                    hint: 'Pega el enlace o ID',
+                  _mount<String>(
+                    surface.text(
+                      'backgroundYoutubeId',
+                      label: 'YouTube URL / ID',
+                    ),
+                    (binding) => _EditorTextField(
+                      label: '',
+                      value: binding.value ?? '',
+                      onChanged: (v) => binding.write(_youtubeIdOf(v)),
+                      hint: 'Pega el enlace o ID',
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              _EditorDropdown(
-                label: 'Fit',
-                value: backgroundFit,
-                options: const [
-                  ('cover', 'Cover'),
-                  ('contain', 'Contain'),
-                ],
-                onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'backgroundFit', v),
+              _mount<String>(
+                surface.text(
+                  'backgroundFit',
+                  label: 'Fit',
+                  type: WebsiteBlockFieldType.select,
+                ),
+                (binding) => _EditorDropdown(
+                  label: '',
+                  value: binding.value ?? 'cover',
+                  options: const [
+                    ('cover', 'Cover'),
+                    ('contain', 'Contain'),
+                  ],
+                  onChanged: binding.write,
+                ),
               ),
               const SizedBox(height: 12),
-              _EditorToggle(
-                label: 'Overlay',
-                value: overlayEnabled,
-                onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'overlayEnabled', v),
+              _mount<bool>(
+                surface.boolean('overlayEnabled', label: 'Overlay'),
+                (binding) => _EditorToggle(
+                  label: '',
+                  value: binding.value ?? false,
+                  onChanged: binding.write,
+                ),
               ),
               if (overlayEnabled) ...[
                 const SizedBox(height: 12),
-                WebsiteColorPickerField(
-                  label: 'Color del overlay',
-                  value: overlayColor,
-                  allowAlpha: false,
-                  onChanged: (v) =>
-                      provider.updateBlockData(blockId, 'overlayColor', v),
+                _mount<String>(
+                  surface.color('overlayColor', label: 'Color del overlay'),
+                  (binding) => WebsiteColorPickerField(
+                    label: '',
+                    value: binding.value ?? '#000000',
+                    allowAlpha: false,
+                    onChanged: binding.write,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                _EditorSlider(
-                  label: 'Opacidad overlay',
-                  value: overlayOpacity.clamp(0.0, 0.9),
-                  min: 0.0,
-                  max: 0.9,
-                  divisions: 18,
-                  valueLabel: overlayOpacity.toStringAsFixed(2),
-                  onChanged: (v) =>
-                      provider.updateBlockData(blockId, 'overlayOpacity', v),
+                _mount<num>(
+                  surface.number('overlayOpacity', label: 'Opacidad overlay'),
+                  (binding) {
+                    final value =
+                        (binding.value?.toDouble() ?? 0.35).clamp(0.0, 0.9);
+                    return _EditorSlider(
+                      label: '',
+                      value: value,
+                      min: 0.0,
+                      max: 0.9,
+                      divisions: 18,
+                      valueLabel: value.toStringAsFixed(2),
+                      onChanged: binding.write,
+                    );
+                  },
                 ),
               ],
             ],
@@ -584,39 +845,54 @@ class _CanvasBlockControls extends StatelessWidget {
             icon: Icons.grid_on_rounded,
             initiallyExpanded: false, // Always collapsed unless manually opened
             children: [
-              _EditorToggle(
-                label: 'Mostrar grid',
-                value: showGrid,
-                onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'showGrid', v),
+              _mount<bool>(
+                surface.boolean('showGrid', label: 'Mostrar grid'),
+                (binding) => _EditorToggle(
+                  label: '',
+                  value: binding.value ?? true,
+                  onChanged: binding.write,
+                ),
               ),
               const SizedBox(height: 12),
-              _EditorToggle(
-                label: 'Snapping',
-                value: snap,
-                onChanged: (v) => provider.updateBlockData(blockId, 'snap', v),
+              _mount<bool>(
+                surface.boolean('snap', label: 'Snapping'),
+                (binding) => _EditorToggle(
+                  label: '',
+                  value: binding.value ?? true,
+                  onChanged: binding.write,
+                ),
               ),
               const SizedBox(height: 12),
-              _EditorSlider(
-                label: 'Tamaño grid',
-                value: gridSize.clamp(4, 24),
-                min: 4,
-                max: 24,
-                divisions: 20,
-                valueLabel: '${gridSize.toStringAsFixed(0)}px',
-                onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'gridSize', v),
+              _mount<num>(
+                surface.number('gridSize', label: 'Tamaño grid'),
+                (binding) {
+                  final value = (binding.value?.toDouble() ?? 8.0).clamp(4, 24);
+                  return _EditorSlider(
+                    label: '',
+                    value: value.toDouble(),
+                    min: 4,
+                    max: 24,
+                    divisions: 20,
+                    valueLabel: '${value.toStringAsFixed(0)}px',
+                    onChanged: binding.write,
+                  );
+                },
               ),
               const SizedBox(height: 12),
-              _EditorSlider(
-                label: 'Distancia snap',
-                value: snapDistance.clamp(2, 16),
-                min: 2,
-                max: 16,
-                divisions: 14,
-                valueLabel: '${snapDistance.toStringAsFixed(0)}px',
-                onChanged: (v) =>
-                    provider.updateBlockData(blockId, 'snapDistance', v),
+              _mount<num>(
+                surface.number('snapDistance', label: 'Distancia snap'),
+                (binding) {
+                  final value = (binding.value?.toDouble() ?? 6.0).clamp(2, 16);
+                  return _EditorSlider(
+                    label: '',
+                    value: value.toDouble(),
+                    min: 2,
+                    max: 16,
+                    divisions: 14,
+                    valueLabel: '${value.toStringAsFixed(0)}px',
+                    onChanged: binding.write,
+                  );
+                },
               ),
             ],
           ),
@@ -629,23 +905,31 @@ class _CanvasBlockControls extends StatelessWidget {
             icon: Icons.crop_free_rounded,
             initiallyExpanded: true,
             children: [
-              _EditorToggle(
-                label: 'Restringir capas al área segura',
-                value: data['constrainElementsToSafeArea'] != false,
-                onChanged: (value) => _setCanvasSetting(
+              _mount<bool>(
+                surface.boolean(
                   'constrainElementsToSafeArea',
-                  value,
+                  label: 'Restringir capas al área segura',
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                data['constrainElementsToSafeArea'] == false
-                    ? 'Sangrado general activado: cualquier capa puede cruzar la guía. La parte fuera de la diapositiva se recorta en vista previa.'
-                    : 'Regla general activa para capas actuales y nuevas. La guía visible conserva la composición entre editor y vista previa.',
-                style: const TextStyle(
-                  color: Colors.white38,
-                  fontSize: 11,
-                  height: 1.35,
+                (binding) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _EditorToggle(
+                      label: '',
+                      value: binding.value ?? true,
+                      onChanged: binding.write,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      binding.value == false
+                          ? 'Sangrado general activado: cualquier capa puede cruzar la guía. La parte fuera de la diapositiva se recorta en vista previa.'
+                          : 'Regla general activa para capas actuales y nuevas. La guía visible conserva la composición entre editor y vista previa.',
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -654,7 +938,7 @@ class _CanvasBlockControls extends StatelessWidget {
         // ========== CANVAS ELEMENTS ==========
         if (!selectedElementOnly)
           _CollapsibleSection(
-            title: 'Canvas Elements (${elements.length})',
+            title: 'Canvas Elements (${surface.layers.length})',
             icon: Icons.layers_rounded,
             initiallyExpanded:
                 active == null, // Only expanded when no element selected
@@ -663,7 +947,7 @@ class _CanvasBlockControls extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _addElement('text'),
+                      onPressed: () => _addElement(context, 'text'),
                       icon: const Icon(Icons.text_fields_rounded, size: 18),
                       label: const Text('Texto'),
                     ),
@@ -671,7 +955,7 @@ class _CanvasBlockControls extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _addElement('button'),
+                      onPressed: () => _addElement(context, 'button'),
                       icon: const Icon(Icons.smart_button_rounded, size: 18),
                       label: const Text('Botón'),
                     ),
@@ -683,7 +967,7 @@ class _CanvasBlockControls extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _addElement('image'),
+                      onPressed: () => _addElement(context, 'image'),
                       icon: const Icon(Icons.image_outlined, size: 18),
                       label: const Text('Imagen'),
                     ),
@@ -691,7 +975,7 @@ class _CanvasBlockControls extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _addElement('shape'),
+                      onPressed: () => _addElement(context, 'shape'),
                       icon: const Icon(Icons.rectangle_outlined, size: 18),
                       label: const Text('Forma'),
                     ),
@@ -699,28 +983,28 @@ class _CanvasBlockControls extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              if (elements.isEmpty)
+              if (surface.layers.isEmpty)
                 Text(
                   'Agrega elementos y arrástralos en el canvas.',
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
                 )
               else
                 Column(
-                  children: elements.map((e) {
-                    final id = e['id']?.toString() ?? '';
-                    final type = (e['type'] ?? 'text').toString();
+                  children: surface.layers.map((layer) {
+                    final data = layer.data;
+                    final type = (data['type'] ?? 'text').toString();
                     final title = switch (type) {
-                      'button' => (e['label'] ?? 'Botón').toString(),
+                      'button' => (data['label'] ?? 'Botón').toString(),
                       'image' =>
-                        (e['altText'] ?? 'Imagen').toString().trim().isEmpty
+                        (data['altText'] ?? 'Imagen').toString().trim().isEmpty
                             ? 'Imagen'
-                            : e['altText'].toString(),
+                            : data['altText'].toString(),
                       'shape' => 'Forma',
                       'product' => 'Producto',
                       'productsGallery' => 'Galería de productos',
-                      _ => (e['text'] ?? 'Texto').toString(),
+                      _ => (data['text'] ?? 'Texto').toString(),
                     };
-                    final isActive = id == activeId;
+                    final isActive = layer.id == activeId;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
@@ -743,22 +1027,44 @@ class _CanvasBlockControls extends StatelessWidget {
                             'productsGallery' => Icons.grid_view_rounded,
                             _ => Icons.text_fields_rounded,
                           },
-                          color: Colors.white70,
+                          color:
+                              layer.visible ? Colors.white70 : Colors.white30,
                           size: 18,
                         ),
                         title: Text(
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 13),
+                          style: TextStyle(
+                            color:
+                                layer.visible ? Colors.white70 : Colors.white30,
+                            fontSize: 13,
+                          ),
                         ),
-                        onTap: () => _setActive(id),
-                        trailing: IconButton(
-                          tooltip: 'Eliminar',
-                          icon: const Icon(Icons.delete_outline, size: 18),
-                          color: Colors.red.shade300,
-                          onPressed: () => _deleteElement(id),
+                        onTap: () => _setActive(layer.id),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Duplicar',
+                              icon: const Icon(Icons.copy_rounded, size: 17),
+                              color: Colors.white54,
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () =>
+                                  _duplicateElement(surface, layer.id),
+                            ),
+                            IconButton(
+                              tooltip: 'Eliminar',
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              color: Colors.red.shade300,
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => provider.removeCanvasLayer(
+                                blockId,
+                                layer.id,
+                                slideIndex: slideIndex,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -783,134 +1089,140 @@ class _CanvasBlockControls extends StatelessWidget {
             icon: Icons.open_with_rounded,
             initiallyExpanded: true,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _EditorTextField(
-                      label: 'X',
-                      value: ((active['x'] as num?)?.toDouble() ?? 0)
-                          .toStringAsFixed(0),
-                      onChanged: (v) {
-                        final parsed = double.tryParse(v);
-                        if (parsed != null) {
-                          _updateElement(activeId!, {'x': parsed});
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _EditorTextField(
-                      label: 'Y',
-                      value: ((active['y'] as num?)?.toDouble() ?? 0)
-                          .toStringAsFixed(0),
-                      onChanged: (v) {
-                        final parsed = double.tryParse(v);
-                        if (parsed != null) {
-                          _updateElement(activeId!, {'y': parsed});
-                        }
-                      },
-                    ),
-                  ),
-                ],
+              // One geometry field per row. The two-column grid the Canvas used
+              // to draw predates the inheritance shell: the shell's own header
+              // is a label plus a status badge — "Personalizado para Móvil" is
+              // the widest of them — and half of a 380 px inspector cannot hold
+              // it, so the pair overflowed instead of ellipsizing.
+              _mount<num>(
+                surface.number('x', label: 'X', layerId: active.id),
+                (binding) => _EditorTextField(
+                  label: '',
+                  value: (binding.value?.toDouble() ?? 0).toStringAsFixed(0),
+                  onChanged: (v) {
+                    final parsed = double.tryParse(v);
+                    if (parsed != null) binding.write(parsed);
+                  },
+                ),
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _EditorTextField(
-                      label: 'Ancho',
-                      value: ((active['w'] as num?)?.toDouble() ?? 200)
-                          .toStringAsFixed(0),
-                      onChanged: (v) {
-                        final parsed = double.tryParse(v);
-                        if (parsed != null) {
-                          _updateElement(
-                            activeId!,
-                            {'w': parsed.clamp(40, 2000)},
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _EditorTextField(
-                      label: 'Alto',
-                      value: ((active['h'] as num?)?.toDouble() ?? 56)
-                          .toStringAsFixed(0),
-                      onChanged: (v) {
-                        final parsed = double.tryParse(v);
-                        if (parsed != null) {
-                          _updateElement(
-                            activeId!,
-                            {'h': parsed.clamp(30, 2000)},
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _EditorSlider(
-                label: 'Rotación',
-                value: ((active['rotation'] as num?)?.toDouble() ?? 0)
-                    .clamp(-180, 180),
-                min: -180,
-                max: 180,
-                divisions: 360,
-                valueLabel:
-                    '${((active['rotation'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}°',
-                onChanged: (v) => _updateElement(activeId!, {'rotation': v}),
-              ),
-              if (((active['rotation'] as num?)?.toDouble() ?? 0).abs() > 0.01)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => _updateElement(activeId!, {'rotation': 0}),
-                    icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                    label: const Text('Restablecer rotación'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF20C5C1),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
+              _mount<num>(
+                surface.number('y', label: 'Y', layerId: active.id),
+                (binding) => _EditorTextField(
+                  label: '',
+                  value: (binding.value?.toDouble() ?? 0).toStringAsFixed(0),
+                  onChanged: (v) {
+                    final parsed = double.tryParse(v);
+                    if (parsed != null) binding.write(parsed);
+                  },
                 ),
-              const SizedBox(height: 12),
-              _EditorToggle(
-                label: 'Bloquear ajustes directos',
-                value: active['locked'] == true,
-                onChanged: (v) => _updateElement(activeId!, {'locked': v}),
               ),
-              const SizedBox(height: 5),
-              const Text(
-                'Evita mover, redimensionar, recortar o rotar accidentalmente desde el lienzo. Los valores precisos siguen disponibles aquí.',
-                style:
-                    TextStyle(color: Colors.white38, fontSize: 11, height: 1.3),
+              const SizedBox(height: 10),
+              _mount<num>(
+                surface.number('w', label: 'Ancho', layerId: active.id),
+                (binding) => _EditorTextField(
+                  label: '',
+                  value: (binding.value?.toDouble() ?? 200).toStringAsFixed(0),
+                  onChanged: (v) {
+                    final parsed = double.tryParse(v);
+                    if (parsed != null) {
+                      binding.write(parsed.clamp(40, 2000));
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              _mount<num>(
+                surface.number('h', label: 'Alto', layerId: active.id),
+                (binding) => _EditorTextField(
+                  label: '',
+                  value: (binding.value?.toDouble() ?? 56).toStringAsFixed(0),
+                  onChanged: (v) {
+                    final parsed = double.tryParse(v);
+                    if (parsed != null) {
+                      binding.write(parsed.clamp(30, 2000));
+                    }
+                  },
+                ),
               ),
               const SizedBox(height: 12),
-              _EditorDropdown(
-                label: 'Visibilidad adaptable',
-                value: active['showOnMobile'] == true
-                    ? 'mobile'
-                    : active['hideOnMobile'] == true
-                        ? 'desktop'
-                        : 'all',
-                options: const [
-                  ('all', 'Escritorio y móvil'),
-                  ('desktop', 'Solo escritorio'),
-                  ('mobile', 'Solo móvil'),
-                ],
-                onChanged: (value) => _updateElement(activeId!, {
-                  'hideOnMobile': value == 'desktop',
-                  'showOnMobile': value == 'mobile',
-                }),
+              _mount<num>(
+                surface.number('rotation',
+                    label: 'Rotación', layerId: active.id),
+                (binding) {
+                  final value =
+                      (binding.value?.toDouble() ?? 0).clamp(-180, 180);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _EditorSlider(
+                        label: '',
+                        value: value.toDouble(),
+                        min: -180,
+                        max: 180,
+                        divisions: 360,
+                        valueLabel: '${value.toStringAsFixed(0)}°',
+                        onChanged: binding.write,
+                      ),
+                      if (value.abs() > 0.01)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () => binding.write(0),
+                            icon:
+                                const Icon(Icons.restart_alt_rounded, size: 16),
+                            label: const Text('Restablecer rotación'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF20C5C1),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _mount<bool>(
+                surface.boolean('locked',
+                    label: 'Bloquear ajustes directos', layerId: active.id),
+                (binding) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _EditorToggle(
+                      label: '',
+                      value: binding.value ?? false,
+                      onChanged: binding.write,
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'Evita mover, redimensionar, recortar o rotar accidentalmente desde el lienzo. Los valores precisos siguen disponibles aquí.',
+                      style: TextStyle(
+                          color: Colors.white38, fontSize: 11, height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // ONE typed visibility. The contradictory `hideOnMobile` /
+              // `showOnMobile` pair is neither written nor offered: what a
+              // viewport owns is this property's own override.
+              _mount<bool>(
+                surface.boolean(
+                  WebsiteCanvasResponsivePolicy.visibleKey,
+                  label: 'Mostrar esta capa',
+                  layerId: active.id,
+                ),
+                (binding) => _EditorToggle(
+                  label: '',
+                  value: binding.value ?? true,
+                  onChanged: binding.write,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _buildElementArrangeControls(active, elements),
+          _buildElementArrangeControls(surface, active),
         ],
         if (active != null &&
             (inspectorSection == null ||
@@ -932,544 +1244,18 @@ class _CanvasBlockControls extends StatelessWidget {
             },
             initiallyExpanded: selectedElementOnly,
             children: [
-              if (activeType == 'text') ...[
-                if (inspectorSection != _InspectorSection.style) ...[
-                  _EditorTextField(
-                    label: 'Texto',
-                    value: active['text']?.toString() ?? '',
-                    onChanged: (v) => _updateElement(activeId!, {'text': v}),
-                    maxLines: 3,
-                  ),
-                ],
-                if (inspectorSection != _InspectorSection.content) ...[
-                  _EditorSlider(
-                    label: 'Tamaño fuente',
-                    value: ((active['fontSize'] as num?)?.toDouble() ?? 24)
-                        .clamp(10, 80),
-                    min: 10,
-                    max: 80,
-                    divisions: 70,
-                    valueLabel:
-                        '${((active['fontSize'] as num?)?.toDouble() ?? 24).toStringAsFixed(0)}px',
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'fontSize': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorDropdown(
-                    label: 'Tipografía del tema',
-                    value: (active['fontRole'] ?? 'heading').toString(),
-                    options: const [
-                      ('heading', 'Títulos'),
-                      ('body', 'Texto general'),
-                    ],
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'fontRole': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorDropdown(
-                    label: 'Peso',
-                    value: (active['fontWeight'] ?? 'w600').toString(),
-                    options: const [
-                      ('w400', 'Normal'),
-                      ('w500', 'Medio'),
-                      ('w600', 'Semi-bold'),
-                      ('w700', 'Bold'),
-                    ],
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'fontWeight': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorDropdown(
-                    label: 'Alineación',
-                    value: (active['align'] ?? 'left').toString(),
-                    options: const [
-                      ('left', 'Izquierda'),
-                      ('center', 'Centro'),
-                      ('right', 'Derecha'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'align': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  WebsiteColorPickerField(
-                    label: 'Color del texto',
-                    value: (active['color'] ?? '#111111').toString(),
-                    allowAlpha: true,
-                    onChanged: (v) => _updateElement(activeId!, {'color': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorSlider(
-                    label: 'Espaciado de letras',
-                    value: ((active['letterSpacing'] as num?)?.toDouble() ?? 0)
-                        .clamp(-1, 8),
-                    min: -1,
-                    max: 8,
-                    divisions: 18,
-                    valueLabel:
-                        ((active['letterSpacing'] as num?)?.toDouble() ?? 0)
-                            .toStringAsFixed(1),
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'letterSpacing': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorSlider(
-                    label: 'Interlineado',
-                    value: ((active['lineHeight'] as num?)?.toDouble() ?? 1.1)
-                        .clamp(0.8, 2.0),
-                    min: 0.8,
-                    max: 2.0,
-                    divisions: 12,
-                    valueLabel:
-                        ((active['lineHeight'] as num?)?.toDouble() ?? 1.1)
-                            .toStringAsFixed(1),
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'lineHeight': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorToggle(
-                    label: 'MAYÚSCULAS',
-                    value: active['uppercase'] == true,
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'uppercase': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorDropdown(
-                    label: 'Animación',
-                    value: (active['anim'] ?? 'none').toString(),
-                    options: const [
-                      ('none', 'Ninguna'),
-                      ('fade', 'Fade'),
-                      ('fadeUp', 'Fade up'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
-                  ),
-                ],
-              ] else if (activeType == 'button') ...[
-                if (inspectorSection != _InspectorSection.style) ...[
-                  WebsiteActionEditor(
-                    showVariant: true,
-                    value: WebsiteActionValue.resolvePrimary(
-                          active,
-                          labelKeys: const ['label'],
-                          hrefKeys: const ['link'],
-                          variantKeys: const ['style'],
-                          defaultLabel: 'Botón',
-                          defaultHref: '/',
-                          defaultVariant: WebsiteActionVariant.fromStorage(
-                            active['style']?.toString(),
-                          ),
-                        ) ??
-                        const WebsiteActionValue(
-                          label: 'Botón',
-                          href: '/',
-                        ),
-                    onChanged: (action) => _updateElement(activeId!, {
-                      'label': action.label,
-                      'link': action.href,
-                      'style': action.variant.storageValue,
-                      'actions': WebsiteActionValue.mergePrimary(
-                        active['actions'],
-                        action,
-                      ),
-                    }),
-                  ),
-                ],
-                if (inspectorSection != _InspectorSection.content) ...[
-                  _EditorToggle(
-                    label: 'Usar estilo global del tema',
-                    value: active['inheritTheme'] != false,
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'inheritTheme': v}),
-                  ),
-                  if (active['inheritTheme'] == false) ...[
-                    const SizedBox(height: 12),
-                    WebsiteColorPickerField(
-                      label: 'Color del botón',
-                      value: (active['bgColor'] ?? '#00A09D').toString(),
-                      allowAlpha: true,
-                      onChanged: (v) =>
-                          _updateElement(activeId!, {'bgColor': v}),
-                    ),
-                    const SizedBox(height: 12),
-                    WebsiteColorPickerField(
-                      label: 'Color del texto',
-                      value: (active['fgColor'] ?? '#FFFFFF').toString(),
-                      allowAlpha: true,
-                      onChanged: (v) =>
-                          _updateElement(activeId!, {'fgColor': v}),
-                    ),
-                    const SizedBox(height: 12),
-                    _EditorSlider(
-                      label: 'Radio',
-                      value: ((active['radius'] as num?)?.toDouble() ?? 12)
-                          .clamp(0, 32),
-                      min: 0,
-                      max: 32,
-                      divisions: 32,
-                      valueLabel:
-                          '${((active['radius'] as num?)?.toDouble() ?? 12).toStringAsFixed(0)}px',
-                      onChanged: (v) =>
-                          _updateElement(activeId!, {'radius': v}),
-                    ),
-                    const SizedBox(height: 12),
-                    _EditorToggle(
-                      label: 'Sombra',
-                      value: (active['shadow'] as bool?) ?? false,
-                      onChanged: (v) =>
-                          _updateElement(activeId!, {'shadow': v}),
-                    ),
-                    const SizedBox(height: 12),
-                    _EditorToggle(
-                      label: 'MAYÚSCULAS',
-                      value: (active['uppercase'] as bool?) ?? false,
-                      onChanged: (v) =>
-                          _updateElement(activeId!, {'uppercase': v}),
-                    ),
-                    const SizedBox(height: 12),
-                    _EditorSlider(
-                      label: 'Letter spacing',
-                      value:
-                          ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
-                              .clamp(0, 6),
-                      min: 0,
-                      max: 6,
-                      divisions: 12,
-                      valueLabel:
-                          ((active['letterSpacing'] as num?)?.toDouble() ?? 0.0)
-                              .toStringAsFixed(1),
-                      onChanged: (v) =>
-                          _updateElement(activeId!, {'letterSpacing': v}),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  _EditorDropdown(
-                    label: 'Animación',
-                    value: (active['anim'] ?? 'none').toString(),
-                    options: const [
-                      ('none', 'Ninguna'),
-                      ('fade', 'Fade'),
-                      ('fadeUp', 'Fade up'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
-                  ),
-                ],
-              ] else if (activeType == 'image') ...[
-                if (inspectorSection != _InspectorSection.style) ...[
-                  const _SectionHeader('Producto vinculado (opcional)'),
-                  const SizedBox(height: 8),
-                  _CanvasProductSelector(
-                    currentProductId: (active['productId'] ?? '').toString(),
-                    onChanged: (id) => _updateElement(activeId!, {
-                      'productId': id,
-                      'imageSource': id.isEmpty ? 'manual' : 'product',
-                    }),
-                  ),
-                  if ((active['productId'] ?? '').toString().isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _EditorDropdown(
-                      label: 'Imagen visible',
-                      value: (active['imageSource'] ?? 'product').toString(),
-                      options: const [
-                        ('product', 'Imagen actual del catálogo'),
-                        ('manual', 'Imagen seleccionada / recorte'),
-                      ],
-                      onChanged: (v) =>
-                          _updateElement(activeId!, {'imageSource': v}),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      (active['imageSource'] ?? 'product') == 'manual'
-                          ? 'La capa conserva el vínculo comercial, pero muestra el recurso seleccionado abajo. Útil para recortes transparentes y campañas.'
-                          : 'La capa sigue automáticamente la imagen principal del producto en el catálogo.',
-                      style: const TextStyle(
-                        color: Colors.white38,
-                        fontSize: 11,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  const _SectionHeader('Imagen seleccionada'),
-                  const SizedBox(height: 8),
-                  _ImagePicker(
-                    currentUrl: (active['imageUrl'] ?? '').toString(),
-                    allowProductLink: true,
-                    onAssetChanged: (selection) => _updateElement(activeId!, {
-                      'imageUrl': selection.publicUrl,
-                      if (selection.linksProduct) ...{
-                        'productId': selection.productId ?? '',
-                        'imageSource': selection.productImageIndex == 0
-                            ? 'product'
-                            : 'manual',
-                      } else ...{
-                        if (selection.comesFromProduct) 'productId': '',
-                        'imageSource': 'manual',
-                      },
-                    }),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorTextField(
-                    label: 'Texto alternativo',
-                    value: (active['altText'] ?? '').toString(),
-                    onChanged: (v) => _updateElement(activeId!, {'altText': v}),
-                  ),
-                ],
-                if (inspectorSection != _InspectorSection.content) ...[
-                  _EditorDropdown(
-                    label: 'Fit',
-                    value: (active['fit'] ?? 'cover').toString(),
-                    options: const [
-                      ('cover', 'Cover'),
-                      ('contain', 'Contain'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'fit': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorSlider(
-                    label: 'Encuadre horizontal',
-                    value:
-                        (((active['focalPointX'] as num?)?.toDouble() ?? 0.5) *
-                                100)
-                            .clamp(0, 100),
-                    min: 0,
-                    max: 100,
-                    divisions: 100,
-                    valueLabel:
-                        '${((((active['focalPointX'] as num?)?.toDouble() ?? 0.5) * 100)).round()}%',
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'focalPointX': v / 100}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorSlider(
-                    label: 'Encuadre vertical',
-                    value:
-                        (((active['focalPointY'] as num?)?.toDouble() ?? 0.5) *
-                                100)
-                            .clamp(0, 100),
-                    min: 0,
-                    max: 100,
-                    divisions: 100,
-                    valueLabel:
-                        '${((((active['focalPointY'] as num?)?.toDouble() ?? 0.5) * 100)).round()}%',
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'focalPointY': v / 100}),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => _updateElement(activeId!, {
-                        'fit': 'cover',
-                        'focalPointX': 0.5,
-                        'focalPointY': 0.5,
-                      }),
-                      icon: const Icon(Icons.center_focus_strong_rounded,
-                          size: 16),
-                      label: const Text('Centrar encuadre'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF20C5C1),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                  ),
-                  const Text(
-                    'En el lienzo: doble clic o usa Recortar; arrastra la imagen para reencuadrar y sus ocho bordes para cambiar el marco.',
-                    style: TextStyle(
-                        color: Colors.white38, fontSize: 11, height: 1.3),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorSlider(
-                    label: 'Radio',
-                    value: ((active['radius'] as num?)?.toDouble() ?? 12)
-                        .clamp(0, 32),
-                    min: 0,
-                    max: 32,
-                    divisions: 32,
-                    valueLabel:
-                        '${((active['radius'] as num?)?.toDouble() ?? 12).toStringAsFixed(0)}px',
-                    onChanged: (v) => _updateElement(activeId!, {'radius': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorDropdown(
-                    label: 'Animación',
-                    value: (active['anim'] ?? 'none').toString(),
-                    options: const [
-                      ('none', 'Ninguna'),
-                      ('fade', 'Fade'),
-                      ('fadeUp', 'Fade up'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
-                  ),
-                ],
-              ] else if (activeType == 'shape') ...[
-                if (inspectorSection != _InspectorSection.style) ...[
-                  _EditorDropdown(
-                    label: 'Forma',
-                    value: (active['shape'] ?? 'rectangle').toString(),
-                    options: const [
-                      ('rectangle', 'Rectángulo'),
-                      ('ellipse', 'Elipse'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'shape': v}),
-                  ),
-                ],
-                if (inspectorSection != _InspectorSection.content) ...[
-                  WebsiteColorPickerField(
-                    label: 'Color de relleno',
-                    value: (active['fillColor'] ?? '#1F2937').toString(),
-                    allowAlpha: true,
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'fillColor': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  WebsiteColorPickerField(
-                    label: 'Color de borde',
-                    value: (active['borderColor'] ?? '#1F2937').toString(),
-                    allowAlpha: true,
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'borderColor': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorSlider(
-                    label: 'Borde',
-                    value: ((active['borderWidth'] as num?)?.toDouble() ?? 0)
-                        .clamp(0, 16),
-                    min: 0,
-                    max: 16,
-                    divisions: 16,
-                    valueLabel:
-                        '${((active['borderWidth'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}px',
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'borderWidth': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  if ((active['shape'] ?? 'rectangle') == 'rectangle')
-                    _EditorSlider(
-                      label: 'Radio',
-                      value: ((active['radius'] as num?)?.toDouble() ?? 0)
-                          .clamp(0, 80),
-                      min: 0,
-                      max: 80,
-                      divisions: 40,
-                      valueLabel:
-                          '${((active['radius'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}px',
-                      onChanged: (v) =>
-                          _updateElement(activeId!, {'radius': v}),
-                    ),
-                ],
-              ] else if (activeType == 'product') ...[
-                if (inspectorSection != _InspectorSection.style) ...[
-                  _CanvasProductSelector(
-                    currentProductId: (active['productId'] ?? '').toString(),
-                    onChanged: (id) =>
-                        _updateElement(activeId!, {'productId': id}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorToggle(
-                    label: 'Mostrar precio',
-                    value: (active['showPrice'] as bool?) ?? true,
-                    onChanged: (v) =>
-                        _updateElement(activeId!, {'showPrice': v}),
-                  ),
-                ],
-                if (inspectorSection != _InspectorSection.content) ...[
-                  _EditorDropdown(
-                    label: 'Animación',
-                    value: (active['anim'] ?? 'none').toString(),
-                    options: const [
-                      ('none', 'Ninguna'),
-                      ('fade', 'Fade'),
-                      ('fadeUp', 'Fade up'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
-                  ),
-                ],
-              ] else if (activeType == 'productsGallery') ...[
-                if (inspectorSection != _InspectorSection.style) ...[
-                  _EditorDropdown(
-                    label: 'Modo',
-                    value: (active['mode'] ?? 'latest').toString(),
-                    options: const [
-                      ('latest', 'Últimos publicados'),
-                      ('manual', 'Manual (IDs)'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'mode': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  _EditorSlider(
-                    label: 'Máx productos',
-                    value: ((active['maxProducts'] as num?)?.toDouble() ?? 6)
-                        .clamp(1, 24),
-                    min: 1,
-                    max: 24,
-                    divisions: 23,
-                    valueLabel: '${(active['maxProducts'] ?? 6)}',
-                    onChanged: (v) => _updateElement(
-                      activeId!,
-                      {'maxProducts': v.round()},
-                    ),
-                  ),
-                  if ((active['mode'] ?? 'latest').toString() == 'manual') ...[
-                    const SizedBox(height: 12),
-                    _CanvasProductsMultiSelector(
-                      selectedIds: ((active['productIds'] as List?) ?? const [])
-                          .map((e) => e.toString())
-                          .where((e) => e.isNotEmpty)
-                          .toList(),
-                      onConfirm: (ids) =>
-                          _updateElement(activeId!, {'productIds': ids}),
-                    ),
-                  ],
-                ],
-                if (inspectorSection != _InspectorSection.content) ...[
-                  _EditorDropdown(
-                    label: 'Diseño',
-                    value: (active['layout'] ?? 'grid').toString(),
-                    options: const [
-                      ('grid', 'Cuadrícula'),
-                      ('carousel', 'Carrusel'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'layout': v}),
-                  ),
-                  const SizedBox(height: 12),
-                  if ((active['layout'] ?? 'grid').toString() == 'grid')
-                    _EditorSlider(
-                      label: 'Columnas',
-                      value: ((active['columns'] as num?)?.toDouble() ?? 3)
-                          .clamp(1, 4),
-                      min: 1,
-                      max: 4,
-                      divisions: 3,
-                      valueLabel: '${(active['columns'] ?? 3)}',
-                      onChanged: (v) => _updateElement(
-                        activeId!,
-                        {'columns': v.round()},
-                      ),
-                    )
-                  else
-                    _EditorSlider(
-                      label: 'Ancho tarjeta',
-                      value: ((active['cardWidth'] as num?)?.toDouble() ?? 300)
-                          .clamp(220, 380),
-                      min: 220,
-                      max: 380,
-                      divisions: 32,
-                      valueLabel:
-                          '${((active['cardWidth'] as num?)?.toDouble() ?? 300).toStringAsFixed(0)}px',
-                      onChanged: (v) =>
-                          _updateElement(activeId!, {'cardWidth': v}),
-                    ),
-                  const SizedBox(height: 12),
-                  _EditorDropdown(
-                    label: 'Animación',
-                    value: (active['anim'] ?? 'none').toString(),
-                    options: const [
-                      ('none', 'Ninguna'),
-                      ('fade', 'Fade'),
-                      ('fadeUp', 'Fade up'),
-                    ],
-                    onChanged: (v) => _updateElement(activeId!, {'anim': v}),
-                  ),
-                ],
-              ],
+              if (activeType == 'text')
+                ..._buildTextLayerControls(surface, active)
+              else if (activeType == 'button')
+                ..._buildButtonLayerControls(surface, active)
+              else if (activeType == 'image')
+                ..._buildImageLayerControls(surface, active)
+              else if (activeType == 'shape')
+                ..._buildShapeLayerControls(surface, active)
+              else if (activeType == 'product')
+                ..._buildProductLayerControls(surface, active)
+              else if (activeType == 'productsGallery')
+                ..._buildGalleryLayerControls(surface, active),
               if (inspectorSection == null) ...[
                 const SizedBox(height: 12),
                 const Divider(color: Colors.white12),
@@ -1489,6 +1275,1128 @@ class _CanvasBlockControls extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+
+  List<Widget> _buildTextLayerControls(
+    _CanvasSurface surface,
+    WebsiteCanvasLayerProjection active,
+  ) {
+    final id = active.id;
+    return <Widget>[
+      if (inspectorSection != _InspectorSection.style)
+        _mount<String>(
+          surface.text('text', label: 'Texto', layerId: id),
+          (binding) => _EditorTextField(
+            label: '',
+            value: binding.value ?? '',
+            onChanged: binding.write,
+            maxLines: 3,
+          ),
+        ),
+      if (inspectorSection != _InspectorSection.content) ...[
+        _mount<num>(
+          surface.number('fontSize', label: 'Tamaño fuente', layerId: id),
+          (binding) {
+            final value = (binding.value?.toDouble() ?? 24).clamp(10, 80);
+            return _EditorSlider(
+              label: '',
+              value: value.toDouble(),
+              min: 10,
+              max: 80,
+              divisions: 70,
+              valueLabel: '${value.toStringAsFixed(0)}px',
+              onChanged: binding.write,
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _mount<String>(
+          surface.text(
+            'fontRole',
+            label: 'Tipografía del tema',
+            layerId: id,
+            type: WebsiteBlockFieldType.select,
+          ),
+          (binding) => _EditorDropdown(
+            label: '',
+            value: binding.value ?? 'heading',
+            options: const [
+              ('heading', 'Títulos'),
+              ('body', 'Texto general'),
+            ],
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<String>(
+          surface.text(
+            'fontWeight',
+            label: 'Peso',
+            layerId: id,
+            type: WebsiteBlockFieldType.select,
+          ),
+          (binding) => _EditorDropdown(
+            label: '',
+            value: binding.value ?? 'w600',
+            options: const [
+              ('w400', 'Normal'),
+              ('w500', 'Medio'),
+              ('w600', 'Semi-bold'),
+              ('w700', 'Bold'),
+            ],
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<String>(
+          surface.text(
+            'align',
+            label: 'Alineación',
+            layerId: id,
+            type: WebsiteBlockFieldType.select,
+          ),
+          (binding) => _EditorDropdown(
+            label: '',
+            value: binding.value ?? 'left',
+            options: const [
+              ('left', 'Izquierda'),
+              ('center', 'Centro'),
+              ('right', 'Derecha'),
+            ],
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<String>(
+          surface.color('color', label: 'Color del texto', layerId: id),
+          (binding) => WebsiteColorPickerField(
+            label: '',
+            value: binding.value ?? '#111111',
+            allowAlpha: true,
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<num>(
+          surface.number('letterSpacing',
+              label: 'Espaciado de letras', layerId: id),
+          (binding) {
+            final value = (binding.value?.toDouble() ?? 0).clamp(-1, 8);
+            return _EditorSlider(
+              label: '',
+              value: value.toDouble(),
+              min: -1,
+              max: 8,
+              divisions: 18,
+              valueLabel: value.toStringAsFixed(1),
+              onChanged: binding.write,
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _mount<num>(
+          surface.number('lineHeight', label: 'Interlineado', layerId: id),
+          (binding) {
+            final value = (binding.value?.toDouble() ?? 1.1).clamp(0.8, 2.0);
+            return _EditorSlider(
+              label: '',
+              value: value,
+              min: 0.8,
+              max: 2.0,
+              divisions: 12,
+              valueLabel: value.toStringAsFixed(1),
+              onChanged: binding.write,
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _mount<bool>(
+          surface.boolean('uppercase', label: 'MAYÚSCULAS', layerId: id),
+          (binding) => _EditorToggle(
+            label: '',
+            value: binding.value ?? false,
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _animationControl(surface, id),
+      ],
+    ];
+  }
+
+  List<Widget> _buildButtonLayerControls(
+    _CanvasSurface surface,
+    WebsiteCanvasLayerProjection active,
+  ) {
+    final id = active.id;
+    final data = active.data;
+    final inheritTheme = data['inheritTheme'] != false;
+    // The action as PERSISTED, for the companion that must stay common.
+    //
+    // Resolved as a whole action rather than read off `style`: a layer written
+    // before the direct keys existed carries its presentation only inside the
+    // structured `actions`, and asking for `style` alone would answer "filled"
+    // for it. Editing just the wording would then rewrite an `outline` button
+    // as a solid one — a silent change to the SHARED presentation, which is
+    // exactly what this split exists to prevent.
+    final shared = surface.sharedLayer(id) ?? data;
+    final sharedAction = WebsiteActionValue.resolvePrimary(
+          shared,
+          labelKeys: const ['label'],
+          hrefKeys: const ['link'],
+          variantKeys: const ['style'],
+          defaultLabel: 'Botón',
+          defaultHref: '/',
+        ) ??
+        const WebsiteActionValue(label: 'Botón', href: '/');
+    final sharedVariant = sharedAction.variant;
+    return <Widget>[
+      // Content is the shared half of the action — the words and the
+      // destination — and it is edited WITHOUT the variant selector.
+      //
+      // `label` and `link` are `sharedOnly`; `style` is `responsiveOptional`.
+      // One editor writing all three would drag presentation into whatever
+      // scope the shared half writes at, so a phone edit of the wording would
+      // silently stamp the phone's variant onto the common base. The variant
+      // therefore lives under Apariencia with its own binding, and the
+      // `actions` mirror is rebuilt from the layer's SHARED variant so the
+      // mirror never records a projected phone value as the common one.
+      if (inspectorSection != _InspectorSection.style)
+        _mount<String>(
+          surface.text('label', label: 'Acción', layerId: id),
+          (binding) => WebsiteActionEditor(
+            showVariant: false,
+            // Label, destination and variant are all shared for this layer, so
+            // the editor shows the shared action itself.
+            value: sharedAction,
+            onChanged: (action) => binding.writeMany(<String, Object?>{
+              'label': action.label,
+              'link': action.href,
+              'actions': WebsiteActionValue.mergePrimary(
+                shared['actions'],
+                action.copyWith(variant: sharedVariant),
+              ),
+            }),
+          ),
+        ),
+      if (inspectorSection != _InspectorSection.content) ...[
+        _mount<String>(
+          surface.text(
+            'style',
+            label: 'Estilo del botón',
+            layerId: id,
+            type: WebsiteBlockFieldType.select,
+          ),
+          (binding) => _EditorDropdown(
+            label: '',
+            value: WebsiteActionVariant.fromStorage(binding.value).storageValue,
+            options: const [
+              ('filled', 'Sólido'),
+              ('outline', 'Contorno'),
+              ('text', 'Solo texto'),
+            ],
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<bool>(
+          surface.boolean('inheritTheme',
+              label: 'Usar estilo global del tema', layerId: id),
+          (binding) => _EditorToggle(
+            label: '',
+            value: binding.value ?? true,
+            onChanged: binding.write,
+          ),
+        ),
+        if (!inheritTheme) ...[
+          const SizedBox(height: 12),
+          _mount<String>(
+            surface.color('bgColor', label: 'Color del botón', layerId: id),
+            (binding) => WebsiteColorPickerField(
+              label: '',
+              value: binding.value ?? '#00A09D',
+              allowAlpha: true,
+              onChanged: binding.write,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _mount<String>(
+            surface.color('fgColor', label: 'Color del texto', layerId: id),
+            (binding) => WebsiteColorPickerField(
+              label: '',
+              value: binding.value ?? '#FFFFFF',
+              allowAlpha: true,
+              onChanged: binding.write,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _mount<num>(
+            surface.number('radius', label: 'Radio', layerId: id),
+            (binding) {
+              final value = (binding.value?.toDouble() ?? 12).clamp(0, 32);
+              return _EditorSlider(
+                label: '',
+                value: value.toDouble(),
+                min: 0,
+                max: 32,
+                divisions: 32,
+                valueLabel: '${value.toStringAsFixed(0)}px',
+                onChanged: binding.write,
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          _mount<bool>(
+            surface.boolean('shadow', label: 'Sombra', layerId: id),
+            (binding) => _EditorToggle(
+              label: '',
+              value: binding.value ?? false,
+              onChanged: binding.write,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _mount<bool>(
+            surface.boolean('uppercase', label: 'MAYÚSCULAS', layerId: id),
+            (binding) => _EditorToggle(
+              label: '',
+              value: binding.value ?? false,
+              onChanged: binding.write,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _mount<num>(
+            surface.number('letterSpacing',
+                label: 'Letter spacing', layerId: id),
+            (binding) {
+              final value = (binding.value?.toDouble() ?? 0.0).clamp(0, 6);
+              return _EditorSlider(
+                label: '',
+                value: value.toDouble(),
+                min: 0,
+                max: 6,
+                divisions: 12,
+                valueLabel: value.toStringAsFixed(1),
+                onChanged: binding.write,
+              );
+            },
+          ),
+        ],
+        const SizedBox(height: 12),
+        _animationControl(surface, id),
+      ],
+    ];
+  }
+
+  List<Widget> _buildImageLayerControls(
+    _CanvasSurface surface,
+    WebsiteCanvasLayerProjection active,
+  ) {
+    final id = active.id;
+    final data = active.data;
+    final productId = (data['productId'] ?? '').toString();
+    final imageUrl = (data['imageUrl'] ?? '').toString();
+    return <Widget>[
+      if (inspectorSection != _InspectorSection.style) ...[
+        const _SectionHeader('Producto vinculado (opcional)'),
+        const SizedBox(height: 8),
+        _mount<String>(
+          surface.text('productId', label: 'Producto', layerId: id),
+          (binding) => _CanvasProductSelector(
+            currentProductId: binding.value ?? '',
+            onChanged: (next) => binding.writeMany(<String, Object?>{
+              'productId': next,
+              'imageSource': next.isEmpty ? 'manual' : 'product',
+            }),
+          ),
+        ),
+        if (productId.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _mount<String>(
+            surface.text(
+              'imageSource',
+              label: 'Imagen visible',
+              layerId: id,
+              type: WebsiteBlockFieldType.select,
+            ),
+            (binding) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _EditorDropdown(
+                  label: '',
+                  value: binding.value ?? 'product',
+                  options: const [
+                    ('product', 'Imagen actual del catálogo'),
+                    ('manual', 'Imagen seleccionada / recorte'),
+                  ],
+                  onChanged: binding.write,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  (binding.value ?? 'product') == 'manual'
+                      ? 'La capa conserva el vínculo comercial, pero muestra el recurso seleccionado abajo. Útil para recortes transparentes y campañas.'
+                      : 'La capa sigue automáticamente la imagen principal del producto en el catálogo.',
+                  style: const TextStyle(
+                    color: Colors.white38,
+                    fontSize: 11,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        const _SectionHeader('Imagen seleccionada'),
+        const SizedBox(height: 8),
+        _mount<String>(
+          surface.text(
+            'imageUrl',
+            label: 'Imagen',
+            layerId: id,
+            type: WebsiteBlockFieldType.image,
+          ),
+          (binding) => _ImagePicker(
+            currentUrl: binding.value ?? '',
+            allowProductLink: true,
+            onAssetChanged: (selection) => binding.writeMany(<String, Object?>{
+              'imageUrl': selection.publicUrl,
+              if (selection.linksProduct) ...<String, Object?>{
+                'productId': selection.productId ?? '',
+                'imageSource':
+                    selection.productImageIndex == 0 ? 'product' : 'manual',
+              } else ...<String, Object?>{
+                if (selection.comesFromProduct) 'productId': '',
+                'imageSource': 'manual',
+              },
+            }),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<String>(
+          surface.text('altText', label: 'Texto alternativo', layerId: id),
+          (binding) => _EditorTextField(
+            label: '',
+            value: binding.value ?? '',
+            onChanged: binding.write,
+          ),
+        ),
+      ],
+      if (inspectorSection != _InspectorSection.content) ...[
+        _mount<String>(
+          surface.text(
+            'fit',
+            label: 'Fit',
+            layerId: id,
+            type: WebsiteBlockFieldType.select,
+          ),
+          (binding) => _EditorDropdown(
+            label: '',
+            value: binding.value ?? 'cover',
+            options: const [
+              ('cover', 'Cover'),
+              ('contain', 'Contain'),
+            ],
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _focalControl(
+          surface: surface,
+          imageUrl: imageUrl,
+          label: 'Encuadre de la imagen',
+          layerId: id,
+        ),
+        const Text(
+          'En el lienzo: doble clic o usa Recortar; arrastra la imagen para reencuadrar y sus ocho bordes para cambiar el marco.',
+          style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.3),
+        ),
+        const SizedBox(height: 12),
+        _mount<num>(
+          surface.number('radius', label: 'Radio', layerId: id),
+          (binding) {
+            final value = (binding.value?.toDouble() ?? 12).clamp(0, 32);
+            return _EditorSlider(
+              label: '',
+              value: value.toDouble(),
+              min: 0,
+              max: 32,
+              divisions: 32,
+              valueLabel: '${value.toStringAsFixed(0)}px',
+              onChanged: binding.write,
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _animationControl(surface, id),
+      ],
+    ];
+  }
+
+  List<Widget> _buildShapeLayerControls(
+    _CanvasSurface surface,
+    WebsiteCanvasLayerProjection active,
+  ) {
+    final id = active.id;
+    final shape = (active.data['shape'] ?? 'rectangle').toString();
+    return <Widget>[
+      if (inspectorSection != _InspectorSection.style)
+        _mount<String>(
+          surface.text(
+            'shape',
+            label: 'Forma',
+            layerId: id,
+            type: WebsiteBlockFieldType.select,
+          ),
+          (binding) => _EditorDropdown(
+            label: '',
+            value: binding.value ?? 'rectangle',
+            options: const [
+              ('rectangle', 'Rectángulo'),
+              ('ellipse', 'Elipse'),
+            ],
+            onChanged: binding.write,
+          ),
+        ),
+      if (inspectorSection != _InspectorSection.content) ...[
+        _mount<String>(
+          surface.color('fillColor', label: 'Color de relleno', layerId: id),
+          (binding) => WebsiteColorPickerField(
+            label: '',
+            value: binding.value ?? '#1F2937',
+            allowAlpha: true,
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<String>(
+          surface.color('borderColor', label: 'Color de borde', layerId: id),
+          (binding) => WebsiteColorPickerField(
+            label: '',
+            value: binding.value ?? '#1F2937',
+            allowAlpha: true,
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<num>(
+          surface.number('borderWidth', label: 'Borde', layerId: id),
+          (binding) {
+            final value = (binding.value?.toDouble() ?? 0).clamp(0, 16);
+            return _EditorSlider(
+              label: '',
+              value: value.toDouble(),
+              min: 0,
+              max: 16,
+              divisions: 16,
+              valueLabel: '${value.toStringAsFixed(0)}px',
+              onChanged: binding.write,
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        if (shape == 'rectangle')
+          _mount<num>(
+            surface.number('radius', label: 'Radio', layerId: id),
+            (binding) {
+              final value = (binding.value?.toDouble() ?? 0).clamp(0, 80);
+              return _EditorSlider(
+                label: '',
+                value: value.toDouble(),
+                min: 0,
+                max: 80,
+                divisions: 40,
+                valueLabel: '${value.toStringAsFixed(0)}px',
+                onChanged: binding.write,
+              );
+            },
+          ),
+      ],
+    ];
+  }
+
+  List<Widget> _buildProductLayerControls(
+    _CanvasSurface surface,
+    WebsiteCanvasLayerProjection active,
+  ) {
+    final id = active.id;
+    return <Widget>[
+      if (inspectorSection != _InspectorSection.style) ...[
+        _mount<String>(
+          surface.text('productId', label: 'Producto', layerId: id),
+          (binding) => _CanvasProductSelector(
+            currentProductId: binding.value ?? '',
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<bool>(
+          surface.boolean('showPrice', label: 'Mostrar precio', layerId: id),
+          (binding) => _EditorToggle(
+            label: '',
+            value: binding.value ?? true,
+            onChanged: binding.write,
+          ),
+        ),
+      ],
+      if (inspectorSection != _InspectorSection.content)
+        _animationControl(surface, id),
+    ];
+  }
+
+  List<Widget> _buildGalleryLayerControls(
+    _CanvasSurface surface,
+    WebsiteCanvasLayerProjection active,
+  ) {
+    final id = active.id;
+    final data = active.data;
+    final mode = (data['mode'] ?? 'latest').toString();
+    final layout = (data['layout'] ?? 'grid').toString();
+    return <Widget>[
+      if (inspectorSection != _InspectorSection.style) ...[
+        _mount<String>(
+          surface.text(
+            'mode',
+            label: 'Modo',
+            layerId: id,
+            type: WebsiteBlockFieldType.select,
+          ),
+          (binding) => _EditorDropdown(
+            label: '',
+            value: binding.value ?? 'latest',
+            options: const [
+              ('latest', 'Últimos publicados'),
+              ('manual', 'Manual (IDs)'),
+            ],
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _mount<num>(
+          surface.number('maxProducts', label: 'Máx productos', layerId: id),
+          (binding) {
+            final value = (binding.value?.toDouble() ?? 6).clamp(1, 24);
+            return _EditorSlider(
+              label: '',
+              value: value.toDouble(),
+              min: 1,
+              max: 24,
+              divisions: 23,
+              valueLabel: '${value.round()}',
+              onChanged: (v) => binding.write(v.round()),
+            );
+          },
+        ),
+        if (mode == 'manual') ...[
+          const SizedBox(height: 12),
+          _mount<List<String>>(
+            surface.field<List<String>>(
+              'productIds',
+              label: 'Productos',
+              layerId: id,
+              decode: WebsiteResponsiveScalarBinding.decodeStringList,
+            ),
+            (binding) => _CanvasProductsMultiSelector(
+              selectedIds: binding.value ?? const <String>[],
+              onConfirm: binding.write,
+            ),
+          ),
+        ],
+      ],
+      if (inspectorSection != _InspectorSection.content) ...[
+        _mount<String>(
+          surface.text(
+            'layout',
+            label: 'Diseño',
+            layerId: id,
+            type: WebsiteBlockFieldType.select,
+          ),
+          (binding) => _EditorDropdown(
+            label: '',
+            value: binding.value ?? 'grid',
+            options: const [
+              ('grid', 'Cuadrícula'),
+              ('carousel', 'Carrusel'),
+            ],
+            onChanged: binding.write,
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (layout == 'grid')
+          _mount<num>(
+            surface.number('columns', label: 'Columnas', layerId: id),
+            (binding) {
+              final value = (binding.value?.toDouble() ?? 3).clamp(1, 4);
+              return _EditorSlider(
+                label: '',
+                value: value.toDouble(),
+                min: 1,
+                max: 4,
+                divisions: 3,
+                valueLabel: '${value.round()}',
+                onChanged: (v) => binding.write(v.round()),
+              );
+            },
+          )
+        else
+          _mount<num>(
+            surface.number('cardWidth', label: 'Ancho tarjeta', layerId: id),
+            (binding) {
+              final value = (binding.value?.toDouble() ?? 300).clamp(220, 380);
+              return _EditorSlider(
+                label: '',
+                value: value.toDouble(),
+                min: 220,
+                max: 380,
+                divisions: 32,
+                valueLabel: '${value.toStringAsFixed(0)}px',
+                onChanged: binding.write,
+              );
+            },
+          ),
+        const SizedBox(height: 12),
+        _animationControl(surface, id),
+      ],
+    ];
+  }
+
+  Widget _animationControl(_CanvasSurface surface, String layerId) {
+    return _mount<String>(
+      surface.text(
+        'anim',
+        label: 'Animación',
+        layerId: layerId,
+        type: WebsiteBlockFieldType.select,
+      ),
+      (binding) => _EditorDropdown(
+        label: '',
+        value: binding.value ?? 'none',
+        options: const [
+          ('none', 'Ninguna'),
+          ('fade', 'Fade'),
+          ('fadeUp', 'Fade up'),
+        ],
+        onChanged: binding.write,
+      ),
+    );
+  }
+
+  static String _youtubeIdOf(String raw) {
+    if (!raw.contains('youtube.com') && !raw.contains('youtu.be')) return raw;
+    final regExp = RegExp(
+      r'^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*',
+    );
+    final match = regExp.firstMatch(raw);
+    if (match != null && match.groupCount >= 7) {
+      final extracted = match.group(7);
+      if (extracted != null && extracted.isNotEmpty) return extracted;
+    }
+    return raw;
+  }
+}
+
+/// One framing control: the resolved value, and the picker on demand.
+///
+/// Reframing is precision, not a permanently mounted editor — the same
+/// disclosure the canonical media row uses.
+///
+/// The shell is the ONLY label and status here: the picker is mounted with
+/// `label: null`, so nothing calls a desktop value "móvil", and its own
+/// `Centrar` is the only centring action. The picker also runs with
+/// `continuousUpdates: false`, so a drag paints locally and persists `x` and
+/// `y` once, when the gesture ends — a reframe is one history entry, and a
+/// cancelled gesture is none.
+class _CanvasFocalField extends StatefulWidget {
+  const _CanvasFocalField({
+    required this.state,
+    required this.imageUrl,
+    required this.onChanged,
+    this.onCustomize,
+    this.onReset,
+  });
+
+  final WebsiteResponsiveFieldState<Offset> state;
+  final String imageUrl;
+  final void Function(double x, double y) onChanged;
+  final VoidCallback? onCustomize;
+  final VoidCallback? onReset;
+
+  @override
+  State<_CanvasFocalField> createState() => _CanvasFocalFieldState();
+}
+
+class _CanvasFocalFieldState extends State<_CanvasFocalField> {
+  /// Transient. Reframing is a mode, never published data.
+  bool _reframing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final focal = widget.state.resolved.value ?? const Offset(0.5, 0.5);
+    final blocked =
+        widget.state.status == WebsiteResponsiveFieldStatus.unavailable ||
+            widget.imageUrl.trim().isEmpty;
+
+    return ResponsiveFieldShell<Offset>(
+      state: widget.state,
+      onCustomize: widget.onCustomize,
+      onReset: widget.onReset,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                // The value, in words, while the picker is closed. Open, the
+                // picker shows the same pair as its own X/Y chips, so this
+                // line steps aside instead of repeating them.
+                child: _reframing
+                    ? const SizedBox.shrink()
+                    : Text(
+                        '${(focal.dx * 100).round()}% · '
+                        '${(focal.dy * 100).round()}%',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 11,
+                          height: 1.3,
+                        ),
+                      ),
+              ),
+              TextButton.icon(
+                onPressed: blocked
+                    ? null
+                    : () => setState(() => _reframing = !_reframing),
+                icon: const Icon(Icons.crop_free_rounded, size: 16),
+                label: Text(_reframing ? 'Listo' : 'Reencuadrar'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF20C5C1),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+          if (_reframing && !blocked) ...[
+            const SizedBox(height: 8),
+            FocalPointPicker(
+              imageUrl: widget.imageUrl,
+              focalX: focal.dx.clamp(0.0, 1.0),
+              focalY: focal.dy.clamp(0.0, 1.0),
+              // The shell already said what this field is and where it writes.
+              label: null,
+              // One drag is one change: local feedback, one atomic write.
+              continuousUpdates: false,
+              onChanged: widget.onChanged,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The state of a Canvas that still speaks — or used to speak — the old model.
+///
+/// Design source: project `a0fa3196-6315-4b96-bde7-7cc801e7a74e`, page
+/// `Website Builder Responsive Authoring`, turn **t10**, frame **10i · Estados
+/// del sistema** (state `documento ambiguo`) and frame **10d · Capas
+/// responsive** (badge `Duplicado legacy`). Components: **E-04 VbNotice**
+/// (anchored to the content, at most one banner per surface), **E-01
+/// VbStatusBadge** (informs, never executes), **A-01** text actions under the
+/// rule *DISABLED SIEMPRE EXPLICA*, and **F-06 VbDensity**.
+///
+/// **Colour and type are not written here.** The notice and the badge already
+/// carry the anatomy read from the guide; the actions are plain `TextButton`s,
+/// so the theme resolver owns their colour, typography, focus, hover and
+/// disabled states in both brightnesses; the explanation lines take
+/// `textTheme.bodySmall` and the `neutral` semantic role. A literal here would
+/// freeze light mode inside the widget — which is what produced white-on-white
+/// text the first time.
+///
+/// **The only geometry declared** is the vertical rhythm, and it comes from
+/// `F-04`'s published scale (2·4·6·8·10·12·14·16·18·24, t10
+/// `components_used.F-04`); the action's minimum height is `F-06`'s, resolved
+/// by [VbDensity], which forces 48 below 900 px.
+///
+/// It presents; it never migrates. Every action is a provider command, and
+/// expanding the reasons changes nothing at all.
+class _CanvasMigrationNotice extends StatefulWidget {
+  const _CanvasMigrationNotice({
+    required this.status,
+    required this.onMigrate,
+    required this.onMigrateKeepingLayers,
+    required this.onRestore,
+  });
+
+  final WebsiteCanvasMigrationStatus status;
+  final VoidCallback onMigrate;
+  final VoidCallback onMigrateKeepingLayers;
+  final VoidCallback onRestore;
+
+  // The surface is private, so these string keys — not the constants — are
+  // what a test addresses. They are part of the contract: an action that
+  // changes a document has to be findable by identity, not by its wording.
+  static const Key migrateKey = Key('canvas-migration-apply');
+  static const Key keepDistinctKey = Key('canvas-migration-keep-distinct');
+  static const Key restoreKey = Key('canvas-migration-restore');
+  static const Key reviewKey = Key('canvas-migration-review');
+  static const Key reasonsKey = Key('canvas-migration-reasons');
+
+  /// `F-04` scale — the only dimensions this surface declares.
+  static const double _gapSmall = 4;
+  static const double _gap = 8;
+  static const double _gapSection = 10;
+
+  @override
+  State<_CanvasMigrationNotice> createState() => _CanvasMigrationNoticeState();
+}
+
+class _CanvasMigrationNoticeState extends State<_CanvasMigrationNotice> {
+  /// Transient. Reading the reasons is not a change to the document.
+  bool _reasonsExpanded = false;
+
+  /// One sentence per typed finding, naming the layers and the field.
+  ///
+  /// The code is never shown: an operator cannot act on
+  /// `nonComplementaryVisibility`, and the plan forbids leaving this state in
+  /// logs or as a raw enum.
+  String _reason(WebsiteCanvasMigrationIssue issue) {
+    final ids = issue.layerIds.toSet().toList();
+    final named = ids.map((id) => '«$id»').join(' y ');
+    final field = issue.propertyKey;
+    return switch (issue.code) {
+      WebsiteCanvasMigrationIssueCode.differingSharedValue =>
+        'Las capas $named guardan un valor distinto en «$field». Unirlas '
+            'obligaría a elegir cuál gana.',
+      WebsiteCanvasMigrationIssueCode.missingPair =>
+        'La capa $named no tiene su pareja de la otra versión, así que no hay '
+            'nada que unir.',
+      WebsiteCanvasMigrationIssueCode.incompatibleType =>
+        'Las capas $named son de tipos distintos.',
+      WebsiteCanvasMigrationIssueCode.nonComplementaryVisibility =>
+        'Las capas $named no se reparten los dispositivos: no queda claro '
+            'cuál se ve en cada uno.',
+      WebsiteCanvasMigrationIssueCode.uncertainOrder =>
+        'Las capas $named declaran su propio orden, y al unirlas habría dos '
+            'órdenes en conflicto.',
+      WebsiteCanvasMigrationIssueCode.duplicateStem =>
+        'Hay más de una capa «${issue.stem}» para el mismo dispositivo.',
+      WebsiteCanvasMigrationIssueCode.conflictingIdentity => ids.isEmpty
+          ? 'La capa en la posición ${issue.stem.replaceFirst("index:", "")} '
+              'no tiene identificador.'
+          : 'Dos capas comparten el identificador «${issue.stem}».',
+    };
+  }
+
+  /// `E-01`: informs, never executes. The word is the channel, not the colour.
+  String get _badgeLabel => switch (widget.status.state) {
+        WebsiteCanvasMigrationState.safe => 'Configuración anterior',
+        WebsiteCanvasMigrationState.ambiguous => 'Revisar',
+        WebsiteCanvasMigrationState.blocked => 'Revisar',
+        WebsiteCanvasMigrationState.migrated => 'Actualizado',
+        WebsiteCanvasMigrationState.canonical => 'Actualizado',
+      };
+
+  VbStatusTone get _badgeTone => switch (widget.status.state) {
+        WebsiteCanvasMigrationState.safe => VbStatusTone.info,
+        WebsiteCanvasMigrationState.ambiguous => VbStatusTone.warning,
+        WebsiteCanvasMigrationState.blocked => VbStatusTone.warning,
+        WebsiteCanvasMigrationState.migrated => VbStatusTone.success,
+        WebsiteCanvasMigrationState.canonical => VbStatusTone.neutral,
+      };
+
+  /// `A-01` text action. No local style: the theme resolver owns colour,
+  /// typography and every interaction state. `F-06` supplies the one number
+  /// that must not be left to Material — the minimum touch target.
+  Widget _action({
+    required Key key,
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+    required VbDensity density,
+  }) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: density.controlHeight),
+        child: TextButton.icon(
+          key: key,
+          onPressed: onPressed,
+          icon: Icon(icon),
+          label: Text(label),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = widget.status;
+    if (status.state == WebsiteCanvasMigrationState.canonical) {
+      return const SizedBox.shrink();
+    }
+
+    final (String title, String body, VbNoticeTone tone) =
+        switch (status.state) {
+      WebsiteCanvasMigrationState.safe => (
+          'Este bloque usa una configuración anterior',
+          'Se sigue publicando tal cual. Actualizarla une las capas '
+              'duplicadas por dispositivo y se puede deshacer.',
+          VbNoticeTone.info,
+        ),
+      WebsiteCanvasMigrationState.ambiguous => (
+          'Este bloque tiene capas duplicadas por dispositivo',
+          'Se sigue publicando tal cual. Unirlas es una decisión tuya y se '
+              'puede deshacer.',
+          VbNoticeTone.warning,
+        ),
+      WebsiteCanvasMigrationState.blocked => (
+          'Este bloque tiene capas sin identidad única',
+          'No se puede actualizar desde aquí: sin un identificador propio por '
+              'capa no se garantiza a cuál apunta cada cambio ni cómo '
+              'deshacerlo. Se sigue publicando tal cual.',
+          VbNoticeTone.warning,
+        ),
+      WebsiteCanvasMigrationState.migrated => (
+          'Configuración actualizada',
+          'Este bloque ya usa una capa por elemento, con sus diferencias por '
+              'dispositivo. Puedes volver a la configuración anterior.',
+          VbNoticeTone.success,
+        ),
+      WebsiteCanvasMigrationState.canonical => ('', '', VbNoticeTone.neutral),
+    };
+
+    final reasons = status.issues;
+    final showReasons = _reasonsExpanded && reasons.isNotEmpty;
+    final density = VbDensity.resolve(context);
+    // The explanation lines are body copy of this surface: type from the
+    // theme, colour from the neutral semantic role — the same pair the
+    // canonical field shell uses for its own help text.
+    final bodyStyle = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: VinabikeThemeRoles.of(context).neutral.accent);
+
+    return Container(
+      margin: const EdgeInsets.only(
+        bottom: _CanvasMigrationNotice._gapSection,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          VbStatusBadge(label: _badgeLabel, tone: _badgeTone, dense: true),
+          const SizedBox(height: _CanvasMigrationNotice._gap),
+          VbNotice(title: title, body: body, tone: tone),
+          if (reasons.isNotEmpty) ...[
+            const SizedBox(height: _CanvasMigrationNotice._gapSmall),
+            _action(
+              key: _CanvasMigrationNotice.reviewKey,
+              density: density,
+              label: showReasons
+                  ? 'Ocultar detalle'
+                  : status.state == WebsiteCanvasMigrationState.blocked
+                      ? 'Revisar identidades'
+                      : 'Ver qué impide unirlas',
+              icon: showReasons
+                  ? Icons.expand_less_rounded
+                  : Icons.expand_more_rounded,
+              onPressed: () =>
+                  setState(() => _reasonsExpanded = !_reasonsExpanded),
+            ),
+            if (showReasons)
+              Padding(
+                key: _CanvasMigrationNotice.reasonsKey,
+                padding: const EdgeInsets.only(
+                  left: _CanvasMigrationNotice._gap,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final issue in reasons) ...[
+                      Text('· ${_reason(issue)}', style: bodyStyle),
+                      const SizedBox(height: _CanvasMigrationNotice._gapSmall),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+          if (status.canMigrateSafely)
+            _action(
+              key: _CanvasMigrationNotice.migrateKey,
+              density: density,
+              label: 'Actualizar configuración',
+              icon: Icons.auto_fix_high_rounded,
+              onPressed: widget.onMigrate,
+            ),
+          if (status.canMigrateKeepingLayers) ...[
+            _action(
+              key: _CanvasMigrationNotice.keepDistinctKey,
+              density: density,
+              label: 'Conservar capas separadas y actualizar',
+              icon: Icons.call_split_rounded,
+              onPressed: widget.onMigrateKeepingLayers,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(
+                left: _CanvasMigrationNotice._gap,
+              ),
+              child: Text(
+                'Ninguna capa se une ni se descarta: cada una queda por '
+                'separado, con lo que ya muestra en cada dispositivo.',
+                style: bodyStyle,
+              ),
+            ),
+          ],
+          if (status.canRestore)
+            _action(
+              key: _CanvasMigrationNotice.restoreKey,
+              density: density,
+              label: 'Restaurar configuración anterior',
+              icon: Icons.history_rounded,
+              onPressed: widget.onRestore,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The Canvas inspector on a target that owns no Canvas document yet.
+///
+/// A slide that is not composed has no layers to show and cannot take one, so
+/// the surface says exactly that instead of rendering controls that would
+/// silently write nothing.
+class _CanvasNotComposedNotice extends StatelessWidget {
+  const _CanvasNotComposedNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF242424),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Esta diapositiva todavía no usa capas',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'Activa "Diseño avanzado por capas" para convertir su contenido en '
+            'capas editables. Hasta entonces no hay nada que ordenar ni '
+            'personalizar por dispositivo.',
+            style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.35),
+          ),
+        ],
+      ),
     );
   }
 }

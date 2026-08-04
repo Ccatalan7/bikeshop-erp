@@ -137,11 +137,13 @@ class _SyncTabState extends State<_SyncTab> {
                     icon: const Icon(Icons.refresh,
                         color: Colors.white54, size: 18),
                     tooltip: 'Reconectar',
-                    onPressed: () => googleService.connect(
-                editorCapability: context
-                    .read<WebsiteEditModeProvider>()
-                    .editorEntryLease,
-              ),
+                    onPressed: googleService.isLoading
+                        ? null
+                        : () => googleService.connect(
+                              editorCapability: context
+                                  .read<WebsiteEditModeProvider>()
+                                  .editorEntryLease,
+                            ),
                   ),
                 ],
               ),
@@ -187,11 +189,13 @@ class _SyncTabState extends State<_SyncTab> {
                     icon: const Icon(Icons.refresh,
                         color: Colors.white54, size: 18),
                     tooltip: 'Renovar acceso',
-                    onPressed: () => googleService.connect(
-                editorCapability: context
-                    .read<WebsiteEditModeProvider>()
-                    .editorEntryLease,
-              ),
+                    onPressed: googleService.isLoading
+                        ? null
+                        : () => googleService.connect(
+                              editorCapability: context
+                                  .read<WebsiteEditModeProvider>()
+                                  .editorEntryLease,
+                            ),
                   ),
                 ],
               ),
@@ -237,10 +241,10 @@ class _SyncTabState extends State<_SyncTab> {
                       onPressed: googleService.isLoading
                           ? null
                           : () => googleService.connect(
-                editorCapability: context
-                    .read<WebsiteEditModeProvider>()
-                    .editorEntryLease,
-              ),
+                                editorCapability: context
+                                    .read<WebsiteEditModeProvider>()
+                                    .editorEntryLease,
+                              ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         foregroundColor: Colors.black,
@@ -259,10 +263,10 @@ class _SyncTabState extends State<_SyncTab> {
                 onPressed: googleService.isLoading
                     ? null
                     : () => googleService.connect(
-                editorCapability: context
-                    .read<WebsiteEditModeProvider>()
-                    .editorEntryLease,
-              ),
+                          editorCapability: context
+                              .read<WebsiteEditModeProvider>()
+                              .editorEntryLease,
+                        ),
                 icon: googleService.isLoading
                     ? const SizedBox(
                         width: 16,
@@ -300,6 +304,7 @@ class _SyncTabState extends State<_SyncTab> {
                 ? 'Importar dirección, horario y teléfono.'
                 : 'Renovar permiso para actualizar desde Google.',
             icon: Icons.sync,
+            enabled: !googleService.isLoading,
             onTap: () async {
               try {
                 final hasAccess = await _ensureGoogleApiAccess(
@@ -338,6 +343,7 @@ class _SyncTabState extends State<_SyncTab> {
                 ? 'Descargar últimas reseñas de Google.'
                 : 'Renovar permiso para descargar reseñas.',
             icon: Icons.reviews,
+            enabled: !googleService.isLoading,
             onTap: () async {
               try {
                 final hasAccess = await _ensureGoogleApiAccess(
@@ -419,6 +425,7 @@ class _SyncTabState extends State<_SyncTab> {
     GoogleBusinessService googleService,
   ) async {
     if (googleService.hasProviderToken) return true;
+    if (googleService.isLoading) return false;
 
     if (googleService.isLinked) {
       final restored = await googleService.ensureProviderToken(
@@ -437,10 +444,9 @@ class _SyncTabState extends State<_SyncTab> {
       ),
     );
     await googleService.connect(
-                editorCapability: context
-                    .read<WebsiteEditModeProvider>()
-                    .editorEntryLease,
-              );
+      editorCapability:
+          context.read<WebsiteEditModeProvider>().editorEntryLease,
+    );
     return false;
   }
 

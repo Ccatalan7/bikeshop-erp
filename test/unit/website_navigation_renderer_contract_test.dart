@@ -8,8 +8,10 @@ void main() {
     final editor = File(
       'lib/modules/website/pages/navigation_management_page.dart',
     ).readAsStringSync();
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
-    final inspector = readLibrarySource('lib/modules/website/widgets/website_editor_panel.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final inspector = readLibrarySource(
+        'lib/modules/website/widgets/website_editor_panel.dart');
 
     expect(editor, contains('cssClass: _resolvedCssClass()'));
     expect(editor, contains("token.toLowerCase() != 'megamenu'"));
@@ -79,11 +81,18 @@ void main() {
     );
     expect(
         layout, contains('final isDesktopHeader = headerGeometry.isDesktop'));
+    // La autoridad de estos dos valores es `effective(...)`: al reabrir el
+    // control, el borrador PENDIENTE gana sobre lo guardado, porque un staged
+    // sin guardar no puede contradecir el lienzo que está previsualizando.
+    // `getSetting` sigue existiendo dentro de ese resolvedor, como el
+    // respaldo guardado, no como el lector directo del control.
     expect(
       inspector,
       matches(
         RegExp(
-          r"getSetting\(\s*'header_menu_surface_color',\s*'#000000'\s*\)",
+          r'String effective\(String key, String defaultValue\) =>\s*'
+          r'widget\.provider\.getEffectiveHeaderSetting\(\s*key,\s*'
+          r'service\.getSetting\(key, defaultValue\),',
           multiLine: true,
         ),
       ),
@@ -92,7 +101,16 @@ void main() {
       inspector,
       matches(
         RegExp(
-          r"getSetting\(\s*'header_menu_rail_color',\s*'#64748B'\s*\)",
+          r"effective\(\s*'header_menu_surface_color',\s*'#000000'\s*\)",
+          multiLine: true,
+        ),
+      ),
+    );
+    expect(
+      inspector,
+      matches(
+        RegExp(
+          r"effective\(\s*'header_menu_rail_color',\s*'#64748B'\s*\)",
           multiLine: true,
         ),
       ),
@@ -112,7 +130,7 @@ void main() {
     );
     expect(
       inspector,
-      contains("getSetting('header_navigation_uppercase', 'true')"),
+      contains("effective('header_navigation_uppercase', 'true')"),
     );
     expect(
       inspector,
@@ -238,7 +256,8 @@ void main() {
   });
 
   test('mega-menu category artwork resolves from typed destinations', () {
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final menu = File(
       'lib/public_store/widgets/mega_menu.dart',
     ).readAsStringSync();
@@ -288,7 +307,8 @@ void main() {
 
   test('empty navigation exposes its canonical editor instead of fake links',
       () {
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
     expect(layout, contains('Configurar navegación'));
     expect(
@@ -299,7 +319,8 @@ void main() {
   });
 
   test('category publication gates menus, CMS cards, and stale CTA clicks', () {
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final blocks = File(
       'lib/modules/website/widgets/website_block_renderer.dart',
     ).readAsStringSync();

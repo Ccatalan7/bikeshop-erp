@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/dev/agent_input.dart';
 
@@ -159,6 +160,108 @@ void main() {
       );
 
       expect(locateAgentInputTargetsForTesting('disabled', null), isEmpty);
+    });
+
+    testWidgets('enters text through the real editable pipeline',
+        (tester) async {
+      const prompt = 'Organiza mañana: cámaras 29 y garantías.';
+      final controller = TextEditingController();
+      final changes = <String>[];
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TextField(
+              key: const ValueKey<String>('agent-editable'),
+              controller: controller,
+              onChanged: changes.add,
+            ),
+          ),
+        ),
+      );
+
+      final result = await enterTextAgentInputTargetForTesting(const {
+        'key': 'agent-editable',
+        'text': prompt,
+      });
+      await tester.pump();
+
+      expect(result['ok'], isTrue);
+      expect(controller.text, prompt);
+      expect(
+        controller.selection,
+        const TextSelection.collapsed(offset: prompt.length),
+      );
+      expect(changes, [prompt]);
+    });
+
+    testWidgets('preserves input formatters and reports the actual value',
+        (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TextField(
+              key: const ValueKey<String>('digits-only'),
+              controller: controller,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+          ),
+        ),
+      );
+
+      final result = await enterTextAgentInputTargetForTesting(const {
+        'key': 'digits-only',
+        'text': 'PG-00490',
+      });
+      await tester.pump();
+
+      expect(result['ok'], isTrue);
+      expect(result['text'], '00490');
+      expect(controller.text, '00490');
+    });
+
+    testWidgets('rejects readonly and non-editable targets without mutation',
+        (tester) async {
+      final controller = TextEditingController(text: 'original');
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                TextField(
+                  key: const ValueKey<String>('readonly'),
+                  controller: controller,
+                  readOnly: true,
+                ),
+                const SizedBox(
+                  key: ValueKey<String>('not-editable'),
+                  width: 40,
+                  height: 40,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final readonly = await enterTextAgentInputTargetForTesting(const {
+        'key': 'readonly',
+        'text': 'changed',
+      });
+      final nonEditable = await enterTextAgentInputTargetForTesting(const {
+        'key': 'not-editable',
+        'text': 'changed',
+      });
+
+      expect(readonly['ok'], isFalse);
+      expect(nonEditable['ok'], isFalse);
+      expect(controller.text, 'original');
     });
   });
 }

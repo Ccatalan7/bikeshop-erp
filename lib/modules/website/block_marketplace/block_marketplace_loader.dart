@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/website_block_definition.dart';
 import '../models/website_block_type.dart';
+import '../models/website_responsive_authoring.dart';
 
 /// Loads block definitions declared as JSON files under
 /// `assets/block_marketplace/`. The loader is intentionally resilient: if a
@@ -126,7 +127,41 @@ class BlockMarketplaceLoader {
       altTextKey: json['altTextKey']?.toString() ?? 'altText',
       actionRole: _parseActionRole(json['actionRole']?.toString()),
       migrationAliases: _parseStringList(json['migrationAliases']),
+      responsivePolicy:
+          _parseResponsivePolicy(json['responsivePolicy']?.toString()),
+      propertyFamily: _parsePropertyFamily(json['propertyFamily']?.toString()),
+      authoringSurfaces: _parseAuthoringSurfaces(json['authoringSurfaces']),
+      supportsResponsiveReset: json['supportsResponsiveReset'] != false,
+      legacyResponsiveAliases:
+          _parseStringList(json['legacyResponsiveAliases']),
     );
+  }
+
+  static WebsiteResponsivePropertyPolicy _parseResponsivePolicy(String? raw) {
+    return WebsiteResponsivePropertyPolicy.values.firstWhere(
+      (value) => value.name == raw,
+      orElse: () => WebsiteResponsivePropertyPolicy.sharedOnly,
+    );
+  }
+
+  static WebsiteResponsivePropertyFamily? _parsePropertyFamily(String? raw) {
+    if (raw == null) return null;
+    for (final value in WebsiteResponsivePropertyFamily.values) {
+      if (value.name == raw) return value;
+    }
+    return null;
+  }
+
+  static Set<WebsiteAuthoringSurface> _parseAuthoringSurfaces(dynamic raw) {
+    if (raw is! List) return const {WebsiteAuthoringSurface.inspector};
+    final parsed = <WebsiteAuthoringSurface>{};
+    for (final item in raw) {
+      final name = item?.toString();
+      for (final value in WebsiteAuthoringSurface.values) {
+        if (value.name == name) parsed.add(value);
+      }
+    }
+    return parsed.isEmpty ? const {WebsiteAuthoringSurface.inspector} : parsed;
   }
 
   static WebsiteTextRole _parseTextRole(String? raw) {

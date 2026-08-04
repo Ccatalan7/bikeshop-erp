@@ -1021,14 +1021,13 @@ class Attendance {
   }
 }
 
-/// Tenant-scoped present-state projection used by compact operational surfaces.
+/// Tenant-scoped attendance row used by the daily operational briefing.
 ///
-/// For the current operating model, an open attendance marking is the only
-/// source of truth for presence. Published and default shifts are intentionally
-/// excluded until weekly planning is consistently maintained. Scheduling
-/// context can be added later without changing this presence contract.
-class CurrentAttendanceBriefingEntry {
-  const CurrentAttendanceBriefingEntry({
+/// Open markings remain the only source of truth for current presence. Closed
+/// rows are real attendance evidence from the current Chilean business day;
+/// planned and default shifts are intentionally excluded.
+class DailyAttendanceBriefingEntry {
+  const DailyAttendanceBriefingEntry({
     required this.attendance,
     required this.employee,
   });

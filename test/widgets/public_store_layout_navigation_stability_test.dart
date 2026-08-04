@@ -16,16 +16,15 @@ import 'package:vinabike_erp/public_store/services/public_store_scroll_state.dar
 import 'package:vinabike_erp/public_store/widgets/public_store_layout.dart';
 import 'package:vinabike_erp/shared/services/tenant_detection_service.dart';
 
-
 /// Grants the editor-entry capability unconditionally so mode/adapter tests
 /// exercise the FSM without the authority seam (covered by
 /// website_editor_entry_authority_test.dart).
 class _GrantingWebsiteService extends WebsiteService {
   static const _lease = WebsiteEditorCapabilitySnapshot(
     identity: 'test-user',
-      activeTenantId: 'test-tenant',
-      storefrontTenantId: 'test-tenant',
-      hasAuthority: true,
+    activeTenantId: 'test-tenant',
+    storefrontTenantId: 'test-tenant',
+    hasAuthority: true,
   );
 
   @override
@@ -363,7 +362,203 @@ class _StateProbePageState extends State<_StateProbePage>
   }
 }
 
+/// Standalone routed-content probe with no keep-alive, shell branch, nested
+/// Navigator or GlobalKey. Its identity is therefore preserved only when the
+/// real PublicStoreLayout wrapper topology remains stable.
+class _StandaloneStateProbePage extends StatefulWidget {
+  const _StandaloneStateProbePage();
+
+  @override
+  State<_StandaloneStateProbePage> createState() =>
+      _StandaloneStateProbePageState();
+}
+
+class _StandaloneStateProbePageState extends State<_StandaloneStateProbePage> {
+  static int disposeCount = 0;
+  final TextEditingController textController = TextEditingController();
+  final FocusNode focusNode = FocusNode();
+  final ScrollController scrollController = ScrollController();
+  double mediaWidth = 0;
+
+  @override
+  void dispose() {
+    disposeCount++;
+    textController.dispose();
+    focusNode.dispose();
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    mediaWidth = MediaQuery.sizeOf(context).width;
+    return Column(
+      children: [
+        TextField(
+          key: const ValueKey('standalone_probe_text_field'),
+          controller: textController,
+          focusNode: focusNode,
+        ),
+        SizedBox(
+          height: 400,
+          child: ListView.builder(
+            controller: scrollController,
+            itemCount: 60,
+            itemBuilder: (context, index) => SizedBox(
+              height: 40,
+              child: Text('standalone fila $index'),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 void _stateRetentionTests() {
+  testWidgets(
+    'standalone GoRoute keeps identical State, text, focus and scroll through '
+    'Public/Preview/Edit and desktop/tablet/mobile transitions',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(2400, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final wasErpMounted = PublicStoreRuntimeConfig.isErpMounted;
+      PublicStoreRuntimeConfig.isErpMounted = false;
+      addTearDown(
+        () => PublicStoreRuntimeConfig.isErpMounted = wasErpMounted,
+      );
+      _StandaloneStateProbePageState.disposeCount = 0;
+
+      final editMode = WebsiteEditModeProvider();
+      addTearDown(editMode.dispose);
+      final website = _GrantingWebsiteService();
+      final tenant = PublicStoreTenantProvider(TenantDetectionService());
+      final cart = CartProvider();
+      final inventory = PublicInventoryService();
+      final scrollState = PublicStoreScrollState();
+
+      final router = GoRouter(
+        initialLocation: '/productos',
+        routes: [
+          GoRoute(
+            path: '/productos',
+            pageBuilder: (context, state) => NoTransitionPage<void>(
+              key: publicStoreRoutePageKey(state),
+              child: KeyedSubtree(
+                key: publicStoreModeContentKey(state),
+                // Public web disables the native content AnimatedSwitcher.
+                // Scope that exact production condition directly over the
+                // layout so this regression isolates wrapper topology.
+                child: MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    disableAnimations: true,
+                  ),
+                  child: MultiProvider(
+                    providers: [
+                      ChangeNotifierProvider.value(value: editMode),
+                      ChangeNotifierProvider<WebsiteService>.value(
+                        value: website,
+                      ),
+                      ChangeNotifierProvider.value(value: tenant),
+                      ChangeNotifierProvider.value(value: cart),
+                      ChangeNotifierProvider.value(value: inventory),
+                      Provider.value(value: scrollState),
+                    ],
+                    child: const PublicStoreLayout(
+                      child: _StandaloneStateProbePage(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pump();
+      await tester.pump();
+
+      final probeBefore = tester.state<_StandaloneStateProbePageState>(
+        find.byType(_StandaloneStateProbePage),
+      );
+      final desktopMediaWidth = probeBefore.mediaWidth;
+      await tester.enterText(
+        find.byKey(const ValueKey('standalone_probe_text_field')),
+        'borrador standalone',
+      );
+      probeBefore.focusNode.requestFocus();
+      await tester.pump();
+      probeBefore.scrollController.jumpTo(320);
+      await tester.pump();
+
+      Future<void> assertRetained(
+        String phase, {
+        double? mediaWidth,
+      }) async {
+        final probe = tester.state<_StandaloneStateProbePageState>(
+          find.byType(_StandaloneStateProbePage),
+        );
+        expect(identical(probe, probeBefore), isTrue,
+            reason: '[$phase] the plain GoRoute State must be identical.');
+        expect(probe.textController.text, 'borrador standalone',
+            reason: '[$phase] text survives.');
+        expect(probe.focusNode.hasFocus, isTrue,
+            reason: '[$phase] focus survives.');
+        expect(probe.scrollController.offset, 320,
+            reason: '[$phase] scroll survives.');
+        expect(_StandaloneStateProbePageState.disposeCount, 0,
+            reason: '[$phase] no routed State disposal is allowed.');
+        if (mediaWidth != null) {
+          expect(probe.mediaWidth, mediaWidth,
+              reason: '[$phase] must exercise the real framed viewport.');
+        }
+      }
+
+      await assertRetained('public');
+      editMode.enterPreviewMode(const [], const {});
+      router.go('/productos?preview=true');
+      await tester.pump();
+      expect(router.routeInformationProvider.value.uri.query, 'preview=true');
+      await assertRetained('preview/desktop', mediaWidth: desktopMediaWidth);
+      editMode.setMode(WebsiteEditorMode.edit);
+      router.go('/productos?edit=true');
+      await tester.pump();
+      expect(router.routeInformationProvider.value.uri.query, 'edit=true');
+      await assertRetained('edit/desktop', mediaWidth: desktopMediaWidth);
+
+      editMode.setDevicePreviewMode(DevicePreviewMode.mobile);
+      await tester.pump();
+      await assertRetained('edit/mobile', mediaWidth: 390);
+      editMode.setDevicePreviewMode(DevicePreviewMode.tablet);
+      await tester.pump();
+      await assertRetained('edit/tablet', mediaWidth: 820);
+      editMode.setDevicePreviewMode(DevicePreviewMode.desktop);
+      await tester.pump();
+      await assertRetained(
+        'edit/desktop-2',
+        mediaWidth: desktopMediaWidth,
+      );
+
+      editMode.setMode(WebsiteEditorMode.preview);
+      router.go('/productos?preview=true');
+      await tester.pump();
+      expect(router.routeInformationProvider.value.uri.query, 'preview=true');
+      await assertRetained('preview-2');
+      editMode.closeEditor();
+      router.go('/productos');
+      await tester.pump();
+      await tester.pump();
+      expect(router.routeInformationProvider.value.uri.query, isEmpty);
+      await assertRetained('public-2');
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(_StandaloneStateProbePageState.disposeCount, 1);
+    },
+  );
+
   testWidgets(
     'H MATRIX: routed State identity, text, focus and scroll survive '
     'Public→Preview→Edit→Preview→Public plus device-preview changes '

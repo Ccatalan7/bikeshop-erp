@@ -1,19 +1,28 @@
 import 'package:flutter/material.dart';
 
-import '../models/website_block_registry.dart';
-import '../models/website_block_type.dart';
+import '../models/website_block_catalog.dart';
 
-/// Canonical block picker. Its contents come from the same registry used by
-/// the editor and public renderer, so registered blocks cannot silently vanish
-/// from one add-block surface.
+/// Canonical block picker for pointer hosts.
+///
+/// Its contents come from [WebsiteBlockCatalog] — the same owner the editor's
+/// insert tab and the compact catalog sheet consume — so a registered family
+/// cannot exist on one add-block surface and be missing from another.
+///
+/// It used to drop the footer silently. It now shows it dimmed with its
+/// reason, because a family the operator cannot add still has to explain
+/// itself rather than vanish.
 class AddBlockDialog extends StatelessWidget {
-  const AddBlockDialog({super.key});
+  const AddBlockDialog({super.key, this.presentBlockTypes = const <String>[]});
+
+  /// `block_type` values already on the page. They only refine the reason a
+  /// non-insertable family gives.
+  final List<String> presentBlockTypes;
 
   @override
   Widget build(BuildContext context) {
-    final definitions = WebsiteBlockRegistry.all()
-        .where((definition) => definition.type != WebsiteBlockType.footer)
-        .toList(growable: false);
+    final entries = WebsiteBlockCatalog.entries(
+      presentBlockTypes: presentBlockTypes,
+    );
 
     return AlertDialog(
       title: const Text('Agregar bloque'),
@@ -21,19 +30,24 @@ class AddBlockDialog extends StatelessWidget {
         width: 440,
         height: 520,
         child: ListView.separated(
-          itemCount: definitions.length,
+          itemCount: entries.length,
           separatorBuilder: (_, __) => const Divider(height: 1),
           itemBuilder: (context, index) {
-            final definition = definitions[index];
+            final entry = entries[index];
             return ListTile(
-              leading: Icon(definition.icon),
-              title: Text(definition.title),
+              enabled: entry.isInsertable,
+              leading: Icon(entry.icon),
+              title: Text(entry.title),
               subtitle: Text(
-                definition.description,
+                entry.isInsertable
+                    ? entry.description
+                    : entry.unavailableReason ?? entry.description,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              onTap: () => Navigator.pop(context, definition.type.name),
+              onTap: entry.isInsertable
+                  ? () => Navigator.pop(context, entry.type.name)
+                  : null,
             );
           },
         ),

@@ -46,6 +46,7 @@ import '../services/mechanic_job_sale_classification_coordinator.dart';
 import '../services/mechanic_job_sale_ui_policy.dart';
 import '../services/mechanic_job_visibility_policy.dart';
 import '../services/mechanic_job_warranty_command_coordinator.dart';
+import '../services/workshop_jobs_load_coordinator.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/pega_detail_view.dart';
 import '../widgets/pegas_calendar_widget.dart';
@@ -348,6 +349,10 @@ class _PegasTablePageState extends State<PegasTablePage>
   bool _isLoading = true;
   bool _isCreatingDebugJob = false;
   bool _needsRefresh = false;
+
+  /// Who is allowed to publish a load. See [WorkshopJobsLoadCoordinator].
+  final WorkshopJobsLoadCoordinator _jobsLoadCoordinator =
+      WorkshopJobsLoadCoordinator();
   Timer? _reloadDebounceTimer;
   String _searchTerm = '';
 
@@ -851,6 +856,8 @@ class _PegasTablePageState extends State<PegasTablePage>
     );
     _aiAssistantContextService.clearVisibleJobsContext();
     _bikeshopService.removeListener(_onBikeshopServiceChanged);
+    // A response that arrives after the page is gone owns nothing.
+    _jobsLoadCoordinator.dispose();
     _reloadDebounceTimer?.cancel();
     _horizontalScrollController.dispose();
     _mobileJobsScrollController.dispose();
@@ -1173,11 +1180,26 @@ class _PegasTablePageState extends State<PegasTablePage>
       _bikeshopService.isJobBikesCacheFresh &&
       _salesService.isInvoicesCacheFresh;
 
+  /// Loads the table from the services. Only the MOST RECENT call may publish
+  /// or complain.
+  ///
+  /// Its triggers are the ones that really need a full read: first build, app
+  /// resume, returning from a route, pull to refresh, and the fallback when
+  /// the cache is empty. A realtime notification does NOT come through here —
+  /// `_onBikeshopServiceChanged` repaints from the cache with
+  /// `_refreshFromCache`, with no database fetch — and this correction leaves
+  /// that surgical path exactly as it was.
+  ///
+  /// Each call takes a ticket first. An older load that finishes later cannot
+  /// paint over a newer one, and an older load that fails cannot raise a
+  /// banner about a state the operator has already left behind.
   Future<void> _loadData({
     bool surfaceErrors = true,
     bool rethrowErrors = false,
     bool forceInvoiceRefresh = false,
   }) async {
+    final ticket = _jobsLoadCoordinator.start();
+
     // Only instant-render when all companion caches are still fresh.
     // Rendering from an expired jobs cache causes the stale first frame the user sees
     // before the full fetch corrects customer/bike names and row membership.
@@ -1239,6 +1261,10 @@ class _PegasTablePageState extends State<PegasTablePage>
 
       final invoiceMap = _buildInvoiceMap(invoices);
 
+      // A successful OLD response is still a stale one: dropping it is what
+      // keeps a newer table from being overwritten by the rows it replaced.
+      if (ticket.isSuperseded) return;
+
       if (mounted) {
         setState(() {
           _jobs = jobs;
@@ -1253,6 +1279,26 @@ class _PegasTablePageState extends State<PegasTablePage>
         _applyFiltersAndSort();
       }
     } catch (e) {
+      // A STALE load says nothing — not to the screen and not to its caller.
+      // Its operation was already replaced by a newer one, so turning its
+      // failure into an error would report a refresh that nobody is waiting
+      // for any more.
+      if (ticket.isSuperseded) return;
+
+      // The typed authority outcome is separated BEFORE the generic branch.
+      // `AuthorityScopeChangedException` means this read belonged to an
+      // authority that is no longer current — the cache refusing to publish
+      // across users or tenants, which is the guarantee we want. It is a
+      // cancellation, not a failure, so it is neither shown NOR rethrown:
+      // rethrowing it only moved the same internal sentence into another
+      // caller's `catch`, where it came back as an orange "no se pudo
+      // actualizar la tabla".
+      if (WorkshopJobsLoadCoordinator.isSupersededError(e)) {
+        // The data already on screen stays; only the spinner ends.
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
       if (mounted) {
         setState(() => _isLoading = false);
         if (surfaceErrors) {
@@ -1261,6 +1307,8 @@ class _PegasTablePageState extends State<PegasTablePage>
           );
         }
       }
+      // A real failure of the CURRENT load keeps its explicit outcome for a
+      // caller that awaited it to verify its own operation.
       if (rethrowErrors) rethrow;
     }
   }

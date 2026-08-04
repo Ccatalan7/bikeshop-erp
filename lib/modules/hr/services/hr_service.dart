@@ -772,33 +772,42 @@ class HRService extends ChangeNotifier {
     }
   }
 
-  /// Returns the people currently marked in at the tenant.
+  /// Returns current presence plus attendances closed during the supplied day.
   ///
-  /// Open attendance markings are deliberately the only presence source here.
-  /// Default or published shifts are not reliable enough yet to determine who
-  /// is actually at the store; future planning context may enrich this
-  /// projection without replacing the open-marking contract.
-  Future<List<CurrentAttendanceBriefingEntry>>
-      getCurrentAttendanceBriefing() async {
+  /// Open attendance markings remain the only presence source. Completed and
+  /// approved rows are historical evidence, never inferred from planning.
+  Future<List<DailyAttendanceBriefingEntry>> getDailyAttendanceBriefing({
+    required DateTime startsAt,
+    required DateTime endsAt,
+  }) async {
     final tenantId = await _tenantService.getTenantId();
     if (tenantId == null) {
       throw StateError('No se encontró la tienda actual.');
     }
+    if (!startsAt.isBefore(endsAt)) {
+      throw ArgumentError.value(
+        endsAt,
+        'endsAt',
+        'Debe ser posterior al inicio del día.',
+      );
+    }
 
     try {
+      final startsAtUtc = startsAt.toUtc().toIso8601String();
+      final endsAtUtc = endsAt.toUtc().toIso8601String();
       final responses = await Future.wait<dynamic>([
         _client
             .from('attendances')
             .select()
             .eq('tenant_id', tenantId)
-            .eq('status', 'ongoing')
-            .isFilter('check_out', null)
+            .or(
+              'and(status.eq.ongoing,check_out.is.null),'
+              'and(status.in.(completed,approved),'
+              'check_out.not.is.null,check_out.gte.$startsAtUtc,'
+              'check_out.lt.$endsAtUtc)',
+            )
             .order('check_in'),
-        _client
-            .from('employees')
-            .select()
-            .eq('tenant_id', tenantId)
-            .eq('status', 'active'),
+        _client.from('employees').select().eq('tenant_id', tenantId),
       ]);
 
       final attendances = (responses[0] as List<dynamic>)
@@ -811,12 +820,12 @@ class HRService extends ChangeNotifier {
             row['id'].toString():
                 Employee.fromMap(Map<String, dynamic>.from(row)),
       };
-      final entries = <CurrentAttendanceBriefingEntry>[];
+      final entries = <DailyAttendanceBriefingEntry>[];
       for (final attendance in attendances) {
         final employee = employees[attendance.employeeId];
         if (employee == null) continue;
         entries.add(
-          CurrentAttendanceBriefingEntry(
+          DailyAttendanceBriefingEntry(
             attendance: attendance,
             employee: employee,
           ),
@@ -824,7 +833,7 @@ class HRService extends ChangeNotifier {
       }
       return entries;
     } catch (error) {
-      debugPrint('Error getting current attendance briefing: $error');
+      debugPrint('Error getting daily attendance briefing: $error');
       rethrow;
     }
   }

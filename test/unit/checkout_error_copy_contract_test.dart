@@ -54,7 +54,8 @@ void main() {
   test('checkout locks the original attempt until recovery finishes', () {
     final source =
         File('lib/public_store/pages/checkout_page.dart').readAsStringSync();
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
     expect(source, contains('_submission.retryOriginalOrder()'));
     expect(source, contains('ignoring: _checkoutLocked'));
@@ -66,7 +67,11 @@ void main() {
     final guardScope = File(
       'lib/public_store/widgets/storefront_navigation_guard_scope.dart',
     ).readAsStringSync();
-    expect(guardScope, contains('canPop: _allowPopOnce'));
+    expect(guardScope, contains('final guardIsActive ='));
+    expect(
+      guardScope,
+      contains('canPop: !guardIsActive || _allowPopOnce'),
+    );
     expect(layout, contains('guard.isLocked'));
     expect(source, contains('REINTENTAR CONFIRMACIÓN'));
     expect(source, isNot(contains('cart.clear()')));

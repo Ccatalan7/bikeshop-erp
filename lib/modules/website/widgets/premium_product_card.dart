@@ -5,7 +5,9 @@ import '../../../shared/utils/chilean_utils.dart';
 
 /// Commencal-style clean, minimal product card used across the website.
 ///
-/// - In **previewMode** the card is non-interactive.
+/// - [interactionsEnabled] is an EXPLICIT interaction flag: visitor surfaces
+///   (public AND Preview) enable it; editors (Edit blocks, editable Canvas)
+///   disable it. It carries no preview-data semantics.
 /// - When interactive, tapping navigates to the product's public URL.
 class PremiumProductCard extends StatefulWidget {
   final String productId;
@@ -14,7 +16,7 @@ class PremiumProductCard extends StatefulWidget {
   final double price;
   final String? imageUrl;
   final String? bodyFont;
-  final bool previewMode;
+  final bool interactionsEnabled;
   final void Function(String route)? onNavigate;
 
   const PremiumProductCard({
@@ -25,7 +27,7 @@ class PremiumProductCard extends StatefulWidget {
     required this.price,
     this.imageUrl,
     this.bodyFont,
-    required this.previewMode,
+    required this.interactionsEnabled,
     this.onNavigate,
   });
 
@@ -36,7 +38,8 @@ class PremiumProductCard extends StatefulWidget {
 class _PremiumProductCardState extends State<PremiumProductCard> {
   bool _isHovered = false;
 
-  bool get _isInteractive => !widget.previewMode && widget.onNavigate != null;
+  bool get _isInteractive =>
+      widget.interactionsEnabled && widget.onNavigate != null;
 
   @override
   Widget build(BuildContext context) {

@@ -3,19 +3,24 @@ import 'package:provider/provider.dart';
 
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
+import '../../modules/website/widgets/website_editor_chrome_geometry.dart';
 import '../../modules/website/widgets/deferred_website_editor_panel.dart';
 import '../../modules/website/models/website_editor_capability.dart';
 import '../../modules/website/services/website_save_coordinator.dart';
+import '../../modules/website/services/website_editor_draft_store.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../shared/services/tenant_service.dart';
 import '../../shared/widgets/workspace_shell_scope.dart';
+import '../../modules/website/widgets/website_editor_contextual_dock.dart';
+import '../../modules/website/widgets/website_editor_draft_recovery_host.dart';
+import '../../modules/website/widgets/website_editor_command_scope.dart';
 
 /// A persistent shell that keeps the editor panel mounted across route changes.
 ///
 /// This widget wraps the router content and overlays the editor panel when in
 /// edit mode. The key insight is that the editor panel is rendered OUTSIDE
 /// the router, so it won't be rebuilt when pages change.
-class PersistentEditorShell extends StatelessWidget {
+class PersistentEditorShell extends StatefulWidget {
   /// Reopens the restored document through the authority-bound editor RPC,
   /// bound to the FULL owner captured BEFORE the first await: exact lease
   /// (fingerprint + authorityEpoch + tenant), provider generation and
@@ -58,14 +63,12 @@ class PersistentEditorShell extends StatelessWidget {
           currentLease.fingerprint != leaseFingerprint ||
           currentLease.authorityEpoch != leaseEpoch ||
           generation != editProvider.editorEntryLeaseGeneration ||
-          identityRevision !=
-              editProvider.editorEntryLeaseIdentityRevision ||
+          identityRevision != editProvider.editorEntryLeaseIdentityRevision ||
           currentDocument.sessionRevision != documentRevision ||
           currentDocument.pageId != pageId ||
           currentDocument.pageSlug != pageSlug ||
           serviceEpoch != websiteService.identityEpoch ||
-          requestIdentity !=
-              websiteService.editorCapabilityRequestIdentity) {
+          requestIdentity != websiteService.editorCapabilityRequestIdentity) {
         throw const WebsiteEditorReadSupersededException(
           'La restauración pertenece a una sesión anterior.',
         );
@@ -127,15 +130,32 @@ class PersistentEditorShell extends StatelessWidget {
   final WebsiteSaveCoordinator? saveCoordinator;
   final Future<String?> Function()? tenantIdResolver;
 
-  static const double _editorPanelWidth = 380;
-  static const double _editorTopBarHeight = 48;
+  @visibleForTesting
+  final WebsiteEditorDraftStore? draftStore;
+
+  /// Geometry has one owner. The literal `380` that used to live here — and in
+  /// three other files, each deciding independently — had no Design source;
+  /// `O-04 VbSideSheet` puts the pane at 420–540 and caps it at 40% of the
+  /// width. See [WebsiteEditorChromeGeometry].
+  static const double _editorTopBarHeight =
+      WebsiteEditorChromeGeometry.topBarHeight;
 
   const PersistentEditorShell({
     super.key,
     required this.child,
     @visibleForTesting this.saveCoordinator,
     @visibleForTesting this.tenantIdResolver,
+    @visibleForTesting this.draftStore,
   });
+
+  @override
+  State<PersistentEditorShell> createState() => _PersistentEditorShellState();
+}
+
+class _PersistentEditorShellState extends State<PersistentEditorShell> {
+  bool _isSaving = false;
+  WebsiteService? _saveCoordinatorOwner;
+  WebsiteSaveCoordinator? _saveCoordinator;
 
   @override
   Widget build(BuildContext context) {
@@ -158,79 +178,102 @@ class PersistentEditorShell extends StatelessWidget {
     // Use Transform.translate to force a new stacking context on the entire
     // editor shell. This helps isolate the editor UI from the page content's
     // z-index fighting, ensuring the editor (bottom of Stack) always wins.
-    return Padding(
-      padding: EdgeInsets.only(top: workspaceTopInset),
-      child: Transform.translate(
-        key: const ValueKey('persistent-editor-workspace-content'),
-        offset: Offset.zero,
-        child: Stack(
-          children: [
-            // Keep router child full-width so the top command bar uses all
-            // space. The whole editor starts below global workspace chrome;
-            // otherwise the two command systems overlap by exactly the
-            // workspace-bar height.
-            Positioned.fill(
-              child: child,
-            ),
-            // Persistent editor panel (fixed width on the right)
-            // Only rendered when in edit mode, but Stack structure is always
-            // present.
-            if (showEditorPanel)
-              Positioned(
-                top: _editorTopBarHeight,
-                right: 0,
-                bottom: 0,
-                width: _editorPanelWidth,
-                child: _PersistentEditorPanel(
-                  editProvider: editProvider,
-                  saveCoordinator: saveCoordinator,
-                  tenantIdResolver: tenantIdResolver,
+    return WebsiteEditorCommandScope(
+      isSaving: _isSaving,
+      onSave: _handleSave,
+      onDiscard: _handleDiscard,
+      onRestoreComplete: _handleRestoreComplete,
+      child: Padding(
+        padding: EdgeInsets.only(top: workspaceTopInset),
+        child: Transform.translate(
+          key: const ValueKey('persistent-editor-workspace-content'),
+          offset: Offset.zero,
+          // Measured and published UNCONDITIONALLY, in every mode and viewport.
+          // A conditional wrapper here is exactly what the editor contract warns
+          // about: it can change the internal composition and remount a plain
+          // GoRoute even when the content anchor keeps its key. Only the values
+          // this scope carries change.
+          child: LayoutBuilder(
+            key: const ValueKey('persistent-editor-chrome-measure'),
+            builder: (context, constraints) {
+              final editorWidth = constraints.maxWidth.isFinite
+                  ? constraints.maxWidth
+                  : MediaQuery.sizeOf(context).width;
+              final paneWidth =
+                  WebsiteEditorChromeGeometry.paneWidthFor(editorWidth);
+              // A pane only exists when the editor can afford one. Below the
+              // derived threshold the composition is contextual and the canvas
+              // keeps the whole width: never a compressed side panel.
+              final mountsPane = showEditorPanel && paneWidth != null;
+
+              return WebsiteEditorChromeScope(
+                editorWidth: editorWidth,
+                canvasWidth: mountsPane ? editorWidth - paneWidth : editorWidth,
+                child: Stack(
+                  children: [
+                    // Keep router child full-width so the top command bar uses
+                    // all space. The whole editor starts below global workspace
+                    // chrome; otherwise the two command systems overlap by
+                    // exactly the workspace-bar height.
+                    Positioned.fill(
+                      child: widget.child,
+                    ),
+                    // Persistent editor pane. The Stack structure is always
+                    // present; only this optional sibling comes and goes.
+                    if (mountsPane)
+                      Positioned(
+                        top: PersistentEditorShell._editorTopBarHeight,
+                        right: 0,
+                        bottom: 0,
+                        width: paneWidth,
+                        child: _PersistentEditorPanel(
+                          editProvider: editProvider,
+                          onSave: _handleSave,
+                          onRestoreComplete: _handleRestoreComplete,
+                          onDiscard: _handleDiscard,
+                        ),
+                      ),
+                    // Contextual host. Below the derived pane threshold the
+                    // editor has no inspector column, so editing starts at the
+                    // selected block: a dock accompanies the selection and
+                    // `Editar` opens the `O-05` sheet over a canvas that stays
+                    // mounted. Same slot as the anchor it replaces, so the
+                    // canvas geometry does not move.
+                    if (showEditorPanel && paneWidth == null)
+                      const Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: WebsiteEditorContextualDock(
+                          key: ValueKey('persistent-editor-contextual-anchor'),
+                        ),
+                      ),
+                    if (editProvider.isInEditorContext)
+                      Positioned(
+                        top: PersistentEditorShell._editorTopBarHeight + 8,
+                        left: 12,
+                        right: mountsPane ? paneWidth + 12 : 12,
+                        child: WebsiteEditorDraftRecoveryHost(
+                          provider: editProvider,
+                          store: widget.draftStore,
+                        ),
+                      ),
+                  ],
                 ),
-              ),
-          ],
+              );
+            },
+          ),
         ),
       ),
-    );
-  }
-}
-
-/// The editor panel widget, designed to be persistent across page navigations.
-class _PersistentEditorPanel extends StatefulWidget {
-  final WebsiteEditModeProvider editProvider;
-  final WebsiteSaveCoordinator? saveCoordinator;
-  final Future<String?> Function()? tenantIdResolver;
-
-  const _PersistentEditorPanel({
-    required this.editProvider,
-    required this.saveCoordinator,
-    required this.tenantIdResolver,
-  });
-
-  @override
-  State<_PersistentEditorPanel> createState() => _PersistentEditorPanelState();
-}
-
-class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
-  bool _isSaving = false;
-  WebsiteService? _saveCoordinatorOwner;
-  WebsiteSaveCoordinator? _saveCoordinator;
-
-  @override
-  Widget build(BuildContext context) {
-    return DeferredWebsiteEditorPanel(
-      onSave: _handleSave,
-      onRestoreComplete: _handleRestoreComplete,
-      onDiscard: _handleDiscard,
     );
   }
 
   Future<void> _handleSave() async {
     if (_isSaving) return;
-
     setState(() => _isSaving = true);
 
     try {
-      final editProvider = widget.editProvider;
+      final editProvider = context.read<WebsiteEditModeProvider>();
       var coordinator = widget.saveCoordinator;
       if (coordinator == null) {
         final websiteService = context.read<WebsiteService>();
@@ -241,7 +284,6 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
         coordinator = _saveCoordinator!;
       }
 
-      // Resolve tenant ID
       final tenantId = await _resolveTenantId();
       if (tenantId == null) {
         _showError('No se pudo identificar el tenant');
@@ -249,7 +291,6 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
       }
 
       _showMessage('Guardando cambios...');
-
       final result = await coordinator.save(
         tenantId: tenantId,
         document: editProvider,
@@ -257,8 +298,6 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
 
       if (result.appliedToActiveDocument) {
         if (editProvider.hasUnsavedChanges) {
-          // The save is confirmed, but NEW edits arrived while it ran:
-          // never a misleading total success.
           _showMessage(
             '✅ Cambios guardados; hay ediciones nuevas sin guardar.',
           );
@@ -266,42 +305,35 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
           _showSuccess('✅ Cambios guardados');
         }
       } else {
-        // The session/authority moved while saving: the writes that DID
-        // complete are durable, but this editor no longer owns them —
-        // never a misleading success.
         _showMessage(
           'La sesión cambió durante el guardado; revisa el estado actual '
           'antes de continuar.',
         );
       }
 
-      // Switch to preview mode
       if (mounted &&
           result.appliedToActiveDocument &&
           !editProvider.hasUnsavedChanges) {
         editProvider.setMode(WebsiteEditorMode.preview);
       }
     } on WebsiteEditorWriteSupersededException {
-      // Typed obsolete outcome: the new session is untouched; nothing to
-      // celebrate and nothing to alarm about.
       _showMessage('El guardado quedó obsoleto por un cambio de sesión.');
-    } catch (e) {
-      _showError('Error al guardar: $e');
+    } catch (error) {
+      _showError('Error al guardar: $error');
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   void _handleDiscard() {
-    widget.editProvider.discardPendingChanges();
-    widget.editProvider.setMode(WebsiteEditorMode.preview);
+    final editProvider = context.read<WebsiteEditModeProvider>();
+    editProvider.discardPendingChanges();
+    editProvider.setMode(WebsiteEditorMode.preview);
   }
 
   Future<void> _handleRestoreComplete() {
     return PersistentEditorShell.restoreEditorDocumentAfterBackup(
-      editProvider: widget.editProvider,
+      editProvider: context.read<WebsiteEditModeProvider>(),
       websiteService: context.read<WebsiteService>(),
       resolveTenantId: _resolveTenantId,
     );
@@ -310,17 +342,13 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
   Future<String?> _resolveTenantId() async {
     final tenantIdResolver = widget.tenantIdResolver;
     if (tenantIdResolver != null) return tenantIdResolver();
-
-    // Try TenantService first (authenticated users)
-    final tenantService = TenantService();
-    return await tenantService.getTenantId();
+    return TenantService().getTenantId();
   }
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showSuccess(String message) {
@@ -338,6 +366,30 @@ class _PersistentEditorPanelState extends State<_PersistentEditorPanel> {
     messenger.removeCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+}
+
+/// The editor panel widget, designed to be persistent across page navigations.
+class _PersistentEditorPanel extends StatelessWidget {
+  final WebsiteEditModeProvider editProvider;
+  final Future<void> Function() onSave;
+  final Future<void> Function() onRestoreComplete;
+  final VoidCallback onDiscard;
+
+  const _PersistentEditorPanel({
+    required this.editProvider,
+    required this.onSave,
+    required this.onRestoreComplete,
+    required this.onDiscard,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DeferredWebsiteEditorPanel(
+      onSave: onSave,
+      onRestoreComplete: onRestoreComplete,
+      onDiscard: onDiscard,
     );
   }
 }

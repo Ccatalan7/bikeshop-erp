@@ -226,21 +226,23 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                 runSpacing: 12,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: _syncBusinessData,
+                    onPressed: svc.isLoading ? null : _syncBusinessData,
                     icon: const Icon(Icons.sync, size: 18),
                     label: const Text('Sincronizar Datos'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: _syncReviews,
+                    onPressed: svc.isLoading ? null : _syncReviews,
                     icon: const Icon(Icons.reviews, size: 18),
                     label: const Text('Sincronizar Reseñas'),
                   ),
                   TextButton.icon(
-                    onPressed: () => svc.connect(
-                editorCapability: context
-                    .read<WebsiteEditModeProvider>()
-                    .editorEntryLease,
-              ),
+                    onPressed: svc.isLoading
+                        ? null
+                        : () => svc.connect(
+                              editorCapability: context
+                                  .read<WebsiteEditModeProvider>()
+                                  .editorEntryLease,
+                            ),
                     icon: const Icon(Icons.refresh, size: 18),
                     label: Text(hasToken ? 'Reconectar' : 'Renovar acceso'),
                   ),
@@ -279,11 +281,13 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: svc.isLoading ? null : () => svc.connect(
-                editorCapability: context
-                    .read<WebsiteEditModeProvider>()
-                    .editorEntryLease,
-              ),
+                        onPressed: svc.isLoading
+                            ? null
+                            : () => svc.connect(
+                                  editorCapability: context
+                                      .read<WebsiteEditModeProvider>()
+                                      .editorEntryLease,
+                                ),
                         icon: svc.isLoading
                             ? const SizedBox(
                                 width: 18,
@@ -517,6 +521,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
     GoogleBusinessService googleService,
   ) async {
     if (googleService.hasProviderToken) return true;
+    if (googleService.isLoading) return false;
 
     if (googleService.isLinked) {
       final restored = await googleService.ensureProviderToken(

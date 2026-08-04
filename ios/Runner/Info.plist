@@ -62,10 +62,23 @@
 		<string>Esta aplicación necesita acceso a la galería para seleccionar imágenes de facturas.</string>
 		<key>NSSpeechRecognitionUsageDescription</key>
 		<string>Esta aplicación necesita reconocimiento de voz para convertir tu audio en mensajes para el asistente.</string>
+		<!-- La barra de estado del sistema es VISIBLE en iOS (2026-08-03).
+		     Estaba oculta, y por eso en iPhone no existía la banda de 47 que
+		     `6a` dibuja como parte del header: el usuario no veía reloj, wifi
+		     ni batería. Comprobado en un iPhone 17 Pro del simulador con
+		     `simctl status_bar override`: la app no los pintaba y la pantalla
+		     de inicio del sistema sí, o sea los ocultaba la app. -->
 		<key>UIStatusBarHidden</key>
-		<true/>
-		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+		<!-- El estilo lo decide el view controller, que en Flutter es la UI:
+		     así cada pantalla pide el contraste que le corresponde
+		     (`SystemChrome.setSystemUIOverlayStyle` / `AnnotatedRegion`). En
+		     `false` el contraste queda congelado para toda la app, y esta app
+		     tiene pantallas claras y un header navy: ningún valor global sirve
+		     para las dos. Éste es el dueño nativo del contraste; no se
+		     compensa en cada pantalla. -->
+		<key>UIViewControllerBasedStatusBarAppearance</key>
+		<true/>
 		<!-- Deep link URL scheme for OAuth callbacks -->
 		<key>CFBundleURLTypes</key>
 		<array>

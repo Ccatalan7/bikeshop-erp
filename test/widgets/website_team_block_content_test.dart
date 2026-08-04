@@ -181,7 +181,8 @@ void main() {
   );
 
   testWidgets(
-    'social links honor eligibility and navigate only in public mode',
+    'social links honor eligibility and navigate for visitors '
+    '(Public and Preview); Edit presenters stay inert',
     (tester) async {
       final navigations = <String>[];
       const data = <String, dynamic>{
@@ -211,6 +212,7 @@ void main() {
       await tester.tap(find.byTooltip('Instagram'));
       expect(navigations, <String>['/equipo/andrea']);
 
+      // Preview keeps VISITOR navigation semantics.
       await _pumpTeam(
         tester,
         width: 834,
@@ -222,8 +224,28 @@ void main() {
       final previewButton = tester.widget<IconButton>(
         find.widgetWithIcon(IconButton, Icons.camera_alt_outlined),
       );
-      expect(previewButton.onPressed, isNull);
-      expect(navigations, <String>['/equipo/andrea']);
+      expect(previewButton.onPressed, isNotNull,
+          reason: 'Preview keeps the visitor social link active');
+      await tester.tap(find.byTooltip('Instagram'));
+      expect(navigations, <String>['/equipo/andrea', '/equipo/andrea'],
+          reason: 'Preview navigates exactly like Public');
+
+      // Edit is identified by its injected presenters and stays inert.
+      await _pumpTeam(
+        tester,
+        width: 834,
+        data: data,
+        onNavigate: navigations.add,
+        isNavigationEligible: (href) => href == '/equipo/andrea',
+        presenters: WebsiteBlockContentPresenters(
+          text: (context, slot) => Text(slot.value, style: slot.baseStyle),
+        ),
+      );
+      final editButton = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.camera_alt_outlined),
+      );
+      expect(editButton.onPressed, isNull,
+          reason: 'Edit (presenters) never navigates');
     },
   );
 

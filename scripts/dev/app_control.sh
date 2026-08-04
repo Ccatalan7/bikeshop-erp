@@ -9,6 +9,7 @@
 #   app_control.sh read [--filter text]   # semantics tree, optionally filtered
 #   app_control.sh find --key|--label X  # live, hittable targets
 #   app_control.sh tap  --key|--label X  # resolve and tap one live target
+#   app_control.sh enter-text --key X --text "texto"
 #   app_control.sh type "texto"
 #   app_control.sh key <keycode>         # 36=return 53=esc 48=tab 51=delete
 #   app_control.sh choose-file /abs/path # file in the current macOS Open panel
@@ -380,6 +381,64 @@ for candidate_index, match in enumerate(payload.get('matches', [payload.get('tap
         match.get('widget', ''),
         match.get('label') or '',
     ))
+PY
+    ;;
+
+  enter-text)
+    shift
+    key=""; label=""; index=""; text_value=""; text_seen=0
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --key|--label|--index|--text)
+          option="$1"
+          if [ $# -lt 2 ]; then
+            echo "$option requiere un valor" >&2
+            exit 2
+          fi
+          case "$option" in
+            --key) key="$2" ;;
+            --label) label="$2" ;;
+            --index) index="$2" ;;
+            --text) text_value="$2"; text_seen=1 ;;
+          esac
+          shift 2
+          ;;
+        *) echo "argumento desconocido: $1" >&2; exit 2 ;;
+      esac
+    done
+    [ -n "$key$label" ] || { echo "usa --key o --label" >&2; exit 2; }
+    [ "$text_seen" -eq 1 ] || { echo "usa --text (puede ser vacío)" >&2; exit 2; }
+    uri="$(vm_uri)"
+    [ -n "$uri" ] || { echo "sin VM service en el log" >&2; exit 1; }
+    python3 - "$uri" "$key" "$label" "$index" "$text_value" <<'PY'
+import json, sys, urllib.error, urllib.parse, urllib.request
+uri = sys.argv[1].strip().rstrip('/')
+key, label, index, text = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+method = 'ext.vinabike.input.enterText'
+
+def call(name, **params):
+    query = urllib.parse.urlencode(params)
+    url = f"{uri}/{name}?{query}" if query else f"{uri}/{name}"
+    with urllib.request.urlopen(url, timeout=30) as response:
+        return json.load(response)
+
+isolate = call('getVM')['result']['isolates'][0]['id']
+available = call('getIsolate', isolateId=isolate)['result'].get('extensionRPCs', [])
+if method not in available:
+    sys.exit('el build corriendo no expone enterText: reinicia la sesión')
+try:
+    result = call(method, isolateId=isolate, key=key, label=label,
+                  index=index, text=text)
+except urllib.error.HTTPError as error:
+    sys.exit(error.read().decode())
+payload = result.get('result', result)
+if payload.get('ok') is not True:
+    sys.exit(str(payload.get('error') or 'la app rechazó la escritura'))
+target = payload.get('target') or {}
+print('texto ingresado (%d caracteres) en %s' % (
+    payload.get('length', 0),
+    target.get('key') or target.get('label') or target.get('widget') or 'campo',
+))
 PY
     ;;
 

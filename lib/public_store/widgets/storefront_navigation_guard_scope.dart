@@ -101,9 +101,8 @@ class _StorefrontNavigationGuardScopeState
     final guardsEditorExit = editProvider.isInEditorContext &&
         editorPopIntent == WebsiteEditorNavigationIntent.leaveEditor;
     final guardsCheckout = checkoutGuard?.isLocked ?? false;
-    if (!guardsEditorDraft && !guardsEditorExit && !guardsCheckout) {
-      return widget.child;
-    }
+    final guardIsActive =
+        guardsEditorDraft || guardsEditorExit || guardsCheckout;
 
     // LocalHistory (drawers, in-page panels) owns this Back before PopScope.
     // Capture that disposition during build so its resulting `didPop=false`
@@ -114,8 +113,13 @@ class _StorefrontNavigationGuardScopeState
         routePopDisposition == RoutePopDisposition.pop;
 
     return PopScope(
-      canPop: _allowPopOnce,
+      // Keep this wrapper mounted for Public/Preview/Edit. Conditionally
+      // inserting PopScope remounted the complete storefront Scaffold (and
+      // every plain GoRoute consumer State) when editor context changed.
+      // An inactive guard varies only this value and behaves like no boundary.
+      canPop: !guardIsActive || _allowPopOnce,
       onPopInvokedWithResult: (didPop, result) async {
+        if (!guardIsActive) return;
         if (!didPop &&
             (routeHandlesLocalHistory ||
                 route?.willHandlePopInternally == true)) {

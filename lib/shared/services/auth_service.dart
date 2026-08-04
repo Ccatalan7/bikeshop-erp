@@ -60,6 +60,28 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// Un cambio de sesión que la UI debe ver: entrar, salir, recuperar clave o
+  /// actualizar el usuario. **`tokenRefreshed` queda fuera a propósito** —
+  /// reconstruir por un refresco destruye formularios a medio llenar.
+  static bool authEventIsSignificant(AuthChangeEvent event) =>
+      event == AuthChangeEvent.signedIn ||
+      event == AuthChangeEvent.signedOut ||
+      event == AuthChangeEvent.passwordRecovery ||
+      event == AuthChangeEvent.userUpdated;
+
+  /// Si hay que avisar a los oyentes por este evento.
+  ///
+  /// **Terminar de inicializar cuenta como aviso**, aunque el evento no sea
+  /// significativo. `gotrue` abre con `initialSession`, que no lo es; sin esta
+  /// condición un arranque **sin sesión guardada** apagaba `isInitializing` en
+  /// silencio y la app se quedaba en «Cargando…» para siempre, sin llegar al
+  /// login. Ver el comentario del listener.
+  static bool shouldNotifyAuthListeners({
+    required AuthChangeEvent event,
+    required bool wasInitializing,
+  }) =>
+      authEventIsSignificant(event) || wasInitializing;
+
   AuthService() {
     _preserveInitialRecoveryUntilConsumed = _capturedRecoveryIntent;
     _initialRecoveryCode = _capturedRecoveryCode;
@@ -80,6 +102,10 @@ class AuthService extends ChangeNotifier {
 
     _subscription = _client.auth.onAuthStateChange.listen((data) async {
       final previousUserId = _currentUser?.id;
+      // **Se recuerda que veníamos inicializando ANTES de apagar la bandera.**
+      // Terminar la inicialización es en sí mismo un cambio que la UI tiene que
+      // ver: `main.dart` pinta «Cargando…» mientras `isInitializing` sea true.
+      final wasInitializing = _isInitializing;
       _session = data.session;
       _currentUser = data.session?.user;
       _isInitializing = false; // Now we can set it to false
@@ -99,10 +125,7 @@ class AuthService extends ChangeNotifier {
       // CRITICAL: Only notify listeners on MEANINGFUL auth changes.
       // Token refreshes should NOT trigger GoRouter rebuilds, as that
       // destroys form state (e.g., sales invoice being edited for >5 min).
-      final isSignificantEvent = data.event == AuthChangeEvent.signedIn ||
-          data.event == AuthChangeEvent.signedOut ||
-          data.event == AuthChangeEvent.passwordRecovery ||
-          data.event == AuthChangeEvent.userUpdated;
+      // La regla vive en `shouldNotifyAuthListeners`, que es la que se prueba.
 
       // Check access profiles on sign in
       if (data.event == AuthChangeEvent.signedIn && _currentUser != null) {
@@ -121,7 +144,23 @@ class AuthService extends ChangeNotifier {
       }
 
       // Only notify (and thus trigger GoRouter redirect) on real auth changes
-      if (isSignificantEvent) {
+      //
+      // **`wasInitializing` va acá por un arranque en frío que se quedaba
+      // colgado (2026-08-03, encontrado en el Simulador de iOS).** Sin sesión
+      // guardada, `gotrue` emite `initialSession` —que NO es «significativo»—:
+      // la bandera se apagaba y **nadie se enteraba**, así que el árbol nunca
+      // se reconstruía y la app se quedaba en «Cargando…» para siempre, sin
+      // llegar jamás a la pantalla de login. Se reprodujo en un simulador
+      // limpio con red buena: 6+ minutos girando. En escritorio no se veía
+      // porque ahí ya hay sesión y la bandera se apaga antes del primer build.
+      //
+      // Notificar cuando la inicialización TERMINA no reabre lo que este
+      // filtro protege: el `tokenRefreshed` que destruía formularios ocurre
+      // mucho después, con `wasInitializing` ya en false.
+      if (shouldNotifyAuthListeners(
+        event: data.event,
+        wasInitializing: wasInitializing,
+      )) {
         debugPrint('🔐 [AuthService] Significant auth event: ${data.event}');
         notifyListeners();
       } else {

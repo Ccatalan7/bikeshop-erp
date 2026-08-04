@@ -6,9 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
+import '../../modules/website/theme/website_resolved_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_page_publication.dart';
-import '../theme/public_store_theme.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 
 /// Modern contact page that reads all data from website_settings
@@ -158,11 +158,8 @@ class _ContactPageState extends State<ContactPage>
       return const _ContactUnavailable();
     }
 
-    // Theme colors
-    final primaryColorStr =
-        websiteService.getSetting('theme_primary_color', '');
-    final primaryColor =
-        _parseColor(primaryColorStr) ?? PublicStoreTheme.primaryBlue;
+    final primaryColor = WebsiteResolvedTheme.of(context).primaryColor;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
       children: [
@@ -172,7 +169,7 @@ class _ContactPageState extends State<ContactPage>
         // Main Content
         Container(
           width: double.infinity,
-          color: Colors.grey.shade50,
+          color: colorScheme.surfaceContainerLow,
           child: Center(
             child: Container(
               constraints: const BoxConstraints(maxWidth: 1200),
@@ -192,8 +189,8 @@ class _ContactPageState extends State<ContactPage>
                             // Contact Form
                             Expanded(
                               flex: 3,
-                              child: _buildContactForm(
-                                  contactEmail, primaryColor),
+                              child:
+                                  _buildContactForm(contactEmail, primaryColor),
                             ),
                             const SizedBox(width: 48),
                             // Info Panel
@@ -231,8 +228,7 @@ class _ContactPageState extends State<ContactPage>
                             primaryColor: primaryColor,
                           ),
                           const SizedBox(height: 48),
-                          _buildContactForm(
-                              contactEmail, primaryColor),
+                          _buildContactForm(contactEmail, primaryColor),
                         ],
                       );
                     },
@@ -294,14 +290,15 @@ class _ContactPageState extends State<ContactPage>
   }
 
   Widget _buildHeroSection(Color primaryColor) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      color: Colors.white,
+      color: colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
       child: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 1120),
-          child: const Column(
+          child: Column(
             children: [
               Text(
                 'Contáctanos',
@@ -309,17 +306,17 @@ class _ContactPageState extends State<ContactPage>
                   fontFamily: null,
                   fontSize: 42,
                   fontWeight: FontWeight.w800,
-                  color: PublicStoreTheme.textPrimary,
+                  color: colorScheme.onSurface,
                   letterSpacing: 0,
                 ),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               Text(
                 'Estamos aquí para ayudarte. Escríbenos y te responderemos lo antes posible.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 18,
-                  color: PublicStoreTheme.textSecondary,
+                  color: colorScheme.onSurfaceVariant,
                   height: 1.5,
                 ),
               ),
@@ -330,36 +327,36 @@ class _ContactPageState extends State<ContactPage>
     );
   }
 
-  Widget _buildContactForm(
-      String contactEmail, Color primaryColor) {
+  Widget _buildContactForm(String contactEmail, Color primaryColor) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(40),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: PublicStoreTheme.divider),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Envíanos un mensaje',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.3,
-                color: PublicStoreTheme.textPrimary,
+                color: colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Completa el formulario y nos contactaremos a la brevedad.',
               style: TextStyle(
                 fontSize: 15,
                 height: 1.5,
-                color: PublicStoreTheme.textSecondary,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 36),
@@ -481,17 +478,18 @@ class _ContactPageState extends State<ContactPage>
                     : () => _submitForm(contactEmail),
                 style: FilledButton.styleFrom(
                   backgroundColor: primaryColor,
+                  foregroundColor: colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: _isSending
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: colorScheme.onPrimary,
                         ),
                       )
                     : const Row(
@@ -525,6 +523,7 @@ class _ContactPageState extends State<ContactPage>
     int maxLines = 1,
     String? Function(String?)? validator,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
@@ -534,28 +533,27 @@ class _ContactPageState extends State<ContactPage>
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
-        labelStyle: const TextStyle(color: PublicStoreTheme.textSecondary),
-        prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 20),
+        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+        labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+        prefixIcon: Icon(icon, color: colorScheme.onSurfaceVariant, size: 20),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: colorScheme.surfaceContainerLow,
         contentPadding: const EdgeInsets.all(16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: PublicStoreTheme.divider),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: PublicStoreTheme.divider),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide:
-              const BorderSide(color: PublicStoreTheme.primaryBlue, width: 2),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFEF4444)),
+          borderSide: BorderSide(color: colorScheme.error),
         ),
       ),
     );
@@ -574,6 +572,7 @@ class _ContactPageState extends State<ContactPage>
     required Color primaryColor,
   }) {
     final businessHourRows = _parseBusinessHours(businessHoursJson);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -583,7 +582,7 @@ class _ContactPageState extends State<ContactPage>
           width: double.infinity,
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
+            color: colorScheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -594,20 +593,20 @@ class _ContactPageState extends State<ContactPage>
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: colorScheme.surface,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: PublicStoreTheme.divider),
+                      border: Border.all(color: colorScheme.outlineVariant),
                     ),
-                    child: const Icon(Icons.location_on_outlined,
-                        color: PublicStoreTheme.textPrimary, size: 24),
+                    child: Icon(Icons.location_on_outlined,
+                        color: colorScheme.onSurface, size: 24),
                   ),
                   const SizedBox(width: 16),
-                  const Text(
+                  Text(
                     'Información de Contacto',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color: PublicStoreTheme.textPrimary,
+                      color: colorScheme.onSurface,
                     ),
                   ),
                 ],
@@ -646,34 +645,34 @@ class _ContactPageState extends State<ContactPage>
             width: double.infinity,
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: colorScheme.inverseSurface,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
                     Icon(Icons.chat_bubble_outline_rounded,
-                        color: Colors.white, size: 24),
-                    SizedBox(width: 12),
+                        color: colorScheme.onInverseSurface, size: 24),
+                    const SizedBox(width: 12),
                     Text(
                       '¿Necesitas ayuda rápida?',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: colorScheme.onInverseSurface,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   'Escríbenos por WhatsApp y te responderemos al instante.',
                   style: TextStyle(
                     fontSize: 15,
                     height: 1.5,
-                    color: Color(0xFF94A3B8),
+                    color: colorScheme.onInverseSurface.withValues(alpha: 0.72),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -687,8 +686,8 @@ class _ContactPageState extends State<ContactPage>
                       _launchUrl('https://wa.me/$whatsappNumber?text=$message');
                     },
                     style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF0F172A),
+                      backgroundColor: colorScheme.onInverseSurface,
+                      foregroundColor: colorScheme.inverseSurface,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       textStyle: const TextStyle(
                         fontSize: 15,
@@ -713,18 +712,18 @@ class _ContactPageState extends State<ContactPage>
             width: double.infinity,
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: colorScheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Síguenos',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: PublicStoreTheme.textPrimary,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -761,11 +760,12 @@ class _ContactPageState extends State<ContactPage>
     required List<_BusinessHourRowData> businessHourRows,
     required String googleMapsUrl,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -776,24 +776,24 @@ class _ContactPageState extends State<ContactPage>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: PublicStoreTheme.divider),
+                  border: Border.all(color: colorScheme.outlineVariant),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.access_time_rounded,
-                  color: PublicStoreTheme.textPrimary,
+                  color: colorScheme.onSurface,
                   size: 24,
                 ),
               ),
               const SizedBox(width: 16),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Horario de Atención',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: PublicStoreTheme.textPrimary,
+                    color: colorScheme.onSurface,
                   ),
                 ),
               ),
@@ -805,17 +805,17 @@ class _ContactPageState extends State<ContactPage>
               _buildHourRow(row.dayLabel, row.hoursLabel, row.isOpen),
             if (googleMapsUrl.isNotEmpty) ...[
               const SizedBox(height: 18),
-              const Divider(color: PublicStoreTheme.divider),
+              Divider(color: colorScheme.outlineVariant),
               const SizedBox(height: 14),
               _buildGoogleMapsButton(googleMapsUrl),
             ],
           ] else ...[
-            const Text(
+            Text(
               'Consulta el horario actualizado directamente en Google Maps.',
               style: TextStyle(
                 fontSize: 15,
                 height: 1.5,
-                color: PublicStoreTheme.textSecondary,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 18),
@@ -827,6 +827,7 @@ class _ContactPageState extends State<ContactPage>
   }
 
   Widget _buildGoogleMapsButton(String googleMapsUrl) {
+    final colorScheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
@@ -834,9 +835,9 @@ class _ContactPageState extends State<ContactPage>
         icon: const Icon(Icons.map_outlined, size: 18),
         label: const Text('Ver en Google Maps'),
         style: OutlinedButton.styleFrom(
-          foregroundColor: PublicStoreTheme.textPrimary,
-          side: const BorderSide(color: PublicStoreTheme.divider),
-          backgroundColor: Colors.white,
+          foregroundColor: colorScheme.onSurface,
+          side: BorderSide(color: colorScheme.outlineVariant),
+          backgroundColor: colorScheme.surface,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           textStyle: const TextStyle(
             fontSize: 15,
@@ -1003,6 +1004,7 @@ class _ContactPageState extends State<ContactPage>
   }
 
   Widget _buildHourRow(String day, String hours, bool isOpen) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -1010,10 +1012,10 @@ class _ContactPageState extends State<ContactPage>
         children: [
           Text(
             day,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: PublicStoreTheme.textPrimary,
+              color: colorScheme.onSurface,
             ),
           ),
           const SizedBox(width: 16),
@@ -1025,9 +1027,11 @@ class _ContactPageState extends State<ContactPage>
                 height: 6,
                 margin: const EdgeInsets.only(right: 8),
                 decoration: BoxDecoration(
+                  // Open/closed keeps its semantic green; closed rests on the
+                  // theme's muted foreground.
                   color: isOpen
                       ? const Color(0xFF10B981)
-                      : const Color(0xFF94A3B8),
+                      : colorScheme.onSurfaceVariant,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -1037,8 +1041,8 @@ class _ContactPageState extends State<ContactPage>
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: isOpen
-                      ? PublicStoreTheme.textPrimary
-                      : const Color(0xFF94A3B8),
+                      ? colorScheme.onSurface
+                      : colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -1049,10 +1053,11 @@ class _ContactPageState extends State<ContactPage>
   }
 
   Widget _buildContactDetailRow(IconData icon, String title, String content) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: const Color(0xFF64748B), size: 20),
+        Icon(icon, color: colorScheme.onSurfaceVariant, size: 20),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -1060,19 +1065,19 @@ class _ContactPageState extends State<ContactPage>
             children: [
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: PublicStoreTheme.textPrimary,
+                  color: colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 content.isNotEmpty ? content : 'No especificado',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   height: 1.5,
-                  color: PublicStoreTheme.textSecondary,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -1088,6 +1093,7 @@ class _ContactPageState extends State<ContactPage>
     required Color color,
     required VoidCallback onTap,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Expanded(
       child: OutlinedButton.icon(
         onPressed: onTap,
@@ -1095,9 +1101,9 @@ class _ContactPageState extends State<ContactPage>
         label: Text(label),
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
-          side: const BorderSide(color: PublicStoreTheme.divider),
+          side: BorderSide(color: colorScheme.outlineVariant),
           padding: const EdgeInsets.symmetric(vertical: 14),
-          backgroundColor: Colors.white,
+          backgroundColor: colorScheme.surface,
           textStyle: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
@@ -1108,37 +1114,6 @@ class _ContactPageState extends State<ContactPage>
         ),
       ),
     );
-  }
-
-  Color? _parseColor(String value) {
-    if (value.isEmpty) return null;
-
-    var cleaned = value.trim().toLowerCase();
-
-    // Handle "color(0xFFXXXXXX)" format
-    if (cleaned.startsWith('color(')) {
-      final inside = cleaned.replaceAll(RegExp(r'color\(|\)'), '');
-      final intValue = int.tryParse(inside);
-      if (intValue != null) return Color(intValue);
-    }
-
-    // Handle "0xFFXXXXXX" format
-    if (cleaned.startsWith('0x')) {
-      final intValue = int.tryParse(cleaned);
-      if (intValue != null) return Color(intValue);
-    }
-
-    // Handle "#XXXXXX" format
-    cleaned = cleaned.replaceAll('#', '');
-    final intValue = int.tryParse(cleaned, radix: 16);
-    if (intValue != null) {
-      if (cleaned.length <= 6) {
-        return Color(0xFF000000 | intValue);
-      }
-      return Color(intValue);
-    }
-
-    return null;
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_document_sanitizer.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_save_coordinator.dart';
 
@@ -275,6 +276,102 @@ void main() {
           (_dataFor(command.blocks, 'canvas-1')['metadata']
               as Map)['activeElementId'],
           'nested-canvas-value',
+        );
+      },
+    );
+
+    test(
+      'responsive branches are deep-copied and transient selection is removed '
+      'only from Canvas-owned roots',
+      () {
+        final source = <String, dynamic>{
+          'activeElementId': 'canvas-selection',
+          'title': 'Canvas',
+          'metadata': {
+            'activeElementId': 'business-metadata',
+            'nested': [
+              {'value': 1},
+            ],
+          },
+          'responsive': {
+            'version': 2,
+            'mobile': {
+              'activeElementId': 'mobile-selection',
+              'title': 'Canvas móvil',
+              'layout': {
+                'rows': [
+                  {'x': 1},
+                ],
+              },
+            },
+          },
+        };
+
+        final sanitized = sanitizeWebsiteBlockDataForPersistence(
+          blockType: 'canvas',
+          data: source,
+        );
+        final mobile =
+            (sanitized['responsive'] as Map)['mobile'] as Map<dynamic, dynamic>;
+
+        expect(sanitized.containsKey('activeElementId'), isFalse);
+        expect(mobile.containsKey('activeElementId'), isFalse);
+        expect(
+          (sanitized['metadata'] as Map)['activeElementId'],
+          'business-metadata',
+        );
+
+        ((source['metadata'] as Map)['nested'] as List).first['value'] = 99;
+        ((((source['responsive'] as Map)['mobile'] as Map)['layout']
+                as Map)['rows'] as List)
+            .first['x'] = 99;
+
+        expect(
+          ((sanitized['metadata'] as Map)['nested'] as List).first['value'],
+          1,
+        );
+        expect(
+          (((mobile['layout'] as Map)['rows'] as List).first as Map)['x'],
+          1,
+        );
+      },
+    );
+
+    test(
+      'Carousel strips responsive selection per slide but preserves root data',
+      () {
+        final sanitized = sanitizeWebsiteBlockDataForPersistence(
+          blockType: 'carousel',
+          data: const <String, dynamic>{
+            'activeElementId': 'carousel-domain-value',
+            'slides': [
+              {
+                'activeElementId': 'slide-selection',
+                'title': 'Slide',
+                'responsive': {
+                  'version': 2,
+                  'mobile': {
+                    'activeElementId': 'mobile-slide-selection',
+                    'title': 'Slide móvil',
+                  },
+                },
+                'metadata': {'activeElementId': 'slide-domain-value'},
+              },
+            ],
+          },
+        );
+
+        expect(sanitized['activeElementId'], 'carousel-domain-value');
+        final slide = (sanitized['slides'] as List).single as Map;
+        expect(slide.containsKey('activeElementId'), isFalse);
+        expect(
+          (((slide['responsive'] as Map)['mobile']) as Map)
+              .containsKey('activeElementId'),
+          isFalse,
+        );
+        expect(
+          (slide['metadata'] as Map)['activeElementId'],
+          'slide-domain-value',
         );
       },
     );

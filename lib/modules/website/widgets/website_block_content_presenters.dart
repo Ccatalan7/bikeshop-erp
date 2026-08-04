@@ -102,6 +102,22 @@ class WebsiteInlineTextSlot {
       : formatting.textAlign;
 }
 
+/// How the inline image editor exposes its "change image" affordance.
+///
+/// [hoverOverlay] is the default for simple, self-contained images: the
+/// whole surface is a pick target and hover mounts the full overlay.
+/// [inspectorOnly] is the opt-in policy for INTERACTIVE BACKGROUNDS —
+/// media that sits underneath real content such as a hero/carousel CTA,
+/// arrows, dots and nested selection. There the background renders
+/// completely passively: no hover overlay, no gesture surface and no
+/// inline chrome of any kind. Image editing lives exclusively in the
+/// block/slide inspector's canonical picker (e.g. the carousel slide's
+/// `Imagen y encuadre` section, or the hero's schema image field).
+enum WebsiteInlineMediaEditAffordance {
+  hoverOverlay,
+  inspectorOnly,
+}
+
 class WebsiteInlineMediaSlot {
   const WebsiteInlineMediaSlot({
     required this.id,
@@ -113,6 +129,7 @@ class WebsiteInlineMediaSlot {
     this.borderRadius,
     this.semanticLabel,
     this.repeaterTarget,
+    this.editAffordance = WebsiteInlineMediaEditAffordance.hoverOverlay,
   }) : assert(valueKeys.length > 0);
 
   final String id;
@@ -124,6 +141,7 @@ class WebsiteInlineMediaSlot {
   final BorderRadius? borderRadius;
   final String? semanticLabel;
   final WebsiteInlineRepeaterTarget? repeaterTarget;
+  final WebsiteInlineMediaEditAffordance editAffordance;
 }
 
 class WebsiteInlineActionSlot {

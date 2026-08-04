@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'website_responsive_authoring.dart';
+
 const websitePublicBreakpoints = <String>[
   'desktop',
   'tablet',
@@ -10,6 +12,30 @@ String websitePublicBreakpointForWidth(double width) {
   if (width < 640) return 'mobile';
   if (width < 1024) return 'tablet';
   return 'desktop';
+}
+
+/// Resolves the semantic viewport using the document's persisted generation.
+///
+/// Existing documents keep the historical 640/1024 bands. A document becomes
+/// canonical only after an explicit responsive edit writes schema version 2,
+/// at which point the shared 600/900 owner is used.
+WebsiteViewport websitePublicViewportForBlockDataWidth(
+  Map<String, dynamic> blockData,
+  double width,
+) =>
+    WebsiteResponsiveDataCodec.viewportForDocumentWidth(blockData, width);
+
+bool isWebsiteBlockVisibleAtLogicalWidth(
+  Map<String, dynamic> block,
+  double width,
+) {
+  if (block['is_visible'] == false) return false;
+  final rawData = block['block_data'];
+  final blockData = rawData is Map
+      ? rawData.map((key, value) => MapEntry(key.toString(), value))
+      : const <String, dynamic>{};
+  final viewport = websitePublicViewportForBlockDataWidth(blockData, width);
+  return isWebsiteBlockVisibleAtPublicBreakpoint(block, viewport.wireName);
 }
 
 Map<String, bool> normalizeWebsiteBlockPublicVisibility(dynamic raw) {

@@ -217,6 +217,8 @@ enumera cada ventana por índice; esta trampa costó una ronda completa el
 scripts/dev/app_control.sh find --label "Confirmar semana"
 scripts/dev/app_control.sh find --key payroll-confirm-week
 scripts/dev/app_control.sh tap  --key payroll-confirm-week
+scripts/dev/app_control.sh enter-text --key ai-assistant-message-input \
+  --text "Resume los trabajos activos"
 ```
 
 **Why a reused `click X Y` keeps missing.** `shot` returns physical pixels —
@@ -253,6 +255,37 @@ Three properties that matter:
 Keep `click X Y` for what has no identity — a canvas, a chart, a spot inside an
 image — and for testing the OS event path itself. For anything with a key or a
 label, use `tap`; never reuse a coordinate from an earlier frame.
+
+### Text fields: update Flutter, not only the macOS AX proxy (2026-08-03)
+
+Computer Use can focus a Flutter macOS `TextField` and report it as settable,
+while `set_value` changes only the native accessibility proxy. The AX tree then
+shows the requested value even though the rendered field and its
+`TextEditingController` remain empty; `Return` consequently submits nothing.
+`type_text`/key injection can fail through the same bridge. This was reproduced
+both in the AI composer and the inventory search field, so a feature-local
+`Semantics(onSetText:)` does not repair it.
+
+For the debug app, enter text through the existing process-local input owner:
+
+```bash
+scripts/dev/app_control.sh enter-text \
+  --key ai-assistant-message-input \
+  --text "Dame un resumen de los trabajos activos"
+scripts/dev/app_control.sh tap --key ai-assistant-send-message
+```
+
+`enter-text` resolves one live `ValueKey<String>`, rejects missing, ambiguous,
+disabled, read-only and non-editable targets, and updates the real
+`EditableTextState` through Flutter's user-edit pipeline. Formatters,
+`onChanged`, selection, rendering and submit callbacks therefore receive the
+same value. An empty `--text ""` deliberately clears the field. The extension
+exists only in Debug and a newly added extension requires a hot restart before
+the running isolate exposes it.
+
+Do not treat a changed AX value as evidence. Completion evidence is the same
+text in a fresh rendered frame/semantics read and the expected result after the
+real submit control is tapped.
 
 ### Two ways of seeing, and they answer different questions
 

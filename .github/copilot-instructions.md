@@ -203,7 +203,11 @@ Claude **Design** window — with versioned tooling:
   create a second and never pattern-kills Flutter/Dart.
 - `scripts/dev/app_control.sh` — `shot` (the engine's own frame via the Dart VM
   service), `click`/`scroll`/`drag`/`type`/`key` in those same frame
-  coordinates, `window`, `geometry`.
+  coordinates, `enter-text --key … --text …` for a keyed Flutter
+  `EditableText`, `window`, `geometry`. On macOS, Computer Use/AX can report a
+  value set successfully while changing only the accessibility proxy and
+  leaving Flutter's controller empty; use `enter-text` for deterministic debug
+  input and prove the rendered/controller result before submitting.
 - `scripts/dev/design_window.sh` — capture the Design window (`shot`, `scroll`,
   `pages`). **Not a source of values**: visual values come from `DesignSync`
   (see below). Use this only for what the 256 KiB file cap truncates, or to

@@ -10,16 +10,23 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
+import '../../../shared/widgets/vb_notice.dart';
+import '../../../shared/widgets/vb_segmented.dart';
+import '../../../shared/widgets/vb_status_badge.dart';
+import '../models/website_block_catalog.dart';
 import '../models/website_block_definition.dart';
+import '../models/website_responsive_authoring.dart';
 import '../models/website_block_capabilities.dart';
 import '../models/website_block_geometry.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
+import '../models/website_canvas_responsive_document.dart';
+import '../models/website_responsive_field_state.dart';
 import '../models/website_page_composition.dart';
 import '../models/website_font_registry.dart';
 import '../models/website_action.dart';
-import '../models/canvas_element_factory.dart';
 import '../models/website_editor_drag_payload.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../models/website_page_models.dart';
@@ -27,14 +34,22 @@ import '../services/website_backup_service.dart';
 import '../services/website_background_removal_service.dart';
 import '../services/website_media_service.dart';
 import '../services/website_service.dart';
+import '../theme/website_resolved_theme.dart';
 import 'block_resize_handle.dart';
 import '../services/google_business_service.dart';
 import 'focal_point_picker.dart';
+import 'responsive_field_shell.dart';
+import 'responsive_media_field.dart';
+import 'website_canvas_field_binding.dart';
+import 'website_responsive_media_binding.dart';
+import 'website_responsive_scalar_binding.dart';
 import 'text_formatting_toolbar.dart';
 import 'website_link_value_editor.dart';
 import 'website_action_editor.dart';
 import 'website_background_removal_dialog.dart';
 import 'website_color_picker.dart';
+import 'website_block_edit_section.dart';
+import 'website_editor_chrome_geometry.dart';
 import 'website_media_picker.dart';
 import 'website_workspace_scope.dart';
 
@@ -48,7 +63,6 @@ part 'editor_panel/canvas_controls.dart';
 part 'editor_panel/page_settings_tab.dart';
 part 'editor_panel/theme_tab.dart';
 part 'editor_panel/shared_field_widgets.dart';
-part 'editor_panel/collection_block_controls.dart';
 part 'editor_panel/header_footer_controls.dart';
 part 'editor_panel/backups_dialog.dart';
 part 'editor_panel/style_controls.dart';
@@ -133,7 +147,11 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     }
 
     return Container(
-      width: 380,
+      // The pane width has one owner. Inside the shell this Container already
+      // receives the slot width, so the constraint is a floor for hosts that
+      // mount the panel standalone — never a second, independent decision.
+      width: WebsiteEditorChromeScope.maybeOf(context)?.paneWidth ??
+          WebsiteEditorChromeGeometry.inspectorWidth,
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
         border: Border(
@@ -339,5 +357,55 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
       default:
         return const SizedBox.shrink();
     }
+  }
+}
+
+// The media/focal binding lives in `website_responsive_media_binding.dart`.
+// A 300-line private helper inside this library could not be tested on its
+// own, and the binding contracts are exactly what needs regression coverage.
+
+/// The selected block's editing controls, on their own, for a host that is not
+/// the desktop pane.
+///
+/// Design source: project `a0fa3196-6315-4b96-bde7-7cc801e7a74e`,
+/// `Website Builder Responsive Authoring` t10 frames 10f and 10h — the phone
+/// sheet shows the properties of the selected block and nothing else.
+///
+/// It is the SAME `_EditBlockTab` the pane mounts, with three things removed
+/// because the contextual host already owns them or must never have them:
+///
+/// * the pane's identity row — the dock and the sheet header name the block;
+/// * the pane's section capsule — the sheet renders `T-04` sub-tabs itself and
+///   drives [section] from outside;
+/// * the whole panel frame — header, undo/redo, backups, Página/Tema/Google
+///   and, decisively, the panel's own `Guardar`. Save has one owner
+///   (`WebsiteEditorCommandScope`); a sheet that grew a second one is exactly
+///   the defect the command scope exists to prevent.
+///
+/// It writes through the same provider commands as the pane, so a property
+/// edited from the phone and the same property edited from the desktop
+/// inspector are one operation with one history step.
+class WebsiteBlockEditSurface extends StatelessWidget {
+  const WebsiteBlockEditSurface({
+    super.key,
+    required this.editProvider,
+    required this.section,
+  });
+
+  final WebsiteEditModeProvider editProvider;
+  final WebsiteBlockEditSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    return _EditBlockTab(
+      editProvider: editProvider,
+      showBlockHeader: false,
+      showSectionNavigation: false,
+      section: switch (section) {
+        WebsiteBlockEditSection.content => _InspectorSection.content,
+        WebsiteBlockEditSection.layout => _InspectorSection.layout,
+        WebsiteBlockEditSection.style => _InspectorSection.style,
+      },
+    );
   }
 }

@@ -130,7 +130,9 @@ class WebsiteContactBlockContent extends StatelessWidget {
                       showAction: showMapAction,
                       onOpenMap: showMapAction
                           ? () {
-                              if (previewMode || presenters != null) return;
+                              // Visitor navigation works in Preview and
+                              // Public; only Edit (presenters) is inert.
+                              if (presenters != null) return;
                               onNavigate?.call(mapUrl);
                             }
                           : null,

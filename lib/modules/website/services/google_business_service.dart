@@ -22,12 +22,11 @@ class GoogleBusinessService with ChangeNotifier {
   String? _lastProviderToken;
   List<String>? _lastIdentityProviders;
 
-
   // Edge Function URL for proxying Google Business API calls (bypasses CORS on web)
   static const String _edgeFunctionUrl =
       'https://xzdvtzdqjeyqxnkqprtf.supabase.co/functions/v1/google-business-reviews';
 
-  String? _issuedIntentNonce;
+  Future<void>? _connectInFlight;
 
   /// Test seam: replaces the web localStorage-backed intent store.
   @visibleForTesting
@@ -42,6 +41,11 @@ class GoogleBusinessService with ChangeNotifier {
   @visibleForTesting
   Future<bool> Function(String stage)? oauthLaunchOverride;
 
+  /// Test seam: selects the linked/unlinked launcher branch without mutating
+  /// the authenticated Supabase user.
+  @visibleForTesting
+  bool Function()? isLinkedOverride;
+
   WebsiteEditorOAuthIntentStore? get _intentStore =>
       intentStoreOverride ?? (kIsWeb ? _webIntentStore() : null);
 
@@ -55,10 +59,10 @@ class GoogleBusinessService with ChangeNotifier {
             .removeItem(WebsiteEditorOAuthIntentGate.storageKey),
       );
 
-  /// A failed/aborted OAuth launch consumes ONLY its own nonce: it can
-  /// never destroy a newer intent issued meanwhile.
-  void _consumeOwnIntentAfterFailedLaunch() {
-    final nonce = _issuedIntentNonce;
+  /// A failed/aborted OAuth launch consumes ONLY the nonce issued by that
+  /// invocation. Never read nonce ownership from mutable service state after
+  /// awaiting an external launcher.
+  void _consumeOwnIntentAfterFailedLaunch(String? nonce) {
     if (nonce == null) return;
     try {
       _intentStore?.clearIfNonce(
@@ -71,13 +75,16 @@ class GoogleBusinessService with ChangeNotifier {
   /// Treats the launcher's `false` as a failed/aborted launch: the pending
   /// intent is consumed and a visible error is surfaced. Returns whether
   /// the launch actually succeeded.
-  bool _handleOAuthLaunchResult(bool result, String stage) {
+  bool _handleOAuthLaunchResult(
+    bool result,
+    String stage,
+    String? issuedIntentNonce,
+  ) {
     if (result) return true;
     debugPrint(
         '⛔ [GoogleBusinessService] OAuth launch ($stage) returned false');
-    _consumeOwnIntentAfterFailedLaunch();
-    _error =
-        'No se pudo iniciar la conexión con Google. Inténtalo de nuevo.';
+    _consumeOwnIntentAfterFailedLaunch(issuedIntentNonce);
+    _error = 'No se pudo iniciar la conexión con Google. Inténtalo de nuevo.';
     _safeNotifyListeners();
     return false;
   }
@@ -152,6 +159,8 @@ class GoogleBusinessService with ChangeNotifier {
   String? get error => _error;
 
   bool get isLinked {
+    final override = isLinkedOverride;
+    if (override != null) return override();
     final user = _supabase.auth.currentUser;
     return user?.identities?.any((i) => i.provider == 'google') ?? false;
   }
@@ -304,13 +313,46 @@ class GoogleBusinessService with ChangeNotifier {
     return 'Error conectando con Google: $raw';
   }
 
-  /// Trigger Google Sign-In with "business.manage" scope.
+  /// Starts the Google Business OAuth operation ("business.manage" scope).
   ///
   /// The EDITOR capability comes from the consumer (the open editor session)
   /// — never from a cold singleton cache — and is validated BEFORE anything
   /// is persisted: only a granted capability whose identity is the current
   /// auth user may issue the one-shot typed return intent.
+  ///
+  /// Concurrency contract: this service is single-flight. Every caller that
+  /// arrives while a launch is active joins the exact same [Future]; it never
+  /// persists another intent, invokes another launcher, or owns another
+  /// loading lifecycle. UI gating is defensive UX, not the concurrency owner.
   Future<void> connect({
+    required WebsiteEditorCapabilitySnapshot? editorCapability,
+  }) {
+    final active = _connectInFlight;
+    if (active != null) return active;
+
+    // Install the shared Future BEFORE _connectOnce can notify listeners.
+    // A listener may synchronously call connect() from the first loading
+    // notification, so assigning after invoking _connectOnce leaves a real
+    // reentrancy window.
+    final completer = Completer<void>();
+    final operation = completer.future;
+    _connectInFlight = operation;
+    unawaited(() async {
+      try {
+        await _connectOnce(editorCapability: editorCapability);
+        completer.complete();
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      } finally {
+        if (identical(_connectInFlight, operation)) {
+          _connectInFlight = null;
+        }
+      }
+    }());
+    return operation;
+  }
+
+  Future<void> _connectOnce({
     required WebsiteEditorCapabilitySnapshot? editorCapability,
   }) async {
     _isLoading = true;
@@ -324,12 +366,12 @@ class GoogleBusinessService with ChangeNotifier {
         currentUserId == null ||
         editorCapability.identity != currentUserId) {
       _isLoading = false;
-      _error =
-          'La sesión del editor no está autorizada para conectar Google.';
+      _error = 'La sesión del editor no está autorizada para conectar Google.';
       _safeNotifyListeners();
       return;
     }
 
+    String? issuedIntentNonce;
     try {
       // Determines redirect URL based on platform
       // ONE typed, versioned, one-shot intent replaces the legacy loose
@@ -343,12 +385,12 @@ class GoogleBusinessService with ChangeNotifier {
         final pathWithQuery =
             uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path;
         final nowMs = DateTime.now().millisecondsSinceEpoch;
-        _issuedIntentNonce = WebsiteEditorOAuthIntentGate.newNonce(nowMs);
+        issuedIntentNonce = WebsiteEditorOAuthIntentGate.newNonce(nowMs);
         _intentStore?.put(
           WebsiteEditorOAuthIntentGate.issue(
             capability: editorCapability,
             nowMs: nowMs,
-            nonce: _issuedIntentNonce!,
+            nonce: issuedIntentNonce,
             returnPath: pathWithQuery,
             openIntegrations: true,
           ),
@@ -373,11 +415,9 @@ class GoogleBusinessService with ChangeNotifier {
       }
 
       // The gate above already proved an authenticated identity (override or
-      // real session) matching the capability; the auth user object is only
-      // needed here to inspect linked identities.
-      final user = _supabase.auth.currentUser;
-      final isLinked =
-          user?.identities?.any((i) => i.provider == 'google') ?? false;
+      // real session) matching the capability. Link state only selects which
+      // OAuth launcher branch runs.
+      final isLinked = this.isLinked;
 
       debugPrint(
           '🔍 [GoogleBusinessService] isLinked: $isLinked, calling OAuth...');
@@ -408,7 +448,13 @@ class GoogleBusinessService with ChangeNotifier {
               );
         debugPrint(
             '✅ [GoogleBusinessService] signInWithOAuth returned: $result');
-        if (!_handleOAuthLaunchResult(result, 'signIn')) return;
+        if (!_handleOAuthLaunchResult(
+          result,
+          'signIn',
+          issuedIntentNonce,
+        )) {
+          return;
+        }
       } else {
         // If not linked, we try to link first
         debugPrint(
@@ -427,7 +473,13 @@ class GoogleBusinessService with ChangeNotifier {
                 );
           debugPrint(
               '✅ [GoogleBusinessService] linkIdentity returned: $result');
-          if (!_handleOAuthLaunchResult(result, 'link')) return;
+          if (!_handleOAuthLaunchResult(
+            result,
+            'link',
+            issuedIntentNonce,
+          )) {
+            return;
+          }
         } catch (e) {
           debugPrint('⚠️ [GoogleBusinessService] linkIdentity error: $e');
           final msg = e.toString().toLowerCase();
@@ -450,7 +502,13 @@ class GoogleBusinessService with ChangeNotifier {
                   );
             debugPrint(
                 '✅ [GoogleBusinessService] signInWithOAuth (fallback) returned: $result');
-            if (!_handleOAuthLaunchResult(result, 'signInFallback')) return;
+            if (!_handleOAuthLaunchResult(
+              result,
+              'signInFallback',
+              issuedIntentNonce,
+            )) {
+              return;
+            }
             return;
           }
 
@@ -462,7 +520,7 @@ class GoogleBusinessService with ChangeNotifier {
 
       // Note: The app will likely reload/redirect after this
     } catch (e) {
-      _consumeOwnIntentAfterFailedLaunch();
+      _consumeOwnIntentAfterFailedLaunch(issuedIntentNonce);
       _error = _toFriendlyConnectError(e);
       _safeNotifyListeners();
       return;

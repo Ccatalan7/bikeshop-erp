@@ -1,7 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_erp/modules/inventory/models/category_models.dart';
 import 'package:vinabike_erp/modules/website/models/website_action.dart';
+import 'package:vinabike_erp/modules/website/services/website_service.dart';
+import 'package:vinabike_erp/modules/website/widgets/premium_product_card.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_action_button.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_block_content_presenters.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_renderer.dart';
+import 'package:vinabike_erp/public_store/providers/public_store_tenant_provider.dart';
+import 'package:vinabike_erp/public_store/services/public_inventory_service.dart';
+import 'package:vinabike_erp/public_store/utils/product_url.dart';
+import 'package:vinabike_erp/shared/models/product.dart';
+import 'package:vinabike_erp/shared/models/tenant.dart';
+import 'package:vinabike_erp/shared/services/tenant_detection_service.dart';
+
+/// Inventory stub: the category grid resolves publication over an empty
+/// catalog, so manual cards with generic destinations stay eligible without
+/// any network access.
+class _StubInventoryService extends PublicInventoryService {
+  @override
+  Future<List<Category>> getCategoriesForTenant({
+    required String tenantId,
+    bool forceRefresh = false,
+  }) async =>
+      const <Category>[];
+}
 
 Widget _rendererHost({
   required String blockType,
@@ -302,6 +328,381 @@ void main() {
       await tester.pump();
       expect(find.byTooltip('Instagram'), findsNothing);
       expect(find.byTooltip('LinkedIn'), findsNothing);
+    });
+  });
+
+  group('visitor interaction boundary parity', () {
+    setUpAll(() async {
+      SharedPreferences.setMockInitialValues(const {});
+      WebsiteService.setSharedPreferences(
+        await SharedPreferences.getInstance(),
+      );
+      await Supabase.initialize(
+        url: 'http://127.0.0.1:54321',
+        anonKey: 'test-anon-key',
+      );
+    });
+
+    setUp(() => WidgetController.hitTestWarningShouldBeFatal = true);
+    tearDown(() => WidgetController.hitTestWarningShouldBeFatal = false);
+
+    Widget parityHost({
+      required String blockType,
+      required Map<String, dynamic> data,
+      bool previewMode = false,
+      bool edit = false,
+      List<Product>? featuredProducts,
+      void Function(String route)? onNavigate,
+      Size size = const Size(1280, 900),
+    }) {
+      final tenant = PublicStoreTenantProvider(TenantDetectionService())
+        ..setTenant(
+          Tenant(
+            id: 'tenant-parity',
+            shopName: 'Tienda',
+            subdomain: 'tienda',
+            createdAt: DateTime.utc(2026, 8, 1),
+            updatedAt: DateTime.utc(2026, 8, 1),
+          ),
+        );
+      return MultiProvider(
+        providers: [
+          ChangeNotifierProvider<PublicStoreTenantProvider>.value(
+            value: tenant,
+          ),
+          ChangeNotifierProvider<PublicInventoryService>(
+            create: (_) => _StubInventoryService(),
+          ),
+          ChangeNotifierProvider<WebsiteService>(
+            create: (_) => WebsiteService(),
+          ),
+        ],
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: size, disableAnimations: true),
+            child: Scaffold(
+              body: SingleChildScrollView(
+                child: Builder(
+                  builder: (context) => WebsiteBlockRenderer.build(
+                    context: context,
+                    blockType: blockType,
+                    data: data,
+                    primaryColor: Colors.blue,
+                    accentColor: Colors.green,
+                    previewMode: previewMode,
+                    featuredProducts: featuredProducts,
+                    onNavigate: onNavigate ?? (_) {},
+                    isNavigationEligible: (_) => true,
+                    tenantId: 'tenant-parity',
+                    // Edit is identified by injected presenters — the ONE
+                    // visitor-interaction boundary.
+                    contentPresenters:
+                        edit ? const WebsiteBlockContentPresenters() : null,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Future<void> settleWithNetworkImages(WidgetTester tester) async {
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+        tester.takeException();
+      }
+    }
+
+    testWidgets('brand logo links navigate in Preview and Public; Edit inert',
+        (tester) async {
+      final routes = <String>[];
+      const data = <String, dynamic>{
+        'brands': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'name': 'MAXXIS',
+            'imageUrl': '',
+            'link': '/productos/categoria/camaras',
+          },
+        ],
+      };
+
+      await tester.pumpWidget(
+        parityHost(blockType: 'brandLogos', data: data, onNavigate: routes.add),
+      );
+      await tester.tap(find.text('MAXXIS'));
+      expect(routes, ['/productos/categoria/camaras']);
+
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'brandLogos',
+          data: data,
+          previewMode: true,
+          onNavigate: routes.add,
+        ),
+      );
+      await tester.tap(find.text('MAXXIS'));
+      expect(
+        routes,
+        ['/productos/categoria/camaras', '/productos/categoria/camaras'],
+        reason: 'Preview navigates exactly like Public',
+      );
+
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'brandLogos',
+          data: data,
+          edit: true,
+          onNavigate: routes.add,
+        ),
+      );
+      await tester.tap(find.text('MAXXIS'));
+      expect(routes.length, 2, reason: 'Edit (presenters) never navigates');
+    });
+
+    testWidgets(
+        'manual category cards navigate in Preview and Public; Edit inert',
+        (tester) async {
+      final routes = <String>[];
+      const data = <String, dynamic>{
+        'categories': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'title': 'Cámaras',
+            'imageUrl': 'https://invalid.local/c.png',
+            'ctaText': 'Ver',
+            'ctaLink': '/productos',
+          },
+        ],
+      };
+
+      Future<void> pumpGrid(
+          {bool previewMode = false, bool edit = false}) async {
+        await tester.pumpWidget(
+          parityHost(
+            blockType: 'categoryGrid',
+            data: data,
+            previewMode: previewMode,
+            edit: edit,
+            onNavigate: routes.add,
+          ),
+        );
+        await settleWithNetworkImages(tester);
+      }
+
+      await pumpGrid();
+      expect(find.byType(InkWell), findsOneWidget);
+      await tester.tap(find.byType(InkWell));
+      expect(routes, ['/productos']);
+
+      await pumpGrid(previewMode: true);
+      await tester.tap(find.byType(InkWell));
+      expect(routes, ['/productos', '/productos'],
+          reason: 'Preview navigates exactly like Public');
+
+      await pumpGrid(edit: true);
+      await tester.tap(find.byType(InkWell));
+      expect(routes.length, 2, reason: 'Edit (presenters) never navigates');
+    });
+
+    testWidgets(
+        'product cards and view-all navigate in Preview and Public; Edit '
+        'inert', (tester) async {
+      final routes = <String>[];
+      final product = Product(
+        id: 'prod-parity-1',
+        name: 'Cámara 26',
+        sku: 'CAM26',
+        price: 9990,
+        cost: 0,
+        stockQuantity: 3,
+        category: ProductCategory.other,
+        createdAt: DateTime.utc(2026, 8, 1),
+        updatedAt: DateTime.utc(2026, 8, 1),
+      );
+      const data = <String, dynamic>{
+        'title': 'Destacados',
+        'productSource': 'featured',
+        'itemsPerRow': 2,
+        'showViewAll': true,
+        'viewAllText': 'Ver todos',
+        'viewAllLink': '/productos',
+      };
+
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'products',
+          data: data,
+          featuredProducts: [product],
+          onNavigate: routes.add,
+        ),
+      );
+      await settleWithNetworkImages(tester);
+      expect(find.byType(PremiumProductCard), findsWidgets);
+      await tester.tap(find.byType(PremiumProductCard).first);
+      expect(routes, [publicProductPath(product)],
+          reason: 'the public product card navigates to its canonical URL');
+      await tester.ensureVisible(find.text('VER TODOS'));
+      await tester.tap(find.text('VER TODOS'));
+      expect(routes, [publicProductPath(product), '/productos']);
+
+      // Preview: visitor interactions stay enabled on the REAL card widget
+      // (preview shows sample data, which is preview-data semantics), and
+      // the configured view-all navigates exactly like Public.
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'products',
+          data: data,
+          previewMode: true,
+          featuredProducts: [product],
+          onNavigate: routes.add,
+        ),
+      );
+      await settleWithNetworkImages(tester);
+      final previewCard = tester.widget<PremiumProductCard>(
+        find.byType(PremiumProductCard).first,
+      );
+      expect(previewCard.interactionsEnabled, isTrue,
+          reason: 'Preview keeps visitor interactions on product cards');
+      await tester.ensureVisible(find.text('VER TODOS'));
+      await tester.tap(find.text('VER TODOS'));
+      expect(routes.last, '/productos',
+          reason: 'Preview view-all navigates exactly like Public');
+      final routesAfterPreview = routes.length;
+
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'products',
+          data: data,
+          edit: true,
+          featuredProducts: [product],
+          onNavigate: routes.add,
+        ),
+      );
+      await settleWithNetworkImages(tester);
+      final editCard = tester.widget<PremiumProductCard>(
+        find.byType(PremiumProductCard).first,
+      );
+      expect(editCard.interactionsEnabled, isFalse,
+          reason: 'Edit (presenters) disables card interactions');
+      await tester.ensureVisible(find.text('VER TODOS'));
+      await tester.tap(find.text('VER TODOS'));
+      expect(routes.length, routesAfterPreview,
+          reason: 'Edit view-all keeps its inert affordance');
+    });
+
+    testWidgets('the mobile product carousel card follows the same boundary',
+        (tester) async {
+      final routes = <String>[];
+      final product = Product(
+        id: 'prod-parity-2',
+        name: 'Cadena 11v',
+        sku: 'CAD11',
+        price: 19990,
+        cost: 0,
+        stockQuantity: 2,
+        category: ProductCategory.other,
+        createdAt: DateTime.utc(2026, 8, 1),
+        updatedAt: DateTime.utc(2026, 8, 1),
+      );
+      const data = <String, dynamic>{
+        'title': 'Destacados',
+        'productSource': 'featured',
+        'showViewAll': false,
+      };
+
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'products',
+          data: data,
+          featuredProducts: [product],
+          onNavigate: routes.add,
+          size: const Size(600, 900),
+        ),
+      );
+      await settleWithNetworkImages(tester);
+      expect(find.byType(PremiumProductCard), findsOneWidget);
+      await tester.tap(find.byType(PremiumProductCard));
+      expect(routes, [publicProductPath(product)],
+          reason: 'the mobile card navigates publicly');
+
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'products',
+          data: data,
+          previewMode: true,
+          featuredProducts: [product],
+          onNavigate: routes.add,
+          size: const Size(600, 900),
+        ),
+      );
+      await settleWithNetworkImages(tester);
+      final previewCard = tester.widget<PremiumProductCard>(
+        find.byType(PremiumProductCard).first,
+      );
+      expect(previewCard.interactionsEnabled, isTrue,
+          reason: 'Preview keeps visitor interactions on the mobile card');
+
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'products',
+          data: data,
+          edit: true,
+          featuredProducts: [product],
+          onNavigate: routes.add,
+          size: const Size(600, 900),
+        ),
+      );
+      await settleWithNetworkImages(tester);
+      final editCard = tester.widget<PremiumProductCard>(
+        find.byType(PremiumProductCard).first,
+      );
+      expect(editCard.interactionsEnabled, isFalse,
+          reason: 'Edit (presenters) disables the mobile card');
+    });
+
+    testWidgets(
+        'the Video Banner CTA navigates in Preview and Public; Edit inert',
+        (tester) async {
+      final routes = <String>[];
+      const data = <String, dynamic>{
+        'title': 'Video',
+        'ctaText': 'Ver más',
+        'ctaLink': '/servicios',
+      };
+
+      await tester.pumpWidget(
+        parityHost(
+            blockType: 'videoBanner', data: data, onNavigate: routes.add),
+      );
+      await tester.tap(find.byType(WebsiteActionButton));
+      expect(routes, ['/servicios']);
+
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'videoBanner',
+          data: data,
+          previewMode: true,
+          onNavigate: routes.add,
+        ),
+      );
+      await tester.tap(find.byType(WebsiteActionButton));
+      expect(routes, ['/servicios', '/servicios'],
+          reason: 'Preview navigates exactly like Public');
+
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'videoBanner',
+          data: data,
+          edit: true,
+          onNavigate: routes.add,
+        ),
+      );
+      final editButton = tester.widget<WebsiteActionButton>(
+        find.byType(WebsiteActionButton),
+      );
+      expect(editButton.onPressed, isNull,
+          reason: 'Edit (presenters) keeps the CTA inert');
+      expect(routes.length, 2);
     });
   });
 }

@@ -14,6 +14,7 @@ class _ThemeTabState extends State<_ThemeTab> {
   // Colors
   final _primaryColorController = TextEditingController();
   final _accentColorController = TextEditingController();
+  final _textColorController = TextEditingController();
   String _productDetailAccent = '#123F68';
   String _productDetailText = '#1E293B';
   String _productDetailLine = '#E8E2D8';
@@ -27,6 +28,14 @@ class _ThemeTabState extends State<_ThemeTab> {
   // Button styles
   String _buttonStyle = 'rounded'; // rounded, sharp, pill
   String _buttonSize = 'medium'; // small, medium, large
+
+  // Global composition spacing. Bounds/presets reuse the canonical page and
+  // block-spacing contracts; arbitrary persisted values remain visible and
+  // are only snapped when the owner changes the slider.
+  double _sectionSpacing = WebsitePageComposition.defaultSectionSpacing;
+  double _containerPadding = WebsiteResolvedTheme.defaultContainerPadding;
+  static const _sectionSpacingPresets = <double>[0, 16, 32, 64, 96];
+  static const _containerPaddingPresets = <double>[16, 24, 32, 48, 64];
 
   // Page Background
   String _pageBackground = '#FFFFFF';
@@ -112,47 +121,47 @@ class _ThemeTabState extends State<_ThemeTab> {
       await service.loadSettings();
 
       if (mounted) {
+        final editProvider = context.read<WebsiteEditModeProvider>();
+        final resolved = WebsiteResolvedTheme.resolve(
+          (key, fallback) {
+            final saved = service.getSetting(key, fallback);
+            return editProvider.isInEditorContext
+                ? editProvider.getEffectiveThemeSetting(key, saved)
+                : saved;
+          },
+        );
         setState(() {
           _primaryColorController.text =
-              service.getSetting('theme_primary_color', '#00A09D');
+              serializeWebsiteEditorColor(resolved.primaryColor);
           _accentColorController.text =
-              service.getSetting('theme_accent_color', '#FF6D00');
-          _productDetailAccent = service.getSetting(
-            'theme_product_detail_accent_color',
-            '#123F68',
+              serializeWebsiteEditorColor(resolved.accentColor);
+          _textColorController.text =
+              serializeWebsiteEditorColor(resolved.textColor);
+          _productDetailAccent = serializeWebsiteEditorColor(
+            resolved.commerceAccentColor,
           );
-          _productDetailText = service.getSetting(
-            'theme_product_detail_text_color',
-            '#1E293B',
+          _productDetailText = serializeWebsiteEditorColor(
+            resolved.commerceTextColor,
           );
-          _productDetailLine = service.getSetting(
-            'theme_product_detail_line_color',
-            '#E8E2D8',
+          _productDetailLine = serializeWebsiteEditorColor(
+            resolved.commerceLineColor,
           );
-          _headingFont = WebsiteFontRegistry.resolveHeadingFont(
-            service.getSetting(
-              'theme_heading_font',
-              WebsiteFontRegistry.headingDefault,
-            ),
-          );
-          _bodyFont = WebsiteFontRegistry.resolveBodyFont(
-            service.getSetting(
-              'theme_body_font',
-              WebsiteFontRegistry.bodyDefault,
-            ),
-          );
+          _headingFont = resolved.headingFont;
+          _bodyFont = resolved.bodyFont;
           _headingSize = _sizeKeyFromStoredValue(
             isHeading: true,
-            raw: service.getSetting('theme_heading_size', '48'),
+            raw: resolved.headingSize.toString(),
           );
           _bodySize = _sizeKeyFromStoredValue(
             isHeading: false,
-            raw: service.getSetting('theme_body_size', '16'),
+            raw: resolved.bodySize.toString(),
           );
-          _buttonStyle = service.getSetting('button_style', 'rounded');
-          _buttonSize = service.getSetting('button_size', 'medium');
+          _buttonStyle = resolved.buttonStyle;
+          _buttonSize = resolved.buttonSize;
+          _sectionSpacing = resolved.sectionSpacing;
+          _containerPadding = resolved.containerPadding;
           _pageBackground =
-              service.getSetting('theme_background_color', '#FFFFFF');
+              serializeWebsiteEditorColor(resolved.backgroundColor);
         });
       }
     } catch (e) {
@@ -164,6 +173,7 @@ class _ThemeTabState extends State<_ThemeTab> {
   void dispose() {
     _primaryColorController.dispose();
     _accentColorController.dispose();
+    _textColorController.dispose();
     super.dispose();
   }
 
@@ -236,6 +246,12 @@ class _ThemeTabState extends State<_ThemeTab> {
                 Icons.wallpaper,
                 'background',
               ),
+              _buildMenuItem(
+                'Espaciado',
+                'Separación y márgenes globales',
+                Icons.space_bar,
+                'spacing',
+              ),
             ],
           ),
         ),
@@ -279,6 +295,9 @@ class _ThemeTabState extends State<_ThemeTab> {
         break;
       case 'background':
         title = 'Fondo';
+        break;
+      case 'spacing':
+        title = 'Espaciado';
         break;
     }
 
@@ -338,6 +357,20 @@ class _ThemeTabState extends State<_ThemeTab> {
                 context
                     .read<WebsiteEditModeProvider>()
                     .updateThemeSetting('theme_accent_color', val);
+              },
+            ),
+            const SizedBox(height: 24),
+            const _SectionHeader('COLOR DE TEXTO'),
+            const SizedBox(height: 12),
+            WebsiteColorPickerField(
+              label: 'Color de texto',
+              value: _textColorController.text,
+              allowAlpha: false,
+              onChanged: (val) {
+                setState(() => _textColorController.text = val);
+                context
+                    .read<WebsiteEditModeProvider>()
+                    .updateThemeSetting('theme_text_color', val);
               },
             ),
             const SizedBox(height: 28),
@@ -519,9 +552,124 @@ class _ThemeTabState extends State<_ThemeTab> {
           ],
         );
 
+      case 'spacing':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionHeader('SEPARACIÓN ENTRE SECCIONES'),
+            const SizedBox(height: 8),
+            _buildThemeDimensionControl(
+              label: 'Espaciado base',
+              description:
+                  'Se aplica a los bloques que heredan el espaciado global.',
+              value: _sectionSpacing,
+              min: WebsitePageComposition.minimumSpacing,
+              max: WebsitePageComposition.maximumSpacing,
+              divisions: 50,
+              presets: _sectionSpacingPresets,
+              onChanged: (value) {
+                setState(() => _sectionSpacing = value);
+                context.read<WebsiteEditModeProvider>().updateThemeSetting(
+                      'theme_section_spacing',
+                      value.round().toString(),
+                    );
+              },
+            ),
+            const SizedBox(height: 24),
+            const _SectionHeader('MARGEN INTERIOR DEL CONTENIDO'),
+            const SizedBox(height: 8),
+            _buildThemeDimensionControl(
+              label: 'Margen del contenedor',
+              description:
+                  'Define el espacio interior global del contenido de página.',
+              value: _containerPadding,
+              min: WebsiteResolvedTheme.minContainerPadding,
+              max: WebsiteResolvedTheme.maxContainerPadding,
+              divisions: 12,
+              presets: _containerPaddingPresets,
+              onChanged: (value) {
+                setState(() => _containerPadding = value);
+                context.read<WebsiteEditModeProvider>().updateThemeSetting(
+                      'theme_container_padding',
+                      value.round().toString(),
+                    );
+              },
+            ),
+          ],
+        );
+
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildThemeDimensionControl({
+    required String label,
+    required String description,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required List<double> presets,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+            const Spacer(),
+            Text(
+              '${value.round()}px',
+              style: const TextStyle(
+                color: Color(0xFF00A09D),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (var index = 0; index < presets.length; index++) ...[
+              _SpacingPresetButton(
+                label: presets[index].round().toString(),
+                isSelected: value == presets[index],
+                onTap: () => onChanged(presets[index]),
+              ),
+              if (index < presets.length - 1) const SizedBox(width: 6),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: const Color(0xFF00A09D),
+            inactiveTrackColor: Colors.white12,
+            thumbColor: const Color(0xFF00A09D),
+            overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            trackHeight: 3,
+          ),
+          child: Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: (next) => onChanged(next.roundToDouble()),
+          ),
+        ),
+        Text(
+          description,
+          style: const TextStyle(color: Colors.white24, fontSize: 9),
+        ),
+      ],
+    );
   }
 
   Widget _buildStyleOption(String label, String value, bool isSelected) {

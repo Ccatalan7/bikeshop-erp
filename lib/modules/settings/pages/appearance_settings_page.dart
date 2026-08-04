@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -30,11 +32,17 @@ class AppearanceSettingsPage extends StatelessWidget {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        'Tema de la Aplicación',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                      // El título fluye con la tarjeta: en compacto, o con el
+                      // texto agrandado, un `Text` suelto en un `Row` desborda
+                      // en vez de reflowar. La tarjeta de abajo ya lo hacía así.
+                      Expanded(
+                        child: Text(
+                          'Tema de la Aplicación',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
                       ),
                     ],
                   ),
@@ -51,22 +59,49 @@ class AppearanceSettingsPage extends StatelessWidget {
                   const SizedBox(height: 24),
                   Consumer<AppearanceService>(
                     builder: (context, appearanceService, _) {
+                      // **Los segmentos van sin icono, y ésa es la corrección.**
+                      // `SegmentedButton` da a cada segmento `maxWidth / 3` y su
+                      // etiqueta va `Flexible` sin `maxLines`: cuando no alcanza
+                      // parte la palabra sin avisar —«Sistem/a» a 390 px, y a
+                      // 430 no—. Las dos palancas que parecerían servir están
+                      // cerradas por el framework: `ButtonStyleButton` recorta a
+                      // cero toda densidad horizontal negativa («don't allow the
+                      // VisualDensity adjustment to reduce the width of the
+                      // left/right padding») y `_SegmentButton` sobrescribe el
+                      // `padding` del estilo en cuanto el segmento tiene icono.
+                      // Medido: 458.10 px de selector con icono —da igual el
+                      // contrato o el `padding`— contra 380.10 px sin icono, o
+                      // sea 26 px de holgura por segmento. A 390 px reales cada
+                      // segmento recibe 108.7 y `Sistema` pasa de pedir ~108 a
+                      // pedir ~82: cabe incluso al 130 % de escala de texto.
+                      //
+                      // No se pierde semántica: `Claro`, `Oscuro` y `Sistema`
+                      // son palabras inequívocas y la selección la sigue
+                      // mostrando el relleno del propio segmento. El canon
+                      // compacto prohíbe el icono **sin** palabra, no al revés.
+                      //
+                      // La densidad **no** se fuerza acá. `VisualDensity.compact`
+                      // no reducía ancho —lo prueba la medición de arriba— y su
+                      // único efecto era bajar el alto del selector de 48 a 40,
+                      // por debajo del mínimo táctil. La densidad la decide el
+                      // `ThemeData`, que ya la deriva de la plataforma:
+                      // `standard` donde se toca con el dedo, `compact` en
+                      // escritorio.
                       return SegmentedButton<ThemeMode>(
+                        key: const ValueKey('appearance-theme-mode'),
+                        showSelectedIcon: false,
                         segments: const [
                           ButtonSegment(
                             value: ThemeMode.light,
                             label: Text('Claro'),
-                            icon: Icon(Icons.light_mode),
                           ),
                           ButtonSegment(
                             value: ThemeMode.dark,
                             label: Text('Oscuro'),
-                            icon: Icon(Icons.dark_mode),
                           ),
                           ButtonSegment(
                             value: ThemeMode.system,
                             label: Text('Sistema'),
-                            icon: Icon(Icons.settings_brightness),
                           ),
                         ],
                         selected: {appearanceService.themeMode},
@@ -97,11 +132,14 @@ class AppearanceSettingsPage extends StatelessWidget {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        'Logo de la Empresa',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                      Expanded(
+                        child: Text(
+                          'Logo de la Empresa',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
                       ),
                     ],
                   ),
@@ -217,62 +255,21 @@ class AppearanceSettingsPage extends StatelessWidget {
                   // Upload and Remove Buttons
                   Consumer<AppearanceService>(
                     builder: (context, appearanceService, _) {
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () async {
-                                await _handleLogoUpload(
-                                    context, appearanceService);
-                              },
-                              icon: const Icon(Icons.upload_file),
-                              label: Text(appearanceService.hasCustomLogo
-                                  ? 'Cambiar Logo'
-                                  : 'Subir Logo'),
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.all(16),
-                              ),
+                      return _LogoActions(
+                        hasCustomLogo: appearanceService.hasCustomLogo,
+                        onUpload: () =>
+                            _handleLogoUpload(context, appearanceService),
+                        onRefresh: () {
+                          appearanceService.refreshLogo();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Logo actualizado'),
+                              duration: Duration(seconds: 2),
                             ),
-                          ),
-                          if (appearanceService.hasCustomLogo) ...[
-                            const SizedBox(width: 12),
-                            Tooltip(
-                              message:
-                                  'Refrescar logo para ver la última versión',
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  appearanceService.refreshLogo();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Logo actualizado'),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Refrescar'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.all(16),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  await _handleLogoRemove(
-                                      context, appearanceService);
-                                },
-                                icon: const Icon(Icons.delete_outline),
-                                label: const Text('Eliminar'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.all(16),
-                                  foregroundColor: Colors.red,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+                          );
+                        },
+                        onRemove: () =>
+                            _handleLogoRemove(context, appearanceService),
                       );
                     },
                   ),
@@ -318,10 +315,10 @@ class AppearanceSettingsPage extends StatelessWidget {
   Future<void> _handleLogoUpload(
       BuildContext context, AppearanceService appearanceService) async {
     BuildContext? dialogContext;
-    
+
     try {
       debugPrint('[AppearanceSettings] pickImage() called');
-      
+
       // Pick image
       final result = await ImageService.pickImage();
 
@@ -375,12 +372,12 @@ class AppearanceSettingsPage extends StatelessWidget {
       await appearanceService
           .uploadCompanyLogo(result.bytes, result.name)
           .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              debugPrint('[AppearanceSettings] Upload TIMED OUT after 30 seconds');
-              throw Exception('Upload timed out after 30 seconds');
-            },
-          );
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('[AppearanceSettings] Upload TIMED OUT after 30 seconds');
+          throw Exception('Upload timed out after 30 seconds');
+        },
+      );
 
       debugPrint('[AppearanceSettings] Upload completed successfully');
 
@@ -410,7 +407,7 @@ class AppearanceSettingsPage extends StatelessWidget {
       );
     } catch (e) {
       debugPrint('[AppearanceSettings] Upload error: $e');
-      
+
       // Close loading dialog if open
       if (dialogContext != null && dialogContext!.mounted) {
         try {
@@ -491,5 +488,190 @@ class AppearanceSettingsPage extends StatelessWidget {
         ),
       );
     }
+  }
+}
+
+/// Acciones del logo — «Subir/Cambiar Logo», «Refrescar» y «Eliminar».
+///
+/// **Causa del defecto:** las tres iban en un `Row` fijo. La etiqueta de un
+/// `*Button.icon` es `Flexible`, así que cuando el ancho no alcanza el botón no
+/// se queja: parte la palabra. A 430 px se leía «Cam/biar/Logo» y «Elimi/nar»,
+/// en claro y en oscuro. No era el ancho de la ventana; era esta composición.
+///
+/// La fila sólo se conserva **cuando cabe medida**, no por costumbre: se calcula
+/// el ancho que cada acción necesita para decir su palabra completa en una línea
+/// —relleno + icono + separación + texto al `textScaler` vigente— y con eso se
+/// elige entre las tres composiciones. Las etiquetas nunca se parten y ninguna
+/// acción se esconde detrás de un icono mudo, que es lo que pide el canon
+/// compacto: una acción importante no puede depender de un icono sin palabra.
+class _LogoActions extends StatelessWidget {
+  const _LogoActions({
+    required this.hasCustomLogo,
+    required this.onUpload,
+    required this.onRefresh,
+    required this.onRemove,
+  });
+
+  /// Separación entre acciones, igual en fila y apiladas.
+  static const double _gap = 12;
+
+  /// Relleno horizontal declarado en el `styleFrom` de cada acción.
+  static const double _horizontalPadding = 16;
+
+  /// Tamaño del icono de un `*Button.icon` en Material 3.
+  static const double _iconExtent = 18;
+
+  /// Separación icono–etiqueta de un `*Button.icon` a escala de texto 1.
+  static const double _iconGap = 8;
+
+  /// Holgura para redondeos de medición: sobrestimar apila un poco antes, que
+  /// es preferible a partir una palabra.
+  static const double _measurementSlack = 4;
+
+  /// Alto mínimo táctil exigido por el canon compacto.
+  static const double _minimumTouchHeight = 48;
+
+  final bool hasCustomLogo;
+  final Future<void> Function() onUpload;
+  final VoidCallback onRefresh;
+  final Future<void> Function() onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final uploadLabel = hasCustomLogo ? 'Cambiar Logo' : 'Subir Logo';
+    final upload = ElevatedButton.icon(
+      key: const ValueKey('appearance-logo-upload'),
+      onPressed: () async {
+        await onUpload();
+      },
+      icon: const Icon(Icons.upload_file),
+      label: Text(
+        uploadLabel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.all(_horizontalPadding),
+        minimumSize: const Size(64, _minimumTouchHeight),
+      ),
+    );
+
+    if (!hasCustomLogo) {
+      return SizedBox(width: double.infinity, child: upload);
+    }
+
+    final refresh = Tooltip(
+      message: 'Refrescar logo para ver la última versión',
+      child: OutlinedButton.icon(
+        key: const ValueKey('appearance-logo-refresh'),
+        onPressed: onRefresh,
+        icon: const Icon(Icons.refresh),
+        label: const Text(
+          'Refrescar',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.all(_horizontalPadding),
+          minimumSize: const Size(64, _minimumTouchHeight),
+        ),
+      ),
+    );
+
+    final remove = OutlinedButton.icon(
+      key: const ValueKey('appearance-logo-remove'),
+      onPressed: () async {
+        await onRemove();
+      },
+      icon: const Icon(Icons.delete_outline),
+      label: const Text(
+        'Eliminar',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.all(_horizontalPadding),
+        minimumSize: const Size(64, _minimumTouchHeight),
+        foregroundColor: Colors.red,
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        final uploadExtent = _labelledActionExtent(context, uploadLabel);
+        final refreshExtent = _labelledActionExtent(context, 'Refrescar');
+        final removeExtent = _labelledActionExtent(context, 'Eliminar');
+
+        // La condición no es «cuánto suman», es **cuánto le toca a cada una**:
+        // `Expanded` reparte el sobrante en partes iguales, así que las dos
+        // acciones flexibles reciben el mismo ancho aunque una necesite más.
+        // Comparar contra la suma dejaba pasar un tramo intermedio —cerca de
+        // 700 px de ventana— donde la fila cabía «en total» pero `Cambiar Logo`
+        // se truncaba con puntos suspensivos. Se mide contra el máximo.
+        final rowRequired =
+            2 * math.max(uploadExtent, removeExtent) + refreshExtent + _gap * 2;
+        final splitRequired = 2 * math.max(refreshExtent, removeExtent) + _gap;
+
+        if (rowRequired <= available) {
+          return Row(
+            key: const ValueKey('appearance-logo-actions-row'),
+            children: [
+              Expanded(child: upload),
+              const SizedBox(width: _gap),
+              refresh,
+              const SizedBox(width: _gap),
+              Expanded(child: remove),
+            ],
+          );
+        }
+
+        if (splitRequired <= available) {
+          return Column(
+            key: const ValueKey('appearance-logo-actions-split'),
+            children: [
+              SizedBox(width: double.infinity, child: upload),
+              const SizedBox(height: _gap),
+              Row(
+                children: [
+                  Expanded(child: refresh),
+                  const SizedBox(width: _gap),
+                  Expanded(child: remove),
+                ],
+              ),
+            ],
+          );
+        }
+
+        return Column(
+          key: const ValueKey('appearance-logo-actions-stack'),
+          children: [
+            SizedBox(width: double.infinity, child: upload),
+            const SizedBox(height: _gap),
+            SizedBox(width: double.infinity, child: refresh),
+            const SizedBox(height: _gap),
+            SizedBox(width: double.infinity, child: remove),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Ancho que necesita una acción para decir `label` completa en una línea.
+  double _labelledActionExtent(BuildContext context, String label) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: Theme.of(context).textTheme.labelLarge,
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return _horizontalPadding * 2 +
+        _iconExtent +
+        _iconGap +
+        painter.width +
+        _measurementSlack;
   }
 }

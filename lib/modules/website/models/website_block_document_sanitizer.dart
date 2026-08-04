@@ -1,3 +1,6 @@
+import 'website_canvas_responsive_document.dart';
+import 'website_responsive_authoring.dart';
+
 /// Removes editor-only values from one persisted block-data object.
 ///
 /// The rule is deliberately type-aware. `activeElementId` is transient only
@@ -9,22 +12,36 @@ Map<String, dynamic> sanitizeWebsiteBlockDataForPersistence({
   required Map<String, dynamic> data,
 }) {
   final normalizedType = blockType.trim().toLowerCase();
-  final sanitized = Map<String, dynamic>.from(data);
+  var sanitized = _deepCopyWebsiteMap(data);
 
   if (normalizedType == 'canvas') {
     sanitized.remove('activeElementId');
-    return sanitized;
+    return WebsiteResponsiveDataCodec.normalize(
+      _sanitizeCanvasLayers(sanitized),
+      transientPropertyKeys: const {'activeElementId'},
+    );
   }
 
-  if (normalizedType != 'carousel') return sanitized;
+  if (normalizedType != 'carousel') {
+    return WebsiteResponsiveDataCodec.normalize(sanitized);
+  }
 
   final rawSlides = sanitized['slides'];
-  if (rawSlides is! List) return sanitized;
+  if (rawSlides is! List) {
+    return WebsiteResponsiveDataCodec.normalize(sanitized);
+  }
 
   sanitized['slides'] = rawSlides.map<dynamic>((rawSlide) {
     if (rawSlide is! Map) return rawSlide;
-    return Map<String, dynamic>.from(rawSlide)..remove('activeElementId');
+    final slide = _deepCopyWebsiteMap(rawSlide)..remove('activeElementId');
+    return WebsiteResponsiveDataCodec.normalize(
+      // A slide can host Canvas content, and its layers own the same nested
+      // responsive container as a standalone Canvas block.
+      _sanitizeCanvasLayers(slide),
+      transientPropertyKeys: const {'activeElementId'},
+    );
   }).toList(growable: false);
+  sanitized = WebsiteResponsiveDataCodec.normalize(sanitized);
   return sanitized;
 }
 
@@ -32,8 +49,8 @@ Map<String, dynamic> sanitizeWebsiteBlockDataForPersistence({
 /// Canvas selection.
 ///
 /// Both supported data aliases are sanitized when present. Callers that own
-/// deeper copy semantics should copy before invoking this helper; only the
-/// block, data map, Carousel slide list, and slide maps are copied here.
+/// deeper copy semantics do not need to copy first: every authored nested map,
+/// list, set and responsive branch is detached before normalization.
 Map<String, dynamic> sanitizeWebsiteBlockForPersistence(
   Map<String, dynamic> block,
 ) {
@@ -56,3 +73,37 @@ List<Map<String, dynamic>> sanitizeWebsiteBlocksForPersistence(
   Iterable<Map<String, dynamic>> blocks,
 ) =>
     blocks.map(sanitizeWebsiteBlockForPersistence).toList();
+
+/// Normalises each Canvas layer with ITS own policies.
+///
+/// A layer owns a nested responsive container, so the root normalisation
+/// cannot reach it: without this pass an empty override map, an override equal
+/// to the base or a transient selection key could survive inside a layer.
+/// Documents without layers come back untouched.
+Map<String, dynamic> _sanitizeCanvasLayers(Map<String, dynamic> data) {
+  final raw = data[WebsiteCanvasResponsivePolicy.elementsKey];
+  if (raw is! List) return data;
+  final next = Map<String, dynamic>.from(data);
+  next[WebsiteCanvasResponsivePolicy.elementsKey] = raw
+      .map<dynamic>(
+        (layer) => layer is Map
+            ? WebsiteCanvasResponsiveDocument.normalizeLayer(layer)
+            : layer,
+      )
+      .toList(growable: false);
+  return next;
+}
+
+Map<String, dynamic> _deepCopyWebsiteMap(Map<dynamic, dynamic> source) =>
+    source.map(
+      (key, value) => MapEntry(key.toString(), _deepCopyWebsiteValue(value)),
+    );
+
+dynamic _deepCopyWebsiteValue(dynamic value) {
+  if (value is Map) return _deepCopyWebsiteMap(value);
+  if (value is List) {
+    return value.map(_deepCopyWebsiteValue).toList(growable: false);
+  }
+  if (value is Set) return value.map(_deepCopyWebsiteValue).toSet();
+  return value;
+}
