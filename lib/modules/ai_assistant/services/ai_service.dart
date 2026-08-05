@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../../crm/models/crm_models.dart';
@@ -13,130 +15,44 @@ import '../../purchases/models/purchase_invoice.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
+import '../../tasks/models/task_model.dart';
 import '../../tasks/services/task_service.dart';
 import '../../../shared/models/supplier.dart';
-import '../../../shared/services/authority_scoped_cache.dart';
+import '../../../shared/models/notification_digest.dart';
 import '../../../shared/services/gemini_proxy_service.dart';
+import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../models/ai_agent_contracts.dart';
+import '../models/ai_agent_audit_event.dart';
+import '../models/ai_agent_tool.dart';
 import '../models/ai_assistant_destination.dart';
+import '../models/ai_assistant_turn_contracts.dart';
 import '../models/ai_attention_report.dart';
 import '../models/ai_inventory_reply.dart';
+import '../providers/ai_agent_model_provider.dart';
+import '../providers/gemini_ai_agent_model_provider.dart';
+import 'ai_assistant_read_tool_catalog.dart';
+import 'ai_assistant_turn_engine.dart';
+import 'ai_business_read_tool_catalog.dart';
+import 'ai_agent_audit_sink.dart';
 import 'ai_attention_read_model.dart';
+import 'ai_operational_read_tool_catalog.dart';
+import 'ai_tool_registry.dart';
+import 'in_memory_ai_agent_audit_sink.dart';
 
-/// Raised when a shared service returned rows that could not be proven to
-/// belong to the turn's authority.
-class AIAssistantSourceUnavailable implements Exception {
-  const AIAssistantSourceUnavailable(this.source, this.reason);
+export '../models/ai_assistant_turn_contracts.dart';
 
-  final String source;
-  final String reason;
+String _newAIAgentId() => const Uuid().v4();
 
-  @override
-  String toString() => 'AI source "$source" unavailable: $reason';
+List<int> _newAIAuditHmacKey() {
+  final random = math.Random.secure();
+  return List<int>.unmodifiable(
+    List<int>.generate(32, (_) => random.nextInt(256), growable: false),
+  );
 }
 
-/// The one authority a turn may answer from.
-///
-/// The session boundary already refuses jobs a page published for another
-/// tenant, but the assistant reads five more sources straight out of shared
-/// caches and services. Those caches are keyed by their own lifecycle, not by
-/// this turn, so a stale one can outlive a tenant switch. Every row is checked
-/// against this key before it reaches a prompt or a card.
-///
-/// A source that cannot be proven is reported unavailable. It is never
-/// silently filtered, and never degraded into "0 resultados" — an empty answer
-/// and an unverifiable answer mean opposite things to whoever reads them.
-/// An unresolved authority is not representable: [scope] is non-null, so a
-/// turn either has one coherent user + tenant or is never constructed. The
-/// nullable version invited a "no authority" branch in every consumer, and a
-/// branch that must never be taken is a branch that eventually is.
-@immutable
-class AIAssistantTurnAuthority {
-  const AIAssistantTurnAuthority(this.scope);
-
-  final ErpAuthorityScopeKey scope;
-
-  String get tenantId => scope.tenantId;
-
-  /// Returns [rows] only when every row belongs to this authority.
-  List<T> verifyRows<T>(
-    String source,
-    Iterable<T> rows,
-    String? Function(T row) tenantOf,
-  ) {
-    final expected = scope.tenantId;
-
-    final verified = <T>[];
-    for (final row in rows) {
-      final rowTenant = tenantOf(row)?.trim();
-      if (rowTenant == null || rowTenant.isEmpty) {
-        throw AIAssistantSourceUnavailable(source, 'a row carries no tenant');
-      }
-      if (rowTenant != expected) {
-        throw AIAssistantSourceUnavailable(
-          source,
-          'a row belongs to another tenant',
-        );
-      }
-      verified.add(row);
-    }
-    return verified;
-  }
-
-  /// Requires a service whose cache publishes its own authority to be bound to
-  /// exactly this one. Checked before and after a read, because a read can
-  /// await across a tenant switch.
-  void requireServiceScope(String source, ErpAuthorityScopeKey? serviceScope) {
-    if (serviceScope == null) {
-      throw AIAssistantSourceUnavailable(source, 'service has no bound scope');
-    }
-    if (serviceScope != scope) {
-      throw AIAssistantSourceUnavailable(
-        source,
-        'service is bound to another authority',
-      );
-    }
-  }
-}
-
-/// A card the assistant offers after answering.
-///
-/// The card carries a [destination] identifier, never a route and never an
-/// entity id. Nothing the model emits can widen where a click lands: the
-/// closed registry in [AIAssistantDestination] decides that, and every entry
-/// in it is an aggregate surface rather than an editor.
-class AIAssistantActionCard {
-  const AIAssistantActionCard({
-    required this.kind,
-    required this.title,
-    required this.destination,
-    this.eyebrow,
-    this.subtitle,
-    this.description,
-    this.chips = const [],
-  });
-
-  final String kind;
-  final String title;
-  final AIAssistantDestination destination;
-  final String? eyebrow;
-  final String? subtitle;
-  final String? description;
-  final List<String> chips;
-
-  /// Names the surface the click opens, so the operator reads the destination
-  /// before choosing it.
-  String get ctaLabel => destination.ctaLabel;
-}
-
-class AIAssistantResponse {
-  const AIAssistantResponse({
-    required this.text,
-    this.cards = const [],
-  });
-
-  final String text;
-  final List<AIAssistantActionCard> cards;
+void _debugAi(String message) {
+  if (!kReleaseMode) debugPrint(message);
 }
 
 class AIProductImageAnalysis {
@@ -254,7 +170,13 @@ class _WidthComparisonCandidate {
   final double stock;
 }
 
-class AIAssistantService extends ChangeNotifier {
+class AIAssistantService extends ChangeNotifier
+    implements AIAssistantTurnEngine {
+  static const Duration _maxModelCallDuration = Duration(seconds: 35);
+  static const Duration _maxAgentTurnDuration = Duration(seconds: 90);
+  static const Duration _maxAuditRecordDuration = Duration(milliseconds: 100);
+  static const int _maxToolCallsPerTurn = 12;
+
   /// One engine per authority, never a process-wide singleton.
   ///
   /// This used to be `factory AIAssistantService() => _instance`, so every
@@ -263,15 +185,33 @@ class AIAssistantService extends ChangeNotifier {
   /// búsqueda anterior" about a search made in someone else's session, and
   /// closing the panel cleared what the operator saw without clearing what the
   /// model remembered. The session boundary owns the lifetime now.
-  AIAssistantService();
+  AIAssistantService({
+    AIAgentModelProvider? modelProvider,
+    AIAgentAuditSink? auditSink,
+    String Function()? idFactory,
+    DateTime Function()? now,
+  })  : _modelProvider = modelProvider ?? GeminiAIAgentModelProvider(),
+        _auditSink = FailSafeAIAgentAuditSink(
+          auditSink ?? InMemoryAIAgentAuditSink(),
+        ),
+        _idFactory = idFactory ?? _newAIAgentId,
+        _now = now ?? DateTime.now,
+        _auditHmacKey = _newAIAuditHmacKey() {
+    _sessionId = _idFactory();
+  }
 
+  final AIAgentModelProvider _modelProvider;
+  final AIAgentAuditSink _auditSink;
+  final String Function() _idFactory;
+  final DateTime Function() _now;
+  final List<int> _auditHmacKey;
+  late String _sessionId;
   GeminiProxyService? _geminiProxyInstance;
   GeminiProxyService get _geminiProxy =>
       _geminiProxyInstance ??= GeminiProxyService();
-  final List<Map<String, dynamic>> _history = [];
+  final List<AIAgentMessage> _history = <AIAgentMessage>[];
   bool _isLoading = false;
-
-  List<Map<String, dynamic>> _toolDeclarations = [];
+  int _turnSequence = 0;
 
   // `_lastSearchSkus` and the stock-filter indices lived here to hand a
   // pre-filtered selection to the inventory screen when the assistant drove
@@ -281,52 +221,14 @@ class AIAssistantService extends ChangeNotifier {
   String? _lastInventorySearchTerm;
 
   bool get isLoading => _isLoading;
-  List<Map<String, dynamic>> get history => _history;
+  List<AIAgentMessage> get history =>
+      List<AIAgentMessage>.unmodifiable(_history);
   bool get isGeminiConfigured => true;
 
-  void initialize() {
-    if (_toolDeclarations.isNotEmpty) {
-      return;
-    }
-
-    _toolDeclarations = [
-      {
-        'functionDeclarations': [
-          {
-            'name': 'searchStock',
-            'description':
-                'Search for products in the inventory using semantic AI search. Returns product name, SKU, brand, category, price, stock quantity, and location.',
-            'parameters': {
-              'type': 'OBJECT',
-              'properties': {
-                'query': {
-                  'type': 'STRING',
-                  'description':
-                      'Search query. Use the specific product type in Spanish as it appears in product names (e.g., "llanta 29" not "aro 29", "camara 29" not "tubo 29"). Include size and specs when the user mentions them.',
-                },
-              },
-              'required': ['query'],
-            },
-          },
-          {
-            'name': 'searchInternet',
-            'description':
-                'Search the internet for information not available in the internal database (e.g., bike compatibility, specs, standard parts).',
-            'parameters': {
-              'type': 'OBJECT',
-              'properties': {
-                'query': {
-                  'type': 'STRING',
-                  'description': 'The search query.',
-                },
-              },
-              'required': ['query'],
-            },
-          },
-        ],
-      },
-    ];
-  }
+  /// Kept as a compatibility hook for callers that eagerly initialized the
+  /// former Gemini-specific declarations. Tool discovery now happens inside
+  /// every authority-bound turn.
+  void initialize() {}
 
   Future<String> generateOneShotText(
     String prompt, {
@@ -410,8 +312,7 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
 
       final jsonBlock = _extractJsonObject(rawText);
       if (jsonBlock == null) {
-        debugPrint(
-            '⚠️ [AI] Product image analysis returned non-JSON: $rawText');
+        _debugAi('⚠️ [AI] Product image analysis returned invalid output.');
         return null;
       }
 
@@ -446,8 +347,8 @@ ${hintLines.isEmpty ? 'sin texto adicional' : hintLines.join('\n')}
         ),
         textConflict: decoded['text_conflict'] == true,
       );
-    } catch (e) {
-      debugPrint('❌ [AI] Product image analysis error: $e');
+    } catch (_) {
+      _debugAi('❌ [AI] Product image analysis failed.');
       return null;
     }
   }
@@ -556,7 +457,7 @@ ${contextLines.isEmpty ? 'sin texto adicional' : contextLines.join('\n')}
       if (rawText.isEmpty) return null;
       final jsonBlock = _extractJsonObject(rawText);
       if (jsonBlock == null) {
-        debugPrint('⚠️ [AI] Visual comparison returned non-JSON: $rawText');
+        _debugAi('⚠️ [AI] Visual comparison returned invalid output.');
         return null;
       }
 
@@ -576,8 +477,8 @@ ${contextLines.isEmpty ? 'sin texto adicional' : contextLines.join('\n')}
 
       _visualComparisonCache[cacheKey] = result;
       return result;
-    } catch (e) {
-      debugPrint('❌ [AI] Visual comparison error: $e');
+    } catch (_) {
+      _debugAi('❌ [AI] Visual comparison failed.');
       return null;
     }
   }
@@ -708,7 +609,7 @@ ${hintLines.join('\n')}
 
       final jsonBlock = _extractJsonObject(rawText);
       if (jsonBlock == null) {
-        debugPrint('⚠️ [AI] Clean product title returned non-JSON: $rawText');
+        _debugAi('⚠️ [AI] Clean product title returned invalid output.');
         return null;
       }
 
@@ -745,8 +646,8 @@ ${hintLines.join('\n')}
 
       _cleanedNameCache[cacheKey.toString()] = result;
       return result;
-    } catch (e) {
-      debugPrint('❌ [AI] Clean product title error: $e');
+    } catch (_) {
+      _debugAi('❌ [AI] Clean product title failed.');
       return null;
     }
   }
@@ -757,11 +658,10 @@ ${hintLines.join('\n')}
       if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
         return response.bodyBytes;
       }
-      debugPrint(
-          '⚠️ [AI] Image download failed (${response.statusCode}) for $url');
+      _debugAi('⚠️ [AI] Image download failed (${response.statusCode}).');
       return null;
-    } catch (e) {
-      debugPrint('❌ [AI] Image download error for $url: $e');
+    } catch (_) {
+      _debugAi('❌ [AI] Image download failed.');
       return null;
     }
   }
@@ -775,6 +675,7 @@ ${hintLines.join('\n')}
     return 'b:${bytes.lengthInBytes}:$hash';
   }
 
+  @override
   Future<AIAssistantResponse> sendMessage(
     String message, {
     List<MechanicJob>? jobs,
@@ -792,25 +693,38 @@ ${hintLines.join('\n')}
   }) async {
     _isLoading = true;
     notifyListeners();
+    final agentTurnStopwatch = Stopwatch()..start();
 
     try {
+      final toolAuthority = AIToolAuthority(
+        userId: authority.scope.userId,
+        tenantId: authority.scope.tenantId,
+        role: authority.role,
+        permissions: authority.permissions,
+      );
+      final canReadOperations = toolAuthority.hasEveryPermission(
+        const <String>{AIToolPermission.operationalRead},
+      );
+
       // Ahead of the job summary and ahead of the model: the operational
       // briefing is answered from the read model or not at all.
       final horizon = detectAttentionHorizon(message);
-      if (horizon != null) {
-        final report = await const AIAttentionReadModel().build(
-          horizon: horizon,
-          authority: authority,
-          bikeshopService: bikeshopService,
-          taskService: taskService,
-        );
+      if (horizon != null && canReadOperations) {
+        final report = await const AIAttentionReadModel()
+            .build(
+              horizon: horizon,
+              authority: authority,
+              bikeshopService: bikeshopService,
+              taskService: taskService,
+            )
+            .timeout(_remainingAgentTurnBudget(agentTurnStopwatch));
         return _recordDeterministic(
           message,
           _attentionResponse(report),
         );
       }
 
-      if (visibleJobsSourceUnavailable) {
+      if (visibleJobsSourceUnavailable && canReadOperations) {
         // The caller published rows it could not vouch for. Answering "no
         // encontré trabajos" here would report a verified zero from a source
         // that was never read, so the engine declines the job path instead.
@@ -820,16 +734,18 @@ ${hintLines.join('\n')}
         }
       }
 
-      final jobSummaryResponse = await _tryHandleJobSummary(
-        message,
-        jobs: jobs,
-        customerService: customerService,
-        bikeshopService: bikeshopService,
-        jobsAreCurrentView: jobsAreCurrentView,
-        jobSummaryScopeLabel: jobSummaryScopeLabel,
-        allowJobCacheFallback: allowJobCacheFallback,
-        authority: authority,
-      );
+      final jobSummaryResponse = canReadOperations
+          ? await _tryHandleJobSummary(
+              message,
+              jobs: jobs,
+              customerService: customerService,
+              bikeshopService: bikeshopService,
+              jobsAreCurrentView: jobsAreCurrentView,
+              jobSummaryScopeLabel: jobSummaryScopeLabel,
+              allowJobCacheFallback: allowJobCacheFallback,
+              authority: authority,
+            ).timeout(_remainingAgentTurnBudget(agentTurnStopwatch))
+          : null;
       if (jobSummaryResponse != null) {
         return _recordDeterministic(message, jobSummaryResponse);
       }
@@ -841,15 +757,17 @@ ${hintLines.join('\n')}
         purchaseService: purchaseService,
         salesService: salesService,
         authority: authority,
-      );
+      ).timeout(_remainingAgentTurnBudget(agentTurnStopwatch));
       if (entityCardResponse != null) {
         return _recordDeterministic(message, entityCardResponse);
       }
 
-      final inventoryRefinement = _tryHandleInventoryRefinement(
-        message,
-        inventoryService: inventoryService,
-      );
+      final inventoryRefinement = canReadOperations
+          ? _tryHandleInventoryRefinement(
+              message,
+              inventoryService: inventoryService,
+            )
+          : null;
       if (inventoryRefinement != null) {
         return _recordDeterministic(
           message,
@@ -857,7 +775,8 @@ ${hintLines.join('\n')}
         );
       }
 
-      final inventoryComparison = _tryHandleInventoryComparison(message);
+      final inventoryComparison =
+          canReadOperations ? _tryHandleInventoryComparison(message) : null;
       if (inventoryComparison != null) {
         return _recordDeterministic(
           message,
@@ -865,86 +784,252 @@ ${hintLines.join('\n')}
         );
       }
 
-      final directInventorySearch = await _tryHandleDirectInventorySearch(
-        message,
-        inventoryService: inventoryService,
-        authority: authority,
-      );
+      final directInventorySearch = canReadOperations
+          ? await _tryHandleDirectInventorySearch(
+              message,
+              inventoryService: inventoryService,
+              authority: authority,
+            ).timeout(_remainingAgentTurnBudget(agentTurnStopwatch))
+          : null;
       if (directInventorySearch != null) {
         return _recordDeterministic(message, directInventorySearch);
       }
 
       initialize();
 
-      final workingHistory = List<Map<String, dynamic>>.from(_history);
-      final systemPrompt = _buildSystemPrompt(jobs ?? []);
-      workingHistory.add({
-        'role': 'user',
-        'parts': [
-          {'text': message},
+      const toolPolicy = AIAssistantRuntimeToolPolicy();
+      final toolRegistry = AIToolRegistry(
+        policy: toolPolicy,
+        registrations: <AIToolRegistration>[
+          ...buildAIAssistantReadToolRegistrations(
+            searchInventory: (query) => _toolSearchStock(
+              query,
+              inventoryService,
+              authority,
+            ),
+            researchPublicWeb: _toolSearchInternet,
+          ),
+          ...buildAIOperationalReadToolRegistrations(
+            listAttentionItems: (horizon, callbackAuthority) =>
+                const AIAttentionReadModel().build(
+              horizon: horizon,
+              authority: _turnAuthorityFromTool(callbackAuthority),
+              bikeshopService: bikeshopService,
+              taskService: taskService,
+              now: _now(),
+            ),
+          ),
+          ...buildAIBusinessReadToolRegistrations(
+            searchWorkshopJobs: (request, callbackAuthority) =>
+                _toolSearchWorkshopJobs(
+              request,
+              callbackAuthority,
+              customerService: customerService,
+              bikeshopService: bikeshopService,
+            ),
+            searchTasks: (request, callbackAuthority) => _toolSearchTasks(
+              request,
+              callbackAuthority,
+              taskService: taskService,
+            ),
+            searchCustomers: (request, callbackAuthority) =>
+                _toolSearchCustomers(
+              request,
+              callbackAuthority,
+              customerService: customerService,
+            ),
+            searchSuppliers: (request, callbackAuthority) =>
+                _toolSearchSuppliers(
+              request,
+              callbackAuthority,
+              purchaseService: purchaseService,
+            ),
+            searchSalesInvoices: (request, callbackAuthority) =>
+                _toolSearchSalesInvoices(
+              request,
+              callbackAuthority,
+              salesService: salesService,
+            ),
+            searchPurchaseInvoices: (request, callbackAuthority) =>
+                _toolSearchPurchaseInvoices(
+              request,
+              callbackAuthority,
+              purchaseService: purchaseService,
+            ),
+          ),
         ],
-      });
+      );
+      final modelTools = toolRegistry
+          .advertisedToolsFor(toolAuthority)
+          .map(
+            (tool) => AIAgentModelTool(
+              name: tool.name,
+              description: tool.description,
+              inputSchema: tool.inputSchema,
+            ),
+          )
+          .toList(growable: false);
 
-      var response = await _geminiProxy.generateContent(
-        model: 'gemini-2.5-flash-lite',
-        systemInstruction: {
-          'parts': [
-            {'text': systemPrompt},
-          ],
-        },
-        contents: workingHistory,
-        tools: _toolDeclarations,
+      final workingHistory = _boundedCanonicalHistory(_history);
+      final systemPrompt = _buildSystemPrompt(
+        canReadOperations
+            ? jobs ?? const <MechanicJob>[]
+            : const <MechanicJob>[],
+      );
+      workingHistory.add(AIAgentMessage.user(message));
+      final turnId = 'turn-${++_turnSequence}';
+      final clientRequestId = _idFactory();
+      final runSessionIdHash = AIAgentAuditHash.sha256OfUtf8(_sessionId);
+      var modelStep = 0;
+      final toolCards = <AIAssistantActionCard>[];
+      var response = await _completeModelTurn(
+        request: AIAgentProviderRequest(
+          turnId: '$turnId/model-${modelStep++}',
+          modelRole: AIAgentModelRole.fast,
+          instructions: systemPrompt,
+          messages: List<AIAgentMessage>.unmodifiable(workingHistory),
+          tools: modelTools,
+        ),
+        turnId: turnId,
+        clientRequestId: clientRequestId,
+        sessionIdHash: runSessionIdHash,
+        timeout: _remainingAgentTurnBudget(agentTurnStopwatch),
       );
 
       // Handle Tool Calls (Recursively if needed)
       int maxTurns = 5;
-      while (response.functionCalls.isNotEmpty && maxTurns > 0) {
+      var totalToolCalls = 0;
+      while (response.toolCalls.isNotEmpty && maxTurns > 0) {
         maxTurns--;
-        final functionCalls = response.functionCalls;
-        final functionResponses = <Map<String, dynamic>>[];
+        final functionCalls = response.toolCalls;
+        if (totalToolCalls + functionCalls.length > _maxToolCallsPerTurn) {
+          const limitMessage =
+              'Pude avanzar con las consultas, pero el turno llegó a su límite '
+              'seguro de herramientas. Repite la parte que falta en una '
+              'solicitud más acotada.';
+          workingHistory.add(
+            const AIAgentMessage.assistant(text: limitMessage),
+          );
+          _replaceCanonicalHistory(workingHistory);
+          return _textResponse(limitMessage, cards: toolCards);
+        }
+        totalToolCalls += functionCalls.length;
+        final functionResponses = <AIAgentToolOutput>[];
         Map<String, Object?>? inventorySearchResult;
+        var turnLimitReached = false;
 
-        workingHistory.add({
-          'role': 'model',
-          'parts': [
-            for (final call in functionCalls)
-              {
-                'functionCall': {
-                  'name': call.name,
-                  'args': call.args,
-                },
-              },
-            if (response.text.trim().isNotEmpty) {'text': response.text.trim()},
-          ],
-        });
+        workingHistory.add(
+          AIAgentMessage.assistant(
+            text: response.text,
+            toolCalls: functionCalls,
+          ),
+        );
 
         for (final call in functionCalls) {
           final name = call.name;
-          final args = call.args;
-
-          debugPrint('🔧 [AI] Calling tool: $name with args: $args');
+          final args = call.arguments;
 
           Map<String, Object?> result;
-
-          if (name == 'searchStock') {
-            result = await _toolSearchStock(
-              args['query'] as String?,
-              inventoryService,
-              authority,
+          if (turnLimitReached) {
+            final rejection = toolRegistry.rejectForTurnLimit(
+              toolName: name,
+              authority: toolAuthority,
             );
-            inventorySearchResult = result;
-          } else if (name == 'searchInternet') {
-            result = await _toolSearchInternet(args['query'] as String?);
+            result = <String, Object?>{
+              'status': 'rejected',
+              'errorCode': rejection.code.name,
+              'message': rejection.message,
+            };
+            await _recordToolAudit(
+              response: response,
+              turnId: turnId,
+              clientRequestId: clientRequestId,
+              sessionIdHash: runSessionIdHash,
+              call: call,
+              receipt: rejection.receipt,
+              input: args,
+              output: null,
+            );
           } else {
-            result = {'error': 'Function $name not found'};
+            try {
+              final executionTimeout =
+                  _remainingAgentTurnBudget(agentTurnStopwatch);
+              final executionFuture = toolRegistry.execute(
+                toolName: name,
+                arguments: args,
+                authority: toolAuthority,
+                executionTimeout: executionTimeout,
+              );
+              final execution = await executionFuture;
+              result = execution.data;
+              await _recordToolAudit(
+                response: response,
+                turnId: turnId,
+                clientRequestId: clientRequestId,
+                sessionIdHash: runSessionIdHash,
+                call: call,
+                receipt: execution.receipt,
+                input: args,
+                output: result,
+              );
+              if (name == AIAssistantReadToolNames.searchInventory) {
+                inventorySearchResult = result;
+              }
+              _appendUniqueToolCards(
+                toolCards,
+                _cardsForToolResult(name, result),
+              );
+            } on TimeoutException {
+              turnLimitReached = true;
+              final rejection = toolRegistry.rejectForTurnLimit(
+                toolName: name,
+                authority: toolAuthority,
+              );
+              result = <String, Object?>{
+                'status': 'rejected',
+                'errorCode': rejection.code.name,
+                'message': rejection.message,
+              };
+              await _recordToolAudit(
+                response: response,
+                turnId: turnId,
+                clientRequestId: clientRequestId,
+                sessionIdHash: runSessionIdHash,
+                call: call,
+                receipt: rejection.receipt,
+                input: args,
+                output: null,
+              );
+            } on AIToolExecutionException catch (error) {
+              if (error.code == AIToolFailureCode.timeout ||
+                  error.code == AIToolFailureCode.turnLimitExceeded) {
+                turnLimitReached = true;
+              }
+              result = <String, Object?>{
+                'status': 'rejected',
+                'errorCode': error.code.name,
+                'message': error.message,
+              };
+              await _recordToolAudit(
+                response: response,
+                turnId: turnId,
+                clientRequestId: clientRequestId,
+                sessionIdHash: runSessionIdHash,
+                call: call,
+                receipt: error.receipt,
+                input: args,
+                output: null,
+              );
+            }
           }
 
-          functionResponses.add({
-            'functionResponse': {
-              'name': name,
-              'response': result,
-            },
-          });
+          functionResponses.add(
+            AIAgentToolOutput(
+              callId: call.id,
+              name: name,
+              output: result,
+            ),
+          );
         }
 
         // The tool results close the call the model just made. They are
@@ -952,10 +1037,19 @@ ${hintLines.join('\n')}
         // model turn is a functionCall with no matching functionResponse is
         // malformed, and the next turn sends it back to Gemini exactly as it
         // was left.
-        workingHistory.add({
-          'role': 'user',
-          'parts': functionResponses,
-        });
+        workingHistory.add(AIAgentMessage.tool(functionResponses));
+
+        if (turnLimitReached) {
+          const limitMessage =
+              'Pude avanzar con las consultas, pero el turno llegó a su límite '
+              'seguro de herramientas. Repite la parte que falta en una '
+              'solicitud más acotada.';
+          workingHistory.add(
+            const AIAgentMessage.assistant(text: limitMessage),
+          );
+          _replaceCanonicalHistory(workingHistory);
+          return _textResponse(limitMessage, cards: toolCards);
+        }
 
         // No auto-navigation. A search used to move the operator's active
         // workspace on its own, which could replace an unrelated surface they
@@ -964,55 +1058,64 @@ ${hintLines.join('\n')}
           inventorySearchResult,
         );
         if (deterministicInventoryReply != null) {
-          _history
-            ..clear()
-            ..addAll(workingHistory)
-            ..add({
-              'role': 'model',
-              'parts': [
-                {'text': deterministicInventoryReply},
-              ],
-            });
+          _replaceCanonicalHistory(<AIAgentMessage>[
+            ...workingHistory,
+            AIAgentMessage.assistant(text: deterministicInventoryReply),
+          ]);
           return _cardResponse(
             deterministicInventoryReply,
-            cards: _buildInventoryCardsFromSearchResult(inventorySearchResult),
+            cards: <AIAssistantActionCard>[
+              ...toolCards,
+              ..._buildInventoryCardsFromSearchResult(inventorySearchResult),
+            ],
           );
         }
 
-        response = await _geminiProxy.generateContent(
-          model: 'gemini-2.5-flash-lite',
-          systemInstruction: {
-            'parts': [
-              {'text': systemPrompt},
-            ],
-          },
-          contents: workingHistory,
-          tools: _toolDeclarations,
+        response = await _completeModelTurn(
+          request: AIAgentProviderRequest(
+            turnId: '$turnId/model-${modelStep++}',
+            modelRole: AIAgentModelRole.fast,
+            instructions: systemPrompt,
+            messages: List<AIAgentMessage>.unmodifiable(workingHistory),
+            tools: modelTools,
+          ),
+          turnId: turnId,
+          clientRequestId: clientRequestId,
+          sessionIdHash: runSessionIdHash,
+          timeout: _remainingAgentTurnBudget(agentTurnStopwatch),
         );
+      }
+
+      if (response.toolCalls.isNotEmpty) {
+        const limitMessage =
+            'Pude avanzar con las consultas, pero el turno llegó a su límite '
+            'seguro de herramientas. Repite la parte que falta en una solicitud '
+            'más acotada.';
+        workingHistory.add(
+          const AIAgentMessage.assistant(text: limitMessage),
+        );
+        _replaceCanonicalHistory(workingHistory);
+        return _textResponse(limitMessage, cards: toolCards);
       }
 
       final text = response.text.trim();
 
       if (text.isEmpty) {
-        return _textResponse('Sorry, I could not generate a response.');
+        return _textResponse(
+          'No pude generar una respuesta útil esta vez. Intenta reformular '
+          'la solicitud.',
+        );
       }
 
-      workingHistory.add({
-        'role': 'model',
-        'parts': [
-          {'text': text},
-        ],
-      });
+      workingHistory.add(AIAgentMessage.assistant(text: text));
 
-      _history
-        ..clear()
-        ..addAll(workingHistory);
+      _replaceCanonicalHistory(workingHistory);
 
-      return _textResponse(text);
-    } on AIAssistantSourceUnavailable catch (e) {
+      return _textResponse(text, cards: toolCards);
+    } on AIAssistantSourceUnavailable {
       // Never degraded into "no encontré nada": an empty answer and an
       // unverifiable one mean opposite things at the counter.
-      debugPrint('⛔ [AI] $e');
+      _debugAi('⛔ [AI] An authority-bound source was unavailable.');
       return _recordDeterministic(
         message,
         _textResponse(
@@ -1021,11 +1124,20 @@ ${hintLines.join('\n')}
           'darte una cifra. Vuelve a intentarlo en unos segundos.',
         ),
       );
+    } on TimeoutException {
+      _debugAi('⚠️ [AI] The assistant turn reached its safe time limit.');
+      return _recordDeterministic(
+        message,
+        _textResponse(
+          'La consulta tomó más de lo seguro para un solo turno. Intenta de '
+          'nuevo con una parte más acotada.',
+        ),
+      );
     } on GeminiProxyException catch (e) {
-      debugPrint('Error sending message via Gemini proxy: $e');
+      _debugAi('⚠️ [AI] The configured model provider is unavailable.');
       return _textResponse(_friendlyGeminiErrorMessage(e));
-    } catch (e) {
-      debugPrint('Error sending message via AI assistant: $e');
+    } catch (_) {
+      _debugAi('⚠️ [AI] The assistant turn failed.');
       return _textResponse(
         'No pude procesar esa solicitud ahora. Intenta de nuevo en unos segundos.',
       );
@@ -1033,6 +1145,918 @@ ${hintLines.join('\n')}
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<AIAgentProviderTurn> _completeModelTurn({
+    required AIAgentProviderRequest request,
+    required String turnId,
+    required String clientRequestId,
+    required AIAgentAuditHash sessionIdHash,
+    required Duration timeout,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final response = await _modelProvider.complete(request).timeout(timeout);
+      stopwatch.stop();
+      await _safeRecordAudit(
+        () => AIAgentAuditEvent(
+          occurredAt: DateTime.now().toUtc(),
+          kind: AIAgentAuditEventKind.modelInvocation,
+          sessionIdHash: sessionIdHash,
+          turnIdHash: AIAgentAuditHash.sha256OfUtf8(turnId),
+          clientRequestIdHash: AIAgentAuditHash.sha256OfUtf8(clientRequestId),
+          modelRole: request.modelRole,
+          provider: response.provider,
+          model: response.model,
+          decision: AIAgentAuditDecision.notApplicable,
+          status: AIAgentAuditStatus.succeeded,
+          duration: stopwatch.elapsed,
+          inputHash: AIAgentAuditHash.hmacSha256OfJson(
+            key: _auditHmacKey,
+            value: _providerRequestAuditPayload(request),
+          ),
+          outputHash: AIAgentAuditHash.hmacSha256OfJson(
+            key: _auditHmacKey,
+            value: _providerTurnAuditPayload(response),
+          ),
+        ),
+      );
+      return response;
+    } on TimeoutException {
+      stopwatch.stop();
+      await _safeRecordAudit(
+        () => AIAgentAuditEvent(
+          occurredAt: DateTime.now().toUtc(),
+          kind: AIAgentAuditEventKind.modelInvocation,
+          sessionIdHash: sessionIdHash,
+          turnIdHash: AIAgentAuditHash.sha256OfUtf8(turnId),
+          clientRequestIdHash: AIAgentAuditHash.sha256OfUtf8(clientRequestId),
+          modelRole: request.modelRole,
+          provider: _modelProvider.providerId,
+          model: 'unresolved',
+          decision: AIAgentAuditDecision.notApplicable,
+          status: AIAgentAuditStatus.timedOut,
+          duration: stopwatch.elapsed,
+          inputHash: AIAgentAuditHash.hmacSha256OfJson(
+            key: _auditHmacKey,
+            value: _providerRequestAuditPayload(request),
+          ),
+        ),
+      );
+      rethrow;
+    } catch (_) {
+      stopwatch.stop();
+      await _safeRecordAudit(
+        () => AIAgentAuditEvent(
+          occurredAt: DateTime.now().toUtc(),
+          kind: AIAgentAuditEventKind.modelInvocation,
+          sessionIdHash: sessionIdHash,
+          turnIdHash: AIAgentAuditHash.sha256OfUtf8(turnId),
+          clientRequestIdHash: AIAgentAuditHash.sha256OfUtf8(clientRequestId),
+          modelRole: request.modelRole,
+          provider: _modelProvider.providerId,
+          model: 'unresolved',
+          decision: AIAgentAuditDecision.notApplicable,
+          status: AIAgentAuditStatus.failed,
+          duration: stopwatch.elapsed,
+          inputHash: AIAgentAuditHash.hmacSha256OfJson(
+            key: _auditHmacKey,
+            value: _providerRequestAuditPayload(request),
+          ),
+        ),
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> _recordToolAudit({
+    required AIAgentProviderTurn response,
+    required String turnId,
+    required String clientRequestId,
+    required AIAgentAuditHash sessionIdHash,
+    required AIAgentToolCall call,
+    required AIToolReceipt receipt,
+    required Map<String, Object?> input,
+    required Map<String, Object?>? output,
+  }) {
+    final status = switch (receipt.status) {
+      AIToolReceiptStatus.succeeded => AIAgentAuditStatus.succeeded,
+      AIToolReceiptStatus.rejected => AIAgentAuditStatus.rejected,
+      AIToolReceiptStatus.timedOut => AIAgentAuditStatus.timedOut,
+      AIToolReceiptStatus.failed => AIAgentAuditStatus.failed,
+    };
+    final failureCode = receipt.failureCode;
+    final isPolicyRejection = switch (failureCode) {
+      AIToolFailureCode.approvalRequired ||
+      AIToolFailureCode.unknownTool ||
+      AIToolFailureCode.unauthorized ||
+      AIToolFailureCode.invalidArguments ||
+      AIToolFailureCode.idempotencyKeyRequired ||
+      AIToolFailureCode.concurrentExecutionDenied ||
+      AIToolFailureCode.turnLimitExceeded =>
+        true,
+      _ => false,
+    };
+    final decision = switch (failureCode) {
+      AIToolFailureCode.approvalRequired =>
+        AIAgentAuditDecision.approvalRequired,
+      AIToolFailureCode.unknownTool ||
+      AIToolFailureCode.unauthorized ||
+      AIToolFailureCode.invalidArguments ||
+      AIToolFailureCode.idempotencyKeyRequired ||
+      AIToolFailureCode.concurrentExecutionDenied =>
+        AIAgentAuditDecision.denied,
+      _ => AIAgentAuditDecision.allowed,
+    };
+
+    return _safeRecordAudit(
+      () => AIAgentAuditEvent(
+        occurredAt: receipt.completedAt,
+        kind: isPolicyRejection
+            ? AIAgentAuditEventKind.toolPolicyDecision
+            : AIAgentAuditEventKind.toolExecution,
+        sessionIdHash: sessionIdHash,
+        turnIdHash: AIAgentAuditHash.sha256OfUtf8(turnId),
+        clientRequestIdHash: AIAgentAuditHash.sha256OfUtf8(clientRequestId),
+        toolCallIdHash: AIAgentAuditHash.sha256OfUtf8(call.id),
+        modelRole: AIAgentModelRole.fast,
+        provider: response.provider,
+        model: response.model,
+        toolId: receipt.toolName,
+        toolVersion: receipt.toolVersion,
+        risk: receipt.risk,
+        decision: decision,
+        status: status,
+        duration:
+            receipt.duration.isNegative ? Duration.zero : receipt.duration,
+        inputHash: AIAgentAuditHash.hmacSha256OfJson(
+          key: _auditHmacKey,
+          value: input,
+        ),
+        outputHash: output == null
+            ? null
+            : AIAgentAuditHash.hmacSha256OfJson(
+                key: _auditHmacKey,
+                value: output,
+              ),
+      ),
+    );
+  }
+
+  Future<void> _safeRecordAudit(AIAgentAuditEvent Function() buildEvent) async {
+    try {
+      await _auditSink.record(buildEvent()).timeout(_maxAuditRecordDuration);
+    } catch (_) {
+      // Event construction and sinks are deliberately outside the critical
+      // path. No exception or stack is retained because either may contain a
+      // provider payload.
+    }
+  }
+
+  Map<String, Object?> _providerRequestAuditPayload(
+    AIAgentProviderRequest request,
+  ) {
+    return <String, Object?>{
+      'modelRole': request.modelRole.name,
+      'instructions': request.instructions,
+      'messages': <Object?>[
+        for (final message in request.messages)
+          <String, Object?>{
+            'role': message.role.name,
+            'text': message.text,
+            'toolCalls': <Object?>[
+              for (final call in message.toolCalls)
+                <String, Object?>{
+                  'id': call.id,
+                  'name': call.name,
+                  'arguments': call.arguments,
+                },
+            ],
+            'toolOutputs': <Object?>[
+              for (final output in message.toolOutputs)
+                <String, Object?>{
+                  'callId': output.callId,
+                  'name': output.name,
+                  'output': output.output,
+                },
+            ],
+          },
+      ],
+      'tools': <Object?>[
+        for (final tool in request.tools)
+          <String, Object?>{
+            'name': tool.name,
+            'description': tool.description,
+            'inputSchema': tool.inputSchema,
+          },
+      ],
+    };
+  }
+
+  Map<String, Object?> _providerTurnAuditPayload(AIAgentProviderTurn turn) {
+    return <String, Object?>{
+      'text': turn.text,
+      'toolCalls': <Object?>[
+        for (final call in turn.toolCalls)
+          <String, Object?>{
+            'id': call.id,
+            'name': call.name,
+            'arguments': call.arguments,
+          },
+      ],
+      'finishReason': turn.finishReason,
+    };
+  }
+
+  AIAssistantTurnAuthority _turnAuthorityFromTool(
+    AIToolAuthority authority,
+  ) {
+    return AIAssistantTurnAuthority(
+      ErpAuthorityScopeKey(
+        userId: authority.userId,
+        tenantId: authority.tenantId,
+      ),
+      role: authority.role,
+      permissions: authority.permissions,
+    );
+  }
+
+  Future<AIBusinessReadToolResult> _toolSearchWorkshopJobs(
+    AIBusinessReadRequest request,
+    AIToolAuthority toolAuthority, {
+    required CustomerService? customerService,
+    required BikeshopService? bikeshopService,
+  }) async {
+    if (bikeshopService == null) {
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    final authority = _turnAuthorityFromTool(toolAuthority);
+    if (bikeshopService.hasJobsCache) {
+      authority.requireServiceScope('taller', bikeshopService.authorityScope);
+    }
+    final loaded = bikeshopService.hasJobsCache
+        ? bikeshopService.cachedJobs
+        : await bikeshopService.getJobs();
+    authority.requireServiceScope('taller', bikeshopService.authorityScope);
+    final jobs = authority.verifyRows(
+      'taller',
+      loaded,
+      (job) => job.tenantId,
+    );
+
+    final customerNames = <String, String>{};
+    if (customerService != null) {
+      final customers = await _loadCustomersForAi(customerService, authority);
+      for (final customer in customers) {
+        final id = customer.id;
+        if (id != null) customerNames[id] = customer.name;
+      }
+    }
+
+    final query = _businessQueryFilter(request.query);
+    final matches = jobs.where((job) {
+      return _matchesSearchAcrossFields(query, <String?>[
+        _jobCardTitle(job),
+        customerNames[job.customerId],
+        _jobStatusLabel(job),
+        job.status.name,
+        job.priority.displayName,
+        job.priority.name,
+        job.clientRequest,
+        job.diagnosis,
+        job.workPerformed,
+        job.assignedTechnicianName,
+      ]);
+    }).toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    final items = <Map<String, Object?>>[
+      for (final job in matches.take(request.limit))
+        <String, Object?>{
+          'jobNumber': _jobCardTitle(job),
+          'customerName': customerNames[job.customerId],
+          'status': _jobStatusLabel(job),
+          'priority': job.priority.displayName,
+          'arrivalDate': job.arrivalDate.toIso8601String(),
+          'deliveryDeadline': job.deliveryDeadline?.toIso8601String(),
+          'clientRequest': _boundedToolText(job.clientRequest),
+          'assignedTechnicianName':
+              _boundedToolText(job.assignedTechnicianName, maxLength: 120),
+        },
+    ];
+    return _businessResult(items);
+  }
+
+  Future<AIBusinessReadToolResult> _toolSearchTasks(
+    AIBusinessReadRequest request,
+    AIToolAuthority toolAuthority, {
+    required TaskService? taskService,
+  }) async {
+    if (taskService == null) {
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    final authority = _turnAuthorityFromTool(toolAuthority);
+    final loadedScope = await taskService.fetchTasksForPreload();
+    if (loadedScope == null) {
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    authority.requireServiceScope('tareas', taskService.authorityScope);
+    final tasks = authority.verifyRows(
+      'tareas',
+      taskService.tasks,
+      (task) => task.tenantId,
+    );
+    final query = _businessQueryFilter(request.query);
+    final matches = tasks.where((task) {
+      return _matchesSearchAcrossFields(query, <String?>[
+        task.title,
+        task.description,
+        _taskStatusLabel(task.status),
+        task.status.name,
+        _taskPriorityLabel(task.priority),
+        task.priority.name,
+        task.assigneeName,
+        _taskLinkedContext(task),
+      ]);
+    }).toList()
+      ..sort((a, b) {
+        final aDue = a.dueDate;
+        final bDue = b.dueDate;
+        if (aDue != null && bDue != null) return aDue.compareTo(bDue);
+        if (aDue != null) return -1;
+        if (bDue != null) return 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
+
+    final items = <Map<String, Object?>>[
+      for (final task in matches.take(request.limit))
+        <String, Object?>{
+          'title': _boundedToolText(task.title, maxLength: 180),
+          'status': _taskStatusLabel(task.status),
+          'priority': _taskPriorityLabel(task.priority),
+          'dueDate': task.dueDate?.toIso8601String(),
+          'assigneeName': _boundedToolText(task.assigneeName, maxLength: 120),
+          'linkedContext':
+              _boundedToolText(_taskLinkedContext(task), maxLength: 160),
+        },
+    ];
+    return _businessResult(items);
+  }
+
+  Future<AIBusinessReadToolResult> _toolSearchCustomers(
+    AIBusinessReadRequest request,
+    AIToolAuthority toolAuthority, {
+    required CustomerService? customerService,
+  }) async {
+    if (customerService == null) {
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    final authority = _turnAuthorityFromTool(toolAuthority);
+    final customers = await _loadCustomersForAi(customerService, authority);
+    if (customers.isEmpty) {
+      // CustomerService publishes no authority receipt. With zero rows there
+      // is nothing to verify, so an empty result cannot be attributed to this
+      // tenant yet.
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    final query = _businessQueryFilter(request.query);
+    final matches = customers.where((customer) {
+      return _matchesSearchAcrossFields(query, <String?>[
+        customer.name,
+        customer.rut,
+        customer.email,
+        customer.phone,
+        customer.isActive ? 'activo' : 'inactivo',
+      ]);
+    }).toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final items = <Map<String, Object?>>[
+      for (final customer in matches.take(request.limit))
+        <String, Object?>{
+          'name': _boundedToolText(customer.name, maxLength: 180),
+          'isActive': customer.isActive,
+          'updatedAt': customer.updatedAt.toIso8601String(),
+        },
+    ];
+    return _businessResult(items);
+  }
+
+  Future<AIBusinessReadToolResult> _toolSearchSuppliers(
+    AIBusinessReadRequest request,
+    AIToolAuthority toolAuthority, {
+    required PurchaseService? purchaseService,
+  }) async {
+    if (purchaseService == null) {
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    final authority = _turnAuthorityFromTool(toolAuthority);
+    if (purchaseService.hasSuppliersCache) {
+      authority.requireServiceScope(
+        'proveedores',
+        purchaseService.supplierAuthorityScope,
+      );
+    }
+    final loaded = await purchaseService.getSuppliers();
+    authority.requireServiceScope(
+      'proveedores',
+      purchaseService.supplierAuthorityScope,
+    );
+    final suppliers = authority.verifyRows(
+      'proveedores',
+      loaded,
+      (supplier) => supplier.tenantId,
+    );
+    final query = _businessQueryFilter(request.query);
+    final matches = suppliers.where((supplier) {
+      return _matchesSearchAcrossFields(query, <String?>[
+        supplier.name,
+        supplier.rut,
+        supplier.aliases.join(' '),
+        supplier.isActive ? 'activo' : 'inactivo',
+      ]);
+    }).toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final items = <Map<String, Object?>>[
+      for (final supplier in matches.take(request.limit))
+        <String, Object?>{
+          'name': _boundedToolText(supplier.name, maxLength: 180),
+          'isActive': supplier.isActive,
+          'updatedAt': supplier.updatedAt.toIso8601String(),
+        },
+    ];
+    return _businessResult(items);
+  }
+
+  Future<AIBusinessReadToolResult> _toolSearchSalesInvoices(
+    AIBusinessReadRequest request,
+    AIToolAuthority toolAuthority, {
+    required SalesService? salesService,
+  }) async {
+    if (salesService == null) {
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    final authority = _turnAuthorityFromTool(toolAuthority);
+    if (salesService.invoices.isEmpty) await salesService.loadInvoices();
+    if (salesService.invoiceError != null) {
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    if (salesService.invoices.isEmpty) {
+      // SalesService has no authority-bound load receipt. Do not turn an
+      // unattributable empty cache into a verified business zero.
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    final invoices = authority.verifyRows(
+      'facturas de venta',
+      salesService.invoices,
+      (invoice) => invoice.tenantId,
+    );
+    final query = _businessQueryFilter(request.query);
+    final matches = invoices.where((invoice) {
+      return _matchesSearchAcrossFields(query, <String?>[
+        invoice.invoiceNumber,
+        invoice.customerName,
+        invoice.reference,
+        _salesInvoiceStatusLabel(invoice.status),
+        invoice.status.name,
+        invoice.balance > 0.01 ? 'pendiente' : 'pagada',
+      ]);
+    }).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final items = <Map<String, Object?>>[
+      for (final invoice in matches.take(request.limit))
+        <String, Object?>{
+          'invoiceNumber':
+              _boundedToolText(invoice.invoiceNumber, maxLength: 80),
+          'customerName':
+              _boundedToolText(invoice.customerName, maxLength: 180),
+          'status': _salesInvoiceStatusLabel(invoice.status),
+          'date': invoice.date.toIso8601String(),
+          'dueDate': invoice.dueDate?.toIso8601String(),
+          'total': invoice.total,
+          'balance': invoice.balance,
+        },
+    ];
+    return _businessResult(items);
+  }
+
+  Future<AIBusinessReadToolResult> _toolSearchPurchaseInvoices(
+    AIBusinessReadRequest request,
+    AIToolAuthority toolAuthority, {
+    required PurchaseService? purchaseService,
+  }) async {
+    if (purchaseService == null) {
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    final authority = _turnAuthorityFromTool(toolAuthority);
+    final loaded = await purchaseService.getPurchaseInvoices();
+    if (loaded.isEmpty) {
+      // Purchase invoice reads do not yet publish an authority scope/receipt.
+      return const AIBusinessReadToolResult.unavailable();
+    }
+    final invoices = authority.verifyRows(
+      'facturas de compra',
+      loaded,
+      (invoice) => invoice.tenantId,
+    );
+    final query = _businessQueryFilter(request.query);
+    final matches = invoices.where((invoice) {
+      return _matchesSearchAcrossFields(query, <String?>[
+        invoice.invoiceNumber,
+        invoice.supplierName,
+        invoice.reference,
+        invoice.status.displayName,
+        invoice.status.name,
+        invoice.balance > 0.01 ? 'pendiente' : 'pagada',
+      ]);
+    }).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final items = <Map<String, Object?>>[
+      for (final invoice in matches.take(request.limit))
+        <String, Object?>{
+          'invoiceNumber':
+              _boundedToolText(invoice.invoiceNumber, maxLength: 80),
+          'supplierName':
+              _boundedToolText(invoice.supplierName, maxLength: 180),
+          'status': invoice.status.displayName,
+          'date': invoice.date.toIso8601String(),
+          'dueDate': invoice.dueDate?.toIso8601String(),
+          'total': invoice.total,
+          'balance': invoice.balance,
+        },
+    ];
+    return _businessResult(items);
+  }
+
+  AIBusinessReadToolResult _businessResult(
+    List<Map<String, Object?>> items,
+  ) {
+    return items.isEmpty
+        ? const AIBusinessReadToolResult.verifiedEmpty()
+        : AIBusinessReadToolResult.success(items);
+  }
+
+  String _businessQueryFilter(String rawQuery) {
+    const noise = <String>{
+      'busca',
+      'buscar',
+      'muestra',
+      'muestrame',
+      'dame',
+      'trae',
+      'traeme',
+      'todos',
+      'todas',
+      'ultimo',
+      'ultima',
+      'ultimos',
+      'ultimas',
+      'reciente',
+      'recientes',
+      'trabajo',
+      'trabajos',
+      'tarea',
+      'tareas',
+      'cliente',
+      'clientes',
+      'proveedor',
+      'proveedores',
+      'factura',
+      'facturas',
+      'venta',
+      'ventas',
+      'compra',
+      'compras',
+      'de',
+      'del',
+      'la',
+      'las',
+      'el',
+      'los',
+      'por',
+      'para',
+    };
+    const singular = <String, String>{
+      'pendientes': 'pendiente',
+      'vencidas': 'vencida',
+      'vencidos': 'vencido',
+      'pagadas': 'pagada',
+      'pagados': 'pagado',
+      'activos': 'activo',
+      'activas': 'activa',
+      'inactivos': 'inactivo',
+      'inactivas': 'inactiva',
+      'completadas': 'completada',
+      'completados': 'completado',
+    };
+    return _normalizeText(rawQuery)
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty && !noise.contains(token))
+        .map((token) => singular[token] ?? token)
+        .join(' ');
+  }
+
+  String? _boundedToolText(String? raw, {int maxLength = 240}) {
+    final value = raw?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
+    if (value.isEmpty) return null;
+    if (value.length <= maxLength) return value;
+    return '${value.substring(0, maxLength - 1).trimRight()}…';
+  }
+
+  String _taskStatusLabel(TaskStatus status) => switch (status) {
+        TaskStatus.pending => 'Pendiente',
+        TaskStatus.inProgress => 'En curso',
+        TaskStatus.completed => 'Completada',
+        TaskStatus.cancelled => 'Cancelada',
+      };
+
+  String _taskPriorityLabel(TaskPriority priority) => switch (priority) {
+        TaskPriority.low => 'Baja',
+        TaskPriority.normal => 'Normal',
+        TaskPriority.high => 'Alta',
+        TaskPriority.urgent => 'Urgente',
+      };
+
+  String? _taskLinkedContext(TaskModel task) {
+    for (final value in <String?>[
+      task.linkedJobNumber,
+      task.linkedSalesInvoiceNumber,
+      task.linkedPurchaseInvoiceNumber,
+      task.linkedCustomerName,
+      task.linkedSupplierName,
+    ]) {
+      final normalized = value?.trim();
+      if (normalized != null && normalized.isNotEmpty) return normalized;
+    }
+    return null;
+  }
+
+  List<AIAssistantActionCard> _cardsForToolResult(
+    String toolName,
+    Map<String, Object?> result,
+  ) {
+    final status = result['status'];
+    final attentionResult =
+        toolName == AIOperationalReadToolNames.listAttentionItems;
+    if (status != 'success' && !(attentionResult && status == 'partial')) {
+      return const [];
+    }
+    final rawItems = result['items'];
+    if (rawItems is! List) return const [];
+    final normalizedItems = rawItems
+        .whereType<Map>()
+        .map(
+          (item) => item.map(
+            (key, value) => MapEntry(key.toString(), value),
+          ),
+        )
+        .toList(growable: false);
+    if (attentionResult) return _attentionToolCards(normalizedItems);
+    final items = normalizedItems.take(3).toList(growable: false);
+
+    return switch (toolName) {
+      AIBusinessReadToolNames.searchWorkshopJobs => <AIAssistantActionCard>[
+          for (final item in items)
+            AIAssistantActionCard(
+              kind: 'job',
+              eyebrow: 'Trabajo',
+              title: _toolItemText(item, 'jobNumber', 'Trabajo'),
+              subtitle: _joinToolCardParts(<String?>[
+                _toolItemTextOrNull(item, 'customerName'),
+                _toolItemTextOrNull(item, 'assignedTechnicianName'),
+              ]),
+              description: _toolItemTextOrNull(item, 'clientRequest'),
+              destination: AIAssistantDestination.workshopJobs,
+              chips: <String>[
+                if (_toolItemTextOrNull(item, 'status') case final value?)
+                  value,
+                if (_toolItemTextOrNull(item, 'priority') case final value?)
+                  value,
+              ],
+            ),
+        ],
+      AIBusinessReadToolNames.searchTasks => <AIAssistantActionCard>[
+          for (final item in items)
+            AIAssistantActionCard(
+              kind: 'task',
+              eyebrow: 'Tarea',
+              title: _toolItemText(item, 'title', 'Tarea'),
+              subtitle: _joinToolCardParts(<String?>[
+                _toolItemTextOrNull(item, 'assigneeName'),
+                _toolDateLabel(item['dueDate'], prefix: 'Vence'),
+                _toolItemTextOrNull(item, 'linkedContext'),
+              ]),
+              destination: AIAssistantDestination.tasks,
+              chips: <String>[
+                if (_toolItemTextOrNull(item, 'status') case final value?)
+                  value,
+                if (_toolItemTextOrNull(item, 'priority') case final value?)
+                  value,
+              ],
+            ),
+        ],
+      AIBusinessReadToolNames.searchCustomers => <AIAssistantActionCard>[
+          for (final item in items)
+            AIAssistantActionCard(
+              kind: 'customer',
+              eyebrow: 'Cliente',
+              title: _toolItemText(item, 'name', 'Cliente'),
+              destination: AIAssistantDestination.customers,
+              chips: <String>[
+                item['isActive'] == true ? 'Activo' : 'Inactivo',
+              ],
+            ),
+        ],
+      AIBusinessReadToolNames.searchSuppliers => <AIAssistantActionCard>[
+          for (final item in items)
+            AIAssistantActionCard(
+              kind: 'supplier',
+              eyebrow: 'Proveedor',
+              title: _toolItemText(item, 'name', 'Proveedor'),
+              destination: AIAssistantDestination.suppliers,
+              chips: <String>[
+                item['isActive'] == true ? 'Activo' : 'Inactivo',
+              ],
+            ),
+        ],
+      AIBusinessReadToolNames.searchSalesInvoices =>
+        _invoiceToolCards(items, isPurchase: false),
+      AIBusinessReadToolNames.searchPurchaseInvoices =>
+        _invoiceToolCards(items, isPurchase: true),
+      _ => const <AIAssistantActionCard>[],
+    };
+  }
+
+  List<AIAssistantActionCard> _attentionToolCards(
+    List<Map<String, Object?>> items,
+  ) {
+    final sources = items
+        .map((item) => item['source']?.toString())
+        .whereType<String>()
+        .toSet();
+    return <AIAssistantActionCard>[
+      if (sources.contains(AIAttentionSource.workshop.name))
+        const AIAssistantActionCard(
+          kind: 'job',
+          eyebrow: 'Taller',
+          title: 'Revisar trabajos que requieren atención',
+          destination: AIAssistantDestination.workshopJobs,
+        ),
+      if (sources.contains(AIAttentionSource.tasks.name))
+        const AIAssistantActionCard(
+          kind: 'task',
+          eyebrow: 'Tareas',
+          title: 'Revisar tareas que requieren atención',
+          destination: AIAssistantDestination.tasks,
+        ),
+    ];
+  }
+
+  List<AIAssistantActionCard> _invoiceToolCards(
+    List<Map<String, Object?>> items, {
+    required bool isPurchase,
+  }) {
+    return <AIAssistantActionCard>[
+      for (final item in items)
+        AIAssistantActionCard(
+          kind: isPurchase ? 'purchase_invoice' : 'sales_invoice',
+          eyebrow: isPurchase ? 'Factura de compra' : 'Factura de venta',
+          title: _toolItemText(item, 'invoiceNumber', 'Factura'),
+          subtitle: _joinToolCardParts(<String?>[
+            _toolItemTextOrNull(
+              item,
+              isPurchase ? 'supplierName' : 'customerName',
+            ),
+            _toolDateLabel(item['dueDate'], prefix: 'Vence'),
+          ]),
+          description: _joinToolCardParts(<String?>[
+            _toolMoneyLabel(item['total'], prefix: 'Total'),
+            _toolMoneyLabel(item['balance'], prefix: 'Saldo'),
+          ]),
+          destination: isPurchase
+              ? AIAssistantDestination.purchases
+              : AIAssistantDestination.salesInvoices,
+          chips: <String>[
+            if (_toolItemTextOrNull(item, 'status') case final value?) value,
+          ],
+        ),
+    ];
+  }
+
+  String _toolItemText(
+    Map<String, Object?> item,
+    String key,
+    String fallback,
+  ) =>
+      _toolItemTextOrNull(item, key) ?? fallback;
+
+  String? _toolItemTextOrNull(Map<String, Object?> item, String key) {
+    final value = item[key]?.toString().trim() ?? '';
+    return value.isEmpty ? null : value;
+  }
+
+  String? _joinToolCardParts(Iterable<String?> values) {
+    final parts = values
+        .whereType<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    return parts.isEmpty ? null : parts.join(' • ');
+  }
+
+  String? _toolDateLabel(Object? raw, {required String prefix}) {
+    final date = DateTime.tryParse(raw?.toString() ?? '');
+    return date == null ? null : '$prefix ${ChileanUtils.formatDate(date)}';
+  }
+
+  String? _toolMoneyLabel(Object? raw, {required String prefix}) {
+    return raw is num
+        ? '$prefix ${ChileanUtils.formatCurrency(raw.toDouble())}'
+        : null;
+  }
+
+  void _appendUniqueToolCards(
+    List<AIAssistantActionCard> target,
+    Iterable<AIAssistantActionCard> additions,
+  ) {
+    final seen = <String>{
+      for (final card in target)
+        '${card.destination.name}\u0000${card.kind}\u0000${card.title}',
+    };
+    for (final card in additions) {
+      final key =
+          '${card.destination.name}\u0000${card.kind}\u0000${card.title}';
+      if (seen.add(key)) target.add(card);
+      if (target.length >= 6) return;
+    }
+  }
+
+  Duration _remainingAgentTurnBudget(Stopwatch stopwatch) {
+    final remaining = _maxAgentTurnDuration - stopwatch.elapsed;
+    if (remaining <= Duration.zero) {
+      throw TimeoutException('assistant turn limit');
+    }
+    return remaining < _maxModelCallDuration
+        ? remaining
+        : _maxModelCallDuration;
+  }
+
+  List<AIAgentMessage> _boundedCanonicalHistory(
+    Iterable<AIAgentMessage> source,
+  ) {
+    const maxMessages = 48;
+    const maxCharacters = 64 * 1024;
+    final messages = source.toList(growable: false);
+    if (messages.isEmpty) return <AIAgentMessage>[];
+
+    var start = messages.length;
+    var characters = 0;
+    for (var index = messages.length - 1; index >= 0; index--) {
+      final nextCharacters = _messageCharacterEstimate(messages[index]);
+      if (messages.length - index > maxMessages ||
+          characters + nextCharacters > maxCharacters) {
+        break;
+      }
+      start = index;
+      characters += nextCharacters;
+    }
+
+    // A canonical turn always begins with the user's message. Moving forward
+    // avoids retaining an orphan assistant tool call or tool output when the
+    // cap lands in the middle of an older turn.
+    while (start < messages.length &&
+        messages[start].role != AIAgentMessageRole.user) {
+      start++;
+    }
+    if (start >= messages.length) return <AIAgentMessage>[];
+    return List<AIAgentMessage>.from(messages.sublist(start));
+  }
+
+  int _messageCharacterEstimate(AIAgentMessage message) {
+    var total = message.text.length + 16;
+    for (final call in message.toolCalls) {
+      total +=
+          call.id.length + call.name.length + _safeJsonLength(call.arguments);
+    }
+    for (final output in message.toolOutputs) {
+      total += output.callId.length +
+          output.name.length +
+          _safeJsonLength(output.output);
+    }
+    return total;
+  }
+
+  int _safeJsonLength(Map<String, Object?> value) {
+    try {
+      return jsonEncode(value).length;
+    } catch (_) {
+      return 1024;
+    }
+  }
+
+  void _replaceCanonicalHistory(Iterable<AIAgentMessage> messages) {
+    _history
+      ..clear()
+      ..addAll(_boundedCanonicalHistory(messages));
   }
 
   /// Records a turn that a deterministic handler answered without the model.
@@ -1046,19 +2070,11 @@ ${hintLines.join('\n')}
     String message,
     AIAssistantResponse response,
   ) {
-    _history
-      ..add({
-        'role': 'user',
-        'parts': [
-          {'text': message},
-        ],
-      })
-      ..add({
-        'role': 'model',
-        'parts': [
-          {'text': response.text},
-        ],
-      });
+    _replaceCanonicalHistory(<AIAgentMessage>[
+      ..._history,
+      AIAgentMessage.user(message),
+      AIAgentMessage.assistant(text: response.text),
+    ]);
     return response;
   }
 
@@ -1336,13 +2352,13 @@ ${hintLines.join('\n')}
       allowJobCacheFallback: allowJobCacheFallback,
       authority: authority,
     );
-    debugPrint(
-      '[AI_CTX][AIService.summary.source] provided=${jobs?.length ?? 'null'} '
-      'currentView=$jobsAreCurrentView source=${sourceJobs.length} '
-      'allowFallback=$allowJobCacheFallback '
-      'scopeParam="$jobSummaryScopeLabel" '
-      'jobs=[${_debugJobNumbers(sourceJobs)}]',
-    );
+    if (!kReleaseMode) {
+      _debugAi(
+        '[AI_CTX][AIService.summary.source] '
+        'provided=${jobs?.length ?? 'null'} currentView=$jobsAreCurrentView '
+        'source=${sourceJobs.length} allowFallback=$allowJobCacheFallback',
+      );
+    }
     if (sourceJobs.isEmpty) {
       if (jobsAreCurrentView || !allowJobCacheFallback) {
         return _textResponse(
@@ -1363,13 +2379,15 @@ ${hintLines.join('\n')}
                   customerName: customerNamesById[job.customerId],
                 ))
             .toList();
-    debugPrint(
-      '[AI_CTX][AIService.summary.scopeSource] before=${sourceJobs.length} '
-      'after=${summarySourceJobs.length} currentView=$jobsAreCurrentView '
-      'includeTest=$includeTestJobs jobs=[${_debugJobNumbers(summarySourceJobs)}]',
-    );
+    if (!kReleaseMode) {
+      _debugAi(
+        '[AI_CTX][AIService.summary.scopeSource] '
+        'before=${sourceJobs.length} after=${summarySourceJobs.length} '
+        'currentView=$jobsAreCurrentView includeTest=$includeTestJobs',
+      );
+    }
 
-    final today = _startOfLocalDay(DateTime.now());
+    final today = NotificationDigestWindow.businessToday(now: _now());
     final asksForActive =
         normalized.contains('activo') || normalized.contains('activos');
     final includeAll = !asksForToday &&
@@ -1389,7 +2407,7 @@ ${hintLines.join('\n')}
 
     if (asksForToday) {
       selectedJobs = summarySourceJobs
-          .where((job) => _isSameLocalDay(job.arrivalDate, today))
+          .where((job) => _isSameChileBusinessDay(job.arrivalDate, today))
           .toList();
       emptyMessage = 'No encontré trabajos ingresados hoy.';
       scopeLabel = 'trabajos ingresados hoy';
@@ -1414,22 +2432,26 @@ ${hintLines.join('\n')}
     }
 
     if (selectedJobs.isEmpty) {
-      debugPrint(
-        '[AI_CTX][AIService.summary.emptySelection] scope="$scopeLabel" '
-        'currentView=$jobsAreCurrentView source=${sourceJobs.length}',
-      );
+      if (!kReleaseMode) {
+        _debugAi(
+          '[AI_CTX][AIService.summary.emptySelection] '
+          'currentView=$jobsAreCurrentView source=${sourceJobs.length}',
+        );
+      }
       return _textResponse(emptyMessage);
     }
 
     if (!jobsAreCurrentView) {
       selectedJobs.sort(_compareJobsForSummary);
     }
-    debugPrint(
-      '[AI_CTX][AIService.summary.selected] selected=${selectedJobs.length} '
-      'scope="$scopeLabel" currentView=$jobsAreCurrentView '
-      'asksToday=$asksForToday asksActive=$asksForActive includeAll=$includeAll '
-      'jobs=[${_debugJobNumbers(selectedJobs)}]',
-    );
+    if (!kReleaseMode) {
+      _debugAi(
+        '[AI_CTX][AIService.summary.selected] '
+        'selected=${selectedJobs.length} currentView=$jobsAreCurrentView '
+        'asksToday=$asksForToday asksActive=$asksForActive '
+        'includeAll=$includeAll',
+      );
+    }
 
     final statusCounts = <String, int>{};
     var highPriorityCount = 0;
@@ -1586,26 +2608,11 @@ ${hintLines.join('\n')}
     }
   }
 
-  String _debugJobNumbers(List<MechanicJob> jobs) {
-    final numbers = jobs
-        .take(12)
-        .map((job) => job.jobNumber ?? job.id ?? 'sin-numero')
-        .join(', ');
-    if (jobs.length <= 12) {
-      return numbers;
-    }
-    return '$numbers, ... +${jobs.length - 12}';
-  }
-
-  DateTime _startOfLocalDay(DateTime value) {
-    return DateTime(value.year, value.month, value.day);
-  }
-
-  bool _isSameLocalDay(DateTime value, DateTime dayStart) {
-    final localDay = _startOfLocalDay(value);
-    return localDay.year == dayStart.year &&
-        localDay.month == dayStart.month &&
-        localDay.day == dayStart.day;
+  bool _isSameChileBusinessDay(DateTime value, DateTime businessDay) {
+    final valueDay = NotificationDigestWindow.businessToday(now: value);
+    return valueDay.year == businessDay.year &&
+        valueDay.month == businessDay.month &&
+        valueDay.day == businessDay.day;
   }
 
   Future<List<MechanicJob>> _loadJobsForSummary(
@@ -1616,36 +2623,56 @@ ${hintLines.join('\n')}
     required AIAssistantTurnAuthority authority,
   }) async {
     if (jobs != null && (jobs.isNotEmpty || useProvidedJobsOnly)) {
-      final providedJobs = jobs.where((job) => job.id != null).toList();
-      debugPrint(
-        '[AI_CTX][AIService.loadJobs] using provided jobs '
-        'provided=${jobs.length} filtered=${providedJobs.length} '
-        'useProvidedOnly=$useProvidedJobsOnly allowFallback=$allowJobCacheFallback '
-        'jobs=[${_debugJobNumbers(providedJobs)}]',
-      );
+      final providedJobs = authority
+          .verifyRows('taller', jobs, (job) => job.tenantId)
+          .where((job) => job.id != null)
+          .toList();
+      if (!kReleaseMode) {
+        _debugAi(
+          '[AI_CTX][AIService.loadJobs] using provided jobs '
+          'provided=${jobs.length} filtered=${providedJobs.length} '
+          'useProvidedOnly=$useProvidedJobsOnly '
+          'allowFallback=$allowJobCacheFallback',
+        );
+      }
       return providedJobs;
     }
 
     if (!allowJobCacheFallback) {
-      debugPrint(
-        '[AI_CTX][AIService.loadJobs] cache fallback disabled; '
-        'provided=${jobs?.length ?? 'null'} useProvidedOnly=$useProvidedJobsOnly',
+      if (!kReleaseMode) {
+        _debugAi(
+          '[AI_CTX][AIService.loadJobs] cache fallback disabled; '
+          'provided=${jobs?.length ?? 'null'} '
+          'useProvidedOnly=$useProvidedJobsOnly',
+        );
+      }
+      throw const AIAssistantSourceUnavailable(
+        'taller',
+        'no trusted workshop source was published',
       );
-      return const <MechanicJob>[];
     }
 
     if (bikeshopService == null) {
-      debugPrint(
-        '[AI_CTX][AIService.loadJobs] no provided jobs and no BikeshopService',
+      if (!kReleaseMode) {
+        _debugAi(
+          '[AI_CTX][AIService.loadJobs] no provided jobs and no '
+          'BikeshopService',
+        );
+      }
+      throw const AIAssistantSourceUnavailable(
+        'taller',
+        'the workshop service is unavailable',
       );
-      return const <MechanicJob>[];
     }
 
-    debugPrint(
-      '[AI_CTX][AIService.loadJobs] FALLBACK to BikeshopService '
-      'hasCache=${bikeshopService.hasJobsCache} useProvidedOnly=$useProvidedJobsOnly '
-      'allowFallback=$allowJobCacheFallback',
-    );
+    if (!kReleaseMode) {
+      _debugAi(
+        '[AI_CTX][AIService.loadJobs] FALLBACK to BikeshopService '
+        'hasCache=${bikeshopService.hasJobsCache} '
+        'useProvidedOnly=$useProvidedJobsOnly '
+        'allowFallback=$allowJobCacheFallback',
+      );
+    }
     // The cache belongs to the service's own lifecycle, not to this turn. It
     // is checked before being *consumed*, and again after any read: a fetch
     // can span a tenant switch and come back holding the previous taller's
@@ -1663,10 +2690,11 @@ ${hintLines.join('\n')}
         .verifyRows('taller', loadedJobs, (job) => job.tenantId)
         .where((job) => job.id != null)
         .toList();
-    debugPrint(
-      '[AI_CTX][AIService.loadJobs] fallback loaded=${fallbackJobs.length} '
-      'jobs=[${_debugJobNumbers(fallbackJobs)}]',
-    );
+    if (!kReleaseMode) {
+      _debugAi(
+        '[AI_CTX][AIService.loadJobs] fallback loaded=${fallbackJobs.length}',
+      );
+    }
     return fallbackJobs;
   }
 
@@ -1690,10 +2718,10 @@ ${hintLines.join('\n')}
       // came from a source that just failed its authority check, and the
       // operator would never know.
       rethrow;
-    } catch (e) {
+    } catch (_) {
       // Anything else only costs the names: the summary still answers, and it
       // answers about jobs that did pass verification.
-      debugPrint('⚠️ [AI] Customer names unavailable for job summary: $e');
+      _debugAi('⚠️ [AI] Customer-name enrichment is unavailable.');
       return const <String, String>{};
     }
   }
@@ -1780,48 +2808,68 @@ ${hintLines.join('\n')}
     SalesService? salesService,
     required AIAssistantTurnAuthority authority,
   }) async {
-    final purchaseInvoiceResponse = await _tryHandlePurchaseInvoiceCards(
-      message,
-      purchaseService: purchaseService,
-      authority: authority,
+    final canReadOperations = authority.permissions.contains(
+      AIToolPermission.operationalRead,
     );
+    final canReadSales = authority.permissions.contains(
+      AIToolPermission.salesRead,
+    );
+    final canReadPurchases = authority.permissions.contains(
+      AIToolPermission.purchasesRead,
+    );
+
+    final purchaseInvoiceResponse = canReadPurchases
+        ? await _tryHandlePurchaseInvoiceCards(
+            message,
+            purchaseService: purchaseService,
+            authority: authority,
+          )
+        : null;
     if (purchaseInvoiceResponse != null) {
       return purchaseInvoiceResponse;
     }
 
-    final salesInvoiceResponse = await _tryHandleSalesInvoiceCards(
-      message,
-      salesService: salesService,
-      authority: authority,
-    );
+    final salesInvoiceResponse = canReadSales
+        ? await _tryHandleSalesInvoiceCards(
+            message,
+            salesService: salesService,
+            authority: authority,
+          )
+        : null;
     if (salesInvoiceResponse != null) {
       return salesInvoiceResponse;
     }
 
-    final customerResponse = await _tryHandleCustomerCards(
-      message,
-      customerService: customerService,
-      authority: authority,
-    );
+    final customerResponse = canReadOperations
+        ? await _tryHandleCustomerCards(
+            message,
+            customerService: customerService,
+            authority: authority,
+          )
+        : null;
     if (customerResponse != null) {
       return customerResponse;
     }
 
-    final supplierResponse = await _tryHandleSupplierCards(
-      message,
-      purchaseService: purchaseService,
-      authority: authority,
-    );
+    final supplierResponse = canReadPurchases
+        ? await _tryHandleSupplierCards(
+            message,
+            purchaseService: purchaseService,
+            authority: authority,
+          )
+        : null;
     if (supplierResponse != null) {
       return supplierResponse;
     }
 
-    final jobResponse = await _tryHandleJobCards(
-      message,
-      customerService: customerService,
-      bikeshopService: bikeshopService,
-      authority: authority,
-    );
+    final jobResponse = canReadOperations
+        ? await _tryHandleJobCards(
+            message,
+            customerService: customerService,
+            bikeshopService: bikeshopService,
+            authority: authority,
+          )
+        : null;
     if (jobResponse != null) {
       return jobResponse;
     }
@@ -2404,7 +3452,7 @@ ${hintLines.join('\n')}
     // back is checked individually.
     if (customerService.hasCustomersCache &&
         customerService.cachedCustomers.isNotEmpty) {
-      return authority
+      final verifiedCustomers = authority
           .verifyRows(
             'clientes',
             customerService.cachedCustomers,
@@ -2412,6 +3460,13 @@ ${hintLines.join('\n')}
           )
           .where((customer) => customer.id != null)
           .toList();
+      if (verifiedCustomers.isEmpty) {
+        throw const AIAssistantSourceUnavailable(
+          'clientes',
+          'the cached read has no usable authority-bound rows',
+        );
+      }
+      return verifiedCustomers;
     }
 
     // An *empty* cache carries no rows, so it carries no evidence of whose
@@ -2422,10 +3477,17 @@ ${hintLines.join('\n')}
     final customers = await customerService.getCustomers(
       forceRefresh: customerService.hasCustomersCache,
     );
-    return authority
+    final verifiedCustomers = authority
         .verifyRows('clientes', customers, (customer) => customer.tenantId)
         .where((customer) => customer.id != null)
         .toList();
+    if (verifiedCustomers.isEmpty) {
+      throw const AIAssistantSourceUnavailable(
+        'clientes',
+        'an empty read has no authority-bound receipt',
+      );
+    }
+    return verifiedCustomers;
   }
 
   AIAssistantActionCard _buildCustomerCard(Customer customer) {
@@ -2661,7 +3723,16 @@ ${hintLines.join('\n')}
     // that never happened.
     final invoiceError = salesService.invoiceError;
     if (invoiceError != null) {
-      throw AIAssistantSourceUnavailable('facturas de venta', invoiceError);
+      throw const AIAssistantSourceUnavailable(
+        'facturas de venta',
+        'the invoice read failed',
+      );
+    }
+    if (salesService.invoices.isEmpty) {
+      throw const AIAssistantSourceUnavailable(
+        'facturas de venta',
+        'an empty read has no authority-bound receipt',
+      );
     }
 
     // SalesService publishes no authority, so every invoice it holds is
@@ -3012,9 +4083,16 @@ ${hintLines.join('\n')}
       return null;
     }
 
+    final loadedInvoices = await purchaseService.getPurchaseInvoices();
+    if (loadedInvoices.isEmpty) {
+      throw const AIAssistantSourceUnavailable(
+        'facturas de compra',
+        'an empty read has no authority-bound receipt',
+      );
+    }
     final invoices = authority.verifyRows(
       'facturas de compra',
-      await purchaseService.getPurchaseInvoices(),
+      loadedInvoices,
       (invoice) => invoice.tenantId,
     );
     final now = DateTime.now();
@@ -3169,8 +4247,14 @@ ${hintLines.join('\n')}
       return null;
     }
 
-    if (searchResult.containsKey('error')) {
-      return 'Error buscando en inventario: ${searchResult['error']}';
+    if (searchResult['status'] == 'verifiedEmpty') {
+      return 'No encontré productos que coincidan con esa búsqueda en el '
+          'inventario verificado.';
+    }
+
+    if (searchResult['status'] == 'unavailable') {
+      return 'No pude confirmar el inventario en este momento. Intenta '
+          'nuevamente en unos segundos.';
     }
 
     if (searchResult.containsKey('result')) {
@@ -3274,8 +4358,11 @@ ${hintLines.join('\n')}
   /// The refinement state matters as much as the history: `_lastSearchResults`
   /// is what makes the assistant say "tomé la búsqueda anterior", so leaving it
   /// behind lets one session narrate another session's search.
+  @override
   void resetChat() {
     _history.clear();
+    _turnSequence = 0;
+    _sessionId = _idFactory();
     _lastSearchResults = [];
     _lastInventorySearchTerm = null;
     notifyListeners();
@@ -3739,13 +4826,22 @@ ${hintLines.join('\n')}
     InventoryService? inventory,
     AIAssistantTurnAuthority authority,
   ) async {
-    if (query == null || query.isEmpty) return {'error': 'Query is empty'};
-    if (inventory == null) return {'error': 'Inventory service not available'};
+    if (query == null || query.trim().isEmpty) {
+      return const <String, Object?>{
+        'status': 'unavailable',
+        'errorCode': 'invalid_inventory_query',
+      };
+    }
+    if (inventory == null) {
+      return const <String, Object?>{
+        'status': 'unavailable',
+        'errorCode': 'inventory_service_unavailable',
+      };
+    }
 
     try {
       final lookupQuery = _normalizeInventoryLookupQuery(query);
-      debugPrint(
-          '🔍 [AI] Combined search for: "$query" (lookup: "$lookupQuery")');
+      _debugAi('🔍 [AI] Inventory search started.');
 
       // Run BOTH searches in parallel for best results
       final List<Map<String, dynamic>> semanticResults = [];
@@ -3762,11 +4858,10 @@ ${hintLines.join('\n')}
         if (vector != null) {
           final results = await inventory.searchProductsSemantic(vector);
           semanticResults.addAll(results);
-          debugPrint(
-              '🧠 [AI] Semantic: ${results.length} results for "$lookupQuery"');
+          _debugAi('🧠 [AI] Semantic inventory enrichment completed.');
         }
-      } catch (e) {
-        debugPrint('⚠️ [AI] Semantic search degraded: $e');
+      } catch (_) {
+        _debugAi('⚠️ [AI] Semantic inventory enrichment degraded.');
       }
 
       // 2. Keyword search — the authoritative catalog read.
@@ -3797,15 +4892,14 @@ ${hintLines.join('\n')}
                 'source': 'keyword',
               }));
         }
-        debugPrint(
-            '🔤 [AI] Keyword: ${keywordResults.length} raw results for "$lookupQuery"');
+        _debugAi('🔤 [AI] Authoritative inventory read completed.');
       } on AIAssistantSourceUnavailable {
         rethrow;
-      } catch (e) {
-        debugPrint('⛔ [AI] Keyword catalog read failed: $e');
-        throw AIAssistantSourceUnavailable(
+      } catch (_) {
+        _debugAi('⛔ [AI] Authoritative inventory read failed.');
+        throw const AIAssistantSourceUnavailable(
           'inventario',
-          'the catalog read failed: $e',
+          'the catalog read failed',
         );
       }
 
@@ -3818,6 +4912,12 @@ ${hintLines.join('\n')}
         if (sku.isNotEmpty && seen.contains(sku)) continue;
         if (sku.isNotEmpty) seen.add(sku);
         merged.add(r);
+      }
+      if (merged.isEmpty) {
+        throw const AIAssistantSourceUnavailable(
+          'inventario',
+          'an empty read has no authority-bound receipt',
+        );
       }
 
       // Semantic RPC rows predate set availability. Rehydrate their catalog
@@ -3878,7 +4978,7 @@ ${hintLines.join('\n')}
             return true;
           }).toList();
 
-          debugPrint(
+          _debugAi(
               '🎯 [AI] Size filter: ${merged.length} → ${filtered.length} results');
           if (filtered.isNotEmpty) {
             merged = filtered;
@@ -3890,11 +4990,15 @@ ${hintLines.join('\n')}
 
       if (merged.isEmpty) {
         _lastSearchResults = [];
-        return {'result': 'No products found for "$query".'};
+        return const <String, Object?>{
+          'status': 'verifiedEmpty',
+          'count': 0,
+          'inStockCount': 0,
+          'products': <Object?>[],
+        };
       }
 
-      debugPrint(
-          '✅ [AI] Combined: ${merged.length} unique results for "$query"');
+      _debugAi('✅ [AI] Inventory search produced verified matches.');
 
       _lastInventorySearchTerm = _simplifyInventorySearchTerm(lookupQuery);
 
@@ -3924,6 +5028,7 @@ ${hintLines.join('\n')}
           summary.map((item) => Map<String, dynamic>.from(item)).toList();
 
       return {
+        'status': 'success',
         'count': merged.length,
         'inStockCount': inStockCount,
         'products': summary,
@@ -3935,8 +5040,11 @@ ${hintLines.join('\n')}
       // identical to whoever is standing at the counter, and only one of them
       // is true.
       rethrow;
-    } catch (e) {
-      return {'error': 'Failed to search inventory: $e'};
+    } catch (_) {
+      throw const AIAssistantSourceUnavailable(
+        'inventario',
+        'inventory search failed',
+      );
     }
   }
 
@@ -3965,8 +5073,8 @@ ${hintLines.join('\n')}
   Future<List<double>?> generateEmbedding(String text) async {
     try {
       return await _geminiProxy.generateEmbedding(text: text);
-    } catch (e) {
-      debugPrint('❌ [AI] Embedding generation error: $e');
+    } catch (_) {
+      _debugAi('⚠️ [AI] Embedding enrichment is unavailable.');
       return null;
     }
   }
@@ -4037,8 +5145,8 @@ ${hintLines.join('\n')}
         bytes: Uint8List.fromList(jpegBytes),
         mimeType: 'image/jpeg',
       );
-    } catch (e) {
-      debugPrint('⚠️ [AI] Failed to normalize image for Gemini: $e');
+    } catch (_) {
+      _debugAi('⚠️ [AI] Image normalization failed.');
       return _PreparedGeminiImage(
         bytes: sourceBytes,
         mimeType: _inferImageMimeType(sourceBytes),
@@ -4113,112 +5221,66 @@ ${hintLines.join('\n')}
   }
 
   Future<Map<String, Object?>> _toolSearchInternet(String? query) async {
-    if (query == null || query.isEmpty) return {'error': 'Query is empty'};
-
-    debugPrint('🌐 [AI] Searching internet for: "$query"');
-
-    try {
-      final url = Uri.parse(
-          'https://html.duckduckgo.com/html/?q=${Uri.encodeComponent(query)}');
-      final response = await http.get(
-        url,
-        headers: {
-          'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        var body = response.body;
-        // Simple regex to extract search result snippets from DuckDuckGo HTML
-        final snippetRegex =
-            RegExp(r'<a class="result__snippet[^>]*>(.*?)</a>', dotAll: true);
-
-        final snippets = snippetRegex
-            .allMatches(body)
-            .map((m) {
-              // Remove all HTML tags and decode basic entities manually or rely on LLM to read them
-              var text =
-                  m.group(1)?.replaceAll(RegExp(r'<[^>]*>'), '').trim() ?? '';
-              text = text
-                  .replaceAll('&amp;', '&')
-                  .replaceAll('&quot;', '"')
-                  .replaceAll('&#x27;', "'")
-                  .replaceAll('&lt;', '<')
-                  .replaceAll('&gt;', '>');
-              return text;
-            })
-            .where((s) => s.isNotEmpty)
-            .take(5)
-            .toList();
-
-        if (snippets.isEmpty) {
-          return {'result': 'No internet search results found.'};
-        }
-
-        return {
-          'result':
-              'Internet search results for "$query":\n\n${snippets.join('\n\n')}'
-        };
-      } else {
-        return {
-          'error':
-              'Failed to fetch search results. Status code: ${response.statusCode}'
-        };
-      }
-    } catch (e) {
-      debugPrint('❌ [AI] Internet search error: $e');
-      return {'error': 'Failed to search internet: $e'};
+    if (query == null || query.trim().isEmpty) {
+      return const <String, Object?>{
+        'status': 'unavailable',
+        'errorCode': 'invalid_public_query',
+      };
     }
+
+    // Public web content must never enter the same loop that can see ERP data
+    // from a client-side HTTP scraper. This stays explicit and fail-closed
+    // until the isolated gateway worker owns egress, DLP and provenance.
+    return const <String, Object?>{
+      'status': 'unavailable',
+      'errorCode': 'isolated_public_research_not_activated',
+      'provenance': <String, Object?>{
+        'origin': 'public_web',
+        'trusted': false,
+        'executed': false,
+      },
+      'sources': <Object?>[],
+    };
   }
 
   String _buildSystemPrompt(List<MechanicJob> jobs) {
-    // Basic summary of jobs to keep prompt size reasonable
-    final jobSummaries = jobs.map((j) {
-      return '- Job ${j.jobNumber ?? "N/A"}: ${j.status.name} | ${j.priority.name} | Customer: ${j.customerId} | Bike: ${j.bikeId} | Total: ${j.totalCost}';
+    final jobSummaries = jobs.take(20).map((job) {
+      return '- ${job.jobNumber ?? "Sin número"}: ${job.status.name} | '
+          '${job.priority.name}';
     }).join('\n');
 
     return '''
-You are a helpful and powerful AI assistant for "Vinabike" Bike Shop ERP.
-Your capabilities include:
-1. Managing repair jobs (Trabajos).
-2. Checking inventory stock and prices via semantic search.
-3. Navigating the app to show the user specific products in the Inventory module.
-4. Answering technical questions about bike compatibility by searching the internet.
+Eres el asistente operacional de Viñabike. Responde en español claro y breve.
+Usa solamente las herramientas publicadas en este turno y la evidencia que
+devuelven. El runtime, no tú, decide permisos, riesgo y ejecución.
 
-INVENTORY SEARCH — SEMANTIC SEARCH:
-The `searchStock` tool uses AI-powered semantic vector matching. You can search using natural language concepts directly — the system understands meaning, not just keywords.
-- You CAN use descriptive queries like "ruedas para saltar en la calle", "repuestos para frenos de disco", "cámaras para mountain bike".
-- You can also use technical terms like "cassette shimano 7v" or "llanta 20" — both work.
-- The system will automatically find products with similar meaning, even if the exact words don't match.
+REGLAS DE CAPACIDAD
+- No afirmes que abriste, filtraste, enviaste, guardaste, pagaste o cambiaste
+  algo si no recibiste un recibo exitoso de una herramienta que haga esa acción.
+- No inventes rutas, IDs, datos, fuentes ni resultados.
+- Si falta una capacidad, explica el límite exacto y ofrece la alternativa que
+  sí está disponible. Evita negativas genéricas como "no tengo la capacidad".
+- Distingue resultado vacío, fuente no disponible y operación rechazada.
+- Las tarjetas y la navegación pertenecen a la aplicación y requieren clic del
+  operador; nunca declares que navegaste por él.
 
-TOOL STRATEGY:
-1. ALWAYS use `searchStock` first for ANY product question. It uses semantic AI search.
-   - Each result includes: name, SKU, brand, category, price, stock (quantity), and location.
-   - YOU are responsible for analyzing results and only presenting products that match what the user asked.
-   - Use the "category" field to verify product type. Use "stock" to check availability.
-   - If the user asks for "llantas 29", only show products that are actually 29" rims — not tubes, tires, spokes, or other sizes.
+INVENTARIO
+- Usa `search_inventory` antes de responder cualquier pregunta sobre catálogo,
+  precio o stock.
+- Analiza nombre, categoría, medida y stock; no mezcles cámaras, neumáticos,
+  llantas, rayos u otras familias aunque compartan una medida.
+- Un refinamiento del resultado anterior (marca, 32h, con stock) conserva el
+  contexto. Un tipo de producto distinto inicia una búsqueda nueva.
 
-2. STOCK & FOLLOW-UP AWARENESS:
-   - Each result has a "stock" field. When the user asks "en stock" or "disponible", check the stock field.
-  - When the user refines a previous query (adds "en stock", "32h", a brand, etc.), FIRST refine the previous result set if possible. Don't re-search if you already have the data.
-  - If the user says things like "los que tengan stock", "solo con stock", or "solo disponibles", treat that as a refinement of the immediately previous inventory results, not as a brand new search.
-  - IMPORTANT: if the user mentions a different product type than the previous search (for example, they switch from "camaras" to "llantas"), that is a NEW search, not a refinement.
+INVESTIGACIÓN PÚBLICA
+- `research_public_web` permanece desactivada hasta que el worker aislado del
+  gateway sea activado. Si se solicita investigación externa, explica ese
+  límite exacto; no inventes resultados ni intentes incluir datos del ERP en
+  una consulta pública.
 
-3. INTERNET SEARCH FALLBACK (CRITICAL):
-   - If the user asks about a specific bike model's specs (e.g. "qué llanta usa una trek xcaliber 8") AND `searchStock` returns no results or irrelevant results, you MUST use `searchInternet`.
-   - Use `searchInternet` to find the technical specifications or compatibility information online. This performs a live web search. Read the snippet results carefully to answer the user's question, but do NOT hallucinate info that is not actually in the snippets.
-   - Do NOT just tell the user "I couldn't find it in the inventory". If it's a general question about a bike or part, search the internet!
-
-4. NAVIGATION IS NOT YOURS TO TRIGGER.
-   - You have no tool that moves the user around the app, and you must never
-     claim you opened, filtered or navigated to any screen.
-   - The application attaches its own cards under your answer. The user clicks
-     one if they want to go somewhere.
-   - Never invent a route, a screen path or a record id in your text.
-
-Current Jobs Context:
-$jobSummaries
+Contexto acotado de trabajos verificados en la superficie actual
+(${jobs.length > 20 ? 'primeros 20' : jobs.length}):
+${jobSummaries.isEmpty ? '- Sin filas publicadas por esta superficie.' : jobSummaries}
 ''';
   }
 

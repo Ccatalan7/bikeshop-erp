@@ -38,8 +38,7 @@ Uri projectWebsiteEditorModeOntoUri(Uri uri, WebsiteEditorMode mode) {
   }
   return Uri(
     scheme: uri.hasScheme ? uri.scheme : null,
-    userInfo:
-        uri.hasAuthority && uri.userInfo.isNotEmpty ? uri.userInfo : null,
+    userInfo: uri.hasAuthority && uri.userInfo.isNotEmpty ? uri.userInfo : null,
     host: uri.hasAuthority ? uri.host : null,
     port: uri.hasPort ? uri.port : null,
     path: uri.path,
@@ -47,6 +46,16 @@ Uri projectWebsiteEditorModeOntoUri(Uri uri, WebsiteEditorMode mode) {
     fragment: uri.hasFragment ? uri.fragment : null,
   );
 }
+
+/// Stable content identity used by storefront scroll restoration.
+///
+/// `edit` and `preview` are projections of the Website Builder chrome, not
+/// different documents. Keeping them in the scroll key makes an
+/// Edit -> Preview -> Edit round-trip jump to a fresh offset bucket on web.
+/// Every foreign query value and the fragment remain part of the identity, so
+/// catalog filters, pagination and anchors still restore independently.
+String websiteEditorScrollRouteKey(Uri uri) =>
+    projectWebsiteEditorModeOntoUri(uri, WebsiteEditorMode.public).toString();
 
 /// True when [uri] already projects [mode] (no stale or missing mode flags).
 ///

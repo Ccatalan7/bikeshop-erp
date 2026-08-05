@@ -157,6 +157,35 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
   WebsiteService? _saveCoordinatorOwner;
   WebsiteSaveCoordinator? _saveCoordinator;
 
+  /// Real height of the mounted contextual dock, published through
+  /// [WebsiteEditorChromeScope] so the canvas can reserve exactly that band.
+  ///
+  /// Measured rather than declared: the dock composes an identity row, an
+  /// action row and its own `SafeArea`, so no constant can stand for it on
+  /// every device. Zero means no dock is mounted.
+  double _contextualDockHeight = 0;
+  final GlobalKey _contextualDockKey = GlobalKey();
+
+  /// Re-measures after layout and republishes only on a real change.
+  ///
+  /// The dock lives inside the scope it feeds, so the value lands one frame
+  /// later — the same shape the sticky header scaffold already uses for its
+  /// own reserved height. The 0.5 threshold stops sub-pixel jitter looping.
+  void _scheduleContextualDockMeasurement({required bool isMounted}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      var measured = 0.0;
+      if (isMounted) {
+        final box =
+            _contextualDockKey.currentContext?.findRenderObject() as RenderBox?;
+        if (box == null || !box.hasSize) return;
+        measured = box.size.height;
+      }
+      if ((measured - _contextualDockHeight).abs() < 0.5) return;
+      setState(() => _contextualDockHeight = measured);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Watch edit mode to show/hide the editor panel
@@ -205,10 +234,13 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
               // derived threshold the composition is contextual and the canvas
               // keeps the whole width: never a compressed side panel.
               final mountsPane = showEditorPanel && paneWidth != null;
+              final mountsDock = showEditorPanel && paneWidth == null;
+              _scheduleContextualDockMeasurement(isMounted: mountsDock);
 
               return WebsiteEditorChromeScope(
                 editorWidth: editorWidth,
                 canvasWidth: mountsPane ? editorWidth - paneWidth : editorWidth,
+                contextualDockHeight: mountsDock ? _contextualDockHeight : 0,
                 child: Stack(
                   children: [
                     // Keep router child full-width so the top command bar uses
@@ -239,13 +271,22 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
                     // `Editar` opens the `O-05` sheet over a canvas that stays
                     // mounted. Same slot as the anchor it replaces, so the
                     // canvas geometry does not move.
-                    if (showEditorPanel && paneWidth == null)
-                      const Positioned(
+                    if (mountsDock)
+                      Positioned(
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: WebsiteEditorContextualDock(
-                          key: ValueKey('persistent-editor-contextual-anchor'),
+                        // The measurement key wraps the anchor instead of
+                        // replacing it: the dock keeps the identity the
+                        // contextual host contract gives it, and the shell
+                        // reads the band it actually paints.
+                        child: KeyedSubtree(
+                          key: _contextualDockKey,
+                          child: const WebsiteEditorContextualDock(
+                            key: ValueKey(
+                              'persistent-editor-contextual-anchor',
+                            ),
+                          ),
                         ),
                       ),
                     if (editProvider.isInEditorContext)

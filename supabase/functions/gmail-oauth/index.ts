@@ -247,6 +247,16 @@ async function handleInboxList(
   return jsonResponse(secondAttempt.payload, secondAttempt.status)
 }
 
+// The only system labels a client may list. A request naming anything else —
+// a user label, CATEGORY_*, or garbage — falls back to INBOX instead of
+// erroring, so an older or tampered client never widens the surface.
+const allowedListLabels = new Set(['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH'])
+
+function resolveListLabel(value: unknown): string {
+  const label = cleanText(value)?.toUpperCase()
+  return label && allowedListLabels.has(label) ? label : 'INBOX'
+}
+
 async function fetchInboxMetadata(accessToken: string, body: Record<string, unknown>) {
   const rawLimit = Number(body.limit ?? 30)
   const limit = Number.isFinite(rawLimit)
@@ -255,10 +265,11 @@ async function fetchInboxMetadata(accessToken: string, body: Record<string, unkn
   const knownIds = parseKnownIds(body.known_ids)
   const pageToken = cleanText(body.page_token)
   const searchQuery = cleanText(body.search_query)
+  const labelId = resolveListLabel(body.label_id)
 
   const listUrl = new URL(`${gmailApiOrigin}/gmail/v1/users/me/messages`)
   listUrl.searchParams.set('maxResults', String(limit))
-  listUrl.searchParams.append('labelIds', 'INBOX')
+  listUrl.searchParams.append('labelIds', labelId)
   if (pageToken) listUrl.searchParams.set('pageToken', pageToken)
   if (searchQuery) listUrl.searchParams.set('q', searchQuery)
 

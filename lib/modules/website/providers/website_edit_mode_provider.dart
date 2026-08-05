@@ -78,6 +78,39 @@ class WebsiteEditorDocument {
   final String? ownerLeaseFingerprint;
 }
 
+/// A request to bring one block back into view after an operation moved it.
+///
+/// Typed and revisioned on purpose. The provider owns *what* must become
+/// visible; the canvas owns *how* it scrolls. A bare block id could not tell a
+/// repeated move of the same block from a stale request already served, so the
+/// revision is what the canvas compares — never coordinates, which only the
+/// laid-out canvas knows.
+@immutable
+class WebsiteEditorBlockRevealRequest {
+  const WebsiteEditorBlockRevealRequest({
+    required this.blockId,
+    required this.revision,
+  });
+
+  final String blockId;
+
+  /// Monotonic per session. Two consecutive moves of the same block are two
+  /// distinct requests.
+  final int revision;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WebsiteEditorBlockRevealRequest &&
+      other.blockId == blockId &&
+      other.revision == revision;
+
+  @override
+  int get hashCode => Object.hash(blockId, revision);
+
+  @override
+  String toString() => 'WebsiteEditorBlockRevealRequest($blockId, v$revision)';
+}
+
 /// Provider for website inline edit mode state.
 /// Tracks edit mode, selected block, and pending changes.
 ///
@@ -112,6 +145,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   String? _selectedBlockId;
   int _selectionVersion = 0; // Tracks explicit selection events
+  WebsiteEditorBlockRevealRequest? _blockRevealRequest;
+  int _blockRevealRevision = 0;
   final Map<String, int> _carouselSlideSelections = {};
   final Map<String, String?> _canvasElementSelections = {};
   final _WebsiteEditorPageDraftState _pageDraft =
@@ -297,6 +332,40 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   WebsiteWriteScope get writeScope => _writeScope;
   String? get selectedBlockId => _selectedBlockId;
   int get selectionVersion => _selectionVersion;
+
+  /// The block the canvas still owes the operator a look at, or null.
+  ///
+  /// Only an *operation* that displaced a block publishes one — the three
+  /// reorder commands plus undo/redo. Selection never does: revealing on every
+  /// tap would scroll the page out from under the finger that just chose a
+  /// block it could already see.
+  WebsiteEditorBlockRevealRequest? get blockRevealRequest =>
+      _blockRevealRequest;
+
+  /// Publishes exactly one reveal request. Callers invoke it only after they
+  /// actually mutated, so a no-op move never scrolls the canvas.
+  void _requestBlockReveal(String blockId) {
+    _blockRevealRevision++;
+    _blockRevealRequest = WebsiteEditorBlockRevealRequest(
+      blockId: blockId,
+      revision: _blockRevealRevision,
+    );
+  }
+
+  /// Reveal for the block a history step just moved, when it survived the step.
+  ///
+  /// Undo/redo restore an order the operator cannot see from the dock alone:
+  /// the identity badge does not change, so without this the reverted result is
+  /// invisible exactly like the move was.
+  void _requestSelectedBlockRevealIfPresent() {
+    final selected = _selectedBlockId;
+    if (selected == null) return;
+    if (!_documentContainsBlock(selected)) return;
+    _requestBlockReveal(selected);
+  }
+
+  bool _documentContainsBlock(String blockId) =>
+      _pageDraft.blocks.any((block) => block['id']?.toString() == blockId);
 
   /// Transient inspector/canvas selection. This is UI state and must never be
   /// persisted into block data or mark the page as changed.
@@ -1142,6 +1211,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void _clearActivePageDraftState() {
     _pageDraft.hasUnsavedChanges = false;
     _selectedBlockId = null;
+    // A pending reveal belongs to the document that requested it. Carrying one
+    // across a page/session change would scroll a new canvas to a stale id.
+    _blockRevealRequest = null;
     _selectedFooterNavId = null;
     _carouselSlideSelections.clear();
     _canvasElementSelections.clear();
@@ -1468,6 +1540,30 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     );
   }
 
+  /// Keeps the block selection across an `edit -> preview -> edit` excursion.
+  ///
+  /// Preview no longer clears it. Every consumer of [selectedBlockId] in the
+  /// app is Edit-only chrome — the contextual dock, the `O-05` sheet, the
+  /// inspector and its tabs, and the editable renderer, all mounted behind an
+  /// `isEditMode` gate — so retaining the value cannot paint a selection on a
+  /// visitor's Preview, while clearing it did three things at once: it lost the
+  /// operator's place, it made the returning Edit look like the header had been
+  /// selected instead, and it fed `null` straight into the durable draft
+  /// snapshot, which captures [selectedBlockId] on every notification.
+  ///
+  /// Only re-entering Edit validates: Preview cannot mutate the document, but a
+  /// reload or a revocation in between can, and a selection pointing at a block
+  /// that no longer exists must resolve to no selection, never to a dangling
+  /// id. Closing the editor, a revocation and a real document change keep
+  /// clearing it through their own owners.
+  void _dropDanglingSelectionForEdit(WebsiteEditorMode next) {
+    if (next != WebsiteEditorMode.edit) return;
+    final selected = _selectedBlockId;
+    if (selected == null) return;
+    if (_documentContainsBlock(selected)) return;
+    _selectedBlockId = null;
+  }
+
   /// Transitions the FSM between `edit` and `preview` while preserving the
   /// active document and drafts. `public` delegates to [closeEditor].
   void setMode(WebsiteEditorMode next) {
@@ -1477,14 +1573,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     }
     assert(isInEditorContext,
         'setMode requires an open editor session; use openEditorDocument.');
-    if (_mode == next &&
-        _workspaceMode == WebsiteWorkspaceMode.pageEditor &&
-        (next == WebsiteEditorMode.edit || _selectedBlockId == null)) {
+    if (_mode == next && _workspaceMode == WebsiteWorkspaceMode.pageEditor) {
       return;
     }
     _mode = next;
     _workspaceMode = WebsiteWorkspaceMode.pageEditor;
-    if (next == WebsiteEditorMode.preview) _selectedBlockId = null;
+    _dropDanglingSelectionForEdit(next);
     notifyListeners();
   }
 
@@ -1507,7 +1601,9 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     if (_mode == request) return;
     _mode = request;
     _workspaceMode = WebsiteWorkspaceMode.pageEditor;
-    if (request == WebsiteEditorMode.preview) _selectedBlockId = null;
+    // Same retention rule as [setMode]: the URL is the other door into the very
+    // same transition, and a mode toggle on web goes through this one.
+    _dropDanglingSelectionForEdit(request);
     _notifyAfterFrame();
   }
 
@@ -1746,6 +1842,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _mode = WebsiteEditorMode.public;
     _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     _selectedBlockId = null;
+    _blockRevealRequest = null;
     _suspendedLease = null;
     _documentOwnerLease = null;
     _sessionOwnerLease = null;
@@ -3614,6 +3711,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         _deepCopyBlocks(_pageDraft.history[_pageDraft.historyIndex]);
     _reconcileTransientCanvasSelections();
     _refreshPageDirtyState();
+    // Reverting a move is itself a move: the operator has to see the restored
+    // order, not infer it. `_reconcileTransientCanvasSelections` already
+    // dropped a selection the step deleted, so this asks only for a block the
+    // restored document still contains.
+    _requestSelectedBlockRevealIfPresent();
     debugPrint(
       '⏪ [EditProvider] Undo: index=${_pageDraft.historyIndex}',
     );
@@ -3629,6 +3731,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         _deepCopyBlocks(_pageDraft.history[_pageDraft.historyIndex]);
     _reconcileTransientCanvasSelections();
     _refreshPageDirtyState();
+    _requestSelectedBlockRevealIfPresent();
     debugPrint(
       '⏩ [EditProvider] Redo: index=${_pageDraft.historyIndex}',
     );
@@ -3680,6 +3783,10 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
     _pageDraft.hasUnsavedChanges = true;
     _saveToHistory();
+    // The operation succeeded; the operator must be able to see it. On the
+    // contextual host the dock is the only other channel and it keeps naming
+    // the same block, so without this a move reads as "nothing happened".
+    _requestBlockReveal(blockId);
     debugPrint('🔼 [EditProvider] Moved block from $index to ${index - 1}');
     notifyListeners();
   }
@@ -3704,6 +3811,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
     _pageDraft.hasUnsavedChanges = true;
     _saveToHistory();
+    _requestBlockReveal(blockId);
     debugPrint('🔽 [EditProvider] Moved block from $index to ${index + 1}');
     notifyListeners();
   }
@@ -3726,6 +3834,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _updateSortOrders();
     _pageDraft.hasUnsavedChanges = true;
     _saveToHistory();
+    final movedId = item['id']?.toString();
+    if (movedId != null && movedId.isNotEmpty) _requestBlockReveal(movedId);
     notifyListeners();
   }
 

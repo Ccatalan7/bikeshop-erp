@@ -438,6 +438,13 @@ class EmailDetailViewUnified extends StatelessWidget {
   final VoidCallback? onReply;
   final VoidCallback? onReplyAll;
   final VoidCallback? onDelete;
+
+  /// Acciones contextuales de carpeta: el dueño de la página decide cuál
+  /// aplica (restaurar sólo en papelera, reportar sólo en bandeja de entrada,
+  /// rescatar sólo en spam) y deja las demás en null.
+  final VoidCallback? onRestore;
+  final VoidCallback? onMarkSpam;
+  final VoidCallback? onMarkNotSpam;
   final ValueChanged<int>? onNavigateSelection;
 
   const EmailDetailViewUnified({
@@ -452,6 +459,9 @@ class EmailDetailViewUnified extends StatelessWidget {
     this.onReply,
     this.onReplyAll,
     this.onDelete,
+    this.onRestore,
+    this.onMarkSpam,
+    this.onMarkNotSpam,
     this.onNavigateSelection,
   });
 
@@ -571,11 +581,29 @@ class EmailDetailViewUnified extends StatelessWidget {
           onPressed: onReplyAll,
           tooltip: 'Responder a todos',
         ),
+      if (onMarkNotSpam != null)
+        IconButton(
+          icon: const Icon(Icons.report_off_outlined),
+          onPressed: onMarkNotSpam,
+          tooltip: 'No es spam',
+        ),
+      if (onMarkSpam != null)
+        IconButton(
+          icon: const Icon(Icons.report_gmailerrorred_outlined),
+          onPressed: onMarkSpam,
+          tooltip: 'Reportar spam',
+        ),
+      if (onRestore != null)
+        IconButton(
+          icon: const Icon(Icons.restore_from_trash_outlined),
+          onPressed: onRestore,
+          tooltip: 'Restaurar a bandeja de entrada',
+        ),
       if (onDelete != null)
         IconButton(
           icon: const Icon(Icons.delete_outline),
           onPressed: onDelete,
-          tooltip: 'Eliminar',
+          tooltip: 'Mover a papelera',
         ),
     ];
   }

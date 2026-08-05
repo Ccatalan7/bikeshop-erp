@@ -37,6 +37,8 @@ Cada ronda debe evaluar y, cuando corresponda, corregir estas dimensiones:
 4. **Backend e integridad de datos**
    - comandos tenant-aware, autorizados, atómicos, idempotentes y seguros ante
      reintentos y concurrencia;
+   - un owner por read model, cargas authority-scoped, cache elegible y
+     reconciliación realtime sin carreras ni refetch completos innecesarios;
    - invariantes, RLS, trazabilidad, errores recuperables y compatibilidad de
      clientes distribuidos;
    - una sola autoridad de escritura; el cliente no coordina efectos parciales.
@@ -60,6 +62,12 @@ Owner -> Control -> Operation -> Consumers
 Source -> Forward effect -> Correction/Reversal -> Projections -> Evidence
 ```
 
+Y una cadena para cada read model afectado:
+
+```text
+Trigger -> Load owner -> Authority/request key -> Read -> Commit -> Reconcile
+```
+
 - **Owner:** entidad o documento que posee el efecto de negocio.
 - **Control:** superficie canónica desde donde el usuario actúa.
 - **Operation:** comando/RPC que valida y ejecuta atómicamente.
@@ -70,6 +78,12 @@ Source -> Forward effect -> Correction/Reversal -> Projections -> Evidence
   efecto sin borrar la evidencia original.
 - **Evidence:** operación, checkpoints, documentos, asientos y actor que
   permiten reconstruir ambos sentidos.
+- **Trigger/Load owner:** qué eventos solicitan datos y quién decide cuál
+  resultado vigente puede publicar datos, loading o error.
+- **Authority/request key:** identidad de usuario/tenant y forma completa de la
+  consulta que impiden compartir o adoptar resultados incompatibles.
+- **Commit/Reconcile:** publicación del snapshot vigente y fusión posterior de
+  mutaciones/realtime sin recargar toda la colección por defecto.
 
 La auditoría debe buscar todas las superficies y todos los consumidores, no
 sólo la ruta mostrada en el pantallazo que inició el trabajo.
@@ -136,7 +150,8 @@ propiedad de `docs/architecture/INVENTORY_ACCOUNTING_TRACEABILITY_PLAN.md`.
 ## 5. Secuencia de refinamiento por módulo
 
 1. **Baseline real:** inventariar rutas, superficies, comandos, tablas,
-   triggers, datos de producción y deuda conocida.
+   triggers de negocio y de carga, datos de producción, cache/preload/realtime
+   y deuda conocida.
 2. **Evaluación de Design:** registrar página, turno y componentes; decidir qué
    se copia, adapta, descarta y agrega según negocio real.
 3. **Mapa de autoridad:** completar las dos cadenas del apartado 3 y el mapa de
@@ -146,7 +161,8 @@ propiedad de `docs/architecture/INVENTORY_ACCOUNTING_TRACEABILITY_PLAN.md`.
 5. **Implementación integral:** primero el owner y comando atómico, luego todas
    las superficies y consumidores; no crear una segunda autoridad temporal.
 6. **Regresiones:** DB/pgTAP, servicios y widgets; incluir reintento,
-   concurrencia, aislamiento de tenant y estados adversos.
+   concurrencia, aislamiento de tenant, éxito/error fuera de orden, cambio de
+   authority scope, realtime durante carga y estados adversos.
 7. **Verificación real:** sesión de debug con datos reales, claro/oscuro y
    escritorio/compacto/teléfono; comparar visual y estructuralmente con Design.
 8. **Cierre:** actualizar registro de superficies, matriz de transición,
@@ -160,6 +176,10 @@ Un módulo sólo puede marcarse terminado cuando existe evidencia de que:
 - el flujo es usable y correcto en escritorio, móvil, claro y oscuro;
 - los términos, permisos y transiciones coinciden con el negocio;
 - cada mutación tiene dueño único, comando atómico e idempotencia;
+- cada read model tiene dueño único, request key/authority explícitas y prueba
+  de que una carga obsoleta no publica ni muestra error;
+- cache, refresh y realtime conservan frescura y actualizaciones quirúrgicas
+  sin carreras ni lecturas completas redundantes demostradas;
 - cada operación material tiene corrección/reversa formal o una razón de
   dominio explícita por la que no corresponde;
 - los caminos directo e inverso dejan contabilidad balanceada, stock coherente,
@@ -178,8 +198,8 @@ Si falta una de estas pruebas, el estado es `parcial` o `bloqueado`, nunca
 Cada módulo mantiene una matriz compacta, dentro de su plan de cierre o en un
 documento dedicado, con estas columnas:
 
-| Flujo/superficie | Owner | Comando | Efecto directo | Corrección/reversa | Contabilidad | Stock | Consumidores | Pruebas | Runtime |
-|---|---|---|---|---|---|---|---|---|---|
+| Flujo/superficie | Owner mutante | Load owner/read model | Comando | Efecto directo | Corrección/reversa | Contabilidad | Stock | Consumidores | Pruebas | Runtime |
+|---|---|---|---|---|---|---|---|---|---|---|
 
 La matriz registra hechos y gaps concretos; no sustituye los documentos
 canónicos ni repite código visible en git.
@@ -223,6 +243,7 @@ contrato y no debe exponerse como la nueva solución de producto.
 - `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`
 - `docs/architecture/universal-ui-component-system.md`
 - `docs/architecture/canonical-ui-surfaces.md`
+- `docs/architecture/async-data-loading-contract.md`
 - `docs/development/AGENT_DATABASE_CONTRACT.md`
 - `docs/architecture/INVENTORY_ACCOUNTING_TRACEABILITY_PLAN.md`
 

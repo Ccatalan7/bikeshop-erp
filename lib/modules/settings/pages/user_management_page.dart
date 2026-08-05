@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../../shared/services/current_user_profile_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -11,6 +13,7 @@ import '../../../shared/services/user_management_navigation.dart';
 import '../../../shared/services/user_management_service.dart';
 import '../../../shared/utils/auth_input_validation.dart';
 import '../../../shared/widgets/branded_loading.dart';
+import '../../../shared/widgets/vb_notice.dart';
 
 enum _IdentityAudience { staff, customers, invitations }
 
@@ -361,6 +364,28 @@ class _UserManagementPageState extends State<UserManagementPage> {
       if (employee.employeeId == employeeId) return employee;
     }
     return null;
+  }
+
+  /// Correo actual de la ficha cuando **no** coincide con el de la invitación;
+  /// `null` cuando coinciden o cuando no hay con qué comparar.
+  ///
+  /// Una invitación es una credencial dirigida a un buzón concreto: su token
+  /// ya viaja dentro de un correo enviado. Que editar la ficha del trabajador
+  /// no la redirija es correcto y es lo que hacen Workspace, Microsoft 365,
+  /// Slack y Okta —redirigirla dejaría vivo el mensaje anterior hacia la
+  /// dirección antigua, y aquí el rol invitado puede ser administrador—. El
+  /// defecto era otro: esa divergencia no se veía en ninguna parte. El
+  /// administrador cambiaba el correo, no pasaba nada visible, y la invitación
+  /// seguía apuntando al buzón que acababa de descartar.
+  String? _invitationEmailDrift(Map<String, dynamic> invitation) {
+    final invitationEmail = invitation['email']?.toString().trim() ?? '';
+    if (invitationEmail.isEmpty) return null;
+    final employee = _employeeAccessById(_invitationEmployeeId(invitation));
+    final employeeEmail = employee?.email?.trim() ?? '';
+    if (employeeEmail.isEmpty) return null;
+    return employeeEmail.toLowerCase() == invitationEmail.toLowerCase()
+        ? null
+        : employeeEmail;
   }
 
   EmployeeAccessState? _employeeStateForStaff(Map<String, dynamic> user) {
@@ -1133,12 +1158,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
       final employee = _employeeAccessById(_invitationEmployeeId(item));
       final role = _roleLabel(item['role']);
       final expiry = _formatDate(item['expires_at']);
+      final exception = _invitationEmailDrift(item) == null
+          ? null
+          : 'Destino distinto al de la ficha';
       return _IdentityRowCopy(
         title: item['email']?.toString() ?? 'Invitación',
         subtitle: employee?.employeeName ?? 'Sin trabajador vinculado',
-        meta: employee == null
-            ? '$role · vence $expiry'
-            : '$role · invitación pendiente',
+        meta: exception ??
+            (employee == null
+                ? '$role · vence $expiry'
+                : '$role · invitación pendiente'),
+        exception: exception,
       );
     }
 
@@ -1721,6 +1751,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final invitationId = invitation['id']?.toString() ?? '';
     final invitationEmployeeId = _invitationEmployeeId(invitation);
     final invitationEmployee = _employeeAccessById(invitationEmployeeId);
+    final driftEmail = _invitationEmailDrift(invitation);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1730,6 +1761,23 @@ class _UserManagementPageState extends State<UserManagementPage> {
           subtitle: 'Invitación de equipo · ${_roleLabel(invitation['role'])}',
           status: 'Pendiente',
         ),
+        // E-04 `VbNotice`. La guía lo quiere anclado al contenido que explica:
+        // la dirección vive en el encabezado, así que el aviso va justo debajo.
+        // Un solo banner por superficie y con los datos reales dentro.
+        if (driftEmail != null) ...[
+          const SizedBox(height: 14),
+          VbNotice(
+            key: const ValueKey('invitation-email-drift-notice'),
+            tone: VbNoticeTone.warning,
+            title: 'Destino distinto al de la ficha',
+            // El correo de la invitación ya está en el encabezado: repetirlo
+            // acá sólo alarga el aviso. Falta el otro dato y la salida.
+            body: 'La ficha de '
+                '${invitationEmployee?.employeeName ?? 'este trabajador'} '
+                'usa $driftEmail. Una invitación enviada no cambia de '
+                'destino: cancela y vuelve a invitar.',
+          ),
+        ],
         const SizedBox(height: 22),
         _detailSection(
           context,
@@ -2250,21 +2298,130 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final formKey = GlobalKey<FormState>();
     final emailController = TextEditingController();
     final nameController = TextEditingController();
+    final emailFocusNode = FocusNode();
     var selectedRole = 'cashier';
     var permissions = _permissionsForRole(selectedRole);
     var selectedEmployeeKey = _noEmployeeSelection;
     EmployeeAccessState? selectedEmployee;
     String? previousEmailPrefill;
     String? previousNamePrefill;
+    InvitationIdentityCheck? identityCheck;
+    String? identityError;
+    String? invitationError;
+    var identityCheckVersion = 0;
+    String? identityCheckKey;
+    Future<InvitationIdentityCheck?>? identityCheckFuture;
+    Timer? identityBlurTimer;
+    var isCheckingIdentity = false;
+    var isSubmitting = false;
+    var dialogOpen = true;
+    StateSetter? updateDialog;
     final activeEmployees = _employeeAccessStates
         .where((employee) => employee.isActiveEmployee)
         .toList(growable: false);
 
+    void clearIdentityCheck() {
+      identityCheckVersion += 1;
+      identityCheckKey = null;
+      identityCheckFuture = null;
+      identityBlurTimer?.cancel();
+      if (!dialogOpen) return;
+      updateDialog?.call(() {
+        identityCheck = null;
+        identityError = null;
+        invitationError = null;
+        isCheckingIdentity = false;
+      });
+    }
+
+    Future<InvitationIdentityCheck?> verifyIdentity({bool force = false}) {
+      final email = emailController.text.trim();
+      if (AuthInputValidation.validateEmail(email) != null) {
+        clearIdentityCheck();
+        return Future.value();
+      }
+      final requestKey =
+          '${email.toLowerCase()}|${selectedEmployee?.employeeId ?? ''}';
+      final pendingCheck = identityCheckFuture;
+      if (pendingCheck != null && identityCheckKey == requestKey) {
+        return pendingCheck;
+      }
+      if (!force && identityCheck != null && identityCheckKey == requestKey) {
+        return Future.value(identityCheck);
+      }
+
+      final checkVersion = ++identityCheckVersion;
+      identityCheckKey = requestKey;
+      updateDialog?.call(() {
+        isCheckingIdentity = true;
+        identityError = null;
+        invitationError = null;
+      });
+
+      late final Future<InvitationIdentityCheck?> request;
+      request = (() async {
+        try {
+          final result = await _userService.checkInternalInvitationIdentity(
+            email: email,
+            employeeId: selectedEmployee?.employeeId,
+          );
+          if (!dialogOpen || checkVersion != identityCheckVersion) return null;
+          updateDialog?.call(() {
+            identityCheck = result;
+            identityError = result.eligible
+                ? null
+                : localizedUserManagementError(result.code);
+            isCheckingIdentity = false;
+          });
+          return result;
+        } on UserManagementException catch (error) {
+          if (!dialogOpen || checkVersion != identityCheckVersion) return null;
+          updateDialog?.call(() {
+            identityCheck = null;
+            identityError = error.message;
+            isCheckingIdentity = false;
+          });
+          return null;
+        } catch (_) {
+          if (!dialogOpen || checkVersion != identityCheckVersion) return null;
+          updateDialog?.call(() {
+            identityCheck = null;
+            identityError = localizedUserManagementError(
+              'staff_identity_lookup_failed',
+            );
+            isCheckingIdentity = false;
+          });
+          return null;
+        } finally {
+          if (identical(identityCheckFuture, request)) {
+            identityCheckFuture = null;
+          }
+        }
+      })();
+      identityCheckFuture = request;
+      return request;
+    }
+
+    void handleEmailFocus() {
+      if (emailFocusNode.hasFocus) return;
+      identityBlurTimer?.cancel();
+      identityBlurTimer = Timer(Duration.zero, () {
+        identityBlurTimer = null;
+        if (dialogOpen && !emailFocusNode.hasFocus) {
+          unawaited(verifyIdentity());
+        }
+      });
+    }
+
+    emailFocusNode.addListener(handleEmailFocus);
+
     try {
-      await showDialog<void>(
+      final invitationSent = await showDialog<bool>(
         context: context,
+        barrierDismissible: false,
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setDialogState) {
+            updateDialog = setDialogState;
             return AlertDialog(
               title: const Text('Invitar usuario interno'),
               content: SizedBox(
@@ -2317,6 +2474,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
                               previousEmailPrefill = nextEmployee?.email;
                               previousNamePrefill = nextEmployee?.employeeName;
                             });
+                            clearIdentityCheck();
+                            unawaited(verifyIdentity());
                           },
                         ),
                         const SizedBox(height: 10),
@@ -2334,13 +2493,48 @@ class _UserManagementPageState extends State<UserManagementPage> {
                         TextFormField(
                           key: const ValueKey('user-invite-email-field'),
                           controller: emailController,
+                          focusNode: emailFocusNode,
                           decoration: const InputDecoration(
                             labelText: 'Email',
                             prefixIcon: Icon(Icons.email_outlined),
                           ),
                           keyboardType: TextInputType.emailAddress,
                           validator: AuthInputValidation.validateEmail,
+                          onChanged: (_) => clearIdentityCheck(),
                         ),
+                        if (isCheckingIdentity) ...[
+                          const SizedBox(height: 8),
+                          const LinearProgressIndicator(
+                            key: ValueKey('user-invite-identity-checking'),
+                          ),
+                        ],
+                        if (identityError != null) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              identityError!,
+                              key: const ValueKey(
+                                'user-invite-identity-error',
+                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                            ),
+                          ),
+                        ] else if (identityCheck?.isExistingCustomer ==
+                            true) ...[
+                          const SizedBox(height: 8),
+                          _noteBox(
+                            dialogContext,
+                            icon: Icons.verified_user_outlined,
+                            text:
+                                'Este correo ya usa una cuenta de cliente de Viñabike. La invitación conservará sus compras y añadirá el acceso ERP a la misma cuenta.',
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         TextFormField(
                           key: const ValueKey('user-invite-name-field'),
@@ -2384,6 +2578,24 @@ class _UserManagementPageState extends State<UserManagementPage> {
                         ),
                         const SizedBox(height: 18),
                         _permissionEditor(permissions, setDialogState),
+                        if (invitationError != null) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              invitationError!,
+                              key: const ValueKey(
+                                'user-invite-submission-error',
+                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -2391,39 +2603,83 @@ class _UserManagementPageState extends State<UserManagementPage> {
               ),
               actions: [
                 TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
+                    onPressed: isSubmitting
+                        ? null
+                        : () => Navigator.pop(dialogContext, false),
                     child: const Text('Cancelar')),
                 FilledButton.icon(
-                  onPressed: _isActionRunning
+                  onPressed: _isActionRunning ||
+                          isSubmitting ||
+                          isCheckingIdentity
                       ? null
                       : () async {
                           if (!formKey.currentState!.validate()) return;
+                          emailFocusNode.unfocus();
+                          identityBlurTimer?.cancel();
+                          final eligibility = await verifyIdentity(force: true);
+                          if (eligibility == null || !eligibility.eligible) {
+                            return;
+                          }
                           final employeeId = selectedEmployee?.employeeId;
-                          Navigator.pop(dialogContext);
-                          await _runAction(
-                            'Invitación enviada por correo',
-                            () async {
-                              await _userService.inviteInternalUser(
-                                email: emailController.text.trim(),
-                                role: selectedRole,
-                                permissions: permissions,
-                                name: nameController.text.trim().isEmpty
-                                    ? null
-                                    : nameController.text.trim(),
-                                employeeId: employeeId,
-                              );
-                            },
-                          );
+                          setDialogState(() {
+                            isSubmitting = true;
+                            invitationError = null;
+                          });
+                          try {
+                            await _userService.inviteInternalUser(
+                              email: emailController.text.trim(),
+                              role: selectedRole,
+                              permissions: permissions,
+                              name: nameController.text.trim().isEmpty
+                                  ? null
+                                  : nameController.text.trim(),
+                              employeeId: employeeId,
+                            );
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext, true);
+                            }
+                          } on UserManagementException catch (error) {
+                            if (!dialogOpen) return;
+                            setDialogState(() {
+                              invitationError = error.message;
+                              isSubmitting = false;
+                            });
+                          } catch (_) {
+                            if (!dialogOpen) return;
+                            setDialogState(() {
+                              invitationError =
+                                  'No pudimos enviar la invitación. Revisa los datos e inténtalo nuevamente.';
+                              isSubmitting = false;
+                            });
+                          }
                         },
-                  icon: const Icon(Icons.send_outlined, size: 18),
-                  label: const Text('Enviar invitación'),
+                  icon: isSubmitting
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_outlined, size: 18),
+                  label: Text(
+                    isSubmitting ? 'Enviando…' : 'Enviar invitación',
+                  ),
                 ),
               ],
             );
           },
         ),
       );
+      dialogOpen = false;
+      if (invitationSent == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invitación enviada por correo')),
+        );
+        await _loadData(silent: true);
+      }
     } finally {
+      dialogOpen = false;
+      identityBlurTimer?.cancel();
+      emailFocusNode.removeListener(handleEmailFocus);
+      emailFocusNode.dispose();
       emailController.dispose();
       nameController.dispose();
     }
@@ -3149,15 +3405,32 @@ class _UserManagementPageState extends State<UserManagementPage> {
     return _roleOptions[role?.toString()] ?? role?.toString() ?? 'Sin rol';
   }
 
+  /// Estas fechas son plazos del negocio —cuándo vence una invitación, cuándo
+  /// entró alguien por última vez—, así que se leen en la hora del taller y no
+  /// en la del equipo que abre la pantalla. `.toLocal()` mostraba la zona del
+  /// dispositivo: en un Mac configurado en horario del Pacífico, un
+  /// vencimiento de las 12:19 de Chile aparecía como 09:19, tres horas antes,
+  /// en la misma pantalla donde el panel de al lado ya rotula «HORA CHILE».
   String _formatDate(dynamic value) {
     if (value == null || value.toString().isEmpty) return 'Sin registro';
     try {
-      return DateFormat('dd/MM/yyyy HH:mm')
-          .format(DateTime.parse(value.toString()).toLocal());
+      final parsed = DateTime.parse(value.toString()).toUtc();
+      return DateFormat('dd/MM/yyyy HH:mm').format(
+        tz.TZDateTime.from(parsed, _shopLocation()),
+      );
     } catch (_) {
       return value.toString();
     }
   }
+}
+
+tz.Location? _shopLocationCache;
+
+tz.Location _shopLocation() {
+  final existing = _shopLocationCache;
+  if (existing != null) return existing;
+  tzdata.initializeTimeZones();
+  return _shopLocationCache = tz.getLocation('America/Santiago');
 }
 
 class _PermissionOption {

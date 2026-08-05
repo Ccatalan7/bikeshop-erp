@@ -1,5 +1,6 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/shared/services/right_toolbar_service.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
@@ -72,8 +73,8 @@ void main() {
 
     final node =
         tester.getSemantics(find.bySemanticsLabel('Asistente IA, herramienta'));
-    expect(node.hasFlag(SemanticsFlag.isSelected), isTrue);
-    expect(node.hasFlag(SemanticsFlag.isButton), isTrue);
+    expect(node.flagsCollection.isSelected, Tristate.isTrue);
+    expect(node.flagsCollection.isButton, isTrue);
   });
 
   testWidgets('an unselected tool does not claim to be selected',
@@ -84,7 +85,7 @@ void main() {
 
     final node =
         tester.getSemantics(find.bySemanticsLabel('Asistente IA, herramienta'));
-    expect(node.hasFlag(SemanticsFlag.isSelected), isFalse);
+    expect(node.flagsCollection.isSelected, isNot(Tristate.isTrue));
   });
 
   testWidgets('the button is tappable through its semantics', (tester) async {

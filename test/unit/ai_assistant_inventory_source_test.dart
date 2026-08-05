@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_erp/modules/ai_assistant/models/ai_agent_tool.dart';
 import 'package:vinabike_erp/modules/ai_assistant/services/ai_service.dart';
 import 'package:vinabike_erp/modules/inventory/models/inventory_models.dart';
 import 'package:vinabike_erp/modules/inventory/services/inventory_service.dart';
@@ -89,6 +90,7 @@ void main() {
 
   final authority = AIAssistantTurnAuthority(
     ErpAuthorityScopeKey.from(userId: 'user-a', tenantId: 'tenant-a')!,
+    permissions: const <String>{AIToolPermission.operationalRead},
   );
 
   setUp(() {
@@ -143,14 +145,16 @@ void main() {
     expect(response.cards, isEmpty);
   });
 
-  test('a completed read with nothing in it is a real zero', () async {
-    // The distinction the whole change exists for: this answer is allowed to
-    // say it found nothing, because the catalog was actually read.
+  test('an empty catalog without an authority receipt stays unavailable',
+      () async {
+    // Product rows can prove their tenant individually; zero rows cannot. The
+    // inventory service does not publish an authority-bound read receipt yet.
     inventory.keywordResults = const <Product>[];
 
     final response = await ask();
 
-    expect(response.text, isNot(contains('no se pudo confirmar')));
+    expect(response.text, contains('no se pudo confirmar'));
+    expect(response.text.toLowerCase(), isNot(contains('no encontré')));
   });
 
   test('a verified catalog answers with its own rows', () async {

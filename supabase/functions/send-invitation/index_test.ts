@@ -126,7 +126,7 @@ function createRuntime(
       evidence.emails.push(email);
       return Promise.resolve(overrides.emailSent !== false);
     },
-    invitationBaseUrl: () => "https://project-vinabike.web.app",
+    invitationBaseUrl: () => "https://vinabike.cl",
     now: () => new Date("2026-07-26T12:00:00.000Z"),
     generateToken: () => fixedToken,
   };
@@ -269,7 +269,7 @@ Deno.test("authorized delivery rotates only the hash and never returns the capab
   );
   assert(
     evidence.emails[0].html.includes(
-      `/accept-invitation.html#token=${fixedToken}`,
+      `https://vinabike.cl/accept-invitation#token=${fixedToken}`,
     ),
     "email CTA must keep the token in the URL fragment",
   );
@@ -298,7 +298,7 @@ Deno.test("authorized delivery rotates only the hash and never returns the capab
     "plain text fallback must preserve the complete onboarding explanation",
   );
   assert(
-    !/(?:src|href)\s*=\s*["']https?:\/\/(?!project-vinabike\.web\.app\/accept-invitation\.html)/i
+    !/(?:src|href)\s*=\s*["']https?:\/\/(?!vinabike\.cl\/accept-invitation#)/i
       .test(evidence.emails[0].html),
     "invitation cannot load remote images or tracking resources",
   );

@@ -78,7 +78,11 @@ void main() {
   });
 
   test('staff invitation lookup and acceptance stay server-authoritative', () {
-    expect(invitationSource, contains("'lookup_user_invitation'"));
+    expect(
+      invitationSource,
+      contains("'lookup_user_invitation_identity'"),
+    );
+    expect(invitationSource, contains("invitation['account_exists']"));
     expect(invitationSource, contains("'p_token': token"));
     expect(invitationSource, contains('signUpStaffInvitation('));
     expect(invitationSource, contains("'accept_user_invitation'"));

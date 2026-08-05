@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const DEFAULT_ALLOWED_ORIGINS = [
+  "https://vinabike.cl",
   "https://project-vinabike.web.app",
   "https://project-vinabike.firebaseapp.com",
   "http://localhost:54330",
@@ -506,7 +507,7 @@ function buildInvitationEmail(
   const shopName = cleanText(tenant?.shop_name) || "Viñabike";
   const firstName = cleanText(invitation.metadata?.first_name);
   const roleDisplay = getRoleDisplayName(invitation.role);
-  const invitationUrl = new URL("/accept-invitation.html", `${baseUrl}/`);
+  const invitationUrl = new URL("/accept-invitation", `${baseUrl}/`);
   invitationUrl.hash = `token=${encodeURIComponent(token)}`;
   const link = invitationUrl.toString();
   const expiryLabel = expiresAt.toLocaleDateString("es-CL", {
@@ -657,7 +658,7 @@ function getRoleDisplayName(role: string): string {
 function invitationBaseUrl(getEnv: EnvReader): string {
   const configured = getEnv("INVITATION_APP_URL")?.trim() ||
     getEnv("APP_URL")?.trim() ||
-    "https://project-vinabike.web.app";
+    "https://vinabike.cl";
 
   try {
     const parsed = new URL(configured);

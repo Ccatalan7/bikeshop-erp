@@ -43,8 +43,8 @@ void main() {
     },
   ];
 
-  WebsiteEditModeProvider newProvider() =>
-      WebsiteEditModeProvider()..enterEditMode(blocks, const <String, dynamic>{});
+  WebsiteEditModeProvider newProvider() => WebsiteEditModeProvider()
+    ..enterEditMode(blocks, const <String, dynamic>{});
 
   /// The viewport is configured on the real test view, not faked in a
   /// descendant `MediaQuery`: a compact host must be proven under real
@@ -168,7 +168,8 @@ void main() {
           reason: '$key mide ${size.height} de alto',
         );
       }
-      final edit = tester.getSize(find.byKey(WebsiteEditorContextualDock.editKey));
+      final edit =
+          tester.getSize(find.byKey(WebsiteEditorContextualDock.editKey));
       expect(
         edit.height,
         greaterThanOrEqualTo(WebsiteEditorContextualDock.primaryActionHeight),
@@ -192,7 +193,8 @@ void main() {
       expect(dock.width, lessThanOrEqualTo(390));
     });
 
-    testWidgets('834 usa el MISMO dock: tablet no recibe una tercera '
+    testWidgets(
+        '834 usa el MISMO dock: tablet no recibe una tercera '
         'composición', (tester) async {
       final provider = newProvider()..selectBlock('block-2');
       useViewport(tester, width: 834, height: 640);
@@ -392,8 +394,7 @@ void main() {
       expect(find.byType(TextField), findsWidgets);
     });
 
-    testWidgets('la hoja no supera el 60% del alto disponible',
-        (tester) async {
+    testWidgets('la hoja no supera el 60% del alto disponible', (tester) async {
       final provider = newProvider()..selectBlock('block-2');
       useViewport(tester, width: 390);
       await tester.pumpWidget(host(provider: provider, width: 390));
@@ -418,7 +419,8 @@ void main() {
       );
     });
 
-    testWidgets('con el teclado abierto la hoja se mide contra el alto que '
+    testWidgets(
+        'con el teclado abierto la hoja se mide contra el alto que '
         'queda y no desborda', (tester) async {
       final provider = newProvider()..selectBlock('block-2');
       useViewport(tester, width: 390, bottomViewInset: 292);
@@ -446,7 +448,8 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('abrir y cerrar no escribe, no crea historia y conserva la '
+    testWidgets(
+        'abrir y cerrar no escribe, no crea historia y conserva la '
         'selección, el viewport y el alcance', (tester) async {
       final provider = newProvider()
         ..selectBlock('block-2')
@@ -532,7 +535,8 @@ void main() {
       expect(WebsiteBlockEditSheetGeometry.titleSize, 14);
       expect(WebsiteBlockEditSheetGeometry.ctaHeight, 50);
       expect(WebsiteBlockEditSheetGeometry.maxHeightFraction, 0.60);
-      expect(WebsiteBlockEditSheetGeometry.maxHeightFor(844), closeTo(506.4, 1));
+      expect(
+          WebsiteBlockEditSheetGeometry.maxHeightFor(844), closeTo(506.4, 1));
     });
   });
 
@@ -552,6 +556,30 @@ void main() {
       provider.setMode(WebsiteEditorMode.public);
       await tester.pump();
       expect(find.byKey(WebsiteEditorContextualDock.dockKey), findsNothing);
+    });
+
+    testWidgets('volver de Vista previa devuelve el dock del mismo bloque',
+        (tester) async {
+      final provider = newProvider()..selectBlock('block-2');
+      useViewport(tester, width: 430, height: 896);
+      await tester.pumpWidget(host(provider: provider, width: 430));
+      await tester.pump();
+      final identity = WebsiteEditorContextualDock.identityLabelFor(
+        provider.getBlock('block-2')!,
+      );
+      expect(find.text(identity), findsOneWidget);
+
+      provider.setMode(WebsiteEditorMode.preview);
+      await tester.pump();
+      expect(find.byKey(WebsiteEditorContextualDock.dockKey), findsNothing);
+
+      provider.setMode(WebsiteEditorMode.edit);
+      await tester.pump();
+
+      // El operador vuelve a lo que estaba haciendo: mismo bloque, mismo dock.
+      expect(find.byKey(WebsiteEditorContextualDock.dockKey), findsOneWidget);
+      expect(find.text(identity), findsOneWidget);
+      expect(provider.selectedBlockId, 'block-2');
     });
 
     testWidgets('un workspace de gestión tampoco lo muestra', (tester) async {

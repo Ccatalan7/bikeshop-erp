@@ -827,7 +827,186 @@ void main() {
       expect(provider.getBlockData('hero-1')['title'], 'New in-memory draft');
     });
   });
+
+  group('la selección sobrevive a una excursión a Vista previa', () {
+    test('Edit -> Preview -> Edit conserva el bloque seleccionado', () {
+      final provider = _threeBlockProvider()..selectBlock('block-2');
+      addTearDown(provider.dispose);
+
+      provider.setMode(WebsiteEditorMode.preview);
+      // Ni el dock ni el inspector existen en Preview: los monta su propia
+      // compuerta de Edit. Por eso el valor puede quedarse, y por eso el
+      // borrador durable —que captura este mismo campo en cada
+      // notificación— no recibe null por pasar por Vista previa.
+      expect(provider.selectedBlockId, 'block-2');
+
+      provider.setMode(WebsiteEditorMode.edit);
+      expect(provider.selectedBlockId, 'block-2');
+      expect(provider.mode, WebsiteEditorMode.edit);
+    });
+
+    test('el comando de ruta (web) recorre el mismo camino', () {
+      final provider = _threeBlockProvider()
+        ..adoptEditorEntryLease(0, _grantedLease)
+        ..selectBlock('block-3');
+      addTearDown(provider.dispose);
+
+      provider.applyRouteModeCommand(WebsiteEditorMode.preview);
+      expect(provider.selectedBlockId, 'block-3');
+
+      provider.applyRouteModeCommand(WebsiteEditorMode.edit);
+      expect(provider.selectedBlockId, 'block-3');
+    });
+
+    test('una selección colgante se resuelve a null al volver a Edit', () {
+      final provider = _threeBlockProvider()..selectBlock('block-2');
+      addTearDown(provider.dispose);
+
+      provider.setMode(WebsiteEditorMode.preview);
+      // El documento cambió mientras el operador miraba la vista previa.
+      provider.openEditorDocument(
+        const <Map<String, dynamic>>[
+          {'id': 'block-9', 'block_type': 'hero', 'block_data': {}},
+        ],
+        const <String, dynamic>{},
+        mode: WebsiteEditorMode.preview,
+      );
+      provider.setMode(WebsiteEditorMode.edit);
+
+      expect(provider.selectedBlockId, isNull);
+    });
+
+    test('cerrar el editor sigue limpiando la selección', () {
+      final provider = _threeBlockProvider()..selectBlock('block-2');
+      addTearDown(provider.dispose);
+
+      provider.setMode(WebsiteEditorMode.preview);
+      provider.closeEditor();
+
+      expect(provider.selectedBlockId, isNull);
+      expect(provider.mode, WebsiteEditorMode.public);
+    });
+  });
+
+  group('reveal: una operación que mueve un bloque pide verlo', () {
+    test('mover abajo y mover arriba emiten una petición cada uno', () {
+      final provider = _threeBlockProvider()..selectBlock('block-1');
+      addTearDown(provider.dispose);
+
+      expect(provider.blockRevealRequest, isNull);
+
+      provider.moveBlockDown('block-1');
+      final first = provider.blockRevealRequest;
+      expect(first?.blockId, 'block-1');
+
+      provider.moveBlockUp('block-1');
+      final second = provider.blockRevealRequest;
+      expect(second?.blockId, 'block-1');
+      // Dos operaciones son dos peticiones: la revisión es lo que el lienzo
+      // compara, no el id.
+      expect(second!.revision, greaterThan(first!.revision));
+    });
+
+    test('un movimiento imposible no pide nada', () {
+      final provider = _threeBlockProvider();
+      addTearDown(provider.dispose);
+
+      provider.moveBlockUp('block-1');
+      expect(provider.blockRevealRequest, isNull);
+
+      provider.moveBlockDown('block-3');
+      expect(provider.blockRevealRequest, isNull);
+    });
+
+    test('reorderBlocks pide por el bloque arrastrado', () {
+      final provider = _threeBlockProvider();
+      addTearDown(provider.dispose);
+
+      provider.reorderBlocks(0, 3);
+      expect(provider.blockRevealRequest?.blockId, 'block-1');
+      expect(provider.blocks.last['id'], 'block-1');
+    });
+
+    test('seleccionar NO pide reveal', () {
+      final provider = _threeBlockProvider();
+      addTearDown(provider.dispose);
+
+      provider.selectBlock('block-2');
+      provider.selectBlock('block-3');
+
+      expect(provider.blockRevealRequest, isNull);
+    });
+
+    test('deshacer y rehacer revelan el bloque seleccionado', () {
+      final provider = _threeBlockProvider()..selectBlock('block-1');
+      addTearDown(provider.dispose);
+
+      provider.moveBlockDown('block-1');
+      final afterMove = provider.blockRevealRequest!.revision;
+
+      provider.undo();
+      final afterUndo = provider.blockRevealRequest!;
+      expect(afterUndo.blockId, 'block-1');
+      expect(afterUndo.revision, greaterThan(afterMove));
+      expect(provider.blocks.first['id'], 'block-1');
+
+      provider.redo();
+      final afterRedo = provider.blockRevealRequest!;
+      expect(afterRedo.blockId, 'block-1');
+      expect(afterRedo.revision, greaterThan(afterUndo.revision));
+    });
+
+    test('deshacer sin selección no pide nada nuevo', () {
+      final provider = _threeBlockProvider();
+      addTearDown(provider.dispose);
+
+      provider.moveBlockDown('block-1');
+      final afterMove = provider.blockRevealRequest!.revision;
+
+      provider.undo();
+      expect(provider.blockRevealRequest!.revision, afterMove);
+    });
+
+    test('abrir otro documento descarta una petición pendiente', () {
+      final provider = _threeBlockProvider();
+      addTearDown(provider.dispose);
+
+      provider.moveBlockDown('block-1');
+      expect(provider.blockRevealRequest, isNotNull);
+
+      provider.openEditorDocument(
+        const <Map<String, dynamic>>[
+          {'id': 'other-1', 'block_type': 'hero', 'block_data': {}},
+        ],
+        const <String, dynamic>{},
+        mode: WebsiteEditorMode.edit,
+        pageId: 'page-b',
+      );
+
+      expect(provider.blockRevealRequest, isNull);
+    });
+  });
 }
+
+/// A three-block page: the smallest document where a move is observable.
+WebsiteEditModeProvider _threeBlockProvider() => WebsiteEditModeProvider()
+  ..enterEditMode(
+    const <Map<String, dynamic>>[
+      {'id': 'block-1', 'block_type': 'hero', 'block_data': {}},
+      {'id': 'block-2', 'block_type': 'about', 'block_data': {}},
+      {'id': 'block-3', 'block_type': 'contact', 'block_data': {}},
+    ],
+    const <String, dynamic>{},
+    pageId: 'page-a',
+  );
+
+const _grantedLease = WebsiteEditorCapabilitySnapshot(
+  identity: 'user-a',
+  activeTenantId: 'tenant-a',
+  storefrontTenantId: 'tenant-a',
+  hasAuthority: true,
+  authorityEpoch: 1,
+);
 
 const _baseHeroData = <String, dynamic>{
   'title': 'Taller',

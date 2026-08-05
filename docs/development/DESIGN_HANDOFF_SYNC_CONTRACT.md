@@ -70,13 +70,44 @@ grep -o 'box-shadow:[^;\"]*' /tmp/guia.html | sort -u
 A 260 KB component guide costs a 2 KB preview this way, and every value in it
 becomes greppable. There is no context argument for guessing.
 
+### Corrección 2026-08-04 — la guía de componentes YA cruzó el cap
+
+`GUÍA GENERAL Viñabike - Componentes.dc.html` pesa **260,9 KB**. `get_file`
+corta el contenido en exactamente **262 144 bytes** (256 KiB) y no lo avisa
+dentro del texto: el archivo guardado termina a mitad de una etiqueta.
+
+Lo que se pierde hoy es concreto: la página cierra con **`X-01 VbSurfaceState`**
+(loading · empty · error · no-results · read-only · sin permiso), y el corte cae
+**dentro de esa sección**. Sólo llega su encabezado. Todo lo anterior —`F-01`…
+`F-06`, `A-01`…`A-03`, `I-*`, `S-*`, `D-01`, `E-*`, `O-01`…`O-05`, `T-01`…`T-05`—
+se lee completo y literal.
+
+Consecuencia operativa, no teórica: **una ronda que diseñe un estado vacío, de
+carga o de error no tiene fuente legible para `X-01` y se detiene ahí.** La
+ventana **no** la desbloquea: sirve para confirmar que la sección existe y dónde
+cae el corte, y nada más. Sus valores siguen siendo *unreadable* — leerlos de la
+ventana es exactamente el «eyeballing» que este contrato prohíbe y que ya costó
+un popover inventado. Se reanuda cuando Design publique `X-01` como artefacto
+fuente propio bajo el cap (o un frame legible en su `handoff-t<N>/`).
+
+Cómo comprobar el corte antes de confiar en lo leído:
+
+```bash
+wc -c <archivo-extraído>   # 262144 ⇒ vino truncado
+```
+
+El payload crudo capea en **262 144**. Si el conteo da 262 145 es porque el
+comando de extracción del ejemplo (`python3 -c "…print(…)"`) agrega un `\n`
+final; el byte extra es del `print`, no del archivo.
+
 ### When the window is still allowed
 
 Only two cases, and never for reading values:
 
-1. **Past the 256 KiB cap.** A long page is cut off; sections beyond it exist
-   only in the window. Read them there, and mark any value taken that way as
-   unsourced until it can be read from a file.
+1. **Past the 256 KiB cap.** A long page is cut off; the window may confirm
+   that later sections exist and where the cut occurs, but their values remain
+   unreadable. Stop until Design publishes a file or handoff frame that exposes
+   those values through `DesignSync`.
 2. **Confirming the built result** looks like the design — the same role
    screenshots of the running app play.
 

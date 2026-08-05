@@ -69,7 +69,7 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
       }
 
       final response = await Supabase.instance.client.rpc(
-        'lookup_user_invitation',
+        'lookup_user_invitation_identity',
         params: {'p_token': token},
       ).maybeSingle();
 
@@ -80,8 +80,15 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
 
       final invitation = Map<String, dynamic>.from(response as Map);
       final email = invitation['email']?.toString().trim() ?? '';
+      final accountExists = invitation['account_exists'];
       if (email.isEmpty) {
         _setInvitationLoadError('La invitación no contiene un correo válido.');
+        return;
+      }
+      if (accountExists is! bool) {
+        _setInvitationLoadError(
+          'No pudimos verificar la cuenta asociada a esta invitación.',
+        );
         return;
       }
 
@@ -96,7 +103,7 @@ class _AcceptInvitationPageState extends State<AcceptInvitationPage> {
         _emailController.text = email;
         _hasMatchingSession = sessionMatchesInvitation;
         _hasMismatchedSession = hasSession && !sessionMatchesInvitation;
-        if (sessionMatchesInvitation) {
+        if (sessionMatchesInvitation || accountExists) {
           _accountMode = _InvitationAccountMode.existing;
         }
         _isLoading = false;

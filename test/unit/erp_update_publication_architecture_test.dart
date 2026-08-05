@@ -56,6 +56,10 @@ void main() {
     final macos = task('🍎 Publish Prepared ERP Update (macOS)');
     final android = task('🤖 Publish Prepared ERP Update (Android)');
 
+    expect(
+      (topLevel['osx'] as Map<String, dynamic>)['group'],
+      <String, dynamic>{'kind': 'build', 'isDefault': true},
+    );
     expect(topLevel['dependsOrder'], 'sequence');
     expect(
       topLevel['dependsOn'],
@@ -129,6 +133,23 @@ void main() {
     expect(RegExp(r'git commit -m').allMatches(prepareHelper), hasLength(1));
     expect(RegExp(r'git push origin').allMatches(prepareHelper), hasLength(1));
     expect(prepareHelper, contains('chmod 600'));
+    expect(
+      prepareHelper,
+      contains('VINABIKE_ERP_RELEASE_BRANCH:-smartpegas1.0'),
+    );
+    expect(
+      prepareHelper,
+      contains('current_head" != "\$canonical_remote_head'),
+    );
+    expect(
+      prepareHelper,
+      contains('git switch "\$CANONICAL_RELEASE_BRANCH"'),
+    );
+    expect(prepareHelper, contains('--check-release-branch)'));
+    expect(
+      prepareHelper,
+      contains("\$CHECK_RELEASE_BRANCH_ONLY\" == 'YES'"),
+    );
     expect(prepareHelper, contains('targets: ["macos", "android"]'));
     expect(prepareHelper, contains('release_notes_from_commit'));
     expect(prepareHelper, contains('release_notes_candidate_b64'));

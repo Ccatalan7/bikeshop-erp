@@ -48,7 +48,7 @@ class _PublicStoreScrollViewState extends State<_PublicStoreScrollView> {
     }
 
     final uri = GoRouterState.of(context).uri;
-    final nextKey = uri.toString();
+    final nextKey = websiteEditorScrollRouteKey(uri);
     if (_routeKey != nextKey) {
       _routeKey = nextKey;
       _restoredForRoute = false;
@@ -266,7 +266,7 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
     // Key scroll offset by current route location so going "back" restores where
     // the user was (most important for long lists like /productos).
     final uri = GoRouterState.of(context).uri;
-    final nextKey = uri.toString();
+    final nextKey = websiteEditorScrollRouteKey(uri);
     if (_routeKey != nextKey) {
       _routeKey = nextKey;
       _restoredForRoute = false;

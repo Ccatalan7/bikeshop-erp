@@ -18,12 +18,14 @@ import {
   buildWorkerLoginEmail,
   buildWorkerPasswordResetMarker,
   canonicalizeRequestedPermissions,
+  checkInternalInvitationIdentity,
   createCustomerAccount,
   createInternalInvitation,
   deactivateAccountPreservingMessagingHistory,
   deleteInternalAccount,
   derivePrincipalOwnerIdentity,
   detachedAccountResult,
+  evaluateInvitationIdentity,
   finishWorkerPasswordCredentialIssue,
   getCallerContext,
   getEmployeeAccessStates,
@@ -328,6 +330,13 @@ class FakeServiceClient {
 
   rpc(name: string, args: Record<string, unknown>) {
     this.rpcCalls.push({ name, args });
+    if (name === "resolve_auth_user_id_by_email") {
+      const normalizedEmail = String(args.p_email ?? "").trim().toLowerCase();
+      const authUser = [...this.authUsers.values()].find((candidate) =>
+        String(candidate.email ?? "").trim().toLowerCase() === normalizedEmail
+      );
+      return Promise.resolve({ data: authUser?.id ?? null, error: null });
+    }
     return Promise.resolve(
       this.rpcResults.get(name) ?? {
         data: null,
@@ -1265,7 +1274,6 @@ Deno.test("an active tenant staff email must use direct employee linking, never 
           email,
           role: "cashier",
           permissions: {},
-          employeeId: "44444444-4444-4444-8444-444444444444",
         },
         "Bearer caller-user-jwt",
         new Request(
@@ -1319,7 +1327,7 @@ Deno.test("an active tenant staff email must use direct employee linking, never 
         tenantId,
         email,
       ),
-    "identity_unavailable",
+    "staff_identity_tenant_conflict",
     "an Auth identity with another active ERP tenant cannot receive an impossible invitation",
   );
 
@@ -1339,7 +1347,7 @@ Deno.test("an active tenant staff email must use direct employee linking, never 
         tenantId,
         email,
       ),
-    "identity_unavailable",
+    "worker_identity_conflict",
     "even a suspended Worker identity cannot receive an unusable ERP invitation",
   );
 
@@ -1359,7 +1367,7 @@ Deno.test("an active tenant staff email must use direct employee linking, never 
         tenantId,
         email,
       ),
-    "identity_unavailable",
+    "historical_employee_identity_conflict",
     "an Auth identity already reserved by any employee cannot receive even an unbound invitation",
   );
   await assertRejectsCode(
@@ -1384,8 +1392,85 @@ Deno.test("an active tenant staff email must use direct employee linking, never 
           "https://example.supabase.co/functions/v1/admin-user-management",
         ),
       ),
-    "identity_unavailable",
+    "historical_employee_identity_conflict",
     "the unbound invitation route rejects a globally reserved employee identity before email",
+  );
+});
+
+Deno.test("invitation preflight and submit share one customer-safe identity evaluator", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const email = "customer@example.invalid";
+  const userId = "33333333-3333-4333-8333-333333333333";
+  const client = new FakeServiceClient();
+  client.authUsers.set(userId, { id: userId, email });
+  client.rows.set("customers", [{ id: "customer-1" }]);
+
+  const direct = await evaluateInvitationIdentity(client, tenantId, email);
+  assertEquals(
+    direct,
+    {
+      eligible: true,
+      status: "available_existing_customer",
+      hasExistingAuthIdentity: true,
+      isExistingCustomer: true,
+    },
+    "an existing storefront customer remains eligible for staff invitation",
+  );
+
+  const preflight = await checkInternalInvitationIdentity(
+    client,
+    {
+      userId: "11111111-1111-4111-8111-111111111111",
+      tenantId,
+      role: "admin",
+      permissions: {},
+    },
+    { email },
+  );
+  assertEquals(
+    preflight,
+    direct,
+    "the public preflight exposes the same safe eligibility projection",
+  );
+  await assertInvitationEmailNotActiveStaff(client, tenantId, email);
+  assertEquals(client.updates.length, 0, "identity checks never mutate records");
+  assertEquals(client.authUpdates.length, 0, "identity checks never mutate Auth");
+});
+
+Deno.test("invitation preflight returns typed conflict evidence without foreign tenant details", async () => {
+  const tenantId = "22222222-2222-4222-8222-222222222222";
+  const email = "legacy@example.invalid";
+  const userId = "33333333-3333-4333-8333-333333333333";
+  const client = new FakeServiceClient();
+  client.authUsers.set(userId, { id: userId, email });
+  client.rows.set("user_profiles", [{
+    tenant_id: "99999999-9999-4999-8999-999999999999",
+    is_active: true,
+  }]);
+
+  const result = await checkInternalInvitationIdentity(
+    client,
+    {
+      userId: "11111111-1111-4111-8111-111111111111",
+      tenantId,
+      role: "admin",
+      permissions: {},
+    },
+    { email },
+  );
+  assertEquals(
+    result,
+    {
+      eligible: false,
+      status: "staff_identity_tenant_conflict",
+      hasExistingAuthIdentity: true,
+      isExistingCustomer: false,
+    },
+    "preflight returns only the safe conflict category",
+  );
+  assert(
+    !JSON.stringify(result).includes("99999999"),
+    "preflight must not leak a foreign tenant identifier",
   );
 });
 

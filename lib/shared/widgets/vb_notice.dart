@@ -125,6 +125,12 @@ class VbNotice extends StatelessWidget {
             child: Semantics(
               container: true,
               excludeSemantics: true,
+              // E-04 · A11Y: «danger y warning se anuncian como liveRegion
+              // asertiva; info y success, polite». Flutter expone una sola
+              // región viva, así que los dos tonos que interrumpen la piden y
+              // los dos que informan se leen al llegar el foco.
+              liveRegion:
+                  tone == VbNoticeTone.warning || tone == VbNoticeTone.danger,
               label: body == null ? title : '$title. $body',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

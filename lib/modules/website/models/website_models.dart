@@ -436,6 +436,22 @@ class StorefrontIdentitySnapshot {
   }
 }
 
+/// Canonical operator-facing name for an online-order delivery mode.
+///
+/// [OnlineOrder.deliveryDisplayName] delegates here so surfaces that only hold
+/// the raw `delivery_type` string — for example an `erp_notifications` payload
+/// snapshot — reuse this owner instead of maintaining a second map.
+String onlineOrderDeliveryDisplayName(String deliveryType) {
+  switch (deliveryType) {
+    case 'pickup':
+      return 'Retiro en tienda';
+    case 'shipping':
+      return 'Despacho';
+    default:
+      return deliveryType;
+  }
+}
+
 class OnlineOrder {
   final String id;
   final String tenantId;
@@ -885,16 +901,8 @@ class OnlineOrder {
   bool get hasRecordedPayment =>
       paymentStatus.trim().toLowerCase() == 'paid' || paidAt != null;
 
-  String get deliveryDisplayName {
-    switch (deliveryType) {
-      case 'pickup':
-        return 'Retiro en tienda';
-      case 'shipping':
-        return 'Despacho';
-      default:
-        return deliveryType;
-    }
-  }
+  String get deliveryDisplayName =>
+      onlineOrderDeliveryDisplayName(deliveryType);
 
   bool get hasPaymentProcessingAttention =>
       paymentProcessingState == 'action_required' ||

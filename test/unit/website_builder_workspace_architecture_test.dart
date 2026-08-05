@@ -136,9 +136,16 @@ void main() {
     );
 
     // 4. A host that cannot afford a pane mounts a contextual anchor instead,
-    //    and never the compressed side panel.
-    final contextualBranch =
-        normalizedShell.indexOf('if (showEditorPanel && paneWidth == null)');
+    //    and never the compressed side panel. The condition is named, like the
+    //    pane's, because the shell also has to publish the dock's measured band
+    //    under exactly the same conjunction — two inline copies of it would be
+    //    two places deciding whether a dock exists.
+    expect(
+      normalizedShell,
+      contains('final mountsDock = showEditorPanel && paneWidth == null;'),
+      reason: 'The contextual host is the negation of the pane conjunction.',
+    );
+    final contextualBranch = normalizedShell.indexOf('if (mountsDock)');
     expect(
       contextualBranch,
       greaterThan(paneBranch),

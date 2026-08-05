@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/ai_assistant/models/ai_agent_tool.dart';
 import 'package:vinabike_erp/modules/ai_assistant/services/ai_service.dart';
 import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
 import 'package:vinabike_erp/shared/services/authority_scoped_cache.dart';
@@ -8,14 +9,17 @@ import 'package:vinabike_erp/shared/services/authority_scoped_cache.dart';
 /// same authority; a mismatch is what the isolation suites cover.
 final _authority = AIAssistantTurnAuthority(
   ErpAuthorityScopeKey.from(userId: 'user-test', tenantId: 'tenant')!,
+  permissions: const <String>{AIToolPermission.operationalRead},
 );
 
 void main() {
   group('AIAssistantService job summaries', () {
-    test('summarizes jobs from today when the user asks for the day', () async {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final service = AIAssistantService();
+    test('today follows Chile when Los Angeles is still on the prior date',
+        () async {
+      // 2026-08-03 23:30 in Los Angeles is already 2026-08-04 02:30 in
+      // Santiago. Device-local date matching would select the wrong jobs.
+      final now = DateTime.utc(2026, 8, 4, 6, 30);
+      final service = AIAssistantService(now: () => now);
 
       final response = await service.sendMessage(
         authority: _authority,
@@ -26,7 +30,7 @@ void main() {
             tenantId: 'tenant',
             jobNumber: 'PG-TODAY',
             customerId: 'customer-today',
-            arrivalDate: today.add(const Duration(hours: 9)),
+            arrivalDate: DateTime.utc(2026, 8, 4, 6),
             status: JobStatus.diagnostico,
             clientRequest: 'Revisar rueda trasera',
             totalCost: 38000,
@@ -36,7 +40,7 @@ void main() {
             tenantId: 'tenant',
             jobNumber: 'PG-OLD',
             customerId: 'customer-old',
-            arrivalDate: today.subtract(const Duration(days: 6)),
+            arrivalDate: DateTime.utc(2026, 8, 4, 3, 30),
             status: JobStatus.pendiente,
             clientRequest: 'Ajuste antiguo',
             totalCost: 4000,
@@ -121,7 +125,7 @@ void main() {
       );
     });
 
-    test('does not use cache fallback when the toolbar has no job context',
+    test('missing toolbar context is unavailable, not a verified zero',
         () async {
       final service = AIAssistantService();
 
@@ -132,10 +136,8 @@ void main() {
         allowJobCacheFallback: false,
       );
 
-      expect(
-        response.text,
-        'No encontré trabajos en la vista actual para resumir ahora. Reabre la vista de Trabajos o actualiza la tabla para sincronizar el asistente.',
-      );
+      expect(response.text, contains('no se pudo confirmar'));
+      expect(response.text.toLowerCase(), isNot(contains('no encontré')));
     });
 
     test('excludes test jobs from global active summaries by default',

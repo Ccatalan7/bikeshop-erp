@@ -1180,6 +1180,42 @@ the native Galaxy S23 Ultra landscape canary remains to be proven; customer
 selection/creation, add-bicycle, the service wizard, and some deep item rows
 still retain legacy dialogs or layouts and need their own touch/keyboard audit.
 
+### Jobs load ownership and surgical realtime (2026-08-04)
+
+The Jobs workspace has one explicit owner for competing full loads. Initial
+mount, resume, route return, pull-to-refresh and cache-empty fallback can overlap
+legitimately; each `_loadData` now takes a monotonic ticket from
+`WorkshopJobsLoadCoordinator`, and only the newest ticket may publish the table,
+loading state or an error. A stale success/error is silent, disposal invalidates
+every live ticket, and a current `AuthorityScopeChangedException` ends its
+spinner without exposing the internal authority-cancellation text to the
+operator. Genuine current errors retain the existing visible/rethrow contract.
+
+This does **not** replace the realtime path. `BikeshopService` remains the owner
+of tenant-scoped job/job-bike events and their cache projection;
+`_onBikeshopServiceChanged` repaints through `_refreshFromCache`, while
+`_surgicalUpdateJob` and `_surgicalRemoveJob` preserve row-level changes from
+other clients without a full database reload. A full load remains only the
+documented fallback when no usable projection exists. The correction therefore
+strengthens read-model centralization without changing job/invoice authority,
+status commands, accounting, stock or the bike-profile/diagnosis/memory
+backbone.
+
+Canonical implementation and regression:
+
+- `lib/modules/bikeshop/services/workshop_jobs_load_coordinator.dart`
+- `lib/modules/bikeshop/pages/pegas_table_page.dart`
+- `test/unit/workshop_jobs_load_coordinator_test.dart`
+
+Future optimization of other modules must not copy this Workshop-local class
+blindly or reintroduce `_isLoading` polling. It follows
+`docs/architecture/async-data-loading-contract.md`: inventory each read model's
+triggers, authority/request key, cache and realtime deltas; migrate consumers
+incrementally; extract a shared coordinator only after multiple proven users
+show the same invariant. Minimum regression for Jobs remains out-of-order
+success/error, authority cancellation, dispose, current real error and proof
+that service notifications keep the cache-only surgical route.
+
 ### Invoice-linked inventory integrity (current rule)
 
 - A posted sales invoice item edit must replace the previously posted inventory snapshot atomically; leaving an invoice confirmed/paid is not a reason to ignore product or quantity changes.

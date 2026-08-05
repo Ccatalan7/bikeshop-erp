@@ -2,7 +2,7 @@
 
 **Status:** Mandatory for every Website Builder, public storefront, campaign,
 and editor-management change  
-**Last updated:** 2026-07-29
+**Last updated:** 2026-08-04
 
 This document is the current engineering contract for the Viñabike Website
 Editor. Read it before changing website editor controls, blocks, renderers,
@@ -17,6 +17,8 @@ evolution plan.
 
 Track the progressive architecture phases and their verified completion in
 [`WEBSITE_BUILDER_PROGRESSIVE_ARCHITECTURE_REFACTOR_PLAN_2026-07-29.md`](../development/WEBSITE_BUILDER_PROGRESSIVE_ARCHITECTURE_REFACTOR_PLAN_2026-07-29.md).
+Responsive ownership and phone authoring are tracked in
+[`WEBSITE_BUILDER_RESPONSIVE_AUTHORING_MASTER_PLAN_2026-08-03.md`](../development/WEBSITE_BUILDER_RESPONSIVE_AUTHORING_MASTER_PLAN_2026-08-03.md).
 
 The editor is not a mockup layered over a separate website. It is the CMS for
 the real website. A result is complete only when the saved editor state fully
@@ -54,6 +56,7 @@ Every change must satisfy all four parts of the editor-owned contract:
 | Inline store/editor shell and page-route controller | `PublicStoreLayout` |
 | Persistent right inspector | `PersistentEditorShell`, `WebsiteEditorPanel` |
 | Typed active document, scoped drafts, page context, selection, and history | `WebsiteEditModeProvider`, `WebsiteEditorDocument` |
+| Responsive viewport, write scope, policy and projection | `WebsiteEditModeProvider`, `website_responsive_authoring.dart`, `WebsiteResponsiveFieldState`, `ResponsiveFieldShell` |
 | Page visibility, order, spacing, full-bleed and height projection | `WebsitePageComposition` |
 | Page-level Edit/Preview/Public composition | `PageComposition` |
 | Editable block composition and block hit testing | `EditableBlockRenderer` |
@@ -66,10 +69,42 @@ Every change must satisfy all four parts of the editor-owned contract:
 | Page/catalog/navigation management | Website Builder management workspaces registered in `canonical-ui-surfaces.md` |
 | Persistence orchestration | `WebsiteSaveCoordinator` through global `Guardar` |
 | Atomic page-block replacement | `replace_page_blocks` through `WebsiteService.replacePageBlocks(...)` |
+| Compact/phone authoring host | `PersistentEditorShell`, compact editor top bar, `WebsiteEditorContextualDock`, `WebsiteContextualSheetScaffold` |
+| Durable local draft and recovery | `WebsiteEditorDraftController`, `WebsiteEditorDraftStore`, `WebsiteEditorDraftRecoveryHost` |
 
 The visual canvas, right inspector, page selector, and black management bar are
 connected parts of this one system. They may expose different tasks, but they
 must never create competing owners for the same value.
+
+### Phone authoring continuity
+
+A phone host is not a compressed desktop inspector. The routed canvas remains
+mounted; a selected block receives one measured contextual dock, and deeper
+controls open through the shared contextual sheet. The canvas reserves the
+dock's **rendered** height, including its SafeArea, rather than duplicating a
+nominal constant.
+
+- Edit -> Preview -> Edit retains the selected block and scroll context. On
+  return to Edit, a selection that no longer belongs to the active document is
+  cleared rather than redirected to another block.
+- Reorder and undo/redo emit a typed block-reveal request. `PageComposition`
+  is the single scroll consumer and reveals that exact block above the measured
+  dock; selection itself never causes unsolicited scrolling or history.
+- Inline text, media, focal point and CTA use the same responsive field/action
+  owners as the desktop inspector. A legacy responsive conflict stays visible
+  but inert until the operator explicitly resets or customizes it; the editor
+  never promotes legacy data silently.
+- A contextual CTA edit uses one local draft and publishes one composite
+  history operation on confirmation. Cancel publishes nothing. Edit-mode CTA
+  navigation remains inert while Preview/public use the real destination.
+- Contextual sheets remain capped at 60% of the keyboard-adjusted viewport,
+  keep the edited content mounted above them, own `viewInsets` once, and never
+  introduce a second save command. Global `Guardar` remains the sole
+  persistence owner.
+- Any change to this geometry must pass the real iOS smoke in
+  `integration_test/website_phone_authoring_ios_smoke_test.dart`; a fabricated
+  `FakeViewPadding` widget test remains useful but cannot close software-
+  keyboard or SafeArea behavior by itself.
 
 ## Agent-created campaigns are real editor operations
 

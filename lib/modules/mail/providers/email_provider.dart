@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/mail_folder.dart';
+
 /// A provider-confirmed address that can be used in the From field.
 ///
 /// This contains presentation metadata only. OAuth credentials remain owned by
@@ -257,8 +259,16 @@ abstract class EmailProvider with ChangeNotifier {
   /// List of emails in the current folder
   List<Email> get emails;
 
-  /// Whether the provider has another inbox page available.
+  /// Whether the provider has another page available for the ACTIVE search.
+  ///
+  /// Browse pagination is per folder — see [hasMoreIn]. Keeping the two
+  /// separate matters because the inbox keeps refreshing in background for
+  /// notifications while the user browses another folder: a shared cursor
+  /// would silently continue Sent with an Inbox page token.
   bool get canLoadMore => false;
+
+  /// Whether the provider has another browse page available in [folder].
+  bool hasMoreIn(MailFolder folder) => canLoadMore;
 
   /// Currently selected email with full content
   Email? get selectedEmail;
@@ -287,8 +297,12 @@ abstract class EmailProvider with ChangeNotifier {
   /// Get valid access token (refresh if needed)
   Future<String?> getValidAccessToken();
 
-  /// Fetch inbox emails
-  Future<List<Email>> getInbox({
+  /// Fetch emails from one canonical folder.
+  ///
+  /// `folder` defaults to the inbox so existing flows keep their behaviour;
+  /// pagination and search are always scoped to the folder being listed.
+  Future<List<Email>> getMessages({
+    MailFolder folder = MailFolder.inbox,
     int limit = 50,
     int start = 0,
     String? pageToken,
@@ -324,6 +338,15 @@ abstract class EmailProvider with ChangeNotifier {
 
   /// Move email to trash
   Future<bool> moveToTrash(String emailId);
+
+  /// Restore an email from trash back to the inbox.
+  Future<bool> restoreFromTrash(String emailId);
+
+  /// Report an email as spam (moves it out of the inbox).
+  Future<bool> markAsSpam(String emailId);
+
+  /// Rescue an email wrongly classified as spam back to the inbox.
+  Future<bool> markAsNotSpam(String emailId);
 
   /// Mark email as read/unread
   Future<bool> markAsRead(String emailId, {bool read = true});

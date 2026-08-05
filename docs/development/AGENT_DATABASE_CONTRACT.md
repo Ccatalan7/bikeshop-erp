@@ -45,6 +45,17 @@ status. Run it once per task, not per command.
 Agents run everything in the left column themselves, without asking. Do not
 hand the user a query, a test, or a migration the repository can execute.
 
+> **Decisión del dueño, 2026-08-05 — corrige la fila de escrituras.** «Los
+> agentes deben correr los querys siempre, sin pedir confirmación.» Las
+> escrituras guiadas (`--write` con `VINABIKE_DB_WRITE_CONFIRM`) pasan a la
+> columna autónoma; el marcador de deliberación y el journal se mantienen. El
+> costo de la regla anterior fue real: un admin recién invitado quedó fuera
+> por metadatos corruptos, el arreglo era un `UPDATE` de una fila, y la regla
+> lo devolvía a un Codex sin cupo. La denegación mecánica vivía en
+> `.claude/hooks/guard-dangerous-bash.sh` (bloque «Production database
+> writes»); mientras el dueño no la retire, el guard sigue denegando por
+> capacidad lo que esta política ya permite.
+
 | Autonomous | Requires the owner's explicit go-ahead in the task |
 |---|---|
 | Guarded reads on `local` and `production` | Any `--write` (the write guard exists to make this deliberate) |
@@ -156,6 +167,32 @@ scripts/db/query.sh production --sql "
   select conname, pg_get_constraintdef(oid)
   from pg_constraint
   where conrelid = 'public.employees'::regclass"
+```
+
+## `core_schema.sql` no es el estado de producción: las políticas se comprueban
+
+2026-08-05. Al planear un aviso en `Usuarios y roles` había que saber si el
+cliente podía leer `user_invitations`. `core_schema.sql:488-497` describe dos
+políticas de `select` —una para `authenticated` filtrada por tenant y otra
+**para `anon` con `using (status = 'pending')` y sin filtro de tenant**. Leída
+sola, esa segunda línea parece una fuga: cualquier anónimo enumerando correos,
+roles y tenants ajenos.
+
+En producción no existe ninguna de las dos. La tabla tiene RLS activo y **cero
+políticas**: sólo la alcanzan las Edge Functions con service role.
+
+La causa es que ese archivo acumula `create policy` históricos que después se
+reemplazaron o se dejaron de aplicar, y nada lo reconcilia. Vale como intención,
+no como estado. Dos consecuencias prácticas: no se reporta una vulnerabilidad
+leyéndolo, y **no se diseña una consulta de cliente confiando en que la política
+existe** — el widget habría compilado, pasado sus pruebas con datos falsos y
+devuelto cero filas para siempre en la app real.
+
+```bash
+scripts/db/query.sh production --sql "
+  select c.relrowsecurity, p.polname, p.polcmd::text
+  from pg_class c left join pg_policy p on p.polrelid = c.oid
+  where c.oid = 'public.user_invitations'::regclass"
 ```
 
 ## Guarded read defaults you should know

@@ -13,6 +13,100 @@ enum EmployeeErpLinkState {
   inconsistent,
 }
 
+enum InvitationIdentityStatus {
+  availableNewIdentity,
+  availableExistingCustomer,
+  activeStaffRequiresDirectLink,
+  inactiveStaffMembership,
+  externalErpMembership,
+  workerIdentityConflict,
+  historicalEmployeeIdentityConflict,
+}
+
+class InvitationIdentityCheck {
+  const InvitationIdentityCheck({
+    required this.eligible,
+    required this.status,
+    required this.hasExistingAuthIdentity,
+    required this.isExistingCustomer,
+  });
+
+  factory InvitationIdentityCheck.fromJson(Map<String, dynamic> json) {
+    final eligible = json['eligible'];
+    final status = json['status'];
+    final hasExistingAuthIdentity = json['hasExistingAuthIdentity'];
+    final isExistingCustomer = json['isExistingCustomer'];
+    if (eligible is! bool ||
+        status is! String ||
+        hasExistingAuthIdentity is! bool ||
+        isExistingCustomer is! bool) {
+      throw const FormatException(
+        'Respuesta inválida al verificar la identidad de invitación.',
+      );
+    }
+
+    final parsedStatus = switch (status) {
+      'available_new_identity' => InvitationIdentityStatus.availableNewIdentity,
+      'available_existing_customer' =>
+        InvitationIdentityStatus.availableExistingCustomer,
+      'active_staff_email_requires_direct_link' =>
+        InvitationIdentityStatus.activeStaffRequiresDirectLink,
+      'staff_membership_inactive' =>
+        InvitationIdentityStatus.inactiveStaffMembership,
+      'staff_identity_tenant_conflict' =>
+        InvitationIdentityStatus.externalErpMembership,
+      'worker_identity_conflict' =>
+        InvitationIdentityStatus.workerIdentityConflict,
+      'historical_employee_identity_conflict' =>
+        InvitationIdentityStatus.historicalEmployeeIdentityConflict,
+      _ => throw const FormatException(
+          'La verificación devolvió un estado de identidad desconocido.',
+        ),
+    };
+    final statusIsEligible =
+        parsedStatus == InvitationIdentityStatus.availableNewIdentity ||
+            parsedStatus == InvitationIdentityStatus.availableExistingCustomer;
+    if (eligible != statusIsEligible ||
+        (isExistingCustomer &&
+            parsedStatus !=
+                InvitationIdentityStatus.availableExistingCustomer) ||
+        (!hasExistingAuthIdentity && isExistingCustomer)) {
+      throw const FormatException(
+        'La verificación devolvió evidencia de identidad contradictoria.',
+      );
+    }
+
+    return InvitationIdentityCheck(
+      eligible: eligible,
+      status: parsedStatus,
+      hasExistingAuthIdentity: hasExistingAuthIdentity,
+      isExistingCustomer: isExistingCustomer,
+    );
+  }
+
+  final bool eligible;
+  final InvitationIdentityStatus status;
+  final bool hasExistingAuthIdentity;
+  final bool isExistingCustomer;
+
+  String get code => switch (status) {
+        InvitationIdentityStatus.availableNewIdentity =>
+          'available_new_identity',
+        InvitationIdentityStatus.availableExistingCustomer =>
+          'available_existing_customer',
+        InvitationIdentityStatus.activeStaffRequiresDirectLink =>
+          'active_staff_email_requires_direct_link',
+        InvitationIdentityStatus.inactiveStaffMembership =>
+          'staff_membership_inactive',
+        InvitationIdentityStatus.externalErpMembership =>
+          'staff_identity_tenant_conflict',
+        InvitationIdentityStatus.workerIdentityConflict =>
+          'worker_identity_conflict',
+        InvitationIdentityStatus.historicalEmployeeIdentityConflict =>
+          'historical_employee_identity_conflict',
+      };
+}
+
 class EmployeeAccessState {
   const EmployeeAccessState({
     required this.employeeId,
@@ -201,7 +295,6 @@ class UserManagementException implements Exception {
   String toString() => message;
 }
 
-@visibleForTesting
 String localizedUserManagementError(String? code) {
   return switch (code) {
     'worker_access_conflict' =>
@@ -219,9 +312,13 @@ String localizedUserManagementError(String? code) {
     'active_staff_email_requires_direct_link' =>
       'Ese correo ya tiene acceso ERP activo. Vincula directamente ese usuario con el trabajador en vez de invitarlo otra vez.',
     'staff_identity_tenant_conflict' =>
-      'Ese correo no está disponible para esta invitación. Revisa si ya tiene otro acceso o utiliza una cuenta distinta.',
+      'Ese correo tiene una identidad ERP creada fuera de esta empresa. No se envió ninguna invitación; solicita su reconciliación.',
+    'historical_employee_identity_conflict' =>
+      'Ese correo ya está reservado por otro vínculo de trabajador. Revisa y reconcilia ese vínculo antes de invitarlo.',
     'identity_unavailable' =>
-      'Ese correo no está disponible para esta invitación. Revisa si ya tiene otro acceso o utiliza una cuenta distinta.',
+      'Ese correo tiene un vínculo de acceso incompatible. No se envió ninguna invitación; revisa su identidad antes de continuar.',
+    'staff_identity_lookup_failed' =>
+      'No pudimos verificar los accesos existentes de ese correo. No se envió ninguna invitación; inténtalo nuevamente.',
     'staff_membership_exists' =>
       'Ese correo ya pertenece a un usuario interno de esta empresa.',
     'employee_not_found' =>
@@ -449,6 +546,18 @@ class UserManagementService {
       throw Exception('No se pudo enviar el correo de invitación.');
     }
     return result;
+  }
+
+  Future<InvitationIdentityCheck> checkInternalInvitationIdentity({
+    required String email,
+    String? employeeId,
+  }) async {
+    final result = await _invokeAdmin<Map<String, dynamic>>({
+      'action': 'check_internal_invitation_identity',
+      'email': email,
+      'employeeId': employeeId,
+    });
+    return InvitationIdentityCheck.fromJson(result);
   }
 
   Future<void> linkInternalUserEmployee({

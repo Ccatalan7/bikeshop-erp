@@ -26,6 +26,8 @@ class _FakeEngine extends AIAssistantService {
   bool? lastSourceUnavailable;
   bool? lastAllowJobCacheFallback;
   String? lastAuthorityTenantId;
+  String? lastAuthorityRole;
+  Set<String>? lastAuthorityPermissions;
 
   @override
   Future<AIAssistantResponse> sendMessage(
@@ -48,6 +50,8 @@ class _FakeEngine extends AIAssistantService {
     lastSourceUnavailable = visibleJobsSourceUnavailable;
     lastAllowJobCacheFallback = allowJobCacheFallback;
     lastAuthorityTenantId = authority.tenantId;
+    lastAuthorityRole = authority.role;
+    lastAuthorityPermissions = authority.permissions;
     final held = pending;
     if (held != null) return held.future;
     return Future<AIAssistantResponse>.value(next);
@@ -146,6 +150,8 @@ void main() {
           visibleJobs: const [],
           hasVisibleJobsContext: false);
       expect(session.transcript, hasLength(3));
+      expect(engine.lastAuthorityRole, 'owner');
+      expect(engine.lastAuthorityPermissions, contains('manage_users'));
 
       await bind();
 
@@ -358,6 +364,50 @@ void main() {
   });
 
   group('turn lease', () {
+    test('oversized input never reaches the transcript or provider', () async {
+      await bind();
+      final oversized = 'a' * (8 * 1024 + 1);
+
+      await session.send(
+        oversized,
+        services: const AIAssistantTurnServices(),
+        visibleJobs: const [],
+        hasVisibleJobsContext: false,
+      );
+
+      expect(engine.sendCount, 0);
+      expect(session.isSending, isFalse);
+      expect(session.transcript, hasLength(2));
+      expect(session.transcript.last.role, AIAssistantTranscriptRole.notice);
+      expect(session.transcript.last.text, contains('máximo 8 KB'));
+      expect(
+          session.transcript.any((entry) => entry.text == oversized), isFalse);
+    });
+
+    test('visible transcript remains bounded across a long-lived session',
+        () async {
+      await bind();
+
+      for (var index = 0; index < 70; index++) {
+        await session.send(
+          'mensaje-$index',
+          services: const AIAssistantTurnServices(),
+          visibleJobs: const [],
+          hasVisibleJobsContext: false,
+        );
+      }
+
+      expect(session.transcript.length, lessThanOrEqualTo(120));
+      expect(
+        session.transcript.any((entry) => entry.text == 'mensaje-0'),
+        isFalse,
+      );
+      expect(
+        session.transcript.any((entry) => entry.text == 'mensaje-69'),
+        isTrue,
+      );
+    });
+
     test('a second send while one is in flight is refused', () async {
       await bind();
       engine.pending = Completer<AIAssistantResponse>();

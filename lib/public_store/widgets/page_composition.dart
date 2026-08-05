@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../modules/website/models/website_block_catalog.dart';
 import '../../modules/website/models/website_editor_drag_payload.dart';
 import '../../modules/website/models/website_page_composition.dart';
 import '../../modules/website/models/website_responsive_authoring.dart';
 import '../../modules/website/models/website_responsive_projection.dart';
+import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/widgets/add_block_dialog.dart';
 import '../../modules/website/widgets/block_spacer_handle.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
@@ -81,6 +83,23 @@ class PageComposition extends StatelessWidget {
 
   bool get _isEditMode => composition.mode == WebsitePageCompositionMode.edit;
 
+  /// Whether this composition is mounted inside the editor shell.
+  ///
+  /// [WebsiteEditorChromeScope] has exactly one publisher —
+  /// `PersistentEditorShell`, which is always built under the edit provider.
+  /// So its presence is also the safe gate for reading that provider: the
+  /// public storefront, Preview and any harness that renders blocks without
+  /// the shell never take the editor path at all.
+  bool _isInsideEditorShell(BuildContext context) =>
+      WebsiteEditorChromeScope.maybeOf(context) != null;
+
+  /// Band the contextual dock takes from the bottom of the canvas, or 0.
+  ///
+  /// Read from the chrome owner, never re-derived here: it is 0 by
+  /// construction with a pane, in Preview, and on the public storefront.
+  double _contextualDockInset(BuildContext context) =>
+      WebsiteEditorChromeScope.maybeOf(context)?.contextualDockHeight ?? 0;
+
   /// Whether this host edits from a dock and sheets instead of a pane.
   ///
   /// One owner decides it — [WebsiteEditorChromeScope] — and an absent scope
@@ -143,6 +162,7 @@ class PageComposition extends StatelessWidget {
         final presentBlockTypes = <String>[
           for (final block in composition.blocks) block.blockType,
         ];
+        final dockInset = _contextualDockInset(context);
         return Stack(
           clipBehavior: Clip.none,
           children: [
@@ -185,6 +205,16 @@ class PageComposition extends StatelessWidget {
                       onAdd: (type) => onAddBlock!(type),
                     ),
                   ),
+                // The contextual dock floats over the bottom of the canvas, so
+                // the page has to end above it. Without this band the last
+                // block can never be seen whole on a phone, and a block moved
+                // to the end is revealed into the space the dock covers — the
+                // scroll extent simply has nowhere further to go.
+                //
+                // The height is the one the shell measured; the dock already
+                // consumed the bottom safe area inside it, so nothing is added
+                // here on top of that.
+                if (dockInset > 0) SizedBox(height: dockInset),
               ],
             ),
             // Pointer drag/drop chrome. It is untouched on the pane host and
@@ -249,10 +279,13 @@ class PageComposition extends StatelessWidget {
     required LayerLink? leadingChromeLink,
     required LayerLink? gapChromeLink,
   }) {
-    final keyedBlock = KeyedSubtree(
+    Widget keyedBlock = KeyedSubtree(
       key: ValueKey<String>('page-composition-block-${block.id}'),
       child: _buildBlock(context, block, canvasWidth: canvasWidth),
     );
+    if (_isEditMode && _isInsideEditorShell(context)) {
+      keyedBlock = _RevealOnRequest(blockId: block.id, child: keyedBlock);
+    }
     final hasGap = !isLast;
     final spacing = block.geometry.spacingAfter;
     return Column(
@@ -440,6 +473,79 @@ class PageComposition extends StatelessWidget {
         child: content,
       ),
     );
+  }
+}
+
+/// The canvas side of [WebsiteEditorBlockRevealRequest].
+///
+/// The provider says WHICH block the operator is owed a look at; this decides
+/// HOW the canvas gets there, and it is the only place that does. It drives the
+/// scroll position that already exists through [Scrollable.ensureVisible] —
+/// no second `ScrollController`, no coordinates, nothing that could disagree
+/// with the canvas about where a block is.
+///
+/// One instance wraps each block, but only the one the request names ever acts:
+/// the [Selector] collapses every other block's dependency to `null`, so a
+/// reveal neither rebuilds nor moves anything else. Deciding this in `build`
+/// rather than in a provider listener is deliberate — a listener runs before
+/// the tree rebuilds, when the element at a given position still belongs to
+/// the block that was there *before* the reorder, and would scroll to that one.
+class _RevealOnRequest extends StatefulWidget {
+  const _RevealOnRequest({required this.blockId, required this.child});
+
+  final String blockId;
+  final Widget child;
+
+  /// `F-05` motion, from `handoff-t10/spec.json`: `base200` with
+  /// `cubic-bezier(.22,1,.36,1)`. A jump would leave the operator to work out
+  /// on their own that the page moved.
+  static const Duration revealDuration = Duration(milliseconds: 200);
+  static const Curve revealCurve = Cubic(0.22, 1, 0.36, 1);
+
+  @override
+  State<_RevealOnRequest> createState() => _RevealOnRequestState();
+}
+
+class _RevealOnRequestState extends State<_RevealOnRequest> {
+  /// Revisions are monotonic for the whole session, so one served value is
+  /// enough even though Flutter reuses these elements positionally across a
+  /// reorder.
+  int? _servedRevision;
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<WebsiteEditModeProvider, int?>(
+      selector: (_, provider) {
+        final request = provider.blockRevealRequest;
+        if (request == null || request.blockId != widget.blockId) return null;
+        return request.revision;
+      },
+      builder: (context, revision, child) {
+        if (revision != null && revision != _servedRevision) {
+          _servedRevision = revision;
+          _scheduleReveal();
+        }
+        return child!;
+      },
+      child: widget.child,
+    );
+  }
+
+  void _scheduleReveal() {
+    // After layout: the block has just changed position, and its new geometry
+    // only exists once this frame is laid out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (Scrollable.maybeOf(context) == null) return;
+      Scrollable.ensureVisible(
+        context,
+        // Leading edge to leading edge: the operator reads a block from its
+        // top, and a long block cannot be framed any other way.
+        alignment: 0,
+        duration: _RevealOnRequest.revealDuration,
+        curve: _RevealOnRequest.revealCurve,
+      );
+    });
   }
 }
 

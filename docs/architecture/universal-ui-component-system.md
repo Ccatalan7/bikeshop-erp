@@ -341,6 +341,32 @@ claim.
 - A split or collapsible pane preserves selection, draft, width preference,
   focus, and return context across responsive recomposition.
 
+### Un componente del kit no se monta con `MaterialApp()` pelado
+
+2026-08-05. Un widget test que renderizaba `VbNotice` (`E-04`) falló con
+`'roles != null': VinabikeThemeRoles is missing. Build the app theme through
+AppTheme.` La causa no es el componente: los del kit leen su color de
+`VinabikeThemeRoles`, que viaja como extensión del tema y **no existe en el
+`ThemeData` por defecto de Flutter**. Un `MaterialApp` sin `theme:` compila, y
+revienta recién al pintar — cuando el test ya navegó tres pantallas y el
+fallo parece de la navegación.
+
+Montarlos así, como ya hacen las pruebas de Nóminas y de apariencia:
+
+```dart
+MaterialApp(
+  theme: AppTheme.resolve(
+    preset: AppearancePresets.all.first,
+    brightness: Brightness.light,
+  ),
+  home: const MiPagina(),
+)
+```
+
+Corolario útil: una prueba de una página que **hoy** no monta ningún componente
+del kit pasa sin tema, y empieza a fallar el día que alguien agrega el primero.
+El tema se pone al escribir la prueba, no cuando se rompe.
+
 ## 9. Adoption
 
 1. Approve the Claude Design foundation kit and component-to-role map.

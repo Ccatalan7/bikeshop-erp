@@ -59,7 +59,7 @@ class AIAssistantCapabilityFingerprint {
   int get hashCode => _value.hashCode;
 
   @override
-  String toString() => 'AIAssistantCapabilityFingerprint($_value)';
+  String toString() => 'AIAssistantCapabilityFingerprint(redacted)';
 }
 
 /// Who produced a transcript entry.

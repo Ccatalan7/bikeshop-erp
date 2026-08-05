@@ -322,6 +322,7 @@ class _PegasTablePageState extends State<PegasTablePage>
   late JobStatusService _jobStatusService;
   late SalesService _salesService;
   late AIAssistantContextService _aiAssistantContextService;
+  final Object _aiAssistantContextOwner = Object();
   final TenantService _tenantService = TenantService();
 
   List<MechanicJob> _jobs = [];
@@ -854,7 +855,9 @@ class _PegasTablePageState extends State<PegasTablePage>
       '[AI_CTX][PegasTable.dispose] contextId=${identityHashCode(_aiAssistantContextService)} '
       'lastFiltered=${_filteredJobs.length}',
     );
-    _aiAssistantContextService.clearVisibleJobsContext();
+    _aiAssistantContextService.clearVisibleJobsContextAfterFrame(
+      owner: _aiAssistantContextOwner,
+    );
     _bikeshopService.removeListener(_onBikeshopServiceChanged);
     // A response that arrives after the page is gone owns nothing.
     _jobsLoadCoordinator.dispose();
@@ -1944,6 +1947,7 @@ class _PegasTablePageState extends State<PegasTablePage>
       'jobs=[${_debugAiJobNumbers(filtered)}]',
     );
     _aiAssistantContextService.setVisibleJobsContext(
+      owner: _aiAssistantContextOwner,
       jobs: filtered,
       scopeLabel: _aiAssistantJobsScopeLabel(),
     );

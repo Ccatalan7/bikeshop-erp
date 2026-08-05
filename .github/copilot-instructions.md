@@ -48,6 +48,7 @@ código o en git, o una conclusión que todavía no se verificó.
 | Componentes compartidos y su adopción | `docs/architecture/universal-ui-component-system.md` |
 | Una superficie de negocio cambió | `docs/architecture/canonical-ui-surfaces.md` |
 | Refinamiento integral de un módulo, incluyendo correcciones/reversas | `docs/architecture/APP_REFINEMENT_MASTER_PLAN.md` |
+| Cargas asíncronas, caché, realtime y carreras de read models | `docs/architecture/async-data-loading-contract.md` |
 | Colaboración entre agentes | `docs/development/CODEX_CLAUDE_COLLABORATION.md` |
 
 Si el aprendizaje no calza en ninguno, va acá — y si acá crece demasiado, se
@@ -772,6 +773,10 @@ Primary files:
 - `scripts/releases/prepare_erp_update.sh` owns the one shared stage, commit,
   push, and exact-SHA handoff for the top-level
   `Publish ERP Update (macOS + Android)` VS Code task.
+  `Cmd+Shift+B` resolves that combined task as the macOS-only default. When an
+  agent branch is not Production-authorized, preparation may switch to
+  `smartpegas1.0` only if both names identify the exact live canonical commit;
+  any other history remains a fail-closed review boundary.
 - `scripts/releases/qualify_erp_update.mjs` waits for the push-triggered
   exact-SHA ERP Integrity Gate, dispatches that gate once when path filters did
   not create a run, and upgrades the private handoff with successful live proof.
@@ -3708,9 +3713,20 @@ class CustomerService extends ChangeNotifier {
 
 ---
 
-# 🚀 PERFORMANCE OPTIMIZATION: SERVICE-LEVEL CACHING
+# 🚀 ASYNC READ-MODEL LOADING, CACHING, AND CONCURRENCY
 
-**CRITICAL: Implemented Dec 1, 2025 for Taller module - APPLY TO ALL MODULES**
+**Corrected 2026-08-04:** the original Dec 1, 2025 guidance treated an
+`_isLoading` flag plus 50 ms polling as sufficient concurrency control and
+recommended copying it to every module. That was incomplete. It could wait for
+a request, but it did not establish which authority, query or user intention
+owned the result. The resulting gap was observed in Gestión de Trabajos as
+out-of-order loads and a user-facing `ERP authority scope changed during load`
+banner.
+
+The canonical contract is now
+[`docs/architecture/async-data-loading-contract.md`](../docs/architecture/async-data-loading-contract.md).
+Read it before changing list/read-model loading, cache, preload, refresh,
+realtime reconciliation or `notifyListeners` behavior.
 
 ## The Problem
 
@@ -3720,156 +3736,68 @@ Navigation between pages in the same module feels slow because:
 - Even switching between tabs/pages in same module causes full reload
 - Users see loading spinners constantly
 
-## The Solution: Service-Level Caching
+## The Solution: Cache-First Rendering With Explicit Load Ownership
 
 Cache data at the **service layer** so pages can:
 1. Show cached data **instantly** (no loading spinner)
 2. Fetch fresh data in background
 3. Invalidate cache only when data actually changes
 
+Caching is only the latency layer. Every visible read model additionally needs
+one load owner, an authority-scoped request key and a monotonic ticket so only
+the latest eligible request can publish data/loading/error. Realtime and local
+mutations should keep their surgical row merge/remove paths; do not replace
+them with full refetches merely to simplify concurrency.
+
 ## Implementation Pattern
 
 ### 1. Add Caching Infrastructure to Service
 
-```dart
-class YourModuleService extends ChangeNotifier {
-  // ============================================================
-  // CACHING - Avoid refetching on every page navigation
-  // ============================================================
-  List<YourModel>? _cachedItems;
-  DateTime? _itemsCacheTime;
-  static const Duration _cacheMaxAge = Duration(minutes: 5);
-  
-  // Loading state flag to prevent concurrent fetches
-  bool _isLoadingItems = false;
-  
-  // Public getters for cached data (instant access)
-  List<YourModel> get cachedItems => _cachedItems ?? [];
-  bool get hasItemsCache => _cachedItems != null;
-  
-  /// Check if cache is still valid
-  bool _isCacheValid(DateTime? cacheTime) {
-    if (cacheTime == null) return false;
-    return DateTime.now().difference(cacheTime) < _cacheMaxAge;
-  }
-  
-  /// Invalidate cache (call after create/update/delete)
-  void invalidateItemsCache() {
-    _cachedItems = null;
-    _itemsCacheTime = null;
-  }
-}
-```
+The cache owner records the value together with its authority scope, complete
+request key, freshness/version evidence and invalidation or merge operations.
+If measurements justify service-level coalescing, it keys the in-flight
+`Future` by that same identity. Never use one global `_isLoadingItems` mutex,
+and never let the cache's existence stand in for authorization.
 
-### 2. Update Fetch Methods to Use Cache
+### 2. Update Fetch Methods Without Losing Ownership
 
-```dart
-Future<List<YourModel>> getItems({
-  String? filterParam,
-  bool forceRefresh = false,
-}) async {
-  // Check if this is a filtered query (don't use cache for filtered results)
-  final isFilteredQuery = filterParam != null && filterParam.isNotEmpty;
-  
-  // Return cached data if valid and not a filtered query
-  if (!forceRefresh && !isFilteredQuery && _isCacheValid(_itemsCacheTime) && _cachedItems != null) {
-    debugPrint('📦 [YourService] Using cached items (${_cachedItems!.length} items)');
-    return _cachedItems!;
-  }
-  
-  // Prevent concurrent fetches
-  if (_isLoadingItems && !isFilteredQuery) {
-    debugPrint('⏳ [YourService] Already loading items, waiting...');
-    while (_isLoadingItems) {
-      await Future.delayed(const Duration(milliseconds: 50));
-    }
-    if (_cachedItems != null && !isFilteredQuery) return _cachedItems!;
-  }
-  
-  try {
-    if (!isFilteredQuery) _isLoadingItems = true;
-    
-    // Fetch from database...
-    final data = await _fetchFromDatabase(filterParam);
-    
-    // Cache only unfiltered results
-    if (!isFilteredQuery) {
-      _cachedItems = data;
-      _itemsCacheTime = DateTime.now();
-      debugPrint('✅ [YourService] Cached ${data.length} items');
-    }
-    
-    return data;
-  } finally {
-    if (!isFilteredQuery) _isLoadingItems = false;
-  }
-}
-```
+The service may return an eligible cache immediately and may share one
+in-flight `Future` only for the same authority scope and complete request key.
+It must not use a global `_isLoadingItems` polling loop. Filtered queries,
+pagination and `forceRefresh` are distinct keys unless the owner deliberately
+proves otherwise.
 
-### 3. Add Cache Invalidation to ALL CRUD Methods
+The consuming surface takes its generation/ticket before the first `await` and
+checks it again before adopting success or error. A superseded success/error is
+silent. A current `AuthorityScopeChangedException` is cancellation, not a user
+error; a genuine current failure remains visible. Use the reference sequence
+and test matrix in the canonical async-loading contract rather than copying a
+feature-local implementation.
 
-```dart
-Future<YourModel> createItem(YourModel item) async {
-  final data = await _db.insert('your_table', item.toJson());
-  invalidateItemsCache();  // ⚠️ CRITICAL: Invalidate after mutation
-  notifyListeners();
-  return YourModel.fromJson(data);
-}
+### 3. Reconcile Every CRUD and Realtime Event
 
-Future<YourModel> updateItem(YourModel item) async {
-  final data = await _db.update('your_table', item.id!, item.toJson());
-  invalidateItemsCache();  // ⚠️ CRITICAL: Invalidate after mutation
-  notifyListeners();
-  return YourModel.fromJson(data);
-}
-
-Future<void> deleteItem(String id) async {
-  await _db.delete('your_table', id);
-  invalidateItemsCache();  // ⚠️ CRITICAL: Invalidate after mutation
-  notifyListeners();
-}
-```
+After create/update/delete/restore, either merge/remove the authoritative row in
+the correctly scoped cache or invalidate the exact affected key. Prefer a
+surgical delta when the command/event returns enough truth; invalidate and
+reload only when a safe merge cannot be proven. `notifyListeners()` must report
+the reconciled projection, not trigger an unconditional second database fetch.
 
 ### 4. Update Page `_loadData()` to Use Cache for Instant Render
 
-```dart
-Future<void> _loadData() async {
-  // 🚀 INSTANT RENDER: Show cached data immediately if available
-  if (_yourService.hasItemsCache && _items.isEmpty) {
-    setState(() {
-      _items = _yourService.cachedItems;
-      _filteredItems = _items;
-      _isLoading = false;  // No loading spinner!
-    });
-    _applyFiltersAndSort();
-  } else {
-    setState(() => _isLoading = true);
-  }
-  
-  try {
-    // Fetch fresh data (will use cache if still valid)
-    final items = await _yourService.getItems();
-    
-    if (mounted) {
-      setState(() {
-        _items = items;
-        _filteredItems = items;
-        _isLoading = false;
-      });
-      _applyFiltersAndSort();
-    }
-  } catch (e) {
-    if (mounted) {
-      setState(() => _isLoading = false);
-      // Show error...
-    }
-  }
-}
-```
+Show cache instantly only when its authority, request key and freshness are
+eligible. Then run the fresh read through the single load owner. Check its
+ticket after every async boundary and before adopting data, loading or error;
+invalidate all tickets on disposal. The complete reference sequence lives in
+the canonical async-loading contract.
 
 ## Reference Implementation
 
-**Services WITH Caching (Production-Ready as of Dec 1, 2025):**
+**Historical cache inventory (originally recorded Dec 1, 2025):**
+
+Presence in this table proves only that a cache existed. It is not current proof
+that authority scope, request keys, latest-request ownership or realtime
+reconciliation satisfy the 2026-08-04 contract; re-audit each consumer before
+changing or reusing it.
 
 | Service | Cache Variables | Preloaded on Login |
 |---------|-----------------|---------------------|
@@ -3903,42 +3831,58 @@ Future<void> _loadData() async {
 
 | Setting | Value | Reason |
 |---------|-------|--------|
-| `_cacheMaxAge` | 5 minutes | Balance between freshness and performance |
-| Concurrent fetch wait | 50ms polling | Prevent duplicate requests |
-| Filtered queries | Always fetch | Filters may not match cache |
+| Cache age/freshness | Defined per read model | Money, stock and collaborative tables do not inherit one universal TTL |
+| Concurrent identical fetch | Shared `Future` keyed by authority + complete query | Coalesce only equivalent reads |
+| Visible load ownership | Monotonic generation/ticket | Latest eligible intention is the only publisher |
+| Filtered queries | Explicit keyed policy | Never adopt an unfiltered cache as a filtered result |
 
 ## When to Apply This Pattern
 
-**APPLY TO:**
+**CONSIDER FOR:**
 - ✅ Any module with list pages (inventory, sales, purchases, CRM, HR)
 - ✅ Services that are called frequently during navigation
-- ✅ Data that doesn't change every second
+- ✅ Data that benefits from cache-first rendering, including realtime-backed
+  projections when events update that same cache surgically
 
 **DO NOT APPLY TO:**
-- ❌ Realtime data (use Supabase realtime subscriptions instead)
-- ❌ Dashboard/analytics (always show fresh data)
-- ❌ Single-record fetches (getById) - no benefit
+- ❌ Cross-tenant/global caches with no authority scope
+- ❌ Query variants that are not represented in the request key
+- ❌ Blind TTL caching where the product contract requires a fresh read
+- ❌ Single-record reads with no measured reuse or latency benefit
 
 ## Checklist for New Modules
 
 When creating a new module:
 
-1. ✅ **Add cache variables** to service: `_cachedItems`, `_itemsCacheTime`, `_isLoadingItems`
+1. ✅ **Map triggers and ownership**: initial load, preload, refresh, route return,
+   service notification, realtime and reconnect
 2. ✅ **Add public getters**: `cachedItems`, `hasItemsCache`
-3. ✅ **Add invalidation method**: `invalidateItemsCache()`
-4. ✅ **Update fetch method** with cache logic (see pattern above)
-5. ✅ **Add invalidation calls** to ALL CRUD methods (create, update, delete, softDelete, restore)
-6. ✅ **Update page `_loadData()`** to show cached data instantly
-7. ✅ **Add service to DataPreloadService** for preloading on login
-8. ✅ **Test navigation** - should feel instant, no loading spinners on second visit
+3. ✅ **Define the full key**: authority scope, filters, sort, page and modes
+4. ✅ **Give the read model one load owner** with a monotonic ticket/generation
+5. ✅ **Add invalidation or surgical cache merge/remove** to every mutation
+6. ✅ **Update page `_loadData()`** to show only eligible cache instantly
+7. ✅ **Add service to DataPreloadService** only when preload uses the same keyed owner
+8. ✅ **Preserve realtime deltas**; full reload is the documented fallback
+9. ✅ **Test adversarial order**: stale success/error, scope change, dispose,
+   force refresh, realtime during load and spinner ownership
+10. ✅ **Test real navigation/refresh** with data from the canonical environment
 
-## Services Pending Optimization
+## App-Wide Adoption
 
-These services may benefit from caching if frequently used:
+Do not mechanically replace every service in one pass. Inventory the real
+triggers and risk first, migrate high-frequency collaborative read models one
+at a time, then extract a shared coordinator only after two or three consumers
+prove identical invariants. Candidate areas include:
 
-- ⏳ `AccountingService` → Chart of accounts, Journal entries (large datasets)
-- ⏳ `StockMovementsService` → Stock movement history
-- ⏳ `SmartTaskService` → Task templates
+- ⏳ inventory, sales/POS, purchases/receiving and CRM lists
+- ⏳ HR and other operational tables with preload + refresh + realtime
+- ⏳ `AccountingService` chart/journal read models after defining freshness
+- ⏳ `StockMovementsService` history after preserving append-only semantics
+- ⏳ `SmartTaskService` templates if measurement proves repeated reads
+
+`WorkshopJobsLoadCoordinator` is the first bounded, verified consumer. It is
+evidence for the contract, not permission to copy a Workshop-specific class
+throughout the repository.
 
 ## Debugging Cache
 
@@ -3946,7 +3890,8 @@ Add these debug prints to track cache behavior:
 
 ```dart
 debugPrint('📦 Using cached items');      // Cache hit
-debugPrint('⏳ Already loading, waiting'); // Concurrent fetch prevented
+debugPrint('🔗 Shared keyed request');     // Equivalent fetch coalesced
+debugPrint('⏭️ Superseded load dropped');  // Stale intent did not publish
 debugPrint('✅ Cached ${items.length}');   // Cache stored
 debugPrint('🗑️ Cache invalidated');        // After mutation
 ```
@@ -5316,56 +5261,53 @@ Copilot must:
 
 ---
 
-# �🚀 Multi-Tenant Onboarding System (AUTO-INITIALIZATION)
+# Multi-Tenant Auth Intent and Onboarding
 
-**Location:** `supabase/sql/core_schema.sql` lines 1608-2091, 11221-11345
+> Corrected 2026-08-04: the earlier text incorrectly described every Auth
+> signup as an ERP-owner registration. That legacy behavior created seeded,
+> owner-authorized tenants for storefront customers and must never return.
 
-## Automated Flow
+- `public.handle_new_user()` is an intent router, not a generic tenant
+  initializer. A public-store customer signup may create or recover only its
+  tenant-scoped `customers` membership. It never creates `tenants` or
+  `user_profiles`, and mutable user metadata is not authority.
+- A new ERP tenant and its foundation seeds are created only through the
+  explicit owner-registration intent with validated shop metadata. OAuth on
+  the ordinary ERP login is an access path for an already assigned identity,
+  not implicit owner registration.
+- Staff join an existing tenant only through the server-owned invitation
+  flow. One Auth identity may legitimately retain customer memberships and one
+  active ERP staff profile; accepting the invitation adds ERP authority while
+  preserving every customer membership. The token-bound acceptance lookup
+  determines whether that exact email already has an Auth identity: existing
+  customers go directly to sign-in, while only a genuinely new identity is
+  offered account creation. Never ask an existing customer to register a
+  second account or encode this decision in client-only heuristics.
+- `admin-user-management` owns one invitation-identity evaluator shared by the
+  read-only preflight and the mutation. Existing customers are eligible;
+  existing ERP, Worker Space, employee-history and suspended membership
+  conflicts are typed, tenant-safe and fail before any invitation write or
+  email. The Flutter dialog stays open with the entered values when either
+  preflight or delivery fails.
+- Legacy accidental customer tenants are never repaired with an alias account,
+  generic tenant deletion or ad-hoc SQL. Use only
+  `repair_legacy_accidental_customer_tenant_identity`: it is service-only,
+  serializes the Auth identity, verifies the exact customer/profile/tenant
+  graph and absence of business data, archives rather than deletes the source
+  tenant, removes only the corrupt profile, rebuilds Auth metadata from active
+  DB relationships, revokes sessions and writes an immutable receipt. A drifted
+  precondition rolls back the whole operation; executing it against production
+  remains an explicitly authorized data repair.
 
-When a user signs up, the system **automatically creates**:
+Canonical implementation and regressions:
 
-1. **Tenant** (shop, subdomain, currency CLP, timezone America/Santiago)
-2. **User Profile** (links user to tenant with 'admin' role)
-3. **30 Chilean Accounting Accounts** (Assets, Liabilities, Equity, Income, Expenses, Tax)
-4. **4 Payment Methods** (Efectivo→Caja, Transferencia→Banco, Cheque, Tarjeta)
-5. **8 Company Settings** (IVA 19%, currency, fiscal year, invoice/purchase prefixes)
-6. **7 Website Settings** (e-commerce defaults, theme, currency)
-
-**Trigger Chain:**
-```
-User signup → on_auth_user_created → handle_new_user() 
-                                           ↓
-                                    Creates tenant
-                                           ↓
-                            trg_tenant_initialization → handle_new_tenant()
-                                                              ↓
-                                                    seed_chart_of_accounts()
-                                                    seed_payment_methods_for_tenant()
-                                                    seed_company_settings()
-                                                    seed_website_settings()
-```
-
-## User Invitation Flow
-
-- If user has pending invitation → joins existing tenant with invited role
-- Otherwise → creates new tenant and becomes admin
-- Subdomain auto-generated from email (handles collisions with counter)
-
-## Manual Seeding (Existing Tenants)
-
-```sql
--- Seed all foundation data for existing tenant
-DO $$
-DECLARE tenant_rec RECORD;
-BEGIN
-  FOR tenant_rec IN SELECT id FROM tenants LOOP
-    PERFORM public.seed_chart_of_accounts(tenant_rec.id);
-    PERFORM public.seed_payment_methods_for_tenant(tenant_rec.id);
-    PERFORM public.seed_company_settings(tenant_rec.id);
-    PERFORM public.seed_website_settings(tenant_rec.id);
-  END LOOP;
-END $$;
-```
+- `supabase/migrations/20260726020000_harden_auth_tenant_provisioning.sql`
+- `supabase/migrations/20260726232000_enforce_employee_access_identity_xor.sql`
+- `supabase/migrations/20260804150000_add_guarded_legacy_auth_identity_repair.sql`
+- `supabase/functions/admin-user-management/index.ts`
+- `supabase/tests/auth_tenant_provisioning_hardening.sql`
+- `supabase/tests/employee_access_identity_xor.sql`
+- `supabase/tests/legacy_auth_identity_repair.sql`
 
 ---
 

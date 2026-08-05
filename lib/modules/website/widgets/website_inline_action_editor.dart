@@ -1,13 +1,41 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/website_action.dart';
+import 'website_action_editor.dart';
+import 'website_editor_block_sheet.dart';
+import 'website_editor_chrome_geometry.dart';
 import 'website_link_value_editor.dart';
+
+/// What the contextual sheet decided when it closed.
+///
+/// Dismissing the sheet applies, mirroring the anchored editor's tap-outside:
+/// on both hosts the only way to throw the edit away is to say so.
+enum _InlineActionOutcome { applied, appliedAndOpen, discarded }
 
 /// Edit chrome for a shared [WebsiteActionButton].
 ///
 /// The visitor button remains the layout owner. This widget only layers an
-/// outline and an overlay editor around that child, so entering Edit cannot
-/// change the button's measured size.
+/// outline and an editor around that child, so entering Edit cannot change the
+/// button's measured size.
+///
+/// The editor itself has two compositions, chosen by the host and never by this
+/// widget's own taste:
+///
+/// * **pointer host with a pane** keeps the anchored card: `O-04`-class chrome
+///   in an overlay, which is what t10 assigns to a pointer host under 1050;
+/// * **contextual host** opens the `O-05` sheet. The anchored card cannot live
+///   there: it is placed unconditionally below the button with no viewport
+///   clamp, no `viewInsets` and no knowledge of the dock, so on a phone its
+///   `Presentación` control and both actions ended up behind the dock, and
+///   with the keyboard up they had nowhere to go at all.
+///
+/// Design source: project `a0fa3196-6315-4b96-bde7-7cc801e7a74e`,
+/// `Website Builder Responsive Authoring` t10 — `surface_component_map` gives
+/// the touch host `O-05 VbBottomSheet` (60% cap) and the pointer host
+/// `O-04 VbSideSheet en overlay`; frames **10f**/**10h** are the sheet and
+/// **10g** is the keyboard case.
 class WebsiteInlineActionEditor extends StatefulWidget {
   const WebsiteInlineActionEditor({
     super.key,
@@ -24,6 +52,23 @@ class WebsiteInlineActionEditor extends StatefulWidget {
   final ValueChanged<String>? onOpen;
   final bool openOnFirstTap;
 
+  /// The `O-05` surface for the contextual host.
+  @visibleForTesting
+  static const Key sheetKey = Key('website-inline-action-sheet');
+
+  /// The three fields, present the moment the sheet opens.
+  @visibleForTesting
+  static const Key sheetFieldsKey = Key('website-inline-action-sheet-fields');
+
+  @visibleForTesting
+  static const Key sheetApplyKey = Key('website-inline-action-sheet-apply');
+
+  @visibleForTesting
+  static const Key sheetCancelKey = Key('website-inline-action-sheet-cancel');
+
+  @visibleForTesting
+  static const Key sheetOpenKey = Key('website-inline-action-sheet-open');
+
   @override
   State<WebsiteInlineActionEditor> createState() =>
       _WebsiteInlineActionEditorState();
@@ -36,6 +81,8 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
   OverlayEntry? _overlayEntry;
   bool _isSelected = false;
   bool _isHovered = false;
+  bool _isSheetOpen = false;
+  bool _usesContextualHost = false;
   late WebsiteActionVariant _variant;
 
   @override
@@ -97,10 +144,68 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
   void _handleTap() {
     if (!_isSelected) {
       setState(() => _isSelected = true);
-      if (widget.openOnFirstTap) _showEditor();
+      if (widget.openOnFirstTap) _openEditor();
+      return;
+    }
+    _openEditor();
+  }
+
+  /// One entry point, two compositions. The host decides.
+  void _openEditor() {
+    if (_usesContextualHost) {
+      if (_isSheetOpen) return;
+      unawaited(_showContextualSheet());
       return;
     }
     if (_overlayEntry == null) _showEditor();
+  }
+
+  /// `O-05` for the contextual host, straight onto the action's own fields.
+  ///
+  /// The draft lives here, not in the provider: the sheet edits a local copy
+  /// and the block is written exactly once, on the way out, so label,
+  /// destination and presentation stay one operation and one history step —
+  /// the same contract the anchored card already honours.
+  Future<void> _showContextualSheet() async {
+    var draft = WebsiteActionValue(
+      label: _labelController.text,
+      href: _hrefController.text,
+      variant: _variant,
+    );
+    setState(() => _isSheetOpen = true);
+
+    final outcome = await showWebsiteContextualSheet<_InlineActionOutcome>(
+      context: context,
+      // This caller lives inside the canvas, under the Navigator the dock
+      // paints over. See `showWebsiteContextualSheet`.
+      useRootNavigator: true,
+      builder: (_) => _InlineActionSheet(
+        initialValue: draft,
+        canOpen: widget.onOpen != null,
+        onDraftChanged: (value) => draft = value,
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isSheetOpen = false;
+      _isSelected = false;
+    });
+
+    if (outcome == _InlineActionOutcome.discarded) {
+      _syncFromWidget();
+      return;
+    }
+
+    _labelController.text = draft.label;
+    _hrefController.text = draft.href;
+    _variant = draft.variant;
+    widget.onChanged(draft);
+
+    if (outcome == _InlineActionOutcome.appliedAndOpen) {
+      final href = draft.href.trim();
+      if (href.isNotEmpty) widget.onOpen?.call(href);
+    }
   }
 
   void _showEditor() {
@@ -161,6 +266,10 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
 
   @override
   Widget build(BuildContext context) {
+    // Read in `build`, where an inherited dependency belongs; the tap handler
+    // then acts on a value that is already current for this frame.
+    _usesContextualHost =
+        !(WebsiteEditorChromeScope.maybeOf(context)?.usesPane ?? true);
     return CompositedTransformTarget(
       link: _layerLink,
       child: MouseRegion(
@@ -214,6 +323,139 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The contextual host's editor for one action.
+///
+/// It opens on the action's own three fields — `Texto del botón`, `Destino`
+/// and `Presentación` — because the operator got here by tapping that
+/// button. Sending them to the block inspector to hunt for it would be a
+/// different, longer task than the one they started.
+///
+/// The fields themselves are [WebsiteActionEditor], the universal owner already
+/// used by the inspector, so both hosts write the same three properties with
+/// the same labels and the same options.
+class _InlineActionSheet extends StatefulWidget {
+  const _InlineActionSheet({
+    required this.initialValue,
+    required this.canOpen,
+    required this.onDraftChanged,
+  });
+
+  final WebsiteActionValue initialValue;
+  final bool canOpen;
+  final ValueChanged<WebsiteActionValue> onDraftChanged;
+
+  @override
+  State<_InlineActionSheet> createState() => _InlineActionSheetState();
+}
+
+class _InlineActionSheetState extends State<_InlineActionSheet> {
+  late WebsiteActionValue _draft = widget.initialValue;
+
+  void _update(WebsiteActionValue value) {
+    setState(() => _draft = value);
+    // The owner keeps a live mirror, so dismissing the sheet by swipe or
+    // barrier applies what is on screen instead of silently dropping it.
+    widget.onDraftChanged(value);
+  }
+
+  void _close(_InlineActionOutcome outcome) =>
+      Navigator.of(context).pop(outcome);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final canOpen = widget.canOpen && _draft.href.trim().isNotEmpty;
+
+    return WebsiteContextualSheetScaffold(
+      surfaceKey: WebsiteInlineActionEditor.sheetKey,
+      title: 'Botón',
+      // No scope badge on purpose. `handoff-t10` declares `cta.label` and
+      // `cta.destination` as `sharedOnly`, so a `Escribe en: móvil` sentence
+      // here would state something the write does not do. A surface that
+      // cannot state its attribution truthfully states nothing.
+      footer: _InlineActionSheetFooter(
+        onCancel: () => _close(_InlineActionOutcome.discarded),
+        onApply: () => _close(_InlineActionOutcome.applied),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            WebsiteActionEditor(
+              key: WebsiteInlineActionEditor.sheetFieldsKey,
+              value: _draft,
+              onChanged: _update,
+              showVariant: true,
+              // The sheet is already titled; a second heading over the first
+              // field would name the same thing twice.
+              title: '',
+              // The component ships a light and a dark treatment. The sheet
+              // paints on `colorScheme.surface`, so the treatment follows the
+              // active theme instead of being fixed to the dark inspector's.
+              darkStyle: theme.brightness == Brightness.dark,
+            ),
+            if (canOpen) ...[
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: WebsiteInlineActionEditor.sheetOpenKey,
+                  onPressed: () => _close(_InlineActionOutcome.appliedAndOpen),
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Abrir'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// `O-05` closes with one primary of 50; `Cancelar` stands beside it because
+/// this sheet is the only place the edit can be thrown away — dismissing it
+/// applies. The primary keeps the published height and the row keeps the
+/// block sheet's own padding, so nothing here is a new measurement.
+class _InlineActionSheetFooter extends StatelessWidget {
+  const _InlineActionSheetFooter({
+    required this.onCancel,
+    required this.onApply,
+  });
+
+  final VoidCallback onCancel;
+  final VoidCallback onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      child: Row(
+        children: [
+          TextButton(
+            key: WebsiteInlineActionEditor.sheetCancelKey,
+            onPressed: onCancel,
+            child: const Text('Cancelar'),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SizedBox(
+              height: WebsiteBlockEditSheetGeometry.ctaHeight,
+              child: FilledButton(
+                key: WebsiteInlineActionEditor.sheetApplyKey,
+                onPressed: onApply,
+                child: const Text('Listo'),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,13 +1,27 @@
 # Plan maestro de autoría responsive del Website Builder
 
 **Fecha:** 2026-08-03  
-**Estado:** plan reconciliado Codex + revisión read-only Claude; no autoriza
-implementación  
+**Estado:** implementación autorizada; Fase 5 cerrada localmente y bajo
+hardening transversal
 **Prioridad de producto:** edición profesional desde teléfono, sin degradar la
 autoría desktop  
 **Ámbito:** Website Builder — Edit, Preview y storefront público  
 **Owners:** Claude lidera diseño visual e interacción; Codex lidera contratos,
 estado, persistencia, migración, integración y verificación
+
+**Checkpoint de implementación 2026-08-04:** el host inline de Fase 5 ya
+conserva selección y scroll al alternar Edit/Preview, mide y reserva el dock
+real, revela el bloque exacto tras reorder/undo y abre la edición CTA en la
+sheet contextual compartida. La sesión nativa verificó además texto inline,
+viewport y alcance independientes, foco móvil con conflicto legacy explícito,
+reorder y restauración por Undo sin guardar datos productivos. Persistencia,
+recuperación y round-trip de save/reload se cierran con fixtures stateful y el
+store local del editor; una prueba contra producción no sustituye ese límite.
+El cierre nativo se ejecutó además en `Claude iPhone 17 Pro` (iOS 26.5) con el
+harness sin autenticación: teclado real `335`, borde inferior de la sheet
+`539`, `Listo` en `531` y borde superior del teclado `539`; resultado 1/1
+verde. El fixture no leyó ni escribió backend y queda repetible en
+`integration_test/website_phone_authoring_ios_smoke_test.dart`.
 
 ## 1. Propósito y autoridad
 

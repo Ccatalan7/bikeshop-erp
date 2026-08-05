@@ -95,6 +95,12 @@
 			],
 			"problemMatcher": [],
 			"group": "build",
+			"osx": {
+				"group": {
+					"kind": "build",
+					"isDefault": true
+				}
+			},
 			"runOptions": {
 				"instanceLimit": 1
 			}

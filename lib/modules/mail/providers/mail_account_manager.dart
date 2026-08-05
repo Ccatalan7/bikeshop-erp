@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/mail_folder.dart';
 import 'email_provider.dart';
 import 'gmail_provider.dart';
 import 'zoho_provider.dart';
@@ -31,7 +32,18 @@ class MailAccountManager extends ChangeNotifier {
   factory MailAccountManager() => instance;
 
   final List<EmailProvider> _providers = [];
+
+  /// La bandeja de entrada unificada. Es una lista con nombre propio y no una
+  /// entrada más de [_folderEmails] porque cuatro consumidores dependen de que
+  /// SIEMPRE sea la bandeja de entrada, sin importar qué carpeta esté mirando
+  /// el usuario: el badge del sidebar, el resumen del panel de notificaciones,
+  /// el stream de correo nuevo y la caché persistente.
   List<Email> _unifiedEmails = [];
+
+  /// Las demás carpetas canónicas, sólo en memoria: se cargan al entrar y no
+  /// participan de push, polling, notificaciones ni caché.
+  final Map<MailFolder, List<Email>> _folderEmails = {};
+  MailFolder _activeFolder = MailFolder.inbox;
   List<Email> _searchResults = [];
   Email? _selectedEmail;
   EmailProvider? _selectedProvider;
@@ -88,8 +100,15 @@ class MailAccountManager extends ChangeNotifier {
   int get loadedCount => emails.length;
   bool get canLoadMore {
     final providersToCheck = _providersForActiveFilter();
-    return providersToCheck.any((provider) => provider.canLoadMore);
+    if (isSearchActive) {
+      return providersToCheck.any((provider) => provider.canLoadMore);
+    }
+    return providersToCheck.any(
+      (provider) => provider.hasMoreIn(_activeFolder),
+    );
   }
+
+  MailFolder get activeFolder => _activeFolder;
 
   Stream<Email> get newEmailStream => _newEmailController.stream;
 
@@ -98,7 +117,11 @@ class MailAccountManager extends ChangeNotifier {
 
   /// Get unified email list (merged from all providers, sorted by date)
   List<Email> get emails {
-    final source = isSearchActive ? _searchResults : _unifiedEmails;
+    final source = isSearchActive
+        ? _searchResults
+        : _activeFolder == MailFolder.inbox
+            ? _unifiedEmails
+            : _folderEmails[_activeFolder] ?? const <Email>[];
     if (_providerFilter != null) {
       return source.where((e) => e.providerId == _providerFilter).toList();
     }
@@ -260,12 +283,22 @@ class MailAccountManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resolutor de identidad Auth, sustituible sólo en pruebas: el guard de
+  /// ciclo de vida debe seguir ejerciéndose (época y usuario) sin exigir un
+  /// Supabase real en un test unitario.
+  @visibleForTesting
+  String? Function()? debugAuthUserIdOverride;
+
+  String? get _currentAuthUserId => debugAuthUserIdOverride != null
+      ? debugAuthUserIdOverride!()
+      : Supabase.instance.client.auth.currentUser?.id;
+
   bool _isCurrentLifecycle(int epoch, String? expectedUserId) {
     return _isSessionScopeReady &&
         expectedUserId != null &&
         epoch == _lifecycleEpoch &&
         expectedUserId == _sessionUserId &&
-        Supabase.instance.client.auth.currentUser?.id == expectedUserId;
+        _currentAuthUserId == expectedUserId;
   }
 
   Future<void> _runStartupStep({
@@ -422,7 +455,8 @@ class MailAccountManager extends ChangeNotifier {
           final knownEmails = _unifiedEmails
               .where((email) => email.providerId == provider.providerId)
               .toList(growable: false);
-          final emails = await provider.getInbox(
+          final emails = await provider.getMessages(
+            folder: MailFolder.inbox,
             limit: inboxPageSize,
             start: 0,
             knownEmails: knownEmails,
@@ -501,12 +535,96 @@ class MailAccountManager extends ChangeNotifier {
     await refreshInbox(background: true);
   }
 
+  /// Switches the folder the unified list shows.
+  ///
+  /// Search state never survives the switch: a query typed in the inbox
+  /// silently filtering the trash would look like lost mail. The inbox keeps
+  /// its data warm; any other folder refreshes on entry because nothing else
+  /// (push, polling) keeps it honest.
+  Future<void> setActiveFolder(MailFolder folder) async {
+    if (_activeFolder == folder) return;
+    _activeFolder = folder;
+    clearSearch();
+    clearSelection();
+    if (folder != MailFolder.inbox) {
+      await _loadFolder(folder);
+    } else {
+      notifyListeners();
+      unawaited(backgroundRefresh());
+    }
+  }
+
+  /// Refreshes whatever folder the user is looking at.
+  Future<void> refreshActiveFolder() {
+    if (_activeFolder == MailFolder.inbox) return refreshInbox();
+    return _loadFolder(_activeFolder);
+  }
+
+  Future<void> _loadFolder(MailFolder folder) async {
+    final epoch = _lifecycleEpoch;
+    final expectedUserId = _sessionUserId;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final collected = <Email>[];
+      final failedProviders = <EmailProvider>[];
+      final previous = _folderEmails[folder] ?? const <Email>[];
+
+      for (final provider in connectedProviders) {
+        try {
+          final knownEmails = previous
+              .where((email) => email.providerId == provider.providerId)
+              .toList(growable: false);
+          final emails = await provider.getMessages(
+            folder: folder,
+            limit: inboxPageSize,
+            start: 0,
+            knownEmails: knownEmails,
+          );
+          if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
+          collected.addAll(emails);
+        } catch (e) {
+          debugPrint('Error fetching ${provider.providerId} $folder: $e');
+          failedProviders.add(provider);
+          collected.addAll(
+            previous.where(
+              (email) => email.providerId == provider.providerId,
+            ),
+          );
+        }
+      }
+
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
+      _folderEmails[folder] = _dedupeAndSort(collected);
+
+      if (failedProviders.isNotEmpty) {
+        _error = _providerFailureMessage(
+          failedProviders,
+          singleAction: 'No se pudo cargar ${folder.label} de',
+          multiAction: 'No se pudo cargar ${folder.label} en algunas cuentas',
+        );
+      }
+    } catch (e) {
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
+      _error = e.toString();
+    } finally {
+      if (_isCurrentLifecycle(epoch, expectedUserId)) {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   /// Load the next page from the active provider filter, or all providers.
   Future<void> loadMore() async {
     if (_isLoadingMore || connectedProviders.isEmpty) return;
 
     final providersToLoad = _providersForActiveFilter()
-        .where((provider) => provider.canLoadMore)
+        .where((provider) => isSearchActive
+            ? provider.canLoadMore
+            : provider.hasMoreIn(_activeFolder))
         .toList(growable: false);
 
     if (providersToLoad.isEmpty) return;
@@ -518,12 +636,18 @@ class MailAccountManager extends ChangeNotifier {
     try {
       final fetched = <Email>[];
 
+      final folder = _activeFolder;
       for (final provider in providersToLoad) {
-        final source = isSearchActive ? _searchResults : _unifiedEmails;
+        final source = isSearchActive
+            ? _searchResults
+            : folder == MailFolder.inbox
+                ? _unifiedEmails
+                : _folderEmails[folder] ?? const <Email>[];
         final knownEmails = source
             .where((email) => email.providerId == provider.providerId)
             .toList(growable: false);
-        final page = await provider.getInbox(
+        final page = await provider.getMessages(
+          folder: folder,
           limit: inboxPageSize,
           start: knownEmails.length,
           searchQuery: isSearchActive ? _searchQuery : null,
@@ -535,9 +659,13 @@ class MailAccountManager extends ChangeNotifier {
       if (fetched.isNotEmpty) {
         if (isSearchActive) {
           _searchResults = _dedupeAndSort([..._searchResults, ...fetched]);
-        } else {
+        } else if (folder == MailFolder.inbox) {
           _unifiedEmails = _dedupeAndSort([..._unifiedEmails, ...fetched]);
           await _cache.cacheEmails(_unifiedEmails);
+        } else {
+          _folderEmails[folder] = _dedupeAndSort(
+            [...?_folderEmails[folder], ...fetched],
+          );
         }
       }
     } catch (e) {
@@ -572,7 +700,8 @@ class MailAccountManager extends ChangeNotifier {
           for (var pageIndex = 0;
               pageIndex < _searchWarmPageLimit;
               pageIndex++) {
-            final emails = await provider.getInbox(
+            final emails = await provider.getMessages(
+              folder: _activeFolder,
               limit: inboxPageSize,
               start: providerResults.length,
               searchQuery: normalizedQuery,
@@ -887,6 +1016,9 @@ class MailAccountManager extends ChangeNotifier {
   void _applyReadStatusLocally(Email email, bool read) {
     _replaceEmailReadStatus(_unifiedEmails, email, read);
     _replaceEmailReadStatus(_searchResults, email, read);
+    for (final folderList in _folderEmails.values) {
+      _replaceEmailReadStatus(folderList, email, read);
+    }
 
     final selected = _selectedEmail;
     if (selected != null &&
@@ -1111,16 +1243,54 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
   }
 
   /// Delete/trash selected email
-  Future<bool> deleteSelectedEmail() async {
-    if (_selectedEmail == null || _selectedProvider == null) return false;
+  Future<bool> deleteSelectedEmail() {
+    return _actOnSelectedEmail(
+      (provider, emailId) => provider.moveToTrash(emailId),
+    );
+  }
 
-    final success = await _selectedProvider!.moveToTrash(_selectedEmail!.id);
+  /// Devuelve el correo seleccionado desde la papelera a la bandeja de
+  /// entrada.
+  Future<bool> restoreSelectedEmail() {
+    return _actOnSelectedEmail(
+      (provider, emailId) => provider.restoreFromTrash(emailId),
+    );
+  }
+
+  /// Reporta el correo seleccionado como spam y lo saca de la vista actual.
+  Future<bool> markSelectedAsSpam() {
+    return _actOnSelectedEmail(
+      (provider, emailId) => provider.markAsSpam(emailId),
+    );
+  }
+
+  /// Rescata de spam el correo seleccionado y lo devuelve a la bandeja.
+  Future<bool> markSelectedAsNotSpam() {
+    return _actOnSelectedEmail(
+      (provider, emailId) => provider.markAsNotSpam(emailId),
+    );
+  }
+
+  /// Toda acción que saca al correo de su carpeta comparte el mismo cierre:
+  /// si el proveedor confirma, el mensaje desaparece de las listas locales y
+  /// la selección se limpia. Las carpetas destino no se actualizan en local a
+  /// ciegas — se recargan al entrar, que es su contrato general.
+  Future<bool> _actOnSelectedEmail(
+    Future<bool> Function(EmailProvider provider, String emailId) action,
+  ) async {
+    final email = _selectedEmail;
+    final provider = _selectedProvider;
+    if (email == null || provider == null) return false;
+
+    final success = await action(provider, email.id);
     if (success) {
-      _unifiedEmails.removeWhere(
-        (e) =>
-            e.id == _selectedEmail!.id &&
-            e.providerId == _selectedEmail!.providerId,
-      );
+      bool matches(Email candidate) =>
+          candidate.id == email.id && candidate.providerId == email.providerId;
+      _unifiedEmails.removeWhere(matches);
+      _searchResults.removeWhere(matches);
+      for (final folderList in _folderEmails.values) {
+        folderList.removeWhere(matches);
+      }
       _selectedEmail = null;
       _selectedProvider = null;
       notifyListeners();
@@ -1148,6 +1318,55 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
   // ignore: must_call_super
   void dispose() {
     debugPrint('📧 [MailManager] dispose called (no-op for singleton)');
+  }
+
+  /// Attaches a scripted provider without Supabase. The unified read model —
+  /// carpetas, paginación por carpeta, invariantes de bandeja de entrada — no
+  /// tenía ninguna costura comprobable antes de esto.
+  @visibleForTesting
+  void debugAttachProvider(EmailProvider provider) {
+    _providers.add(provider);
+    provider.addListener(_onProviderChange);
+  }
+
+  /// Publica un alcance de sesión ficticio para pruebas del modelo de
+  /// lectura. Debe usarse junto con [debugAuthUserIdOverride].
+  @visibleForTesting
+  void debugCommitSessionScope(String userId) {
+    _sessionUserId = userId;
+    _isSessionScopeReady = true;
+  }
+
+  /// Returns the singleton to a virgin in-memory state between tests.
+  ///
+  /// No sustituye a [reset]: no toca sesión, transporte ni caché persistente,
+  /// que en pruebas unitarias no existen.
+  @visibleForTesting
+  void debugResetInMemoryState() {
+    for (final provider in _providers) {
+      provider.removeListener(_onProviderChange);
+    }
+    _providers.clear();
+    _unifiedEmails.clear();
+    _folderEmails.clear();
+    _activeFolder = MailFolder.inbox;
+    _searchResults.clear();
+    _searchQuery = '';
+    _isSearching = false;
+    _searchRequestId++;
+    _selectedEmail = null;
+    _selectedProvider = null;
+    _selectedEmailError = null;
+    _isLoadingSelectedEmail = false;
+    _selectionRequestId++;
+    _providerFilter = null;
+    _error = null;
+    _isLoading = false;
+    _isLoadingMore = false;
+    _lastFetch = null;
+    _sessionUserId = null;
+    _isSessionScopeReady = false;
+    debugAuthUserIdOverride = null;
   }
 
   /// Resets every user-scoped resource without closing the process-wide event
@@ -1178,6 +1397,8 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
         }
         _providers.clear();
         _unifiedEmails.clear();
+        _folderEmails.clear();
+        _activeFolder = MailFolder.inbox;
         _searchResults.clear();
         _searchQuery = '';
         _isSearching = false;

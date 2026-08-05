@@ -60,8 +60,10 @@ The Design **window** is for two things only: reading what falls past the
 All SQL — local and hosted — goes through `scripts/db/query.sh`; the Supabase
 CLI never runs SQL and is invoked through `scripts/supabase_cli.sh` for
 control-plane work only. Start with `just db-preflight`. Reads are autonomous;
-writes need the owner's go-ahead. The full contract, including the autonomy
-boundary and the guarded-read defaults, is in
+guarded writes are agent-run too since 2026-08-05 («los agentes deben correr
+los querys siempre, sin pedir confirmación» — el dueño; corrige «writes need
+the owner's go-ahead»). The full contract, including the autonomy boundary and
+the guarded-read defaults, is in
 `docs/development/AGENT_DATABASE_CONTRACT.md`.
 
 Never use `supabase db query`, `supabase db push`, ad hoc hosted `psql`, or the

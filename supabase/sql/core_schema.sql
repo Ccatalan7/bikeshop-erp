@@ -52370,22 +52370,88 @@ begin
 end
 $$;
 
+-- 2026-08-05: el sello `account_type` de raw_app_meta_data es estado DERIVADO
+-- del perfil ERP activo. GoTrue puede pisarlo con una copia vieja de la fila
+-- (write-back tras la verificación de correo: borró el sello de un admin
+-- recién aceptado y lo dejó fuera). El punto de entrada repara un sello
+-- AUSENTE desde user_profiles; uno EN CONFLICTO sigue fallando cerrado. La
+-- función es volátil porque la reparación escribe. Fuente:
+-- supabase/migrations/20260805180000_self_heal_erp_account_stamp.sql y pgTAP
+-- supabase/tests/erp_account_stamp_self_heal.sql.
 create or replace function public.get_my_erp_profile()
 returns jsonb
 language plpgsql
-stable
 security definer
 set search_path = pg_catalog, public, pg_temp
 as $$
+declare
+  caller_user_id uuid := auth.uid();
+  claimed_account_type text;
+  auth_email text;
+  owner_email_value text;
+  active_profile_count integer;
+  profile_row public.user_profiles%rowtype;
 begin
   if exists (
     select 1
     from auth.users auth_user
-    where auth_user.id = auth.uid()
+    where auth_user.id = caller_user_id
       and auth_user.banned_until > statement_timestamp()
   ) then
     raise exception 'ERP profile access denied'
       using errcode = '42501';
+  end if;
+
+  if caller_user_id is not null then
+    select coalesce(auth_user.raw_app_meta_data->>'account_type', ''),
+           lower(nullif(trim(auth_user.email), ''))
+    into claimed_account_type, auth_email
+    from auth.users auth_user
+    where auth_user.id = caller_user_id;
+
+    if found and claimed_account_type = '' then
+      select count(*)::integer
+      into active_profile_count
+      from public.user_profiles profile
+      join public.tenants tenant
+        on tenant.id = profile.tenant_id
+       and tenant.is_active is true
+      where profile.user_id = caller_user_id
+        and profile.is_active is true;
+
+      if active_profile_count = 1 then
+        select profile.*
+        into profile_row
+        from public.user_profiles profile
+        join public.tenants tenant
+          on tenant.id = profile.tenant_id
+         and tenant.is_active is true
+        where profile.user_id = caller_user_id
+          and profile.is_active is true;
+
+        select lower(nullif(trim(tenant.owner_email), ''))
+        into owner_email_value
+        from public.tenants tenant
+        where tenant.id = profile_row.tenant_id;
+
+        update auth.users
+        set raw_app_meta_data = (
+              coalesce(raw_app_meta_data, '{}'::jsonb)
+              - 'pending_invitation_token_hash'
+            ) || jsonb_build_object(
+              'account_type',
+              case
+                when auth_email is not null
+                     and auth_email = owner_email_value
+                  then 'erp_owner'
+                else 'erp_staff'
+              end,
+              'tenant_id', profile_row.tenant_id,
+              'role', profile_row.role
+            )
+        where id = caller_user_id;
+      end if;
+    end if;
   end if;
 
   return public.get_my_erp_profile_internal();
@@ -62856,3 +62922,7 @@ commit;
 -- Append-only Payroll settlement correction for payments and advance
 -- allocations, preserving balanced journals, traceability, and readback.
 \ir ../migrations/20260802120000_add_audited_payroll_settlement_reversals.sql
+
+-- Guarded quarantine for legacy customer signups that accidentally received
+-- their own seeded ERP tenant before the auth-intent boundary was hardened.
+\ir ../migrations/20260804150000_add_guarded_legacy_auth_identity_repair.sql

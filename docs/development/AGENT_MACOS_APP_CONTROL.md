@@ -283,6 +283,13 @@ same value. An empty `--text ""` deliberately clears the field. The extension
 exists only in Debug and a newly added extension requires a hot restart before
 the running isolate exposes it.
 
+Hot reload also cannot retrofit every change to the shape of an already-live
+object. If adding a non-null instance field produces an otherwise impossible
+`Null` subtype error immediately after reload, capture that exact first error
+and hot restart the **same canonical session** once before diagnosing app
+logic. Do not launch a second Flutter session; verify the restarted isolate is
+clean and continue from there.
+
 Do not treat a changed AX value as evidence. Completion evidence is the same
 text in a fresh rendered frame/semantics read and the expected result after the
 real submit control is tapped.
@@ -460,6 +467,38 @@ touch targets, safe areas or the software keyboard.
 
 This tool drives **simulators only**. "On my iPhone" means building for the
 device with the normal toolchain; say so instead of silently using a simulator.
+
+### Website Builder phone keyboard smoke
+
+The editor has an auth-free integration harness for the exact compact host,
+CTA contextual sheet and iOS software-keyboard inset. Reuse it instead of
+copying a Supabase session into a simulator:
+
+```bash
+fvm flutter test \
+  integration_test/website_phone_authoring_ios_smoke_test.dart \
+  -d <simulator-udid> --reporter expanded
+```
+
+Disconnect **I/O > Keyboard > Connect Hardware Keyboard** for this smoke, then
+restore it afterward. The test unregisters Flutter's synthetic text input,
+focuses the real field and requires a non-zero iOS `viewInsets.bottom`; it also
+proves that the sheet and `Listo` end above the keyboard.
+
+For a host-side PNG, use the checked-in extended driver:
+
+```bash
+fvm flutter drive \
+  --driver=test_driver/website_phone_authoring_ios_smoke_test.dart \
+  --target=integration_test/website_phone_authoring_ios_smoke_test.dart \
+  -d <simulator-udid>
+```
+
+It writes `/private/tmp/website-phone-authoring-ios-keyboard.png`. A plain
+`simctl io screenshot` taken while `flutter test` runs is misleading: XCTest
+can present its own `Test finished` surface even while the Flutter test is
+still reporting. Use the integration screenshot and the measured inset, not
+that external frame.
 
 ## 5. Cost discipline
 

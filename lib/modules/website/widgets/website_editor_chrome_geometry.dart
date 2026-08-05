@@ -187,11 +187,28 @@ class WebsiteEditorChromeScope extends InheritedWidget {
     super.key,
     required this.editorWidth,
     required this.canvasWidth,
+    this.contextualDockHeight = 0,
     required super.child,
   });
 
   final double editorWidth;
   final double canvasWidth;
+
+  /// Height the contextual dock currently occupies at the bottom of the
+  /// editor, or 0 when no dock is mounted.
+  ///
+  /// **Measured, never chosen.** t10 frame 10e publishes the dock's row
+  /// (`dock_row: 48`) and the bottom safe area (`safearea_bottom: 20`), but the
+  /// band the canvas actually loses is the composed widget: identity row plus
+  /// action row plus the `SafeArea` the dock already consumes for itself. The
+  /// shell measures the real thing and publishes it here so consumers reserve
+  /// exactly that and never add a second `SafeArea` on top of it.
+  ///
+  /// It exists because the canvas is a scroll view and the dock floats over its
+  /// bottom: without reserving the band, the last block of a page can never be
+  /// fully seen, and a block revealed at the end of the document lands under
+  /// the dock instead of in view.
+  final double contextualDockHeight;
 
   WebsiteEditorChromeComposition get composition =>
       WebsiteEditorChromeGeometry.compositionFor(editorWidth);
@@ -218,6 +235,7 @@ class WebsiteEditorChromeScope extends InheritedWidget {
   @override
   bool updateShouldNotify(WebsiteEditorChromeScope oldWidget) {
     return editorWidth != oldWidget.editorWidth ||
-        canvasWidth != oldWidget.canvasWidth;
+        canvasWidth != oldWidget.canvasWidth ||
+        contextualDockHeight != oldWidget.contextualDockHeight;
   }
 }

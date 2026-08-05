@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/mail_folder.dart';
 import 'email_provider.dart';
 
 @visibleForTesting
@@ -67,6 +68,7 @@ class ZohoProvider extends EmailProvider {
   String? _email;
   String? _accountId;
   String? _inboxFolderId;
+  final Map<MailFolder, String> _systemFolderIds = {};
   List<EmailSenderIdentity> _senderIdentities = const <EmailSenderIdentity>[];
   String? _senderIdentityError;
 
@@ -74,7 +76,8 @@ class ZohoProvider extends EmailProvider {
   Email? _selectedEmail;
   bool _isLoading = false;
   String? _error;
-  bool _canLoadMore = false;
+  bool _searchCanLoadMore = false;
+  final Map<MailFolder, bool> _folderHasMore = {};
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -115,7 +118,10 @@ class ZohoProvider extends EmailProvider {
   Email? get selectedEmail => _selectedEmail;
 
   @override
-  bool get canLoadMore => _canLoadMore;
+  bool get canLoadMore => _searchCanLoadMore;
+
+  @override
+  bool hasMoreIn(MailFolder folder) => _folderHasMore[folder] ?? false;
 
   String get _accountUrl => '$_apiBase/accounts/$_accountId';
 
@@ -374,7 +380,8 @@ class ZohoProvider extends EmailProvider {
   }
 
   @override
-  Future<List<Email>> getInbox({
+  Future<List<Email>> getMessages({
+    MailFolder folder = MailFolder.inbox,
     int limit = 50,
     int start = 0,
     String? pageToken,
@@ -385,46 +392,45 @@ class ZohoProvider extends EmailProvider {
     _error = null;
     notifyListeners();
 
-    debugPrint('📬 [Zoho] getInbox called, accountId: $_accountId');
+    debugPrint(
+      '📬 [Zoho] getMessages(${folder.name}) called, accountId: $_accountId',
+    );
 
     try {
-      // Get inbox folder ID if not cached
-      if (_inboxFolderId == null) {
-        final foldersUrl = '$_accountUrl/folders';
-        debugPrint('📬 [Zoho] Fetching folders from: $foldersUrl');
-        final folderData = await _proxyRequest(method: 'GET', url: foldersUrl);
-        final folders = folderData['data'] as List? ?? [];
-        final inbox = folders.firstWhere(
-          (f) => f['folderName'] == 'Inbox' || f['folderName'] == 'INBOX',
-          orElse: () => null,
-        );
-        _inboxFolderId = inbox?['folderId']?.toString();
-        debugPrint('📬 [Zoho] Found inbox folderId: $_inboxFolderId');
+      final folderId = await _resolveSystemFolderId(folder);
+      if (folderId == null) {
+        throw Exception('${folder.label} folder not found');
       }
-
-      if (_inboxFolderId == null) throw Exception('Inbox folder not found');
 
       final normalizedSearch = searchQuery?.trim();
       final effectiveSearch =
           normalizedSearch?.isEmpty ?? true ? null : normalizedSearch;
       final page = await _fetchZohoMessagePage(
+        folderId: folderId,
         limit: limit,
         start: start,
         searchQuery: effectiveSearch,
       );
       final messages = page.messages;
-      _canLoadMore = messages.length >= limit;
+      if (effectiveSearch != null) {
+        _searchCanLoadMore = messages.length >= limit;
+      } else {
+        _folderHasMore[folder] = messages.length >= limit;
+      }
 
       _emails = messages
           .whereType<Map>()
-          .map((m) => _parseZohoMessage(Map<String, dynamic>.from(m)))
+          .map((m) => _parseZohoMessage(
+                Map<String, dynamic>.from(m),
+                fallbackFolderId: folderId,
+              ))
           .where((email) =>
               effectiveSearch == null ||
               _matchesLocalSearch(email, effectiveSearch))
           .toList();
       return _emails;
     } catch (e) {
-      debugPrint('getInbox error: $e');
+      debugPrint('getMessages error: $e');
       _error = e.toString();
       rethrow;
     } finally {
@@ -433,26 +439,54 @@ class ZohoProvider extends EmailProvider {
     }
   }
 
+  /// Resolves and caches the Zoho folderId of a canonical system folder.
+  ///
+  /// One folders request fills the whole map, so switching between folders
+  /// costs a single extra round trip for the lifetime of the session.
+  Future<String?> _resolveSystemFolderId(MailFolder folder) async {
+    final cached = _systemFolderIds[folder];
+    if (cached != null) return cached;
+
+    final foldersUrl = '$_accountUrl/folders';
+    debugPrint('📬 [Zoho] Fetching folders from: $foldersUrl');
+    final folderData = await _proxyRequest(method: 'GET', url: foldersUrl);
+    final folders = folderData['data'] as List? ?? [];
+    for (final raw in folders.whereType<Map>()) {
+      final resolved = resolveZohoSystemFolder(
+        folderType: raw['folderType']?.toString(),
+        folderName: raw['folderName']?.toString(),
+      );
+      final folderId = raw['folderId']?.toString();
+      if (resolved != null && folderId != null && folderId.isNotEmpty) {
+        _systemFolderIds.putIfAbsent(resolved, () => folderId);
+      }
+    }
+    _inboxFolderId = _systemFolderIds[MailFolder.inbox] ?? _inboxFolderId;
+    debugPrint('📬 [Zoho] Resolved system folders: $_systemFolderIds');
+    return _systemFolderIds[folder];
+  }
+
   Future<({List<dynamic> messages, bool usedProviderSearch})>
       _fetchZohoMessagePage({
+    required String folderId,
     required int limit,
     required int start,
     String? searchQuery,
   }) async {
     // Note: Zoho uses folderId as query param, not path.
-    final inboxUrl =
-        '$_accountUrl/messages/view?folderId=$_inboxFolderId&limit=$limit&start=$start';
+    final listUrl =
+        '$_accountUrl/messages/view?folderId=$folderId&limit=$limit&start=$start';
 
     if (searchQuery == null) {
-      debugPrint('📬 [Zoho] Fetching messages from: $inboxUrl');
-      final data = await _proxyRequest(method: 'GET', url: inboxUrl);
+      debugPrint('📬 [Zoho] Fetching messages from: $listUrl');
+      final data = await _proxyRequest(method: 'GET', url: listUrl);
       return (messages: _extractZohoMessages(data), usedProviderSearch: true);
     }
 
     final encodedSearch = Uri.encodeQueryComponent(searchQuery);
     final searchUrls = [
-      '$_accountUrl/messages/search?folderId=$_inboxFolderId&searchKey=$encodedSearch&limit=$limit&start=$start',
-      '$inboxUrl&searchKey=$encodedSearch',
+      '$_accountUrl/messages/search?folderId=$folderId&searchKey=$encodedSearch&limit=$limit&start=$start',
+      '$listUrl&searchKey=$encodedSearch',
     ];
 
     for (final url in searchUrls) {
@@ -469,7 +503,7 @@ class ZohoProvider extends EmailProvider {
     }
 
     debugPrint('📬 [Zoho] Falling back to local filtering for search page.');
-    final data = await _proxyRequest(method: 'GET', url: inboxUrl);
+    final data = await _proxyRequest(method: 'GET', url: listUrl);
     return (messages: _extractZohoMessages(data), usedProviderSearch: false);
   }
 
@@ -499,9 +533,13 @@ class ZohoProvider extends EmailProvider {
     return searchable.contains(loweredQuery);
   }
 
-  Email _parseZohoMessage(Map<String, dynamic> json) {
+  Email _parseZohoMessage(
+    Map<String, dynamic> json, {
+    String? fallbackFolderId,
+  }) {
     final messageId = json['messageId']?.toString() ?? '';
-    final folderId = json['folderId']?.toString() ?? _inboxFolderId ?? '';
+    final folderId =
+        json['folderId']?.toString() ?? fallbackFolderId ?? _inboxFolderId ?? '';
     final attachments = _extractZohoAttachments(json, messageId: messageId);
     final hasAttachment = attachments.isNotEmpty ||
         _isTruthyAttachmentFlag(json['hasAttachment']) ||
@@ -762,6 +800,47 @@ class ZohoProvider extends EmailProvider {
       return true;
     } catch (e) {
       debugPrint('moveToTrash error: $e');
+      _error = e.toString();
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> restoreFromTrash(String emailId) async =>
+      _moveToSystemFolder(emailId, MailFolder.inbox, action: 'restore');
+
+  @override
+  Future<bool> markAsSpam(String emailId) async =>
+      _moveToSystemFolder(emailId, MailFolder.spam, action: 'markAsSpam');
+
+  @override
+  Future<bool> markAsNotSpam(String emailId) async =>
+      _moveToSystemFolder(emailId, MailFolder.inbox, action: 'markAsNotSpam');
+
+  /// Zoho no versiona spam como label sino como carpeta: reportar, rescatar y
+  /// restaurar son la misma operación de mover hacia una carpeta de sistema
+  /// resuelta por id real — nunca por nombre literal, que puede venir
+  /// localizado.
+  Future<bool> _moveToSystemFolder(
+    String emailId,
+    MailFolder destination, {
+    required String action,
+  }) async {
+    try {
+      final folderId = await _resolveSystemFolderId(destination);
+      if (folderId == null) {
+        throw Exception('${destination.label} folder not found');
+      }
+      await _proxyRequest(
+        method: 'PUT',
+        url: '$_accountUrl/messages/$emailId/move',
+        body: {'destfolderId': folderId},
+      );
+      _emails.removeWhere((e) => e.id == emailId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('$action error: $e');
       _error = e.toString();
       return false;
     }

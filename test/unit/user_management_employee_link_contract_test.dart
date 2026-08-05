@@ -138,15 +138,64 @@ void main() {
     );
     expect(
       localizedUserManagementError('staff_identity_tenant_conflict'),
-      contains('no está disponible'),
+      contains('reconciliación'),
+    );
+    expect(
+      localizedUserManagementError(
+        'historical_employee_identity_conflict',
+      ),
+      contains('vínculo de trabajador'),
     );
     expect(
       localizedUserManagementError('identity_unavailable'),
-      contains('no está disponible'),
+      contains('vínculo de acceso incompatible'),
     );
     expect(
       localizedUserManagementError('unknown_code'),
       'No pudimos completar la gestión de acceso. Inténtalo nuevamente.',
+    );
+  });
+
+  test('invitation identity projection fails closed on contradictory data', () {
+    final customer = InvitationIdentityCheck.fromJson({
+      'eligible': true,
+      'status': 'available_existing_customer',
+      'hasExistingAuthIdentity': true,
+      'isExistingCustomer': true,
+    });
+    expect(customer.eligible, isTrue);
+    expect(customer.isExistingCustomer, isTrue);
+    expect(
+      customer.status,
+      InvitationIdentityStatus.availableExistingCustomer,
+    );
+
+    final conflict = InvitationIdentityCheck.fromJson({
+      'eligible': false,
+      'status': 'staff_identity_tenant_conflict',
+      'hasExistingAuthIdentity': true,
+      'isExistingCustomer': false,
+    });
+    expect(conflict.eligible, isFalse);
+    expect(conflict.code, 'staff_identity_tenant_conflict');
+
+    expect(
+      () => InvitationIdentityCheck.fromJson({
+        'eligible': true,
+        'status': 'staff_identity_tenant_conflict',
+        'hasExistingAuthIdentity': true,
+        'isExistingCustomer': false,
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => InvitationIdentityCheck.fromJson({
+        'eligible': true,
+        'status': 'future_status',
+        'hasExistingAuthIdentity': true,
+        'isExistingCustomer': false,
+      }),
+      throwsFormatException,
     );
   });
 
@@ -260,6 +309,10 @@ void main() {
     ).readAsStringSync();
 
     expect(service, contains("'action': 'link_internal_user_employee'"));
+    expect(
+      service,
+      contains("'action': 'check_internal_invitation_identity'"),
+    );
     expect(service, contains("'action': 'unlink_internal_user_employee'"));
     expect(service, contains("'userId': userId"));
     expect(service, contains("'employeeId': employeeId"));

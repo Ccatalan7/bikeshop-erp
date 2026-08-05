@@ -128,6 +128,13 @@ top-level task:
 Cmd+Shift+B -> Publish ERP Update (macOS + Android)
 ```
 
+On macOS this combined publisher is the workspace's default build task, so the
+shortcut starts it directly instead of relying on the last task selected in
+VS Code. If an agent-created branch is not authorized for `Production` but its
+HEAD is exactly the live `origin/smartpegas1.0` commit, preparation switches to
+that canonical branch without changing the files. Any different or divergent
+history still stops before dependency resolution, staging, commit, or push.
+
 Its preparation task checks the desktop `Production` branch boundary, safely
 fast-forwards a behind local branch when Git can do so without disturbing local
 work, normalizes Flutter dependencies, stages all Source Control changes, and

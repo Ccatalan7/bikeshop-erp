@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -17,12 +18,14 @@ import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/messaging/utils/conversation_channel_presentation.dart';
 import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
+import '../../modules/website/models/website_models.dart';
 import '../models/notification_digest.dart';
 import '../services/notification_service.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import '../utils/chilean_utils.dart';
 import '../utils/notification_deep_link.dart';
+import '../utils/responsive_viewport.dart';
 import '../utils/trusted_meta_notification_url.dart';
 
 /// Opens the operational briefing as a slide-in panel.
@@ -610,16 +613,10 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                                 setState(() => _activityFilter = filter);
                               },
                               onTap: (item) {
-                                final notificationId = item.notificationId;
-                                if (notificationId != null) {
-                                  unawaited(
-                                    _notifications.markNotificationRead(
-                                      notificationId,
-                                    ),
-                                  );
-                                }
+                                _markActivityRead(item);
                                 widget.onNavigate(item.route);
                               },
+                              onExpand: _markActivityRead,
                             ),
                           ),
                         ],
@@ -633,6 +630,36 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
         );
       },
     );
+  }
+
+  /// Opening the record and opening its disclosure are both acts of reading, so
+  /// they settle unread state through the same idempotent writer.
+  ///
+  /// The historical projection is reconciled first. `NotificationService` only
+  /// owns the latest realtime feed, and `_mergeNotificationRows` lets that feed
+  /// win per id — so a row that exists only in the selected period would keep
+  /// its unread dot and stay inside `n nuevas` until the next reload.
+  void _markActivityRead(_BriefingActivityItem item) {
+    final notificationId = item.notificationId;
+    if (notificationId == null || !item.unread) return;
+    _reconcilePeriodRowRead(notificationId);
+    unawaited(_notifications.markNotificationRead(notificationId));
+  }
+
+  /// Idempotent: a row that is already read produces no new list and no
+  /// rebuild, so reopening a disclosure cannot rewrite its `read_at`.
+  void _reconcilePeriodRowRead(String notificationId) {
+    final readAt = DateTime.now().toUtc().toIso8601String();
+    var changed = false;
+    final reconciled = _periodNotifications.map((row) {
+      if (row['id']?.toString() != notificationId || row['read_at'] != null) {
+        return row;
+      }
+      changed = true;
+      return {...row, 'read_at': readAt};
+    }).toList(growable: false);
+    if (!changed || !mounted) return;
+    setState(() => _periodNotifications = reconciled);
   }
 
   void _showOperationalAlerts() {
@@ -666,10 +693,14 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       final type = row['type']?.toString() ?? '';
       final platformKey = _platformKeyForNotificationType(type);
       final route = resolveErpNotificationRoute(row);
+      final body = row['body']?.toString() ?? '';
+      // The payload already travelled with the row (`data` is part of both the
+      // period read and the realtime projection), so enrichment costs no query.
+      final data = _notificationPayload(row);
       items.add(
         _BriefingActivityItem(
           title: row['title']?.toString() ?? 'Actividad',
-          subtitle: row['body']?.toString() ?? '',
+          subtitle: _erpActivitySubtitle(type, body, data),
           createdAt: createdAt,
           route: route,
           icon: _iconForNotificationType(type),
@@ -678,6 +709,7 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
           unread: row['read_at'] == null,
           notificationId: row['id']?.toString(),
           platformKey: platformKey,
+          detail: _erpActivityDetail(type, data, createdAt),
         ),
       );
     }
@@ -710,13 +742,10 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       final lastMessageAt = conversation.lastMessageAt?.toLocal();
       if (lastMessageAt == null || !digest.contains(lastMessageAt)) continue;
       final name = _conversationName(conversation);
-      final message = conversation.lastMessageContent?.trim();
       items.add(
         _BriefingActivityItem(
           title: name,
-          subtitle: message == null || message.isEmpty
-              ? conversation.channelLabel
-              : message,
+          subtitle: _conversationSubtitle(conversation),
           createdAt: lastMessageAt,
           route: Uri(
             path: '/chat',
@@ -766,6 +795,188 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     if (creator != null && creator.isNotEmpty) return creator;
     return conversation.channelLabel;
   }
+}
+
+/// Reads the durable JSON payload the notification row already carries.
+///
+/// `data` is selected by both `loadNotifications` and
+/// `loadNotificationsForRange`, and realtime inserts publish the whole row, so
+/// no consumer of this helper performs an additional read.
+Map<String, dynamic> _notificationPayload(Map<String, dynamic> row) {
+  final data = row['data'];
+  if (data is Map) return Map<String, dynamic>.from(data);
+  return const <String, dynamic>{};
+}
+
+String _payloadText(Map<String, dynamic> data, String key) =>
+    data[key]?.toString().trim() ?? '';
+
+/// Joins the segments that actually resolved, so a missing payload field
+/// disappears instead of leaving a dangling separator or a false placeholder.
+String _joinActivitySegments(Iterable<String> segments) => segments
+    .map((segment) => segment.trim())
+    .where((segment) => segment.isNotEmpty)
+    .join(' · ');
+
+/// Second line of a collapsed ERP activity row.
+///
+/// The server-composed `body` already carries the identity and the money for
+/// every type it applies to, so enrichment appends the operational fact the
+/// owner decides with (`método`, `bicicleta`, `entrega`) instead of
+/// re-formatting an amount in the widget layer.
+String _erpActivitySubtitle(
+  String type,
+  String body,
+  Map<String, dynamic> data,
+) {
+  switch (type) {
+    case 'mechanic_job_created':
+      return _joinActivitySegments([body, _payloadText(data, 'bike_label')]);
+    case 'sales_payment_received':
+    case 'expense_recorded':
+      return _joinActivitySegments(
+          [body, _payloadText(data, 'payment_method')]);
+    case 'online_order_created':
+      final deliveryType = _payloadText(data, 'delivery_type');
+      return _joinActivitySegments([
+        body,
+        deliveryType.isEmpty
+            ? ''
+            : onlineOrderDeliveryDisplayName(deliveryType),
+      ]);
+    case 'whatsapp_catalog_approved':
+      final product = _payloadText(data, 'product_name');
+      if (product.isEmpty) return body;
+      final sku = _payloadText(data, 'sku');
+      return _joinActivitySegments([product, sku.isEmpty ? '' : 'SKU $sku']);
+    default:
+      return body;
+  }
+}
+
+/// Second line of a conversation row.
+///
+/// The channel used to live only in the row glyph and its accent colour, which
+/// made it a colour-only signal. It is named in words here, and the preview
+/// never claims an unread incoming message when the shop itself sent last.
+String _conversationSubtitle(Conversation conversation) {
+  final message = conversation.lastMessageContent?.trim() ?? '';
+  final isOutgoing = conversation.lastMessageIsMine ||
+      conversation.lastMessageDirection?.trim().toLowerCase() == 'outbound';
+  final unread = conversation.unreadCount;
+  return _joinActivitySegments([
+    conversation.shortChannelLabel,
+    if (!isOutgoing && unread > 1) '$unread nuevos',
+    if (message.isNotEmpty) isOutgoing ? 'Tú: $message' : message,
+  ]);
+}
+
+/// Builds the in-place disclosure for the ERP types that have something real to
+/// read. Returns `null` when the payload resolves nothing, which is what keeps
+/// the affordance itself meaningful: no chevron means no hidden content.
+_ActivityDetail? _erpActivityDetail(
+  String type,
+  Map<String, dynamic> data,
+  DateTime createdAt,
+) {
+  switch (type) {
+    case 'mechanic_job_created':
+      final request = _payloadText(data, 'client_request');
+      if (request.isEmpty) return null;
+      return _ActivityDetail(
+        noun: 'la solicitud del cliente',
+        actionLabel: 'Abrir trabajo',
+        fields: [
+          _ActivityDetailField(
+            label: 'SOLICITUD DEL CLIENTE',
+            value: request,
+            maxLines: 4,
+          ),
+        ],
+      );
+    case 'sales_payment_received':
+      final fields = <_ActivityDetailField>[
+        ..._optionalField('CLIENTE', _payloadText(data, 'customer_name')),
+        ..._optionalField('REGISTRÓ', _payloadText(data, 'recorded_by_name')),
+        ..._optionalField(
+          'REFERENCIA',
+          _payloadText(data, 'reference'),
+        ),
+        ..._divergentDateField(
+          'FECHA DEL PAGO',
+          _payloadText(data, 'payment_date'),
+          createdAt,
+        ),
+      ];
+      if (fields.isEmpty) return null;
+      return _ActivityDetail(
+        noun: 'el detalle del pago',
+        actionLabel: 'Abrir pago',
+        fields: fields,
+      );
+    case 'expense_recorded':
+      final fields = <_ActivityDetailField>[
+        ..._optionalField('CATEGORÍA', _payloadText(data, 'category_name')),
+        // `document_type` is deliberately absent: its operator-facing label is
+        // owned three times over inside `lib/modules/accounting/pages/`, all
+        // private, and this surface must not become a fourth copy.
+        ..._optionalField(
+          'N° DE DOCUMENTO',
+          _payloadText(data, 'document_number'),
+        ),
+        ..._optionalField('REGISTRÓ', _payloadText(data, 'recorded_by_name')),
+        ..._divergentDateField(
+          'FECHA DEL DOCUMENTO',
+          _payloadText(data, 'issue_date'),
+          createdAt,
+        ),
+      ];
+      if (fields.isEmpty) return null;
+      return _ActivityDetail(
+        noun: 'el detalle del gasto',
+        actionLabel: 'Abrir gasto',
+        fields: fields,
+      );
+    default:
+      return null;
+  }
+}
+
+List<_ActivityDetailField> _optionalField(String label, String value) {
+  if (value.isEmpty) return const [];
+  return [_ActivityDetailField(label: label, value: value)];
+}
+
+/// A payload date earns a line only when it disagrees with the day the row was
+/// registered. When both fall on the same Chilean civil day the row timestamp
+/// already says it, and repeating it would be noise.
+///
+/// `payment_date` and `issue_date` are calendar dates, not instants: the
+/// pipeline serialises them as `YYYY-MM-DD` or as midnight UTC. Reading the
+/// leading date parts textually keeps `2026-07-31T00:00:00+00:00` on the 31st
+/// instead of letting a timezone conversion move it to the 30th.
+List<_ActivityDetailField> _divergentDateField(
+  String label,
+  String rawDate,
+  DateTime createdAt,
+) {
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(rawDate);
+  if (match == null) return const [];
+  final year = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  final reference = _chileBriefingTime(createdAt);
+  if (year == reference.year &&
+      month == reference.month &&
+      day == reference.day) {
+    return const [];
+  }
+  return [
+    _ActivityDetailField(
+      label: label,
+      value: '${match.group(3)}/${match.group(2)}/$year',
+    ),
+  ];
 }
 
 const _jobsAccent = Color(0xFF2878B8);
@@ -956,7 +1167,15 @@ class _BriefingToolbar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 360;
+          // The threshold decides whether the long `n nuevas` label fits, so it
+          // has to move with the text, not stay a fixed pixel count. At a 384
+          // panel this row lands on exactly 360.0: at scale 1.0 the long label
+          // fits (unchanged behaviour), at 1.3 it overflowed the flex by 33 px.
+          final labelFontSize = theme.textTheme.labelLarge?.fontSize ?? 14;
+          final scaledLabelFontSize =
+              MediaQuery.textScalerOf(context).scale(labelFontSize);
+          final labelScale = scaledLabelFontSize / labelFontSize;
+          final compact = constraints.maxWidth < 360 * labelScale;
           return Row(
             children: [
               _PeriodTab(
@@ -2684,13 +2903,21 @@ class _ActivitySection extends StatefulWidget {
     required this.filter,
     required this.onFilterChanged,
     required this.onTap,
+    required this.onExpand,
   });
 
   final List<_BriefingActivityItem> items;
   final NotificationDigestSnapshot digest;
   final _ActivityFilter filter;
   final ValueChanged<_ActivityFilter> onFilterChanged;
+
+  /// Opens the record. Rows without a disclosure invoke it directly; rows with
+  /// one invoke it from the explicit action inside the open disclosure.
   final ValueChanged<_BriefingActivityItem> onTap;
+
+  /// Reading a disclosure is reading the notification, so opening one settles
+  /// the same unread state a click used to. Collapsing writes nothing.
+  final ValueChanged<_BriefingActivityItem> onExpand;
 
   @override
   State<_ActivitySection> createState() => _ActivitySectionState();
@@ -2701,6 +2928,11 @@ class _ActivitySectionState extends State<_ActivitySection> {
 
   int _visibleLimit = _activityBatchSize;
 
+  /// Exactly one open row, owned by the list rather than by the row, per
+  /// Design `T-03 VbRowDisclosure`: "Una fila abierta a la vez; abrir otra
+  /// cierra la anterior."
+  String? _expandedNotificationId;
+
   @override
   void didUpdateWidget(covariant _ActivitySection oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -2709,11 +2941,20 @@ class _ActivitySectionState extends State<_ActivitySection> {
         oldWidget.digest.endDate != widget.digest.endDate;
     if (oldWidget.filter != widget.filter || periodChanged) {
       _visibleLimit = _activityBatchSize;
+      _expandedNotificationId = null;
     }
   }
 
   void _showMore() {
     setState(() => _visibleLimit += _activityBatchSize);
+  }
+
+  void _toggleDetail(_BriefingActivityItem item) {
+    final notificationId = item.notificationId;
+    if (notificationId == null) return;
+    final opening = _expandedNotificationId != notificationId;
+    setState(() => _expandedNotificationId = opening ? notificationId : null);
+    if (opening) widget.onExpand(item);
   }
 
   @override
@@ -2748,7 +2989,11 @@ class _ActivitySectionState extends State<_ActivitySection> {
                   _ActivityRow(
                     item: visibleItems[index],
                     isLast: index == visibleItems.length - 1,
-                    onTap: () => widget.onTap(visibleItems[index]),
+                    expanded: visibleItems[index].isExpandable &&
+                        visibleItems[index].notificationId ==
+                            _expandedNotificationId,
+                    onOpen: () => widget.onTap(visibleItems[index]),
+                    onToggle: () => _toggleDetail(visibleItems[index]),
                   ),
                 if (remaining > 0)
                   Padding(
@@ -3107,41 +3352,52 @@ class _ActivityRow extends StatelessWidget {
   const _ActivityRow({
     required this.item,
     required this.isLast,
-    required this.onTap,
+    required this.expanded,
+    required this.onOpen,
+    required this.onToggle,
   });
+
+  /// `F-06 VbDensity` publishes 48 for a comfortable table row, and the same
+  /// 48 is the forced touch target below 900 logical px. The row is the single
+  /// target either way, so one minimum serves both.
+  static const double minRowHeight = 48;
 
   final _BriefingActivityItem item;
   final bool isLast;
-  final VoidCallback onTap;
+  final bool expanded;
+  final VoidCallback onOpen;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final rowHeight = item.subtitle.trim().isEmpty ? 46.0 : 72.0;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(7),
-      child: SizedBox(
-        height: rowHeight,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: 32,
-              child: Stack(
-                alignment: Alignment.topCenter,
-                children: [
-                  if (!isLast)
-                    Positioned(
-                      top: 28,
-                      bottom: 0,
-                      child: Container(
-                        width: 1,
-                        color: item.accent.withValues(alpha: 0.25),
-                      ),
-                    ),
-                  Positioned(
-                    top: 8,
+    final detail = item.detail;
+    final expandable = item.isExpandable;
+    final isOpen = expandable && expanded;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+
+    // A row with hidden content toggles it; a row without one keeps navigating
+    // exactly as it did before. The visible control is what tells them apart.
+    final primaryAction = expandable ? onToggle : onOpen;
+
+    final header = Semantics(
+      button: true,
+      expanded: expandable ? isOpen : null,
+      child: InkWell(
+        onTap: primaryAction,
+        borderRadius: BorderRadius.circular(7),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: minRowHeight),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 32,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Center(
+                    widthFactor: 1,
+                    heightFactor: 1,
                     child: Container(
                       width: 28,
                       height: 28,
@@ -3165,62 +3421,295 @@ class _ActivityRow extends StatelessWidget {
                             ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 7, bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontWeight: item.unread
-                                  ? FontWeight.w700
-                                  : FontWeight.w600,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 7, bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: item.unread
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ),
-                        if (item.unread) ...[
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: item.accent,
-                              shape: BoxShape.circle,
+                          if (item.unread) ...[
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: item.accent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            _compactTime(item.createdAt),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
-                          const SizedBox(width: 6),
                         ],
-                        Text(
-                          _compactTime(item.createdAt),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                      ),
+                      if (item.subtitle.trim().isNotEmpty ||
+                          detail != null) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: item.subtitle.trim().isEmpty
+                                  ? const SizedBox.shrink()
+                                  : Text(
+                                      item.subtitle,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                            ),
+                            if (detail != null) ...[
+                              const SizedBox(width: 8),
+                              _ActivityDisclosureIndicator(
+                                detail: detail,
+                                expanded: isOpen,
+                                reduceMotion: reduceMotion,
+                              ),
+                            ],
+                          ],
                         ),
                       ],
-                    ),
-                    if (item.subtitle.trim().isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        item.subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
                     ],
-                  ],
+                  ),
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        if (detail != null)
+          AnimatedSize(
+            duration: reduceMotion
+                ? Duration.zero
+                // `T-03` publishes no duration of its own; `F-05` publishes
+                // exactly three (fast 120 / base 200 / pane 380) and `base` is
+                // the in-place one. Replace this if Design publishes a row
+                // disclosure duration.
+                : const Duration(milliseconds: 200),
+            curve: _briefingDisclosureCurve,
+            alignment: Alignment.topCenter,
+            child: isOpen
+                ? _ActivityDetailBody(detail: detail, onOpen: onOpen)
+                : const SizedBox(width: double.infinity),
+          ),
+      ],
+    );
+
+    // The timeline connector spans the whole row, so an open disclosure does
+    // not break the chain the collapsed list draws.
+    final body = isLast
+        ? content
+        : Stack(
+            children: [
+              Positioned(
+                top: 28,
+                bottom: 0,
+                left: 0,
+                width: 32,
+                child: Center(
+                  child: Container(
+                    width: 1,
+                    color: item.accent.withValues(alpha: 0.25),
+                  ),
+                ),
+              ),
+              content,
+            ],
+          );
+
+    if (!expandable) return body;
+
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+          if (!isOpen) onToggle();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          if (isOpen) onToggle();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: body,
+    );
+  }
+}
+
+/// Design `F-05`: `cubic-bezier(.22,1,.36,1)`, the single ERP motion curve.
+const Curve _briefingDisclosureCurve = Cubic(0.22, 1, 0.36, 1);
+
+/// The visible, labelled disclosure affordance.
+///
+/// It is deliberately not a second tap target: the whole row owns the gesture.
+/// `GUI_MOBILE_DESIGN_PRINCIPLES.md` requires that the label describe what
+/// opens, because "an unlabelled chevron is not enough".
+///
+/// No `Tooltip` here, and that is a measured exception rather than an
+/// oversight: `Tooltip` mounts an `OverlayPortal`, this file already composes
+/// inside `LayoutBuilder`, and a visible tooltip during a width change mutates
+/// one `_RenderLayoutBuilder` from inside another's `performLayout`. The word
+/// is rendered instead, so nothing is left to a hover-only channel.
+class _ActivityDisclosureIndicator extends StatelessWidget {
+  const _ActivityDisclosureIndicator({
+    required this.detail,
+    required this.expanded,
+    required this.reduceMotion,
+  });
+
+  /// `A-02 VbIconButton`: "el glifo no crece; crece el hit target".
+  static const double glyphSize = 16;
+
+  final _ActivityDetail detail;
+  final bool expanded;
+  final bool reduceMotion;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = expanded ? 'Ocultar' : 'Detalles';
+    return Semantics(
+      label: expanded ? 'Ocultar ${detail.noun}' : 'Ver ${detail.noun}',
+      child: ExcludeSemantics(
+        child: SizedBox(
+          // `A-02` control box on surface; the row supplies the touch target.
+          height: 28,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 2),
+              AnimatedRotation(
+                turns: expanded ? 0.5 : 0,
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 120),
+                curve: _briefingDisclosureCurve,
+                child: Icon(
+                  Icons.expand_more,
+                  size: glyphSize,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// In-place disclosure body.
+///
+/// Design `T-03 VbRowDisclosure`: opens in place, indented to the content,
+/// no shadow. It carries the sunken surface layer rather than the guide's
+/// `surfaceSelected`, because `appearance-palette-contract.md` keeps selected,
+/// expanded and applied as separate meanings and this list has no selection —
+/// which is also why there is no selected-row bar.
+class _ActivityDetailBody extends StatelessWidget {
+  const _ActivityDetailBody({required this.detail, required this.onOpen});
+
+  final _ActivityDetail detail;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      // Aligned after the existing 32 px gutter and its 10 px gap.
+      padding: const EdgeInsets.only(left: 42, bottom: 10),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          // `F-04`: radius ctrl 6.
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final field in detail.fields) ...[
+              Text(
+                field.label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  // `F-02` overline: +0.8 tracking.
+                  letterSpacing: 0.8,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                field.value,
+                maxLines: field.maxLines,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+            ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: onOpen,
+                style: TextButton.styleFrom(
+                  // This is an independent target, not part of the row, so it
+                  // carries its own height. `F-06`: compact 32, and the forced
+                  // 48 touch minimum below 900 logical px — measured on the
+                  // unzoomed viewport owner, never on a local breakpoint.
+                  minimumSize: Size(
+                    0,
+                    ResponsiveViewport.usesCompactShell(context)
+                        ? _ActivityRow.minRowHeight
+                        : 32,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: Text(detail.actionLabel),
               ),
             ),
           ],
@@ -3607,6 +4096,7 @@ class _BriefingActivityItem {
     required this.unread,
     this.notificationId,
     this.platformKey,
+    this.detail,
   });
 
   final String title;
@@ -3619,6 +4109,47 @@ class _BriefingActivityItem {
   final bool unread;
   final String? notificationId;
   final String? platformKey;
+
+  /// In-place disclosure content, or `null` when the payload resolved nothing
+  /// worth hiding. Only rows carrying a notification id can expand, because the
+  /// list owner tracks the open row by that id.
+  final _ActivityDetail? detail;
+
+  bool get isExpandable => detail != null && notificationId != null;
+}
+
+/// One labelled fact inside an activity disclosure.
+class _ActivityDetailField {
+  const _ActivityDetailField({
+    required this.label,
+    required this.value,
+    this.maxLines = 2,
+  });
+
+  final String label;
+  final String value;
+  final int maxLines;
+}
+
+/// Contents of an activity row disclosure: context plus one explicit action.
+///
+/// Design `GUÍA GENERAL Viñabike - Componentes` · `T-03 VbRowDisclosure`:
+/// "Contiene contexto y enlaces, no un formulario". Anything that needs fields
+/// belongs in a side sheet, not here.
+class _ActivityDetail {
+  const _ActivityDetail({
+    required this.noun,
+    required this.actionLabel,
+    required this.fields,
+  });
+
+  /// Names what opens, for the accessible label of the disclosure control.
+  final String noun;
+
+  /// Verb + object, per `A-01 VbButton` (`text` variant) content rule.
+  final String actionLabel;
+
+  final List<_ActivityDetailField> fields;
 }
 
 void _navigateToRoute(BuildContext context, String route) {

@@ -55,8 +55,44 @@ Future<void> showWebsiteBlockEditSheet({
   required BuildContext context,
   required WebsiteEditModeProvider provider,
 }) {
-  return showModalBottomSheet<void>(
+  return showWebsiteContextualSheet<void>(
     context: context,
+    builder: (sheetContext) {
+      // `.value`: the sheet is a route outside the editor subtree, so it is
+      // handed the SAME provider instance instead of creating a second one.
+      return ChangeNotifierProvider<WebsiteEditModeProvider>.value(
+        value: provider,
+        child: const WebsiteBlockEditSheet(),
+      );
+    },
+  );
+}
+
+/// The `O-05` route, owned once.
+///
+/// Every contextual sheet in the editor opens through here so the barrier, the
+/// scroll-control flag and the SafeArea decision cannot drift between two
+/// sheets that are supposed to be the same object to the operator.
+///
+/// [useRootNavigator] is the one thing a caller decides, because it depends on
+/// where the caller sits relative to the contextual dock. The dock is a `Stack`
+/// sibling of the canvas inside the editor shell, so it paints above every
+/// route the canvas's own Navigator hosts:
+///
+/// * opened from the dock — the block sheet — the nearest Navigator is already
+///   above the shell, and the default keeps that route inside the workspace
+///   branch where it belongs;
+/// * opened from inside the canvas — the inline CTA — it is not, and the sheet
+///   would render *under* the dock. The canvas has no handle on the branch
+///   Navigator, so that caller escapes to the root.
+Future<T?> showWebsiteContextualSheet<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool useRootNavigator = false,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    useRootNavigator: useRootNavigator,
     // The canvas must stay visible above the sheet: t10 10f edits the block
     // while its image is still on screen. A scrim would defeat that.
     barrierColor: Colors.transparent,
@@ -66,14 +102,7 @@ Future<void> showWebsiteBlockEditSheet({
     // handling; the route must not letterbox it first.
     isScrollControlled: true,
     useSafeArea: false,
-    builder: (sheetContext) {
-      // `.value`: the sheet is a route outside the editor subtree, so it is
-      // handed the SAME provider instance instead of creating a second one.
-      return ChangeNotifierProvider<WebsiteEditModeProvider>.value(
-        value: provider,
-        child: const WebsiteBlockEditSheet(),
-      );
-    },
+    builder: builder,
   );
 }
 
@@ -103,6 +132,78 @@ class _WebsiteBlockEditSheetState extends State<WebsiteBlockEditSheet> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<WebsiteEditModeProvider>();
+    final theme = Theme.of(context);
+
+    final selectedId = provider.selectedBlockId;
+    final block = selectedId == null ? null : provider.getBlock(selectedId);
+    final title = block == null
+        ? 'Bloque'
+        : WebsiteEditorContextualDock.identityLabelFor(block);
+    final scope = WebsiteEditorContextualDock.scopeLabelFor(
+      viewport: provider.previewViewport,
+      scope: provider.writeScope,
+    );
+
+    return WebsiteContextualSheetScaffold(
+      surfaceKey: WebsiteBlockEditSheet.sheetKey,
+      title: title,
+      scope: scope,
+      headerExtras: [
+        Divider(height: 1, color: theme.dividerColor),
+        _SheetSectionTabs(
+          key: WebsiteBlockEditSheet.sectionTabsKey,
+          section: _section,
+          onChanged: (value) => setState(() => _section = value),
+        ),
+        Divider(height: 1, color: theme.dividerColor),
+      ],
+      footer: _SheetDoneCta(
+        onPressed: () => Navigator.of(context).maybePop(),
+      ),
+      child: selectedId == null
+          ? const _NoSelection()
+          : DeferredWebsiteBlockEditSurface(
+              editProvider: provider,
+              section: _section,
+            ),
+    );
+  }
+}
+
+/// The `O-05` chrome itself: cap, radius, handle, title, keyboard and SafeArea.
+///
+/// Extracted from the block sheet so a second contextual sheet reuses the
+/// published geometry instead of restating it. Everything measured here comes
+/// from [WebsiteBlockEditSheetGeometry], which reads `handoff-t10/spec.json`;
+/// this widget adds no value of its own.
+class WebsiteContextualSheetScaffold extends StatelessWidget {
+  const WebsiteContextualSheetScaffold({
+    super.key,
+    required this.title,
+    required this.child,
+    required this.footer,
+    this.scope,
+    this.surfaceKey,
+    this.headerExtras = const <Widget>[],
+  });
+
+  final String title;
+
+  /// The `Escribe en: …` sentence, when the surface can state it truthfully.
+  /// Null renders no badge — a sheet that does not know its attribution says
+  /// nothing rather than guessing one.
+  final String? scope;
+
+  final Widget child;
+  final Widget footer;
+  final Key? surfaceKey;
+
+  /// Rows between the title and the body — the block sheet's `T-04` tabs and
+  /// their separators. Empty for a sheet that edits a single object.
+  final List<Widget> headerExtras;
+
+  @override
+  Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.maybeOf(context);
@@ -117,24 +218,13 @@ class _WebsiteBlockEditSheetState extends State<WebsiteBlockEditSheet> {
       availableHeight <= 0 ? media.size.height : availableHeight,
     );
 
-    final selectedId = provider.selectedBlockId;
-    final block =
-        selectedId == null ? null : provider.getBlock(selectedId);
-    final title = block == null
-        ? 'Bloque'
-        : WebsiteEditorContextualDock.identityLabelFor(block);
-    final scope = WebsiteEditorContextualDock.scopeLabelFor(
-      viewport: provider.previewViewport,
-      scope: provider.writeScope,
-    );
-
     return Padding(
       // `viewInsets` pushes the whole sheet up with the keyboard.
       padding: EdgeInsets.only(bottom: keyboardInset),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
         child: Material(
-          key: WebsiteBlockEditSheet.sheetKey,
+          key: surfaceKey,
           color: theme.colorScheme.surface,
           shadowColor: roles?.shadow ?? theme.shadowColor,
           elevation: 12,
@@ -149,24 +239,9 @@ class _WebsiteBlockEditSheetState extends State<WebsiteBlockEditSheet> {
               children: [
                 const _SheetHandle(),
                 _SheetTitleRow(title: title, scope: scope),
-                Divider(height: 1, color: theme.dividerColor),
-                _SheetSectionTabs(
-                  key: WebsiteBlockEditSheet.sectionTabsKey,
-                  section: _section,
-                  onChanged: (value) => setState(() => _section = value),
-                ),
-                Divider(height: 1, color: theme.dividerColor),
-                Expanded(
-                  child: selectedId == null
-                      ? const _NoSelection()
-                      : DeferredWebsiteBlockEditSurface(
-                          editProvider: provider,
-                          section: _section,
-                        ),
-                ),
-                _SheetDoneCta(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
+                ...headerExtras,
+                Expanded(child: child),
+                footer,
               ],
             ),
           ),
@@ -203,11 +278,12 @@ class _SheetTitleRow extends StatelessWidget {
   const _SheetTitleRow({required this.title, required this.scope});
 
   final String title;
-  final String scope;
+  final String? scope;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scopeLabel = scope;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
       child: Row(
@@ -227,8 +303,10 @@ class _SheetTitleRow extends StatelessWidget {
                   ),
             ),
           ),
-          const SizedBox(width: 8),
-          VbStatusBadge(label: scope, tone: VbStatusTone.neutral),
+          if (scopeLabel != null) ...[
+            const SizedBox(width: 8),
+            VbStatusBadge(label: scopeLabel, tone: VbStatusTone.neutral),
+          ],
         ],
       ),
     );

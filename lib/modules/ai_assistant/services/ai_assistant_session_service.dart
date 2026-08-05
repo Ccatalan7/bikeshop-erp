@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../shared/models/current_user_profile.dart';
@@ -11,6 +13,8 @@ import '../../sales/services/sales_service.dart';
 import '../../tasks/services/task_service.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../models/ai_assistant_session_state.dart';
+import '../models/ai_agent_tool.dart';
+import 'ai_assistant_turn_engine.dart';
 import 'ai_service.dart';
 
 /// Domain services one assistant turn needs. The panel collects them from the
@@ -45,6 +49,13 @@ const String _untrustedJobsNotice =
     'pertenezcan a este taller, así que los dejé fuera de esta respuesta. Esto '
     'no significa que no haya trabajos.';
 
+const int _maxUserMessageBytes = 8 * 1024;
+const int _maxTranscriptEntries = 120;
+const int _maxTranscriptBytes = 256 * 1024;
+const String _oversizedMessageNotice =
+    'Ese mensaje es demasiado largo para procesarlo de forma segura. Divídelo '
+    'en partes más pequeñas (máximo 8 KB por mensaje).';
+
 /// Owns the assistant session: the visible transcript, the authority it is
 /// bound to, the generation that invalidates in-flight turns, and the engine.
 ///
@@ -54,23 +65,25 @@ const String _untrustedJobsNotice =
 /// previous search. One owner removes that class of defect by construction.
 class AIAssistantSessionService extends ChangeNotifier {
   AIAssistantSessionService({
-    AIAssistantService Function()? engineFactory,
+    AIAssistantTurnEngine Function()? engineFactory,
   }) : _engineFactory = engineFactory ?? _defaultEngineFactory;
 
-  static AIAssistantService _defaultEngineFactory() {
+  static AIAssistantTurnEngine _defaultEngineFactory() {
     final engine = AIAssistantService();
     engine.initialize();
     return engine;
   }
 
-  final AIAssistantService Function() _engineFactory;
+  final AIAssistantTurnEngine Function() _engineFactory;
   final AuthorityCacheScope _scope = AuthorityCacheScope();
 
-  AIAssistantService? _engine;
+  AIAssistantTurnEngine? _engine;
   String? _requestedUserId;
   int _resolutionToken = 0;
   AIAssistantCapabilityFingerprint _capabilities =
       AIAssistantCapabilityFingerprint.none;
+  String _authorityRole = 'unknown';
+  Set<String> _authorityPermissions = const <String>{};
   AIAssistantSessionStatus _status = AIAssistantSessionStatus.signedOut;
   bool _isSending = false;
   final List<AIAssistantTranscriptEntry> _transcript =
@@ -100,7 +113,7 @@ class AIAssistantSessionService extends ChangeNotifier {
   int get generation => _scope.generation;
 
   @visibleForTesting
-  AIAssistantService? get engine => _engine;
+  AIAssistantTurnEngine? get engine => _engine;
 
   /// Binds the session to one coherent Auth user + tenant + ERP profile.
   ///
@@ -188,9 +201,9 @@ class AIAssistantSessionService extends ChangeNotifier {
     String? resolvedTenantId;
     try {
       resolvedTenantId = _normalize(await resolveTenantId());
-    } catch (error) {
+    } catch (_) {
       if (!kReleaseMode) {
-        debugPrint('[AIAssistantSession] Tenant resolution failed: $error');
+        debugPrint('[AIAssistantSession] Tenant resolution failed.');
       }
       resolvedTenantId = null;
     }
@@ -207,6 +220,8 @@ class AIAssistantSessionService extends ChangeNotifier {
 
     _scope.bind(userId: normalizedUser, tenantId: resolvedTenantId);
     _capabilities = fingerprint;
+    _authorityRole = profile.role.trim().toLowerCase();
+    _authorityPermissions = _toolPermissionsFor(profile);
     _engine = null;
     _isSending = false;
     _transcript
@@ -219,6 +234,54 @@ class AIAssistantSessionService extends ChangeNotifier {
       );
     _status = AIAssistantSessionStatus.ready;
     notifyListeners();
+  }
+
+  Set<String> _toolPermissionsFor(CurrentUserProfile profile) {
+    final role = profile.role.trim().toLowerCase();
+    final granted = <String>{
+      ...profile.permissions.entries
+          .where((entry) => entry.value)
+          .map((entry) => entry.key.trim())
+          .where((permission) => permission.isNotEmpty),
+    };
+
+    const staffRoles = <String>{
+      'owner',
+      'admin',
+      'manager',
+      'cashier',
+      'mechanic',
+      'accountant',
+    };
+    if (staffRoles.contains(role)) {
+      granted.add(AIToolPermission.operationalRead);
+    }
+
+    const salesRoles = <String>{
+      'owner',
+      'admin',
+      'manager',
+      'cashier',
+      'accountant',
+    };
+    if (salesRoles.contains(role) ||
+        profile.permissions['create_invoices'] == true ||
+        profile.permissions['access_accounting'] == true) {
+      granted.add(AIToolPermission.salesRead);
+    }
+
+    const purchaseRoles = <String>{
+      'owner',
+      'admin',
+      'manager',
+      'accountant',
+    };
+    if (purchaseRoles.contains(role) ||
+        profile.permissions['access_accounting'] == true) {
+      granted.add(AIToolPermission.purchasesRead);
+    }
+
+    return Set<String>.unmodifiable(granted);
   }
 
   /// Sends one turn. The transcript entry and the model input come from this
@@ -235,6 +298,16 @@ class AIAssistantSessionService extends ChangeNotifier {
     if (!canSend) return;
     final text = rawText.trim();
     if (text.isEmpty) return;
+    if (utf8.encode(text).length > _maxUserMessageBytes) {
+      // Never retain or forward the oversized value. The fixed notice keeps
+      // prompts, pasted exports and accidental files out of both transcript
+      // memory and the model/provider boundary.
+      _appendTranscript(
+        const AIAssistantTranscriptEntry.notice(_oversizedMessageNotice),
+      );
+      notifyListeners();
+      return;
+    }
 
     final lease = _scope.capture();
     if (lease == null) return;
@@ -255,14 +328,14 @@ class AIAssistantSessionService extends ChangeNotifier {
           );
 
     _isSending = true;
-    _transcript.add(
+    _appendTranscript(
       AIAssistantTranscriptEntry(
         role: AIAssistantTranscriptRole.user,
         text: text,
       ),
     );
     if (hasVisibleJobsContext && !jobsContext.isTrusted) {
-      _transcript.add(
+      _appendTranscript(
         const AIAssistantTranscriptEntry.notice(_untrustedJobsNotice),
       );
       if (!kReleaseMode) {
@@ -295,11 +368,15 @@ class AIAssistantSessionService extends ChangeNotifier {
         // The turn's authority travels with the turn, so every shared cache
         // the engine reads is checked against this exact key rather than
         // against whatever the service happens to be bound to.
-        authority: AIAssistantTurnAuthority(lease.scope),
+        authority: AIAssistantTurnAuthority(
+          lease.scope,
+          role: _authorityRole,
+          permissions: _authorityPermissions,
+        ),
       );
-    } catch (error) {
+    } catch (_) {
       if (!kReleaseMode) {
-        debugPrint('[AIAssistantSession] Turn failed: $error');
+        debugPrint('[AIAssistantSession] Turn failed.');
       }
       response = const AIAssistantResponse(
         text: 'No pude procesar esa solicitud ahora. Intenta de nuevo en unos '
@@ -311,7 +388,7 @@ class AIAssistantSessionService extends ChangeNotifier {
     // publishes, and never clears the replacement session's sending flag.
     if (!_scope.owns(lease)) return;
 
-    _transcript.add(
+    _appendTranscript(
       AIAssistantTranscriptEntry(
         role: AIAssistantTranscriptRole.assistant,
         text: response.text,
@@ -320,6 +397,34 @@ class AIAssistantSessionService extends ChangeNotifier {
     );
     _isSending = false;
     notifyListeners();
+  }
+
+  void _appendTranscript(AIAssistantTranscriptEntry entry) {
+    _transcript.add(entry);
+    while (_transcript.length > _maxTranscriptEntries ||
+        _transcriptByteLength() > _maxTranscriptBytes) {
+      _transcript.removeAt(0);
+    }
+  }
+
+  int _transcriptByteLength() {
+    var total = 0;
+    for (final entry in _transcript) {
+      total += utf8.encode(entry.text).length;
+      for (final card in entry.cards) {
+        for (final value in <String?>[
+          card.kind,
+          card.title,
+          card.eyebrow,
+          card.subtitle,
+          card.description,
+          ...card.chips,
+        ]) {
+          if (value != null) total += utf8.encode(value).length;
+        }
+      }
+    }
+    return total;
   }
 
   /// Drops every trace of the current session: visible transcript, model
@@ -331,6 +436,8 @@ class AIAssistantSessionService extends ChangeNotifier {
     _engine?.resetChat();
     _engine = null;
     _capabilities = AIAssistantCapabilityFingerprint.none;
+    _authorityRole = 'unknown';
+    _authorityPermissions = const <String>{};
     _transcript.clear();
     _isSending = false;
     _status = status;
@@ -345,8 +452,13 @@ class AIAssistantSessionService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _resolutionToken++;
+    _scope.bind(userId: null, tenantId: null);
+    _scope.invalidate();
     _engine?.resetChat();
     _engine = null;
+    _transcript.clear();
+    _isSending = false;
     super.dispose();
   }
 }

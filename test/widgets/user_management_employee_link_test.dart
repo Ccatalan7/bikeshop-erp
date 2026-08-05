@@ -204,15 +204,144 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'identity conflict is explained before send and creates no invitation',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(900, 820));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final tenantService = TenantService.testing(
+        currentUserId: () => null,
+        profileLookup: (_) async => const [],
+      );
+      final userService = _FakeUserManagementService(
+        tenantService,
+        overview: _overview(),
+        identityCheck: const InvitationIdentityCheck(
+          eligible: false,
+          status: InvitationIdentityStatus.externalErpMembership,
+          hasExistingAuthIdentity: true,
+          isExistingCustomer: false,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TenantService>.value(value: tenantService),
+            Provider<UserManagementService>.value(value: userService),
+          ],
+          child: const MaterialApp(home: UserManagementPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar equipo'));
+      await tester.pumpAndSettle();
+
+      final emailFinder = find.byKey(
+        const ValueKey('user-invite-email-field'),
+      );
+      await tester.enterText(emailFinder, 'legacy@example.com');
+      await tester.tap(find.byKey(const ValueKey('user-invite-name-field')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('user-invite-identity-error')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('reconciliación'), findsOneWidget);
+      await tester.tap(find.text('Enviar invitación'));
+      await tester.pumpAndSettle();
+      expect(find.text('Invitar usuario interno'), findsOneWidget);
+      expect(userService.invitationCount, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'invitation failure keeps the dialog and entered identity intact',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(900, 820));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final tenantService = TenantService.testing(
+        currentUserId: () => null,
+        profileLookup: (_) async => const [],
+      );
+      final userService = _FakeUserManagementService(
+        tenantService,
+        overview: _overview(),
+        invitationError: const UserManagementException(
+          code: 'invitation_delivery_failed',
+          message:
+              'No se pudo entregar el correo de invitación. No se marcó como enviado; inténtalo nuevamente.',
+          status: 503,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TenantService>.value(value: tenantService),
+            Provider<UserManagementService>.value(value: userService),
+          ],
+          child: const MaterialApp(home: UserManagementPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invitar equipo'));
+      await tester.pumpAndSettle();
+
+      final emailFinder = find.byKey(
+        const ValueKey('user-invite-email-field'),
+      );
+      final nameFinder = find.byKey(
+        const ValueKey('user-invite-name-field'),
+      );
+      await tester.enterText(emailFinder, 'cliente@example.com');
+      await tester.enterText(nameFinder, 'Cliente Existente');
+      await tester.tap(find.text('Enviar invitación'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Invitar usuario interno'), findsOneWidget);
+      expect(
+        tester.widget<TextFormField>(emailFinder).controller!.text,
+        'cliente@example.com',
+      );
+      expect(
+        tester.widget<TextFormField>(nameFinder).controller!.text,
+        'Cliente Existente',
+      );
+      expect(
+        find.byKey(const ValueKey('user-invite-submission-error')),
+        findsOneWidget,
+      );
+      expect(userService.identityCheckCount, 2);
+      expect(userService.invitationCount, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 class _FakeUserManagementService extends UserManagementService {
   _FakeUserManagementService(
     super.tenantService, {
     required this.overview,
+    this.identityCheck = const InvitationIdentityCheck(
+      eligible: true,
+      status: InvitationIdentityStatus.availableNewIdentity,
+      hasExistingAuthIdentity: false,
+      isExistingCustomer: false,
+    ),
+    this.invitationError,
   });
 
   final Map<String, dynamic> overview;
+  final InvitationIdentityCheck identityCheck;
+  final UserManagementException? invitationError;
+  int identityCheckCount = 0;
+  int invitationCount = 0;
 
   @override
   Future<Map<String, dynamic>> getIdentityOverview({
@@ -220,6 +349,29 @@ class _FakeUserManagementService extends UserManagementService {
     String? customerId,
   }) async {
     return overview;
+  }
+
+  @override
+  Future<InvitationIdentityCheck> checkInternalInvitationIdentity({
+    required String email,
+    String? employeeId,
+  }) async {
+    identityCheckCount += 1;
+    return identityCheck;
+  }
+
+  @override
+  Future<Map<String, dynamic>> inviteInternalUser({
+    required String email,
+    required String role,
+    required Map<String, bool> permissions,
+    String? name,
+    String? employeeId,
+  }) async {
+    invitationCount += 1;
+    final error = invitationError;
+    if (error != null) throw error;
+    return {'success': true, 'emailSent': true, 'invitationId': 'invitation-1'};
   }
 }
 

@@ -115,7 +115,17 @@ void main() {
     expect(panel, contains('_mail.briefingEmails'));
     expect(panel, contains('_activityPulseBuckets(digest, items)'));
     expect(panel, contains('totalDays > 90'));
-    expect(panel, contains('final compact = constraints.maxWidth < 360'));
+    // The toolbar still abbreviates its alert label on a narrow host, but the
+    // threshold moves with the text: a fixed 360 px overflowed the flex at
+    // text scale 1.3, where a 384 px panel lands on exactly 360.0.
+    expect(panel, contains('final compact = constraints.maxWidth <'));
+    expect(
+      panel,
+      contains('MediaQuery.textScalerOf(context).scale(labelFontSize)'),
+    );
+    expect(panel, contains('360 * labelScale'));
+    expect(panel,
+        contains("compact ? '\$unreadAlerts' : '\$unreadAlerts nuevas'"));
     expect(
       mail,
       contains(

@@ -8,6 +8,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MESSAGE=''
 STATE_FILE_REQUEST='auto'
 NOTES_CANDIDATE=''
+CANONICAL_RELEASE_BRANCH="${VINABIKE_ERP_RELEASE_BRANCH:-smartpegas1.0}"
+CHECK_RELEASE_BRANCH_ONLY='NO'
 state_temp_file=''
 release_notes_temp_dir=''
 release_notes_from_commit=''
@@ -36,6 +38,9 @@ while [[ $# -gt 0 ]]; do
       NOTES_CANDIDATE="${2:?--notes-candidate requires a value}"
       shift
       ;;
+    --check-release-branch)
+      CHECK_RELEASE_BRANCH_ONLY='YES'
+      ;;
     *)
       echo "Unknown option: $1" >&2
       exit 64
@@ -53,6 +58,68 @@ require_command() {
     echo "Required command '$1' was not found." >&2
     exit 127
   fi
+}
+
+ensure_safe_production_branch() {
+  local current_branch="$1"
+  local boundary_output
+
+  if boundary_output="$(
+    bash scripts/publish_macos_update.sh --check-release-branch 2>&1
+  )"; then
+    printf '%s\n' "$boundary_output"
+    branch="$current_branch"
+    return
+  fi
+
+  if [[ "$current_branch" == "$CANONICAL_RELEASE_BRANCH" ]]; then
+    printf '%s\n' "$boundary_output" >&2
+    exit 1
+  fi
+
+  step "Checking a safe handoff from $current_branch to $CANONICAL_RELEASE_BRANCH"
+  if ! git fetch --quiet --no-tags origin \
+    "refs/heads/${CANONICAL_RELEASE_BRANCH}:refs/remotes/origin/${CANONICAL_RELEASE_BRANCH}"; then
+    printf '%s\n' "$boundary_output" >&2
+    echo "Could not read origin/$CANONICAL_RELEASE_BRANCH." >&2
+    exit 1
+  fi
+
+  local current_head
+  local canonical_remote_head
+  current_head="$(git rev-parse HEAD)"
+  canonical_remote_head="$(
+    git rev-parse "refs/remotes/origin/${CANONICAL_RELEASE_BRANCH}"
+  )"
+  if [[ "$current_head" != "$canonical_remote_head" ]]; then
+    printf '%s\n' "$boundary_output" >&2
+    echo "Automatic branch handoff was not attempted because $current_branch" >&2
+    echo "does not point to the exact live origin/$CANONICAL_RELEASE_BRANCH commit." >&2
+    echo 'Review or integrate that history first; the publisher will not merge it.' >&2
+    exit 1
+  fi
+
+  if git show-ref --verify --quiet "refs/heads/${CANONICAL_RELEASE_BRANCH}"; then
+    local canonical_local_head
+    canonical_local_head="$(git rev-parse "refs/heads/${CANONICAL_RELEASE_BRANCH}")"
+    if [[ "$canonical_local_head" != "$canonical_remote_head" ]]; then
+      if ! git merge-base --is-ancestor \
+        "$canonical_local_head" "$canonical_remote_head"; then
+        echo "Local $CANONICAL_RELEASE_BRANCH contains history not present on origin." >&2
+        echo 'The publisher will not move or discard that branch automatically.' >&2
+        exit 1
+      fi
+      git branch -f "$CANONICAL_RELEASE_BRANCH" "$canonical_remote_head"
+    fi
+  else
+    git branch --track \
+      "$CANONICAL_RELEASE_BRANCH" "origin/$CANONICAL_RELEASE_BRANCH"
+  fi
+
+  step "Switching safely to $CANONICAL_RELEASE_BRANCH at the same source commit"
+  git switch "$CANONICAL_RELEASE_BRANCH"
+  branch="$CANONICAL_RELEASE_BRANCH"
+  bash scripts/publish_macos_update.sh --check-release-branch
 }
 
 cleanup_state_temp_file() {
@@ -270,7 +337,12 @@ if [[ -z "$branch" ]]; then
 fi
 
 step 'Checking the macOS Production branch boundary'
-bash scripts/publish_macos_update.sh --check-release-branch
+ensure_safe_production_branch "$branch"
+
+if [[ "$CHECK_RELEASE_BRANCH_ONLY" == 'YES' ]]; then
+  echo 'Shared ERP release branch preflight passed.'
+  exit 0
+fi
 
 step "Checking live source history for $branch"
 git fetch --quiet --no-tags origin "refs/heads/${branch}:refs/remotes/origin/${branch}"

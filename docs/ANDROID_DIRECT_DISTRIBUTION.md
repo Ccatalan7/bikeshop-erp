@@ -98,6 +98,11 @@ The normal cross-platform developer action on macOS is:
 Cmd+Shift+B -> Publish ERP Update (macOS + Android)
 ```
 
+The macOS combined publisher is the default build task only on macOS; the
+working Windows flow is unchanged. A safe macOS handoff from an agent branch
+occurs only when it identifies the exact live `origin/smartpegas1.0` commit;
+release preparation never merges or overwrites divergent history automatically.
+
 On Windows, the equivalent single action is:
 
 ```text

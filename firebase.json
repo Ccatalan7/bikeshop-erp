@@ -618,6 +618,11 @@
       ],
       "redirects": [
         {
+          "source": "/accept-invitation",
+          "destination": "https://project-vinabike.web.app/accept-invitation",
+          "type": 302
+        },
+        {
           "source": "/productos/000ca591-e26b-4397-b56d-fcbab4ee36bb",
           "destination": "/productos/camara-bicicleta-aro-27-5-x-1-75-a-2-35-v-francesa-arisun/6927116164430",
           "type": 301

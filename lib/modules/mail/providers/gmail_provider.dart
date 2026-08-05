@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/mail_folder.dart';
 import 'email_provider.dart';
 
 /// Gmail implementation of EmailProvider
@@ -23,8 +24,14 @@ class GmailProvider extends EmailProvider {
   Email? _selectedEmail;
   bool _isLoading = false;
   String? _error;
-  String? _nextPageToken;
+  // Un cursor por carpeta. El refresco de la bandeja de entrada corre en
+  // segundo plano para las notificaciones mientras el usuario navega otra
+  // carpeta: un cursor único haría que «cargar más» en Enviados continuara
+  // con el token de la bandeja de entrada.
+  final Map<MailFolder, String?> _folderPageTokens = {};
+  String? _searchPageToken;
   String? _lastSearchQuery;
+  MailFolder? _lastSearchFolder;
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -56,7 +63,10 @@ class GmailProvider extends EmailProvider {
   Email? get selectedEmail => _selectedEmail;
 
   @override
-  bool get canLoadMore => _nextPageToken != null;
+  bool get canLoadMore => _searchPageToken != null;
+
+  @override
+  bool hasMoreIn(MailFolder folder) => _folderPageTokens[folder] != null;
 
   @override
   Future<void> initialize() async {
@@ -326,7 +336,8 @@ class GmailProvider extends EmailProvider {
   }
 
   @override
-  Future<List<Email>> getInbox({
+  Future<List<Email>> getMessages({
+    MailFolder folder = MailFolder.inbox,
     int limit = 50,
     int start = 0,
     String? pageToken,
@@ -347,18 +358,28 @@ class GmailProvider extends EmailProvider {
       final normalizedSearch = searchQuery?.trim();
       final effectiveSearch =
           normalizedSearch?.isEmpty ?? true ? null : normalizedSearch;
-      if (start == 0 || effectiveSearch != _lastSearchQuery) {
-        _nextPageToken = null;
+      final isSearch = effectiveSearch != null;
+      if (isSearch &&
+          (start == 0 ||
+              effectiveSearch != _lastSearchQuery ||
+              folder != _lastSearchFolder)) {
+        _searchPageToken = null;
+      }
+      if (!isSearch && start == 0) {
+        _folderPageTokens[folder] = null;
       }
       _lastSearchQuery = effectiveSearch;
+      _lastSearchFolder = isSearch ? folder : _lastSearchFolder;
 
       debugPrint(
         '📧 [Gmail] Fetching inbox (limit: $limit, start: $start, search: ${effectiveSearch ?? "none"}, known: ${knownById.length})...',
       );
-      final effectivePageToken =
-          pageToken ?? (start > 0 ? _nextPageToken : null);
+      final storedToken =
+          isSearch ? _searchPageToken : _folderPageTokens[folder];
+      final effectivePageToken = pageToken ?? (start > 0 ? storedToken : null);
       final prefs = await SharedPreferences.getInstance();
       final refreshAttachmentMetadata = start == 0 &&
+          folder == MailFolder.inbox &&
           effectiveSearch == null &&
           knownById.isNotEmpty &&
           !(prefs.getBool(_attachmentMetadataMigrationKey) ?? false);
@@ -368,6 +389,10 @@ class GmailProvider extends EmailProvider {
           'action': 'list_inbox',
           'limit': limit,
           'start': start,
+          // Una función desplegada antigua ignora este campo y sigue
+          // listando INBOX; el campo sólo cambia el resultado cuando la
+          // función ya valida el label contra su propia allowlist.
+          if (folder != MailFolder.inbox) 'label_id': folder.gmailLabelId,
           if (effectiveSearch != null) 'search_query': effectiveSearch,
           if (effectivePageToken != null && effectivePageToken.isNotEmpty)
             'page_token': effectivePageToken,
@@ -381,8 +406,13 @@ class GmailProvider extends EmailProvider {
       }
 
       final data = response.data as Map<String, dynamic>? ?? {};
-      _nextPageToken = data['nextPageToken']?.toString();
-      if (_nextPageToken?.isEmpty ?? false) _nextPageToken = null;
+      var nextToken = data['nextPageToken']?.toString();
+      if (nextToken?.isEmpty ?? false) nextToken = null;
+      if (isSearch) {
+        _searchPageToken = nextToken;
+      } else {
+        _folderPageTokens[folder] = nextToken;
+      }
       final messages = data['messages'] as List? ?? [];
       _emails = messages.whereType<Map>().map((message) {
         final typedMessage = Map<String, dynamic>.from(message);
@@ -390,7 +420,7 @@ class GmailProvider extends EmailProvider {
         if (typedMessage['known'] == true && knownById.containsKey(id)) {
           return knownById[id]!;
         }
-        return _parseGmailMessage(typedMessage);
+        return _parseGmailMessage(typedMessage, folder: folder);
       }).toList();
 
       if (refreshAttachmentMetadata) {
@@ -408,7 +438,10 @@ class GmailProvider extends EmailProvider {
     }
   }
 
-  Email _parseGmailMessage(Map<String, dynamic> data) {
+  Email _parseGmailMessage(
+    Map<String, dynamic> data, {
+    MailFolder folder = MailFolder.inbox,
+  }) {
     final headers = data['payload']?['headers'] as List? ?? [];
     String getHeader(String name) {
       final header = headers.firstWhere(
@@ -428,7 +461,7 @@ class GmailProvider extends EmailProvider {
     return Email(
       id: data['id'] ?? '',
       providerId: _providerId,
-      folderId: 'INBOX',
+      folderId: folder.gmailLabelId,
       subject:
           getHeader('Subject').isEmpty ? '(Sin asunto)' : getHeader('Subject'),
       fromAddress: getHeader('From'),
@@ -926,6 +959,73 @@ class GmailProvider extends EmailProvider {
       return true;
     } catch (e) {
       debugPrint('moveToTrash error: $e');
+      _error = e.toString();
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> restoreFromTrash(String emailId) async {
+    try {
+      // `untrash` devuelve el mensaje a los labels que tenía antes de la
+      // papelera; el INBOX explícito cubre el caso de un correo que ya no
+      // conservaba ninguno visible.
+      await _proxyRequest(
+          method: 'POST', url: '$_apiBase/messages/$emailId/untrash');
+      await _proxyRequest(
+        method: 'POST',
+        url: '$_apiBase/messages/$emailId/modify',
+        body: {
+          'addLabelIds': ['INBOX'],
+        },
+      );
+      _emails.removeWhere((e) => e.id == emailId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('restoreFromTrash error: $e');
+      _error = e.toString();
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> markAsSpam(String emailId) async {
+    try {
+      await _proxyRequest(
+        method: 'POST',
+        url: '$_apiBase/messages/$emailId/modify',
+        body: {
+          'addLabelIds': ['SPAM'],
+          'removeLabelIds': ['INBOX'],
+        },
+      );
+      _emails.removeWhere((e) => e.id == emailId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('markAsSpam error: $e');
+      _error = e.toString();
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> markAsNotSpam(String emailId) async {
+    try {
+      await _proxyRequest(
+        method: 'POST',
+        url: '$_apiBase/messages/$emailId/modify',
+        body: {
+          'addLabelIds': ['INBOX'],
+          'removeLabelIds': ['SPAM'],
+        },
+      );
+      _emails.removeWhere((e) => e.id == emailId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('markAsNotSpam error: $e');
       _error = e.toString();
       return false;
     }

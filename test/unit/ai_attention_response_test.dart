@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/ai_assistant/models/ai_agent_tool.dart';
 import 'package:vinabike_erp/modules/ai_assistant/models/ai_assistant_destination.dart';
 import 'package:vinabike_erp/modules/ai_assistant/services/ai_service.dart';
 import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
@@ -14,7 +15,10 @@ import 'package:vinabike_erp/shared/services/authority_scoped_cache.dart';
 /// back — what it claims, what it refuses to claim, and what it never leaks.
 const _tenant = 'tenant-a';
 final _scope = ErpAuthorityScopeKey.from(userId: 'user-a', tenantId: _tenant)!;
-final _authority = AIAssistantTurnAuthority(_scope);
+final _authority = AIAssistantTurnAuthority(
+  _scope,
+  permissions: const <String>{AIToolPermission.operationalRead},
+);
 
 const _secret = 'PGRST302-conn-tenant-b-token';
 

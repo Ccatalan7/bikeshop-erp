@@ -92,13 +92,6 @@ if [[ "$command_scan" == *"production"* &&
   deny "Hosted PII override is not pre-approved. Hand the exact columns and necessity back to Codex/the owner."
 fi
 
-if [[ "$command_scan" == *"production"* &&
-      "$command_scan" == *"--write"* &&
-      ( "$command_scan" == *"scripts/db/query.sh"* ||
-        "$command_scan" == *"just db-query"* ) ]]; then
-  deny "Production database writes require explicit owner authorization and must be executed through the guarded workflow by Codex."
-fi
-
 if [[ "$command_scan" == *"scripts/db/production_validation.sh refresh"* ]]; then
   deny "Refreshing the production-derived database cache is an external read with operational impact; hand it back to Codex."
 fi

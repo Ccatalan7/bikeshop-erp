@@ -53,6 +53,22 @@ type StaffRole =
 
 type AuthorityRole = "owner" | StaffRole;
 
+export type InvitationIdentityStatus =
+  | "available_new_identity"
+  | "available_existing_customer"
+  | "active_staff_email_requires_direct_link"
+  | "staff_membership_inactive"
+  | "staff_identity_tenant_conflict"
+  | "worker_identity_conflict"
+  | "historical_employee_identity_conflict";
+
+export interface InvitationIdentityEligibility {
+  eligible: boolean;
+  status: InvitationIdentityStatus;
+  hasExistingAuthIdentity: boolean;
+  isExistingCustomer: boolean;
+}
+
 interface StaffTargetContext {
   userId: string;
   role: StaffRole;
@@ -220,6 +236,10 @@ export async function handler(req: Request) {
         );
       case "get_worker_portal_access":
         return respond(await getWorkerPortalAccess(serviceClient, caller, body));
+      case "check_internal_invitation_identity":
+        return respond(
+          await checkInternalInvitationIdentity(serviceClient, caller, body),
+        );
       case "create_internal_invitation":
         return respond(
           await createInternalInvitation(serviceClient, caller, body, authHeader, req),
@@ -881,11 +901,6 @@ export async function createInternalInvitation(
     body.permissions,
   );
   const employeeId = body.employeeId == null ? null : required(body.employeeId, "employeeId");
-  await assertInvitationEmailNotActiveStaff(
-    serviceClient,
-    caller.tenantId,
-    email,
-  );
   if (employeeId) {
     await assertActiveEmployeeForInvitation(
       serviceClient,
@@ -893,6 +908,11 @@ export async function createInternalInvitation(
       employeeId,
     );
   }
+  await assertInvitationEmailNotActiveStaff(
+    serviceClient,
+    caller.tenantId,
+    email,
+  );
 
   const { data: existing, error: existingError } = await serviceClient
     .from("user_invitations")
@@ -988,119 +1008,168 @@ export async function createInternalInvitation(
   return emailResult;
 }
 
-export async function assertInvitationEmailNotActiveStaff(
+export async function checkInternalInvitationIdentity(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+): Promise<InvitationIdentityEligibility> {
+  const email = normalizeEmail(required(body.email, "email"));
+  const employeeId = body.employeeId == null ? null : required(body.employeeId, "employeeId");
+  if (employeeId) {
+    await assertActiveEmployeeForInvitation(
+      serviceClient,
+      caller.tenantId,
+      employeeId,
+    );
+  }
+  return evaluateInvitationIdentity(
+    serviceClient,
+    caller.tenantId,
+    email,
+  );
+}
+
+export async function evaluateInvitationIdentity(
   serviceClient: SupabaseClient,
   tenantId: string,
   email: string,
-) {
-  let authUser: any;
-  try {
-    authUser = await findAuthUserByEmail(serviceClient, email);
-  } catch {
+): Promise<InvitationIdentityEligibility> {
+  const { data: authUserId, error: authLookupError } = await serviceClient.rpc(
+    "resolve_auth_user_id_by_email",
+    { p_email: email },
+  );
+  if (
+    authLookupError ||
+    (authUserId != null &&
+      (typeof authUserId !== "string" || authUserId.trim().length === 0))
+  ) {
     throw new HttpError(
       503,
       "staff_identity_lookup_failed",
       "Unable to verify whether this email already has ERP access",
     );
   }
-  if (!authUser?.id) return;
+  if (authUserId == null) {
+    return {
+      eligible: true,
+      status: "available_new_identity",
+      hasExistingAuthIdentity: false,
+      isExistingCustomer: false,
+    };
+  }
 
   const [
     { data: profileMemberships, error: profileError },
     { data: workerMemberships, error: workerError },
     { data: employeeMemberships, error: employeeError },
+    { data: customerMemberships, error: customerError },
   ] = await Promise.all([
     serviceClient
       .from("user_profiles")
       .select("tenant_id, is_active")
-      .eq("user_id", authUser.id)
+      .eq("user_id", authUserId)
       .limit(100),
     serviceClient
       .from("employee_portal_accounts")
       .select("tenant_id, is_active")
-      .eq("auth_user_id", authUser.id)
+      .eq("auth_user_id", authUserId)
       .limit(100),
     serviceClient
       .from("employees")
       .select("id, tenant_id")
-      .eq("user_id", authUser.id)
+      .eq("user_id", authUserId)
       .limit(100),
+    serviceClient
+      .from("customers")
+      .select("id")
+      .eq("auth_user_id", authUserId)
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .limit(1),
   ]);
 
-  if (profileError || workerError || employeeError) {
+  if (profileError || workerError || employeeError || customerError) {
     throw new HttpError(
       503,
       "staff_identity_lookup_failed",
       "Unable to verify whether this email already has ERP access",
     );
   }
+
   const memberships = Array.isArray(profileMemberships) ? profileMemberships : [];
-  if (
-    (
-      Array.isArray(workerMemberships) &&
-      workerMemberships.length > 0
-    ) ||
-    (
-      Array.isArray(employeeMemberships) &&
-      employeeMemberships.length > 0
-    )
-  ) {
-    console.warn("Invitation identity unavailable", {
-      reason: Array.isArray(workerMemberships) &&
-          workerMemberships.length > 0
-        ? "worker_identity"
-        : "historical_employee_identity",
-    });
-    throw new HttpError(
-      409,
-      "identity_unavailable",
-      "This identity is unavailable for a new ERP invitation",
-    );
+  if (Array.isArray(workerMemberships) && workerMemberships.length > 0) {
+    return {
+      eligible: false,
+      status: "worker_identity_conflict",
+      hasExistingAuthIdentity: true,
+      isExistingCustomer: false,
+    };
   }
-  if (
-    memberships.some((membership: any) => membership.tenant_id !== tenantId)
-  ) {
-    console.warn("Invitation identity unavailable", {
-      reason: "external_erp_membership",
-    });
-    throw new HttpError(
-      409,
-      "identity_unavailable",
-      "This identity is unavailable for a new ERP invitation",
-    );
+  if (Array.isArray(employeeMemberships) && employeeMemberships.length > 0) {
+    return {
+      eligible: false,
+      status: "historical_employee_identity_conflict",
+      hasExistingAuthIdentity: true,
+      isExistingCustomer: false,
+    };
+  }
+  if (memberships.some((membership: any) => membership.tenant_id !== tenantId)) {
+    return {
+      eligible: false,
+      status: "staff_identity_tenant_conflict",
+      hasExistingAuthIdentity: true,
+      isExistingCustomer: false,
+    };
   }
   if (
     memberships.some((membership: any) =>
       membership.tenant_id === tenantId && membership.is_active === true
     )
   ) {
-    throw new HttpError(
-      409,
-      "active_staff_email_requires_direct_link",
-      "This email already has active ERP access; use the employee link action",
-    );
-  }
-  if (
-    memberships.some((membership: any) =>
-      membership.tenant_id === tenantId && membership.is_active === false
-    )
-  ) {
-    throw new HttpError(
-      409,
-      "staff_membership_inactive",
-      "This email has suspended ERP access; reactivate or detach that membership",
-    );
+    return {
+      eligible: false,
+      status: "active_staff_email_requires_direct_link",
+      hasExistingAuthIdentity: true,
+      isExistingCustomer: false,
+    };
   }
   if (memberships.length > 0) {
-    console.warn("Invitation identity unavailable", {
-      reason: "external_erp_history",
-    });
-    throw new HttpError(
-      409,
-      "identity_unavailable",
-      "This identity is unavailable for a new ERP invitation",
-    );
+    return {
+      eligible: false,
+      status: "staff_membership_inactive",
+      hasExistingAuthIdentity: true,
+      isExistingCustomer: false,
+    };
   }
+
+  const isExistingCustomer = Array.isArray(customerMemberships) && customerMemberships.length > 0;
+  return {
+    eligible: true,
+    status: isExistingCustomer ? "available_existing_customer" : "available_new_identity",
+    hasExistingAuthIdentity: true,
+    isExistingCustomer,
+  };
+}
+
+export async function assertInvitationEmailNotActiveStaff(
+  serviceClient: SupabaseClient,
+  tenantId: string,
+  email: string,
+) {
+  const eligibility = await evaluateInvitationIdentity(
+    serviceClient,
+    tenantId,
+    email,
+  );
+  if (eligibility.eligible) return;
+
+  const message = eligibility.status ===
+      "active_staff_email_requires_direct_link"
+    ? "This email already has active ERP access; use the employee link action"
+    : eligibility.status === "staff_membership_inactive"
+    ? "This email has suspended ERP access; reactivate or detach that membership"
+    : "This identity has incompatible existing access";
+  throw new HttpError(409, eligibility.status, message);
 }
 
 export async function assertActiveEmployeeForInvitation(

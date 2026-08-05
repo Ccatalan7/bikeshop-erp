@@ -6,14 +6,36 @@ import '../providers/email_provider.dart';
 class EmailListItemUnified extends StatelessWidget {
   final Email email;
   final bool isSelected;
+
+  /// En Enviados y Borradores el interlocutor de la fila es el destinatario
+  /// («Para: …»), no el remitente — que ahí siempre sería uno mismo.
+  final bool showsRecipient;
   final VoidCallback onTap;
 
   const EmailListItemUnified({
     super.key,
     required this.email,
     required this.isSelected,
+    this.showsRecipient = false,
     required this.onTap,
   });
+
+  String get _counterpartInitial {
+    final source = showsRecipient
+        ? _counterpartName.replaceFirst('Para: ', '')
+        : email.senderName;
+    return source.isNotEmpty ? source[0].toUpperCase() : '?';
+  }
+
+  String get _counterpartName {
+    if (!showsRecipient) return email.senderName;
+    final to = email.toAddress.trim();
+    if (to.isEmpty) return '(sin destinatario)';
+    final first = to.split(',').first.trim();
+    final match = RegExp(r'^"?([^"<]+)"?\s*<').firstMatch(first);
+    final name = match?.group(1)?.trim() ?? first.split('@').first;
+    return 'Para: $name';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,9 +77,7 @@ class EmailListItemUnified extends StatelessWidget {
                         ? _getProviderColor(email.providerId)
                         : colorScheme.surfaceContainerHighest,
                     child: Text(
-                      email.senderName.isNotEmpty
-                          ? email.senderName[0].toUpperCase()
-                          : '?',
+                      _counterpartInitial,
                       style: TextStyle(
                         color: isUnread
                             ? Colors.white
@@ -97,7 +117,7 @@ class EmailListItemUnified extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            email.senderName,
+                            _counterpartName,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontWeight:
                                   isUnread ? FontWeight.w700 : FontWeight.w500,

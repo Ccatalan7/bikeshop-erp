@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/web_url.dart';
 import '../../../shared/services/deep_link_handler.dart';
+import '../models/mail_folder.dart';
 import '../providers/email_provider.dart';
 import '../providers/mail_account_manager.dart';
 import '../widgets/email_list_item_unified.dart';
@@ -437,6 +438,44 @@ ${email.content ?? email.summary ?? ''}
     );
   }
 
+  /// Restaurar, reportar spam y rescatar de spam no piden confirmación:
+  /// las tres son reversibles con la acción contraria, y la papelera y spam
+  /// del proveedor siguen existiendo como red. Sólo la papelera confirma,
+  /// porque su vaciado automático (30 días) la vuelve eventualmente
+  /// irreversible.
+  Future<void> _runSelectedEmailAction({
+    required Future<bool> Function() action,
+    required String successMessage,
+    required String failureMessage,
+  }) async {
+    final success = await action();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? successMessage : failureMessage),
+        backgroundColor: success ? null : Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  Future<void> _restoreSelectedEmail() => _runSelectedEmailAction(
+        action: _manager.restoreSelectedEmail,
+        successMessage: 'Correo restaurado a la bandeja de entrada',
+        failureMessage: 'No se pudo restaurar el correo',
+      );
+
+  Future<void> _markSelectedAsSpam() => _runSelectedEmailAction(
+        action: _manager.markSelectedAsSpam,
+        successMessage: 'Correo reportado como spam',
+        failureMessage: 'No se pudo reportar el correo',
+      );
+
+  Future<void> _markSelectedAsNotSpam() => _runSelectedEmailAction(
+        action: _manager.markSelectedAsNotSpam,
+        successMessage: 'Correo devuelto a la bandeja de entrada',
+        failureMessage: 'No se pudo rescatar el correo',
+      );
+
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
@@ -686,7 +725,18 @@ ${email.content ?? email.summary ?? ''}
                       ),
                       onReply: () => _replyToEmail(false),
                       onReplyAll: () => _replyToEmail(true),
-                      onDelete: _confirmDeleteSelectedEmail,
+                      onDelete: _manager.activeFolder == MailFolder.trash
+                          ? null
+                          : _confirmDeleteSelectedEmail,
+                      onRestore: _manager.activeFolder == MailFolder.trash
+                          ? _restoreSelectedEmail
+                          : null,
+                      onMarkSpam: _manager.activeFolder == MailFolder.inbox
+                          ? _markSelectedAsSpam
+                          : null,
+                      onMarkNotSpam: _manager.activeFolder == MailFolder.spam
+                          ? _markSelectedAsNotSpam
+                          : null,
                       onNavigateSelection: _moveSelection,
                     )
                   : _buildEmptyDetailView(),
@@ -712,7 +762,18 @@ ${email.content ?? email.summary ?? ''}
         ),
         onReply: () => _replyToEmail(false),
         onReplyAll: () => _replyToEmail(true),
-        onDelete: _confirmDeleteSelectedEmail,
+        onDelete: _manager.activeFolder == MailFolder.trash
+            ? null
+            : _confirmDeleteSelectedEmail,
+        onRestore: _manager.activeFolder == MailFolder.trash
+            ? _restoreSelectedEmail
+            : null,
+        onMarkSpam: _manager.activeFolder == MailFolder.inbox
+            ? _markSelectedAsSpam
+            : null,
+        onMarkNotSpam: _manager.activeFolder == MailFolder.spam
+            ? _markSelectedAsNotSpam
+            : null,
         onNavigateSelection: _moveSelection,
       );
     }
@@ -744,7 +805,9 @@ ${email.content ?? email.summary ?? ''}
                   children: [
                     Flexible(
                       child: Text(
-                        'Bandeja Unificada',
+                        _manager.activeFolder == MailFolder.inbox
+                            ? 'Bandeja Unificada'
+                            : _manager.activeFolder.label,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
@@ -777,8 +840,9 @@ ${email.content ?? email.summary ?? ''}
                 label: const Text('Redactar'),
               ),
               _buildHeaderIconButton(
-                onPressed:
-                    _manager.isLoading ? null : () => _manager.refreshInbox(),
+                onPressed: _manager.isLoading
+                    ? null
+                    : () => _manager.refreshActiveFolder(),
                 icon: _manager.isLoading
                     ? const SizedBox(
                         width: 16,
@@ -821,6 +885,7 @@ ${email.content ?? email.summary ?? ''}
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              _buildFolderSelectorControl(),
               _buildAccountFilterControl(),
               _buildQuickFilterChip(
                 label: 'No leídos',
@@ -964,6 +1029,59 @@ ${email.content ?? email.summary ?? ''}
       (id: 'zoho', label: 'Zoho'),
       (id: 'gmail', label: 'Gmail'),
     ].where((provider) => !connectedProviderIds.contains(provider.id)).toList();
+  }
+
+  /// Mismo control ancla que el filtro de cuentas — un popup con chip de
+  /// borde — para que la fila de filtros hable un solo idioma visual.
+  Widget _buildFolderSelectorControl() {
+    final theme = Theme.of(context);
+
+    return PopupMenuButton<MailFolder>(
+      tooltip: 'Cambiar de carpeta',
+      onSelected: (folder) => unawaited(_manager.setActiveFolder(folder)),
+      itemBuilder: (context) => [
+        for (final folder in MailFolder.values)
+          CheckedPopupMenuItem(
+            value: folder,
+            checked: _manager.activeFolder == folder,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(folder.icon, size: 16),
+                const SizedBox(width: 8),
+                Text(folder.label),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        key: const ValueKey('mail-folder-selector'),
+        height: 32,
+        constraints: const BoxConstraints(maxWidth: 210),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.colorScheme.outline),
+          borderRadius: BorderRadius.circular(7),
+          color: theme.colorScheme.surface,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_manager.activeFolder.icon, size: 16),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                _manager.activeFolder.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, size: 18),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildAccountFilterControl() {
@@ -1171,6 +1289,8 @@ ${email.content ?? email.summary ?? ''}
           child: EmailListItemUnified(
             email: email,
             isSelected: isSelected,
+            showsRecipient:
+                _manager.activeFolder.showsRecipientAsCounterpart,
             onTap: () => _selectEmail(email),
           ),
         );
