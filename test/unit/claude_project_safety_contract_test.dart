@@ -218,7 +218,6 @@ void main() {
       '/opt/homebrew/bin/psql postgres://example',
       '/usr/local/bin/supabase db push',
       'bash scripts/db/query.sh production --allow-pii --sql "select 1"',
-      'just db-query production --write --sql "select 1"',
       'firebase deploy',
     ]) {
       final output = await _runGuard(command);
@@ -227,6 +226,22 @@ void main() {
         'deny',
         reason: command,
       );
+    }
+
+    // 2026-08-05 · decisión del dueño: «los agentes deben correr los querys
+    // siempre, sin pedir confirmación». La escritura guiada a producción por
+    // el camino canónico deja de denegarse — VINABIKE_DB_WRITE_CONFIRM y el
+    // journal de scripts/db/query.sh conservan la deliberación y la
+    // auditoría. El costo de la regla anterior fue real: un admin recién
+    // invitado quedó bloqueado por metadatos corruptos, el arreglo era un
+    // UPDATE de una fila, y el guard lo devolvía a un Codex sin cupo. Los
+    // caminos NO guiados (psql directo, supabase db, --allow-pii) siguen
+    // denegados arriba: la política abrió el camino auditado, no la puerta.
+    for (final command in const [
+      'bash scripts/db/query.sh production --write --sql "select 1"',
+      'just db-query production --write --sql "select 1"',
+    ]) {
+      expect(await _runGuard(command), isNull, reason: command);
     }
   });
 }
