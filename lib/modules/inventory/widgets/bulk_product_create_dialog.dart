@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
+
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import 'package:provider/provider.dart';
 
 import '../../ai_assistant/services/ai_service.dart';
@@ -533,7 +535,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
           child: Icon(
             Icons.warning_amber_rounded,
             size: 16,
-            color: Colors.orange.shade700,
+            color: VinabikeThemeRoles.of(context).warning.accent,
           ),
         ),
       );
@@ -545,7 +547,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
         child: Icon(
           Icons.verified_outlined,
           size: 16,
-          color: Colors.green.shade600,
+          color: VinabikeThemeRoles.of(context).success.accent,
         ),
       );
     }
@@ -830,7 +832,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.orange.shade50,
+                color: VinabikeThemeRoles.of(context).warning.container,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
@@ -838,7 +840,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: Colors.orange.shade700,
+                  color: VinabikeThemeRoles.of(context).warning.accent,
                 ),
               ),
             ),
@@ -1089,14 +1091,14 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            color: _resultIsError ? Colors.red.shade50 : Colors.green.shade50,
+            color: _resultIsError ? Theme.of(context).colorScheme.errorContainer : VinabikeThemeRoles.of(context).success.container,
             child: Row(
               children: [
                 Icon(
                   _resultIsError ? Icons.error_outline : Icons.check_circle,
                   color: _resultIsError
-                      ? Colors.red.shade700
-                      : Colors.green.shade700,
+                      ? Theme.of(context).colorScheme.error
+                      : VinabikeThemeRoles.of(context).success.accent,
                   size: 18,
                 ),
                 const SizedBox(width: 10),
@@ -1105,8 +1107,8 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                     _resultMessage!,
                     style: TextStyle(
                       color: _resultIsError
-                          ? Colors.red.shade800
-                          : Colors.green.shade800,
+                          ? Theme.of(context).colorScheme.error
+                          : VinabikeThemeRoles.of(context).success.onContainer,
                     ),
                   ),
                 ),
@@ -1238,15 +1240,15 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
         final rowBg = draft.isCheckingDuplicates
             ? theme.colorScheme.primaryContainer.withValues(alpha: 0.18)
             : draft.hasPotentialDuplicates
-                ? Colors.orange.shade50
+                ? VinabikeThemeRoles.of(context).warning.container
                 : draft.hasCheckedDuplicates &&
                         draft.duplicateCheckError == null
-                    ? Colors.green.shade50.withValues(alpha: 0.45)
+                    ? VinabikeThemeRoles.of(context).success.container.withValues(alpha: 0.45)
                     : draft.isSelected
                         ? (isEven
                             ? theme.colorScheme.surface
                             : theme.colorScheme.surfaceContainerLowest)
-                        : Colors.grey.shade50.withValues(alpha: 0.5);
+                        : Theme.of(context).colorScheme.surfaceContainerLow.withValues(alpha: 0.5);
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: _hPad, vertical: 4),
@@ -1391,7 +1393,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                                 width: 15,
                                 height: 15,
                                 decoration: BoxDecoration(
-                                  color: Colors.red.shade400,
+                                  color: Theme.of(context).colorScheme.error,
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                       color: Colors.white, width: 1.5),
@@ -1590,7 +1592,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                 width: _wDel,
                 child: IconButton(
                   icon: Icon(Icons.delete_outline,
-                      size: 16, color: Colors.red.shade300),
+                      size: 16, color: Theme.of(context).colorScheme.error),
                   onPressed: () => _removeRow(index),
                   tooltip: 'Eliminar fila',
                   visualDensity: VisualDensity.compact,
@@ -1625,13 +1627,13 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
           // Legend
           if (invalidCount > 0) ...[
             Icon(Icons.warning_amber_rounded,
-                size: 14, color: Colors.orange.shade600),
+                size: 14, color: VinabikeThemeRoles.of(context).warning.accent),
             const SizedBox(width: 5),
             Text(
               '$invalidCount incompleta(s)',
               style: TextStyle(
                 fontSize: 11,
-                color: Colors.orange.shade700,
+                color: VinabikeThemeRoles.of(context).warning.accent,
               ),
             ),
             const SizedBox(width: 6),
@@ -1639,7 +1641,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
               '· nombre y precio requeridos',
               style: TextStyle(
                 fontSize: 11,
-                color: Colors.orange.shade400,
+                color: VinabikeThemeRoles.of(context).warning.border,
               ),
             ),
             if (duplicateWarningCount > 0) ...[
@@ -1648,7 +1650,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                 '· $duplicateWarningCount con parecidos',
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.orange.shade700,
+                  color: VinabikeThemeRoles.of(context).warning.accent,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1730,13 +1732,13 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(5),
             borderSide: BorderSide(
-              color: Colors.grey.shade300,
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(5),
             borderSide: BorderSide(
-              color: Colors.grey.shade300,
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
           focusedBorder: OutlineInputBorder(
@@ -1752,7 +1754,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
           prefixText: prefix,
           prefixStyle: TextStyle(
             fontSize: 12,
-            color: Colors.grey.shade500,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           suffixIcon: suffixIcon != null
               ? Padding(
@@ -1762,7 +1764,7 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
               : null,
           errorText: errorText,
           errorStyle: const TextStyle(fontSize: 9, height: 0.8),
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+          hintStyle: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 11),
         ),
         style: TextStyle(
           fontSize: 12,
@@ -1794,11 +1796,11 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
               const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(5),
-            borderSide: BorderSide(color: Colors.grey.shade300),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(5),
-            borderSide: BorderSide(color: Colors.grey.shade300),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
         ),
         enabled: enabled,

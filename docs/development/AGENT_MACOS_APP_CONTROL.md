@@ -131,6 +131,48 @@ Traps this encodes, each of which cost a full round when hit:
    después usa `doctor` y reemplaza la sesión una vez. Nunca dejes un poller
    que ejecute acciones: observar `status` puede repetirse, enviar `r`/`R` no.
 
+9. **Recicla la sesión (`stop && start`) en rondas pesadas de WebView**
+   (2026-08-05). Un hot restart (`R`) reinicia el código Dart pero **no corre
+   `dispose()`**: cada restart puede dejar huérfano el WKWebView nativo de
+   cada workspace abierto, y esa memoria no vuelve nunca dentro del mismo
+   proceso. Costo real: tras ~24 h de sesión con 5 recorridos completos de
+   AliExpress y ~6 hot restarts, el proceso llegó a **41 GB de RSS**, macOS
+   agotó la memoria del sistema y pausó todas las aplicaciones — los
+   «cuelgues» que parecían bugs del flujo OCR eran el proceso congelado por el
+   sistema. Regla: antes de una ronda que navegue mucho dentro de WebViews
+   (importación AliExpress, pruebas largas del navegador), y después de 2-3
+   hot restarts con workspaces de navegador abiertos, reemplaza el proceso
+   completo. En producción no aplica (no hay hot restart) y desde el
+   2026-08-05 la app además se defiende sola: `MemoryHygiene` (watchdog de RSS
+   + `didHaveMemoryPressure`) libera las cachés transitorias registradas, el
+   ImageCache del framework y la caché en memoria de los WebView.
+
+10. **Una sesión lanzada por el agente no puede hacer hot reload en esta
+    máquina** (2026-08-06). macOS protege los contenedores de las demás apps:
+    un `flutter run` lanzado desde el shell del agente (hijo de Claude.app, con
+    o sin sandbox propio) no puede escribir el DevFS en
+    `~/Library/Containers/com.vinabike.vinabikeErp/Data/tmp/` — «Operation not
+    permitted». El arranque en frío funciona (instala por el bundle), pero el
+    **primer** `r`/`R` imprime «Flutter failed to create file/directory at
+    .../Data/tmp/...» y `flutter run` **muere**, llevándose el `screen`. El
+    síntoma engaña doble: parece que «algo mata la sesión a los minutos», y el
+    primer archivo que DevFS intenta crear (p. ej. un asset) parece el
+    culpable. Costó cinco sesiones en una noche. Opciones reales: (a) el dueño
+    lanza `scripts/dev/native_session.sh start` desde su Terminal y el agente
+    se adhiere con `screen -x` — el modo histórico, con reload de 2-5 s; (b) el
+    dueño concede a Claude acceso a datos de otras apps / Full Disk Access
+    cuando macOS lo pregunte; (c) sin permiso, el agente trabaja sólo con
+    arranques en frío (~1-2 min por iteración de código; navegar y probar no
+    necesita reload).
+
+11. **Nunca vacíes `.tmp/native-session/run.log`** (2026-08-06). `app_control.sh`
+    saca la URL del VM service de ese archivo: truncarlo para «leer el log
+    limpio» deja toda la herramienta ciega con «sin VM service en el log», y
+    los `tap`/`read` fallan en silencio mientras la sesión sigue viva. Para
+    leer sólo lo nuevo, usa `tail -c`/`tail -n` o marca la posición antes de
+    empezar; para empezar de cero, reemplaza la sesión (`stop && start`), que
+    reescribe la línea del VM service.
+
 ### Verifying dark and compact without leaving a trace
 
 Both are required before a surface is declared done, and both are reachable

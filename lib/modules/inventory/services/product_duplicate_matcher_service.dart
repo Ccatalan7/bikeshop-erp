@@ -147,8 +147,8 @@ class _DuplicateRescoreInputs {
   final bool hasExactImageMatch;
   final bool hasExactModelMatch;
 
-  // Bounded transient cache, populated and drained inside one
-  // `findCandidates` call. Not used outside that scope.
+  // Transient cache scoped to one `findCandidates` call; the public wrapper
+  // clears it in a `finally` so no entry survives the search that created it.
   static final Map<ProductDuplicateCandidate, _DuplicateRescoreInputs> _cache =
       <ProductDuplicateCandidate, _DuplicateRescoreInputs>{};
 }
@@ -174,6 +174,26 @@ class ProductDuplicateMatcherService {
   final bool persistComputedImageFingerprints;
 
   Future<List<ProductDuplicateCandidate>> findCandidates({
+    required ProductDuplicateProbe probe,
+    required List<Product> products,
+    int limit = 6,
+  }) async {
+    try {
+      return await _findCandidatesInner(
+        probe: probe,
+        products: products,
+        limit: limit,
+      );
+    } finally {
+      // La caché de rescoring es transitoria por contrato: vive dentro de una
+      // búsqueda (la UI corre una a la vez). El drenaje selectivo del final no
+      // cubría reemplazos ni excepciones a medio camino y dejaba entradas
+      // huérfanas acumulándose entre corridas (2026-08-05).
+      _DuplicateRescoreInputs._cache.clear();
+    }
+  }
+
+  Future<List<ProductDuplicateCandidate>> _findCandidatesInner({
     required ProductDuplicateProbe probe,
     required List<Product> products,
     int limit = 6,
@@ -483,11 +503,6 @@ class ProductDuplicateMatcherService {
         maxComparisons: 3,
       );
       candidates.sort(_compareCandidates);
-    }
-    // Drop scoring-input cache entries for candidates we are about to
-    // expose, to keep memory bounded.
-    for (final c in candidates) {
-      _DuplicateRescoreInputs._cache.remove(c);
     }
     return candidates.take(limit).toList();
   }

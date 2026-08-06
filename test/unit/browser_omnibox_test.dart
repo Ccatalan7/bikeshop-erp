@@ -86,4 +86,23 @@ void main() {
       isNull,
     );
   });
+
+  // La navegación por teclado calca el contrato de Chrome: null representa el
+  // texto libre del usuario; ↓ entra a la lista, ↑ desde la primera fila
+  // vuelve al texto libre, y los extremos no ciclan para que una tecla
+  // sostenida no dé vueltas sorpresivas.
+  test('el resaltado entra con ↓ y vuelve al texto libre con ↑', () {
+    expect(nextOmniboxHighlight(current: null, count: 5, delta: 1), 0);
+    expect(nextOmniboxHighlight(current: 0, count: 5, delta: 1), 1);
+    expect(nextOmniboxHighlight(current: 1, count: 5, delta: -1), 0);
+    expect(nextOmniboxHighlight(current: 0, count: 5, delta: -1), isNull);
+    expect(nextOmniboxHighlight(current: null, count: 5, delta: -1), isNull);
+  });
+
+  test('los extremos no ciclan y una lista vacía nunca resalta', () {
+    expect(nextOmniboxHighlight(current: 4, count: 5, delta: 1), 4);
+    expect(nextOmniboxHighlight(current: null, count: 0, delta: 1), isNull);
+    expect(nextOmniboxHighlight(current: 2, count: 0, delta: 1), isNull);
+    expect(nextOmniboxHighlight(current: 2, count: 5, delta: 0), isNull);
+  });
 }

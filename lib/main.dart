@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
+import 'shared/services/memory_hygiene.dart';
 import 'shared/services/notification_service.dart';
 import 'shared/services/mail_notification_gate.dart';
 import 'shared/services/chat_notification_gate.dart';
@@ -998,6 +999,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     super.initState();
     _workspaceManager = context.read<WorkspaceManager>();
     WidgetsBinding.instance.addObserver(this);
+    MemoryHygiene.startWatchdog();
 
     final notificationService = NotificationService();
     notificationService.setForegroundPresentationPolicy(
@@ -1032,6 +1034,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     _notificationLifecycleEpoch++;
     _notificationUserId = null;
     _erpNotificationsRefreshInFlight = false;
+    MemoryHygiene.stopWatchdog();
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_workspaceManager.flushBrowserSession());
     _routeSubscription?.cancel();
@@ -1050,6 +1053,13 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     unawaited(MailAccountManager.instance.reset());
     NotificationService().clearForegroundPresentationPolicy(this);
     super.dispose();
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    // iOS/Android avisan por este canal; en macOS la red de seguridad es el
+    // watchdog de RSS de MemoryHygiene. Ambos convergen en la misma limpieza.
+    unawaited(MemoryHygiene.onSystemMemoryPressure());
   }
 
   @override

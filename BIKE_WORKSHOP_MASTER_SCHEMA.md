@@ -2121,6 +2121,41 @@ turns `diagnosis_added` into proof that a diagnostic was sent. A terminal job
 without enough evidence remains `Sin dato`; a later reopened job still exposes
 its first delivery.
 
+### Milestone capture and the status-transition ledger (2026-08-05)
+
+Reconstruction was honest but starved: the `job_statuses` semantic flags
+(`triggers_start`, `triggers_completion`, `triggers_delivery`) were stored and
+edited in the statuses admin UI yet **nothing executed `triggers_start`** —
+`started_at` sat at 49% coverage, `completed_at` at 11%, and the only durable
+transition evidence was a name-based timeline entry plus a self-overwriting
+`status_updated_at`. Delivery alone had the correct shape (semantic resolver +
+immutable `mechanic_job_delivery_events` + server-side capture). Migration
+`20260805210000` completes that pattern for the whole lifecycle:
+
+- `mechanic_job_resolves_start(status, status_id)` mirrors the delivery and
+  completion resolvers (flag first, canonical code fallback, legacy
+  `EN_CURSO` text).
+- `normalize_mechanic_job_lifecycle_timestamps()` (the BEFORE lifecycle guard)
+  now also stamps `started_at`, first-wins and never cleared: moving to
+  `En Pausa` or `REPUESTOS` does not un-start a job, and reaching a
+  completion or delivery status implies a start even when nobody passed
+  through `En Curso`. Delivery keeps its existing clear-on-reopen semantics;
+  completion keeps first-wins.
+- `mechanic_job_status_transitions` is the append-only ledger: every status
+  write from every writer (form, table quick-change, POS, future automations)
+  records from/to status, **phase and flags frozen at the moment of the
+  change** (renaming a status later cannot rewrite history), the acting
+  `auth.uid()` and a `clock_timestamp()`. The only writer is the AFTER trigger
+  (`security definer`); clients hold a tenant-scoped SELECT policy and no
+  insert/update/delete path. Jobs with text-only statuses (no `status_id`)
+  still record with `false` flags and a null phase.
+- Per-status residence time — the diff between consecutive ledger rows —
+  becomes computable from the ledger's first day forward. This is the data
+  source for bottleneck analysis (time sitting in `Presupuesto`,
+  `REPUESTOS`, `Contactar`…) that the Flujo column and dashboard could never
+  derive from a mutable `status_updated_at`. History before 2026-08-05 stays
+  under non-destructive reconstruction; the ledger is never backfilled.
+
 The operational clocks remain deliberately distinct:
 
 - business open hours come from the database-backed

@@ -40,7 +40,16 @@ class AliExpressDailyInvoiceService {
     final detailItems = _mapList(detail['items']);
     final listUsableItems = listItems.where(_isUsableProductItem).toList();
     final detailUsableItems = detailItems.where(_isUsableProductItem).toList();
-    final useDetailItems = detailUsableItems.isNotEmpty &&
+    // Cuando el pedido viene de la API de AliExpress, sus líneas son la fuente
+    // de verdad: traen producto, cantidad, precio unitario e imagen tal como
+    // los tiene el proveedor. El detalle se lee de la página y puede perder
+    // líneas —el 2026-04-06 dejó en 1 unidad un pedido de 2, y la diferencia
+    // se absorbió como «ajuste», duplicando el costo unitario que habría
+    // entrado al inventario— (2026-08-06). El detalle sigue aportando lo que
+    // la lista no tiene: el desglose de subtotal, envío, impuesto y descuento.
+    final listIsAuthoritative = _text(listOrder['via']) == 'api';
+    final useDetailItems = !listIsAuthoritative &&
+        detailUsableItems.isNotEmpty &&
         (detailUsableItems.length >= listUsableItems.length ||
             detailUsableItems
                 .any((item) => _text(item['imageUrl']).isNotEmpty));
@@ -85,7 +94,11 @@ class AliExpressDailyInvoiceService {
       ]),
       'pageTitle': _firstText([detail['pageTitle'], list['pageTitle']]),
       'orderNumber': _firstText([detail['orderNumber'], list['orderNumber']]),
-      'orderDate': _firstText([detail['orderDate'], list['orderDate']]),
+      // La fecha de la API es la del pedido; la de la página puede ser otra
+      // (pago, entrega) y arrastraba el pedido a un día que no era el suyo.
+      'orderDate': listIsAuthoritative
+          ? _firstText([list['orderDate'], detail['orderDate']])
+          : _firstText([detail['orderDate'], list['orderDate']]),
       'supplierName': _firstText([
         detail['supplierName'],
         list['supplierName'],

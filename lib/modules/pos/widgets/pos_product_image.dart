@@ -1,10 +1,21 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../shared/services/memory_hygiene.dart';
+
+/// Imagen de producto del POS con recorte automático del fondo blanco.
+///
+/// Los píxeles decodificados viven en el `ImageCache` del framework (con tope
+/// y evicción propios). Antes este widget guardaba cada `ui.Image` decodificada
+/// en un mapa estático sin tope y la memoria nativa crecía sin retorno —
+/// hallazgo del incidente de 41 GB del 2026-08-05. Lo único que se cachea
+/// estáticamente ahora es el `Rect` de recorte por URL: 32 bytes por entrada,
+/// con tope y evicción.
 class PosProductImage extends StatefulWidget {
   final String imageUrl;
   final BoxFit fit;
@@ -26,14 +37,28 @@ class PosProductImage extends StatefulWidget {
 }
 
 class _PosProductImageState extends State<PosProductImage> {
-  static final Map<String, Future<_TrimmedImageData>> _imageCache = {};
+  static final LinkedHashMap<String, Rect> _contentRectCache =
+      LinkedHashMap<String, Rect>();
+  static const int _contentRectCacheCap = 1024;
+  static bool _hygieneRegistered = false;
 
-  late Future<_TrimmedImageData> _imageFuture;
+  ImageStream? _imageStream;
+  ImageStreamListener? _imageListener;
+  ImageInfo? _imageInfo;
+  Rect? _sourceRect;
+  bool _hasError = false;
+  int _rectComputationEpoch = 0;
+
+  String get _cacheKey => '${widget.imageUrl}#${widget.maxCacheDimension}';
 
   @override
   void initState() {
     super.initState();
-    _imageFuture = _load(widget.imageUrl, widget.maxCacheDimension);
+    if (!_hygieneRegistered) {
+      _hygieneRegistered = true;
+      MemoryHygiene.registerTransientCache(_contentRectCache.clear);
+    }
+    _resolveImage();
   }
 
   @override
@@ -41,54 +66,95 @@ class _PosProductImageState extends State<PosProductImage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.imageUrl != widget.imageUrl ||
         oldWidget.maxCacheDimension != widget.maxCacheDimension) {
-      _imageFuture = _load(widget.imageUrl, widget.maxCacheDimension);
+      _sourceRect = null;
+      _hasError = false;
+      _resolveImage();
     }
   }
 
-  static Future<_TrimmedImageData> _load(String imageUrl, int maxDimension) {
-    final cacheKey = '$imageUrl#$maxDimension';
-    return _imageCache.putIfAbsent(
-      cacheKey,
-      () => _resolveAndTrimImage(imageUrl, maxDimension),
-    );
+  @override
+  void dispose() {
+    _detachListener();
+    _imageInfo?.dispose();
+    _imageInfo = null;
+    super.dispose();
   }
 
-  static Future<_TrimmedImageData> _resolveAndTrimImage(
-    String imageUrl,
-    int maxDimension,
-  ) async {
+  void _detachListener() {
+    final stream = _imageStream;
+    final listener = _imageListener;
+    if (stream != null && listener != null) {
+      stream.removeListener(listener);
+    }
+    _imageStream = null;
+    _imageListener = null;
+  }
+
+  void _resolveImage() {
     final provider = CachedNetworkImageProvider(
-      imageUrl,
-      maxWidth: maxDimension,
-      maxHeight: maxDimension,
+      widget.imageUrl,
+      maxWidth: widget.maxCacheDimension,
+      maxHeight: widget.maxCacheDimension,
     );
-    final stream = provider.resolve(ImageConfiguration.empty);
-    final completer = Completer<ImageInfo>();
-
-    late final ImageStreamListener listener;
-    listener = ImageStreamListener(
-      (info, _) {
-        if (!completer.isCompleted) {
-          completer.complete(info);
-        }
-        stream.removeListener(listener);
-      },
-      onError: (error, stackTrace) {
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
-        }
-        stream.removeListener(listener);
-      },
+    final newStream = provider.resolve(ImageConfiguration.empty);
+    if (newStream.key == _imageStream?.key) return;
+    _detachListener();
+    _imageStream = newStream;
+    final listener = ImageStreamListener(
+      _handleImageFrame,
+      onError: _handleImageError,
     );
+    _imageListener = listener;
+    newStream.addListener(listener);
+  }
 
-    stream.addListener(listener);
-    final imageInfo = await completer.future;
-    final image = imageInfo.image;
+  void _handleImageFrame(ImageInfo info, bool synchronousCall) {
+    if (!mounted) {
+      info.dispose();
+      return;
+    }
+    _imageInfo?.dispose();
+    _imageInfo = info;
+    _hasError = false;
 
-    return _TrimmedImageData(
-      image: image,
-      sourceRect: await _findContentRect(image),
-    );
+    final key = _cacheKey;
+    final cached = _contentRectCache.remove(key);
+    if (cached != null) {
+      // Re-insertar la entrada la marca como recién usada (evicción LRU).
+      _contentRectCache[key] = cached;
+      _sourceRect = cached;
+      if (!synchronousCall) setState(() {});
+      return;
+    }
+
+    final epoch = ++_rectComputationEpoch;
+    // Clon propio para el análisis: el frame puede reemplazarse (y disponerse)
+    // mientras el cálculo asíncrono sigue leyendo los píxeles.
+    final analysisImage = info.image.clone();
+    unawaited(_computeAndStoreRect(analysisImage, key, epoch));
+  }
+
+  Future<void> _computeAndStoreRect(
+    ui.Image analysisImage,
+    String key,
+    int epoch,
+  ) async {
+    try {
+      final rect = await _findContentRect(analysisImage);
+      _contentRectCache[key] = rect;
+      while (_contentRectCache.length > _contentRectCacheCap) {
+        _contentRectCache.remove(_contentRectCache.keys.first);
+      }
+      if (!mounted || epoch != _rectComputationEpoch) return;
+      setState(() => _sourceRect = rect);
+    } finally {
+      analysisImage.dispose();
+    }
+  }
+
+  void _handleImageError(Object error, StackTrace? stackTrace) {
+    if (!mounted) return;
+    setState(() => _hasError = true);
   }
 
   static Future<Rect> _findContentRect(ui.Image image) async {
@@ -139,46 +205,33 @@ class _PosProductImageState extends State<PosProductImage> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_TrimmedImageData>(
-      future: _imageFuture,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return widget.errorWidget;
-        }
+    if (_hasError) return widget.errorWidget;
 
-        final data = snapshot.data;
-        if (data == null) {
-          return widget.placeholder;
-        }
+    final imageInfo = _imageInfo;
+    final sourceRect = _sourceRect;
+    if (imageInfo == null || sourceRect == null) {
+      return widget.placeholder;
+    }
 
-        return CustomPaint(
-          painter: _TrimmedImagePainter(
-            data: data,
-            fit: widget.fit,
-          ),
-          child: const SizedBox.expand(),
-        );
-      },
+    return CustomPaint(
+      painter: _TrimmedImagePainter(
+        image: imageInfo.image,
+        sourceRect: sourceRect,
+        fit: widget.fit,
+      ),
+      child: const SizedBox.expand(),
     );
   }
 }
 
-class _TrimmedImageData {
+class _TrimmedImagePainter extends CustomPainter {
   final ui.Image image;
   final Rect sourceRect;
-
-  const _TrimmedImageData({
-    required this.image,
-    required this.sourceRect,
-  });
-}
-
-class _TrimmedImagePainter extends CustomPainter {
-  final _TrimmedImageData data;
   final BoxFit fit;
 
   const _TrimmedImagePainter({
-    required this.data,
+    required this.image,
+    required this.sourceRect,
     required this.fit,
   });
 
@@ -187,15 +240,15 @@ class _TrimmedImagePainter extends CustomPainter {
     if (size.isEmpty) return;
 
     final output = Offset.zero & size;
-    final fitted = applyBoxFit(fit, data.sourceRect.size, output.size);
+    final fitted = applyBoxFit(fit, sourceRect.size, output.size);
     final destination = Alignment.center.inscribe(
       fitted.destination,
       output,
     );
 
     canvas.drawImageRect(
-      data.image,
-      data.sourceRect,
+      image,
+      sourceRect,
       destination,
       Paint()
         ..isAntiAlias = true
@@ -205,6 +258,8 @@ class _TrimmedImagePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TrimmedImagePainter oldDelegate) {
-    return oldDelegate.data != data || oldDelegate.fit != fit;
+    return oldDelegate.image != image ||
+        oldDelegate.sourceRect != sourceRect ||
+        oldDelegate.fit != fit;
   }
 }

@@ -174,3 +174,131 @@ test('content extractor prints the list and detail debug stages', () => {
   assert.match(source, /list\.card\.extracted/);
   assert.match(source, /detail\.extract\.complete/);
 });
+
+test('la API de pedidos se lee sin inventar fechas ni montos', () => {
+
+  // Fechas: la forma real de AliExpress, y un formato desconocido que debe
+  // quedar vacío en vez de convertirse en una fecha plausible.
+  assert.equal(parser.parseApiOrderDate('Jun 15, 2026'), '2026-06-15');
+  assert.equal(parser.parseApiOrderDate('Apr 6, 2026'), '2026-04-06');
+  assert.equal(parser.parseApiOrderDate('15/06/2026'), '');
+
+  // Montos: en CLP la coma agrupa miles y no hay decimales.
+  assert.equal(parser.parseApiMoney('CLP 13,941'), 13941);
+  assert.equal(parser.parseApiMoney('CLP 6,590'), 6590);
+  assert.equal(parser.parseApiMoney('$1.234,56'), 1234.56);
+  assert.equal(parser.parseApiMoney(''), null);
+});
+
+test('un pedido de la API se mapea con sus líneas, imágenes y total', () => {
+  const order = parser.mapApiOrder({
+    orderId: '8209933206078042',
+    orderDateText: 'Apr 6, 2026',
+    totalPriceText: 'CLP 9,211',
+    currencyCode: 'CLP',
+    storeName: 'NEWBIRTH Outdoors Store',
+    statusText: 'Completed',
+    orderDetailUrl: '//www.aliexpress.com/p/order/detail.html?orderId=8209933206078042',
+    orderLines: [
+      {
+        productId: '1005008734024041',
+        quantity: '2',
+        formatPriceInfo: 'CLP 3,990',
+        itemTitle: 'Luz de bicicleta portátil, linterna IPX6',
+        itemDetailUrl: '//www.aliexpress.com/item/1005008734024041.html',
+        itemImgUrl: '//ae01.alicdn.com/kf/luz.jpg',
+        skuAttrs: [{ value: 'Q01' }],
+      },
+    ],
+  });
+
+  assert.equal(order.orderNumber, '8209933206078042');
+  assert.equal(order.orderDate, '2026-04-06');
+  assert.equal(order.total, 9211);
+  assert.equal(order.items.length, 1);
+  assert.equal(order.items[0].quantity, 2);
+  assert.equal(order.items[0].unitPrice, 3990);
+  assert.equal(order.items[0].total, 7980);
+  assert.match(order.items[0].description, /Q01/);
+  assert.match(order.items[0].imageUrl, /^https:\/\/ae01\.alicdn\.com/);
+  assert.match(order.items[0].productUrl, /^https:\/\/www\.aliexpress\.com/);
+});
+
+test('un pedido sin identificador no produce una fila fantasma', () => {
+  assert.equal(parser.mapApiOrder({ orderDateText: 'Apr 6, 2026' }), null);
+});
+
+test('el corte por fecha exige que la página entera sea anterior al día', () => {
+  // Reproduce el defecto real del 2026-04-06: la página trae pedidos del día
+  // buscado junto a uno más antiguo, y quedan más del mismo día en la página
+  // siguiente. Cortar al ver el primer pedido viejo perdía esos pedidos.
+  const page = [
+    { orderDate: '2026-04-06' },
+    { orderDate: '2026-04-06' },
+    { orderDate: '2026-04-05' },
+  ];
+  const newestOnPage = page
+    .map((order) => order.orderDate)
+    .reduce((newest, date) => (date > newest ? date : newest), '');
+  assert.equal(newestOnPage, '2026-04-06');
+  assert.equal(newestOnPage < '2026-04-06', false, 'no debe cortar todavía');
+
+  const nextPage = [{ orderDate: '2026-04-05' }, { orderDate: '2026-04-04' }];
+  const newestOnNextPage = nextPage
+    .map((order) => order.orderDate)
+    .reduce((newest, date) => (date > newest ? date : newest), '');
+  assert.equal(newestOnNextPage < '2026-04-06', true, 'ahora sí corta');
+});
+
+test('dos líneas del mismo producto suman unidades en vez de perderse', () => {
+  const order = parser.mapApiOrder({
+    orderId: '8209933206118042',
+    orderDateText: 'Apr 6, 2026',
+    totalPriceText: 'CLP 8,057',
+    orderLines: [
+      {
+        productId: '1005008554962320',
+        quantity: '1',
+        formatPriceInfo: 'CLP 3,490',
+        itemTitle: 'ROCKBROS botella de agua 600ML',
+        itemImgUrl: '//ae01.alicdn.com/kf/botella.jpg',
+      },
+      {
+        productId: '1005008554962320',
+        quantity: '1',
+        formatPriceInfo: 'CLP 3,490',
+        itemTitle: 'ROCKBROS botella de agua 600ML',
+        itemImgUrl: '//ae01.alicdn.com/kf/botella.jpg',
+      },
+    ],
+  });
+
+  assert.equal(order.items.length, 1);
+  assert.equal(order.items[0].quantity, 2);
+  assert.equal(order.items[0].total, 6980);
+});
+
+test('el corte exige dos páginas seguidas anteriores al día', () => {
+  // La lista no viene estrictamente ordenada por fecha: una sola página
+  // «vieja» no prueba que el día terminó, y cortar ahí devolvía conjuntos
+  // distintos entre corridas del mismo día (6 y luego 8 pedidos del
+  // 2026-04-06). Se confirma con una segunda página.
+  const target = '2026-04-06';
+  const newestOf = (page) => page.reduce((newest, date) => (date > newest ? date : newest), '');
+
+  let pagesPast = 0;
+  const cut = (page) => {
+    if (newestOf(page) < target) {
+      pagesPast += 1;
+      return pagesPast >= 2;
+    }
+    pagesPast = 0;
+    return false;
+  };
+
+  assert.equal(cut(['2026-04-06', '2026-04-05']), false, 'aún hay del día');
+  assert.equal(cut(['2026-04-05', '2026-04-04']), false, 'primera página vieja');
+  assert.equal(cut(['2026-04-06']), false, 'reaparece el día: el contador se reinicia');
+  assert.equal(cut(['2026-04-03']), false);
+  assert.equal(cut(['2026-04-02']), true, 'dos seguidas confirman el fin');
+});

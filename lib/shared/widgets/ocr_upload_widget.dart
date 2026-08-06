@@ -5,7 +5,7 @@ import 'dart:convert';
 
 import 'dart:async';
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kDebugMode, kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
@@ -36,6 +36,7 @@ import '../../modules/inventory/models/brand_models.dart' show ProductBrand;
 import '../../modules/ai_assistant/services/ai_service.dart';
 import '../models/supplier_ocr_template.dart';
 import '../services/image_service.dart';
+import '../themes/vinabike_theme_roles.dart';
 import '../utils/chilean_utils.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../../shared/models/supplier.dart' as shared_supplier;
@@ -371,7 +372,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                     Icon(
                       _useVeryfi ? Icons.cloud : Icons.phone_android,
                       size: 16,
-                      color: _useVeryfi ? Colors.purple : Colors.blue,
+                      color: VinabikeThemeRoles.of(context).info.accent,
                     ),
                     const SizedBox(width: 6),
                     Flexible(
@@ -564,666 +565,750 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             data.lineItems.isNotEmpty &&
             unresolvedProductCount == 0);
 
-    return Column(
-      mainAxisSize: MainAxisSize.max,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Header with Status and Provider
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.check, color: Colors.green),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Factura Procesada',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    _useVeryfi
-                        ? 'Procesado con Inteligencia Artificial (Veryfi)'
-                        : 'Procesado localmente',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Provider Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: _useVeryfi ? Colors.purple.shade50 : Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: _useVeryfi
-                      ? Colors.purple.shade200
-                      : Colors.blue.shade200,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _useVeryfi ? Icons.auto_awesome : Icons.phone_android,
-                    size: 14,
-                    color: _useVeryfi ? Colors.purple : Colors.blue,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _useVeryfi ? 'Veryfi AI' : 'Local OCR',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: _useVeryfi ? Colors.purple : Colors.blue,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        // Invoice Details Card
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header with Status and Provider
+          Row(
             children: [
-              InkWell(
-                onTap: _showSupplierSelectionDialog,
-                child: Row(
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: VinabikeThemeRoles.of(context).success.container,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.check,
+                    color: VinabikeThemeRoles.of(context).success.accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _buildDetailRow(
-                        Icons.store,
-                        'Proveedor',
-                        _ocrSupplierName ??
-                            data.supplierName ??
-                            'No detectado (Toca para seleccionar)',
-                        isBold: true,
-                        valueColor:
-                            (_ocrSupplierName ?? data.supplierName) == null
-                                ? Colors.orange
-                                : null,
+                    const Text(
+                      'Factura Procesada',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const Icon(Icons.edit, size: 16, color: Colors.grey),
+                    Text(
+                      _useVeryfi
+                          ? 'Procesado con Inteligencia Artificial (Veryfi)'
+                          : 'Procesado localmente',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: supplierTemplateActive
-                          ? Colors.blue.shade50
-                          : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: supplierTemplateActive
-                            ? Colors.blue.shade200
-                            : Colors.grey.shade300,
+              // Provider Badge
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: VinabikeThemeRoles.of(context).info.container,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: _useVeryfi
+                        ? VinabikeThemeRoles.of(context).info.border
+                        : VinabikeThemeRoles.of(context).info.border,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _useVeryfi ? Icons.auto_awesome : Icons.phone_android,
+                      size: 14,
+                      color: VinabikeThemeRoles.of(context).info.accent,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _useVeryfi ? 'Veryfi AI' : 'Local OCR',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: VinabikeThemeRoles.of(context).info.accent,
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          supplierTemplateActive
-                              ? Icons.auto_fix_high
-                              : Icons.rule,
-                          size: 14,
-                          color: supplierTemplateActive
-                              ? Colors.blue.shade700
-                              : Colors.grey.shade700,
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Invoice Details Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Theme.of(context).dividerColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .shadow
+                      .withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                InkWell(
+                  onTap: _showSupplierSelectionDialog,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildDetailRow(
+                          Icons.store,
+                          'Proveedor',
+                          _ocrSupplierName ??
+                              data.supplierName ??
+                              'No detectado (Toca para seleccionar)',
+                          isBold: true,
+                          valueColor:
+                              (_ocrSupplierName ?? data.supplierName) == null
+                                  ? Colors.orange
+                                  : null,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          aliExpressTemplateActive
-                              ? 'Plantilla AliExpress activa'
-                              : supplierTemplateActive
-                                  ? 'Plantilla OCR activa'
-                                  : 'Sin plantilla OCR',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                      ),
+                      Icon(Icons.edit,
+                          size: 16,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: supplierTemplateActive
+                            ? Colors.blue.shade50
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: supplierTemplateActive
+                              ? Colors.blue.shade200
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            supplierTemplateActive
+                                ? Icons.auto_fix_high
+                                : Icons.rule,
+                            size: 14,
                             color: supplierTemplateActive
                                 ? Colors.blue.shade700
                                 : Colors.grey.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            aliExpressTemplateActive
+                                ? 'Plantilla AliExpress activa'
+                                : supplierTemplateActive
+                                    ? 'Plantilla OCR activa'
+                                    : 'Sin plantilla OCR',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: supplierTemplateActive
+                                  ? Colors.blue.shade700
+                                  : Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: _isSavingSupplierTemplate
+                          ? null
+                          : _showSaveSupplierTemplateDialog,
+                      icon: _isSavingSupplierTemplate
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_as, size: 16),
+                      label: const Text('Guardar plantilla OCR'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () =>
+                            _showEditInvoiceNumberDialog(data.invoiceNumber),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildDetailRow(
+                                Icons.receipt,
+                                'N° Factura',
+                                data.invoiceNumber ?? '---',
+                              ),
+                            ),
+                            Icon(Icons.edit,
+                                size: 16,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _showEditDateDialog(data.date),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildDetailRow(
+                                Icons.calendar_today,
+                                'Fecha',
+                                data.date != null
+                                    ? '${data.date!.day}/${data.date!.month}/${data.date!.year}'
+                                    : '---',
+                              ),
+                            ),
+                            Icon(Icons.edit,
+                                size: 16,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                _buildDetailRow(
+                  Icons.attach_money,
+                  'Total',
+                  _formatAmount(data.total),
+                  isBold: true,
+                  valueColor: theme.colorScheme.primary,
+                  valueSize: 18,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          if (widget.showLineItemReview) ...[
+            // Products Section
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Productos Detectados (${data.lineItems.length})',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (data.lineItems.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: _buildCompactDiagnosticsStatus(
+                              invoiceDiagnostics),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                TextButton.icon(
+                  onPressed: () => setState(() => _showStock = !_showStock),
+                  icon: Icon(
+                    _showStock ? Icons.visibility_off : Icons.visibility,
+                    size: 16,
+                  ),
+                  label: Text(_showStock ? 'Ocultar Stock' : 'Ver Stock'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            if (data.lineItems.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: VinabikeThemeRoles.of(context).warning.container,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: VinabikeThemeRoles.of(context).warning.border),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber,
+                        color: VinabikeThemeRoles.of(context).warning.accent),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'No se detectaron productos individuales. Se importará solo el total.',
+                        style: TextStyle(
+                            color: VinabikeThemeRoles.of(context)
+                                .warning
+                                .onContainer),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              // Altura acotada, no `Expanded`: esta sección vive dentro de un
+              // scroll vertical, donde «ocupa el resto» no tiene resto que
+              // ocupar. Con flex aquí el layout aborta y la revisión OCR se
+              // mostraba como un cuadro en blanco (2026-08-06).
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 420),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Column(
+                      children: [
+                        // Header Row
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.5),
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(8)),
+                          ),
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 32), // Status icon width
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 3,
+                                child: Text('SKU',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                        fontSize: 12)),
+                              ),
+                              Expanded(
+                                flex: _showStock
+                                    ? 8
+                                    : 10, // Give description most space
+                                child: Text('Descripción',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                        fontSize: 12)),
+                              ),
+                              if (_showStock)
+                                Expanded(
+                                  flex: 2,
+                                  child: Text('Stock',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                          fontSize: 12)),
+                                ),
+                              Expanded(
+                                flex: 2,
+                                child: Text('Cant.',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                        fontSize: 12)),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text('Precio',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                        fontSize: 12)),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text('Dscto',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                        fontSize: 12)),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text('Total',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                        fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Scrollable Data Rows
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 320),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: data.lineItems.map((item) {
+                                final rowDiagnostics = _getRowDiagnostics(item);
+                                // Determine verification status
+                                Widget statusIcon;
+                                String tooltip;
+
+                                if (item.sku == null || item.sku!.isEmpty) {
+                                  statusIcon = Icon(Icons.remove_circle_outline,
+                                      size: 18,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant);
+                                  tooltip = 'Sin código SKU';
+                                } else if (item.existsInDatabase == true) {
+                                  statusIcon = Icon(Icons.check_circle,
+                                      size: 18,
+                                      color: VinabikeThemeRoles.of(context)
+                                          .success
+                                          .accent);
+                                  tooltip =
+                                      'Producto encontrado: ${item.matchedProductName ?? item.sku}';
+                                } else {
+                                  statusIcon = Icon(Icons.warning_amber,
+                                      size: 18,
+                                      color: VinabikeThemeRoles.of(context)
+                                          .warning
+                                          .accent);
+                                  tooltip = 'Producto nuevo - debe crearse';
+                                }
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 12),
+                                  decoration: BoxDecoration(
+                                      border: Border(
+                                          bottom: BorderSide(
+                                              color: Theme.of(context)
+                                                  .dividerColor))),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 32,
+                                        child: Tooltip(
+                                            message: tooltip,
+                                            child: statusIcon),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        flex: 3,
+                                        child: TextField(
+                                          decoration: InputDecoration(
+                                            hintText: 'ASIGNAR SKU',
+                                            isDense: true,
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 4, vertical: 4),
+                                            border: (item.sku == null ||
+                                                    item.sku!.isEmpty)
+                                                ? OutlineInputBorder(
+                                                    borderSide: BorderSide(
+                                                        color: Colors
+                                                            .orange.shade300,
+                                                        width: 0.5),
+                                                  )
+                                                : InputBorder.none,
+                                            filled: (item.sku == null ||
+                                                item.sku!.isEmpty),
+                                            fillColor:
+                                                VinabikeThemeRoles.of(context)
+                                                    .warning
+                                                    .container,
+                                            hintStyle: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: VinabikeThemeRoles.of(
+                                                        context)
+                                                    .warning
+                                                    .border),
+                                          ),
+                                          controller:
+                                              _skuControllers.putIfAbsent(
+                                                  _parsedData!.lineItems
+                                                      .indexOf(item),
+                                                  () => TextEditingController(
+                                                      text: item.sku)),
+                                          style: TextStyle(
+                                            fontFamily: 'monospace',
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: item.existsInDatabase == true
+                                                ? VinabikeThemeRoles.of(context)
+                                                    .success
+                                                    .accent
+                                                : null,
+                                          ),
+                                          onChanged: (newSku) =>
+                                              _updateItemSku(item, newSku),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: _showStock ? 8 : 10,
+                                        child: Text(
+                                          item.description,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                      if (_showStock)
+                                        Expanded(
+                                          flex: 2,
+                                          child: Text(
+                                              item.currentStock?.toString() ??
+                                                  '-',
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant)),
+                                        ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                            item.quantity?.toStringAsFixed(0) ??
+                                                '1',
+                                            style:
+                                                const TextStyle(fontSize: 13)),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                            item.unitPrice != null
+                                                ? '\$${item.unitPrice!.toStringAsFixed(0)}'
+                                                : '-',
+                                            style:
+                                                const TextStyle(fontSize: 13)),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                            (item.discount != null &&
+                                                    item.discount! > 0)
+                                                ? '\$${item.discount!.toStringAsFixed(0)}'
+                                                : (item.discountRate != null &&
+                                                        item.discountRate! > 0)
+                                                    ? '${item.discountRate!.toStringAsFixed(0)}%'
+                                                    : '-',
+                                            style: TextStyle(
+                                                fontSize: 13,
+                                                color: VinabikeThemeRoles.of(
+                                                        context)
+                                                    .warning
+                                                    .onContainer)),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            if (!rowDiagnostics.isComplete ||
+                                                !rowDiagnostics.isConsistent ||
+                                                rowDiagnostics.wasAutoAdjusted)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 6),
+                                                child: Tooltip(
+                                                  message:
+                                                      _buildRowDiagnosticsTooltip(
+                                                    item,
+                                                    rowDiagnostics,
+                                                  ),
+                                                  child: Icon(
+                                                    !rowDiagnostics
+                                                                .isComplete ||
+                                                            !rowDiagnostics
+                                                                .isConsistent
+                                                        ? Icons.error_outline
+                                                        : Icons.auto_fix_high,
+                                                    size: 16,
+                                                    color: !rowDiagnostics
+                                                                .isComplete ||
+                                                            !rowDiagnostics
+                                                                .isConsistent
+                                                        ? VinabikeThemeRoles.of(
+                                                                context)
+                                                            .warning
+                                                            .accent
+                                                        : VinabikeThemeRoles.of(
+                                                                context)
+                                                            .info
+                                                            .accent,
+                                                  ),
+                                                ),
+                                              ),
+                                            Text(
+                                              item.total != null
+                                                  ? '\$${item.total!.toStringAsFixed(0)}'
+                                                  : '-',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: !rowDiagnostics
+                                                            .isComplete ||
+                                                        !rowDiagnostics
+                                                            .isConsistent
+                                                    ? VinabikeThemeRoles.of(
+                                                            context)
+                                                        .warning
+                                                        .onContainer
+                                                    : null,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: _isSavingSupplierTemplate
-                        ? null
-                        : _showSaveSupplierTemplateDialog,
-                    icon: _isSavingSupplierTemplate
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save_as, size: 16),
-                    label: const Text('Guardar plantilla OCR'),
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ],
+                ),
               ),
-              const Divider(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () =>
-                          _showEditInvoiceNumberDialog(data.invoiceNumber),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.receipt,
-                              'N° Factura',
-                              data.invoiceNumber ?? '---',
-                            ),
-                          ),
-                          const Icon(Icons.edit, size: 16, color: Colors.grey),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _showEditDateDialog(data.date),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildDetailRow(
-                              Icons.calendar_today,
-                              'Fecha',
-                              data.date != null
-                                  ? '${data.date!.day}/${data.date!.month}/${data.date!.year}'
-                                  : '---',
-                            ),
-                          ),
-                          const Icon(Icons.edit, size: 16, color: Colors.grey),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const Divider(height: 24),
-              _buildDetailRow(
-                Icons.attach_money,
-                'Total',
-                _formatAmount(data.total),
-                isBold: true,
-                valueColor: theme.colorScheme.primary,
-                valueSize: 18,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-        if (widget.showLineItemReview) ...[
-          // Products Section
+            // Create New Products Button (if any unrecognized products)
+            if (data.lineItems.any((item) => item.existsInDatabase == false))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: OutlinedButton.icon(
+                  onPressed:
+                      _isOpeningBulkCreate ? null : _openBulkCreateScreen,
+                  icon: _isOpeningBulkCreate
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(Icons.add_circle_outline,
+                          color: VinabikeThemeRoles.of(context).warning.accent),
+                  label: Text(
+                    'Crear ${data.lineItems.where((item) => item.existsInDatabase == false).length} Productos Nuevos',
+                    style: TextStyle(
+                      color: VinabikeThemeRoles.of(context).warning.accent,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: BorderSide(
+                      color: VinabikeThemeRoles.of(context).warning.border,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+
+          // Action Buttons
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Productos Detectados (${data.lineItems.length})',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (data.lineItems.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child:
-                            _buildCompactDiagnosticsStatus(invoiceDiagnostics),
-                      ),
-                  ],
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _parsedData = null;
+                      _baseParsedData = null;
+                      _errorMessage = null;
+                      _ocrSupplier = null;
+                      _ocrSupplierName = null;
+                      _supplierIdForNewProducts = null;
+                    });
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
-              TextButton.icon(
-                onPressed: () => setState(() => _showStock = !_showStock),
-                icon: Icon(
-                  _showStock ? Icons.visibility_off : Icons.visibility,
-                  size: 16,
-                ),
-                label: Text(_showStock ? 'Ocultar Stock' : 'Ver Stock'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: canUseParsedData
+                      ? () => _handleUseParsedData(data)
+                      : null,
+                  icon: const Icon(Icons.check),
+                  label: Text(canUseParsedData
+                      ? 'Usar Datos'
+                      : !hasResolvedSupplier
+                          ? 'Seleccionar proveedor'
+                          : data.lineItems.isEmpty
+                              ? 'Sin productos detectados'
+                              : unresolvedProductCount == 1
+                                  ? 'Resolver 1 producto'
+                                  : 'Resolver $unresolvedProductCount productos'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          if (data.lineItems.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber, color: Colors.orange.shade700),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'No se detectaron productos individuales. Se importará solo el total.',
-                      style: TextStyle(color: Colors.orange.shade900),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Column(
-                    children: [
-                      // Header Row
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.5),
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(8)),
-                        ),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 32), // Status icon width
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 3,
-                              child: Text('SKU',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade700,
-                                      fontSize: 12)),
-                            ),
-                            Expanded(
-                              flex: _showStock
-                                  ? 8
-                                  : 10, // Give description most space
-                              child: Text('Descripción',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade700,
-                                      fontSize: 12)),
-                            ),
-                            if (_showStock)
-                              Expanded(
-                                flex: 2,
-                                child: Text('Stock',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.grey.shade700,
-                                        fontSize: 12)),
-                              ),
-                            Expanded(
-                              flex: 2,
-                              child: Text('Cant.',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade700,
-                                      fontSize: 12)),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Text('Precio',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade700,
-                                      fontSize: 12)),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text('Dscto',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade700,
-                                      fontSize: 12)),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Text('Total',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey.shade700,
-                                      fontSize: 12)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Scrollable Data Rows
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: data.lineItems.map((item) {
-                              final rowDiagnostics = _getRowDiagnostics(item);
-                              // Determine verification status
-                              Widget statusIcon;
-                              String tooltip;
-
-                              if (item.sku == null || item.sku!.isEmpty) {
-                                statusIcon = const Icon(
-                                    Icons.remove_circle_outline,
-                                    size: 18,
-                                    color: Colors.grey);
-                                tooltip = 'Sin código SKU';
-                              } else if (item.existsInDatabase == true) {
-                                statusIcon = const Icon(Icons.check_circle,
-                                    size: 18, color: Colors.green);
-                                tooltip =
-                                    'Producto encontrado: ${item.matchedProductName ?? item.sku}';
-                              } else {
-                                statusIcon = const Icon(Icons.warning_amber,
-                                    size: 18, color: Colors.orange);
-                                tooltip = 'Producto nuevo - debe crearse';
-                              }
-
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 12),
-                                decoration: BoxDecoration(
-                                    border: Border(
-                                        bottom: BorderSide(
-                                            color: Colors.grey.shade200))),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 32,
-                                      child: Tooltip(
-                                          message: tooltip, child: statusIcon),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      flex: 3,
-                                      child: TextField(
-                                        decoration: InputDecoration(
-                                          hintText: 'ASIGNAR SKU',
-                                          isDense: true,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 4, vertical: 4),
-                                          border: (item.sku == null ||
-                                                  item.sku!.isEmpty)
-                                              ? OutlineInputBorder(
-                                                  borderSide: BorderSide(
-                                                      color: Colors
-                                                          .orange.shade300,
-                                                      width: 0.5),
-                                                )
-                                              : InputBorder.none,
-                                          filled: (item.sku == null ||
-                                              item.sku!.isEmpty),
-                                          fillColor: Colors.orange.shade50,
-                                          hintStyle: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.orange.shade300),
-                                        ),
-                                        controller: _skuControllers.putIfAbsent(
-                                            _parsedData!.lineItems
-                                                .indexOf(item),
-                                            () => TextEditingController(
-                                                text: item.sku)),
-                                        style: TextStyle(
-                                          fontFamily: 'monospace',
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                          color: item.existsInDatabase == true
-                                              ? Colors.green.shade700
-                                              : null,
-                                        ),
-                                        onChanged: (newSku) =>
-                                            _updateItemSku(item, newSku),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: _showStock ? 8 : 10,
-                                      child: Text(
-                                        item.description,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                    ),
-                                    if (_showStock)
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                            item.currentStock?.toString() ??
-                                                '-',
-                                            style: const TextStyle(
-                                                fontSize: 13,
-                                                color: Colors.blueGrey)),
-                                      ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(
-                                          item.quantity?.toStringAsFixed(0) ??
-                                              '1',
-                                          style: const TextStyle(fontSize: 13)),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(
-                                          item.unitPrice != null
-                                              ? '\$${item.unitPrice!.toStringAsFixed(0)}'
-                                              : '-',
-                                          style: const TextStyle(fontSize: 13)),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(
-                                          (item.discount != null &&
-                                                  item.discount! > 0)
-                                              ? '\$${item.discount!.toStringAsFixed(0)}'
-                                              : (item.discountRate != null &&
-                                                      item.discountRate! > 0)
-                                                  ? '${item.discountRate!.toStringAsFixed(0)}%'
-                                                  : '-',
-                                          style: TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.orange.shade800)),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.end,
-                                        children: [
-                                          if (!rowDiagnostics.isComplete ||
-                                              !rowDiagnostics.isConsistent ||
-                                              rowDiagnostics.wasAutoAdjusted)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                  right: 6),
-                                              child: Tooltip(
-                                                message:
-                                                    _buildRowDiagnosticsTooltip(
-                                                  item,
-                                                  rowDiagnostics,
-                                                ),
-                                                child: Icon(
-                                                  !rowDiagnostics.isComplete ||
-                                                          !rowDiagnostics
-                                                              .isConsistent
-                                                      ? Icons.error_outline
-                                                      : Icons.auto_fix_high,
-                                                  size: 16,
-                                                  color: !rowDiagnostics
-                                                              .isComplete ||
-                                                          !rowDiagnostics
-                                                              .isConsistent
-                                                      ? Colors.orange.shade700
-                                                      : Colors.blue.shade700,
-                                                ),
-                                              ),
-                                            ),
-                                          Text(
-                                            item.total != null
-                                                ? '\$${item.total!.toStringAsFixed(0)}'
-                                                : '-',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.bold,
-                                              color:
-                                                  !rowDiagnostics.isComplete ||
-                                                          !rowDiagnostics
-                                                              .isConsistent
-                                                      ? Colors.orange.shade800
-                                                      : null,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(height: 24),
-
-          // Create New Products Button (if any unrecognized products)
-          if (data.lineItems.any((item) => item.existsInDatabase == false))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: OutlinedButton.icon(
-                onPressed:
-                    _isOpeningBulkCreate ? null : _openBulkCreateScreen,
-                icon: _isOpeningBulkCreate
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add_circle_outline,
-                        color: Colors.orange),
-                label: Text(
-                  'Crear ${data.lineItems.where((item) => item.existsInDatabase == false).length} Productos Nuevos',
-                  style: const TextStyle(color: Colors.orange),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: const BorderSide(color: Colors.orange),
-                ),
-              ),
-            ),
         ],
-
-        // Action Buttons
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _parsedData = null;
-                    _baseParsedData = null;
-                    _errorMessage = null;
-                    _ocrSupplier = null;
-                    _ocrSupplierName = null;
-                    _supplierIdForNewProducts = null;
-                  });
-                },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reintentar'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed:
-                    canUseParsedData ? () => _handleUseParsedData(data) : null,
-                icon: const Icon(Icons.check),
-                label: Text(canUseParsedData
-                    ? 'Usar Datos'
-                    : !hasResolvedSupplier
-                        ? 'Seleccionar proveedor'
-                        : data.lineItems.isEmpty
-                            ? 'Sin productos detectados'
-                            : unresolvedProductCount == 1
-                                ? 'Resolver 1 producto'
-                                : 'Resolver $unresolvedProductCount productos'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 
@@ -1340,8 +1425,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     // Use debounce for real-time matching to avoid overlapping lookups and dialogs
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
-      final verifiedItem =
-          await _verifySingleProduct(
+      final verifiedItem = await _verifySingleProduct(
         item.copyWith(sku: newSku.trim()),
         supplierId: _supplierIdForNewProducts ?? widget.supplierId,
       );
@@ -1421,8 +1505,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, 'REJECT'),
-            child: const Text('Ingresar otro SKU',
-                style: TextStyle(color: Colors.red)),
+            child: Text('Ingresar otro SKU',
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, 'SYNC'),
@@ -1592,6 +1676,12 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   Future<void> _openBulkCreateScreen() async {
+    if (kDebugMode) {
+      debugPrint(
+        '🧪 [BulkCreate] pressed · parsed=${_parsedData != null} '
+        'opening=$_isOpeningBulkCreate',
+      );
+    }
     if (_parsedData == null || _isOpeningBulkCreate) return;
     final sourceData = _parsedData!;
     setState(() => _isOpeningBulkCreate = true);
@@ -1611,15 +1701,28 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         final tenantService = TenantService();
         final categoryService = CategoryService(dbService, tenantService);
         final brandService = BrandService(dbService);
+        // Con tope: sin él, una de las dos consultas colgada dejaba la
+        // apertura del panel esperando para siempre, sin error ni panel, y el
+        // botón parecía muerto (2026-08-06). Si vence, se avisa y se puede
+        // reintentar en vez de quedar en un limbo silencioso.
         final results = await Future.wait<dynamic>([
           categoryService.getCategories(),
           brandService.getBrands(activeOnly: true),
-        ]);
+        ]).timeout(
+          const Duration(seconds: 20),
+          onTimeout: () => throw TimeoutException(
+            'Las categorías y marcas no respondieron a tiempo.',
+          ),
+        );
+        if (kDebugMode) {
+          debugPrint('🧪 [BulkCreate] referencias cargadas');
+        }
         if (!mounted || !identical(_parsedData, sourceData)) return;
         _categories = results[0] as List<Category>;
         _brands = results[1] as List<ProductBrand>;
         if (_categories.isEmpty) {
-          throw StateError('No hay categorías disponibles para crear productos.');
+          throw StateError(
+              'No hay categorías disponibles para crear productos.');
         }
       } catch (e) {
         debugPrint('Failed to load categories/brands: $e');
@@ -1629,7 +1732,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
               content: Text(
                 'No se pudo abrir la creación de productos: $e Reintenta.',
               ),
-              backgroundColor: Colors.red,
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         }
@@ -1666,7 +1769,12 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       if (isAliExpressInvoice) {
         try {
-          await _assignNextAliExpressSkus(_newProductEntries);
+          // Con tope: es una sugerencia de numeración, no un requisito para
+          // abrir la revisión. Sin él, una consulta lenta dejaba el panel sin
+          // abrir y el botón parecía no responder (2026-08-06); los SKU
+          // definitivos se reservan igual al crear los productos.
+          await _assignNextAliExpressSkus(_newProductEntries)
+              .timeout(const Duration(seconds: 12));
         } catch (error) {
           debugPrint(
               '⚠️ [OCR] No se pudo preparar la secuencia SKU AE: $error');
@@ -1674,6 +1782,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       }
 
       if (!mounted || !identical(_parsedData, sourceData)) return;
+      if (kDebugMode) {
+        debugPrint('🧪 [BulkCreate] abriendo panel de revisión');
+      }
       setState(() {
         _showBulkCreate = true;
         _similarProductMessage = null;
@@ -1723,10 +1834,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         .toList(growable: false);
     if (pending.isEmpty) return;
 
-    final supplierId =
-        (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
-    final supplierName =
-        (_ocrSupplierName ?? widget.supplierName)?.trim();
+    final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+    final supplierName = (_ocrSupplierName ?? widget.supplierName)?.trim();
     if (supplierId == null || supplierId.isEmpty) {
       throw StateError('Falta resolver el proveedor AliExpress.');
     }
@@ -1894,7 +2003,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                             _supplierIdForNewProducts =
                                                 supplier.id;
                                             _baseParsedData = supplierBase;
-                                            _parsedData = _applySupplierTemplate(
+                                            _parsedData =
+                                                _applySupplierTemplate(
                                               supplierBase,
                                               supplier,
                                             );
@@ -1910,7 +2020,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                               content: Text(
                                                 'No se pudo verificar el catálogo de ${supplier.name}: $error',
                                               ),
-                                              backgroundColor: Colors.red,
+                                              backgroundColor:
+                                                  Theme.of(this.context)
+                                                      .colorScheme
+                                                      .error,
                                             ),
                                           );
                                         }
@@ -2095,653 +2208,744 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                       color: Color(0xFF616161))),
             );
 
-        return SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Row(
-                children: [
-                  const Icon(Icons.add_circle, color: Colors.orange, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        // O-04 de la guía de componentes: cuerpo con scroll propio y pie fijo
+        // con un primario. La altura la acota el diálogo que la contiene.
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Header
+                    Row(
                       children: [
-                        const Text('Revisar productos de la factura',
-                            style: TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.bold)),
-                        Row(
-                          children: [
-                            Text(
-                              '${_newProductEntries.where((e) => e.isSelected).length} de ${_newProductEntries.length} seleccionados',
-                              style: TextStyle(
-                                  fontSize: 14, color: Colors.grey.shade600),
-                            ),
-                            Text(' • ',
-                                style: TextStyle(
-                                    fontSize: 14, color: Colors.grey.shade400)),
-                            Icon(
-                              (_ocrSupplierName ?? widget.supplierName) != null
-                                  ? Icons.local_shipping_outlined
-                                  : Icons.warning_amber_rounded,
-                              size: 14,
-                              color:
-                                  (_ocrSupplierName ?? widget.supplierName) !=
-                                          null
-                                      ? Colors.orange.shade700
-                                      : Colors.red.shade600,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _ocrSupplierName ??
-                                  widget.supplierName ??
-                                  'Sin proveedor',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color:
+                        const Icon(Icons.add_circle,
+                            color: Colors.orange, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Revisar productos de la factura',
+                                  style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold)),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${_newProductEntries.where((e) => e.isSelected).length} de ${_newProductEntries.length} seleccionados',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant),
+                                  ),
+                                  Text(' • ',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outline)),
+                                  Icon(
                                     (_ocrSupplierName ?? widget.supplierName) !=
+                                            null
+                                        ? Icons.local_shipping_outlined
+                                        : Icons.warning_amber_rounded,
+                                    size: 14,
+                                    color: (_ocrSupplierName ??
+                                                widget.supplierName) !=
                                             null
                                         ? Colors.orange.shade700
                                         : Colors.red.shade600,
-                                fontWeight: FontWeight.w500,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _ocrSupplierName ??
+                                        widget.supplierName ??
+                                        'Sin proveedor',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: (_ocrSupplierName ??
+                                                  widget.supplierName) !=
+                                              null
+                                          ? Colors.orange.shade700
+                                          : Colors.red.shade600,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  border: Border.all(color: Colors.grey.shade200),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.manage_search,
-                      size: 18,
-                      color: Colors.grey.shade700,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _similarProductMessage ??
-                            (_looksLikeAliExpressInvoice(_parsedData!)
-                                ? 'Plantilla AliExpress: revisa parecidos antes de crear productos nuevos.'
-                                : 'Busca parecidos para reutilizar productos existentes antes de crear nuevos.'),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      onPressed: _bulkCreateBusy()
-                          ? null
-                          : () => _checkSimilarProductsForNewEntries(),
-                      icon: _isCheckingSimilarProducts
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.search, size: 16),
-                      label: Text(_isCheckingSimilarProducts
-                          ? 'Buscando...'
-                          : 'Buscar parecidos'),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // Pricing rule strip ─ explains the suggested-price formula and
-              // lets the user toggle whether the OCR/JSON cost already
-              // includes IVA (e.g. AliExpress allocates tax into each unit).
-              _buildPricingRuleStrip(),
-
-              const SizedBox(height: 12),
-
-              // Table — always tableInnerWidth wide, scrolls horizontally if needed
-              Scrollbar(
-                controller: _bulkCreateHorizontalScrollController,
-                thumbVisibility: true,
-                trackVisibility: true,
-                notificationPredicate: (notification) =>
-                    notification.metrics.axis == Axis.horizontal,
-                child: SingleChildScrollView(
-                  controller: _bulkCreateHorizontalScrollController,
-                  scrollDirection: Axis.horizontal,
-                  child: Container(
-                    width: tableInnerWidth,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // ── Header ──────────────────────────────────────────────
-                        Container(
-                          height: 38,
-                          padding: const EdgeInsets.symmetric(horizontal: hPad),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(9)),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const SizedBox(
-                                  width: wChk), // checkbox placeholder
-                              headerCell('Img', wImg),
-                              const SizedBox(width: gap),
-                              headerCell('SKU', wSku),
-                              const SizedBox(width: gap),
-                              headerCell('Nombre', wName),
-                              const SizedBox(width: gap),
-                              headerCell('Parecidos', wSimilar),
-                              const SizedBox(width: gap),
-                              headerCell(
-                                  _costsIncludeIva
-                                      ? 'Costo (c/IVA)'
-                                      : 'Costo (Neto)',
-                                  wCost,
-                                  align: TextAlign.center),
-                              const SizedBox(width: gap),
-                              headerCell(
-                                  _costsIncludeIva
-                                      ? 'Precio (×2)'
-                                      : 'Precio (×1,19×2)',
-                                  wPrice,
-                                  align: TextAlign.center),
-                              const SizedBox(width: gap),
-                              headerCell('Categoría', wCat),
-                              const SizedBox(width: gap),
-                              headerCell('Marca', wBrand),
-                              const SizedBox(width: gap),
-                              headerCell('Taller', wTaller,
-                                  align: TextAlign.center),
                             ],
                           ),
                         ),
-                        // ── Rows ─────────────────────────────────────────────────
-                        ...List.generate(_newProductEntries.length, (index) {
-                          final entry = _newProductEntries[index];
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: hPad, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: entry.isSelected
-                                  ? Colors.white
-                                  : Colors.grey.shade50,
-                              border: Border(
-                                  top: BorderSide(color: Colors.grey.shade200)),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        border:
+                            Border.all(color: Theme.of(context).dividerColor),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.manage_search,
+                            size: 18,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _similarProductMessage ??
+                                  (_looksLikeAliExpressInvoice(_parsedData!)
+                                      ? 'Plantilla AliExpress: revisa parecidos antes de crear productos nuevos.'
+                                      : 'Busca parecidos para reutilizar productos existentes antes de crear nuevos.'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
                             ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                // Checkbox
-                                SizedBox(
-                                  width: wChk,
-                                  child: Checkbox(
-                                    value: entry.isSelected,
-                                    onChanged: entry.requiresDuplicateReview
-                                        ? null
-                                        : (v) => setState(() =>
-                                            entry.isSelected = v ?? false),
-                                  ),
+                          ),
+                          const SizedBox(width: 12),
+                          OutlinedButton.icon(
+                            onPressed: _bulkCreateBusy()
+                                ? null
+                                : () => _checkSimilarProductsForNewEntries(),
+                            icon: _isCheckingSimilarProducts
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.search, size: 16),
+                            label: Text(_isCheckingSimilarProducts
+                                ? 'Buscando...'
+                                : 'Buscar parecidos'),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Pricing rule strip ─ explains the suggested-price formula and
+                    // lets the user toggle whether the OCR/JSON cost already
+                    // includes IVA (e.g. AliExpress allocates tax into each unit).
+                    _buildPricingRuleStrip(),
+
+                    const SizedBox(height: 12),
+
+                    // Table — always tableInnerWidth wide, scrolls horizontally if needed
+                    Scrollbar(
+                      controller: _bulkCreateHorizontalScrollController,
+                      thumbVisibility: true,
+                      trackVisibility: true,
+                      notificationPredicate: (notification) =>
+                          notification.metrics.axis == Axis.horizontal,
+                      child: SingleChildScrollView(
+                        controller: _bulkCreateHorizontalScrollController,
+                        scrollDirection: Axis.horizontal,
+                        child: Container(
+                          width: tableInnerWidth,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // ── Header ──────────────────────────────────────────────
+                              Container(
+                                height: 38,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: hPad),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(9)),
                                 ),
-                                // Image cell
-                                SizedBox(
-                                  width: wImg - gap,
-                                  child: DropTarget(
-                                    onDragDone: (d) async {
-                                      if (d.files.isNotEmpty) {
-                                        final f = d.files.first;
-                                        _uploadImage(entry,
-                                            await f.readAsBytes(), f.name);
-                                      }
-                                    },
-                                    onDragEntered: (_) => setState(
-                                        () => entry.isHoveringImage = true),
-                                    onDragExited: (_) => setState(
-                                        () => entry.isHoveringImage = false),
-                                    child: MouseRegion(
-                                      onEnter: (_) => setState(
-                                          () => entry.isHoveringImage = true),
-                                      onExit: (_) => setState(
-                                          () => entry.isHoveringImage = false),
-                                      child: Stack(children: [
-                                        InkWell(
-                                          onTap: () async {
-                                            final r =
-                                                await ImageService.pickImage();
-                                            if (r != null) {
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    const SizedBox(
+                                        width: wChk), // checkbox placeholder
+                                    headerCell('Img', wImg),
+                                    const SizedBox(width: gap),
+                                    headerCell('SKU', wSku),
+                                    const SizedBox(width: gap),
+                                    headerCell('Nombre', wName),
+                                    const SizedBox(width: gap),
+                                    headerCell('Parecidos', wSimilar),
+                                    const SizedBox(width: gap),
+                                    headerCell(
+                                        _costsIncludeIva
+                                            ? 'Costo (c/IVA)'
+                                            : 'Costo (Neto)',
+                                        wCost,
+                                        align: TextAlign.center),
+                                    const SizedBox(width: gap),
+                                    headerCell(
+                                        _costsIncludeIva
+                                            ? 'Precio (×2)'
+                                            : 'Precio (×1,19×2)',
+                                        wPrice,
+                                        align: TextAlign.center),
+                                    const SizedBox(width: gap),
+                                    headerCell('Categoría', wCat),
+                                    const SizedBox(width: gap),
+                                    headerCell('Marca', wBrand),
+                                    const SizedBox(width: gap),
+                                    headerCell('Taller', wTaller,
+                                        align: TextAlign.center),
+                                  ],
+                                ),
+                              ),
+                              // ── Rows ─────────────────────────────────────────────────
+                              ...List.generate(_newProductEntries.length,
+                                  (index) {
+                                final entry = _newProductEntries[index];
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: hPad, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: entry.isSelected
+                                        ? Colors.white
+                                        : Colors.grey.shade50,
+                                    border: Border(
+                                        top: BorderSide(
+                                            color: Colors.grey.shade200)),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      // Checkbox
+                                      SizedBox(
+                                        width: wChk,
+                                        child: Checkbox(
+                                          value: entry.isSelected,
+                                          onChanged:
+                                              entry.requiresDuplicateReview
+                                                  ? null
+                                                  : (v) => setState(() => entry
+                                                      .isSelected = v ?? false),
+                                        ),
+                                      ),
+                                      // Image cell
+                                      SizedBox(
+                                        width: wImg - gap,
+                                        child: DropTarget(
+                                          onDragDone: (d) async {
+                                            if (d.files.isNotEmpty) {
+                                              final f = d.files.first;
                                               _uploadImage(
-                                                  entry, r.bytes, r.name);
+                                                  entry,
+                                                  await f.readAsBytes(),
+                                                  f.name);
                                             }
                                           },
-                                          child: Container(
-                                            width: 46,
-                                            height: 46,
-                                            decoration: BoxDecoration(
-                                              color: entry.isHoveringImage
-                                                  ? Colors.blue
-                                                      .withValues(alpha: 0.08)
-                                                  : Colors.grey[100],
-                                              border: Border.all(
-                                                color: entry.isHoveringImage
-                                                    ? Colors.blue
-                                                    : Colors.grey[300]!,
-                                                width: entry.isHoveringImage
-                                                    ? 2
-                                                    : 1,
+                                          onDragEntered: (_) => setState(() =>
+                                              entry.isHoveringImage = true),
+                                          onDragExited: (_) => setState(() =>
+                                              entry.isHoveringImage = false),
+                                          child: MouseRegion(
+                                            onEnter: (_) => setState(() =>
+                                                entry.isHoveringImage = true),
+                                            onExit: (_) => setState(() =>
+                                                entry.isHoveringImage = false),
+                                            child: Stack(children: [
+                                              InkWell(
+                                                onTap: () async {
+                                                  final r = await ImageService
+                                                      .pickImage();
+                                                  if (r != null) {
+                                                    _uploadImage(
+                                                        entry, r.bytes, r.name);
+                                                  }
+                                                },
+                                                child: Container(
+                                                  width: 46,
+                                                  height: 46,
+                                                  decoration: BoxDecoration(
+                                                    color: entry.isHoveringImage
+                                                        ? Colors.blue
+                                                            .withValues(
+                                                                alpha: 0.08)
+                                                        : Colors.grey[100],
+                                                    border: Border.all(
+                                                      color: entry
+                                                              .isHoveringImage
+                                                          ? Colors.blue
+                                                          : Colors.grey[300]!,
+                                                      width:
+                                                          entry.isHoveringImage
+                                                              ? 2
+                                                              : 1,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            4),
+                                                  ),
+                                                  child: entry.isUploadingImage
+                                                      ? const Center(
+                                                          child: SizedBox(
+                                                              width: 18,
+                                                              height: 18,
+                                                              child:
+                                                                  CircularProgressIndicator(
+                                                                      strokeWidth:
+                                                                          2)))
+                                                      : entry.imageUrl != null
+                                                          ? ClipRRect(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          4),
+                                                              child: ImageService
+                                                                  .buildProductImage(
+                                                                imageUrl: entry
+                                                                    .imageUrl,
+                                                                size: 46,
+                                                              ),
+                                                            )
+                                                          : const Icon(
+                                                              Icons
+                                                                  .add_photo_alternate,
+                                                              size: 18,
+                                                              color:
+                                                                  Colors.grey),
+                                                ),
                                               ),
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
+                                              if (entry.imageUrl != null &&
+                                                  entry.isHoveringImage)
+                                                Positioned(
+                                                  right: 0,
+                                                  top: 0,
+                                                  child: GestureDetector(
+                                                    onTap: () => setState(() {
+                                                      entry.imageUrl = null;
+                                                      entry.imageUrlOptimized =
+                                                          null;
+                                                      entry.imageBytes = null;
+                                                      entry.imageFileName =
+                                                          null;
+                                                      entry
+                                                          .invalidateDuplicateResolution();
+                                                    }),
+                                                    child: Container(
+                                                      width: 16,
+                                                      height: 16,
+                                                      decoration:
+                                                          const BoxDecoration(
+                                                              color: Colors.red,
+                                                              shape: BoxShape
+                                                                  .circle),
+                                                      child: const Icon(
+                                                          Icons.close,
+                                                          size: 11,
+                                                          color: Colors.white),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ]),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: gap),
+                                      // SKU
+                                      SizedBox(
+                                        width: wSku,
+                                        child: TextField(
+                                          controller: entry.skuController,
+                                          enabled: entry.isSelected,
+                                          onChanged: (_) => setState(() {
+                                            entry
+                                                .invalidateDuplicateResolution();
+                                          }),
+                                          decoration: InputDecoration(
+                                            isDense: true,
+                                            border: const OutlineInputBorder(),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 8, vertical: 8),
+                                            errorText: entry.sku.isEmpty
+                                                ? 'Requerido'
+                                                : null,
+                                            errorStyle:
+                                                const TextStyle(fontSize: 10),
+                                          ),
+                                          style: const TextStyle(
+                                              fontFamily: 'monospace',
+                                              fontSize: 12),
+                                        ),
+                                      ),
+                                      const SizedBox(width: gap),
+                                      // Name
+                                      SizedBox(
+                                        width: wName,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            TextField(
+                                              controller: entry.nameController,
+                                              enabled: entry.isSelected,
+                                              onChanged: (_) => setState(() {}),
+                                              minLines: 1,
+                                              maxLines: 2,
+                                              decoration: const InputDecoration(
+                                                isDense: true,
+                                                border: OutlineInputBorder(),
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 8),
+                                              ),
+                                              style:
+                                                  const TextStyle(fontSize: 12),
                                             ),
-                                            child: entry.isUploadingImage
-                                                ? const Center(
-                                                    child: SizedBox(
-                                                        width: 18,
-                                                        height: 18,
+                                            if (entry.isAICleaningName ||
+                                                entry.nameWasAICleaned)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 3),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    if (entry.isAICleaningName)
+                                                      const SizedBox(
+                                                        width: 10,
+                                                        height: 10,
                                                         child:
                                                             CircularProgressIndicator(
                                                                 strokeWidth:
-                                                                    2)))
-                                                : entry.imageUrl != null
-                                                    ? ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(4),
-                                                        child: ImageService
-                                                            .buildProductImage(
-                                                          imageUrl:
-                                                              entry.imageUrl,
-                                                          size: 46,
-                                                        ),
+                                                                    1.5),
                                                       )
-                                                    : const Icon(
-                                                        Icons
-                                                            .add_photo_alternate,
-                                                        size: 18,
-                                                        color: Colors.grey),
-                                          ),
+                                                    else
+                                                      const Text('✨',
+                                                          style: TextStyle(
+                                                              fontSize: 11)),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      entry.isAICleaningName
+                                                          ? 'IA limpiando título…'
+                                                          : 'Limpiado por IA',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: entry
+                                                                .isAICleaningName
+                                                            ? Colors
+                                                                .grey.shade600
+                                                            : Colors.deepPurple
+                                                                .shade400,
+                                                      ),
+                                                    ),
+                                                    if (entry
+                                                            .nameWasAICleaned &&
+                                                        entry.originalNoisyTitle !=
+                                                            null) ...[
+                                                      const SizedBox(width: 6),
+                                                      Tooltip(
+                                                        message:
+                                                            'Título original:\n${entry.originalNoisyTitle}',
+                                                        child: Icon(
+                                                          Icons.info_outline,
+                                                          size: 12,
+                                                          color: Theme.of(
+                                                                  context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                          ],
                                         ),
-                                        if (entry.imageUrl != null &&
-                                            entry.isHoveringImage)
-                                          Positioned(
-                                            right: 0,
-                                            top: 0,
-                                            child: GestureDetector(
-                                              onTap: () => setState(() {
-                                                entry.imageUrl = null;
-                                                entry.imageUrlOptimized = null;
-                                                entry.imageBytes = null;
-                                                entry.imageFileName = null;
+                                      ),
+                                      const SizedBox(width: gap),
+                                      SizedBox(
+                                        width: wSimilar,
+                                        child: _buildSimilarProductCell(entry),
+                                      ),
+                                      const SizedBox(width: gap),
+                                      // Cost
+                                      SizedBox(
+                                        width: wCost,
+                                        child: TextField(
+                                          controller: entry.costController,
+                                          enabled: entry.isSelected,
+                                          onChanged: (_) => setState(() {}),
+                                          keyboardType: TextInputType.number,
+                                          decoration: InputDecoration(
+                                            isDense: true,
+                                            border: const OutlineInputBorder(),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 8, vertical: 8),
+                                            prefixText: '\$ ',
+                                            hintText: '0',
+                                            hintStyle: TextStyle(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .outline),
+                                          ),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      const SizedBox(width: gap),
+                                      // Price
+                                      SizedBox(
+                                        width: wPrice,
+                                        child: TextField(
+                                          controller: entry.priceController,
+                                          enabled: entry.isSelected,
+                                          onChanged: (_) => setState(() {}),
+                                          keyboardType: TextInputType.number,
+                                          decoration: InputDecoration(
+                                            isDense: true,
+                                            border: const OutlineInputBorder(),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 8, vertical: 8),
+                                            prefixText: '\$ ',
+                                            hintText: '0',
+                                            hintStyle: TextStyle(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .outline),
+                                          ),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      const SizedBox(width: gap),
+                                      // Category
+                                      SizedBox(
+                                        width: wCat,
+                                        child: DropdownMenu<Category>(
+                                          width: wCat,
+                                          menuHeight: 280,
+                                          initialSelection:
+                                              entry.selectedCategory,
+                                          hintText: 'Categoría',
+                                          textStyle:
+                                              const TextStyle(fontSize: 12),
+                                          inputDecorationTheme:
+                                              const InputDecorationTheme(
+                                            isDense: true,
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
+                                                    horizontal: 8, vertical: 8),
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          enabled: entry.isSelected,
+                                          enableFilter: true,
+                                          requestFocusOnTap: true,
+                                          dropdownMenuEntries: _categories
+                                              .map((c) =>
+                                                  DropdownMenuEntry<Category>(
+                                                      value: c, label: c.name))
+                                              .toList(),
+                                          onSelected: (v) {
+                                            if (v != null) {
+                                              setState(() {
+                                                entry.selectedCategory = v;
                                                 entry
                                                     .invalidateDuplicateResolution();
-                                              }),
-                                              child: Container(
-                                                width: 16,
-                                                height: 16,
-                                                decoration: const BoxDecoration(
-                                                    color: Colors.red,
-                                                    shape: BoxShape.circle),
-                                                child: const Icon(Icons.close,
-                                                    size: 11,
-                                                    color: Colors.white),
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: gap),
+                                      // Brand
+                                      SizedBox(
+                                        width: wBrand,
+                                        child: DropdownMenu<ProductBrand>(
+                                          width: wBrand,
+                                          menuHeight: 280,
+                                          initialSelection: entry.selectedBrand,
+                                          hintText: 'Marca',
+                                          textStyle:
+                                              const TextStyle(fontSize: 12),
+                                          inputDecorationTheme:
+                                              const InputDecorationTheme(
+                                            isDense: true,
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
+                                                    horizontal: 8, vertical: 8),
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          enabled: entry.isSelected,
+                                          enableFilter: true,
+                                          requestFocusOnTap: true,
+                                          dropdownMenuEntries: _brands
+                                              .map((b) => DropdownMenuEntry<
+                                                      ProductBrand>(
+                                                  value: b, label: b.name))
+                                              .toList(),
+                                          onSelected: (v) {
+                                            if (v != null) {
+                                              setState(() {
+                                                entry.selectedBrand = v;
+                                                entry
+                                                    .invalidateDuplicateResolution();
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: gap),
+                                      // Workshop toggle
+                                      SizedBox(
+                                        width: wTaller,
+                                        child: Tooltip(
+                                          message: 'Consumible de taller',
+                                          child: Center(
+                                            child: Transform.scale(
+                                              scale: 0.82,
+                                              child: Switch.adaptive(
+                                                value:
+                                                    entry.isWorkshopConsumable,
+                                                onChanged: entry.isSelected
+                                                    ? (v) => setState(() => entry
+                                                        .isWorkshopConsumable = v)
+                                                    : null,
+                                                materialTapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
                                               ),
                                             ),
                                           ),
-                                      ]),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: gap),
-                                // SKU
-                                SizedBox(
-                                  width: wSku,
-                                  child: TextField(
-                                    controller: entry.skuController,
-                                    enabled: entry.isSelected,
-                                    onChanged: (_) => setState(() {
-                                      entry.invalidateDuplicateResolution();
-                                    }),
-                                    decoration: InputDecoration(
-                                      isDense: true,
-                                      border: const OutlineInputBorder(),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 8),
-                                      errorText: entry.sku.isEmpty
-                                          ? 'Requerido'
-                                          : null,
-                                      errorStyle: const TextStyle(fontSize: 10),
-                                    ),
-                                    style: const TextStyle(
-                                        fontFamily: 'monospace', fontSize: 12),
-                                  ),
-                                ),
-                                const SizedBox(width: gap),
-                                // Name
-                                SizedBox(
-                                  width: wName,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      TextField(
-                                        controller: entry.nameController,
-                                        enabled: entry.isSelected,
-                                        onChanged: (_) => setState(() {}),
-                                        minLines: 1,
-                                        maxLines: 2,
-                                        decoration: const InputDecoration(
-                                          isDense: true,
-                                          border: OutlineInputBorder(),
-                                          contentPadding: EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 8),
                                         ),
-                                        style: const TextStyle(fontSize: 12),
                                       ),
-                                      if (entry.isAICleaningName ||
-                                          entry.nameWasAICleaned)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 3),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (entry.isAICleaningName)
-                                                const SizedBox(
-                                                  width: 10,
-                                                  height: 10,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                          strokeWidth: 1.5),
-                                                )
-                                              else
-                                                const Text('✨',
-                                                    style: TextStyle(
-                                                        fontSize: 11)),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                entry.isAICleaningName
-                                                    ? 'IA limpiando título…'
-                                                    : 'Limpiado por IA',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: entry.isAICleaningName
-                                                      ? Colors.grey.shade600
-                                                      : Colors
-                                                          .deepPurple.shade400,
-                                                ),
-                                              ),
-                                              if (entry.nameWasAICleaned &&
-                                                  entry.originalNoisyTitle !=
-                                                      null) ...[
-                                                const SizedBox(width: 6),
-                                                Tooltip(
-                                                  message:
-                                                      'Título original:\n${entry.originalNoisyTitle}',
-                                                  child: Icon(
-                                                    Icons.info_outline,
-                                                    size: 12,
-                                                    color: Colors.grey.shade500,
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
                                     ],
                                   ),
-                                ),
-                                const SizedBox(width: gap),
-                                SizedBox(
-                                  width: wSimilar,
-                                  child: _buildSimilarProductCell(entry),
-                                ),
-                                const SizedBox(width: gap),
-                                // Cost
-                                SizedBox(
-                                  width: wCost,
-                                  child: TextField(
-                                    controller: entry.costController,
-                                    enabled: entry.isSelected,
-                                    onChanged: (_) => setState(() {}),
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(
-                                      isDense: true,
-                                      border: const OutlineInputBorder(),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 8),
-                                      prefixText: '\$ ',
-                                      hintText: '0',
-                                      hintStyle: TextStyle(
-                                          color: Colors.grey.shade400),
-                                    ),
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                                const SizedBox(width: gap),
-                                // Price
-                                SizedBox(
-                                  width: wPrice,
-                                  child: TextField(
-                                    controller: entry.priceController,
-                                    enabled: entry.isSelected,
-                                    onChanged: (_) => setState(() {}),
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(
-                                      isDense: true,
-                                      border: const OutlineInputBorder(),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 8),
-                                      prefixText: '\$ ',
-                                      hintText: '0',
-                                      hintStyle: TextStyle(
-                                          color: Colors.grey.shade400),
-                                    ),
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                                const SizedBox(width: gap),
-                                // Category
-                                SizedBox(
-                                  width: wCat,
-                                  child: DropdownMenu<Category>(
-                                    width: wCat,
-                                    menuHeight: 280,
-                                    initialSelection: entry.selectedCategory,
-                                    hintText: 'Categoría',
-                                    textStyle: const TextStyle(fontSize: 12),
-                                    inputDecorationTheme:
-                                        const InputDecorationTheme(
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 8),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    enabled: entry.isSelected,
-                                    enableFilter: true,
-                                    requestFocusOnTap: true,
-                                    dropdownMenuEntries: _categories
-                                        .map((c) => DropdownMenuEntry<Category>(
-                                            value: c, label: c.name))
-                                        .toList(),
-                                    onSelected: (v) {
-                                      if (v != null) {
-                                        setState(() {
-                                          entry.selectedCategory = v;
-                                          entry.invalidateDuplicateResolution();
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: gap),
-                                // Brand
-                                SizedBox(
-                                  width: wBrand,
-                                  child: DropdownMenu<ProductBrand>(
-                                    width: wBrand,
-                                    menuHeight: 280,
-                                    initialSelection: entry.selectedBrand,
-                                    hintText: 'Marca',
-                                    textStyle: const TextStyle(fontSize: 12),
-                                    inputDecorationTheme:
-                                        const InputDecorationTheme(
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 8),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    enabled: entry.isSelected,
-                                    enableFilter: true,
-                                    requestFocusOnTap: true,
-                                    dropdownMenuEntries: _brands
-                                        .map((b) =>
-                                            DropdownMenuEntry<ProductBrand>(
-                                                value: b, label: b.name))
-                                        .toList(),
-                                    onSelected: (v) {
-                                      if (v != null) {
-                                        setState(() {
-                                          entry.selectedBrand = v;
-                                          entry.invalidateDuplicateResolution();
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: gap),
-                                // Workshop toggle
-                                SizedBox(
-                                  width: wTaller,
-                                  child: Tooltip(
-                                    message: 'Consumible de taller',
-                                    child: Center(
-                                      child: Transform.scale(
-                                        scale: 0.82,
-                                        child: Switch.adaptive(
-                                          value: entry.isWorkshopConsumable,
-                                          onChanged: entry.isSelected
-                                              ? (v) => setState(() => entry
-                                                  .isWorkshopConsumable = v)
-                                              : null,
-                                          materialTapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              if (_bulkCreateBlockingMessage() case final message?) ...[
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    border: Border.all(color: Colors.amber.shade200),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          size: 17, color: Colors.amber.shade900),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          message,
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.amber.shade900),
+                                );
+                              }),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
+                    ),
 
-              // Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _bulkCreateBusy()
-                          ? null
-                          : () {
-                              for (final e in _newProductEntries) {
-                                e.dispose();
-                              }
-                              _newProductEntries.clear();
-                              setState(() => _showBulkCreate = false);
-                            },
-                      icon: const Icon(Icons.arrow_back),
-                      label: const Text('Volver'),
-                      style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed:
-                          _canCreateBulkProducts() ? _createBulkProducts : null,
-                      icon: _creatingProducts
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.check),
-                      label: Text(
-                        _creatingProducts
-                            ? 'Creando...'
-                            : 'Crear ${_newProductEntries.where((entry) => entry.isSelected).length} producto${_newProductEntries.where((entry) => entry.isSelected).length == 1 ? '' : 's'}',
-                      ),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Colors.orange,
-                      ),
-                    ),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 4),
+            _buildBulkCreateFooter(),
+          ],
         );
       },
+    );
+  }
+
+  /// Pie fijo de la revisión de productos (O-04 de la guía de componentes).
+  ///
+  /// Vive fuera del área con scroll a propósito: con las acciones al final del
+  /// contenido, el botón para crear los productos quedaba bajo el pliegue y
+  /// había que descubrirlo scrolleando —con ocho filas ya no se veía— y el
+  /// motivo por el que estaba deshabilitado quedaba aún más lejos
+  /// (2026-08-06). El aviso acompaña al primario porque explica justamente por
+  /// qué no se puede continuar.
+  Widget _buildBulkCreateFooter() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_bulkCreateBlockingMessage() case final message?) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: VinabikeThemeRoles.of(context).warning.container,
+              border: Border.all(
+                  color: VinabikeThemeRoles.of(context).warning.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline,
+                    size: 17,
+                    color: VinabikeThemeRoles.of(context).warning.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: VinabikeThemeRoles.of(context).warning.onContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _bulkCreateBusy()
+                    ? null
+                    : () {
+                        for (final e in _newProductEntries) {
+                          e.dispose();
+                        }
+                        _newProductEntries.clear();
+                        setState(() => _showBulkCreate = false);
+                      },
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Volver'),
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed:
+                    _canCreateBulkProducts() ? _createBulkProducts : null,
+                icon: _creatingProducts
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check),
+                label: Text(
+                  _creatingProducts
+                      ? 'Creando...'
+                      : 'Crear ${_newProductEntries.where((entry) => entry.isSelected).length} producto${_newProductEntries.where((entry) => entry.isSelected).length == 1 ? '' : 's'}',
+                ),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor:
+                      VinabikeThemeRoles.of(context).warning.accent,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -2756,8 +2960,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             requiresDuplicateReview: entry.requiresDuplicateReview,
             state: entry.resolutionState,
             aiCleaning: entry.isAICleaningName,
-            matchChecking:
-                entry.isCheckingSimilar ||
+            matchChecking: entry.isCheckingSimilar ||
                 entry.isLinkingExisting ||
                 entry.isUploadingImage,
           ),
@@ -2768,23 +2971,21 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       _isOpeningBulkCreate ||
       _creatingProducts ||
       _isCheckingSimilarProducts ||
-      _newProductEntries
-          .any((entry) =>
-              entry.isAICleaningName ||
-              entry.isCheckingSimilar ||
-              entry.isLinkingExisting ||
-              entry.isUploadingImage);
+      _newProductEntries.any((entry) =>
+          entry.isAICleaningName ||
+          entry.isCheckingSimilar ||
+          entry.isLinkingExisting ||
+          entry.isUploadingImage);
 
   String? _bulkCreateBlockingMessage() {
     final selected =
         _newProductEntries.where((entry) => entry.isSelected).toList();
     if (_creatingProducts) return null;
-    if (selected
-        .any((entry) =>
-            entry.isAICleaningName ||
-            entry.isCheckingSimilar ||
-            entry.isLinkingExisting ||
-            entry.isUploadingImage)) {
+    if (selected.any((entry) =>
+        entry.isAICleaningName ||
+        entry.isCheckingSimilar ||
+        entry.isLinkingExisting ||
+        entry.isUploadingImage)) {
       return 'Espera a que termine el análisis o la carga de imágenes.';
     }
     final unresolved = selected
@@ -2821,14 +3022,16 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         message: entry.creationError!,
         child: Row(
           children: [
-            Icon(Icons.error_outline, size: 15, color: Colors.red.shade700),
+            Icon(Icons.error_outline,
+                size: 15, color: Theme.of(context).colorScheme.error),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 'Error al crear · reintentar',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: Colors.red.shade700),
+                style: TextStyle(
+                    fontSize: 11, color: Theme.of(context).colorScheme.error),
               ),
             ),
           ],
@@ -2858,22 +3061,22 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       return Tooltip(
         message: 'Revisión completa. Pulsa para buscar nuevamente.',
         child: InkWell(
-          onTap: entry.isSelected
-                  && !_bulkCreateBusy()
+          onTap: entry.isSelected && !_bulkCreateBusy()
               ? () => _checkSimilarProductsForNewEntries(entry: entry)
               : null,
           borderRadius: BorderRadius.circular(8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
             decoration: BoxDecoration(
-              color: Colors.green.shade50,
+              color: VinabikeThemeRoles.of(context).success.container,
               border: Border.all(color: Colors.green.shade200),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
                 Icon(Icons.add_box_outlined,
-                    size: 15, color: Colors.green.shade800),
+                    size: 15,
+                    color: VinabikeThemeRoles.of(context).success.onContainer),
                 const SizedBox(width: 6),
                 Text(
                   'Nuevo',
@@ -2910,8 +3113,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
     if (entry.resolutionState == OcrProductResolutionState.failed) {
       return OutlinedButton.icon(
-        onPressed: entry.isSelected
-                && !_bulkCreateBusy()
+        onPressed: entry.isSelected && !_bulkCreateBusy()
             ? () => _checkSimilarProductsForNewEntries(entry: entry)
             : null,
         icon: const Icon(Icons.refresh, size: 14),
@@ -3489,8 +3691,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     required List<inv_models.Product> products,
   }) async {
     if (!entry.requiresDuplicateReview) return null;
-    final supplierId =
-        (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+    final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
     final productUrl = entry.originalItem.productUrl?.trim();
     final itemId = _aliExpressItemIdForLine(entry.originalItem);
     final variantKey = _aliExpressVariantKeyForLine(entry.originalItem);
@@ -3570,7 +3771,12 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     final productId = product.id;
     if (productId == null || _parsedData == null) return false;
 
-    if (entry.requiresDuplicateReview) {
+    // 2026-08-05: aprender SIEMPRE, no sólo tras una revisión de duplicados.
+    // Con la condición anterior, la primera creación/vínculo de cada producto
+    // jamás guardaba su listing y la tabla de aliases llevaba 0 filas tras
+    // ~10 facturas: cada re-importación volvía a adivinar desde cero. El
+    // helper ya se autoprotege: sin itemId y variante reales no persiste.
+    {
       if (mounted) setState(() => entry.isLinkingExisting = true);
       try {
         await _rememberAliExpressAlias(entry, productId: productId);
@@ -3656,8 +3862,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     _NewProductEntry entry, {
     required String productId,
   }) async {
-    final supplierId =
-        (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+    final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
     if (supplierId == null || supplierId.isEmpty) {
       throw StateError('Falta resolver el proveedor AliExpress.');
     }
@@ -3757,7 +3962,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
         try {
           var savedProduct = await inventoryService.createProduct(product);
-          if (entry.requiresDuplicateReview && savedProduct.id != null) {
+          if (savedProduct.id != null) {
             try {
               await _rememberAliExpressAlias(
                 entry,
@@ -3871,7 +4076,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           SnackBar(
             content: Text(
                 'No se creó ningún producto. Las $failed filas siguen disponibles para reintentar.'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -3881,7 +4086,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -4011,7 +4216,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey.shade600,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             Text(
@@ -4465,7 +4670,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('No se pudo guardar la plantilla OCR: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     } finally {
@@ -4580,8 +4785,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                  'Selecciona un proveedor antes de aplicar la factura.'),
+              content:
+                  Text('Selecciona un proveedor antes de aplicar la factura.'),
               backgroundColor: Colors.orange,
             ),
           );

@@ -8,7 +8,8 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart'
+    show KeyDownEvent, KeyRepeatEvent, LogicalKeyboardKey, rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
@@ -22,6 +23,7 @@ import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
 import '../services/auth_service.dart';
 import '../services/aliexpress_daily_invoice_service.dart';
+import '../services/aliexpress_pending_days_service.dart';
 import '../services/browser_credential_vault.dart';
 import '../services/browser_profile_service.dart';
 import '../services/browser_site_memory_service.dart';
@@ -35,6 +37,7 @@ import '../services/workspace_manager.dart';
 import '../utils/browser_omnibox.dart';
 import '../utils/browser_credential_autofill.dart';
 import '../utils/file_download.dart';
+import 'vb_notice.dart';
 
 /// Persistent browser workspace - loads a website as a first-class workspace.
 ///
@@ -134,6 +137,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   String _activeSuggestionQuery = '';
   bool _isFetchingSuggestions = false;
   bool _showAddressSuggestions = false;
+  int? _highlightedSuggestionIndex;
+  bool _transientMenuOpen = false;
+  List<_BrowserAddressSuggestion> _visibleSuggestions = const [];
+  bool _showFavoritesBar = true;
+  static const _favoritesBarPrefsKey = 'vinabike_browser_favorites_bar_v1';
   final Set<String> _automaticCredentialSubmitAttempts = {};
   final Set<String> _credentialAutofillInFlight = {};
   final Set<String> _credentialSavedFeedbackOrigins = {};
@@ -168,6 +176,23 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   InAppWebViewSettings _browserSettings(double browserZoom) =>
       InAppWebViewSettings(
+        // Sin esto, WKWebView se presenta con el user agent genérico de app
+        // embebida («…AppleWebKit/605.1.15 (KHTML, like Gecko)», sin sufijo
+        // Safari) y Google/YouTube/muchos sitios sirven su página de respaldo
+        // de HTML básico — el «look 1999». Verificado con la sonda de
+        // onLoadStop el 2026-08-05: `applicationNameForUserAgent` NO se
+        // aplica en la implementación macOS del plugin, así que va el UA
+        // completo, calcado del default real de WKWebView + el sufijo
+        // Safari. El token AppleWebKit/605.1.15 lleva años congelado por
+        // Apple, por lo que fijarlo no envejece en la práctica. Android no lo
+        // necesita: su UA por defecto ya declara Chrome. iOS se deja por
+        // defecto a propósito: un UA de escritorio forzaría sitios desktop en
+        // un teléfono.
+        userAgent: defaultTargetPlatform == TargetPlatform.macOS
+            ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+                'Version/18.5 Safari/605.1.15'
+            : null,
         useShouldOverrideUrlLoading: true,
         javaScriptEnabled: true,
         javaScriptCanOpenWindowsAutomatically: true,
@@ -275,6 +300,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     unawaited(_loadBrowserBookmarks());
     unawaited(_loadDocumentRelayAvailability());
     unawaited(_prepareBrowser());
+    unawaited(_restoreAliExpressOrderDates());
   }
 
   @override
@@ -588,6 +614,212 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         Uri.tryParse(_currentUrl),
       );
 
+  /// Días en los que esta cuenta tiene pedidos, aprendidos de la última
+  /// consulta a la API. Alimentan la marca del calendario para no elegir a
+  /// ciegas un día sin compras.
+  final Set<String> _aliExpressOrderDates = <String>{};
+
+  /// Días de compra que ya tienen factura emitida en el ERP.
+  final Set<String> _aliExpressInvoicedDates = <String>{};
+
+  void _rememberAliExpressOrderDates(Iterable<String> dates) {
+    final added = _aliExpressOrderDates.addAll.call;
+    added(dates.where((date) => date.trim().isNotEmpty));
+    if (mounted) setState(() {});
+    unawaited(_persistAliExpressOrderDates());
+    unawaited(_refreshAliExpressInvoicedDates());
+  }
+
+  /// Marca qué días ya fueron facturados, contrastando el índice de compras
+  /// con las facturas del ERP. Es lo que convierte «hubo compras ese día» en
+  /// la información accionable: «esta compra todavía no está registrada».
+  Future<void> _refreshAliExpressInvoicedDates() async {
+    if (!mounted || _aliExpressOrderDates.isEmpty) return;
+    try {
+      final purchaseService = context.read<PurchaseService>();
+      final invoiced = <String>{};
+      for (final day in _aliExpressOrderDates) {
+        final date = DateTime.tryParse(day);
+        if (date == null) continue;
+        final number = AliExpressPendingDaysService.invoiceNumberForDate(date);
+        if (await purchaseService.checkInvoiceNumberExists(number) != null) {
+          invoiced.add(day);
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _aliExpressInvoicedDates
+          ..clear()
+          ..addAll(invoiced);
+      });
+      _announceAliExpressPendingDays();
+    } catch (error) {
+      // Es una pista de conveniencia: si no se puede resolver, el diálogo
+      // simplemente no afirma nada sobre facturas ya emitidas.
+      debugPrint('⚠️ [AliExpress] No se pudo revisar facturas del día: $error');
+    }
+  }
+
+  static const _aliExpressOrderDatesPrefsKey = 'browser.aliexpress.orderDates';
+
+  Future<void> _persistAliExpressOrderDates() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Sólo los días recientes: el calendario mira meses, no años.
+      final recent = _aliExpressOrderDates.toList()..sort();
+      await prefs.setStringList(
+        _profilePrefsKey(_aliExpressOrderDatesPrefsKey),
+        recent.length > 400 ? recent.sublist(recent.length - 400) : recent,
+      );
+    } catch (_) {
+      // Un caché de conveniencia que no se pudo guardar no rompe el flujo.
+    }
+  }
+
+  Future<void> _restoreAliExpressOrderDates() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored =
+          prefs.getStringList(_profilePrefsKey(_aliExpressOrderDatesPrefsKey));
+      if (stored == null || stored.isEmpty || !mounted) return;
+      setState(() => _aliExpressOrderDates.addAll(stored));
+      // Los días restaurados también necesitan saberse facturados o no: sin
+      // esto, un día ya registrado reaparecía como pendiente tras reiniciar.
+      unawaited(_refreshAliExpressInvoicedDates());
+    } catch (_) {
+      // Idem: es caché, no verdad.
+    }
+  }
+
+  static String _dateKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
+  /// Días ya anunciados, para no repetir el aviso en cada consulta.
+  static final Set<String> _announcedAliExpressPendingDays = <String>{};
+
+  /// Avisa cuando hay compras sin factura, incluidas las hechas fuera del ERP.
+  ///
+  /// El aviso nace del contraste entre la cuenta del proveedor y las facturas
+  /// del ERP, así que cubre la compra hecha desde el teléfono o desde otro
+  /// navegador —el caso que motivó esto—; no depende de que el pedido haya
+  /// pasado por este navegador ni de un correo de confirmación que AliExpress
+  /// no envía.
+  void _announceAliExpressPendingDays() {
+    if (!mounted) return;
+    final pending = AliExpressPendingDaysService.pendingDays(
+      daysWithOrders: _aliExpressOrderDates,
+      invoiceNumbers: _aliExpressInvoicedDates.map(
+        (day) => AliExpressPendingDaysService.invoiceNumberForDate(
+          DateTime.parse(day),
+        ),
+      ),
+    );
+    final fresh = pending
+        .where((day) => _announcedAliExpressPendingDays.add(day))
+        .toList();
+    if (fresh.isEmpty) return;
+
+    final newest = fresh.first;
+    final parsed = DateTime.parse(newest);
+    final label = '${parsed.day.toString().padLeft(2, '0')}/'
+        '${parsed.month.toString().padLeft(2, '0')}';
+    _showBrowserSnack(
+      fresh.length == 1
+          ? 'Compras del $label sin factura registrada. Ábrelas desde «Compras del día».'
+          : '${fresh.length} días con compras sin factura, el más reciente el $label.',
+    );
+  }
+
+  /// Pista sobre qué días tienen compras, para no elegir a ciegas.
+  ///
+  /// Se apoya en el índice que la consulta a la API deja como subproducto. No
+  /// bloquea ningún día: la ausencia de marca significa «no consta», no «no
+  /// hubo compras» — afirmar lo segundo con datos parciales sería mentirle al
+  /// usuario.
+  Widget _buildAliExpressDayHint(
+    BuildContext context, {
+    required DateTime selectedDate,
+    required ValueChanged<DateTime> onPickDate,
+  }) {
+    if (_aliExpressOrderDates.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final selectedKey = _dateKey(selectedDate);
+    final hasOrders = _aliExpressOrderDates.contains(selectedKey);
+    final alreadyInvoiced = _aliExpressInvoicedDates.contains(selectedKey);
+    // Lo accionable es el día comprado que aún no está registrado; los ya
+    // facturados sólo estorbarían la lista.
+    final pending = AliExpressPendingDaysService.pendingDays(
+      daysWithOrders: _aliExpressOrderDates,
+      invoiceNumbers: _aliExpressInvoicedDates.map(
+        (day) => AliExpressPendingDaysService.invoiceNumberForDate(
+          DateTime.parse(day),
+        ),
+      ),
+    );
+    final recent =
+        pending.where((date) => date != selectedKey).take(4).toList();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // E-04 `VbNotice` de la guía de componentes: el estado del día es un
+          // aviso de la superficie, no una fila de texto propia. Usar el
+          // componente canónico da el tono, el ícono y la región viva ya
+          // resueltos, en vez de una variante local del mismo aviso.
+          VbNotice(
+            key: const ValueKey('aliexpress-day-state-notice'),
+            tone: alreadyInvoiced
+                ? VbNoticeTone.success
+                : hasOrders
+                    ? VbNoticeTone.warning
+                    : VbNoticeTone.info,
+            title: alreadyInvoiced
+                ? 'Día ya facturado'
+                : hasOrders
+                    ? 'Compras sin factura'
+                    : 'Sin compras este día',
+            body: alreadyInvoiced
+                ? 'Ya existe una factura registrada para esta fecha.'
+                : hasOrders
+                    ? 'Las compras de este día aún no se registran en el ERP.'
+                    : null,
+          ),
+          if (recent.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Compras sin factura',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final date in recent)
+                  ActionChip(
+                    key: ValueKey('aliexpress-day-hint-$date'),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    label: Text(
+                      '${date.substring(8)}/${date.substring(5, 7)}',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                    onPressed: () => onPickDate(DateTime.parse(date)),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<_AliExpressImportRequest?> _pickAliExpressImportRequest() async {
     var selectedDate = DateTime.now();
     return showDialog<_AliExpressImportRequest>(
@@ -639,6 +871,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                       '${selectedDate.year}',
                     ),
                   ),
+                ),
+                _buildAliExpressDayHint(
+                  context,
+                  selectedDate: selectedDate,
+                  onPickDate: (date) =>
+                      setDialogState(() => selectedDate = date),
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -796,6 +1034,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       _showBrowserSnack(_friendlyAliExpressImportError(error));
     } finally {
       progress.dispose();
+      // El recorrido diario carga decenas de páginas de pedidos con todas sus
+      // imágenes y la caché en memoria del WebView las retiene indefinidamente
+      // (parte del incidente de 41 GB del 2026-08-05). Liberarla aquí no toca
+      // cookies ni sesiones: sólo recursos re-descargables.
+      unawaited(
+        InAppWebViewController.clearAllCache(includeDiskFiles: false)
+            .catchError((_) {}),
+      );
       if (mounted) setState(() => _isAliExpressImportRunning = false);
     }
   }
@@ -832,23 +1078,19 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';
     final ordersUri = Uri.parse(AliExpressDailyInvoiceService.ordersUri);
-    if (Uri.tryParse(_currentUrl)?.path != ordersUri.path) {
-      await _navigateAliExpressAndWait(ordersUri);
-    }
+    // Página fresca SIEMPRE, aunque ya estemos en la URL correcta: si una
+    // corrida anterior murió ahí (timers congelados por oclusión de ventana,
+    // timeout del bridge), el contexto JavaScript queda envenenado y en él ni
+    // el bridge vuelve a instalarse (2026-08-06). Recargar cuesta ~2 s y
+    // garantiza un mundo limpio por corrida.
+    await _navigateAliExpressAndWait(ordersUri);
 
     onProgress('Buscando todos los pedidos del $dateText...');
     await _installAliExpressBridge(controller);
-    final listResult = await _runAliExpressBridge(
+    final listResult = await _collectAliExpressOrdersList(
       controller,
-      method: 'extractOrdersList',
-      arguments: <String, dynamic>{
-        'filters': <String, dynamic>{
-          'dateMode': 'day',
-          'exactDate': dateText,
-          'fromDate': dateText,
-          'toDate': dateText,
-        },
-      },
+      dateText: dateText,
+      onProgress: onProgress,
     );
     final rawOrders = listResult['orders'];
     final orders = <Map<String, dynamic>>[
@@ -1043,6 +1285,242 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     };
   }
 
+  /// Recorre el listado de pedidos con el reloj en Dart.
+  ///
+  /// WebKit suspende los timers de la página cuando la ventana de la app no
+  /// está visible en macOS. Mientras el recorrido esperaba con `setTimeout`
+  /// dentro del WebView, dejar la ventana atrás congelaba la extracción para
+  /// siempre —el diálogo giraba y sólo «revivía» al volver a mirar la
+  /// pantalla— (verificado el 2026-08-06: un latido `setInterval` no emitió un
+  /// solo tick durante el cuelgue). Aquí cada llamada a JavaScript es corta y
+  /// síncrona, y las pausas las cuenta Dart, que no depende de la visibilidad.
+  /// Pide los pedidos a la API que la propia página usa.
+  ///
+  /// Es la vía correcta y la que se intenta primero: trae fecha, total y cada
+  /// línea con su imagen tal como los tiene AliExpress, pagina por número de
+  /// página y no depende del scroll, de la lista virtualizada, del rótulo del
+  /// botón «View orders» ni del carrusel de recomendaciones. El recorrido del
+  /// DOM queda sólo como respaldo para cuando la página no exponga su cliente
+  /// de API.
+  Future<Map<String, dynamic>?> _collectAliExpressOrdersViaApi(
+    InAppWebViewController controller, {
+    required String dateText,
+    required ValueChanged<String> onProgress,
+  }) async {
+    try {
+      await _runAliExpressBridge(controller, method: 'ordersApiProbeInstall');
+      // La plantilla de la petición se toma de una llamada real de esta misma
+      // sesión: los identificadores de módulo cambian por cuenta y versión, y
+      // reconstruirlos a mano sería adivinar. Pedir la página siguiente
+      // provoca esa llamada.
+      final clicked = await _runAliExpressBridge(
+        controller,
+        method: 'ordersListClickLoadMore',
+      );
+      if (clicked['clicked'] != true) return null;
+      await Future<void>.delayed(const Duration(seconds: 6));
+
+      onProgress('Consultando pedidos del $dateText en AliExpress...');
+      final result = await _runAliExpressBridge(
+        controller,
+        method: 'ordersApiCollect',
+        arguments: <String, dynamic>{
+          'filters': <String, dynamic>{'exactDate': dateText, 'maxPages': 30},
+        },
+      );
+      if (result['ok'] != true) {
+        _aliExpressDebug('orders.api.unavailable', result);
+        return null;
+      }
+
+      final orders = <Map<String, dynamic>>[
+        for (final order in (result['orders'] as List? ?? const []))
+          if (order is Map) Map<String, dynamic>.from(order),
+      ];
+      final datesWithOrders = <String>[
+        for (final date in (result['datesWithOrders'] as List? ?? const []))
+          date.toString(),
+      ];
+      if (datesWithOrders.isNotEmpty) {
+        _rememberAliExpressOrderDates(datesWithOrders);
+      }
+      _aliExpressDebug('orders.api.collected', <String, dynamic>{
+        'date': dateText,
+        'orderCount': orders.length,
+        'pagesRead': result['pagesRead'],
+        'reason': result['reason'],
+        'datesWithOrders': datesWithOrders.length,
+      });
+
+      return <String, dynamic>{
+        'orders': orders,
+        'scannedCount': orders.length,
+        'pageUrl': _currentUrl,
+        'warnings': const <String>[],
+        'preload': <String, dynamic>{
+          'source': 'api',
+          'pagesRead': result['pagesRead'],
+          'terminationReason': result['reason'],
+        },
+      };
+    } catch (error) {
+      _aliExpressDebug('orders.api.failed', <String, dynamic>{
+        'error': error.toString(),
+      });
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> _collectAliExpressOrdersList(
+    InAppWebViewController controller, {
+    required String dateText,
+    required ValueChanged<String> onProgress,
+  }) async {
+    final apiResult = await _collectAliExpressOrdersViaApi(
+      controller,
+      dateText: dateText,
+      onProgress: onProgress,
+    );
+    if (apiResult != null) return apiResult;
+    onProgress('Recorriendo el listado de pedidos del $dateText...');
+
+    const maxPasses = 40;
+    const maxLoadMoreClicks = 24;
+    final filters = <String, dynamic>{
+      'dateMode': 'day',
+      'exactDate': dateText,
+      'fromDate': dateText,
+      'toDate': dateText,
+    };
+
+    var state = await _runAliExpressBridge(
+      controller,
+      method: 'ordersListBeginSteppedRun',
+    );
+    _aliExpressDebug('list.stepped.begin', state);
+
+    var loadMoreClicks = 0;
+    var passesWithoutProgress = 0;
+    var lastHarvested = _asInt(state['harvested']);
+    var terminationReason = 'max-passes';
+
+    for (var pass = 0; pass < maxPasses; pass++) {
+      final viewportHeight = _asInt(state['viewportHeight'], fallback: 800);
+      final bottom = _asInt(state['bottom']);
+      final scrollY = _asInt(state['scrollY']);
+      // Techo: el final de la LISTA, nunca el del documento. Debajo vive un
+      // carrusel de recomendaciones con scroll infinito que, si se toca,
+      // crece sin límite y ralentiza cada medición de la página.
+      final ceiling = math.max(0, bottom - viewportHeight + 320);
+      final step = math.max(420, (viewportHeight * 0.78).round());
+
+      if (scrollY < ceiling) {
+        await _runAliExpressBridge(
+          controller,
+          method: 'ordersListScrollTo',
+          arguments: <String, dynamic>{
+            'filters': math.min(ceiling, scrollY + step),
+          },
+        );
+        // La lista está virtualizada: hay que dejarla montar las tarjetas
+        // nuevas antes de cosecharlas, y cosechar en cada paso porque al
+        // salir de pantalla se desmontan.
+        await Future<void>.delayed(const Duration(milliseconds: 420));
+        state = await _runAliExpressBridge(
+          controller,
+          method: 'ordersListHarvestStep',
+        );
+      } else if (_asBool(state['hasLoadMore']) &&
+          loadMoreClicks < maxLoadMoreClicks) {
+        final click = await _runAliExpressBridge(
+          controller,
+          method: 'ordersListClickLoadMore',
+        );
+        loadMoreClicks++;
+        _aliExpressDebug('list.stepped.load-more', <String, dynamic>{
+          'clicks': loadMoreClicks,
+          'clicked': click['clicked'],
+        });
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+        state = await _runAliExpressBridge(
+          controller,
+          method: 'ordersListHarvestStep',
+        );
+      } else {
+        terminationReason = 'end-of-list';
+        if (kDebugMode) {
+          _aliExpressDebug(
+            'list.stepped.tail',
+            await _runAliExpressBridge(
+              controller,
+              method: 'ordersListDebugTail',
+            ),
+          );
+        }
+        break;
+      }
+
+      final harvested = _asInt(state['harvested']);
+      onProgress(
+        'Buscando pedidos del $dateText... $harvested encontrados',
+      );
+      if (harvested > lastHarvested) {
+        lastHarvested = harvested;
+        passesWithoutProgress = 0;
+      } else if (_asInt(state['scrollY']) >= ceiling &&
+          !_asBool(state['hasLoadMore'])) {
+        passesWithoutProgress++;
+        if (passesWithoutProgress >= 3) {
+          terminationReason = 'no-progress';
+          break;
+        }
+      }
+    }
+
+    final finished = await _runAliExpressBridge(
+      controller,
+      method: 'ordersListFinishSteppedRun',
+      arguments: <String, dynamic>{'filters': filters},
+    );
+    _aliExpressDebug('list.stepped.end', <String, dynamic>{
+      'terminationReason': terminationReason,
+      'loadMoreClicks': loadMoreClicks,
+      'harvestedCount': (finished['orders'] as List?)?.length ?? 0,
+      'diagnostics': finished['diagnostics'],
+    });
+
+    final harvestedOrders = <Map<String, dynamic>>[
+      for (final order in (finished['orders'] as List? ?? const []))
+        if (order is Map) Map<String, dynamic>.from(order),
+    ];
+    final matchingOrders = harvestedOrders
+        .where((order) => order['orderDate']?.toString() == dateText)
+        .toList();
+
+    return <String, dynamic>{
+      'orders': matchingOrders,
+      'scannedCount': harvestedOrders.length,
+      'pageUrl': _currentUrl,
+      'warnings': matchingOrders.isEmpty && harvestedOrders.isNotEmpty
+          ? <String>[
+              'Recorrí ${harvestedOrders.length} pedidos y ninguno es del $dateText.',
+            ]
+          : const <String>[],
+      'preload': <String, dynamic>{
+        'terminationReason': terminationReason,
+        'loadMoreClicks': loadMoreClicks,
+      },
+    };
+  }
+
+  static int _asInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  static bool _asBool(dynamic value) => value == true || value == 'true';
+
   Future<void> _navigateAliExpressAndWait(Uri uri) async {
     if (!AliExpressDailyInvoiceService.isTrustedUri(uri)) {
       throw StateError('AliExpress intentó abrir una dirección no confiable.');
@@ -1068,7 +1546,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           'La extracción solo puede ejecutarse dentro de AliExpress.');
     }
     _aliExpressBridgeSource ??= await rootBundle.loadString(
-      'tools/chrome-extensions/aliexpress-invoice-generator/content.js',
+      'assets/browser/aliexpress_invoice_content.js',
     );
     await controller.evaluateJavascript(source: _aliExpressBridgeSource!);
   }
@@ -1078,22 +1556,49 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     required String method,
     Map<String, dynamic> arguments = const {},
   }) async {
-    const allowedMethods = {'extractOrdersList', 'extractOrder'};
+    const allowedMethods = {
+      'extractOrdersList',
+      'extractOrder',
+      'ordersListBeginSteppedRun',
+      'ordersApiProbeInstall',
+      'ordersApiProbeRead',
+      'ordersApiShapeProbe',
+      'ordersApiCollect',
+      'ordersListDebugTail',
+      'ordersListScrollTo',
+      'ordersListHarvestStep',
+      'ordersListClickLoadMore',
+      'ordersListFinishSteppedRun',
+    };
     if (!allowedMethods.contains(method)) {
       throw ArgumentError.value(method, 'method');
     }
+    // Un promise perdido (proceso de contenido reiniciado, contexto de página
+    // reemplazado) dejaba este await colgado PARA SIEMPRE con el diálogo de
+    // progreso girando (2026-08-05). El recorrido largo de la lista puede
+    // tardar minutos legítimos; el detalle de un pedido, no.
+    final bridgeTimeout = method == 'extractOrdersList'
+        ? const Duration(minutes: 8)
+        : const Duration(seconds: 60);
     final result = await controller.callAsyncJavaScript(
       functionBody: '''
         const bridge = globalThis.__ALIEXPRESS_INVOICE_BRIDGE__;
         if (!bridge || typeof bridge[method] !== 'function') {
           throw new Error('Extractor AliExpress no disponible.');
         }
-        return await bridge[method](filters || undefined);
+        return await bridge[method](filters !== null && filters !== undefined ? filters : undefined);
       ''',
       arguments: <String, dynamic>{
         'method': method,
         'filters': arguments['filters'],
       },
+    ).timeout(
+      bridgeTimeout,
+      onTimeout: () => throw TimeoutException(
+        'La extracción de AliExpress no respondió en '
+        '${bridgeTimeout.inMinutes > 0 ? '${bridgeTimeout.inMinutes} min' : '${bridgeTimeout.inSeconds} s'}; '
+        'el navegador pudo reiniciar la página. Inténtalo nuevamente.',
+      ),
     );
     if (result == null) {
       throw StateError('AliExpress no devolvió información.');
@@ -1149,12 +1654,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     Map<String, dynamic> invoice,
   ) async {
     final assets = await Future.wait<dynamic>([
-      rootBundle.loadString(
-        'tools/chrome-extensions/aliexpress-invoice-generator/invoice.css',
-      ),
-      rootBundle.loadString(
-        'tools/chrome-extensions/aliexpress-invoice-generator/invoice.js',
-      ),
+      rootBundle.loadString('assets/browser/aliexpress_invoice.css'),
+      rootBundle.loadString('assets/browser/aliexpress_invoice.js'),
       rootBundle.load('assets/images/loading_logo.png'),
       _inlineAliExpressInvoiceImages(invoice),
     ]);
@@ -1337,6 +1838,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     switch (action) {
       case _BrowserMenuAction.recent:
         await _showBrowserLibraryDialog(_BrowserLibraryKind.recent);
+      case _BrowserMenuAction.favoritesBar:
+        await _toggleFavoritesBar();
+        break;
       case _BrowserMenuAction.bookmarks:
         await _showBrowserLibraryDialog(_BrowserLibraryKind.bookmarks);
       case _BrowserMenuAction.clearData:
@@ -1434,7 +1938,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
     _queueAddressSuggestions(userQuery);
     if (mounted) {
-      setState(() => _showAddressSuggestions = true);
+      setState(() {
+        _showAddressSuggestions = true;
+        // Escribir invalida el resaltado: la lista que se ve cambia.
+        _highlightedSuggestionIndex = null;
+      });
     }
   }
 
@@ -1768,9 +2276,28 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
   }
 
+  Future<void> _toggleFavoritesBar() async {
+    setState(() => _showFavoritesBar = !_showFavoritesBar);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(
+        _profilePrefsKey(_favoritesBarPrefsKey),
+        _showFavoritesBar,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Favorites bar preference skipped: $error');
+      }
+    }
+  }
+
   Future<void> _loadBrowserBookmarks() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final visible = prefs.getBool(_profilePrefsKey(_favoritesBarPrefsKey));
+      if (visible != null && mounted && visible != _showFavoritesBar) {
+        setState(() => _showFavoritesBar = visible);
+      }
       final encoded =
           prefs.getStringList(_profilePrefsKey(_bookmarkPrefsKey)) ?? const [];
       final entries = <_BrowserBookmarkEntry>[];
@@ -1818,6 +2345,19 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       return null;
     }
     return uri.toString();
+  }
+
+  Future<void> _removeBookmarkEntry(_BrowserBookmarkEntry bookmark) async {
+    final nextEntries = _bookmarkEntries
+        .where((entry) => entry.url != bookmark.url)
+        .toList(growable: false);
+    if (mounted) {
+      setState(() => _bookmarkEntries = nextEntries);
+      _showBrowserSnack('Marcador eliminado.');
+    } else {
+      _bookmarkEntries = nextEntries;
+    }
+    await _saveBrowserBookmarks(nextEntries);
   }
 
   Future<void> _toggleCurrentBookmark() async {
@@ -2668,6 +3208,58 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Navegación por teclado del omnibox, como en un navegador real: ↓/↑
+  /// recorren las sugerencias visibles, Enter abre la resaltada (o navega lo
+  /// escrito si no hay resaltado) y Esc cierra el panel.
+  KeyEventResult _handleOmniboxKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final suggestions = _visibleSuggestions;
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.escape) {
+      if (!_showAddressSuggestions) return KeyEventResult.ignored;
+      setState(() {
+        _showAddressSuggestions = false;
+        _highlightedSuggestionIndex = null;
+      });
+      return KeyEventResult.handled;
+    }
+
+    if (suggestions.isEmpty) return KeyEventResult.ignored;
+
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp) {
+      setState(() {
+        _highlightedSuggestionIndex = nextOmniboxHighlight(
+          current: _highlightedSuggestionIndex,
+          count: suggestions.length,
+          delta: key == LogicalKeyboardKey.arrowDown ? 1 : -1,
+        );
+      });
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      final index = _highlightedSuggestionIndex;
+      if (index == null || index < 0 || index >= suggestions.length) {
+        // Sin resaltado: el TextField ejecuta su onSubmitted normal.
+        return KeyEventResult.ignored;
+      }
+      unawaited(_openAddressSuggestion(suggestions[index]));
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _submitOmnibox(String input) {
+    _highlightedSuggestionIndex = null;
+    unawaited(_loadAddress(input));
+  }
+
   List<_BrowserAddressSuggestion> _addressSuggestions() {
     if (!_showAddressSuggestions) return const [];
 
@@ -2805,6 +3397,16 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
     _addressFocusNode.unfocus();
     _hideAddressSuggestions();
+  }
+
+  /// Un clic dentro de la página cae en la capa nativa del WebView y jamás
+  /// llega a la barrera modal de Flutter, así que el menú ⋮ o un menú
+  /// contextual quedaban abiertos. El puente JS reporta ese clic y aquí se
+  /// cierra el menú transitorio, igual que ya se des-enfoca el omnibox.
+  void _dismissTransientMenuFromPageInteraction() {
+    if (!_transientMenuOpen || !mounted) return;
+    _transientMenuOpen = false;
+    Navigator.of(context).maybePop();
   }
 
   Future<void> _installPageInteractionBridge(
@@ -3280,6 +3882,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                   handlerName: _pageInteractionHandlerName,
                   callback: (_) {
                     _clearAddressFocusFromPageInteraction();
+                    _dismissTransientMenuFromPageInteraction();
                     return null;
                   },
                 );
@@ -3290,6 +3893,24 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 unawaited(_installPageInteractionBridge(controller));
                 unawaited(_applyBrowserZoom(browserZoom));
                 unawaited(_refreshNavigationState());
+              },
+              onWebContentProcessDidTerminate: (controller) {
+                // WebKit reinicia su proceso de contenido tras un crash u
+                // OOM sin avisar visualmente: los promises de JavaScript en
+                // vuelo mueren con él. Registrarlo y soltar la navegación en
+                // curso es lo que convierte un cuelgue eterno en un error
+                // diagnosticable (2026-08-05).
+                debugPrint(
+                  '⚠️ Browser: el proceso de contenido del WebView terminó '
+                  '(crash/OOM) en $_currentUrl',
+                );
+                final navigationCompleter = _aliExpressNavigationCompleter;
+                if (navigationCompleter != null &&
+                    !navigationCompleter.isCompleted) {
+                  navigationCompleter.completeError(
+                    StateError('El navegador reinició la página de AliExpress.'),
+                  );
+                }
               },
               onLoadStart: (controller, url) {
                 if (!mounted) return;
@@ -3307,6 +3928,25 @@ class _WebViewModulePageState extends State<WebViewModulePage>
               },
               onLoadStop: (controller, url) async {
                 if (!mounted) return;
+                if (kDebugMode) {
+                  // Sonda de identidad: la captura de pantalla del agente no
+                  // ve la capa nativa del WebView, así que la verificación del
+                  // user agent y del render moderno sale por el log.
+                  unawaited(() async {
+                    final ua = await controller.evaluateJavascript(
+                      source: 'navigator.userAgent',
+                    );
+                    final modernSignal = await controller.evaluateJavascript(
+                      source:
+                          "document.querySelector('[jscontroller]') != null",
+                    );
+                    debugPrint('🌐 [BrowserProbe] url=$url');
+                    debugPrint('🌐 [BrowserProbe] ua=$ua');
+                    debugPrint(
+                      '🌐 [BrowserProbe] modernGoogleMarkup=$modernSignal',
+                    );
+                  }());
+                }
                 setState(() {
                   _isLoading = false;
                   _loadingProgress = 100;
@@ -4023,275 +4663,427 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         ? null
         : (_loadingProgress / 100).clamp(0.0, 1.0).toDouble();
     final addressSuggestions = _addressSuggestions();
+    // El manejador de teclado necesita exactamente la lista que se pinta.
+    _visibleSuggestions = addressSuggestions;
+    if (_highlightedSuggestionIndex != null &&
+        _highlightedSuggestionIndex! >= addressSuggestions.length) {
+      _highlightedSuggestionIndex =
+          addressSuggestions.isEmpty ? null : addressSuggestions.length - 1;
+    }
     final isBookmarked = _isCurrentBookmarked;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: theme.dividerColor,
-            width: 1,
+    return TooltipTheme(
+      // El toolbar vive pegado al borde superior de la ventana: un tooltip
+      // hacia arriba se recorta contra el marco. Todos hacia abajo.
+      data: TooltipTheme.of(context).copyWith(preferBelow: true),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border(
+            bottom: BorderSide(
+              color: theme.dividerColor,
+              width: 1,
+            ),
           ),
         ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                Tooltip(
-                  message: _pageTitle ?? widget.title,
-                  child: Icon(
-                    widget.icon,
-                    color: widget.iconColor ?? theme.colorScheme.primary,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (_isAliExpressPage) ...[
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
                   Tooltip(
-                    message: 'Reunir las compras de un día en una factura',
-                    child: FilledButton.tonalIcon(
-                      onPressed: canUseWebView && !_isAliExpressImportRunning
-                          ? _startAliExpressDailyImport
-                          : null,
-                      icon: _isAliExpressImportRunning
-                          ? const SizedBox(
-                              width: 15,
-                              height: 15,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.receipt_long_outlined, size: 17),
-                      label: const Text('Compras del día'),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        visualDensity: VisualDensity.compact,
-                      ),
+                    message: _pageTitle ?? widget.title,
+                    child: Icon(
+                      widget.icon,
+                      color: widget.iconColor ?? theme.colorScheme.primary,
+                      size: 20,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                ],
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, size: 20),
-                  onPressed: _canGoBack ? _goBack : null,
-                  tooltip: 'Atrás',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.arrow_forward, size: 20),
-                  onPressed: _canGoForward ? _goForward : null,
-                  tooltip: 'Adelante',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.refresh, size: 20),
-                  onPressed: canUseWebView ? _reload : null,
-                  tooltip: 'Recargar',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.home_outlined, size: 20),
-                  onPressed: canUseWebView ? _goHome : null,
-                  tooltip: 'Inicio',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 38,
-                    child: TextField(
-                      controller: _addressController,
-                      focusNode: _addressFocusNode,
-                      enabled: canUseWebView,
-                      textInputAction: TextInputAction.go,
-                      keyboardType: TextInputType.url,
-                      onSubmitted: _loadAddress,
-                      style: theme.textTheme.bodyMedium,
-                      decoration: InputDecoration(
-                        isDense: true,
-                        filled: true,
-                        fillColor: theme.colorScheme.surfaceContainerHighest,
-                        prefixIcon: Icon(
-                          Icons.language,
-                          size: 18,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        suffixIcon: _isLoading
-                            ? Padding(
-                                padding: const EdgeInsets.all(10),
-                                child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    value: progressValue,
-                                  ),
-                                ),
+                  const SizedBox(width: 8),
+                  if (_isAliExpressPage) ...[
+                    Tooltip(
+                      message: 'Reunir las compras de un día en una factura',
+                      child: FilledButton.tonalIcon(
+                        onPressed: canUseWebView && !_isAliExpressImportRunning
+                            ? _startAliExpressDailyImport
+                            : null,
+                        icon: _isAliExpressImportRunning
+                            ? const SizedBox(
+                                width: 15,
+                                height: 15,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : IconButton(
-                                tooltip: 'Ir',
-                                icon: const Icon(Icons.arrow_forward, size: 18),
-                                onPressed: canUseWebView
-                                    ? () => _loadAddress(
-                                          _addressController.text,
-                                        )
-                                    : null,
-                              ),
-                        hintText: 'Buscar o escribir URL',
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: theme.dividerColor,
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: theme.dividerColor,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: theme.colorScheme.primary,
-                            width: 1.3,
-                          ),
+                            : const Icon(Icons.receipt_long_outlined, size: 17),
+                        label: const Text('Compras del día'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 36),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          visualDensity: VisualDensity.compact,
                         ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(
-                    isBookmarked ? Icons.star : Icons.star_border,
-                    size: 20,
-                  ),
-                  color: isBookmarked
-                      ? Colors.amber.shade700
-                      : theme.colorScheme.onSurfaceVariant,
-                  onPressed: canUseWebView ? _toggleCurrentBookmark : null,
-                  tooltip:
-                      isBookmarked ? 'Quitar marcador' : 'Guardar marcador',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                ),
-                PopupMenuButton<_BrowserMenuAction>(
-                  enabled: canUseWebView,
-                  tooltip: 'Opciones del navegador',
-                  icon: const Icon(Icons.more_vert, size: 20),
-                  onSelected: (action) {
-                    unawaited(_handleBrowserMenuAction(action));
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: _BrowserMenuAction.recent,
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.history),
-                        title: Text('Recientes'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: _BrowserMenuAction.bookmarks,
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.star_border),
-                        title: Text('Marcadores'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: _BrowserMenuAction.forgetSiteCredentials,
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.key_off_outlined),
-                        title: Text('Olvidar credenciales del sitio'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: _BrowserMenuAction.clearData,
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.cleaning_services_outlined),
-                        title: Text('Limpiar datos'),
-                      ),
-                    ),
-                    PopupMenuDivider(),
-                    PopupMenuItem(
-                      value: _BrowserMenuAction.openInChrome,
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.person_outline),
-                        title: Text('Abrir en Chrome'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: _BrowserMenuAction.openExternal,
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(Icons.open_in_new),
-                        title: Text('Abrir afuera'),
-                      ),
-                    ),
+                    const SizedBox(width: 6),
                   ],
-                ),
-                Tooltip(
-                  message: _displayHost().isEmpty
-                      ? 'Abrir en navegador externo'
-                      : _displayHost(),
-                  child: IconButton(
-                    icon: const Icon(Icons.open_in_new, size: 20),
-                    onPressed: canUseWebView ? _openCurrentExternal : null,
-                    tooltip: 'Abrir en navegador externo',
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, size: 20),
+                    onPressed: _canGoBack ? _goBack : null,
+                    tooltip: 'Atrás',
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
                       minWidth: 36,
                       minHeight: 36,
                     ),
                   ),
-                ),
-              ],
+                  IconButton(
+                    icon: const Icon(Icons.arrow_forward, size: 20),
+                    onPressed: _canGoForward ? _goForward : null,
+                    tooltip: 'Adelante',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 20),
+                    onPressed: canUseWebView ? _reload : null,
+                    tooltip: 'Recargar',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.home_outlined, size: 20),
+                    onPressed: canUseWebView ? _goHome : null,
+                    tooltip: 'Inicio',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SizedBox(
+                      height: 38,
+                      child: Focus(
+                        onKeyEvent: _handleOmniboxKey,
+                        child: TextField(
+                          key: const ValueKey('browser-omnibox-field'),
+                          controller: _addressController,
+                          focusNode: _addressFocusNode,
+                          enabled: canUseWebView,
+                          textInputAction: TextInputAction.go,
+                          keyboardType: TextInputType.url,
+                          onSubmitted: _submitOmnibox,
+                          style: theme.textTheme.bodyMedium,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            filled: true,
+                            fillColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                            // Indicador de seguridad del sitio cargado, como en
+                            // cualquier navegador: candado en HTTPS, aviso en
+                            // HTTP plano. Refleja la página actual, no lo que se
+                            // está escribiendo.
+                            prefixIcon: Tooltip(
+                              message: switch (
+                                  Uri.tryParse(_currentUrl)?.scheme) {
+                                'https' => 'Conexión segura (HTTPS)',
+                                'http' => 'Conexión NO segura (HTTP)',
+                                _ => 'Dirección o búsqueda',
+                              },
+                              child: Icon(
+                                switch (Uri.tryParse(_currentUrl)?.scheme) {
+                                  'https' => Icons.lock_outline,
+                                  'http' => Icons.no_encryption_gmailerrorred,
+                                  _ => Icons.language,
+                                },
+                                size: 18,
+                                color:
+                                    Uri.tryParse(_currentUrl)?.scheme == 'http'
+                                        ? theme.colorScheme.error
+                                        : theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            suffixIcon: _isLoading
+                                ? Padding(
+                                    padding: const EdgeInsets.all(10),
+                                    child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        value: progressValue,
+                                      ),
+                                    ),
+                                  )
+                                : IconButton(
+                                    tooltip: 'Ir',
+                                    icon: const Icon(Icons.arrow_forward,
+                                        size: 18),
+                                    onPressed: canUseWebView
+                                        ? () => _loadAddress(
+                                              _addressController.text,
+                                            )
+                                        : null,
+                                  ),
+                            hintText: 'Buscar o escribir URL',
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                color: theme.dividerColor,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                color: theme.dividerColor,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                color: theme.colorScheme.primary,
+                                width: 1.3,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(
+                      isBookmarked ? Icons.star : Icons.star_border,
+                      size: 20,
+                    ),
+                    color: isBookmarked
+                        ? Colors.amber.shade700
+                        : theme.colorScheme.onSurfaceVariant,
+                    onPressed: canUseWebView ? _toggleCurrentBookmark : null,
+                    tooltip:
+                        isBookmarked ? 'Quitar marcador' : 'Guardar marcador',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                  ),
+                  PopupMenuButton<_BrowserMenuAction>(
+                    enabled: canUseWebView,
+                    tooltip: 'Opciones del navegador',
+                    icon: const Icon(Icons.more_vert, size: 20),
+                    onOpened: () => _transientMenuOpen = true,
+                    onCanceled: () => _transientMenuOpen = false,
+                    onSelected: (action) {
+                      _transientMenuOpen = false;
+                      unawaited(_handleBrowserMenuAction(action));
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: _BrowserMenuAction.recent,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.history),
+                          title: Text('Recientes'),
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: _BrowserMenuAction.bookmarks,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.star_border),
+                          title: Text('Marcadores'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: _BrowserMenuAction.favoritesBar,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(
+                            _showFavoritesBar
+                                ? Icons.check_box_outlined
+                                : Icons.check_box_outline_blank,
+                          ),
+                          title: const Text('Barra de favoritos'),
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: _BrowserMenuAction.forgetSiteCredentials,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.key_off_outlined),
+                          title: Text('Olvidar credenciales del sitio'),
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: _BrowserMenuAction.clearData,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.cleaning_services_outlined),
+                          title: Text('Limpiar datos'),
+                        ),
+                      ),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(
+                        value: _BrowserMenuAction.openInChrome,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.person_outline),
+                          title: Text('Abrir en Chrome'),
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: _BrowserMenuAction.openExternal,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.open_in_new),
+                          title: Text('Abrir afuera'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Tooltip(
+                    message: _displayHost().isEmpty
+                        ? 'Abrir en navegador externo'
+                        : _displayHost(),
+                    child: IconButton(
+                      icon: const Icon(Icons.open_in_new, size: 20),
+                      onPressed: canUseWebView ? _openCurrentExternal : null,
+                      tooltip: 'Abrir en navegador externo',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          if (addressSuggestions.isNotEmpty)
-            _buildAddressSuggestions(context, addressSuggestions),
-          if (_isLoading)
-            LinearProgressIndicator(
-              value: progressValue,
-              minHeight: 2,
-              color: widget.iconColor ?? theme.colorScheme.primary,
-              backgroundColor: Colors.transparent,
-            ),
-        ],
+            if (_showFavoritesBar && _bookmarkEntries.isNotEmpty)
+              _buildFavoritesBar(context),
+            if (addressSuggestions.isNotEmpty)
+              _buildAddressSuggestions(context, addressSuggestions),
+            if (_isLoading)
+              LinearProgressIndicator(
+                value: progressValue,
+                minHeight: 2,
+                color: widget.iconColor ?? theme.colorScheme.primary,
+                backgroundColor: Colors.transparent,
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  /// Barra de favoritos al estilo de un navegador de escritorio: los
+  /// marcadores existentes, visibles bajo la barra de direcciones. Clic
+  /// navega; clic secundario ofrece quitar. Se oculta desde el menú ⋮ y la
+  /// preferencia persiste por perfil.
+  Widget _buildFavoritesBar(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('browser-favorites-bar'),
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.4),
+          ),
+        ),
+      ),
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: _bookmarkEntries.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 2),
+          itemBuilder: (context, index) {
+            final bookmark = _bookmarkEntries[index];
+            final title =
+                bookmark.title.trim().isEmpty ? bookmark.host : bookmark.title;
+            return Tooltip(
+              message: bookmark.url,
+              waitDuration: const Duration(milliseconds: 600),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () => unawaited(_loadAddress(bookmark.url)),
+                onSecondaryTapDown: (details) => unawaited(
+                  _showFavoriteContextMenu(context, details, bookmark),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.public,
+                        size: 14,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 160),
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFavoriteContextMenu(
+    BuildContext context,
+    TapDownDetails details,
+    _BrowserBookmarkEntry bookmark,
+  ) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) return;
+    _transientMenuOpen = true;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        details.globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(value: 'open', child: Text('Abrir')),
+        PopupMenuItem(value: 'remove', child: Text('Quitar de favoritos')),
+      ],
+    );
+    _transientMenuOpen = false;
+    switch (action) {
+      case 'open':
+        await _loadAddress(bookmark.url);
+      case 'remove':
+        await _removeBookmarkEntry(bookmark);
+    }
   }
 
   Widget _buildAddressSuggestions(
@@ -4321,6 +5113,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         separatorBuilder: (_, __) => const SizedBox(height: 2),
         itemBuilder: (context, index) {
           final suggestion = suggestions[index];
+          final isHighlighted = index == _highlightedSuggestionIndex;
           return MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
@@ -4329,6 +5122,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(6),
+                  color: isHighlighted
+                      ? theme.colorScheme.primaryContainer
+                          .withValues(alpha: 0.45)
+                      : null,
                 ),
                 child: SizedBox(
                   height: 44,
@@ -4725,6 +5522,7 @@ enum _BrowserPermissionDecision {
 enum _BrowserMenuAction {
   recent,
   bookmarks,
+  favoritesBar,
   forgetSiteCredentials,
   clearData,
   openInChrome,

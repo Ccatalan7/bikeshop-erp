@@ -349,10 +349,15 @@ List<_TimeStage> _coreStages(
       detail: waitLive
           ? 'en curso · tiempo calendario'
           : metrics.startedAt == null
-              ? 'inicio sin evidencia'
+              ? 'sin registro de inicio'
               : 'hasta el inicio · calendario',
-      tooltip:
-          'Espera a taller: ${_safeDuration(waitDuration)}. ${metrics.approvalDecision == 'approved' ? 'Aprobación' : 'Recepción'} → inicio. ${_sourceDescription(metrics.startSource)}',
+      tooltip: waitLive
+          ? 'Espera a taller: ${_safeDuration(waitDuration)} (en curso)\n'
+              '${metrics.approvalDecision == 'approved' ? 'Aprobación' : 'Recepción'} → inicio de trabajo\n'
+              'Inicio aún no registrado'
+          : 'Espera a taller: ${_safeDuration(waitDuration)}\n'
+              '${metrics.approvalDecision == 'approved' ? 'Aprobación' : 'Recepción'} → inicio de trabajo\n'
+              '${_sourceDescription(metrics.startSource)}',
       icon: waitLive ? Icons.hourglass_top_rounded : Icons.play_arrow_rounded,
       color: metrics.startedAt != null
           ? const Color(0xFF1976D2)
@@ -366,10 +371,14 @@ List<_TimeStage> _coreStages(
       detail: executionLive
           ? 'en curso · tiempo calendario'
           : metrics.completedAt == null
-              ? 'sin ciclo comprobable'
+              ? 'sin registro de término'
               : 'inicio a término · calendario',
-      tooltip:
-          'Ejecución: ${_safeDuration(executionDuration)}. Inicio → término. ${_sourceDescription(metrics.completionSource)}',
+      tooltip: executionLive
+          ? 'Ejecución: ${_safeDuration(executionDuration)} (en curso)\n'
+              'Inicio → término · incluye pausas y esperas de repuestos'
+          : 'Ejecución: ${_safeDuration(executionDuration)}\n'
+              'Inicio → término · incluye pausas y esperas de repuestos\n'
+              '${_sourceDescription(metrics.completionSource)}',
       icon: executionLive ? Icons.build_rounded : Icons.task_alt_rounded,
       color: metrics.completedAt != null
           ? const Color(0xFF2E7D32)
@@ -387,10 +396,15 @@ List<_TimeStage> _coreStages(
           : cycleLive
               ? 'en curso · tiempo calendario'
               : metrics.firstDeliveredAt == null
-                  ? 'entrega sin evidencia'
+                  ? 'sin registro de entrega'
                   : 'recepción a 1ª entrega · calendario',
-      tooltip:
-          '${metrics.reopenedAfterDelivery ? 'Primera entrega' : 'Ciclo total'}: ${_safeDuration(cycleDuration)}. Recepción → primera entrega inmutable. ${_sourceDescription(metrics.deliverySource)}',
+      tooltip: cycleLive
+          ? '${metrics.reopenedAfterDelivery ? 'Primera entrega' : 'Ciclo total'}: ${_safeDuration(cycleDuration)} (en curso)\n'
+              'Recepción → primera entrega\n'
+              'Entrega aún no registrada'
+          : '${metrics.reopenedAfterDelivery ? 'Primera entrega' : 'Ciclo total'}: ${_safeDuration(cycleDuration)}\n'
+              'Recepción → primera entrega\n'
+              '${_sourceDescription(metrics.deliverySource)}',
       icon: metrics.reopenedAfterDelivery
           ? Icons.replay_rounded
           : metrics.firstDeliveredAt != null
@@ -449,14 +463,15 @@ String _safeDuration(Duration? duration) {
 
 String _sourceDescription(String? source) {
   return switch (source) {
-    'recorded_timestamp' => 'Fecha registrada en la ficha.',
-    'mode_event' => 'Decisión respaldada por evento inmutable.',
-    'status_transition' => 'Entrega respaldada por transición inmutable.',
-    'legacy_timeline' => 'Reconstruido desde la bitácora histórica.',
-    'legacy_current_state' =>
-      'Reconstruido desde el estado histórico disponible.',
-    null => 'Sin evidencia suficiente.',
-    _ => 'Respaldado por evento ${source.replaceAll('_', ' ')}.',
+    'recorded_timestamp' => 'Hito registrado con hora exacta',
+    'mode_event' => 'Decisión registrada con hora exacta',
+    'status_transition' => 'Transición registrada con hora exacta',
+    'legacy_timeline' => 'Estimación según historial de estados',
+    'legacy_current_state' => 'Estimación según último estado conocido',
+    // Desde el 05-08-2026 cada cambio de estado queda registrado con su hora
+    // exacta; las pegas anteriores no tienen ese dato y no se inventa.
+    null => 'Hito sin registro',
+    _ => 'Evento ${source.replaceAll('_', ' ')}',
   };
 }
 

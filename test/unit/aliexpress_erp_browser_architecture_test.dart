@@ -27,17 +27,16 @@ void main() {
       contains(
           'No se usó una vista simplificada para evitar un preview engañoso'),
     );
+    // El renderizador compartido se empaqueta desde `assets/browser/`, copia
+    // espejo de la extensión de Chrome: los assets del ERP viven bajo
+    // `assets/` y `aliexpress_asset_mirror_test.dart` impide que deriven.
     expect(
       browser,
-      contains(
-        'tools/chrome-extensions/aliexpress-invoice-generator/invoice.css',
-      ),
+      contains('assets/browser/aliexpress_invoice.css'),
     );
     expect(
       browser,
-      contains(
-        'tools/chrome-extensions/aliexpress-invoice-generator/invoice.js',
-      ),
+      contains('assets/browser/aliexpress_invoice.js'),
     );
     expect(browser, contains("label: const Text('Generar preview')"));
     expect(browser, contains("'Preview de factura AliExpress'"));
@@ -69,24 +68,12 @@ void main() {
       contains('globalThis.__ALIEXPRESS_INVOICE_DATA__'),
     );
     expect(invoiceRenderer, contains('buildInvoiceMarkup'));
-    expect(
-      pubspec,
-      contains(
-        'tools/chrome-extensions/aliexpress-invoice-generator/content.js',
-      ),
-    );
-    expect(
-      pubspec,
-      contains(
-        'tools/chrome-extensions/aliexpress-invoice-generator/invoice.css',
-      ),
-    );
-    expect(
-      pubspec,
-      contains(
-        'tools/chrome-extensions/aliexpress-invoice-generator/invoice.js',
-      ),
-    );
+    // Los assets se empaquetan desde `assets/browser/`; la extensión de Chrome
+    // conserva los originales en `tools/` y el espejo se guarda en
+    // `aliexpress_asset_mirror_test.dart`.
+    expect(pubspec, contains('assets/browser/aliexpress_invoice_content.js'));
+    expect(pubspec, contains('assets/browser/aliexpress_invoice.css'));
+    expect(pubspec, contains('assets/browser/aliexpress_invoice.js'));
   });
 
   test('AliExpress OCR creation separates internal SKU from supplier code', () {

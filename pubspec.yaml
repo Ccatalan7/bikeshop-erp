@@ -135,9 +135,13 @@ flutter:
     - web/spreadsheet_engine/univer_desktop_host.html
     - web/spreadsheet_engine/univer.bundle.js
     - web/spreadsheet_engine/univer.bundle.css
-    - tools/chrome-extensions/aliexpress-invoice-generator/content.js
-    - tools/chrome-extensions/aliexpress-invoice-generator/invoice.css
-    - tools/chrome-extensions/aliexpress-invoice-generator/invoice.js
+    # Copias espejo de tools/chrome-extensions/aliexpress-invoice-generator/:
+    # los assets del ERP viven bajo assets/ (layout convencional); la extensión
+    # de Chrome sigue siendo dueña de los originales en tools/. El test
+    # aliexpress_asset_mirror_test.dart exige que las copias no deriven.
+    - assets/browser/aliexpress_invoice_content.js
+    - assets/browser/aliexpress_invoice.css
+    - assets/browser/aliexpress_invoice.js
 
   fonts:
     - family: Oswald

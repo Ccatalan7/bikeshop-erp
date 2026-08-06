@@ -73,6 +73,47 @@ void main() {
       expect(service.hasBrandsCache, isFalse);
     },
   );
+
+  test(
+    'el catálogo de marcas sin tenant se acepta; el de otro tenant no',
+    () async {
+      // En producción 137 de 146 marcas son catálogo compartido y no traen
+      // tenant. Exigirles uno hacía fallar toda la carga y con ella la
+      // creación de productos desde OCR (2026-08-06). Una marca de OTRO
+      // tenant sí debe seguir cerrando el paso.
+      final database = _BrandRowsDatabaseService([
+        {'id': 'b1', 'name': 'Shimano', 'tenant_id': null, 'is_active': true},
+        {'id': 'b2', 'name': 'Ritech', 'tenant_id': 'tenant-a', 'is_active': true},
+      ]);
+      final tenantService = TenantService.testing(
+        currentUserId: () => _userA,
+        profileLookup: (userId) async => const [
+          {
+            'tenant_id': 'tenant-a',
+            'role': 'admin',
+            'permissions': <String, dynamic>{},
+          },
+        ],
+      );
+      final service = BrandService(database, tenantService: tenantService);
+      addTearDown(() {
+        service.dispose();
+        tenantService.dispose();
+        database.dispose();
+      });
+
+      final brands = await service.getBrands(forceRefresh: true);
+      expect(brands.map((brand) => brand.name), containsAll(['Shimano', 'Ritech']));
+
+      database.rows = [
+        {'id': 'b3', 'name': 'Ajena', 'tenant_id': 'tenant-b', 'is_active': true},
+      ];
+      await expectLater(
+        service.getBrands(forceRefresh: true),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
 }
 
 Future<void> _installAuthenticatedTestSession() async {
@@ -124,4 +165,24 @@ class _RecordingDatabaseService extends DatabaseService {
     selectCalls++;
     return const [];
   }
+}
+
+class _BrandRowsDatabaseService extends DatabaseService {
+  _BrandRowsDatabaseService(this.rows);
+
+  List<Map<String, dynamic>> rows;
+
+  @override
+  Future<List<Map<String, dynamic>>> select(
+    String table, {
+    String? selectColumns,
+    String? where,
+    List<String>? whereIn,
+    String? orderBy,
+    bool descending = false,
+    int? limit,
+    int? offset,
+    bool fetchAll = false,
+  }) async =>
+      rows;
 }

@@ -167,7 +167,19 @@ class BrandService extends ChangeNotifier {
     }
 
     var brands = data.map(ProductBrand.fromJson).toList();
-    if (brands.any((brand) => brand.tenantId != expectedTenantId)) {
+    // Una marca sin tenant es catálogo compartido, no una fuga de otro
+    // tenant: el listado sembrado (Shimano, Bucklos, Zoom…) nace así y son
+    // 137 de las 146 marcas en producción. Exigirles tenant hacía fallar la
+    // carga completa y con ella la creación de productos desde OCR —el panel
+    // no abría y parecía que el botón no respondía— (2026-08-06). Lo que sí
+    // es un defecto de aislamiento, y sigue fallando cerrado, es una marca
+    // que pertenece a OTRO tenant.
+    // `ProductBrand.tenantId` es cadena vacía cuando la fila no trae tenant.
+    final hasForeignBrand = brands.any(
+      (brand) =>
+          brand.tenantId.isNotEmpty && brand.tenantId != expectedTenantId,
+    );
+    if (hasForeignBrand) {
       throw StateError(
         'Brand query returned data outside the authority tenant',
       );

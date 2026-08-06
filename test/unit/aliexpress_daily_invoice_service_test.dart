@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/shared/services/aliexpress_daily_invoice_service.dart';
 
 void main() {
+  _apiSourceOfTruthTests();
+
   group('AliExpressDailyInvoiceService', () {
     test('accepts only HTTPS AliExpress hosts', () {
       expect(
@@ -238,6 +240,104 @@ void main() {
       expect(invoice['discount'], 2266);
       expect(invoice['total'], 21580);
       expect(invoice['componentDifference'], -2);
+    });
+  });
+}
+
+void _apiSourceOfTruthTests() {
+  group('las líneas de la API mandan sobre el detalle raspado', () {
+    test('un pedido de 2 unidades no se reduce a 1 por el detalle', () {
+      // Caso real del 2026-04-06 (pedido 8209933206118042): la API entregó las
+      // 2 unidades y el detalle leído de la página sólo veía 1. Al pisar las
+      // líneas con el detalle, la unidad faltante se absorbía como «ajuste» y
+      // el costo unitario que entraba al inventario quedaba al doble.
+      final listOrder = <String, dynamic>{
+        'via': 'api',
+        'orderNumber': '8209933206118042',
+        'orderDate': '2026-04-06',
+        'total': 8057,
+        // La API entrega las unidades ya agregadas por producto.
+        'items': [
+          {
+            'sku': 'AE-54962320',
+            'itemId': '1005008554962320',
+            'description': 'ROCKBROS botella de agua 600ML',
+            'quantity': 2,
+            'unitPrice': 3490,
+            'total': 6980,
+            'imageUrl': 'https://ae01.alicdn.com/kf/botella.jpg',
+          },
+        ],
+      };
+      final detailOrder = <String, dynamic>{
+        'orderNumber': '8209933206118042',
+        'orderDate': '2026-04-16',
+        'subtotal': 6980,
+        'tax': 1286,
+        'discount': 209,
+        'total': 8057,
+        'items': [
+          {
+            'sku': 'AE-54962320',
+            'description': 'ROCKBROS botella de agua 600ML',
+            'quantity': 1,
+            'unitPrice': 3490,
+            'total': 3490,
+            'imageUrl': 'https://ae01.alicdn.com/kf/botella.jpg',
+          },
+        ],
+      };
+
+      final merged = AliExpressDailyInvoiceService.mergeListAndDetailOrder(
+        listOrder,
+        detailOrder,
+        Uri.parse(
+          'https://www.aliexpress.com/p/order/detail.html?orderId=8209933206118042',
+        ),
+      );
+
+      final items = (merged['items'] as List).cast<Map<String, dynamic>>();
+      final units = items.fold<num>(
+        0,
+        (sum, item) => sum + (item['quantity'] as num? ?? 0),
+      );
+      expect(units, 2, reason: 'las dos unidades de la API se conservan');
+      // El desglose de montos sigue viniendo del detalle, que es quien lo tiene.
+      expect(merged['subtotal'], 6980);
+      expect(merged['tax'], 1286);
+      expect(merged['discount'], 209);
+      // Y la fecha del pedido es la de la API, no otra fecha de la página.
+      expect(merged['orderDate'], '2026-04-06');
+    });
+
+    test('sin origen API el detalle sigue mandando sobre la lista', () {
+      final merged = AliExpressDailyInvoiceService.mergeListAndDetailOrder(
+        <String, dynamic>{
+          'orderNumber': '1',
+          'orderDate': '2026-04-06',
+          'items': [
+            {'sku': 'X', 'description': 'parcial', 'quantity': 1, 'total': 100},
+          ],
+        },
+        <String, dynamic>{
+          'orderNumber': '1',
+          'orderDate': '2026-04-07',
+          'items': [
+            {
+              'sku': 'X',
+              'description': 'completo',
+              'quantity': 2,
+              'unitPrice': 50,
+              'total': 100,
+              'imageUrl': 'https://ae01.alicdn.com/kf/x.jpg',
+            },
+          ],
+        },
+        Uri.parse('https://www.aliexpress.com/p/order/detail.html?orderId=1'),
+      );
+      final items = (merged['items'] as List).cast<Map<String, dynamic>>();
+      expect(items.single['description'], 'completo');
+      expect(merged['orderDate'], '2026-04-07');
     });
   });
 }

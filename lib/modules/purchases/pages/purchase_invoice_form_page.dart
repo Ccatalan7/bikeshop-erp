@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -249,7 +251,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('No se pudo abrir la recepción: $error'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -539,7 +541,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('No se pudo abrir la devolución: $error'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -575,7 +577,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('No se pudo abrir la nota de crédito: $error'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -734,7 +736,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error con escáner: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -1068,7 +1070,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.error_outline, color: Colors.red),
+        icon: Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
         title: Text(title),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
@@ -1448,7 +1450,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error preparando el formulario: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
       _invoiceNumberController.text = await _previewPurchaseInvoiceNumber();
@@ -1811,9 +1813,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }) async {
     if (_selectedSupplier == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecciona o crea un proveedor antes de guardar.'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content:
+              const Text('Selecciona o crea un proveedor antes de guardar.'),
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
       return null;
@@ -1821,9 +1824,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     if (_lineEntries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Agrega al menos un producto a la factura.'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: const Text('Agrega al menos un producto a la factura.'),
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
       return null;
@@ -1840,9 +1843,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
     if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No hay líneas válidas para guardar.'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: const Text('No hay líneas válidas para guardar.'),
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
       return null;
@@ -1876,8 +1879,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       final shouldContinue = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          icon: const Icon(Icons.warning_amber_rounded,
-              color: Colors.orange, size: 48),
+          icon: Icon(Icons.warning_amber_rounded,
+              color: VinabikeThemeRoles.of(context).warning.accent, size: 48),
           title: const Text('Número de factura duplicado'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1901,7 +1904,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                       'Factura existente:',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1999,7 +2002,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('No se pudo guardar la factura: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
       return null;
@@ -2069,7 +2072,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al actualizar estado: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     } finally {
@@ -2112,11 +2115,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.delete_forever, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Eliminar factura'),
+            Icon(Icons.delete_forever,
+                color: Theme.of(context).colorScheme.error),
+            const SizedBox(width: 8),
+            const Text('Eliminar factura'),
           ],
         ),
         content: Text(
@@ -2160,7 +2164,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al eliminar: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
           duration: const Duration(seconds: 5),
         ),
       );
@@ -2232,7 +2236,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
             child: const Text('Eliminar pago'),
           ),
@@ -2259,7 +2263,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al eliminar el pago: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -2569,9 +2573,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           actionButtons.add(
             OutlinedButton.icon(
               onPressed: _deleteInvoice,
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
               label:
-                  const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                  Text('Eliminar', style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
           );
           actionButtons.add(const SizedBox(width: 8));
@@ -2701,9 +2705,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           actionButtons.add(
             OutlinedButton.icon(
               onPressed: _undoLastPayment,
-              icon: const Icon(Icons.undo_outlined, color: Colors.red),
-              label: const Text('Deshacer pago',
-                  style: TextStyle(color: Colors.red)),
+              icon: Icon(Icons.undo_outlined, color: Theme.of(context).colorScheme.error),
+              label: Text('Deshacer pago',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
           );
 

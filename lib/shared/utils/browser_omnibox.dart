@@ -51,6 +51,27 @@ BrowserInlineCompletion? browserInlineHostCompletion({
   return null;
 }
 
+/// Moves the highlighted omnibox suggestion with the arrow keys.
+///
+/// `null` means the free-typed text is active (Chrome's behaviour): the first
+/// ↓ highlights the first row, ↑ from the first row returns to the free text
+/// instead of wrapping, and ↓ past the last row stays on the last row so a
+/// held key never cycles surprisingly.
+int? nextOmniboxHighlight({
+  required int? current,
+  required int count,
+  required int delta,
+}) {
+  if (count <= 0 || delta == 0) return null;
+  if (current == null) {
+    return delta > 0 ? 0 : null;
+  }
+  final next = current + delta;
+  if (next < 0) return null;
+  if (next >= count) return count - 1;
+  return next;
+}
+
 /// Returns a lower score for a stronger local omnibox match.
 /// `-1` means the visited site does not match the current input.
 int browserSiteMatchRank({
