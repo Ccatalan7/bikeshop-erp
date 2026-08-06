@@ -37,8 +37,22 @@ void main() {
     final sheetStart = source.indexOf('void _showReorderSheet');
     expect(sheetStart, greaterThan(classStart));
     final sheetEnd = source.indexOf('\n  Widget ', sheetStart);
-    final drawerSource =
+    var drawerSource =
         source.substring(classStart, sheetStart) + source.substring(sheetEnd);
+
+    // Misma razón para la hoja que elige el destino de un espacio nuevo: se
+    // muestra como modal sobre el contexto de la app, no sobre el navy del
+    // drawer. Declararle la tinta del chrome la haría ilegible sobre la
+    // superficie clara de la hoja.
+    final launcherStart = drawerSource.indexOf(
+      'Future<void> _openCompactWorkspaceLauncher',
+    );
+    expect(launcherStart, greaterThan(0),
+        reason: 'la hoja de espacios nuevos dejó de existir o cambió de nombre');
+    final launcherEnd = drawerSource.indexOf('\n  Widget ', launcherStart);
+    expect(launcherEnd, greaterThan(launcherStart));
+    drawerSource = drawerSource.substring(0, launcherStart) +
+        drawerSource.substring(launcherEnd);
 
     final offenders = <String>[];
     for (final match in RegExp(r'ListTile\(').allMatches(drawerSource)) {

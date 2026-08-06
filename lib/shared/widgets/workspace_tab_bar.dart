@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'vb_anchored_popover.dart';
 import 'vb_shell_icon_button.dart';
 
+import '../services/workspace_launch_options.dart';
 import '../services/workspace_manager.dart';
 import 'quick_ui_settings_button.dart';
 import 'share_workspace_link_button.dart';
@@ -961,43 +962,15 @@ class _NewTabDropdown extends StatefulWidget {
   State<_NewTabDropdown> createState() => _NewTabDropdownState();
 }
 
-@immutable
-class _NewWorkspaceOption {
-  const _NewWorkspaceOption(this.icon, this.title, this.route);
-  final IconData icon;
-  final String title;
-  final String route;
-}
-
 class _NewTabDropdownState extends State<_NewTabDropdown> {
   final GlobalKey _anchor = GlobalKey();
 
-  static const List<_NewWorkspaceOption> _options = <_NewWorkspaceOption>[
-    _NewWorkspaceOption(Icons.dashboard, 'Dashboard', '/dashboard'),
-    _NewWorkspaceOption(
-      Icons.language,
-      'Navegador web',
-      '/tools/web?url=https%3A%2F%2Fwww.google.com&name=Navegador%20web',
-    ),
-    _NewWorkspaceOption(Icons.shopping_bag, 'Productos', '/inventory/products'),
-    _NewWorkspaceOption(Icons.receipt, 'Ventas', '/sales/invoices'),
-    _NewWorkspaceOption(Icons.people, 'Clientes', '/clientes'),
-    _NewWorkspaceOption(
-      Icons.shopping_cart,
-      'Compras',
-      '/purchases/suppliers',
-    ),
-    _NewWorkspaceOption(Icons.point_of_sale, 'POS', '/pos'),
-    _NewWorkspaceOption(Icons.build, 'Taller', '/taller/pegas'),
-    _NewWorkspaceOption(
-      Icons.account_balance,
-      'Contabilidad',
-      '/accounting/accounts',
-    ),
-  ];
+  // El catálogo es compartido: compacto ofrece los mismos destinos en una
+  // hoja inferior. Ver `workspace_launch_options.dart`.
+  static const List<WorkspaceLaunchOption> _options = workspaceLaunchOptions;
 
   Future<void> _open() async {
-    final chosen = await showVbAnchoredPopover<_NewWorkspaceOption>(
+    final chosen = await showVbAnchoredPopover<WorkspaceLaunchOption>(
       anchorContext: _anchor.currentContext ?? context,
       minWidth: 208,
       barrierLabel: 'Cerrar el menú de espacios de trabajo',
@@ -1027,7 +1000,7 @@ class _NewTabDropdownState extends State<_NewTabDropdown> {
 class _NewWorkspaceMenu extends StatelessWidget {
   const _NewWorkspaceMenu({required this.options});
 
-  final List<_NewWorkspaceOption> options;
+  final List<WorkspaceLaunchOption> options;
 
   @override
   Widget build(BuildContext context) {

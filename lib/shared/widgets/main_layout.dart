@@ -9,6 +9,7 @@ import '../services/current_user_profile_navigation.dart';
 import '../services/navigation_service.dart';
 import '../services/query_performance_service.dart';
 import '../services/right_toolbar_service.dart';
+import '../services/workspace_launch_options.dart';
 import '../services/workspace_manager.dart';
 import '../services/window_zoom_service.dart';
 import '../services/notification_service.dart';
@@ -3948,8 +3949,10 @@ class _AppDrawerState extends State<AppDrawer> {
     return Consumer<WorkspaceManager>(
       builder: (context, manager, _) {
         final workspaces = manager.workspaces;
-        if (workspaces.length <= 1) return const SizedBox.shrink();
         final activeId = manager.activeWorkspace?.id;
+        // Elegir entre espacios sólo tiene sentido cuando hay más de uno; la
+        // acción de abrir uno nuevo vive aparte, siempre visible.
+        if (workspaces.length <= 1) return const SizedBox.shrink();
         return ExpansionTile(
           key: const ValueKey('mobile-workspace-selector'),
           minTileHeight: 48,
@@ -3993,6 +3996,97 @@ class _AppDrawerState extends State<AppDrawer> {
         );
       },
     );
+  }
+
+  /// Abre un espacio de trabajo nuevo desde el shell compacto.
+  ///
+  /// Es el equivalente del «+» de la barra de pestañas de escritorio. Va
+  /// siempre visible y fuera del selector: crear no es elegir entre los ya
+  /// abiertos, y hasta el 2026-08-06 el compacto simplemente no tenía forma de
+  /// abrir un segundo espacio.
+  Widget _buildCompactNewWorkspaceAction(
+    BuildContext context, {
+    required WorkspaceChromeStyleData chrome,
+  }) {
+    return Consumer<WorkspaceManager>(
+      builder: (context, manager, _) {
+        final atLimit =
+            manager.workspaces.length >= WorkspaceManager.maxWorkspaces;
+        return ListTile(
+          key: const ValueKey('mobile-workspace-new'),
+          minTileHeight: 48,
+          enabled: !atLimit,
+          iconColor: chrome.mutedForeground,
+          textColor: chrome.foreground,
+          leading: const Icon(Icons.add_rounded, size: 20),
+          title: Text(
+            atLimit
+                ? 'Máximo de espacios abiertos'
+                : 'Nuevo espacio de trabajo',
+            style: TextStyle(
+              color: atLimit ? chrome.mutedForeground : chrome.foreground,
+            ),
+          ),
+          onTap: atLimit
+              ? null
+              : () => _openCompactWorkspaceLauncher(context, manager),
+        );
+      },
+    );
+  }
+
+  /// Elige el destino del espacio nuevo en una hoja inferior.
+  ///
+  /// O-05 de la guía de componentes: en compacto el catálogo se ofrece en una
+  /// hoja, no en el popover anclado que usa el «+» de escritorio. El catálogo
+  /// es el mismo (`workspaceLaunchOptions`), sólo cambia la presentación.
+  Future<void> _openCompactWorkspaceLauncher(
+    BuildContext context,
+    WorkspaceManager manager,
+  ) async {
+    final navigator = Navigator.of(context);
+    final chosen = await showModalBottomSheet<WorkspaceLaunchOption>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Text(
+                'Abrir en un espacio nuevo',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final option in workspaceLaunchOptions)
+                    ListTile(
+                      key: ValueKey('mobile-workspace-launch-${option.route}'),
+                      minTileHeight: 48,
+                      leading: Icon(option.icon),
+                      title: Text(option.title),
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop<WorkspaceLaunchOption>(
+                        option,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null) return;
+    manager.addWorkspace(title: chosen.title, initialRoute: chosen.route);
+    // Cerrar el drawer deja a la vista el espacio recién abierto.
+    if (navigator.canPop()) navigator.pop();
   }
 
   Widget _buildCompactToolsMode(
@@ -4310,6 +4404,7 @@ class _AppDrawerState extends State<AppDrawer> {
               padding: const EdgeInsets.only(bottom: 12),
               children: [
                 _buildCompactWorkspaceAccess(drawerContext, chrome: chrome),
+                _buildCompactNewWorkspaceAction(drawerContext, chrome: chrome),
                 ExpandableMenuItem(
                   key: const ValueKey('drawer-dashboard'),
                   icon: Icons.dashboard_outlined,

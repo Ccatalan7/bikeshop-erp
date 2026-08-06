@@ -285,6 +285,35 @@ void main() {
     expect(selector, contains('minTileHeight: 48'));
     expect(selector, contains('manager.switchToWorkspaceById(workspace.id)'));
 
+    // Abrir un espacio nuevo es una acción propia y siempre visible: vive
+    // fuera del selector, porque hasta el 2026-08-06 el shell compacto sólo
+    // podía moverse entre los espacios ya abiertos y no crear el segundo.
+    final newWorkspaceAction = _between(
+      mainLayoutSource,
+      'Widget _buildCompactNewWorkspaceAction(',
+      'Future<void> _openCompactWorkspaceLauncher(',
+    );
+    expect(newWorkspaceAction, contains("ValueKey('mobile-workspace-new')"));
+    expect(newWorkspaceAction, contains('minTileHeight: 48'));
+    expect(
+      newWorkspaceAction,
+      contains('WorkspaceManager.maxWorkspaces'),
+      reason: 'el tope de espacios se dice, no se descubre al fallar',
+    );
+    expect(
+      mainLayoutSource,
+      contains('_buildCompactNewWorkspaceAction(drawerContext'),
+      reason: 'la acción se monta en el drawer, no dentro del selector',
+    );
+    // El catálogo de destinos es el mismo que ofrece el «+» de escritorio.
+    final launcher = _between(
+      mainLayoutSource,
+      'Future<void> _openCompactWorkspaceLauncher(',
+      'Widget _buildCompactToolsMode(',
+    );
+    expect(launcher, contains('workspaceLaunchOptions'));
+    expect(launcher, contains('showModalBottomSheet<WorkspaceLaunchOption>'));
+
     final drawerHeader = _between(
       mainLayoutSource,
       'Widget _buildCompactDrawerHeader(',
