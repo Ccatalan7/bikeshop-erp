@@ -35,7 +35,9 @@ import '../services/smart_screenshot_service.dart';
 import '../services/window_zoom_service.dart';
 import '../services/workspace_manager.dart';
 import '../utils/browser_omnibox.dart';
+import '../utils/browser_user_agent.dart';
 import '../utils/responsive_viewport.dart';
+import 'browser_popup_window.dart';
 import '../utils/browser_credential_autofill.dart';
 import '../utils/file_download.dart';
 import 'vb_notice.dart';
@@ -177,6 +179,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   /// [compact] describe el shell del ERP, no el sitio: bajo 900px el WebView
   /// tiene que comportarse como el navegador de un teléfono.
+  /// User agent del dispositivo sin el token de WebView embebido; `null`
+  /// cuando la plataforma no lo declara y hay que dejar el suyo.
+  String? _sanitizedUserAgent;
+
   InAppWebViewSettings _browserSettings(
     double browserZoom, {
     bool compact = false,
@@ -198,7 +204,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
                 'AppleWebKit/605.1.15 (KHTML, like Gecko) '
                 'Version/18.5 Safari/605.1.15'
-            : null,
+            : _sanitizedUserAgent,
         useShouldOverrideUrlLoading: true,
         javaScriptEnabled: true,
         javaScriptCanOpenWindowsAutomatically: true,
@@ -454,6 +460,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       if (defaultTargetPlatform == TargetPlatform.android) {
         await InAppWebViewController.setWebContentsDebuggingEnabled(
           kDebugMode,
+        );
+        // El WebView de Android se anuncia con el token `wv`, y varios sitios
+        // —AliExpress entre ellos— responden a eso con un panel de bloqueo en
+        // vez de su formulario de sesión. Se parte del user agent real del
+        // dispositivo y sólo se le quita ese token: la versión de Chrome que
+        // el sitio necesita conocer queda intacta (2026-08-07).
+        _sanitizedUserAgent = sanitizeEmbeddedUserAgent(
+          await InAppWebViewController.getDefaultUserAgent(),
         );
       }
 
@@ -3816,6 +3830,40 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     CreateWindowAction createWindowAction,
   ) async {
     final url = createWindowAction.request.url;
+
+    // Una ventana emergente con `windowId` se hospeda tal cual, conservando el
+    // vínculo con quien la abrió. Volver a pedir su URL en otra pestaña lo
+    // rompe: el inicio de sesión nunca vuelve al origen y queda a la vista la
+    // página suelta del popup. Es la causa del login roto de AliExpress en el
+    // teléfono (2026-08-07).
+    final features = createWindowAction.windowFeatures;
+    if (shouldHostPopupWindow(
+      isDialog: createWindowAction.isDialog,
+      width: features?.width,
+      height: features?.height,
+      toolbarsVisibility: features?.toolbarsVisibility,
+      menuBarVisibility: features?.menuBarVisibility,
+    )) {
+      final windowId = createWindowAction.windowId;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(
+            fullscreenDialog: true,
+            builder: (_) => BrowserPopupWindow(
+              windowId: windowId,
+              settings: _browserSettings(
+                _browserZoom(context),
+                compact: ResponsiveViewport.usesCompactShell(context),
+              ),
+              initialHost: url?.host,
+            ),
+          ),
+        ),
+      );
+      return true;
+    }
+
     if (url == null) return false;
 
     final requestMethod = createWindowAction.request.method?.toUpperCase();
