@@ -86,12 +86,9 @@ export function validateIntegrityRun(
   return run;
 }
 
-export async function fetchAndValidateIntegrityRun({
+async function fetchIntegrityRunSnapshot({
   runId,
-  runAttempt,
   repository,
-  headSha,
-  branch,
   token,
   apiUrl = "https://api.github.com",
   request = globalThis.fetch,
@@ -136,25 +133,71 @@ export async function fetchAndValidateIntegrityRun({
   } catch {
     fail("GitHub returned invalid ERP integrity qualification evidence.");
   }
+  return { run, numericRunId };
+}
+
+export async function fetchAndValidateIntegrityRun(options) {
+  const { run, numericRunId } = await fetchIntegrityRunSnapshot(options);
   return validateIntegrityRun(run, {
-    repository,
-    headSha,
-    branch,
+    repository: options.repository,
+    headSha: options.headSha,
+    branch: options.branch,
     runId: numericRunId,
-    runAttempt,
+    runAttempt: options.runAttempt,
   });
+}
+
+// Un gate todavía en vuelo no es un gate fallido. Poder esperarlo es lo que
+// permite despachar los publicadores mientras el gate corre, en vez de gastar
+// sus ~9 minutos en fila delante de la compilación (2026-08-07).
+const IN_FLIGHT_RUN_STATUSES = new Set([
+  "queued",
+  "in_progress",
+  "waiting",
+  "pending",
+  "requested",
+]);
+
+export async function awaitIntegrityQualification({
+  waitSeconds = 0,
+  pollSeconds = 20,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now = () => Date.now(),
+  ...options
+}) {
+  const budgetMs = Math.max(0, Number(waitSeconds) || 0) * 1000;
+  const pollMs = Math.max(1, Number(pollSeconds) || 1) * 1000;
+  const deadline = now() + budgetMs;
+  for (;;) {
+    const { run, numericRunId } = await fetchIntegrityRunSnapshot(options);
+    const inFlight = IN_FLIGHT_RUN_STATUSES.has(String(run?.status ?? ""));
+    if (!inFlight || now() >= deadline) {
+      return validateIntegrityRun(run, {
+        repository: options.repository,
+        headSha: options.headSha,
+        branch: options.branch,
+        runId: numericRunId,
+        runAttempt: options.runAttempt,
+      });
+    }
+    await sleep(pollMs);
+  }
 }
 
 function parseArguments(argv) {
   let runId = "";
   let runAttempt = "";
+  // Cuánto se acepta esperar a un gate que todavía corre. Cero mantiene la
+  // conducta histórica: un run no concluido se rechaza en el acto.
+  let waitSeconds = "0";
+  const known = new Set(["--run-id", "--run-attempt", "--wait-seconds"]);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--help" || argument === "-h") return { help: true };
-    if (argument !== "--run-id" && argument !== "--run-attempt") {
+    if (!known.has(argument)) {
       fail(
         "Usage: verify_integrity_qualification.mjs --run-id <id> " +
-          "--run-attempt <attempt>",
+          "--run-attempt <attempt> [--wait-seconds <seconds>]",
       );
     }
     const value = argv[index + 1];
@@ -163,9 +206,13 @@ function parseArguments(argv) {
     }
     if (argument === "--run-id") runId = value;
     if (argument === "--run-attempt") runAttempt = value;
+    if (argument === "--wait-seconds") {
+      if (!/^[0-9]{1,4}$/u.test(value)) fail("--wait-seconds must be seconds.");
+      waitSeconds = value;
+    }
     index += 1;
   }
-  return { runId, runAttempt };
+  return { runId, runAttempt, waitSeconds };
 }
 
 export async function main({
@@ -183,7 +230,8 @@ export async function main({
       );
       return 0;
     }
-    const run = await fetchAndValidateIntegrityRun({
+    const run = await awaitIntegrityQualification({
+      waitSeconds: Number(args.waitSeconds ?? 0),
       runId: args.runId,
       runAttempt: args.runAttempt,
       repository: env.GITHUB_REPOSITORY,

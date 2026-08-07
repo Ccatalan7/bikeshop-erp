@@ -130,6 +130,7 @@ jobs:
           node scripts/releases/verify_integrity_qualification.mjs
           --run-id '${{ inputs.integrity_run_id }}'
           --run-attempt '${{ inputs.integrity_run_attempt }}'
+          --wait-seconds '2400'
 
   publish:
     # La compilación ya no espera al gate: arranca en paralelo y el propio job
@@ -357,7 +358,8 @@ jobs:
           if [[ -n '${{ inputs.integrity_run_id }}' ]]; then
             node scripts/releases/verify_integrity_qualification.mjs \
               --run-id '${{ inputs.integrity_run_id }}' \
-              --run-attempt '${{ inputs.integrity_run_attempt }}'
+              --run-attempt '${{ inputs.integrity_run_attempt }}' \
+              --wait-seconds '2400'
           elif [[ '${{ needs.integrity.result }}' != 'success' ]]; then
             echo 'The in-workflow integrity job did not succeed.' >&2
             exit 1

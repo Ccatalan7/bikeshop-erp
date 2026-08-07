@@ -131,6 +131,7 @@ jobs:
           node scripts/releases/verify_integrity_qualification.mjs
           --run-id '${{ inputs.integrity_run_id }}'
           --run-attempt '${{ inputs.integrity_run_attempt }}'
+          --wait-seconds '2400'
 
   build:
     # Compilar arranca junto con el gate, no después. `needs` con `always()`

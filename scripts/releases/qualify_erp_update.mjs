@@ -592,12 +592,20 @@ export async function writeQualification(prepared, liveRun) {
 }
 
 function parseArguments(argv) {
+  let dispatchOnly = false;
   let preparedState = "auto";
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--help" || argument === "-h") return { help: true };
+    if (argument === "--dispatch-only") {
+      dispatchOnly = true;
+      continue;
+    }
     if (argument !== "--prepared-state") {
-      fail("Usage: qualify_erp_update.mjs --prepared-state <path|auto>");
+      fail(
+        "Usage: qualify_erp_update.mjs --prepared-state <path|auto> " +
+          "[--dispatch-only]",
+      );
     }
     const value = argv[index + 1];
     if (!value || value.startsWith("--")) {
@@ -606,7 +614,7 @@ function parseArguments(argv) {
     preparedState = value;
     index += 1;
   }
-  return { preparedState };
+  return { preparedState , dispatchOnly };
 }
 
 export async function main({
@@ -619,7 +627,7 @@ export async function main({
     if (args.help) {
       stdout.write(
         "Usage: node scripts/releases/qualify_erp_update.mjs " +
-          "--prepared-state <path|auto>\n",
+          "--prepared-state <path|auto> [--dispatch-only]\n",
       );
       return 0;
     }
@@ -635,6 +643,20 @@ export async function main({
       `${selection.dispatched ? "Dispatched" : "Reusing"} qualification run: ` +
         `${selection.workflowRun.url ?? "GitHub Actions"}\n`,
     );
+    // `--dispatch-only` entrega la referencia del gate apenas existe, para que
+    // los publicadores arranquen mientras corre en vez de esperar sus ~9
+    // minutos en fila. La prueba no se debilita: cada workflow verifica ese
+    // mismo run antes de publicar, y ahora sabe esperar a que concluya
+    // (`verify_integrity_qualification.mjs --wait-seconds`).
+    if (args.dispatchOnly) {
+      const pending = await writeQualification(prepared, selection.workflowRun);
+      stdout.write(
+        `ERP update bound to in-flight gate run ${pending.run_id}, ` +
+          `attempt ${pending.run_attempt}. Publishers may start now and will ` +
+          `refuse to publish unless that run succeeds.\n`,
+      );
+      return 0;
+    }
     const liveRun = await waitForQualification(prepared, selection.workflowRun);
     const proof = await writeQualification(prepared, liveRun);
     stdout.write(

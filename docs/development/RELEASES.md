@@ -80,13 +80,35 @@ baja el gate a la mitad —agrega ocho arranques en frío—, así que el techo 
 esta técnica ya está cerca. Lo que queda por atacar es el costo fijo, no el
 número de partes.
 
-Pendiente, y es lo que queda del camino crítico: **el conductor todavía espera
-la calificación completa antes de despachar los publicadores**, así que los
-~8 min del gate siguen en fila delante de los ~13 de compilación aunque los
-workflows ya sepan correr en paralelo. Cerrarlo exige despachar los
-publicadores con el `integrity_run_id` de un gate **en vuelo** y que
-`verify_integrity_qualification.mjs` espere a que ese run concluya en vez de
-fallar por «no completado».
+### Lo medido, y lo que queda (2026-08-07)
+
+| Etapa | Antes | Ahora |
+|---|---|---|
+| Gate de integridad | 13 min 39 s | **8 min 42 s** (run 31163160950) |
+| Publicación completa | ~28 min | **25 min 21 s** |
+
+El gate bajó cinco minutos y eso se cobra en cada publicación y en cada PR. Lo
+que sigue en el camino crítico es que **el conductor espera la calificación
+completa antes de despachar los publicadores**: los ~9 min del gate quedan en
+fila delante de los ~15 de compilación aunque los workflows ya sepan correr en
+paralelo.
+
+Las dos piezas para cerrarlo ya están y son la ruta normal desde el momento en
+que se use la bandera:
+
+- `qualify_erp_update.mjs --dispatch-only` despacha el gate y escribe su
+  referencia apenas existe, sin esperar a que termine.
+- `verify_integrity_qualification.mjs --wait-seconds <n>` espera a un run **en
+  vuelo** en vez de rechazarlo por «no completado». Ambos publicadores lo
+  invocan con 2400 s. Un run ya concluido en fracaso nunca se reintenta: se
+  rechaza en el acto.
+
+Con eso el orden pasa a ser: preparar → despachar gate → arrancar los dos
+publicadores de inmediato → cada uno compila mientras el gate corre y verifica
+ese run exacto antes de firmar y subir. Estimado ~15 min en vez de 25. **Falta
+probarlo en una publicación real**; hasta entonces la tarea de VS Code sigue
+usando la secuencia probada, para no estrenar el camino nuevo en una
+publicación que importe.
 
 **Un test frágil que esto destapó.** `ai_tool_registry_test.dart` se daba 2 ms
 de presupuesto real y fallaba con la máquina cargada, sin que nada estuviera

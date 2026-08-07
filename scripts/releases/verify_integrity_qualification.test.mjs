@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  awaitIntegrityQualification,
   fetchAndValidateIntegrityRun,
   validateIntegrityRun,
 } from "./verify_integrity_qualification.mjs";
@@ -81,4 +82,70 @@ test("fetches only the requested run and validates its live response", async () 
   );
   assert.equal(requestedHeaders.Authorization, "Bearer test-token");
   assert.equal(run.head_sha, HEAD_SHA);
+});
+
+// Esperar a un gate en vuelo es lo que permite despachar los publicadores
+// mientras el gate corre. Un run no concluido no es un run fallido; uno que
+// nunca concluye dentro del presupuesto sí se rechaza.
+function respondWith(sequence) {
+  let call = 0;
+  return async () => {
+    const body = JSON.stringify(sequence[Math.min(call++, sequence.length - 1)]);
+    return { ok: true, text: async () => body };
+  };
+}
+
+test("waits for an in-flight gate and accepts its success", async () => {
+  const slept = [];
+  const run = await awaitIntegrityQualification({
+    ...expected,
+    token: "t",
+    request: respondWith([
+      successfulRun({ status: "queued", conclusion: null }),
+      successfulRun({ status: "in_progress", conclusion: null }),
+      successfulRun(),
+    ]),
+    waitSeconds: 600,
+    pollSeconds: 1,
+    sleep: async (ms) => slept.push(ms),
+  });
+  assert.equal(run.id, 123456);
+  assert.deepEqual(slept, [1000, 1000]);
+});
+
+test("rejects a gate that never concludes within the budget", async () => {
+  let clock = 0;
+  await assert.rejects(
+    awaitIntegrityQualification({
+      ...expected,
+      token: "t",
+      request: respondWith([successfulRun({ status: "in_progress", conclusion: null })]),
+      waitSeconds: 5,
+      pollSeconds: 1,
+      sleep: async () => {
+        clock += 4000;
+      },
+      now: () => clock,
+    }),
+    /does not prove a successful/u,
+  );
+});
+
+test("a concluded failure is never retried into success", async () => {
+  const slept = [];
+  await assert.rejects(
+    awaitIntegrityQualification({
+      ...expected,
+      token: "t",
+      request: respondWith([
+        successfulRun({ conclusion: "failure" }),
+        successfulRun(),
+      ]),
+      waitSeconds: 600,
+      pollSeconds: 1,
+      sleep: async (ms) => slept.push(ms),
+    }),
+    /does not prove a successful/u,
+  );
+  assert.deepEqual(slept, []);
 });
