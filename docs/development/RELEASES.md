@@ -124,6 +124,27 @@ firmar y subir, y ahora el contrato de Android afirma exactamente eso —
 `publish` no puede nombrar a `qualification`, y el paso de verificación tiene
 que preceder al de compilar/firmar/subir.
 
+**Segunda medición, 2026-08-07** (`07d433d6`, ya sin `qualification` en el
+`needs` de Android): macOS **11 min 39 s**, Android **18 min 39 s**. Android no
+mejoró, y el desglose dice exactamente por qué:
+
+```text
+Require the integrity qualification …  20:45:31 → 20:52:36   (7 min 05 s esperando)
+Build, sign, upload, and verify …      20:52:36 → 21:00:39   (8 min 03 s)
+```
+
+**En Android compilar y subir son el mismo paso.** Como la verificación tiene
+que ir antes de subir, termina yendo antes de compilar, y la espera al gate
+vuelve al camino crítico aunque el job arranque de inmediato. macOS no lo sufre
+porque `build` y `publish` son jobs distintos: sólo el segundo espera.
+
+Lo que falta, y es lo único que queda: **partir ese paso** en compilar+firmar /
+verificar / subir+verificar, de modo que la espera al gate caiga entre la
+compilación y la subida. Con los 8 min de build solapados contra los ~10 del
+gate, Android debería terminar cerca de los 12, como macOS. No se hizo en la
+misma ronda a propósito: toca la firma y la subida del APK, y merece su propia
+atención en vez de ir de apuro al final de otra cosa.
+
 Cómo se corre el camino rápido:
 
 ```bash
