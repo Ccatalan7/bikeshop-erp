@@ -35,6 +35,7 @@ import '../services/smart_screenshot_service.dart';
 import '../services/window_zoom_service.dart';
 import '../services/workspace_manager.dart';
 import '../utils/browser_omnibox.dart';
+import '../utils/responsive_viewport.dart';
 import '../utils/browser_credential_autofill.dart';
 import '../utils/file_download.dart';
 import 'vb_notice.dart';
@@ -1836,6 +1837,19 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   Future<void> _handleBrowserMenuAction(_BrowserMenuAction action) async {
     switch (action) {
+      // Las cuatro primeras son las que en compacto salieron de la barra.
+      case _BrowserMenuAction.reload:
+        _reload();
+        return;
+      case _BrowserMenuAction.forward:
+        _goForward();
+        return;
+      case _BrowserMenuAction.home:
+        _goHome();
+        return;
+      case _BrowserMenuAction.toggleBookmark:
+        await _toggleCurrentBookmark();
+        return;
       case _BrowserMenuAction.recent:
         await _showBrowserLibraryDialog(_BrowserLibraryKind.recent);
       case _BrowserMenuAction.favoritesBar:
@@ -3908,7 +3922,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 if (navigationCompleter != null &&
                     !navigationCompleter.isCompleted) {
                   navigationCompleter.completeError(
-                    StateError('El navegador reinició la página de AliExpress.'),
+                    StateError(
+                        'El navegador reinició la página de AliExpress.'),
                   );
                 }
               },
@@ -4671,6 +4686,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           addressSuggestions.isEmpty ? null : addressSuggestions.length - 1;
     }
     final isBookmarked = _isCurrentBookmarked;
+    // Misma frontera que el resto del shell: bajo 900px la barra se recompone,
+    // no se encoge.
+    final compactBrowserChrome = ResponsiveViewport.usesCompactShell(context);
 
     return TooltipTheme(
       // El toolbar vive pegado al borde superior de la ventana: un tooltip
@@ -4727,46 +4745,54 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                     ),
                     const SizedBox(width: 6),
                   ],
+                  // En compacto sólo sobrevive «Atrás»: es el control que se
+                  // usa a cada rato y el único que no tiene equivalente obvio
+                  // dentro del menú. Adelante, recargar e inicio se van al
+                  // menú «⋮». Meter los nueve controles de escritorio en 420px
+                  // dejaba la dirección reducida a un candado ilegible y sin
+                  // forma de saber en qué sitio estabas (2026-08-06).
                   IconButton(
                     icon: const Icon(Icons.arrow_back, size: 20),
                     onPressed: _canGoBack ? _goBack : null,
                     tooltip: 'Atrás',
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
+                    constraints: BoxConstraints(
+                      minWidth: compactBrowserChrome ? 48 : 36,
+                      minHeight: compactBrowserChrome ? 48 : 36,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward, size: 20),
-                    onPressed: _canGoForward ? _goForward : null,
-                    tooltip: 'Adelante',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
+                  if (!compactBrowserChrome) ...[
+                    IconButton(
+                      icon: const Icon(Icons.arrow_forward, size: 20),
+                      onPressed: _canGoForward ? _goForward : null,
+                      tooltip: 'Adelante',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh, size: 20),
-                    onPressed: canUseWebView ? _reload : null,
-                    tooltip: 'Recargar',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
+                    IconButton(
+                      icon: const Icon(Icons.refresh, size: 20),
+                      onPressed: canUseWebView ? _reload : null,
+                      tooltip: 'Recargar',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.home_outlined, size: 20),
-                    onPressed: canUseWebView ? _goHome : null,
-                    tooltip: 'Inicio',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
+                    IconButton(
+                      icon: const Icon(Icons.home_outlined, size: 20),
+                      onPressed: canUseWebView ? _goHome : null,
+                      tooltip: 'Inicio',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(width: 8),
                   Expanded(
                     child: SizedBox(
@@ -4863,23 +4889,26 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton(
-                    icon: Icon(
-                      isBookmarked ? Icons.star : Icons.star_border,
-                      size: 20,
+                  // El marcador se guarda desde el menú en compacto: la
+                  // dirección necesita ese ancho más que una estrella.
+                  if (!compactBrowserChrome)
+                    IconButton(
+                      icon: Icon(
+                        isBookmarked ? Icons.star : Icons.star_border,
+                        size: 20,
+                      ),
+                      color: isBookmarked
+                          ? Colors.amber.shade700
+                          : theme.colorScheme.onSurfaceVariant,
+                      onPressed: canUseWebView ? _toggleCurrentBookmark : null,
+                      tooltip:
+                          isBookmarked ? 'Quitar marcador' : 'Guardar marcador',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
                     ),
-                    color: isBookmarked
-                        ? Colors.amber.shade700
-                        : theme.colorScheme.onSurfaceVariant,
-                    onPressed: canUseWebView ? _toggleCurrentBookmark : null,
-                    tooltip:
-                        isBookmarked ? 'Quitar marcador' : 'Guardar marcador',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
-                    ),
-                  ),
                   PopupMenuButton<_BrowserMenuAction>(
                     enabled: canUseWebView,
                     tooltip: 'Opciones del navegador',
@@ -4891,6 +4920,53 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                       unawaited(_handleBrowserMenuAction(action));
                     },
                     itemBuilder: (context) => [
+                      // Lo que en escritorio son botones propios, en compacto
+                      // entra acá arriba: no desaparece ninguna acción, sólo
+                      // cambia de sitio para que la dirección sea legible.
+                      if (compactBrowserChrome) ...[
+                        const PopupMenuItem(
+                          value: _BrowserMenuAction.reload,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.refresh),
+                            title: Text('Recargar'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _BrowserMenuAction.forward,
+                          enabled: _canGoForward,
+                          child: const ListTile(
+                            dense: true,
+                            leading: Icon(Icons.arrow_forward),
+                            title: Text('Adelante'),
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: _BrowserMenuAction.home,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.home_outlined),
+                            title: Text('Inicio'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _BrowserMenuAction.toggleBookmark,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(
+                              isBookmarked ? Icons.star : Icons.star_border,
+                              color:
+                                  isBookmarked ? Colors.amber.shade700 : null,
+                            ),
+                            title: Text(
+                              isBookmarked
+                                  ? 'Quitar marcador'
+                                  : 'Guardar marcador',
+                            ),
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                      ],
                       const PopupMenuItem(
                         value: _BrowserMenuAction.recent,
                         child: ListTile(
@@ -4954,21 +5030,24 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                       ),
                     ],
                   ),
-                  Tooltip(
-                    message: _displayHost().isEmpty
-                        ? 'Abrir en navegador externo'
-                        : _displayHost(),
-                    child: IconButton(
-                      icon: const Icon(Icons.open_in_new, size: 20),
-                      onPressed: canUseWebView ? _openCurrentExternal : null,
-                      tooltip: 'Abrir en navegador externo',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 36,
-                        minHeight: 36,
+                  // En compacto esta acción ya vive en el menú («Abrir
+                  // afuera»); repetirla en la barra sólo robaba ancho.
+                  if (!compactBrowserChrome)
+                    Tooltip(
+                      message: _displayHost().isEmpty
+                          ? 'Abrir en navegador externo'
+                          : _displayHost(),
+                      child: IconButton(
+                        icon: const Icon(Icons.open_in_new, size: 20),
+                        onPressed: canUseWebView ? _openCurrentExternal : null,
+                        tooltip: 'Abrir en navegador externo',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 36,
+                          minHeight: 36,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -5520,6 +5599,11 @@ enum _BrowserPermissionDecision {
 }
 
 enum _BrowserMenuAction {
+  // Sólo aparecen en compacto: en escritorio son botones propios de la barra.
+  reload,
+  forward,
+  home,
+  toggleBookmark,
   recent,
   bookmarks,
   favoritesBar,
