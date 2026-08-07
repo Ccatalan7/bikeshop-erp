@@ -39,15 +39,54 @@ Lo aplicado:
 1. **El gate corre la suite en cuatro partes paralelas** (`FLUTTER_TEST_SHARD_INDEX`
    / `FLUTTER_TEST_SHARD_TOTAL` en `run_flutter_test_gate.sh`, matriz en el
    workflow). `fail-fast: false` a propósito: el reporte debe decir todo lo que
-   está roto, no lo primero. Analyze, la compilación web y los contratos corren
-   sólo en la parte 0; repetirlos cuatro veces no verifica nada nuevo.
+   está roto, no lo primero.
 2. **Caché de dependencias** (`~/.pub-cache`, y Gradle en Android) en el gate y
-   en los dos publicadores. Antes sólo Windows cacheaba.
+   en los dos publicadores. Antes sólo Windows cacheaba. Medido después:
+   `pub get` con caché tibio tarda 0,5 s, así que el ahorro real está en Gradle
+   (8 de los 12,5 min de Android), no en Dart. La estimación optimista inicial
+   era falsa.
+3. **Analyze, la compilación web y los contratos corren en un job hermano**
+   (`checks`), al lado de las cuatro partes.
+4. **El gate corre al lado de los builds**, no delante: en macOS `build`
+   depende sólo de `source-guard`, y `publish` exige el gate por las dos rutas
+   —`qualification` con calificación externa, `integrity` sin ella—; en Android
+   `publish` arranca en paralelo y vuelve a verificar en un paso propio,
+   inmediatamente antes de firmar y subir. Si el gate falla no se publica nada;
+   sólo se gastó CPU compilando.
 
-Pendiente y de mayor impacto: **paralelizar el gate con los builds**. Hoy es
-gate → build; debería ser gate ∥ build, con sólo el paso de publicar esperando
-al gate. Eso quita ~13 minutos más sin debilitar ninguna garantía: si el gate
-falla no se publica, sólo se desperdicia CPU compilando.
+### Tres cosas que corrigen la intuición (2026-08-07)
+
+**`needs` no es una puerta: es una espera.** Con `if: always()` un job igual
+espera a que termine todo lo que nombra en `needs`, pase o falle. Poner
+`needs: [source-guard, integrity]` en el build «para conservar la referencia»
+deja el gate en fila delante del build igual que antes, y el paralelismo es
+sólo aparente. Lo que se paraleliza se saca de `needs`; lo que se exige se
+comprueba en el job que publica. El contrato vive en
+`test/unit/macos_release_artifact_gate_test.dart`, que ahora afirma justamente
+eso: `build` no puede nombrar a `integrity` ni a `qualification`, y `publish`
+tiene que nombrar a los tres.
+
+**Repartir no sirve si una parte carga con todo.** La primera medición del gate
+en cuatro partes dio 794 s contra 819 s de línea base: 25 segundos. Las partes
+1-3 terminaron en 492-571 s y la parte 0 en 794 s, porque analyze, la
+compilación web y los contratos colgaban de `matrix.shard == 0`. El gate vale
+lo que su parte más lenta; poner el trabajo extra dentro de una parte es
+ponerlo en el camino crítico. Por eso existe ahora el job `checks`.
+
+**Un cuarto de la suite tarda 433 s, no 135.** `flutter test` paga un costo
+fijo de compilación en cada corredor, y ese costo no se reparte. La suite
+completa tardaba 541 s; un cuarto tarda 433 s. Subir de cuatro partes a ocho no
+baja el gate a la mitad —agrega ocho arranques en frío—, así que el techo de
+esta técnica ya está cerca. Lo que queda por atacar es el costo fijo, no el
+número de partes.
+
+Pendiente, y es lo que queda del camino crítico: **el conductor todavía espera
+la calificación completa antes de despachar los publicadores**, así que los
+~8 min del gate siguen en fila delante de los ~13 de compilación aunque los
+workflows ya sepan correr en paralelo. Cerrarlo exige despachar los
+publicadores con el `integrity_run_id` de un gate **en vuelo** y que
+`verify_integrity_qualification.mjs` espere a que ese run concluya en vez de
+fallar por «no completado».
 
 **Un test frágil que esto destapó.** `ai_tool_registry_test.dart` se daba 2 ms
 de presupuesto real y fallaba con la máquina cargada, sin que nada estuviera

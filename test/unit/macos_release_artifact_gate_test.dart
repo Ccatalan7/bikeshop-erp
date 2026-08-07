@@ -79,6 +79,10 @@ void main() {
       contains(
         "if: \${{ always() && !cancelled() && "
         "needs.build.result == 'success' && "
+        "(inputs.integrity_run_id == '' || "
+        "needs.qualification.result == 'success') && "
+        "(inputs.integrity_run_id != '' || "
+        "needs.integrity.result == 'success') && "
         "github.event_name == 'workflow_dispatch' && "
         "inputs.release_target != 'android' && "
         "inputs.publish_release == true }}",
@@ -333,38 +337,50 @@ void main() {
     final sourceGuardJob = workflow.indexOf('\n  source-guard:');
     final qualificationJob = workflow.indexOf('\n  qualification:');
     final buildJob = workflow.indexOf('\n  build:');
-    final buildNeedsSourceGuard = workflow.indexOf(
-      '- source-guard',
-      buildJob,
-    );
-    final buildNeedsIntegrity = workflow.indexOf(
-      '- integrity',
-      buildJob,
-    );
-    final buildNeedsQualification = workflow.indexOf(
-      '- qualification',
-      buildJob,
-    );
     final publishJob = workflow.indexOf('\n  publish:');
-    final publishNeedsBuild = workflow.indexOf('needs: build', publishJob);
+    final buildBlock = workflow.substring(buildJob, publishJob);
+    final publishBlock = workflow.substring(publishJob);
     expect(sourceGuardJob, greaterThanOrEqualTo(0));
     expect(integrityJob, greaterThanOrEqualTo(0));
     expect(qualificationJob, greaterThan(integrityJob));
     expect(buildJob, greaterThan(qualificationJob));
-    expect(buildNeedsSourceGuard, greaterThan(buildJob));
-    expect(buildNeedsIntegrity, greaterThan(buildJob));
-    expect(buildNeedsQualification, greaterThan(buildNeedsIntegrity));
+    expect(publishJob, greaterThan(buildJob));
+
+    // Compilar arranca junto al gate. `needs` no es una puerta: con `always()`
+    // igual espera a que el job listado termine, así que nombrar a `integrity`
+    // o a `qualification` aquí volvería a poner el gate en fila delante del
+    // build y anularía el paralelismo.
+    final buildNeeds = buildBlock.substring(buildBlock.indexOf('needs:'));
+    expect(buildNeeds, contains('- source-guard'));
+    expect(buildNeeds, isNot(contains('- integrity')));
+    expect(buildNeeds, isNot(contains('- qualification')));
     expect(
-      workflow.substring(buildJob, buildNeedsSourceGuard),
+      buildBlock.substring(0, buildBlock.indexOf('needs:')),
+      contains("needs.source-guard.result == 'success'"),
+    );
+
+    // La garantía que importa: el artefacto no se hace público sin un gate
+    // exitoso sobre esta misma fuente, por cualquiera de las dos rutas.
+    final publishNeeds = publishBlock.substring(publishBlock.indexOf('needs:'));
+    expect(publishNeeds, contains('- build'));
+    expect(publishNeeds, contains('- integrity'));
+    expect(publishNeeds, contains('- qualification'));
+    expect(
+      publishBlock.substring(0, publishBlock.indexOf('needs:')),
       allOf(
         contains('always()'),
         contains('!cancelled()'),
-        contains("inputs.integrity_run_id == ''"),
-        contains("inputs.integrity_run_id != ''"),
+        contains("needs.build.result == 'success'"),
+        contains(
+          "(inputs.integrity_run_id == '' || "
+          "needs.qualification.result == 'success')",
+        ),
+        contains(
+          "(inputs.integrity_run_id != '' || "
+          "needs.integrity.result == 'success')",
+        ),
       ),
     );
-    expect(publishJob, greaterThan(buildNeedsIntegrity));
-    expect(publishNeedsBuild, greaterThan(publishJob));
   });
 
   test('installer keeps Gatekeeper enabled and verifies a narrow target', () {

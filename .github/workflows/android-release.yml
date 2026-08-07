@@ -136,12 +136,15 @@ jobs:
     # exige la calificación antes de firmar y subir (ver el paso «Require the
     # integrity qualification»). Si el gate falla sólo se gastó CPU
     # compilando; nunca se publica sin verificar (2026-08-07).
-    if: ${{ always() && !cancelled() && inputs.publish_release == true && needs.source-guard.result == 'success' }}
+    if: ${{ always() && !cancelled() && inputs.publish_release == true && needs.source-guard.result == 'success' && (inputs.integrity_run_id == '' || needs.qualification.result == 'success') }}
     needs:
       - source-guard
       # `integrity` se conserva para la variante sin calificación externa, donde
       # el gate corre dentro de este mismo workflow y sí debe preceder al build.
+      # Con calificación externa ese job queda saltado y no espera a nadie:
+      # `qualification` sólo consulta un run ya terminado y dura segundos.
       - integrity
+      - qualification
     name: Build, sign, and publish protected Android update
     runs-on: ubuntu-latest
     timeout-minutes: 60

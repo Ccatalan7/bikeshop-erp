@@ -133,14 +133,14 @@ jobs:
           --run-attempt '${{ inputs.integrity_run_attempt }}'
 
   build:
-    # Compilar no espera al gate: arranca junto con él. Publicar sí lo exige,
-    # y eso ocurre en el job `publish`, que sigue dependiendo de la
-    # calificación. Si el gate falla sólo se gastó CPU compilando; el artefacto
-    # no sale (2026-08-07).
-    if: ${{ always() && !cancelled() && inputs.release_target != 'android' && needs.source-guard.result == 'success' && (inputs.integrity_run_id != '' || needs.integrity.result == 'success') }}
+    # Compilar arranca junto con el gate, no después. `needs` con `always()`
+    # NO es una puerta: igual espera a que el job listado termine, así que
+    # nombrar aquí a `integrity` volvía a poner el gate en fila delante del
+    # build. El gate se exige en `publish`, que es donde el artefacto se hace
+    # público; si falla, sólo se gastó CPU compilando (2026-08-07).
+    if: ${{ inputs.release_target != 'android' && needs.source-guard.result == 'success' }}
     needs:
       - source-guard
-      - integrity
     name: Build, verify, and package macOS app
     runs-on: macos-15
     outputs:
@@ -331,10 +331,13 @@ jobs:
           retention-days: 7
 
   publish:
-    # La calificación se exige aquí, que es donde el artefacto se hace público.
-    if: ${{ always() && !cancelled() && needs.build.result == 'success' && (inputs.integrity_run_id == '' || needs.qualification.result == 'success') && github.event_name == 'workflow_dispatch' && inputs.release_target != 'android' && inputs.publish_release == true }}
+    # El gate se exige aquí, que es donde el artefacto se hace público: con
+    # calificación externa manda `qualification`; sin ella, el gate que corrió
+    # dentro de este workflow. Ninguna de las dos rutas publica sin verificar.
+    if: ${{ always() && !cancelled() && needs.build.result == 'success' && (inputs.integrity_run_id == '' || needs.qualification.result == 'success') && (inputs.integrity_run_id != '' || needs.integrity.result == 'success') && github.event_name == 'workflow_dispatch' && inputs.release_target != 'android' && inputs.publish_release == true }}
     needs:
       - build
+      - integrity
       - qualification
     name: Publish verified coworker update
     runs-on: ubuntu-latest
