@@ -105,10 +105,34 @@ que se use la bandera:
 
 Con eso el orden pasa a ser: preparar → despachar gate → arrancar los dos
 publicadores de inmediato → cada uno compila mientras el gate corre y verifica
-ese run exacto antes de firmar y subir. Estimado ~15 min en vez de 25. **Falta
-probarlo en una publicación real**; hasta entonces la tarea de VS Code sigue
-usando la secuencia probada, para no estrenar el camino nuevo en una
-publicación que importe.
+ese run exacto antes de firmar y subir.
+
+**Probado el 2026-08-07** en la publicación de `27d2e52e`:
+
+| | Fila (25/06 anterior) | Camino rápido |
+|---|---|---|
+| macOS | 25 min 21 s | **13 min 58 s** |
+| Android | 25 min 21 s | 18 min 29 s |
+
+Y la misma trampa cobró de nuevo, en el sitio que se había «arreglado»:
+Android tardó cuatro minutos y medio más que macOS porque su `publish` todavía
+nombraba a `qualification` en `needs`. Con `always()` eso lo hacía esperar a
+que el gate entero terminara, así que la compilación arrancaba diez minutos
+tarde. macOS, que depende sólo de `source-guard`, arrancó de inmediato. La
+exigencia del gate no va en `needs`: va en el paso que corre justo antes de
+firmar y subir, y ahora el contrato de Android afirma exactamente eso —
+`publish` no puede nombrar a `qualification`, y el paso de verificación tiene
+que preceder al de compilar/firmar/subir.
+
+Cómo se corre el camino rápido:
+
+```bash
+bash scripts/releases/prepare_erp_update.sh --notes-candidate <notas.json>
+node scripts/releases/qualify_erp_update.mjs --prepared-state auto --dispatch-only
+# y enseguida, sin esperar:
+bash scripts/publish_macos_update.sh --prepared-state auto &
+node scripts/releases/publish_android_workflow.mjs --prepared-state auto &
+```
 
 **Un test frágil que esto destapó.** `ai_tool_registry_test.dart` se daba 2 ms
 de presupuesto real y fallaba con la máquina cargada, sin que nada estuviera

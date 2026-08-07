@@ -164,7 +164,34 @@ void main() {
     expect(workflow, contains("inputs.integrity_run_id == ''"));
     expect(workflow, contains("inputs.integrity_run_id != ''"));
     expect(workflow, contains('needs.integrity.result'));
-    expect(workflow, contains('needs.qualification.result'));
+    // La exigencia del gate NO puede vivir en `needs` de este job: `needs` es
+    // una espera, y nombrar ahí a `qualification` hacía que la compilación
+    // arrancara recién cuando el gate terminaba (medido el 2026-08-07: 18 min
+    // 29 s contra los 13 min 58 s de macOS en la misma publicación). Vive en un
+    // paso propio que espera al run en vuelo, inmediatamente antes de firmar y
+    // subir.
+    final publishJob = workflow.indexOf('\n  publish:');
+    final publishNeeds = workflow.indexOf('needs:', publishJob);
+    final publishSteps = workflow.indexOf('steps:', publishJob);
+    expect(
+      workflow.substring(publishJob, publishSteps),
+      isNot(contains('- qualification')),
+    );
+    expect(
+      workflow.substring(publishJob, publishNeeds),
+      isNot(contains('needs.qualification.result')),
+    );
+    final qualificationGate = workflow.indexOf(
+      'verify_integrity_qualification.mjs',
+      publishSteps,
+    );
+    final signedUpload = workflow.indexOf(
+      'Build, sign, upload, and verify the Android release',
+      publishSteps,
+    );
+    expect(qualificationGate, greaterThan(publishSteps));
+    expect(signedUpload, greaterThan(qualificationGate));
+    expect(workflow, contains("--wait-seconds '2400'"));
     expect(workflow, contains('verify_integrity_qualification.mjs'));
     expect(workflow, contains('actions: read'));
     expect(workflow, contains('contents: read'));

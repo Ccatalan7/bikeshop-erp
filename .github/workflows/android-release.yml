@@ -137,15 +137,21 @@ jobs:
     # exige la calificación antes de firmar y subir (ver el paso «Require the
     # integrity qualification»). Si el gate falla sólo se gastó CPU
     # compilando; nunca se publica sin verificar (2026-08-07).
-    if: ${{ always() && !cancelled() && inputs.publish_release == true && needs.source-guard.result == 'success' && (inputs.integrity_run_id == '' || needs.qualification.result == 'success') }}
+    if: ${{ always() && !cancelled() && inputs.publish_release == true && needs.source-guard.result == 'success' }}
     needs:
       - source-guard
-      # `integrity` se conserva para la variante sin calificación externa, donde
-      # el gate corre dentro de este mismo workflow y sí debe preceder al build.
-      # Con calificación externa ese job queda saltado y no espera a nadie:
-      # `qualification` sólo consulta un run ya terminado y dura segundos.
+      # `integrity` se conserva SÓLO para la variante sin calificación externa:
+      # ahí el gate corre dentro de este workflow y nada más lo verifica. Con
+      # calificación externa ese job queda saltado y no hace esperar a nadie.
+      #
+      # `qualification` NO va aquí, y eso se midió: nombrarlo hacía que este
+      # job esperara a que el gate entero terminara —`needs` es una espera, no
+      # una puerta— y la compilación arrancaba diez minutos tarde. El 2026-08-07
+      # Android tardó 18 min 29 s con esa dependencia y macOS, que sólo depende
+      # de `source-guard`, 13 min 58 s en la misma publicación. La exigencia
+      # vive en el paso «Require the integrity qualification», que espera al run
+      # en vuelo justo antes de firmar y subir.
       - integrity
-      - qualification
     name: Build, sign, and publish protected Android update
     runs-on: ubuntu-latest
     timeout-minutes: 60
