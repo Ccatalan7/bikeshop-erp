@@ -233,12 +233,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         transparentBackground: false,
         useHybridComposition: true,
         useOnDownloadStart: true,
-        // En Android, `useWideViewPort` hace que la página se mida contra un
-        // viewport ancho (~980px) en vez del ancho real: los sitios entonces
-        // sirven su versión de ESCRITORIO dentro del teléfono, encogida e
-        // ilegible —así se veía AliExpress— (2026-08-06). En compacto el
-        // WebView debe declarar el ancho del dispositivo.
-        useWideViewPort: !compact,
+        // `useWideViewPort` DEBE quedar activo: es lo que hace que Android
+        // respete el `<meta name="viewport">` del sitio, que es como una
+        // página declara su layout móvil. Apagarlo hace lo contrario de lo que
+        // sugiere el nombre —el WebView ignora el meta y renderiza contra 980
+        // px, o sea ESCRITORIO— y con eso Google y AliExpress salían en su
+        // versión de computador dentro del teléfono (2026-08-07, corrige el
+        // cambio del día anterior).
+        useWideViewPort: true,
         verticalScrollBarEnabled: true,
       );
 
@@ -4733,9 +4735,32 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // En compacto esta acción baja a su propia fila: metida en
-                  // la barra ocupaba ~250px de 420 y volvía a dejar la
-                  // dirección como un candado ilegible (2026-08-06).
+                  // En compacto la acción del sitio es un ícono, como la
+                  // pastilla de una extensión de navegador: se reconoce, no
+                  // roba ancho a la dirección y no empuja el contenido. Con
+                  // texto ocupaba ~250px de 420; en una fila propia tapaba
+                  // media pantalla (2026-08-07).
+                  if (_isAliExpressPage && compactBrowserChrome)
+                    IconButton(
+                      key: const ValueKey('browser-aliexpress-daily-compact'),
+                      onPressed: canUseWebView && !_isAliExpressImportRunning
+                          ? _startAliExpressDailyImport
+                          : null,
+                      icon: _isAliExpressImportRunning
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.receipt_long_outlined, size: 20),
+                      color: theme.colorScheme.primary,
+                      tooltip: 'Compras del día',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 48,
+                        minHeight: 48,
+                      ),
+                    ),
                   if (_isAliExpressPage && !compactBrowserChrome) ...[
                     Tooltip(
                       message: 'Reunir las compras de un día en una factura',
@@ -5067,38 +5092,6 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 ],
               ),
             ),
-            // Fila contextual del sitio: aparece sólo dentro de AliExpress y
-            // sólo en compacto, con el ancho completo y un objetivo real de
-            // 48px. Es el motivo por el que el ERP tiene navegador propio, así
-            // que esconderla a dos toques dentro del menú la degradaría.
-            if (_isAliExpressPage && compactBrowserChrome)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.tonalIcon(
-                    key: const ValueKey('browser-aliexpress-daily-compact'),
-                    onPressed: canUseWebView && !_isAliExpressImportRunning
-                        ? _startAliExpressDailyImport
-                        : null,
-                    icon: _isAliExpressImportRunning
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.receipt_long_outlined, size: 18),
-                    label: Text(
-                      _isAliExpressImportRunning
-                          ? 'Reuniendo compras…'
-                          : 'Compras del día',
-                    ),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(0, 48),
-                    ),
-                  ),
-                ),
-              ),
             if (_showFavoritesBar && _bookmarkEntries.isNotEmpty)
               _buildFavoritesBar(context),
             if (addressSuggestions.isNotEmpty)

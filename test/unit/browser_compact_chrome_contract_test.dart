@@ -65,28 +65,32 @@ void main() {
     expect(block, contains('compactBrowserChrome ? 48 : 36'));
   });
 
-  test('la acción de AliExpress baja a su propia fila en compacto', () {
-    // Dentro de la barra ocupaba ~250px de 420 y volvía a dejar la dirección
-    // como un candado ilegible. Es la acción por la que el ERP tiene navegador
-    // propio, así que tampoco se esconde dentro del menú.
-    expect(source, contains('if (_isAliExpressPage && !compactBrowserChrome)'));
+  test('la acción de AliExpress es un ícono en compacto, no texto ni fila', () {
+    // Con texto ocupaba ~250px de 420 y aplastaba la dirección; en una fila
+    // propia tapaba media pantalla. Un ícono se reconoce, no roba ancho y no
+    // empuja el contenido.
     expect(source, contains('if (_isAliExpressPage && compactBrowserChrome)'));
-    expect(source, contains("ValueKey('browser-aliexpress-daily-compact')"));
+    expect(source, contains('if (_isAliExpressPage && !compactBrowserChrome)'));
 
-    // El contenedor declara el ancho antes de la clave del botón, así que la
-    // ventana mira a ambos lados.
     final anchor = source.indexOf("ValueKey('browser-aliexpress-daily-compact')");
-    final compactRow = source.substring(anchor - 400, anchor + 900);
-    expect(compactRow, contains('minimumSize: const Size(0, 48)'),
-        reason: 'objetivo real de 48px en táctil');
-    expect(compactRow, contains('width: double.infinity'),
-        reason: 'la fila usa el ancho disponible');
+    expect(anchor, greaterThan(0));
+    final compactAction = source.substring(anchor - 200, anchor + 1100);
+    expect(compactAction, contains('IconButton('),
+        reason: 'en compacto la acción es un ícono');
+    expect(compactAction, contains("tooltip: 'Compras del día'"),
+        reason: 'el ícono se explica al mantener pulsado');
+    expect(compactAction, contains('minWidth: 48'));
+    expect(compactAction, isNot(contains('width: double.infinity')),
+        reason: 'no vuelve a ocupar una fila completa');
   });
 
   test('en compacto el WebView no pide un viewport de escritorio', () {
     // `useWideViewPort` mide la página contra ~980px en Android: los sitios
     // servían su versión de escritorio dentro del teléfono, encogida.
-    expect(source, contains('useWideViewPort: !compact'));
+    // `useWideViewPort` se queda activo a propósito: es lo que hace que
+    // Android respete el meta viewport del sitio. Apagarlo servía la versión
+    // de escritorio, que es justo lo contrario (2026-08-07).
+    expect(source, contains('useWideViewPort: true'));
     expect(source, contains('initialScale: compact ? 100 :'));
     expect(source, contains('textZoom: compact ? 100 :'));
     expect(
