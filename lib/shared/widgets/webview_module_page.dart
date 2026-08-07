@@ -3838,6 +3838,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     // teléfono (2026-08-07).
     final features = createWindowAction.windowFeatures;
     if (shouldHostPopupWindow(
+      url: url?.toString(),
+      navigationType: createWindowAction.navigationType?.toString(),
       isDialog: createWindowAction.isDialog,
       width: features?.width,
       height: features?.height,

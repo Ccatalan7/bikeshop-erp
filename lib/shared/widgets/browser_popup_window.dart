@@ -14,21 +14,32 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 /// madre— o un simple `target="_blank"`, que se abre mejor como otra pestaña.
 ///
 /// Toda ventana nueva trae `windowId`, así que ese dato no distingue nada.
-/// Lo que sí distingue es cómo la pidió el sitio: un `window.open` con tamaño
-/// o sin barras es una ventana de trabajo —inicios de sesión, pagos,
-/// verificaciones— que le responde a quien la abrió. Un enlace con
-/// `target="_blank"` no declara nada de eso.
+///
+/// La regla es por defecto conservadora, y esa dirección importa: **se hospeda
+/// salvo que sea un enlace que la persona tocó**. Exigir que el popup declare
+/// tamaño o esconda barras —como se intentó primero— deja fuera al caso más
+/// común de todos, `window.open(url)` a secas, que es justamente como abren su
+/// ventana los inicios de sesión. Perder ese caso es perder el login entero,
+/// mientras que hospedar de más sólo cambia dónde se ve una página.
+///
+/// Una ventana sin URL sólo puede ser conducida por quien la abrió
+/// (`window.open('')` y después `win.location = …`), así que se hospeda
+/// siempre: reabrirla por su cuenta es imposible.
 bool shouldHostPopupWindow({
+  String? url,
+  String? navigationType,
   bool? isDialog,
-  bool? androidIsDialog,
   double? width,
   double? height,
   bool? toolbarsVisibility,
   bool? menuBarVisibility,
 }) {
-  if (isDialog == true || androidIsDialog == true) return true;
+  final target = url?.trim() ?? '';
+  if (target.isEmpty || target == 'about:blank') return true;
+  if (isDialog == true) return true;
   if ((width ?? 0) > 0 || (height ?? 0) > 0) return true;
-  return toolbarsVisibility == false || menuBarVisibility == false;
+  if (toolbarsVisibility == false || menuBarVisibility == false) return true;
+  return navigationType != 'LINK_ACTIVATED';
 }
 
 class BrowserPopupWindow extends StatefulWidget {

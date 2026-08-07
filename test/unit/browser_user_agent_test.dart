@@ -52,26 +52,50 @@ void main() {
   });
 
   group('ventanas nuevas', () {
-    test('un window.open con tamaño se hospeda conservando su ventana madre',
+    // La dirección de la regla es lo que importa: perder un popup de login es
+    // perder la sesión entera; hospedar de más sólo cambia dónde se ve una
+    // página. Por eso se hospeda salvo que sea un enlace que la persona tocó.
+    test('un window.open a secas se hospeda: es como abre su ventana un login',
         () {
-      expect(shouldHostPopupWindow(width: 500, height: 600), isTrue);
+      expect(
+        shouldHostPopupWindow(url: 'https://login.aliexpress.com/'),
+        isTrue,
+      );
     });
 
-    test('una ventana sin barras también es un popup de trabajo', () {
-      expect(shouldHostPopupWindow(toolbarsVisibility: false), isTrue);
-      expect(shouldHostPopupWindow(menuBarVisibility: false), isTrue);
-      expect(shouldHostPopupWindow(isDialog: true), isTrue);
-    });
-
-    test('un target="_blank" corriente sigue abriéndose como otra pestaña', () {
-      expect(shouldHostPopupWindow(), isFalse);
+    test('una ventana sin URL se hospeda siempre', () {
+      expect(shouldHostPopupWindow(url: null), isTrue);
+      expect(shouldHostPopupWindow(url: '   '), isTrue);
+      expect(shouldHostPopupWindow(url: 'about:blank'), isTrue);
       expect(
         shouldHostPopupWindow(
-          isDialog: false,
-          width: 0,
-          height: 0,
-          toolbarsVisibility: true,
-          menuBarVisibility: true,
+          url: 'about:blank',
+          navigationType: 'LINK_ACTIVATED',
+        ),
+        isTrue,
+      );
+    });
+
+    test('un window.open con tamaño o sin barras también se hospeda', () {
+      expect(
+        shouldHostPopupWindow(url: 'https://x.test/', width: 500, height: 600),
+        isTrue,
+      );
+      expect(
+        shouldHostPopupWindow(
+            url: 'https://x.test/', toolbarsVisibility: false),
+        isTrue,
+      );
+      expect(shouldHostPopupWindow(url: 'https://x.test/', isDialog: true),
+          isTrue);
+    });
+
+    test('un target="_blank" que la persona tocó sigue siendo otra pestaña',
+        () {
+      expect(
+        shouldHostPopupWindow(
+          url: 'https://x.test/articulo',
+          navigationType: 'LINK_ACTIVATED',
         ),
         isFalse,
       );
