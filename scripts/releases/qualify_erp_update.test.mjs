@@ -7,6 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  qualificationRunFromListing,
   chooseExactQualificationRun,
   findOrDispatchQualificationRun,
   waitForQualification,
@@ -308,4 +309,29 @@ test("does not rerun an application-test failure for the same SHA", async () => 
       .length,
     0,
   );
+});
+
+// Un run recién despachado llega con los nombres del listado, no con los de la
+// API. Escribirlo sin traducir dejaba la referencia en `undefined` y el
+// publicador se caía al verificarla (2026-08-07).
+test("translates a dispatched listing run into qualification proof", () => {
+  const proof = qualificationRunFromListing(
+    {
+      databaseId: 31199968076,
+      attempt: 1,
+      workflowDatabaseId: 4242,
+      headSha: "c".repeat(40),
+      createdAt: "2026-08-07T09:57:28Z",
+    },
+    { head_sha: "c".repeat(40), branch: "smartpegas1.0" },
+  );
+
+  assert.equal(proof.id, 31199968076);
+  assert.equal(proof.run_attempt, 1);
+  assert.equal(proof.workflow_id, 4242);
+  assert.equal(proof.head_branch, "smartpegas1.0");
+  assert.match(proof.updated_at, /^\d{4}-\d{2}-\d{2}T[0-9:.]+Z$/u);
+  for (const value of Object.values(proof)) {
+    assert.notEqual(value, undefined);
+  }
 });

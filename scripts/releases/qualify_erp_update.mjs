@@ -526,6 +526,21 @@ export async function waitForQualification(
   fail("ERP integrity qualification exceeded its bounded wait time.");
 }
 
+/// Traduce un run del listado (`gh run list`) a la forma que usa la API de un
+/// run. Sin esto la referencia se escribe como `undefined` y el publicador se
+/// cae al verificarla.
+export function qualificationRunFromListing(listing, preparedState) {
+  const run = listing ?? {};
+  return {
+    id: run.databaseId,
+    run_attempt: run.attempt ?? 1,
+    workflow_id: run.workflowDatabaseId,
+    head_sha: run.headSha ?? preparedState?.head_sha,
+    head_branch: run.headBranch ?? preparedState?.branch,
+    updated_at: run.createdAt ?? new Date().toISOString(),
+  };
+}
+
 export async function writeQualification(prepared, liveRun) {
   const proof = {
     repository: REPOSITORY,
@@ -649,7 +664,14 @@ export async function main({
     // mismo run antes de publicar, y ahora sabe esperar a que concluya
     // (`verify_integrity_qualification.mjs --wait-seconds`).
     if (args.dispatchOnly) {
-      const pending = await writeQualification(prepared, selection.workflowRun);
+      // El listado de `gh run list` nombra sus campos distinto que la API de
+      // un run (`databaseId`/`attempt` en vez de `id`/`run_attempt`). Sin esta
+      // traducción la referencia se escribe como `undefined` y el publicador
+      // se cae al verificarla.
+      const pending = await writeQualification(
+        prepared,
+        qualificationRunFromListing(selection.workflowRun, prepared.state),
+      );
       stdout.write(
         `ERP update bound to in-flight gate run ${pending.run_id}, ` +
           `attempt ${pending.run_attempt}. Publishers may start now and will ` +
