@@ -600,7 +600,13 @@ void main() {
       );
       var executions = 0;
       final verifier = _CountingApprovalVerifier(
-        delay: const Duration(milliseconds: 10),
+        // Márgenes holgados a propósito: lo que el test afirma es que la
+        // latencia de aprobación se descuenta del presupuesto, no que el reloj
+        // real acierte al milisegundo. Con 10 ms contra 2 ms, un corredor
+        // cargado agotaba el presupuesto ANTES de invocar al verificador y el
+        // test fallaba sin que nada estuviera roto (2026-08-07, al partir la
+        // suite en cuatro procesos paralelos).
+        delay: const Duration(milliseconds: 400),
       );
       final registry = AIToolRegistry(
         now: () => now,
@@ -636,7 +642,7 @@ void main() {
             idempotencyKey: 'operation-slow-approval',
             expiresAt: now.add(const Duration(minutes: 5)),
           ),
-          executionTimeout: const Duration(milliseconds: 2),
+          executionTimeout: const Duration(milliseconds: 80),
         ),
       );
 

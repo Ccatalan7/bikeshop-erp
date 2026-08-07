@@ -19,6 +19,42 @@ feature/current line → pull request to protected main → integrity + preview
   invariant dashboard. A critical violation fails the release record without
   attempting an automatic data repair.
 
+## Cuánto tarda publicar, y por qué (2026-08-07)
+
+Línea base medida en el run 31153201788, antes de tocar nada:
+
+| Etapa | Tiempo | Detalle |
+|---|---|---|
+| Gate de integridad | 13 min 39 s | 9 min la suite Flutter, 2,5 min compilar web, 1 min analyze |
+| Build macOS | ~12 min 30 s | en paralelo con Android |
+| Build Android | ~14 min | |
+
+El gate y los publicadores corren **en fila**, así que una publicación completa
+son ~28 minutos. La comparación con «en mi máquina son 3 minutos» engaña: un
+corredor de GitHub tiene 2 vCPU y parte de cero, mientras el escritorio
+reutiliza todo lo compilado. La misma suite tarda 4 min local y 9 en CI.
+
+Lo aplicado:
+
+1. **El gate corre la suite en cuatro partes paralelas** (`FLUTTER_TEST_SHARD_INDEX`
+   / `FLUTTER_TEST_SHARD_TOTAL` en `run_flutter_test_gate.sh`, matriz en el
+   workflow). `fail-fast: false` a propósito: el reporte debe decir todo lo que
+   está roto, no lo primero. Analyze, la compilación web y los contratos corren
+   sólo en la parte 0; repetirlos cuatro veces no verifica nada nuevo.
+2. **Caché de dependencias** (`~/.pub-cache`, y Gradle en Android) en el gate y
+   en los dos publicadores. Antes sólo Windows cacheaba.
+
+Pendiente y de mayor impacto: **paralelizar el gate con los builds**. Hoy es
+gate → build; debería ser gate ∥ build, con sólo el paso de publicar esperando
+al gate. Eso quita ~13 minutos más sin debilitar ninguna garantía: si el gate
+falla no se publica, sólo se desperdicia CPU compilando.
+
+**Un test frágil que esto destapó.** `ai_tool_registry_test.dart` se daba 2 ms
+de presupuesto real y fallaba con la máquina cargada, sin que nada estuviera
+roto. Ya era frágil; correr cuatro procesos a la vez sólo lo hizo visible. Se
+le dio holgura sin cambiar lo que afirma. Un test que mide tiempo real necesita
+márgenes que aguanten un corredor ocupado.
+
 ## El recuadro de novedades (2026-08-06)
 
 `prepare_erp_update.sh` genera la nota de usuario con el **Codex local**. Esa
