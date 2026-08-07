@@ -3,10 +3,28 @@ class AliExpressDailyInvoiceService {
 
   static const ordersUri = 'https://www.aliexpress.com/p/order/index.html';
 
+  /// Dominios de AliExpress donde el ERP reconoce una sesión de compras.
+  ///
+  /// La lista es explícita a propósito: el extractor sólo debe correr en el
+  /// sitio del proveedor, así que un patrón amplio como «contiene aliexpress»
+  /// abriría la puerta a un dominio parecido. Se agregó `.us` porque la cuenta
+  /// del taller navega el sitio estadounidense y allí la acción «Compras del
+  /// día» simplemente no aparecía (2026-08-06).
+  static const Set<String> _trustedRegistrableDomains = <String>{
+    'aliexpress.com',
+    'aliexpress.us',
+    'aliexpress.ru',
+    'aliexpress.es',
+    'aliexpress.cl',
+  };
+
   static bool isTrustedUri(Uri? uri) {
     if (uri == null || uri.scheme != 'https') return false;
     final host = uri.host.toLowerCase();
-    return host == 'aliexpress.com' || host.endsWith('.aliexpress.com');
+    for (final domain in _trustedRegistrableDomains) {
+      if (host == domain || host.endsWith('.$domain')) return true;
+    }
+    return false;
   }
 
   static Uri? resolveOrderDetailUri(Map<String, dynamic> order) {

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/shared/services/aliexpress_daily_invoice_service.dart';
 
 void main() {
+  _trustedDomainTests();
   _apiSourceOfTruthTests();
 
   group('AliExpressDailyInvoiceService', () {
@@ -338,6 +339,42 @@ void _apiSourceOfTruthTests() {
       final items = (merged['items'] as List).cast<Map<String, dynamic>>();
       expect(items.single['description'], 'completo');
       expect(merged['orderDate'], '2026-04-07');
+    });
+  });
+}
+
+void _trustedDomainTests() {
+  group('dominios de AliExpress reconocidos', () {
+    test('acepta los sitios regionales donde compra el taller', () {
+      // La cuenta navega el sitio estadounidense: con sólo `.com` en la lista,
+      // «Compras del día» no aparecía ahí (2026-08-06).
+      for (final url in [
+        'https://www.aliexpress.com/p/order/index.html',
+        'https://www.aliexpress.us/p/order/index.html',
+        'https://es.aliexpress.com/',
+        'https://aliexpress.com/',
+      ]) {
+        expect(
+          AliExpressDailyInvoiceService.isTrustedUri(Uri.parse(url)),
+          isTrue,
+          reason: '$url es AliExpress',
+        );
+      }
+    });
+
+    test('sigue rechazando lo que no es AliExpress ni es HTTPS', () {
+      for (final url in [
+        'http://www.aliexpress.com/',
+        'https://aliexpress.com.attacker.net/',
+        'https://notaliexpress.com/',
+        'https://aliexpress.evil/',
+      ]) {
+        expect(
+          AliExpressDailyInvoiceService.isTrustedUri(Uri.parse(url)),
+          isFalse,
+          reason: '$url no debe habilitar el extractor',
+        );
+      }
     });
   });
 }

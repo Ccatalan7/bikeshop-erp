@@ -64,4 +64,35 @@ void main() {
     final block = source.substring(backIndex, backIndex + 320);
     expect(block, contains('compactBrowserChrome ? 48 : 36'));
   });
+
+  test('la acción de AliExpress baja a su propia fila en compacto', () {
+    // Dentro de la barra ocupaba ~250px de 420 y volvía a dejar la dirección
+    // como un candado ilegible. Es la acción por la que el ERP tiene navegador
+    // propio, así que tampoco se esconde dentro del menú.
+    expect(source, contains('if (_isAliExpressPage && !compactBrowserChrome)'));
+    expect(source, contains('if (_isAliExpressPage && compactBrowserChrome)'));
+    expect(source, contains("ValueKey('browser-aliexpress-daily-compact')"));
+
+    // El contenedor declara el ancho antes de la clave del botón, así que la
+    // ventana mira a ambos lados.
+    final anchor = source.indexOf("ValueKey('browser-aliexpress-daily-compact')");
+    final compactRow = source.substring(anchor - 400, anchor + 900);
+    expect(compactRow, contains('minimumSize: const Size(0, 48)'),
+        reason: 'objetivo real de 48px en táctil');
+    expect(compactRow, contains('width: double.infinity'),
+        reason: 'la fila usa el ancho disponible');
+  });
+
+  test('en compacto el WebView no pide un viewport de escritorio', () {
+    // `useWideViewPort` mide la página contra ~980px en Android: los sitios
+    // servían su versión de escritorio dentro del teléfono, encogida.
+    expect(source, contains('useWideViewPort: !compact'));
+    expect(source, contains('initialScale: compact ? 100 :'));
+    expect(source, contains('textZoom: compact ? 100 :'));
+    expect(
+      source,
+      contains('compact: ResponsiveViewport.usesCompactShell(context)'),
+      reason: 'la clasificación viene del owner compartido, no de otra medida',
+    );
+  });
 }

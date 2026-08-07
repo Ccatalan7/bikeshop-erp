@@ -175,7 +175,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
   }
 
-  InAppWebViewSettings _browserSettings(double browserZoom) =>
+  /// [compact] describe el shell del ERP, no el sitio: bajo 900px el WebView
+  /// tiene que comportarse como el navegador de un teléfono.
+  InAppWebViewSettings _browserSettings(
+    double browserZoom, {
+    bool compact = false,
+  }) =>
       InAppWebViewSettings(
         // Sin esto, WKWebView se presenta con el user agent genérico de app
         // embebida («…AppleWebKit/605.1.15 (KHTML, like Gecko)», sin sufijo
@@ -216,7 +221,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         iframeAllowFullscreen: true,
         incognito: false,
         isInspectable: kDebugMode,
-        initialScale: (browserZoom * 100).round(),
+        initialScale: compact ? 100 : (browserZoom * 100).round(),
         mixedContentMode: MixedContentMode.MIXED_CONTENT_COMPATIBILITY_MODE,
         needInitialFocus: true,
         pageZoom: browserZoom,
@@ -224,11 +229,16 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         saveFormData: true,
         sharedCookiesEnabled: true,
         thirdPartyCookiesEnabled: true,
-        textZoom: (browserZoom * 100).round(),
+        textZoom: compact ? 100 : (browserZoom * 100).round(),
         transparentBackground: false,
         useHybridComposition: true,
         useOnDownloadStart: true,
-        useWideViewPort: true,
+        // En Android, `useWideViewPort` hace que la página se mida contra un
+        // viewport ancho (~980px) en vez del ancho real: los sitios entonces
+        // sirven su versión de ESCRITORIO dentro del teléfono, encogida e
+        // ilegible —así se veía AliExpress— (2026-08-06). En compacto el
+        // WebView debe declarar el ancho del dispositivo.
+        useWideViewPort: !compact,
         verticalScrollBarEnabled: true,
       );
 
@@ -3889,7 +3899,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
               webViewEnvironment: _webViewEnvironment,
               initialUserScripts: _credentialAutofillUserScripts,
               initialUrlRequest: _urlRequest(initialUri),
-              initialSettings: _browserSettings(browserZoom),
+              initialSettings: _browserSettings(
+                browserZoom,
+                compact: ResponsiveViewport.usesCompactShell(context),
+              ),
               onWebViewCreated: (controller) {
                 _controller = controller;
                 controller.addJavaScriptHandler(
@@ -4720,7 +4733,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (_isAliExpressPage) ...[
+                  // En compacto esta acción baja a su propia fila: metida en
+                  // la barra ocupaba ~250px de 420 y volvía a dejar la
+                  // dirección como un candado ilegible (2026-08-06).
+                  if (_isAliExpressPage && !compactBrowserChrome) ...[
                     Tooltip(
                       message: 'Reunir las compras de un día en una factura',
                       child: FilledButton.tonalIcon(
@@ -5051,6 +5067,38 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 ],
               ),
             ),
+            // Fila contextual del sitio: aparece sólo dentro de AliExpress y
+            // sólo en compacto, con el ancho completo y un objetivo real de
+            // 48px. Es el motivo por el que el ERP tiene navegador propio, así
+            // que esconderla a dos toques dentro del menú la degradaría.
+            if (_isAliExpressPage && compactBrowserChrome)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    key: const ValueKey('browser-aliexpress-daily-compact'),
+                    onPressed: canUseWebView && !_isAliExpressImportRunning
+                        ? _startAliExpressDailyImport
+                        : null,
+                    icon: _isAliExpressImportRunning
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.receipt_long_outlined, size: 18),
+                    label: Text(
+                      _isAliExpressImportRunning
+                          ? 'Reuniendo compras…'
+                          : 'Compras del día',
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                    ),
+                  ),
+                ),
+              ),
             if (_showFavoritesBar && _bookmarkEntries.isNotEmpty)
               _buildFavoritesBar(context),
             if (addressSuggestions.isNotEmpty)
