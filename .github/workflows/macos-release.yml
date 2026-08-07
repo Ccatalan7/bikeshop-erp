@@ -133,11 +133,14 @@ jobs:
           --run-attempt '${{ inputs.integrity_run_attempt }}'
 
   build:
-    if: ${{ always() && !cancelled() && inputs.release_target != 'android' && needs.source-guard.result == 'success' && ((inputs.integrity_run_id == '' && needs.integrity.result == 'success') || (inputs.integrity_run_id != '' && needs.qualification.result == 'success')) }}
+    # Compilar no espera al gate: arranca junto con él. Publicar sí lo exige,
+    # y eso ocurre en el job `publish`, que sigue dependiendo de la
+    # calificación. Si el gate falla sólo se gastó CPU compilando; el artefacto
+    # no sale (2026-08-07).
+    if: ${{ always() && !cancelled() && inputs.release_target != 'android' && needs.source-guard.result == 'success' && (inputs.integrity_run_id != '' || needs.integrity.result == 'success') }}
     needs:
       - source-guard
       - integrity
-      - qualification
     name: Build, verify, and package macOS app
     runs-on: macos-15
     outputs:
@@ -328,8 +331,11 @@ jobs:
           retention-days: 7
 
   publish:
-    if: ${{ always() && !cancelled() && needs.build.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.release_target != 'android' && inputs.publish_release == true }}
-    needs: build
+    # La calificación se exige aquí, que es donde el artefacto se hace público.
+    if: ${{ always() && !cancelled() && needs.build.result == 'success' && (inputs.integrity_run_id == '' || needs.qualification.result == 'success') && github.event_name == 'workflow_dispatch' && inputs.release_target != 'android' && inputs.publish_release == true }}
+    needs:
+      - build
+      - qualification
     name: Publish verified coworker update
     runs-on: ubuntu-latest
     environment: Production

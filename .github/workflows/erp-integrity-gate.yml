@@ -75,6 +75,61 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
 
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.5"
+          channel: stable
+          cache: true
+
+      - name: Cache resolved Dart packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Run this shard of the Flutter suite
+        env:
+          FLUTTER_TEST_SHARD_INDEX: ${{ matrix.shard }}
+          FLUTTER_TEST_SHARD_TOTAL: ${{ strategy.job-total }}
+        run: bash scripts/run_flutter_test_gate.sh flutter
+
+  checks:
+    # Analyze, la compilación web y los contratos no dependen de las
+    # pruebas: corren al lado de ellas, no dentro de una parte. Colgados de
+    # la parte 0 la volvían el cuello de botella del gate completo.
+    name: Static analysis and packaged web build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Bind a dispatched qualification to this workflow source
+        if: ${{ inputs.expected_commit != '' }}
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'The requested integrity source binding is invalid.' >&2
+            exit 1
+          fi
+          if [[ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo 'The integrity workflow source does not match the requested commit.' >&2
+            exit 1
+          fi
+          echo 'The ERP Integrity Gate is bound to the requested commit.'
+
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
       - name: Set up Node for packaged web assets
         uses: actions/setup-node@v4
         with:
@@ -82,7 +137,6 @@ jobs:
           cache: npm
 
       - name: Test desktop release metadata helpers
-        if: ${{ matrix.shard == 0 }}
         run: node --test scripts/releases/*.test.mjs
 
       - name: Build packaged spreadsheet engine
@@ -114,21 +168,12 @@ jobs:
         run: flutter pub get
 
       - name: Verify canonical UI guidance contract
-        if: ${{ matrix.shard == 0 }}
         run: flutter test test/unit/ui_guidance_contract_test.dart
 
       - name: Analyze without increasing the existing warning baseline
-        if: ${{ matrix.shard == 0 }}
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib test
 
-      - name: Run this shard of the Flutter suite
-        env:
-          FLUTTER_TEST_SHARD_INDEX: ${{ matrix.shard }}
-          FLUTTER_TEST_SHARD_TOTAL: ${{ strategy.job-total }}
-        run: bash scripts/run_flutter_test_gate.sh flutter
-
       - name: Compile ERP web release
-        if: ${{ matrix.shard == 0 }}
         run: >-
           flutter build web --release --no-wasm-dry-run
           --dart-define=STORE_PERF_LOGS=true

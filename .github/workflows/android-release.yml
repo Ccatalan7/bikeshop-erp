@@ -132,11 +132,16 @@ jobs:
           --run-attempt '${{ inputs.integrity_run_attempt }}'
 
   publish:
-    if: ${{ always() && !cancelled() && inputs.publish_release == true && needs.source-guard.result == 'success' && ((inputs.integrity_run_id == '' && needs.integrity.result == 'success') || (inputs.integrity_run_id != '' && needs.qualification.result == 'success')) }}
+    # La compilación ya no espera al gate: arranca en paralelo y el propio job
+    # exige la calificación antes de firmar y subir (ver el paso «Require the
+    # integrity qualification»). Si el gate falla sólo se gastó CPU
+    # compilando; nunca se publica sin verificar (2026-08-07).
+    if: ${{ always() && !cancelled() && inputs.publish_release == true && needs.source-guard.result == 'success' }}
     needs:
       - source-guard
+      # `integrity` se conserva para la variante sin calificación externa, donde
+      # el gate corre dentro de este mismo workflow y sí debe preceder al build.
       - integrity
-      - qualification
     name: Build, sign, and publish protected Android update
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -335,6 +340,23 @@ jobs:
           keystore_bytes="$(stat -c '%s' "$keystore")"
           if (( keystore_bytes < 256 || keystore_bytes > 1048576 )); then
             echo 'The protected Android release keystore has an invalid size.' >&2
+            exit 1
+          fi
+
+      # Puerta real de publicación: el artefacto no sale sin una calificación
+      # exitosa para este mismo SHA. Antes esto bloqueaba el arranque del job
+      # entero y por eso el build no empezaba hasta terminar el gate.
+      - name: Require the integrity qualification before publishing
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ -n '${{ inputs.integrity_run_id }}' ]]; then
+            node scripts/releases/verify_integrity_qualification.mjs \
+              --run-id '${{ inputs.integrity_run_id }}' \
+              --run-attempt '${{ inputs.integrity_run_attempt }}'
+          elif [[ '${{ needs.integrity.result }}' != 'success' ]]; then
+            echo 'The in-workflow integrity job did not succeed.' >&2
             exit 1
           fi
 
