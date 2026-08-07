@@ -44,6 +44,17 @@ Cuatro reglas que cuestan un intento fallido cada una si se ignoran:
 4. Los `change_NNN` se leen del inventario del rango, no se inventan:
    `collectReleaseInventory(...)` + `createCodexReleaseContext(inv).changes`.
 
+5. **El gate mide qué tan concreta es la nota, no sólo su forma.** Rechaza con
+   «AI release notes are too generic» si los ítems no nombran algo observable.
+   Cada ítem se valida contra dos vocabularios de `generate_release_notes.mjs`:
+   el del módulo (`CONCRETE_RELEASE_LANGUAGE`, p. ej. en `general`: botones,
+   ventanas, listas, notificaciones, búsqueda, descargas) y el de conducta
+   visible (`USER_OBSERVABLE_RELEASE_LANGUAGE`: ahora, puedes, muestra, avisa,
+   elige, móvil…), con un mínimo de 6 palabras. En una publicación con dos o
+   más commits, **la mitad de los ítems y al menos dos deben pasar**. Escribir
+   «se mejoró el flujo» nunca pasa; «Ahora el menú del móvil incorpora un botón
+   para abrir otro espacio de trabajo» sí, y además se entiende.
+
 Antes de gastar una publicación, valida el candidato en seco con
 `acceptCodexReleaseEnvelope(envelope, {inventory})`: devuelve `source: "ai"`
 cuando pasa, y el motivo exacto cuando no.
