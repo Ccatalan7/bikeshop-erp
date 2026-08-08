@@ -72,7 +72,7 @@ void main() {
     final qualification = task('✅ Qualify ERP Update (exact SHA)');
     expect(
       qualification['command'],
-      'node scripts/releases/qualify_erp_update.mjs --prepared-state auto',
+      'node scripts/releases/qualify_erp_update.mjs --prepared-state auto --dispatch-only',
     );
     expect(qualification['hide'], isTrue);
     expect(

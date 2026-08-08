@@ -117,6 +117,21 @@ String buildBrowserWorkspaceRoute({
   ).toString();
 }
 
+/// Whether a browser URL is safe and useful to restore as an ERP workspace.
+///
+/// AliExpress can expose an image-CDN URL as Android's provisional
+/// `onCreateWindow` request URL. Old builds persisted that transport hint as a
+/// real tab, so the broken image surface survived app updates indefinitely.
+/// Keep this exclusion deliberately host-specific: ordinary image pages and
+/// every other HTTP(S) workspace remain restorable.
+bool isRestorableBrowserWorkspaceUri(Uri uri) {
+  if (uri.scheme != 'http' && uri.scheme != 'https') return false;
+  final host = uri.host.toLowerCase();
+  if (host.isEmpty) return false;
+  return host != 'aliexpress-media.com' &&
+      !host.endsWith('.aliexpress-media.com');
+}
+
 String inferWorkspaceModuleRoot(String route) {
   final path = workspaceRoutePath(route);
   const moduleRoots = [
@@ -625,14 +640,26 @@ class WorkspaceManager extends ChangeNotifier {
           .whereType<String>()
           .toSet();
       final restored = <Workspace>[];
+      final restoredByStoredIndex = <int, Workspace>{};
+      var discardedStoredTab = false;
 
-      for (final value in storedTabs) {
-        if (_workspaces.length >= maxWorkspaces) break;
-        if (value is! Map) continue;
+      for (var storedIndex = 0;
+          storedIndex < storedTabs.length;
+          storedIndex += 1) {
+        if (_workspaces.length >= maxWorkspaces) {
+          discardedStoredTab = true;
+          break;
+        }
+        final value = storedTabs[storedIndex];
+        if (value is! Map) {
+          discardedStoredTab = true;
+          continue;
+        }
 
         final url = value['url']?.toString().trim() ?? '';
         final uri = Uri.tryParse(url);
-        if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+        if (uri == null || !isRestorableBrowserWorkspaceUri(uri)) {
+          discardedStoredTab = true;
           continue;
         }
         if (existingUrls.remove(uri.toString())) continue;
@@ -652,6 +679,7 @@ class WorkspaceManager extends ChangeNotifier {
           isHydrated: false,
         );
         restored.add(workspace);
+        restoredByStoredIndex[storedIndex] = workspace;
       }
 
       if (restored.isNotEmpty) {
@@ -671,18 +699,36 @@ class WorkspaceManager extends ChangeNotifier {
           decoded['activeWasBrowser'] == true &&
           restored.isNotEmpty) {
         final storedIndex = decoded['activeBrowserIndex'];
-        final browserIndex = storedIndex is int
-            ? storedIndex.clamp(0, restored.length - 1)
-            : restored.length - 1;
-        final activeWorkspace = restored[browserIndex];
-        _activeIndex = _workspaces.indexOf(activeWorkspace);
-        activeWorkspace.isHydrated = true;
+        final activeWorkspace = storedIndex is int
+            ? restoredByStoredIndex[storedIndex]
+            : restored.last;
+        if (activeWorkspace != null) {
+          _activeIndex = _workspaces.indexOf(activeWorkspace);
+          activeWorkspace.isHydrated = true;
+        } else if (previouslyActiveId != null) {
+          final restoredActiveIndex = _workspaces.indexWhere(
+            (workspace) => workspace.id == previouslyActiveId,
+          );
+          if (restoredActiveIndex >= 0) _activeIndex = restoredActiveIndex;
+        }
       } else if (previouslyActiveId != null) {
         final restoredActiveIndex = _workspaces.indexWhere(
           (workspace) => workspace.id == previouslyActiveId,
         );
         if (restoredActiveIndex >= 0) {
           _activeIndex = restoredActiveIndex;
+        }
+      }
+
+      if (discardedStoredTab && generation == _sessionGeneration) {
+        final hasRestorableTabs = _persistableBrowserWorkspaces().isNotEmpty;
+        if (hasRestorableTabs) {
+          await prefs.setString(
+            _browserSessionStorageKey,
+            _browserSessionPayload(),
+          );
+        } else {
+          await prefs.remove(_browserSessionStorageKey);
         }
       }
     } catch (error) {
@@ -709,13 +755,7 @@ class WorkspaceManager extends ChangeNotifier {
   }
 
   String _browserSessionPayload() {
-    final browserWorkspaces = _workspaces
-        .where((workspace) => workspace.isBrowserWorkspace)
-        .where((workspace) {
-      final url = _browserUrlForWorkspace(workspace);
-      final uri = url == null ? null : Uri.tryParse(url);
-      return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
-    }).toList(growable: false);
+    final browserWorkspaces = _persistableBrowserWorkspaces();
     final active = activeWorkspace;
     final activeBrowserIndex = active == null
         ? -1
@@ -737,6 +777,14 @@ class WorkspaceManager extends ChangeNotifier {
     });
   }
 
+  List<Workspace> _persistableBrowserWorkspaces() => _workspaces
+          .where((workspace) => workspace.isBrowserWorkspace)
+          .where((workspace) {
+        final url = _browserUrlForWorkspace(workspace);
+        final uri = url == null ? null : Uri.tryParse(url);
+        return uri != null && isRestorableBrowserWorkspaceUri(uri);
+      }).toList(growable: false);
+
   void _scheduleBrowserSessionPersist() {
     if (_isRestoringBrowserSession || !_isInitialized) return;
     _browserSessionPersistTimer?.cancel();
@@ -752,8 +800,7 @@ class WorkspaceManager extends ChangeNotifier {
 
     final storageKey = _browserSessionStorageKey;
     final payload = _browserSessionPayload();
-    final hasBrowserWorkspaces =
-        _workspaces.any((workspace) => workspace.isBrowserWorkspace);
+    final hasBrowserWorkspaces = _persistableBrowserWorkspaces().isNotEmpty;
 
     _browserSessionPersistTail = _browserSessionPersistTail.then((_) async {
       try {

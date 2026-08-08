@@ -133,10 +133,10 @@ jobs:
           --wait-seconds '2400'
 
   publish:
-    # La compilación ya no espera al gate: arranca en paralelo y el propio job
-    # exige la calificación antes de firmar y subir (ver el paso «Require the
-    # integrity qualification»). Si el gate falla sólo se gastó CPU
-    # compilando; nunca se publica sin verificar (2026-08-07).
+    # La compilación ya no espera al gate: arranca en paralelo y el publicador
+    # exige la calificación después de construir/firmar localmente, pero antes
+    # de la primera escritura remota. Si falla sólo se gastó CPU; nunca se
+    # publica sin verificar (2026-08-07).
     if: ${{ always() && !cancelled() && inputs.publish_release == true && needs.source-guard.result == 'success' }}
     needs:
       - source-guard
@@ -149,8 +149,8 @@ jobs:
       # una puerta— y la compilación arrancaba diez minutos tarde. El 2026-08-07
       # Android tardó 18 min 29 s con esa dependencia y macOS, que sólo depende
       # de `source-guard`, 13 min 58 s en la misma publicación. La exigencia
-      # vive en el paso «Require the integrity qualification», que espera al run
-      # en vuelo justo antes de firmar y subir.
+      # vive dentro del publicador protegido, después del build y justo antes
+      # de la primera escritura a Storage.
       - integrity
     name: Build, sign, and publish protected Android update
     runs-on: ubuntu-latest
@@ -353,30 +353,16 @@ jobs:
             exit 1
           fi
 
-      # Puerta real de publicación: el artefacto no sale sin una calificación
-      # exitosa para este mismo SHA. Antes esto bloqueaba el arranque del job
-      # entero y por eso el build no empezaba hasta terminar el gate.
-      - name: Require the integrity qualification before publishing
+      - name: Build, sign, qualify, upload, and verify the Android release
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if [[ -n '${{ inputs.integrity_run_id }}' ]]; then
-            node scripts/releases/verify_integrity_qualification.mjs \
-              --run-id '${{ inputs.integrity_run_id }}' \
-              --run-attempt '${{ inputs.integrity_run_attempt }}' \
-              --wait-seconds '2400'
-          elif [[ '${{ needs.integrity.result }}' != 'success' ]]; then
-            echo 'The in-workflow integrity job did not succeed.' >&2
-            exit 1
-          fi
-
-      - name: Build, sign, upload, and verify the Android release
-        env:
           VINABIKE_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/android-release.jks
           VINABIKE_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
           VINABIKE_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
           VINABIKE_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          VINABIKE_ANDROID_INTEGRITY_RUN_ID: ${{ inputs.integrity_run_id }}
+          VINABIKE_ANDROID_INTEGRITY_RUN_ATTEMPT: ${{ inputs.integrity_run_attempt }}
+          VINABIKE_ANDROID_INTEGRITY_RESULT: ${{ needs.integrity.result }}
           SUPABASE_RELEASE_SECRET: ${{ secrets.SUPABASE_RELEASE_SECRET }}
           VINABIKE_ANDROID_RELEASE_NOTES_PATH: ${{ runner.temp }}/android-release-notes.json
           VINABIKE_ANDROID_RELEASE_NOTES_FROM_COMMIT: ${{ steps.notes-base.outputs.commit }}

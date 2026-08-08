@@ -59,7 +59,7 @@ cd "$PROJECT_ROOT"
 
 for required in \
   awk base64 cat chmod cp curl date dd dirname find git head jq keytool mktemp \
-  mv perl rm sed shasum sleep sort stat tail tr; do
+  mv node perl rm sed shasum sleep sort stat tail tr; do
   if ! command -v "$required" >/dev/null 2>&1; then
     echo "$required is required." >&2
     exit 127
@@ -492,6 +492,39 @@ write_release_evidence() {
   mv -f "$temporary_evidence" "$RELEASE_EVIDENCE_PATH"
 }
 
+require_integrity_qualification_before_publication() {
+  local integrity_run_id="${VINABIKE_ANDROID_INTEGRITY_RUN_ID:-}"
+  local integrity_run_attempt="${VINABIKE_ANDROID_INTEGRITY_RUN_ATTEMPT:-}"
+  local in_workflow_result="${VINABIKE_ANDROID_INTEGRITY_RESULT:-}"
+
+  if [[ -z "$CI_EXACT_SHA" ]]; then
+    return
+  fi
+
+  if [[ -n "$integrity_run_id" ]]; then
+    if [[
+      ! "$integrity_run_id" =~ ^[0-9]+$ ||
+      ! "$integrity_run_attempt" =~ ^[0-9]+$
+    ]]; then
+      echo 'The protected Android integrity qualification reference is invalid.' >&2
+      exit 65
+    fi
+    [[ -n "${GITHUB_TOKEN:-}" ]] || {
+      echo 'GITHUB_TOKEN is required to verify Android integrity.' >&2
+      exit 66
+    }
+    node scripts/releases/verify_integrity_qualification.mjs \
+      --run-id "$integrity_run_id" \
+      --run-attempt "$integrity_run_attempt" \
+      --wait-seconds '2400'
+  elif [[ "$in_workflow_result" != 'success' ]]; then
+    echo 'The in-workflow integrity job did not succeed.' >&2
+    exit 1
+  fi
+
+  echo 'The exact-SHA integrity qualification permits Android publication.'
+}
+
 prepare_ci_version() {
   if [[
     "$LATEST_ANDROID_COMMIT" == "$CI_EXACT_SHA" &&
@@ -892,6 +925,13 @@ jq -n \
     release_notes: $release_notes,
     commit: $commit
   }' > "$MANIFEST_PATH"
+
+# Everything above this point is read-only against production: it resolves the
+# next monotonic version, builds/signs the APK and prepares immutable evidence
+# locally. The exact-SHA gate is deliberately awaited only now, immediately
+# before the first possible storage mutation, so CI compilation overlaps the
+# integrity run without weakening the publication boundary (2026-08-07).
+require_integrity_qualification_before_publication
 
 download_private_object_if_present() {
   local object_path="$1"

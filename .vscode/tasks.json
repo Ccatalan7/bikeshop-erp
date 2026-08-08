@@ -123,7 +123,7 @@
 		{
 			"label": "✅ Qualify ERP Update (exact SHA)",
 			"type": "shell",
-			"command": "node scripts/releases/qualify_erp_update.mjs --prepared-state auto",
+			"command": "node scripts/releases/qualify_erp_update.mjs --prepared-state auto --dispatch-only",
 			"problemMatcher": [],
 			"hide": true,
 			"runOptions": {

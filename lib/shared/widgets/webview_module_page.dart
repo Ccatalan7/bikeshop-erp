@@ -3837,6 +3837,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     // página suelta del popup. Es la causa del login roto de AliExpress en el
     // teléfono (2026-08-07).
     final features = createWindowAction.windowFeatures;
+    final dispositionSupport = currentBrowserPopupDispositionSupport;
     if (shouldHostPopupWindow(
       url: url?.toString(),
       navigationType: createWindowAction.navigationType?.toString(),
@@ -3845,25 +3846,17 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       height: features?.height,
       toolbarsVisibility: features?.toolbarsVisibility,
       menuBarVisibility: features?.menuBarVisibility,
+      dispositionSupport: dispositionSupport,
     )) {
-      final windowId = createWindowAction.windowId;
-      final navigator = Navigator.of(context, rootNavigator: true);
-      unawaited(
-        navigator.push(
-          MaterialPageRoute<void>(
-            fullscreenDialog: true,
-            builder: (_) => BrowserPopupWindow(
-              windowId: windowId,
-              settings: _browserSettings(
-                _browserZoom(context),
-                compact: ResponsiveViewport.usesCompactShell(context),
-              ),
-              initialHost: url?.host,
-            ),
-          ),
+      return hostBrowserPopupWindow(
+        context: context,
+        action: createWindowAction,
+        settings: _browserSettings(
+          _browserZoom(context),
+          compact: ResponsiveViewport.usesCompactShell(context),
         ),
+        dispositionSupport: dispositionSupport,
       );
-      return true;
     }
 
     if (url == null) return false;

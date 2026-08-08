@@ -1,5 +1,25 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
+/// Calidad de las señales que entrega la plataforma para una ventana nueva.
+///
+/// Android sólo garantiza el [CreateWindowAction.windowId] y el transporte al
+/// WebView hijo. La URL puede ser `null`, `about:blank` o incluso la imagen que
+/// estaba bajo el dedo, y no entrega de forma fiable navigationType/features.
+/// Tratar esos campos como intención de navegación separa el popup de su
+/// `window.opener` y rompe los inicios de sesión.
+enum BrowserPopupDispositionSupport {
+  androidTransportOnly,
+  reliableHints,
+}
+
+BrowserPopupDispositionSupport get currentBrowserPopupDispositionSupport =>
+    defaultTargetPlatform == TargetPlatform.android
+        ? BrowserPopupDispositionSupport.androidTransportOnly
+        : BrowserPopupDispositionSupport.reliableHints;
 
 /// Ventana emergente que conserva su ventana madre.
 ///
@@ -33,13 +53,65 @@ bool shouldHostPopupWindow({
   double? height,
   bool? toolbarsVisibility,
   bool? menuBarVisibility,
+  BrowserPopupDispositionSupport dispositionSupport =
+      BrowserPopupDispositionSupport.reliableHints,
 }) {
+  if (dispositionSupport ==
+      BrowserPopupDispositionSupport.androidTransportOnly) {
+    return true;
+  }
+
   final target = url?.trim() ?? '';
   if (target.isEmpty || target == 'about:blank') return true;
   if (isDialog == true) return true;
   if ((width ?? 0) > 0 || (height ?? 0) > 0) return true;
   if (toolbarsVisibility == false || menuBarVisibility == false) return true;
   return navigationType != 'LINK_ACTIVATED';
+}
+
+/// Host inicial que es seguro mostrar antes de que el WebView hijo navegue.
+///
+/// En Android la URL de la solicitud no identifica necesariamente la ventana
+/// hija. El título se adopta de `onLoadStart/onLoadStop`, cuando ya pertenece
+/// al WebView correcto.
+String? browserPopupInitialHost({
+  required String? requestUrl,
+  BrowserPopupDispositionSupport dispositionSupport =
+      BrowserPopupDispositionSupport.reliableHints,
+}) {
+  if (dispositionSupport ==
+      BrowserPopupDispositionSupport.androidTransportOnly) {
+    return null;
+  }
+  final uri = Uri.tryParse(requestUrl?.trim() ?? '');
+  return uri?.host.isNotEmpty == true ? uri!.host : null;
+}
+
+/// Único owner que hospeda una ventana hija preservando su `windowId`.
+bool hostBrowserPopupWindow({
+  required BuildContext context,
+  required CreateWindowAction action,
+  required InAppWebViewSettings settings,
+  BrowserPopupDispositionSupport? dispositionSupport,
+}) {
+  final support = dispositionSupport ?? currentBrowserPopupDispositionSupport;
+  final navigator = Navigator.of(context, rootNavigator: true);
+  unawaited(
+    navigator.push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => BrowserPopupWindow(
+          windowId: action.windowId,
+          settings: settings,
+          initialHost: browserPopupInitialHost(
+            requestUrl: action.request.url?.toString(),
+            dispositionSupport: support,
+          ),
+        ),
+      ),
+    ),
+  );
+  return true;
 }
 
 class BrowserPopupWindow extends StatefulWidget {
@@ -100,6 +172,14 @@ class _BrowserPopupWindowState extends State<BrowserPopupWindow> {
       body: InAppWebView(
         windowId: widget.windowId,
         initialSettings: widget.settings,
+        // Un proveedor de identidad puede encadenar más de una ventana. Cada
+        // hija conserva el opener de la anterior en vez de convertirse en una
+        // pestaña independiente del ERP.
+        onCreateWindow: (_, action) async => hostBrowserPopupWindow(
+          context: context,
+          action: action,
+          settings: widget.settings,
+        ),
         onLoadStart: (_, url) {
           _adoptUrl(url);
           if (mounted && !_isLoading) setState(() => _isLoading = true);

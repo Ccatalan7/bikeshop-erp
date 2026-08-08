@@ -167,9 +167,9 @@ void main() {
     // La exigencia del gate NO puede vivir en `needs` de este job: `needs` es
     // una espera, y nombrar ahí a `qualification` hacía que la compilación
     // arrancara recién cuando el gate terminaba (medido el 2026-08-07: 18 min
-    // 29 s contra los 13 min 58 s de macOS en la misma publicación). Vive en un
-    // paso propio que espera al run en vuelo, inmediatamente antes de firmar y
-    // subir.
+    // 29 s contra los 13 min 58 s de macOS en la misma publicación). Vive en
+    // una fase propia del publicador que espera al run en vuelo después del
+    // build local y justo antes de la primera escritura remota.
     final publishJob = workflow.indexOf('\n  publish:');
     final publishNeeds = workflow.indexOf('needs:', publishJob);
     final publishSteps = workflow.indexOf('steps:', publishJob);
@@ -181,18 +181,16 @@ void main() {
       workflow.substring(publishJob, publishNeeds),
       isNot(contains('needs.qualification.result')),
     );
-    final qualificationGate = workflow.indexOf(
-      'verify_integrity_qualification.mjs',
-      publishSteps,
-    );
     final signedUpload = workflow.indexOf(
-      'Build, sign, upload, and verify the Android release',
+      'Build, sign, qualify, upload, and verify the Android release',
       publishSteps,
     );
-    expect(qualificationGate, greaterThan(publishSteps));
-    expect(signedUpload, greaterThan(qualificationGate));
+    expect(signedUpload, greaterThan(publishSteps));
     expect(workflow, contains("--wait-seconds '2400'"));
     expect(workflow, contains('verify_integrity_qualification.mjs'));
+    expect(workflow, contains('VINABIKE_ANDROID_INTEGRITY_RUN_ID:'));
+    expect(workflow, contains('VINABIKE_ANDROID_INTEGRITY_RUN_ATTEMPT:'));
+    expect(workflow, contains('VINABIKE_ANDROID_INTEGRITY_RESULT:'));
     expect(workflow, contains('actions: read'));
     expect(workflow, contains('contents: read'));
     expect(workflow, isNot(contains('contents: write')));
@@ -275,6 +273,26 @@ void main() {
     expect(
       publisher,
       contains(r'and .version_code == (.build_number + 2000)'),
+    );
+    final build = publisher.indexOf(r'"${FLUTTER_COMMAND[@]}" build apk');
+    final integrityGate = publisher.lastIndexOf(
+      'require_integrity_qualification_before_publication',
+    );
+    final firstRemoteMutation = publisher.indexOf(
+      r'for part_array_index in "${!APK_PART_FILES[@]}"',
+    );
+    expect(build, greaterThanOrEqualTo(0));
+    expect(integrityGate, greaterThan(build));
+    expect(firstRemoteMutation, greaterThan(integrityGate));
+    expect(
+      publisher.substring(build, integrityGate),
+      contains('APKSIGNER_OUTPUT'),
+      reason: 'The signed APK must be verified before waiting on integrity.',
+    );
+    expect(
+      publisher.substring(integrityGate, firstRemoteMutation),
+      isNot(contains('upload_object ')),
+      reason: 'No storage mutation may occur before the exact-SHA gate.',
     );
     expect(publisher, contains('--argjson build_number "\$VERSION_CODE"'));
     expect(publisher, contains('--argjson version_code "\$APK_VERSION_CODE"'));

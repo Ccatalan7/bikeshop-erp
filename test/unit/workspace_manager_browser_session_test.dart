@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vinabike_erp/shared/services/workspace_manager.dart';
@@ -142,5 +144,110 @@ void main() {
       (workspace) => workspace.isBrowserWorkspace,
     );
     expect(browser.isHydrated, isFalse);
+  });
+
+  test('discarded AliExpress media tab is removed without stealing focus',
+      () async {
+    const storageKey = 'vinabike_browser_workspace_session_v1::staff-sanitize';
+    SharedPreferences.setMockInitialValues({
+      storageKey: jsonEncode({
+        'version': 1,
+        'activeWasBrowser': true,
+        'activeBrowserIndex': 0,
+        'tabs': [
+          {
+            'url':
+                'https://ae-pic-a1.aliexpress-media.com/kf/example-image.jpg',
+            'title': 'Imagen',
+            'isPinned': false,
+          },
+          {
+            'url': 'https://www.aliexpress.com/account',
+            'title': 'AliExpress',
+            'isPinned': false,
+          },
+        ],
+      }),
+    });
+
+    final restored = WorkspaceManager(sessionIdentity: 'staff-sanitize');
+    await restored.browserSessionReady;
+
+    expect(restored.activeWorkspace?.currentRoute, '/dashboard');
+    expect(
+      restored.workspaces.any(
+        (workspace) =>
+            workspace.browserUrl?.contains('aliexpress-media.com') == true,
+      ),
+      isFalse,
+    );
+    final retained = restored.workspaces.singleWhere(
+      (workspace) =>
+          workspace.browserUrl == 'https://www.aliexpress.com/account',
+    );
+    expect(retained.isHydrated, isFalse);
+
+    final prefs = await SharedPreferences.getInstance();
+    final sanitized = jsonDecode(prefs.getString(storageKey)!) as Map;
+    expect(sanitized['activeWasBrowser'], isFalse);
+    expect((sanitized['tabs'] as List), hasLength(1));
+    expect(
+      ((sanitized['tabs'] as List).single as Map)['url'],
+      'https://www.aliexpress.com/account',
+    );
+  });
+
+  test('restore keeps the original active index after sanitizing earlier tabs',
+      () async {
+    const storageKey = 'vinabike_browser_workspace_session_v1::staff-index-map';
+    SharedPreferences.setMockInitialValues({
+      storageKey: jsonEncode({
+        'version': 1,
+        'activeWasBrowser': true,
+        'activeBrowserIndex': 1,
+        'tabs': [
+          {
+            'url': 'https://ae-pic-a1.aliexpress-media.com/kf/stale.jpg',
+            'title': 'Stale',
+            'isPinned': false,
+          },
+          {
+            'url': 'https://first.example',
+            'title': 'First',
+            'isPinned': false,
+          },
+          {
+            'url': 'https://second.example',
+            'title': 'Second',
+            'isPinned': false,
+          },
+        ],
+      }),
+    });
+
+    final restored = WorkspaceManager(sessionIdentity: 'staff-index-map');
+    await restored.browserSessionReady;
+
+    expect(restored.activeWorkspace?.browserUrl, 'https://first.example');
+    expect(restored.activeWorkspace?.isHydrated, isTrue);
+  });
+
+  test('restore exclusion is narrow to the AliExpress media CDN', () {
+    expect(
+      isRestorableBrowserWorkspaceUri(
+        Uri.parse('https://ae-pic-a1.aliexpress-media.com/kf/image.jpg'),
+      ),
+      isFalse,
+    );
+    expect(
+      isRestorableBrowserWorkspaceUri(
+        Uri.parse('https://images.example.com/product.jpg'),
+      ),
+      isTrue,
+    );
+    expect(
+      isRestorableBrowserWorkspaceUri(Uri.parse('file:///tmp/image.jpg')),
+      isFalse,
+    );
   });
 }

@@ -138,12 +138,16 @@ que ir antes de subir, termina yendo antes de compilar, y la espera al gate
 vuelve al camino crítico aunque el job arranque de inmediato. macOS no lo sufre
 porque `build` y `publish` son jobs distintos: sólo el segundo espera.
 
-Lo que falta, y es lo único que queda: **partir ese paso** en compilar+firmar /
-verificar / subir+verificar, de modo que la espera al gate caiga entre la
-compilación y la subida. Con los 8 min de build solapados contra los ~10 del
-gate, Android debería terminar cerca de los 12, como macOS. No se hizo en la
-misma ronda a propósito: toca la firma y la subida del APK, y merece su propia
-atención en vez de ir de apuro al final de otra cosa.
+**Corregido el 2026-08-07:** el publicador Android ahora separa sus fases dentro
+del mismo proceso protegido: resuelve la versión, compila, firma y valida el APK
+localmente; después espera la calificación exacta; y sólo entonces permite la
+primera escritura a Storage y verifica el read-back. La clave es que el gate no
+protege el gasto local de CPU: protege la mutación de producción. Si falla, el
+APK construido se descarta sin subir nada. Los contratos fijan el orden
+`flutter build` → firma verificada → gate exact-SHA → primera subida, por lo que
+no se puede volver a adelantar una escritura remota ni poner la espera delante
+del build por accidente. La medición real de esta publicación debe reemplazar
+cualquier estimación anterior.
 
 Cómo se corre el camino rápido:
 

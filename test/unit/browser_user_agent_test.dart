@@ -100,5 +100,34 @@ void main() {
         isFalse,
       );
     });
+
+    test('Android hospeda la hija aun cuando sus hints parecen un enlace', () {
+      expect(
+        shouldHostPopupWindow(
+          url: 'https://ae-pic-a1.aliexpress-media.com/kf/example.jpg',
+          navigationType: 'LINK_ACTIVATED',
+          dispositionSupport:
+              BrowserPopupDispositionSupport.androidTransportOnly,
+        ),
+        isTrue,
+      );
+    });
+
+    test('Android no usa la URL provisional como título del popup', () {
+      expect(
+        browserPopupInitialHost(
+          requestUrl: 'https://ae-pic-a1.aliexpress-media.com/kf/example.jpg',
+          dispositionSupport:
+              BrowserPopupDispositionSupport.androidTransportOnly,
+        ),
+        isNull,
+      );
+      expect(
+        browserPopupInitialHost(
+          requestUrl: 'https://accounts.google.com/signin',
+        ),
+        'accounts.google.com',
+      );
+    });
   });
 }
