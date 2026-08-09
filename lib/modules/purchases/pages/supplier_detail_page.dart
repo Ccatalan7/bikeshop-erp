@@ -137,7 +137,7 @@ class SupplierDetailPage extends StatefulWidget {
 enum _SupplierDetailSection {
   summary('Resumen'),
   identity('Identidad'),
-  classification('Clasificación'),
+  classification('Para qué lo usamos'),
   relationships('Relaciones'),
   accounting('Criterios contables'),
   access('Accesos'),
@@ -1031,7 +1031,7 @@ String _partyKindLabel(ExternalPartyKind kind) => switch (kind) {
       ExternalPartyKind.organization => 'Organización',
       ExternalPartyKind.person => 'Persona',
       ExternalPartyKind.publicAuthority => 'Organismo público',
-      ExternalPartyKind.other => 'Otro',
+      ExternalPartyKind.other => 'Sin especificar',
     };
 
 class _SupplierSummarySection extends StatelessWidget {
@@ -1420,7 +1420,7 @@ class _SupplierIdentitySection extends StatelessWidget {
         (label: 'Razón social', value: party.legalName!),
       if (_present(party.tradeName))
         (label: 'Nombre comercial', value: party.tradeName!),
-      (label: 'Tipo de contraparte', value: _partyKindLabel(party.kind)),
+      (label: 'Tipo de entidad', value: _partyKindLabel(party.kind)),
       if (identifier != null)
         (label: 'Identificador tributario', value: identifier.value),
       if (_present(party.countryCode))
@@ -1442,7 +1442,7 @@ class _SupplierIdentitySection extends StatelessWidget {
       children: [
         const _SupplierSectionHeading(
           title: 'Identidad',
-          description: 'Quién es la contraparte y cómo la contacta el taller.',
+          description: 'Datos legales y de contacto de este proveedor.',
         ),
         const _SupplierBlockLabel('Datos vigentes'),
         const SizedBox(height: 7),
@@ -1472,42 +1472,34 @@ class _SupplierClassificationSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final relationship = profile.relationship;
     final signal = profile.attentionSignals?.classificationStatus;
-    final groups = <_ClassificationGroup>[
-      _ClassificationGroup(
-        title: 'Cómo se relaciona con el taller',
-        helper: 'Abre las secciones del perfil y del editor.',
-        values: relationship.roles
-            .map((role) => _classificationLabel(role.label, 'Rol vigente'))
-            .toList(growable: false),
-      ),
-      _ClassificationGroup(
-        title: 'Qué puede hacer',
-        helper: 'Capacidades reconocidas.',
-        values: relationship.capabilities
-            .map(
-              (capability) => _classificationLabel(
-                capability.label,
-                'Capacidad vigente',
-              ),
-            )
-            .toList(growable: false),
-      ),
-      _ClassificationGroup(
-        title: 'Etiquetas',
-        helper: 'Descriptivas. No deciden ninguna cuenta.',
-        values: relationship.tags
-            .map((tag) => _classificationLabel(tag.label, 'Etiqueta vigente'))
-            .toList(growable: false),
-      ),
-    ];
-    final hasValues = groups.any((group) => group.values.isNotEmpty);
+    final purposes = relationship.roles
+        .map(
+          (role) => _relationshipPurposeLabel(
+            role.code,
+            _classificationLabel(role.label, 'Relación vigente'),
+          ),
+        )
+        .toList(growable: false);
+    final details = relationship.capabilities
+        .map(
+          (capability) => _relationshipDetailLabel(
+            capability.code,
+            _classificationLabel(capability.label, 'Detalle vigente'),
+          ),
+        )
+        .toList(growable: false);
+    final internalTags = relationship.tags
+        .where((tag) => !_systemRelationshipTagCodes.contains(tag.code))
+        .map((tag) => _classificationLabel(tag.label, 'Etiqueta interna'))
+        .toList(growable: false);
+    final hasValues = purposes.isNotEmpty || details.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _SupplierSectionHeading(
-          title: 'Clasificación',
+          title: 'Para qué lo usamos',
           description:
-              'Cómo se relaciona con el taller, qué puede hacer y cómo lo describimos.',
+              'Define dónde aparece y qué información se puede configurar. No contabiliza ni automatiza por sí sola.',
         ),
         if (signal == SupplierProfileClassificationStatus.unclassified) ...[
           const VbNotice(
@@ -1525,31 +1517,43 @@ class _SupplierClassificationSection extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-        for (final group in groups)
-          if (group.values.isNotEmpty) ...[
-            _SupplierBlockLabel(group.title),
-            const SizedBox(height: 7),
-            _SupplierPanel(
-              child: Column(
-                children: [
-                  for (var index = 0; index < group.values.length; index++)
-                    _SupplierPlainValueRow(
-                      first: index == 0,
-                      value: group.values[index],
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              group.helper,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
+        if (purposes.isNotEmpty) ...[
+          const _SupplierBlockLabel('Relaciones vigentes'),
+          const SizedBox(height: 7),
+          _SupplierPanel(
+            child: Column(
+              children: [
+                for (var index = 0; index < purposes.length; index++)
+                  _SupplierPlainValueRow(
+                    first: index == 0,
+                    value: purposes[index],
                   ),
+              ],
             ),
-            const SizedBox(height: 20),
-          ],
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (details.isNotEmpty || internalTags.isNotEmpty) ...[
+          _SupplierPanel(
+            child: Column(
+              children: [
+                if (details.isNotEmpty)
+                  _SupplierDataRow(
+                    first: true,
+                    label: 'Detalles operativos',
+                    value: details.join(' · '),
+                  ),
+                if (internalTags.isNotEmpty)
+                  _SupplierDataRow(
+                    first: details.isEmpty,
+                    label: 'Organización interna',
+                    value: internalTags.join(' · '),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
         const _SupplierBlockLabel('Naturaleza operacional'),
         const SizedBox(height: 7),
         const VbNotice(
@@ -1563,18 +1567,40 @@ class _SupplierClassificationSection extends StatelessWidget {
   }
 }
 
-@immutable
-class _ClassificationGroup {
-  const _ClassificationGroup({
-    required this.title,
-    required this.helper,
-    required this.values,
-  });
+const _systemRelationshipTagCodes = <String>{
+  'digital',
+  'transport',
+  'government',
+  'facility',
+  'recurring',
+  'essential_service',
+};
 
-  final String title;
-  final String helper;
-  final List<String> values;
-}
+String _relationshipPurposeLabel(String code, String fallback) =>
+    switch (code) {
+      'goods_vendor' => 'Bienes y repuestos',
+      'service_provider' => 'Servicios',
+      'digital_platform' => 'Servicios digitales',
+      'logistics_provider' => 'Transporte y logística',
+      'utility_provider' => 'Servicios básicos',
+      'landlord' => 'Arrendamiento',
+      'government_authority' => 'Impuestos y obligaciones públicas',
+      'operational_resource' => 'Recurso o portal operativo',
+      _ => fallback,
+    };
+
+String _relationshipDetailLabel(String code, String fallback) => switch (code) {
+      'inventory_goods' => 'Inventario y reventa',
+      'workshop_consumables' => 'Insumos de taller',
+      'freight_transport' => 'Flete o despacho',
+      'digital_services' => 'Software, dominio, red o publicidad',
+      'utilities' => 'Luz, agua u otro suministro',
+      'rent_lease' => 'Arriendo de local, inmueble o activo',
+      'tax_payments' => 'Impuestos, tasas o permisos',
+      'credential_portal' => 'Acceso, enlace o cuenta operativa',
+      'purchase_invoices' => 'Documentos de compra',
+      _ => fallback,
+    };
 
 class _SupplierPlainValueRow extends StatelessWidget {
   const _SupplierPlainValueRow({

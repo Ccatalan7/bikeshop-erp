@@ -212,6 +212,38 @@ void main() {
   });
 
   testWidgets(
+    'classification reads as one operational relationship, not three axes',
+    (tester) async {
+      final source = _FakeSupplierDetailDataSource(
+        profile: _profile(
+          tenantId: tenantId,
+          supplierId: supplierId,
+          partyId: partyId,
+          name: 'Servicio digital',
+          hasCredential: false,
+          accountingPolicyStatus: 'not_applicable',
+          recognizedDocumentCount: 0,
+          freeEngagement: true,
+        ),
+        canReadCredentialMetadata: false,
+      );
+
+      await pumpDetail(tester, source: source);
+      final sectionSelect =
+          find.byKey(const ValueKey('supplier-detail-section-select'));
+      await tester.tap(sectionSelect);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Para qué lo usamos').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Para qué lo usamos'), findsWidgets);
+      expect(find.text('Servicios digitales'), findsOneWidget);
+      expect(find.text('Qué puede hacer'), findsNothing);
+      expect(find.text('Etiquetas'), findsNothing);
+    },
+  );
+
+  testWidgets(
       'credential permission denial loads no metadata and offers no reveal',
       (tester) async {
     final source = _FakeSupplierDetailDataSource(

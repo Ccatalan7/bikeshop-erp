@@ -13,12 +13,30 @@ void main() {
 
   test('editor is identity first and has no legacy classifier or KPI UI', () {
     expect(source.indexOf("title: 'Identidad'"), greaterThan(0));
+    // Identidad va antes que la pregunta por la relación: en teléfono el
+    // nombre no puede quedar bajo una lista.
     expect(
       source.indexOf("title: 'Identidad'"),
-      lessThan(source.indexOf("title: 'Clasificación'")),
+      lessThan(source.indexOf("title: 'Relación con el taller'")),
     );
     expect(source, contains("'Nombre visible'"));
-    expect(source, contains("'Tipo de contraparte'"));
+    // T20 · la primera decisión es la relación, no el tipo legal.
+    expect(source, isNot(contains("'Tipo de contraparte'")));
+    expect(source, contains("'Tipo de entidad'"));
+    expect(source, contains("'No especificado'"));
+    expect(source, contains("'supplier-show-legal-details'"));
+    expect(source, contains("'Agregar datos legales'"));
+    expect(source, contains('¿Qué relación tenemos con este proveedor?'));
+    // Los tres ejes desaparecen de la superficie: se derivan.
+    expect(source, isNot(contains("title: 'Roles'")));
+    expect(source, isNot(contains("title: 'Capacidades'")));
+    expect(source, isNot(contains("title: 'Etiquetas internas'")));
+    expect(source, contains('_syncClassificationFromRelations'));
+    expect(source, contains('_preservedTagIds'));
+    expect(source, contains('_preservedCapabilityIds'));
+    // El control táctil es el canónico; S-06 se declara ausente, no se inventa.
+    expect(source, contains('VbShortSelect<String?>'));
+    expect(source, contains('S-06 VbSearchableSelect'));
     expect(source, contains('_selectedRoleIds.isEmpty'));
     expect(source, isNot(contains('SupplierType')));
     expect(source, isNot(contains('FilterChip(')));
@@ -48,14 +66,47 @@ void main() {
     expect(source, isNot(contains("].join('|')")));
   });
 
-  test('roles capabilities and tags are independent checkbox rows', () {
+  test('one question derives the three stored arrays', () {
+    // T20 · The operator answers once. Roles/capabilities/tags stay as storage
+    // and are derived here; the screen never presents them as three axes.
     expect(source, contains('SupplierClassificationSelection('));
     expect(source, contains('assignmentId: assignmentIds[definition.id]'));
-    expect(source, contains('Checkbox('));
+    expect(source, contains('class _SupplierRelationKind'));
+    expect(source, contains('class _RelationSubtype'));
+    expect(source, contains('_kSupplierRelationKinds'));
+
+    // Eight relations, and every subtype list stays inside the S-05 ceiling.
+    for (final label in <String>[
+      'Bienes y repuestos',
+      'Servicios',
+      'Servicios digitales',
+      'Transporte y logística',
+      'Servicios básicos',
+      'Arrendamiento',
+      'Impuestos y obligaciones públicas',
+      'Recurso o portal operativo',
+    ]) {
+      expect(source, contains("label: '$label'"));
+    }
+
+    // Every relation states its consequence in operating language.
+    expect(source, contains('consequence:'));
+    expect(source, contains('No contabiliza ni '));
+
+    // The word the owner rejected never reaches the surface.
+    expect(source, isNot(contains("'Servicio gratuito'")));
+    expect(source, isNot(contains("'Etiquetas internas'")));
+
+    // Nothing stored is destroyed just because it has no on-screen home.
+    expect(source, contains('_preservedRoleIds'));
+    expect(source, contains('_preservedCapabilityIds'));
+    expect(source, contains('_preservedTagIds'));
+    expect(source, contains('_hydrateRelationsFromSelection'));
+    expect(source, contains("roleCodes: <String>['operational_resource']"));
     expect(
-        source, contains('constraints: const BoxConstraints(minHeight: 48)'));
-    expect(source, contains("code != 'free_service'"));
-    expect(source, contains("code != 'free-service'"));
+      source,
+      isNot(contains('DropdownButtonFormField<ExternalPartyKind>')),
+    );
   });
 
   test(

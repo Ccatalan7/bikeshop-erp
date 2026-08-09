@@ -11,6 +11,7 @@ import '../../../shared/services/return_navigation.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/vb_notice.dart';
+import '../../../shared/widgets/vb_short_select.dart';
 import '../../accounting/models/account.dart';
 import '../../accounting/models/expense_category.dart';
 import '../../accounting/services/accounting_service.dart';
@@ -280,12 +281,167 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
   Object? _accountCatalogError;
   Object? _expenseCategoryCatalogError;
   bool _optionalCatalogsLoading = false;
-  ExternalPartyKind _partyKind = ExternalPartyKind.organization;
+  ExternalPartyKind _partyKind = ExternalPartyKind.other;
   bool _isActive = true;
+  bool _showLegalDetails = false;
   bool _showOptionalDetails = false;
   final Set<String> _selectedRoleIds = {};
   final Set<String> _selectedCapabilityIds = {};
   final Set<String> _selectedTagIds = {};
+
+  /// The operator's answer to the single question.
+  final List<_RelationChoice> _relationChoices = <_RelationChoice>[];
+
+  /// Assignments already stored that no relation or subtype can express.
+  /// They are never shown and never dropped: destroying data the operator
+  /// cannot see would be worse than carrying it.
+  final Set<String> _preservedRoleIds = {};
+  final Set<String> _preservedCapabilityIds = {};
+  final Set<String> _preservedTagIds = {};
+
+  /// Relations the tenant catalog can actually express. A relation whose role
+  /// codes are absent is not offered instead of being silently mapped wrong.
+  List<_SupplierRelationKind> get _supportedRelationKinds {
+    final catalog = _catalog;
+    if (catalog == null) return const <_SupplierRelationKind>[];
+    final codes = <String>{
+      for (final role in catalog.roles) role.code.toLowerCase(),
+    };
+    return _kSupplierRelationKinds
+        .where((kind) => kind.roleCodes.any(codes.contains))
+        .toList(growable: false);
+  }
+
+  String? _roleIdFor(_SupplierRelationKind kind) {
+    final catalog = _catalog;
+    if (catalog == null) return null;
+    for (final code in kind.roleCodes) {
+      for (final role in catalog.roles) {
+        if (role.code.toLowerCase() == code) return role.id;
+      }
+    }
+    return null;
+  }
+
+  String? _capabilityIdForCode(String code) {
+    final catalog = _catalog;
+    if (catalog == null) return null;
+    for (final capability in catalog.capabilities) {
+      if (capability.code.toLowerCase() == code) return capability.id;
+    }
+    return null;
+  }
+
+  /// The single write path: the answer becomes the three arrays.
+  void _syncClassificationFromRelations() {
+    _selectedRoleIds
+      ..clear()
+      ..addAll(<String>{
+        for (final choice in _relationChoices)
+          if (_roleIdFor(choice.kind) case final String id) id,
+      })
+      ..addAll(_preservedRoleIds);
+
+    final derived = <String>{};
+    for (final choice in _relationChoices) {
+      for (final code in choice.kind.capabilityCodes) {
+        final id = _capabilityIdForCode(code);
+        if (id != null) derived.add(id);
+      }
+      final subtypeKey = choice.subtypeKey;
+      if (subtypeKey == null) continue;
+      for (final subtype in choice.kind.subtypes) {
+        if (subtype.key != subtypeKey) continue;
+        for (final code in subtype.capabilityCodes) {
+          final id = _capabilityIdForCode(code);
+          if (id != null) derived.add(id);
+        }
+      }
+    }
+    _selectedCapabilityIds
+      ..clear()
+      ..addAll(derived)
+      ..addAll(_preservedCapabilityIds);
+
+    // Tags left the flow entirely; whatever was stored keeps being stored.
+    _selectedTagIds
+      ..clear()
+      ..addAll(_preservedTagIds);
+  }
+
+  /// Rebuilds the operator's answer from what is already stored.
+  void _hydrateRelationsFromSelection() {
+    final storedRoleIds = Set<String>.of(_selectedRoleIds);
+    final storedCapabilityIds = Set<String>.of(_selectedCapabilityIds);
+    _relationChoices.clear();
+    final representedRoleIds = <String>{};
+    final derivedCapabilityIds = <String>{};
+    for (final kind in _supportedRelationKinds) {
+      final roleId = _roleIdFor(kind);
+      if (roleId == null || !storedRoleIds.contains(roleId)) continue;
+      representedRoleIds.add(roleId);
+      for (final code in kind.capabilityCodes) {
+        final id = _capabilityIdForCode(code);
+        if (id != null) derivedCapabilityIds.add(id);
+      }
+      String? subtypeKey;
+      final subtypeCapabilityUniverse = <String>{
+        for (final subtype in kind.subtypes)
+          for (final code in subtype.capabilityCodes)
+            if (_capabilityIdForCode(code) case final String id) id,
+      };
+      final storedSubtypeCapabilities =
+          storedCapabilityIds.where(subtypeCapabilityUniverse.contains).toSet();
+      for (final subtype in kind.subtypes) {
+        final ids = subtype.capabilityCodes
+            .map(_capabilityIdForCode)
+            .whereType<String>()
+            .toSet();
+        if (ids.isNotEmpty &&
+            ids.length == storedSubtypeCapabilities.length &&
+            ids.containsAll(storedSubtypeCapabilities)) {
+          subtypeKey = subtype.key;
+          derivedCapabilityIds.addAll(ids);
+          break;
+        }
+      }
+      _relationChoices.add(
+        _RelationChoice(kindKey: kind.key, subtypeKey: subtypeKey),
+      );
+    }
+    _preservedRoleIds
+      ..clear()
+      ..addAll(storedRoleIds.where((id) => !representedRoleIds.contains(id)));
+    _preservedCapabilityIds
+      ..clear()
+      ..addAll(storedCapabilityIds.where(
+        (id) => !derivedCapabilityIds.contains(id),
+      ));
+    _preservedTagIds
+      ..clear()
+      ..addAll(_selectedTagIds);
+    _syncClassificationFromRelations();
+  }
+
+  Future<void> _openRelationPicker() async {
+    final taken = _relationChoices.map((c) => c.kindKey).toSet();
+    final available = _supportedRelationKinds
+        .where((kind) => !taken.contains(kind.key))
+        .toList(growable: false);
+    if (available.isEmpty) return;
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => _RelationPickerSheet(kinds: available),
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      _relationChoices.add(_RelationChoice(kindKey: chosen));
+      _syncClassificationFromRelations();
+    });
+  }
+
   final Map<String, String> _roleAssignmentIds = {};
   final Map<String, String> _capabilityAssignmentIds = {};
   final Map<String, String> _tagAssignmentIds = {};
@@ -417,6 +573,10 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     _selectedRoleIds.clear();
     _selectedCapabilityIds.clear();
     _selectedTagIds.clear();
+    _relationChoices.clear();
+    _preservedRoleIds.clear();
+    _preservedCapabilityIds.clear();
+    _preservedTagIds.clear();
     _roleAssignmentIds.clear();
     _capabilityAssignmentIds.clear();
     _tagAssignmentIds.clear();
@@ -429,8 +589,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       _accountCatalogError = null;
       _expenseCategoryCatalogError = null;
       _optionalCatalogsLoading = false;
-      _partyKind = ExternalPartyKind.organization;
+      _partyKind = ExternalPartyKind.other;
       _isActive = true;
+      _showLegalDetails = false;
       _showOptionalDetails = false;
       _loading = true;
       _saving = false;
@@ -667,6 +828,11 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     _notes.text = relationship.notes ?? party.notes ?? '';
     _partyKind = party.kind;
     _isActive = relationship.isActive;
+    _showLegalDetails = party.kind != ExternalPartyKind.other ||
+        _legalName.text.isNotEmpty ||
+        _tradeName.text.isNotEmpty ||
+        _aliases.text.isNotEmpty ||
+        _taxIdentifier.text.isNotEmpty;
 
     void restoreAssignments<T>({
       required Iterable<T> active,
@@ -718,6 +884,10 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       selected: _selectedTagIds,
       assignmentIds: _tagAssignmentIds,
     );
+
+    // The three arrays are storage. The operator's answer is rebuilt from them
+    // so an existing supplier opens on the question, not on a list of axes.
+    _hydrateRelationsFromSelection();
   }
 
   void _showNotice(
@@ -794,8 +964,8 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedRoleIds.isEmpty) {
       _showNotice(
-        'Falta una forma de relación',
-        'Selecciona al menos un rol. Un proveedor puede cumplir varios.',
+        'Falta indicar la relación',
+        'Elige para qué usamos este proveedor. Si cumple más de una función, puedes agregar otra relación.',
         VbNoticeTone.warning,
       );
       return;
@@ -1002,26 +1172,35 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                         taxIdentifier: _taxIdentifier,
                         partyKind: _partyKind,
                         isActive: _isActive,
+                        showLegalDetails: _showLegalDetails,
                         onPartyKindChanged: (value) =>
                             setState(() => _partyKind = value),
                         onActiveChanged: (value) =>
                             setState(() => _isActive = value),
+                        onShowLegalDetails: () =>
+                            setState(() => _showLegalDetails = true),
                       ),
                       const SizedBox(height: 16),
-                      _ClassificationSection(
-                        catalog: _catalog!,
-                        selectedRoleIds: _selectedRoleIds,
-                        selectedCapabilityIds: _selectedCapabilityIds,
-                        selectedTagIds: _selectedTagIds,
-                        onRoleChanged: (id, value) => setState(() => value
-                            ? _selectedRoleIds.add(id)
-                            : _selectedRoleIds.remove(id)),
-                        onCapabilityChanged: (id, value) => setState(() => value
-                            ? _selectedCapabilityIds.add(id)
-                            : _selectedCapabilityIds.remove(id)),
-                        onTagChanged: (id, value) => setState(() => value
-                            ? _selectedTagIds.add(id)
-                            : _selectedTagIds.remove(id)),
+                      _RelationKindSection(
+                        choices: _relationChoices,
+                        availableKinds: _supportedRelationKinds
+                            .where((kind) => !_relationChoices
+                                .any((c) => c.kindKey == kind.key))
+                            .toList(growable: false),
+                        onAdd: _openRelationPicker,
+                        onRemove: (kindKey) => setState(() {
+                          _relationChoices
+                              .removeWhere((c) => c.kindKey == kindKey);
+                          _syncClassificationFromRelations();
+                        }),
+                        onSubtypeChanged: (kindKey, subtypeKey) => setState(() {
+                          for (final choice in _relationChoices) {
+                            if (choice.kindKey == kindKey) {
+                              choice.subtypeKey = subtypeKey;
+                            }
+                          }
+                          _syncClassificationFromRelations();
+                        }),
                       ),
                       const SizedBox(height: 16),
                       if (_showOptionalDetails || _profile != null)
@@ -1468,7 +1647,7 @@ class _EditorHeader extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  'Identidad primero; agrega sólo las dimensiones que correspondan.',
+                  'Completa lo esencial y agrega sólo lo que realmente usas.',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
@@ -1580,8 +1759,10 @@ class _IdentitySection extends StatelessWidget {
     required this.taxIdentifier,
     required this.partyKind,
     required this.isActive,
+    required this.showLegalDetails,
     required this.onPartyKindChanged,
     required this.onActiveChanged,
+    required this.onShowLegalDetails,
   });
 
   final bool compact;
@@ -1592,34 +1773,57 @@ class _IdentitySection extends StatelessWidget {
   final TextEditingController taxIdentifier;
   final ExternalPartyKind partyKind;
   final bool isActive;
+  final bool showLegalDetails;
   final ValueChanged<ExternalPartyKind> onPartyKindChanged;
   final ValueChanged<bool> onActiveChanged;
+  final VoidCallback onShowLegalDetails;
 
   @override
   Widget build(BuildContext context) {
-    final kind = DropdownButtonFormField<ExternalPartyKind>(
-      key: const ValueKey('supplier-party-kind'),
-      initialValue: partyKind,
-      isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Tipo de contraparte'),
-      items: const [
-        DropdownMenuItem(
-            value: ExternalPartyKind.organization, child: Text('Organización')),
-        DropdownMenuItem(
-            value: ExternalPartyKind.person, child: Text('Persona')),
-        DropdownMenuItem(
-            value: ExternalPartyKind.publicAuthority,
-            child: Text('Organismo público')),
-        DropdownMenuItem(value: ExternalPartyKind.other, child: Text('Otro')),
+    final theme = Theme.of(context);
+    final kind = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        VbShortSelect<ExternalPartyKind>(
+          key: const ValueKey('supplier-party-kind'),
+          value: partyKind,
+          label: 'Tipo de entidad',
+          sheetTitle: 'Elegir tipo de entidad',
+          options: const [
+            VbShortSelectOption(
+              value: ExternalPartyKind.other,
+              label: 'No especificado',
+            ),
+            VbShortSelectOption(
+              value: ExternalPartyKind.organization,
+              label: 'Empresa',
+            ),
+            VbShortSelectOption(
+              value: ExternalPartyKind.person,
+              label: 'Persona',
+            ),
+            VbShortSelectOption(
+              value: ExternalPartyKind.publicAuthority,
+              label: 'Organismo público',
+            ),
+          ],
+          onChanged: onPartyKindChanged,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Dato legal opcional. No decide clasificación ni contabilidad.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
       ],
-      onChanged: (value) {
-        if (value != null) onPartyKindChanged(value);
-      },
+      // Legal identity only. It never decides classification or accounting:
+      // in production all 91 suppliers sit on the unspecified value, so making
+      // it the first decision asked for jargon that changed nothing.
     );
     return _EditorSection(
       title: 'Identidad',
-      description:
-          'Sólo el nombre, el tipo de contraparte y un rol son obligatorios.',
+      description: 'Sólo el nombre y una relación son obligatorios.',
       child: Column(
         children: [
           _field(displayName, 'Nombre visible',
@@ -1627,7 +1831,6 @@ class _IdentitySection extends StatelessWidget {
           const SizedBox(height: 12),
           _responsivePair(
               compact,
-              kind,
               SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Proveedor activo'),
@@ -1635,78 +1838,312 @@ class _IdentitySection extends StatelessWidget {
                     const Text('Puede desactivarse sin borrar su historia.'),
                 value: isActive,
                 onChanged: onActiveChanged,
-              )),
-          const SizedBox(height: 12),
-          _responsivePair(compact, _field(legalName, 'Razón social (opcional)'),
-              _field(tradeName, 'Nombre comercial (opcional)')),
-          const SizedBox(height: 12),
-          _responsivePair(compact, _field(aliases, 'Alias, separados por coma'),
-              _field(taxIdentifier, 'RUT u otro identificador fiscal')),
+              ),
+              const SizedBox.shrink()),
+          if (showLegalDetails) ...[
+            const SizedBox(height: 12),
+            _responsivePair(
+              compact,
+              _field(legalName, 'Razón social (opcional)'),
+              _field(tradeName, 'Nombre comercial (opcional)'),
+            ),
+            const SizedBox(height: 12),
+            _responsivePair(
+              compact,
+              _field(aliases, 'Otros nombres (opcional)'),
+              _field(taxIdentifier, 'RUT u otro identificador fiscal'),
+            ),
+            const SizedBox(height: 12),
+            kind,
+          ] else ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('supplier-show-legal-details'),
+                onPressed: onShowLegalDetails,
+                icon: const Icon(Icons.add),
+                label: const Text('Agregar datos legales'),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _ClassificationSection extends StatelessWidget {
-  const _ClassificationSection({
-    required this.catalog,
-    required this.selectedRoleIds,
-    required this.selectedCapabilityIds,
-    required this.selectedTagIds,
-    required this.onRoleChanged,
-    required this.onCapabilityChanged,
-    required this.onTagChanged,
+/// One human relationship the operator can declare.
+///
+/// The backend still stores three independent arrays (roles, capabilities,
+/// tags). This table is the ONLY place that knows that, so the operator never
+/// sees three axes: they answer one question and the arrays are derived.
+///
+/// `roleCodes` are matched against the tenant catalog by code, first hit wins,
+/// so a tenant that renamed or extended its catalog still resolves. A relation
+/// whose codes are absent from the catalog is simply not offered.
+class _SupplierRelationKind {
+  const _SupplierRelationKind({
+    required this.key,
+    required this.label,
+    required this.consequence,
+    required this.roleCodes,
+    this.capabilityCodes = const <String>[],
+    this.subtypePrompt,
+    this.subtypes = const <_RelationSubtype>[],
   });
 
-  final SupplierClassificationCatalog catalog;
-  final Set<String> selectedRoleIds;
-  final Set<String> selectedCapabilityIds;
-  final Set<String> selectedTagIds;
-  final void Function(String, bool) onRoleChanged;
-  final void Function(String, bool) onCapabilityChanged;
-  final void Function(String, bool) onTagChanged;
+  final String key;
+  final String label;
 
-  bool _allowed(SupplierClassificationDefinition definition) {
-    final code = definition.code.toLowerCase();
-    return code != 'free_service' && code != 'free-service' && code != 'free';
-  }
+  /// What declaring this relation actually does, in operating language.
+  final String consequence;
+  final List<String> roleCodes;
+  final List<String> capabilityCodes;
+  final String? subtypePrompt;
+  final List<_RelationSubtype> subtypes;
+}
+
+class _RelationSubtype {
+  const _RelationSubtype(this.key, this.label, this.capabilityCodes);
+  final String key;
+  final String label;
+
+  /// Every visible subtype has a distinct persisted representation. A detail
+  /// that the backend cannot distinguish does not appear as a fake choice.
+  final List<String> capabilityCodes;
+}
+
+/// Eight relations. Every subtype list stays at or under the S-05 ceiling.
+const List<_SupplierRelationKind> _kSupplierRelationKinds =
+    <_SupplierRelationKind>[
+  _SupplierRelationKind(
+    key: 'goods',
+    label: 'Bienes y repuestos',
+    consequence:
+        'Lo incluye en Bienes y repuestos del Directorio de proveedores.',
+    roleCodes: <String>['goods_vendor'],
+    subtypePrompt: '¿Qué tipo de bienes?',
+    subtypes: <_RelationSubtype>[
+      _RelationSubtype(
+        'both',
+        'Inventario e insumos de taller',
+        <String>['inventory_goods', 'workshop_consumables'],
+      ),
+      _RelationSubtype(
+          'inventory', 'Inventario o reventa', <String>['inventory_goods']),
+      _RelationSubtype(
+          'workshop', 'Insumos de taller', <String>['workshop_consumables']),
+    ],
+  ),
+  _SupplierRelationKind(
+    key: 'services',
+    label: 'Servicios',
+    consequence: 'Identifica un servicio operativo o profesional contratado.',
+    roleCodes: <String>['service_provider'],
+  ),
+  _SupplierRelationKind(
+    key: 'digital',
+    label: 'Servicios digitales',
+    consequence:
+        'Lo incluye en Servicios digitales del Directorio de proveedores.',
+    roleCodes: <String>['digital_platform'],
+    capabilityCodes: <String>['digital_services'],
+  ),
+  _SupplierRelationKind(
+    key: 'logistics',
+    label: 'Transporte y logística',
+    consequence:
+        'Lo incluye en Transporte y logística del Directorio de proveedores.',
+    roleCodes: <String>['logistics_provider'],
+    capabilityCodes: <String>['freight_transport'],
+  ),
+  _SupplierRelationKind(
+    key: 'utilities',
+    label: 'Servicios básicos',
+    consequence:
+        'Lo incluye en Servicios básicos del Directorio de proveedores.',
+    roleCodes: <String>['utility_provider'],
+    capabilityCodes: <String>['utilities'],
+  ),
+  _SupplierRelationKind(
+    key: 'lease',
+    label: 'Arrendamiento',
+    consequence: 'Lo incluye en Arrendamiento del Directorio de proveedores.',
+    roleCodes: <String>['landlord'],
+    capabilityCodes: <String>['rent_lease'],
+  ),
+  _SupplierRelationKind(
+    key: 'public',
+    label: 'Impuestos y obligaciones públicas',
+    consequence:
+        'Lo incluye en Organismos públicos del Directorio de proveedores.',
+    roleCodes: <String>['government_authority'],
+    capabilityCodes: <String>['tax_payments'],
+  ),
+  _SupplierRelationKind(
+    key: 'portal',
+    label: 'Recurso o portal operativo',
+    consequence:
+        'Lo identifica como recurso operativo; accesos y enlaces se configuran por separado.',
+    roleCodes: <String>['operational_resource'],
+  ),
+];
+
+/// One declared relation plus the subtype the operator picked for it.
+class _RelationChoice {
+  _RelationChoice({required this.kindKey, this.subtypeKey});
+  final String kindKey;
+  String? subtypeKey;
+
+  _SupplierRelationKind get kind =>
+      _kSupplierRelationKinds.firstWhere((k) => k.key == kindKey);
+}
+
+/// The single question. No axes, no chips, no seven visible checkboxes.
+/// Relation picker.
+///
+/// Eight options exceed the S-05 ceiling of seven, and the guide is explicit
+/// that a taller S-05 is the wrong component. `S-06 VbSearchableSelect` is the
+/// canonical owner and does NOT exist in this repository yet, so this sheet
+/// composes the O-05 presentation with a search field locally and the missing
+/// shared owner is declared in the handoff instead of being invented here.
+class _RelationPickerSheet extends StatefulWidget {
+  const _RelationPickerSheet({required this.kinds});
+  final List<_SupplierRelationKind> kinds;
+
+  @override
+  State<_RelationPickerSheet> createState() => _RelationPickerSheetState();
+}
+
+class _RelationPickerSheetState extends State<_RelationPickerSheet> {
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final needle = _query.trim().toLowerCase();
+    final matches = needle.isEmpty
+        ? widget.kinds
+        : widget.kinds
+            .where((kind) => kind.label.toLowerCase().contains(needle))
+            .toList(growable: false);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text('¿Qué relación tenemos con este proveedor?',
+                    style: theme.textTheme.titleMedium),
+              ),
+              if (widget.kinds.length > 5)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: TextField(
+                    key: const ValueKey('supplier-relation-search'),
+                    autofocus: false,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Buscar',
+                    ),
+                    onChanged: (value) => setState(() => _query = value),
+                  ),
+                ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: matches.length,
+                  itemBuilder: (context, index) {
+                    final kind = matches[index];
+                    return ListTile(
+                      key: ValueKey<String>(
+                          'supplier-relation-option-${kind.key}'),
+                      minVerticalPadding: 12,
+                      title: Text(kind.label),
+                      subtitle: Text(
+                        kind.consequence,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => Navigator.of(context).pop(kind.key),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RelationKindSection extends StatelessWidget {
+  const _RelationKindSection({
+    required this.choices,
+    required this.availableKinds,
+    required this.onAdd,
+    required this.onRemove,
+    required this.onSubtypeChanged,
+  });
+
+  final List<_RelationChoice> choices;
+  final List<_SupplierRelationKind> availableKinds;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onRemove;
+  final void Function(String kindKey, String? subtypeKey) onSubtypeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final canAdd = availableKinds.isNotEmpty;
     return _EditorSection(
-      title: 'Clasificación',
-      description:
-          'Son dimensiones independientes. Seleccionar una no borra ni deduce las otras.',
+      title: 'Relación con el taller',
+      description: '¿Qué relación tenemos con este proveedor?',
+      trailing: canAdd && choices.isNotEmpty
+          ? TextButton.icon(
+              key: const ValueKey('supplier-add-relation'),
+              onPressed: onAdd,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar otra'),
+            )
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ClassificationGroup(
-            title: 'Roles',
-            help: 'Cómo se relaciona con el taller. Elige al menos uno.',
-            definitions: catalog.roles.where(_allowed).toList(),
-            selectedIds: selectedRoleIds,
-            onChanged: onRoleChanged,
-          ),
-          if (catalog.capabilities.where(_allowed).isNotEmpty) ...[
-            const SizedBox(height: 18),
-            _ClassificationGroup(
-              title: 'Capacidades',
-              help: 'Qué puede proveer o habilitar.',
-              definitions: catalog.capabilities.where(_allowed).toList(),
-              selectedIds: selectedCapabilityIds,
-              onChanged: onCapabilityChanged,
-            ),
-          ],
-          if (catalog.tags.where(_allowed).isNotEmpty) ...[
-            const SizedBox(height: 18),
-            _ClassificationGroup(
-              title: 'Etiquetas internas',
-              help:
-                  'Contexto operativo del negocio; no reemplaza el criterio contable.',
-              definitions: catalog.tags.where(_allowed).toList(),
-              selectedIds: selectedTagIds,
-              onChanged: onTagChanged,
+        children: <Widget>[
+          if (choices.isEmpty)
+            _RelationEmptyPrompt(onAdd: onAdd)
+          else ...<Widget>[
+            for (final choice in choices) ...<Widget>[
+              _RelationChoiceCard(
+                choice: choice,
+                onRemove: () => onRemove(choice.kindKey),
+                onSubtypeChanged: (value) =>
+                    onSubtypeChanged(choice.kindKey, value),
+              ),
+              const SizedBox(height: 10),
+            ],
+            // Said once, for the whole decision, not per relation.
+            Text(
+              'La relación decide dónde aparece este proveedor y qué datos '
+              'operativos puedes configurar después. No contabiliza ni '
+              'automatiza nada por sí sola.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ],
@@ -1715,49 +2152,31 @@ class _ClassificationSection extends StatelessWidget {
   }
 }
 
-class _ClassificationGroup extends StatelessWidget {
-  const _ClassificationGroup(
-      {required this.title,
-      required this.help,
-      required this.definitions,
-      required this.selectedIds,
-      required this.onChanged});
-  final String title;
-  final String help;
-  final List<SupplierClassificationDefinition> definitions;
-  final Set<String> selectedIds;
-  final void Function(String, bool) onChanged;
+class _RelationEmptyPrompt extends StatelessWidget {
+  const _RelationEmptyPrompt({required this.onAdd});
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(title,
-            style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 2),
-        Text(help,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 8),
-        DecoratedBox(
-          decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(8)),
-          child: Column(
-            children: [
-              for (var index = 0; index < definitions.length; index++) ...[
-                _ClassificationRow(
-                  definition: definitions[index],
-                  selected: selectedIds.contains(definitions[index].id),
-                  onChanged: (value) => onChanged(definitions[index].id, value),
-                ),
-                if (index < definitions.length - 1)
-                  Divider(height: 1, color: theme.colorScheme.outlineVariant),
-              ],
-            ],
+      children: <Widget>[
+        Text(
+          'Elige una. Puedes agregar otra después si el proveedor hace más de '
+          'una cosa.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 48,
+          child: FilledButton.icon(
+            key: const ValueKey('supplier-choose-relation'),
+            onPressed: onAdd,
+            icon: const Icon(Icons.add),
+            label: const Text('Elegir relación'),
           ),
         ),
       ],
@@ -1765,58 +2184,82 @@ class _ClassificationGroup extends StatelessWidget {
   }
 }
 
-class _ClassificationRow extends StatelessWidget {
-  const _ClassificationRow(
-      {required this.definition,
-      required this.selected,
-      required this.onChanged});
-  final SupplierClassificationDefinition definition;
-  final bool selected;
-  final ValueChanged<bool> onChanged;
+class _RelationChoiceCard extends StatelessWidget {
+  const _RelationChoiceCard({
+    required this.choice,
+    required this.onRemove,
+    required this.onSubtypeChanged,
+  });
+
+  final _RelationChoice choice;
+  final VoidCallback onRemove;
+  final ValueChanged<String?> onSubtypeChanged;
 
   @override
   Widget build(BuildContext context) {
-    final enabled = definition.isActive || selected;
-    return Semantics(
-      label: definition.label,
-      checked: selected,
-      enabled: enabled,
-      child: InkWell(
-        onTap: enabled ? () => onChanged(!selected) : null,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(
-              children: [
-                Checkbox(
-                    value: selected,
-                    onChanged:
-                        enabled ? (value) => onChanged(value ?? false) : null),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(definition.label,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w600)),
-                        if (definition.description?.trim().isNotEmpty == true)
-                          Text(definition.description!,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant)),
-                      ]),
+    final theme = Theme.of(context);
+    final kind = choice.kind;
+    return Container(
+      key: ValueKey<String>('supplier-relation-${kind.key}'),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  kind.label,
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
-              ],
+              ),
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: IconButton(
+                  key: ValueKey<String>('supplier-relation-remove-${kind.key}'),
+                  tooltip: 'Quitar ${kind.label}',
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.close, size: 18),
+                ),
+              ),
+            ],
+          ),
+          Text(
+            kind.consequence,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-        ),
+          if (kind.subtypes.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: VbShortSelect<String?>(
+                key: ValueKey<String>('supplier-subtype-${kind.key}'),
+                label: kind.subtypePrompt ?? 'Detalle',
+                sheetTitle: kind.subtypePrompt ?? 'Detalle',
+                value: choice.subtypeKey,
+                placeholder: 'Elegir',
+                options: <VbShortSelectOption<String?>>[
+                  for (final subtype in kind.subtypes)
+                    VbShortSelectOption<String?>(
+                      value: subtype.key,
+                      label: subtype.label,
+                    ),
+                ],
+                onChanged: onSubtypeChanged,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1886,13 +2329,13 @@ class _RelationshipSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _EditorSection(
-        title: 'Relaciones',
+        title: 'Contratos y servicios',
         description:
             'Contratos, planes y cuentas de servicio se guardan por versiones.',
         trailing: TextButton.icon(
             onPressed: onCreate,
             icon: const Icon(Icons.add),
-            label: const Text('Nueva relación')),
+            label: const Text('Nuevo contrato')),
         child: engagements.isEmpty
             ? const _EmptyLine(
                 text:

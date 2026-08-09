@@ -4944,6 +4944,201 @@ select ok(
   'credential delete receipt is a durable secret-free tombstone'
 );
 
+-- -------------------------------------------------------------------------
+-- Role/capability payload compatibility guard
+-- -------------------------------------------------------------------------
+
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select set_config('request.jwt.claim.sub', '', true);
+
+select has_function(
+  'public',
+  'validate_supplier_role_capabilities',
+  array['uuid', 'jsonb', 'jsonb'],
+  'supplier profile publishes one server-owned compatibility guard'
+);
+
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.save_supplier_relationship_profile(uuid,uuid,timestamp with time zone,jsonb,jsonb,jsonb,jsonb)',
+    'EXECUTE'
+  ) and not has_function_privilege(
+    'authenticated',
+    'public.save_supplier_relationship_profile_v1_internal(uuid,uuid,timestamp with time zone,jsonb,jsonb,jsonb,jsonb)',
+    'EXECUTE'
+  ),
+  'authenticated clients can execute only the guarded supplier-profile command'
+);
+
+insert into public.tenants (id, shop_name) values (
+  'a8082100-0000-4000-8000-000000000009',
+  'Supplier Relationship Guard'
+);
+
+insert into public.suppliers (id, tenant_id, name) values (
+  'a8082100-0001-4000-8000-000000000109',
+  'a8082100-0000-4000-8000-000000000009',
+  'Proveedor Guardia'
+);
+
+select is(
+  (
+    select label
+    from public.supplier_role_definitions
+    where tenant_id = 'a8082100-0000-4000-8000-000000000009'
+      and code = 'operational_resource'
+      and is_system
+  ),
+  'Recurso o portal operativo',
+  'new tenants seed the operational-resource system role'
+);
+
+select lives_ok(
+  $$select public.save_supplier_relationship_profile(
+    'a8082100-0000-4000-8000-000000000009',
+    'a8082100-0001-4000-8000-000000000109',
+    (select updated_at from public.suppliers
+      where id = 'a8082100-0001-4000-8000-000000000109'),
+    '{"operation_id":"a8082100-0900-4000-8000-000000000001","display_name":"Proveedor Guardia"}'::jsonb,
+    '[{"code":"goods_vendor"}]'::jsonb,
+    '[{"code":"inventory_goods"}]'::jsonb,
+    '[]'::jsonb
+  )$$,
+  'goods vendor accepts an inventory-goods capability'
+);
+
+select throws_ok(
+  $$select public.save_supplier_relationship_profile(
+    'a8082100-0000-4000-8000-000000000009',
+    'a8082100-0001-4000-8000-000000000109',
+    (select updated_at from public.suppliers
+      where id = 'a8082100-0001-4000-8000-000000000109'),
+    '{"operation_id":"a8082100-0900-4000-8000-000000000002","display_name":"Proveedor Guardia"}'::jsonb,
+    '[{"code":"goods_vendor"}]'::jsonb,
+    '[{"code":"utilities"}]'::jsonb,
+    '[]'::jsonb
+  )$$,
+  '23514',
+  'Supplier capability is incompatible with selected roles: utilities',
+  'goods vendor rejects an unrelated utilities capability'
+);
+
+select ok(
+  not exists (
+    select 1
+    from public.supplier_profile_command_receipts
+    where tenant_id = 'a8082100-0000-4000-8000-000000000009'
+      and operation_id = 'a8082100-0900-4000-8000-000000000002'
+  ) and exists (
+    select 1
+    from public.supplier_relationship_capabilities
+    where tenant_id = 'a8082100-0000-4000-8000-000000000009'
+      and supplier_id = 'a8082100-0001-4000-8000-000000000109'
+      and capability_code = 'inventory_goods'
+      and valid_to is null
+  ),
+  'an incompatible payload fails before receipts or assignment mutation'
+);
+
+select lives_ok(
+  $$select public.save_supplier_relationship_profile(
+    'a8082100-0000-4000-8000-000000000009',
+    'a8082100-0001-4000-8000-000000000109',
+    (select updated_at from public.suppliers
+      where id = 'a8082100-0001-4000-8000-000000000109'),
+    '{"operation_id":"a8082100-0900-4000-8000-000000000003","display_name":"Proveedor Guardia"}'::jsonb,
+    '[{"code":"goods_vendor"},{"code":"utility_provider"}]'::jsonb,
+    '[{"code":"inventory_goods"},{"code":"utilities"}]'::jsonb,
+    '[]'::jsonb
+  )$$,
+  'a mixed supplier accepts the union of capabilities from its roles'
+);
+
+select lives_ok(
+  $$select public.save_supplier_relationship_profile(
+    'a8082100-0000-4000-8000-000000000009',
+    'a8082100-0001-4000-8000-000000000109',
+    (select updated_at from public.suppliers
+      where id = 'a8082100-0001-4000-8000-000000000109'),
+    '{"operation_id":"a8082100-0900-4000-8000-000000000004","display_name":"Proveedor Guardia"}'::jsonb,
+    '[{"code":"operational_resource"}]'::jsonb,
+    '[{"code":"credential_portal"}]'::jsonb,
+    '[]'::jsonb
+  )$$,
+  'operational resource accepts the credential-portal capability'
+);
+
+select lives_ok(
+  $$select public.save_supplier_relationship_profile(
+    'a8082100-0000-4000-8000-000000000009',
+    'a8082100-0001-4000-8000-000000000109',
+    (select updated_at from public.suppliers
+      where id = 'a8082100-0001-4000-8000-000000000109'),
+    '{"operation_id":"a8082100-0900-4000-8000-000000000005","display_name":"Proveedor Guardia"}'::jsonb,
+    '[{"code":"service_provider"}]'::jsonb,
+    '[]'::jsonb,
+    '[]'::jsonb
+  )$$,
+  'a valid role remains sufficient when no capability applies'
+);
+
+insert into public.supplier_role_definitions (
+  tenant_id, code, label, is_system, metadata
+) values (
+  'a8082100-0000-4000-8000-000000000009',
+  'custom_repair_network',
+  'Red personalizada de reparación',
+  false,
+  '{"allowed_capability_codes":["custom_frame_repair"]}'::jsonb
+);
+
+insert into public.supplier_capability_definitions (
+  tenant_id, code, label, is_system
+) values
+  (
+    'a8082100-0000-4000-8000-000000000009',
+    'custom_frame_repair',
+    'Reparación de cuadros personalizada',
+    false
+  ),
+  (
+    'a8082100-0000-4000-8000-000000000009',
+    'custom_unlisted_capability',
+    'Capacidad personalizada no autorizada',
+    false
+  );
+
+select lives_ok(
+  $$select public.save_supplier_relationship_profile(
+    'a8082100-0000-4000-8000-000000000009',
+    'a8082100-0001-4000-8000-000000000109',
+    (select updated_at from public.suppliers
+      where id = 'a8082100-0001-4000-8000-000000000109'),
+    '{"operation_id":"a8082100-0900-4000-8000-000000000006","display_name":"Proveedor Guardia"}'::jsonb,
+    '[{"code":"custom_repair_network"}]'::jsonb,
+    '[{"code":"custom_frame_repair"}]'::jsonb,
+    '[]'::jsonb
+  )$$,
+  'custom non-system role explicitly authorizes a custom capability in metadata'
+);
+
+select throws_ok(
+  $$select public.save_supplier_relationship_profile(
+    'a8082100-0000-4000-8000-000000000009',
+    'a8082100-0001-4000-8000-000000000109',
+    (select updated_at from public.suppliers
+      where id = 'a8082100-0001-4000-8000-000000000109'),
+    '{"operation_id":"a8082100-0900-4000-8000-000000000007","display_name":"Proveedor Guardia"}'::jsonb,
+    '[{"code":"custom_repair_network"}]'::jsonb,
+    '[{"code":"custom_unlisted_capability"}]'::jsonb,
+    '[]'::jsonb
+  )$$,
+  '23514',
+  'Supplier capability is incompatible with selected roles: custom_unlisted_capability',
+  'custom capabilities fail closed unless selected custom-role metadata allows them'
+);
+
 select * from finish();
 
 rollback;

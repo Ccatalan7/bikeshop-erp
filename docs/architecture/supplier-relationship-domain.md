@@ -43,7 +43,7 @@ supplier row or clears classifications. Hard delete is not a general client
 operation; ordinary retirement changes relationship status through the profile
 command.
 
-## 2. Classification is multidimensional
+## 2. Classification is multidimensional internally, guided operationally
 
 A single `SupplierType` cannot describe geography, commercial position, and
 business nature at once. The canonical classification has separate axes:
@@ -63,9 +63,26 @@ business nature at once. The canonical classification has separate axes:
 - accounting treatment: effective accounts, tax posture, and other defaults
   proposed by a versioned policy.
 
-Roles, capabilities, tags, engagements, and policies are all many-valued. A
-supplier may sell parts and charge freight, or host several utilities at
-different sites. No axis silently derives another.
+Roles, capabilities, tags, engagements, and policies are all many-valued
+storage and audit facts. A supplier may sell parts and charge freight, or host
+several utilities at different sites. That normalization is not the operator's
+form model: the editor starts from one explained operational relationship and
+maps it explicitly to compatible internal facts. The mapping is visible and
+validated; it is never an unlabelled inference from a supplier name, invoice or
+legacy type.
+
+The editor must not expose roles, capabilities and tags as three peer
+checklists. Their system vocabularies overlap by design history (for example,
+digital, transport, utilities, government and facilities), so independent
+selection creates combinations that have no business meaning. The
+operator-facing purposes are goods, services, digital services, logistics,
+utilities, leasing, public obligations and resource/portal access. A mixed
+supplier adds another complete purpose. Each purpose owns only its compatible
+subtypes, and a subtype is offered only when its value can be persisted and
+read back without changing meaning. System capabilities are derived by the
+adapter and system tags that duplicate the purpose are not authored in this
+workflow. Tenant-created tags remain optional organizational metadata and
+cannot enable behavior.
 
 An `observed` assignment is evidence awaiting review, not a current
 classification. It remains visible only in the audit/candidate workflow and
@@ -216,12 +233,24 @@ billing cycle. The profile publishes:
 - links and contacts; and
 - credential availability without exposing the secret to the general read.
 
-Editing is an explicit adaptive workflow. Sections appear because the selected
-roles or engagements need them; identity remains available to every profile,
-while commercial, logistics, recurrence, accounting, site, and portal sections
-are conditional. A portal-only free service is valid without RUT, invoice, bank
-or payment fields and may later gain additional roles or engagements without
-changing identity or losing history.
+Editing is an explicit adaptive workflow. Its first business question is
+`¿Qué relación tenemos con este proveedor?`, answered through the canonical
+compact selector with explanations, not through a wall of checkboxes or chips.
+Adding another relationship is explicit. Sections appear because that selected
+relationship or one of its engagements needs them; identity remains available
+to every profile, while commercial, logistics, recurrence, accounting, site,
+and portal sections are conditional. The surface states the real consequence:
+the relationship controls directory placement and which details may be
+configured; it does not classify, post or automate a transaction by itself. A
+portal-only free service is valid without RUT, invoice, bank or payment fields
+and may later gain additional roles or engagements without changing identity
+or losing history.
+
+Identity kind is legal metadata, not supplier classification. The editor calls
+it `Tipo de entidad`, keeps it under optional legal details, and represents an
+unknown historical value as `Sin especificar`; it never presents `other` as a
+meaningful commercial choice or changes the value silently from a selected
+relationship.
 
 `free` is a billing cycle on an effective engagement version. It is never a
 supplier role, capability, tag, or accounting shortcut. Changing from free to

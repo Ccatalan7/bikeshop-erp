@@ -60,7 +60,15 @@ void main() {
       await pumpEditor(tester, source: source);
 
       expect(find.text('Identidad'), findsOneWidget);
-      expect(find.text('Clasificación'), findsOneWidget);
+      expect(find.text('Relación con el taller'), findsOneWidget);
+      expect(find.text('Tipo de entidad'), findsNothing);
+      final legalDetails =
+          find.byKey(const ValueKey('supplier-show-legal-details'));
+      expect(legalDetails, findsOneWidget);
+      await tester.ensureVisible(legalDetails);
+      await tester.tap(legalDetails);
+      await tester.pumpAndSettle();
+      expect(find.text('Tipo de entidad'), findsOneWidget);
       expect(find.text('Contacto y ubicación'), findsNothing);
       expect(
         find.byKey(const ValueKey('supplier-show-optional-details')),
@@ -91,30 +99,24 @@ void main() {
         find.byKey(const ValueKey('supplier-display-name')),
         'Proveedor híbrido',
       );
-      for (final label in ['Bienes e inventario', 'Servicios digitales']) {
-        final role = find
-            .ancestor(of: find.text(label), matching: find.byType(InkWell))
-            .first;
-        await tester.ensureVisible(role);
+      // T20 · una sola pregunta. Se elige por la hoja, no por una pared de
+      // casillas, y el segundo caso mixto entra por «Agregar otra».
+      for (final label in ['Bienes y repuestos', 'Servicios digitales']) {
+        final opener = find.byKey(const ValueKey('supplier-choose-relation'));
+        final adder = find.byKey(const ValueKey('supplier-add-relation'));
+        final trigger = opener.evaluate().isNotEmpty ? opener : adder;
+        await tester.ensureVisible(trigger);
+        await tester.tap(trigger);
         await tester.pumpAndSettle();
-        final verticalAdjustment = 400 - tester.getCenter(role).dy;
-        if (verticalAdjustment.abs() > 20) {
-          await tester.drag(
-            find.byType(SingleChildScrollView),
-            Offset(0, verticalAdjustment),
-          );
-          await tester.pumpAndSettle();
-        }
-        await tester.tap(role);
-        await tester.pump();
+        await tester.tap(find.text(label).last);
+        await tester.pumpAndSettle();
       }
 
-      expect(
-        tester
-            .widgetList<Checkbox>(find.byType(Checkbox))
-            .where((checkbox) => checkbox.value == true),
-        hasLength(2),
-      );
+      // Dos relaciones declaradas, cada una con su tarjeta.
+      expect(find.byKey(const ValueKey('supplier-relation-goods')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('supplier-relation-digital')),
+          findsOneWidget);
 
       final save = find.byKey(const ValueKey('supplier-save'));
       await tester.ensureVisible(save);
@@ -131,7 +133,10 @@ void main() {
         command.roles.map((selection) => selection.definition.code),
         unorderedEquals(['goods_vendor', 'digital_platform']),
       );
-      expect(command.capabilities, isEmpty);
+      expect(
+        command.capabilities.map((selection) => selection.definition.code),
+        <String>['digital_services'],
+      );
       expect(command.tags, isEmpty);
 
       final nameField = tester.widget<TextFormField>(
@@ -139,15 +144,102 @@ void main() {
       );
       expect(nameField.controller?.text, 'Proveedor híbrido');
       expect(find.text('No se pudo guardar el proveedor'), findsOneWidget);
-      expect(
-        tester
-            .widgetList<Checkbox>(find.byType(Checkbox))
-            .where((checkbox) => checkbox.value == true),
-        hasLength(2),
-      );
+      expect(find.byKey(const ValueKey('supplier-relation-goods')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('supplier-relation-digital')),
+          findsOneWidget);
       expect(
         tester.widget<FilledButton>(save).onPressed,
         isNotNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'una relación sólo ofrece sus subtipos y deriva la capacidad compatible',
+    (tester) async {
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        saveError: StateError('offline'),
+      );
+      await pumpEditor(tester, source: source);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-display-name')),
+        'Proveedor de repuestos',
+      );
+      final chooseRelation =
+          find.byKey(const ValueKey('supplier-choose-relation'));
+      await tester.ensureVisible(chooseRelation);
+      await tester.tap(chooseRelation);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bienes y repuestos').last);
+      await tester.pumpAndSettle();
+
+      final goodsSubtype = find.byKey(const ValueKey('supplier-subtype-goods'));
+      await tester.ensureVisible(goodsSubtype);
+      await tester.tap(goodsSubtype);
+      await tester.pumpAndSettle();
+      expect(find.text('Inventario o reventa'), findsOneWidget);
+      expect(find.text('Insumos de taller'), findsOneWidget);
+      expect(find.text('Electricidad'), findsNothing);
+      await tester.tap(find.text('Inventario o reventa'));
+      await tester.pumpAndSettle();
+
+      final save = find.byKey(const ValueKey('supplier-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(source.profileCommands, hasLength(1));
+      final command = source.profileCommands.single;
+      expect(
+        command.roles.map((selection) => selection.definition.code),
+        ['goods_vendor'],
+      );
+      expect(
+        command.capabilities.map((selection) => selection.definition.code),
+        ['inventory_goods'],
+      );
+      expect(command.tags, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'editar no borra clasificaciones históricas que la pregunta guiada no muestra',
+    (tester) async {
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: _profileWithHiddenAssignments(),
+        saveError: StateError('offline'),
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+      );
+
+      expect(find.text('Rol interno heredado'), findsNothing);
+      expect(find.text('Portal con acceso'), findsNothing);
+      expect(find.text('Crítico para la operación'), findsNothing);
+
+      final save = find.byKey(const ValueKey('supplier-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      final command = source.profileCommands.single;
+      expect(
+        command.roles.map((selection) => selection.definition.code),
+        unorderedEquals(<String>['goods_vendor', 'preferred_partner']),
+      );
+      expect(
+        command.capabilities.map((selection) => selection.definition.code),
+        <String>['credential_portal'],
+      );
+      expect(
+        command.tags.map((selection) => selection.definition.code),
+        <String>['critical'],
       );
     },
   );
@@ -169,7 +261,7 @@ void main() {
       );
 
       expect(find.text('Contacto y ubicación'), findsOneWidget);
-      expect(find.text('Relaciones'), findsOneWidget);
+      expect(find.text('Contratos y servicios'), findsOneWidget);
       expect(find.text('Criterios contables'), findsOneWidget);
       expect(find.text('Accesos'), findsOneWidget);
       expect(find.text('Sin accesos guardados.'), findsOneWidget);
@@ -519,7 +611,7 @@ void main() {
 
       expect(tester.takeException(), isNull, reason: brightness.name);
       expect(find.text('Editar proveedor'), findsOneWidget);
-      expect(find.text('Relaciones'), findsOneWidget);
+      expect(find.text('Contratos y servicios'), findsOneWidget);
       expect(find.text('Criterios contables'), findsOneWidget);
       expect(find.text('Accesos'), findsOneWidget);
     }
@@ -1054,8 +1146,32 @@ SupplierClassificationCatalog _catalog() {
         code: 'digital_platform',
         label: 'Servicios digitales',
       ),
+      definition(
+        id: '51000000-0000-0000-0000-000000000005',
+        kind: SupplierClassificationDefinitionKind.role,
+        code: 'preferred_partner',
+        label: 'Rol interno heredado',
+      ),
     ],
     capabilities: [
+      definition(
+        id: '61000000-0000-0000-0000-000000000006',
+        kind: SupplierClassificationDefinitionKind.capability,
+        code: 'inventory_goods',
+        label: 'Bienes de inventario',
+      ),
+      definition(
+        id: '61100000-0000-0000-0000-000000000006',
+        kind: SupplierClassificationDefinitionKind.capability,
+        code: 'workshop_consumables',
+        label: 'Insumos de taller',
+      ),
+      definition(
+        id: '61200000-0000-0000-0000-000000000006',
+        kind: SupplierClassificationDefinitionKind.capability,
+        code: 'digital_services',
+        label: 'Servicios digitales',
+      ),
       definition(
         id: '60000000-0000-0000-0000-000000000006',
         kind: SupplierClassificationDefinitionKind.capability,
@@ -1108,6 +1224,62 @@ SupplierProfile _profile({
       'relationship_tags': const <Map<String, dynamic>>[],
       'engagements': const <Map<String, dynamic>>[],
       'accounting': const {
+        'policies': <Map<String, dynamic>>[],
+        'rules': <Map<String, dynamic>>[],
+        'recent_evidence': <Map<String, dynamic>>[],
+        'observed_account_ids': <String>[],
+      },
+    });
+
+SupplierProfile _profileWithHiddenAssignments() =>
+    SupplierProfile.fromJson(const {
+      'tenant_id': _tenantId,
+      'supplier_id': _supplierFixtureId,
+      'party_id': '30000000-0000-0000-0000-000000000003',
+      'party_kind': 'organization',
+      'display_name': 'Proveedor con historia',
+      'is_active': true,
+      'has_portal_credential': false,
+      'relationship_roles': [
+        {
+          'id': '90000000-0000-0000-0000-000000000009',
+          'definition_id': '40000000-0000-0000-0000-000000000004',
+          'code': 'goods_vendor',
+          'label': 'Bienes e inventario',
+          'source': 'manual',
+          'metadata': <String, dynamic>{},
+        },
+        {
+          'id': '90100000-0000-0000-0000-000000000009',
+          'definition_id': '51000000-0000-0000-0000-000000000005',
+          'code': 'preferred_partner',
+          'label': 'Rol interno heredado',
+          'source': 'manual',
+          'metadata': <String, dynamic>{},
+        },
+      ],
+      'relationship_capabilities': [
+        {
+          'id': '90200000-0000-0000-0000-000000000009',
+          'definition_id': '60000000-0000-0000-0000-000000000006',
+          'code': 'credential_portal',
+          'label': 'Portal con acceso',
+          'source': 'manual',
+          'metadata': <String, dynamic>{},
+        },
+      ],
+      'relationship_tags': [
+        {
+          'id': '90300000-0000-0000-0000-000000000009',
+          'definition_id': '70000000-0000-0000-0000-000000000007',
+          'code': 'critical',
+          'label': 'Crítico para la operación',
+          'source': 'manual',
+          'metadata': <String, dynamic>{},
+        },
+      ],
+      'engagements': <Map<String, dynamic>>[],
+      'accounting': {
         'policies': <Map<String, dynamic>>[],
         'rules': <Map<String, dynamic>>[],
         'recent_evidence': <Map<String, dynamic>>[],
