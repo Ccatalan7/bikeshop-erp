@@ -40,6 +40,102 @@ final RegExp _sensitivePublicWebsiteSettingKey = RegExp(
 /// saving authority is no longer current.
 typedef WebsiteEditorWriteGuard = void Function();
 
+/// One-shot authority for a Website Builder command that crosses an async
+/// boundary before issuing a remote write.
+///
+/// The widget owns the live identity evidence (provider/service instances,
+/// entry-lease generations and host revision). This class owns the state
+/// machine: validate -> consume the operation-specific claim -> validate,
+/// then expose the same validator as the service's pre/post-write guard.
+/// Reusing an authority or losing any captured owner is a typed supersession,
+/// never an ordinary persistence error that could be shown in a new session.
+class WebsiteEditorRemoteWriteAuthority {
+  WebsiteEditorRemoteWriteAuthority({
+    required String tenantId,
+    required bool Function() claimOwner,
+    required bool Function() isCurrent,
+    required String operation,
+  })  : tenantId = tenantId.trim(),
+        _claimOwner = claimOwner,
+        _isCurrent = isCurrent,
+        _operation = operation {
+    if (this.tenantId.isEmpty) {
+      throw const WebsiteEditorWriteSupersededException(
+        'La operación remota no tiene un tenant editor vigente.',
+      );
+    }
+  }
+
+  final String tenantId;
+  final bool Function() _claimOwner;
+  final bool Function() _isCurrent;
+  final String _operation;
+  bool _claimed = false;
+
+  /// Read-only checkpoint for awaits that precede the remote write.
+  void ensureCurrent() {
+    bool current;
+    try {
+      current = _isCurrent();
+    } catch (_) {
+      current = false;
+    }
+    if (!current) {
+      throw WebsiteEditorWriteSupersededException(
+        'La autoridad de $_operation cambió antes de completarse.',
+      );
+    }
+  }
+
+  /// Consumes the operation-specific owner exactly once and returns the guard
+  /// that the service invokes around every mutable request.
+  WebsiteEditorWriteGuard claimForWrite() {
+    if (_claimed) {
+      throw WebsiteEditorWriteSupersededException(
+        'La autoridad de $_operation ya fue consumida.',
+      );
+    }
+    _claimed = true;
+    ensureCurrent();
+
+    bool claimed;
+    try {
+      claimed = _claimOwner();
+    } catch (_) {
+      claimed = false;
+    }
+    if (!claimed) {
+      throw WebsiteEditorWriteSupersededException(
+        'La autoridad de $_operation fue reemplazada antes del guardado.',
+      );
+    }
+
+    ensureCurrent();
+    return ensureCurrent;
+  }
+}
+
+/// FIFO owner for remote commands whose result order is user-visible.
+///
+/// Each scheduled operation receives its own result/error, while the private
+/// tail always completes successfully so one failed command cannot skip or
+/// reorder the next command.
+class WebsiteEditorRemoteWriteSerialQueue {
+  Future<void> _tail = Future<void>.value();
+
+  Future<T> schedule<T>(Future<T> Function() operation) {
+    final result = Completer<T>();
+    _tail = _tail.then((_) async {
+      try {
+        result.complete(await operation());
+      } catch (error, stackTrace) {
+        result.completeError(error, stackTrace);
+      }
+    });
+    return result.future;
+  }
+}
+
 /// Service for managing website content, banners, featured products, and online orders
 class WebsiteService extends ChangeNotifier {
   WebsiteService({
@@ -4021,6 +4117,7 @@ class WebsiteService extends ChangeNotifier {
   Future<WebsitePage> createPage(
     WebsitePage page, {
     String? tenantId,
+    WebsiteEditorWriteGuard? writeGuard,
   }) async {
     _WebsiteTenantScopeLease? lease;
     final hasExplicitTenant = tenantId != null;
@@ -4040,8 +4137,17 @@ class WebsiteService extends ChangeNotifier {
       final data = page.toInsertJson();
       data['tenant_id'] = effectiveTenantId;
 
+      // A page creation is an externally visible mutation. Revalidate after
+      // every preceding await and immediately before the insert so an editor
+      // that moved from A to B cannot resolve B's tenant implicitly or create
+      // under an already-superseded navigation decision.
+      writeGuard?.call();
       final response =
           await _supabase.from('website_pages').insert(data).select().single();
+      // The server may already have durably accepted A's request; the
+      // post-response guard still prevents its result, cache invalidation and
+      // local page adoption from crossing into B.
+      writeGuard?.call();
 
       final newPage = WebsitePage.fromJson(response);
       WebsiteService.clearPageCache();
@@ -4052,7 +4158,12 @@ class WebsiteService extends ChangeNotifier {
 
       return newPage;
     } catch (e) {
-      if (lease != null && _ownsTenantScope(lease)) {
+      if (e is! WebsiteEditorWriteSupersededException) {
+        writeGuard?.call();
+      }
+      if (e is! WebsiteEditorWriteSupersededException &&
+          lease != null &&
+          _ownsTenantScope(lease)) {
         _error = 'Error al crear página: $e';
         debugPrint(_error);
       }

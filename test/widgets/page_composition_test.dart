@@ -548,7 +548,8 @@ void main() {
           const <String, dynamic>{},
           pageId: 'page-a',
           pageSlug: 'page-a',
-        );
+        )
+        ..selectBlock('text');
       addTearDown(provider.dispose);
 
       WebsitePageComposition composition(WebsitePageCompositionMode mode) =>

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/website/models/website_action.dart';
 import 'package:vinabike_erp/modules/website/models/website_editor_capability.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/services/website_save_coordinator.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_composition.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
@@ -18,6 +19,7 @@ import 'package:vinabike_erp/modules/website/widgets/inline_editable_text_v2.dar
 import 'package:vinabike_erp/modules/website/widgets/text_formatting_toolbar.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_action_button.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_renderer.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_block_surface.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_contact_block_content.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_cta_block_content.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_faq_block_content.dart';
@@ -48,31 +50,45 @@ Map<String, dynamic> _block({
 }
 
 String _breakpoint(double width) {
-  if (width < 600) return 'mobile';
-  if (width < 1200) return 'tablet';
-  return 'desktop';
+  return WebsiteViewport.fromLogicalWidth(width).wireName;
 }
 
 Widget _host({
-  required WebsitePageComposition composition,
+  required List<Map<String, dynamic>> blocks,
+  required WebsitePageCompositionMode mode,
+  required double logicalWidth,
   WebsiteEditModeProvider? provider,
 }) {
-  final app = MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: PageComposition(
-          composition: composition,
-          primaryColor: const Color(0xFF143D59),
-          accentColor: const Color(0xFFF4B41A),
-          textColor: Colors.black,
-          containerPadding: 24,
-          onAddBlock: (type, {atIndex}) {},
-          onSpacingChanged: (blockId, spacing) {},
-          onNavigate: (_) {},
-          isNavigationEligible: (_) => true,
+  WebsitePageComposition project(List<Map<String, dynamic>> source) =>
+      WebsitePageComposition.project(
+        blocks: source,
+        mode: mode,
+        breakpoint: _breakpoint(logicalWidth),
+        logicalWidth: logicalWidth,
+      );
+
+  Widget page(WebsitePageComposition composition) => Scaffold(
+        body: SingleChildScrollView(
+          child: PageComposition(
+            composition: composition,
+            primaryColor: const Color(0xFF143D59),
+            accentColor: const Color(0xFFF4B41A),
+            textColor: Colors.black,
+            containerPadding: 24,
+            onAddBlock: (type, {atIndex}) {},
+            onSpacingChanged: (blockId, spacing) {},
+            onNavigate: (_) {},
+            isNavigationEligible: (_) => true,
+          ),
         ),
-      ),
-    ),
+      );
+
+  final app = MaterialApp(
+    home: provider == null
+        ? page(project(blocks))
+        : Consumer<WebsiteEditModeProvider>(
+            builder: (context, live, _) => page(project(live.blocks)),
+          ),
   );
   if (provider == null) return app;
   return ChangeNotifierProvider<WebsiteEditModeProvider>.value(
@@ -90,13 +106,12 @@ Future<void> _pumpComposition(
   if (mode == WebsitePageCompositionMode.edit) {
     await tester.runAsync(DeferredEditableBlockRenderer.preload);
   }
+  final width = tester.view.physicalSize.width / tester.view.devicePixelRatio;
   await tester.pumpWidget(
     _host(
-      composition: WebsitePageComposition.project(
-        blocks: blocks,
-        mode: mode,
-        breakpoint: _breakpoint(tester.view.physicalSize.width),
-      ),
+      blocks: blocks,
+      mode: mode,
+      logicalWidth: width,
       provider: provider,
     ),
   );
@@ -642,6 +657,11 @@ void main() {
         provider: provider,
       );
 
+      // Production selects the block on pointer-down before its inline
+      // presenter handles the edit. The exact mutation lease deliberately
+      // rejects a callback captured without that owner selection.
+      provider.selectBlock('about');
+      await tester.pump();
       tester
           .widget<InlineEditableTextV2>(
             find.byKey(
@@ -665,6 +685,8 @@ void main() {
           .call('https://invalid.local/saved-about.jpg');
       await tester.pump();
 
+      provider.selectBlock('cta');
+      await tester.pump();
       tester
           .widget<InlineEditableTextV2>(
             find.byKey(
@@ -690,6 +712,8 @@ void main() {
           );
       await tester.pump();
 
+      provider.selectBlock('contact');
+      await tester.pump();
       tester
           .widget<InlineEditableTextV2>(
             find.byKey(
@@ -838,6 +862,189 @@ void main() {
           tester.getRect(find.byKey(WebsiteCtaBlockContent.rootKey));
       expect(publicCtaRect, previewCtaRect,
           reason: 'Preview and Public must agree on the saved CTA geometry.');
+    },
+  );
+
+  testWidgets(
+    'Style survives save, fresh reload, Preview and Public without changing '
+    'a Button scalar style',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final initialBlocks = <Map<String, dynamic>>[
+        _block(
+          id: 'styled-button',
+          type: 'button',
+          order: 0,
+          data: const <String, dynamic>{
+            'label': 'Abrir catálogo',
+            'link': '/productos',
+            'style': 'outline',
+            'surfaceStyle': <String, dynamic>{
+              'backgroundColor': '#FF112233',
+              'paddingTop': 40,
+              'paddingRight': 30,
+              'paddingBottom': 20,
+              'paddingLeft': 10,
+              'futureSurfaceOwner': <String, dynamic>{'kept': true},
+            },
+            'responsive': <String, dynamic>{
+              'version': 2,
+              'mobile': <String, dynamic>{
+                'surfacePaddingTop': 8,
+                'surfacePaddingLeft': 6,
+                'futureMobileOwner': 'kept',
+              },
+              'tablet': <String, dynamic>{
+                'surfacePaddingRight': 18,
+                'futureTabletOwner': 'kept',
+              },
+            },
+          },
+        ),
+      ];
+      final provider = WebsiteEditModeProvider()
+        ..adoptEditorEntryLease(
+          0,
+          const WebsiteEditorCapabilitySnapshot(
+            identity: 'style-save-user',
+            activeTenantId: 'tenant-style-round-trip',
+            storefrontTenantId: 'tenant-style-round-trip',
+            hasAuthority: true,
+          ),
+        )
+        ..enterEditMode(
+          initialBlocks,
+          const <String, dynamic>{},
+          pageId: 'page-style-round-trip',
+          pageSlug: 'style-round-trip',
+        );
+
+      await _pumpComposition(
+        tester,
+        blocks: provider.blocks,
+        mode: WebsitePageCompositionMode.edit,
+        provider: provider,
+      );
+      provider.selectBlock('styled-button');
+      await tester.pump();
+      final lease = provider.captureInlineMutationLease(
+        WebsiteInlineManipulationTarget(
+          blockId: 'styled-button',
+          owner: const WebsiteInlineBlockOwner(),
+          viewport: WebsiteViewport.mobile,
+          properties: <WebsiteInlineManipulationProperty>[
+            WebsiteInlineManipulationProperty(
+              canonicalKey: 'surfaceStyle',
+              policy: WebsiteResponsivePropertyPolicy.sharedOnly,
+            ),
+          ],
+        ),
+      );
+      expect(lease, isNotNull);
+      final sourceData = Map<String, dynamic>.from(
+        lease!.sourceBlock['block_data'] as Map,
+      );
+      final sourceSurface = Map<String, dynamic>.from(
+        sourceData['surfaceStyle'] as Map,
+      );
+      expect(
+        provider.commitInlineMutation(
+          lease,
+          <String, Object?>{
+            'surfaceStyle': <String, dynamic>{
+              ...sourceSurface,
+              'borderRadius': 12,
+            },
+          },
+        ),
+        WebsiteInlineMutationResult.committed,
+      );
+      await tester.pump();
+
+      final gateway = _StatefulFakeSaveGateway(
+        serviceCapability: _cap(
+          'style-save-user',
+          'tenant-style-round-trip',
+        ),
+      );
+      final result = await WebsiteSaveCoordinator(gateway).save(
+        tenantId: 'tenant-style-round-trip',
+        document: provider,
+      );
+      expect(result.appliedToActiveDocument, isTrue);
+      expect(gateway.replaceCalls, 1);
+
+      final reloadedRows = gateway.readPage('page-style-round-trip');
+      final persistedData = Map<String, dynamic>.from(
+        reloadedRows.single['block_data'] as Map,
+      );
+      expect(persistedData['style'], 'outline');
+      final persistedSurface = persistedData['surfaceStyle'] as Map;
+      expect(persistedSurface['borderRadius'], 12);
+      expect(
+        (persistedSurface['futureSurfaceOwner'] as Map)['kept'],
+        isTrue,
+      );
+      final persistedResponsive = persistedData['responsive'] as Map;
+      expect(
+        (persistedResponsive['mobile'] as Map)['futureMobileOwner'],
+        'kept',
+      );
+      expect(
+        (persistedResponsive['tablet'] as Map)['futureTabletOwner'],
+        'kept',
+      );
+
+      final reloaded = WebsiteEditModeProvider()
+        ..enterPreviewMode(
+          reloadedRows,
+          const <String, dynamic>{},
+          pageId: 'page-style-round-trip',
+          pageSlug: 'style-round-trip',
+        );
+      addTearDown(reloaded.dispose);
+      provider.dispose();
+
+      for (final (width, expectedPadding) in const <(double, EdgeInsets)>[
+        (390, EdgeInsets.fromLTRB(6, 8, 30, 20)),
+        (834, EdgeInsets.fromLTRB(10, 40, 18, 20)),
+      ]) {
+        await tester.binding.setSurfaceSize(Size(width, 1200));
+        for (final mode in <WebsitePageCompositionMode>[
+          WebsitePageCompositionMode.preview,
+          WebsitePageCompositionMode.public,
+        ]) {
+          final rows = mode == WebsitePageCompositionMode.preview
+              ? reloaded.blocks
+              : gateway.readPage('page-style-round-trip');
+          await _pumpComposition(
+            tester,
+            blocks: rows,
+            mode: mode,
+          );
+          final surface = tester.widget<Container>(
+            find.byKey(WebsiteBlockSurface.fallbackKey),
+          );
+          final decoration = surface.decoration! as BoxDecoration;
+          expect(decoration.color, const Color(0xFF112233));
+          expect(decoration.borderRadius, BorderRadius.circular(12));
+          expect(
+            find.descendant(
+              of: find.byKey(WebsiteBlockSurface.fallbackKey),
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is Padding && widget.padding == expectedPadding,
+              ),
+            ),
+            findsOneWidget,
+            reason: '$mode @ $width consumes the saved viewport padding',
+          );
+          expect(find.text('Abrir catálogo'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        }
+      }
     },
   );
 
@@ -1009,6 +1216,12 @@ void main() {
         );
       }
 
+      Future<void> selectInlineOwner(String blockId) async {
+        provider.selectBlock(blockId);
+        await tester.pump();
+      }
+
+      await selectInlineOwner('features');
       inlineText('features', 'features.item.0.title')
           .onTextChanged!
           .call('Diagnóstico guardado');
@@ -1017,18 +1230,22 @@ void main() {
           .onFormattingChanged!
           .call(const TextFormatting(textAlign: TextAlign.right));
       await tester.pump();
+      await selectInlineOwner('services');
       inlineText('services', 'services.item.0.description')
           .onTextChanged!
           .call('Servicio guardado');
       await tester.pump();
+      await selectInlineOwner('faq');
       inlineText('faq', 'faq.item.0.question')
           .onTextChanged!
           .call('Pregunta guardada');
       await tester.pump();
+      await selectInlineOwner('testimonials');
       inlineText('testimonials', 'testimonials.item.0.comment')
           .onTextChanged!
           .call('Testimonio guardado');
       await tester.pump();
+      await selectInlineOwner('pricing');
       inlineText('pricing', 'pricing.plan.0.name')
           .onTextChanged!
           .call('Plan guardado');
@@ -1050,8 +1267,10 @@ void main() {
             ),
           );
       await tester.pump();
+      await selectInlineOwner('stats');
       inlineText('stats', 'stats.metric.0.value').onTextChanged!.call('1500');
       await tester.pump();
+      await selectInlineOwner('team');
       inlineText('team', 'team.member.0.name')
           .onTextChanged!
           .call('Andrea guardada');
@@ -1067,6 +1286,7 @@ void main() {
           .onChanged!
           .call('https://invalid.local/team.jpg');
       await tester.pump();
+      await selectInlineOwner('gallery');
       inlineText('gallery', 'gallery.image.0.caption')
           .onTextChanged!
           .call('Taller guardado');

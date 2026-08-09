@@ -3,16 +3,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/website_action.dart';
+import '../providers/website_edit_mode_provider.dart';
 import 'website_action_editor.dart';
 import 'website_editor_block_sheet.dart';
 import 'website_editor_chrome_geometry.dart';
 import 'website_link_value_editor.dart';
+import 'website_media_picker.dart';
 
 /// What the contextual sheet decided when it closed.
 ///
 /// Dismissing the sheet applies, mirroring the anchored editor's tap-outside:
 /// on both hosts the only way to throw the edit away is to say so.
 enum _InlineActionOutcome { applied, appliedAndOpen, discarded }
+
+typedef WebsiteInlineActionCommit = WebsiteInlineMutationResult Function(
+  WebsiteActionValue value,
+);
 
 /// Edit chrome for a shared [WebsiteActionButton].
 ///
@@ -44,13 +50,20 @@ class WebsiteInlineActionEditor extends StatefulWidget {
     required this.onChanged,
     this.onOpen,
     this.openOnFirstTap = false,
+    this.asyncBinding,
   });
 
   final WebsiteActionValue action;
   final Widget child;
-  final ValueChanged<WebsiteActionValue> onChanged;
+
+  /// Persists the action and reports whether the canonical owner admitted it.
+  /// `onOpen` is gated on this exact result, never merely on dialog Apply.
+  final WebsiteInlineActionCommit onChanged;
   final ValueChanged<String>? onOpen;
   final bool openOnFirstTap;
+
+  /// Exact authority for the action slot represented by [child].
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   /// The `O-05` surface for the contextual host.
   @visibleForTesting
@@ -84,6 +97,7 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
   bool _isSheetOpen = false;
   bool _usesContextualHost = false;
   late WebsiteActionVariant _variant;
+  WebsiteAsyncFieldArm? _overlayArm;
 
   @override
   void initState() {
@@ -107,6 +121,14 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
 
   @override
   void deactivate() {
+    final arm = _overlayArm;
+    _overlayArm = null;
+    if (arm != null) {
+      widget.asyncBinding?.commit(
+        arm,
+        () => WebsiteInlineMutationResult.unchanged,
+      );
+    }
     _removeOverlay();
     super.deactivate();
   }
@@ -125,20 +147,52 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
     if (entry?.mounted == true) entry!.remove();
   }
 
-  void _closeEditor({required bool save}) {
+  WebsiteInlineMutationResult _commitDraft(
+    WebsiteActionValue draft,
+    WebsiteAsyncFieldArm? arm,
+  ) {
+    final liveBinding = widget.asyncBinding;
+    if (arm != null) {
+      if (liveBinding == null) return WebsiteInlineMutationResult.rejected;
+      return liveBinding.commit(arm, () {
+        if (draft == widget.action) {
+          return WebsiteInlineMutationResult.unchanged;
+        }
+        return widget.onChanged(draft);
+      });
+    }
+    if (liveBinding != null) return WebsiteInlineMutationResult.rejected;
+    if (draft == widget.action) return WebsiteInlineMutationResult.unchanged;
+    return widget.onChanged(draft);
+  }
+
+  WebsiteInlineMutationResult _closeEditor({required bool save}) {
+    var result = WebsiteInlineMutationResult.unchanged;
     if (save) {
-      widget.onChanged(
+      result = _commitDraft(
         WebsiteActionValue(
           label: _labelController.text,
           href: _hrefController.text,
           variant: _variant,
         ),
+        _overlayArm,
       );
+      if (!result.accepted) _syncFromWidget();
     } else {
+      final arm = _overlayArm;
+      if (arm != null) {
+        result = widget.asyncBinding?.commit(
+              arm,
+              () => WebsiteInlineMutationResult.unchanged,
+            ) ??
+            WebsiteInlineMutationResult.rejected;
+      }
       _syncFromWidget();
     }
+    _overlayArm = null;
     _removeOverlay();
     if (mounted) setState(() => _isSelected = false);
+    return result;
   }
 
   void _handleTap() {
@@ -167,6 +221,10 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
   /// destination and presentation stay one operation and one history step —
   /// the same contract the anchored card already honours.
   Future<void> _showContextualSheet() async {
+    final openingCallback = widget.onChanged;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    if (openingBinding != null && arm == null) return;
     var draft = WebsiteActionValue(
       label: _labelController.text,
       href: _hrefController.text,
@@ -193,14 +251,32 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
     });
 
     if (outcome == _InlineActionOutcome.discarded) {
+      if (arm != null) {
+        widget.asyncBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+      }
       _syncFromWidget();
       return;
     }
 
+    WebsiteInlineMutationResult result;
+    if (arm != null) {
+      result = _commitDraft(draft, arm);
+    } else if (identical(widget.onChanged, openingCallback)) {
+      result = _commitDraft(draft, null);
+    } else {
+      result = WebsiteInlineMutationResult.rejected;
+    }
+
+    if (!result.accepted) {
+      _syncFromWidget();
+      return;
+    }
     _labelController.text = draft.label;
     _hrefController.text = draft.href;
     _variant = draft.variant;
-    widget.onChanged(draft);
 
     if (outcome == _InlineActionOutcome.appliedAndOpen) {
       final href = draft.href.trim();
@@ -209,14 +285,24 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
   }
 
   void _showEditor() {
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    if (openingBinding != null && arm == null) return;
     final overlay = Overlay.maybeOf(context);
     final renderObject = context.findRenderObject();
     if (overlay == null ||
         renderObject is! RenderBox ||
         !renderObject.attached ||
         !renderObject.hasSize) {
+      if (arm != null) {
+        widget.asyncBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+      }
       return;
     }
+    _overlayArm = arm;
 
     _overlayEntry = OverlayEntry(
       builder: (overlayContext) => Stack(
@@ -252,8 +338,8 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
                         ? null
                         : () {
                             final href = _hrefController.text.trim();
-                            _closeEditor(save: true);
-                            widget.onOpen!(href);
+                            final result = _closeEditor(save: true);
+                            if (result.accepted) widget.onOpen?.call(href);
                           },
               ),
             ),

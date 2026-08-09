@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:vinabike_erp/modules/website/models/canvas_element_factory.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_composition.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/widgets/deferred_canvas_block.dart';
 import 'package:vinabike_erp/modules/website/widgets/deferred_editable_block_renderer.dart';
@@ -71,9 +72,7 @@ Map<String, dynamic> _responsive(Map<String, dynamic> viewports) {
 }
 
 String _breakpoint(double width) {
-  if (width < 600) return 'mobile';
-  if (width < 1200) return 'tablet';
-  return 'desktop';
+  return WebsiteViewport.fromLogicalWidth(width).wireName;
 }
 
 Finder _layerFinder(String id) =>
@@ -105,6 +104,7 @@ Future<void> _pumpBlocks(
             blocks: blocks,
             mode: mode,
             breakpoint: _breakpoint(width),
+            logicalWidth: width,
           ),
           primaryColor: const Color(0xFF143D59),
           accentColor: const Color(0xFF00A09D),

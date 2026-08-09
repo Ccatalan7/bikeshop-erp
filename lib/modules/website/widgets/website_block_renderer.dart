@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/website_service.dart';
 
 import '../../../public_store/providers/public_store_tenant_provider.dart';
@@ -13,11 +12,12 @@ import '../../../public_store/services/public_category_publication.dart';
 import '../../../public_store/services/public_inventory_service.dart';
 import '../../../shared/models/public_product_visibility_policy.dart';
 import '../../../shared/services/tenant_service.dart';
-import '../../../shared/services/inventory_service.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/widgets/hover_scale.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_font_registry.dart';
+import '../models/website_block_registry.dart';
+import '../models/website_block_surface_style.dart';
 import '../models/website_block_type.dart';
 import '../models/website_action.dart';
 import '../models/website_canvas_responsive_document.dart';
@@ -32,6 +32,7 @@ import 'website_carousel_media.dart';
 import 'website_carousel_edit_binding.dart';
 import 'website_canvas_editor_binding.dart';
 import 'website_block_content_presenters.dart';
+import 'website_block_surface.dart';
 import 'website_contact_block_content.dart';
 import 'website_cta_block_content.dart';
 import 'website_faq_block_content.dart';
@@ -108,6 +109,7 @@ class WebsiteBlockRenderer {
     required BuildContext context,
     required String blockType,
     required Map<String, dynamic> data,
+    required WebsiteViewport effectiveViewport,
     required Color primaryColor,
     required Color accentColor,
     List<Product>? featuredProducts,
@@ -133,163 +135,228 @@ class WebsiteBlockRenderer {
     headingFont = WebsiteFontRegistry.resolveOptionalHeadingFont(headingFont);
     bodyFont = WebsiteFontRegistry.resolveOptionalBodyFont(bodyFont);
 
-    switch (type) {
-      case WebsiteBlockType.hero:
-        return WebsiteHeroBlockContent(
-          data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          previewMode: previewMode,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          headingSize: headingSize,
-          bodySize: bodySize,
-          onNavigate: onNavigate,
-          isNavigationEligible: isNavigationEligible,
-          presenters: contentPresenters,
-        );
-      case WebsiteBlockType.carousel:
-        return _buildCarousel(
-          context: context,
-          data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          previewMode: previewMode,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          headingSize: headingSize,
-          bodySize: bodySize,
-          onNavigate: onNavigate,
-          isNavigationEligible: isNavigationEligible,
-          tenantId: tenantId,
-          presenters: contentPresenters,
-          editBinding: carouselEditBinding,
-        );
-      case WebsiteBlockType.canvas:
-        return _buildCanvas(
-          context: context,
-          data: data,
-          accentColor: accentColor,
-          onNavigate: onNavigate,
-          isNavigationEligible: isNavigationEligible,
-          tenantId: tenantId,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          editBinding: canvasEditBinding,
-        );
-      case WebsiteBlockType.text:
-        return _buildText(
-          context: context,
-          data: data,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          headingSize: headingSize,
-          bodySize: bodySize,
-          inlinePresenter: contentPresenters?.text,
-        );
-      case WebsiteBlockType.button:
-        return _buildButton(
-          context: context,
-          data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          bodyFont: bodyFont,
-          bodySize: bodySize,
-          onNavigate: onNavigate,
-          isNavigationEligible: isNavigationEligible,
-          actionPresenter: contentPresenters?.action,
-        );
-      case WebsiteBlockType.divider:
-        return _buildDivider(
-          context: context,
-          data: data,
-        );
-      case WebsiteBlockType.products:
-        return _buildProducts(
-          context: context,
-          data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          featuredProducts: featuredProducts,
-          featuredProductsReady: featuredProductsReady,
-          previewMode: previewMode,
-          visitorInteractionsEnabled: visitorInteractionsEnabled,
-          bodyFont: bodyFont,
-          onNavigate: onNavigate,
-          isNavigationEligible: isNavigationEligible,
-          tenantId: tenantId,
-        );
-      case WebsiteBlockType.services:
-        return _withResponsiveContentPadding(
-          context: context,
-          data: data,
-          defaultVertical: 56,
-          builder: (padding) => WebsiteServicesBlockContent(
+    Widget buildContent(WebsiteBlockSurfaceStyle surfaceStyle) {
+      switch (type) {
+        case WebsiteBlockType.hero:
+          return WebsiteHeroBlockContent(
             data: data,
+            surfaceStyle: surfaceStyle,
             primaryColor: primaryColor,
+            accentColor: accentColor,
+            previewMode: previewMode,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            headingSize: headingSize,
+            bodySize: bodySize,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+            presenters: contentPresenters,
+          );
+        case WebsiteBlockType.carousel:
+          return _applySurfacePadding(
+            surfaceStyle,
+            _buildCarousel(
+              context: context,
+              data: data,
+              surfaceStyle: surfaceStyle,
+              primaryColor: primaryColor,
+              accentColor: accentColor,
+              previewMode: previewMode,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              headingSize: headingSize,
+              bodySize: bodySize,
+              onNavigate: onNavigate,
+              isNavigationEligible: isNavigationEligible,
+              tenantId: tenantId,
+              presenters: contentPresenters,
+              editBinding: carouselEditBinding,
+            ),
+            blockType: WebsiteBlockType.carousel,
+            data: data,
+          );
+        case WebsiteBlockType.canvas:
+          return _buildCanvas(
+            context: context,
+            data: data,
+            accentColor: accentColor,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+            tenantId: tenantId,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            editBinding: canvasEditBinding,
+          );
+        case WebsiteBlockType.text:
+          return _applySurfacePadding(
+            surfaceStyle,
+            _buildText(
+              context: context,
+              data: data,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              headingSize: headingSize,
+              bodySize: bodySize,
+              inlinePresenter: contentPresenters?.text,
+            ),
+            blockType: WebsiteBlockType.text,
+            data: data,
+          );
+        case WebsiteBlockType.button:
+          return _applySurfacePadding(
+            surfaceStyle,
+            _buildButton(
+              context: context,
+              data: data,
+              primaryColor: primaryColor,
+              accentColor: accentColor,
+              bodyFont: bodyFont,
+              bodySize: bodySize,
+              onNavigate: onNavigate,
+              isNavigationEligible: isNavigationEligible,
+              actionPresenter: contentPresenters?.action,
+            ),
+            blockType: WebsiteBlockType.button,
+            data: data,
+          );
+        case WebsiteBlockType.divider:
+          return _applySurfacePadding(
+            surfaceStyle,
+            _buildDivider(
+              context: context,
+              data: data,
+            ),
+            blockType: WebsiteBlockType.divider,
+            data: data,
+          );
+        case WebsiteBlockType.products:
+          return _buildProducts(
+            context: context,
+            data: data,
+            surfaceStyle: surfaceStyle,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            featuredProducts: featuredProducts,
+            featuredProductsReady: featuredProductsReady,
+            previewMode: previewMode,
+            visitorInteractionsEnabled: visitorInteractionsEnabled,
+            bodyFont: bodyFont,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+            tenantId: tenantId,
+          );
+        case WebsiteBlockType.services:
+          return _withResponsiveContentPadding(
+            surfaceStyle: surfaceStyle,
+            blockType: WebsiteBlockType.services,
+            data: data,
+            builder: (padding) => WebsiteServicesBlockContent(
+              data: data,
+              primaryColor: primaryColor,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              presenters: contentPresenters,
+              backgroundColor: surfaceStyle.hasAuthoredBackground
+                  ? Colors.transparent
+                  : null,
+              padding: padding,
+            ),
+          );
+        case WebsiteBlockType.about:
+          return WebsiteAboutBlockContent(
+            data: data,
             headingFont: headingFont,
             bodyFont: bodyFont,
             presenters: contentPresenters,
-            backgroundColor: _parseColor(data['style']?['backgroundColor']),
-            padding: padding,
-          ),
-        );
-      case WebsiteBlockType.about:
-        return WebsiteAboutBlockContent(
-          data: data,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          presenters: contentPresenters,
-          padding: _parsePadding(
-            data,
-            defaultVertical: 64,
-            screenWidth: MediaQuery.sizeOf(context).width,
-          ),
-        );
-      case WebsiteBlockType.cta:
-        return WebsiteCtaBlockContent(
-          data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          previewMode: previewMode,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          onNavigate: onNavigate,
-          isNavigationEligible: isNavigationEligible,
-          presenters: contentPresenters,
-        );
-      case WebsiteBlockType.features:
-        return _withResponsiveContentPadding(
-          context: context,
-          data: data,
-          builder: (padding) => WebsiteFeaturesBlockContent(
+            padding: _surfacePadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.about,
+              data: data,
+            ),
+          );
+        case WebsiteBlockType.cta:
+          return WebsiteCtaBlockContent(
             data: data,
+            surfaceStyle: surfaceStyle,
             primaryColor: primaryColor,
+            accentColor: accentColor,
+            previewMode: previewMode,
             headingFont: headingFont,
             bodyFont: bodyFont,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
             presenters: contentPresenters,
-            backgroundColor: _parseColor(data['style']?['backgroundColor']),
-            padding: padding,
-          ),
-        );
-      case WebsiteBlockType.testimonials:
-        return _withResponsiveContentPadding(
-          context: context,
-          data: data,
-          builder: (padding) => WebsiteTestimonialsBlockContent(
+          );
+        case WebsiteBlockType.features:
+          return _withResponsiveContentPadding(
+            surfaceStyle: surfaceStyle,
+            blockType: WebsiteBlockType.features,
             data: data,
-            primaryColor: primaryColor,
-            headingFont: headingFont,
-            bodyFont: bodyFont,
-            presenters: contentPresenters,
-            padding: padding,
-          ),
-        );
-      case WebsiteBlockType.pricing:
-        return _withResponsiveContentPadding(
-          context: context,
-          data: data,
-          builder: (padding) => WebsitePricingBlockContent(
+            builder: (padding) => WebsiteFeaturesBlockContent(
+              data: data,
+              primaryColor: primaryColor,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              presenters: contentPresenters,
+              backgroundColor: surfaceStyle.hasAuthoredBackground
+                  ? Colors.transparent
+                  : null,
+              padding: padding,
+            ),
+          );
+        case WebsiteBlockType.testimonials:
+          return _withResponsiveContentPadding(
+            surfaceStyle: surfaceStyle,
+            blockType: WebsiteBlockType.testimonials,
+            data: data,
+            builder: (padding) => WebsiteTestimonialsBlockContent(
+              data: data,
+              primaryColor: primaryColor,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              presenters: contentPresenters,
+              backgroundColor: surfaceStyle.hasAuthoredBackground
+                  ? Colors.transparent
+                  : null,
+              padding: padding,
+            ),
+          );
+        case WebsiteBlockType.pricing:
+          return _withResponsiveContentPadding(
+            surfaceStyle: surfaceStyle,
+            blockType: WebsiteBlockType.pricing,
+            data: data,
+            builder: (padding) => WebsitePricingBlockContent(
+              data: data,
+              primaryColor: primaryColor,
+              accentColor: accentColor,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              previewMode: previewMode,
+              onNavigate: onNavigate,
+              isNavigationEligible: isNavigationEligible,
+              presenters: contentPresenters,
+              backgroundColor: surfaceStyle.hasAuthoredBackground
+                  ? Colors.transparent
+                  : null,
+              padding: padding,
+            ),
+          );
+        case WebsiteBlockType.gallery:
+          return _withResponsiveContentPadding(
+            surfaceStyle: surfaceStyle,
+            blockType: WebsiteBlockType.gallery,
+            data: data,
+            builder: (padding) => WebsiteGalleryBlockContent(
+              data: data,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              presenters: contentPresenters,
+              padding: padding,
+            ),
+          );
+        case WebsiteBlockType.contact:
+          return WebsiteContactBlockContent(
             data: data,
             primaryColor: primaryColor,
             accentColor: accentColor,
@@ -299,173 +366,170 @@ class WebsiteBlockRenderer {
             onNavigate: onNavigate,
             isNavigationEligible: isNavigationEligible,
             presenters: contentPresenters,
-            padding: padding,
-          ),
-        );
-      case WebsiteBlockType.gallery:
-        return _withResponsiveContentPadding(
-          context: context,
-          data: data,
-          builder: (padding) => WebsiteGalleryBlockContent(
+            padding: _surfacePadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.contact,
+              data: data,
+            ),
+          );
+        case WebsiteBlockType.faq:
+          return _withResponsiveContentPadding(
+            surfaceStyle: surfaceStyle,
+            blockType: WebsiteBlockType.faq,
             data: data,
-            headingFont: headingFont,
-            bodyFont: bodyFont,
-            presenters: contentPresenters,
-            padding: padding,
-          ),
-        );
-      case WebsiteBlockType.contact:
-        return WebsiteContactBlockContent(
-          data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          previewMode: previewMode,
-          onNavigate: onNavigate,
-          isNavigationEligible: isNavigationEligible,
-          presenters: contentPresenters,
-          padding: _parsePadding(
-            data,
-            screenWidth: MediaQuery.sizeOf(context).width,
-            defaultVertical: 64,
-            defaultHorizontal: 24,
-          ),
-        );
-      case WebsiteBlockType.faq:
-        return _withResponsiveContentPadding(
-          context: context,
-          data: data,
-          builder: (padding) => WebsiteFaqBlockContent(
+            builder: (padding) => WebsiteFaqBlockContent(
+              data: data,
+              primaryColor: primaryColor,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              presenters: contentPresenters,
+              padding: padding,
+            ),
+          );
+        case WebsiteBlockType.stats:
+          return _withResponsiveContentPadding(
+            surfaceStyle: surfaceStyle,
+            blockType: WebsiteBlockType.stats,
             data: data,
+            builder: (padding) => WebsiteStatsBlockContent(
+              data: data,
+              primaryColor: primaryColor,
+              accentColor: accentColor,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              presenters: contentPresenters,
+              padding: padding,
+            ),
+          );
+        case WebsiteBlockType.team:
+          return _withResponsiveContentPadding(
+            surfaceStyle: surfaceStyle,
+            blockType: WebsiteBlockType.team,
+            data: data,
+            builder: (padding) => WebsiteTeamBlockContent(
+              data: data,
+              accentColor: accentColor,
+              headingFont: headingFont,
+              bodyFont: bodyFont,
+              previewMode: previewMode,
+              onNavigate: onNavigate,
+              isNavigationEligible: isNavigationEligible,
+              presenters: contentPresenters,
+              padding: padding,
+            ),
+          );
+        case WebsiteBlockType.footer:
+          return const SizedBox(height: 64);
+        case WebsiteBlockType.categoryGrid:
+          return _AutoCategoryGrid(
+            data: data,
+            surfaceStyle: surfaceStyle,
             primaryColor: primaryColor,
-            headingFont: headingFont,
-            bodyFont: bodyFont,
-            presenters: contentPresenters,
-            padding: padding,
-          ),
-        );
-      case WebsiteBlockType.stats:
-        return _withResponsiveContentPadding(
-          context: context,
-          data: data,
-          builder: (padding) => WebsiteStatsBlockContent(
-            data: data,
-            primaryColor: primaryColor,
-            accentColor: accentColor,
-            headingFont: headingFont,
-            bodyFont: bodyFont,
-            presenters: contentPresenters,
-            padding: padding,
-          ),
-        );
-      case WebsiteBlockType.team:
-        return _withResponsiveContentPadding(
-          context: context,
-          data: data,
-          builder: (padding) => WebsiteTeamBlockContent(
-            data: data,
             accentColor: accentColor,
             headingFont: headingFont,
             bodyFont: bodyFont,
             previewMode: previewMode,
+            visitorInteractionsEnabled: visitorInteractionsEnabled,
+            onNavigate: onNavigate,
+          );
+        case WebsiteBlockType.videoBanner:
+          return _buildVideoBanner(
+            context: context,
+            data: data,
+            surfaceStyle: surfaceStyle,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            previewMode: previewMode,
+            visitorInteractionsEnabled: visitorInteractionsEnabled,
             onNavigate: onNavigate,
             isNavigationEligible: isNavigationEligible,
-            presenters: contentPresenters,
-            padding: padding,
-          ),
-        );
-      case WebsiteBlockType.footer:
-        return const SizedBox(height: 64);
-      case WebsiteBlockType.categoryGrid:
-        return _AutoCategoryGrid(
-          data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          previewMode: previewMode,
-          visitorInteractionsEnabled: visitorInteractionsEnabled,
-          onNavigate: onNavigate,
-        );
-      case WebsiteBlockType.videoBanner:
-        return _buildVideoBanner(
-          context: context,
-          data: data,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          previewMode: previewMode,
-          visitorInteractionsEnabled: visitorInteractionsEnabled,
-          onNavigate: onNavigate,
-          isNavigationEligible: isNavigationEligible,
-        );
-      case WebsiteBlockType.partnersBanner:
-        return _buildPartnersBanner(
-          context: context,
-          data: data,
-          primaryColor: primaryColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-        );
-      case WebsiteBlockType.brandLogos:
-        return _buildBrandLogos(
-          context: context,
-          data: data,
-          primaryColor: primaryColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          previewMode: previewMode,
-          visitorInteractionsEnabled: visitorInteractionsEnabled,
-          onNavigate: onNavigate,
-          isNavigationEligible: isNavigationEligible,
-        );
-      case WebsiteBlockType.googleReviews:
-        // Inject synced Google review truth when the block has no custom reviews.
-        var effectiveData = data;
-        try {
-          // Access service safely (without listen to avoid redundant rebuilds here, parent handles it)
-          final service = Provider.of<WebsiteService>(context, listen: false);
-          final jsonStr = service.getSetting('google_reviews_data');
-          final syncedRating = service.getSetting('google_reviews_rating');
-          final syncedTotal = service.getSetting('google_reviews_total');
+          );
+        case WebsiteBlockType.partnersBanner:
+          return _buildPartnersBanner(
+            context: context,
+            data: data,
+            surfaceStyle: surfaceStyle,
+            primaryColor: primaryColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+          );
+        case WebsiteBlockType.brandLogos:
+          return _buildBrandLogos(
+            context: context,
+            data: data,
+            surfaceStyle: surfaceStyle,
+            primaryColor: primaryColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            previewMode: previewMode,
+            visitorInteractionsEnabled: visitorInteractionsEnabled,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+          );
+        case WebsiteBlockType.googleReviews:
+          // Inject synced Google review truth when the block has no custom reviews.
+          var effectiveData = data;
+          try {
+            // Access service safely (without listen to avoid redundant rebuilds here, parent handles it)
+            final service = Provider.of<WebsiteService>(context, listen: false);
+            final jsonStr = service.getSetting('google_reviews_data');
+            final syncedRating = service.getSetting('google_reviews_rating');
+            final syncedTotal = service.getSetting('google_reviews_total');
 
-          if ((data['reviews'] as List?)?.isEmpty ?? true) {
-            if (jsonStr.isNotEmpty) {
-              final list = jsonDecode(jsonStr) as List;
-              final reviews =
-                  list.map((e) => Map<String, dynamic>.from(e)).toList();
+            if ((data['reviews'] as List?)?.isEmpty ?? true) {
+              if (jsonStr.isNotEmpty) {
+                final list = jsonDecode(jsonStr) as List;
+                final reviews =
+                    list.map((e) => Map<String, dynamic>.from(e)).toList();
 
-              // Create new map to avoid mutating original
-              effectiveData = Map<String, dynamic>.from(data);
-              effectiveData['reviews'] = reviews;
+                // Create new map to avoid mutating original
+                effectiveData = Map<String, dynamic>.from(data);
+                effectiveData['reviews'] = reviews;
+              }
             }
+
+            if (syncedRating.isNotEmpty || syncedTotal.isNotEmpty) {
+              effectiveData = Map<String, dynamic>.from(effectiveData);
+              if (syncedRating.isNotEmpty && effectiveData['rating'] == null) {
+                effectiveData['rating'] = syncedRating;
+              }
+              if (syncedTotal.isNotEmpty &&
+                  effectiveData['totalReviews'] == null) {
+                effectiveData['totalReviews'] = syncedTotal;
+              }
+            }
+          } catch (e) {
+            debugPrint('Error injecting reviews: $e');
           }
 
-          if (syncedRating.isNotEmpty || syncedTotal.isNotEmpty) {
-            effectiveData = Map<String, dynamic>.from(effectiveData);
-            if (syncedRating.isNotEmpty && effectiveData['rating'] == null) {
-              effectiveData['rating'] = syncedRating;
-            }
-            if (syncedTotal.isNotEmpty &&
-                effectiveData['totalReviews'] == null) {
-              effectiveData['totalReviews'] = syncedTotal;
-            }
-          }
-        } catch (e) {
-          debugPrint('Error injecting reviews: $e');
-        }
-
-        return GoogleReviewsCarousel(
-          data: effectiveData,
-          primaryColor: primaryColor,
-          accentColor: accentColor,
-          headingFont: headingFont,
-          bodyFont: bodyFont,
-          previewMode: previewMode,
-        );
+          return GoogleReviewsCarousel(
+            data: effectiveData,
+            padding: _surfacePadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.googleReviews,
+              data: data,
+            ),
+            backgroundColorOverride:
+                surfaceStyle.hasAuthoredBackground ? Colors.transparent : null,
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            previewMode: previewMode,
+          );
+      }
     }
+
+    return WebsiteBlockSurface(
+      data: data,
+      viewport: effectiveViewport,
+      paintDecoration:
+          type != WebsiteBlockType.canvas && type != WebsiteBlockType.footer,
+      clipContent: type != WebsiteBlockType.videoBanner,
+      builder: (context, surfaceStyle) => buildContent(surfaceStyle),
+    );
   }
 
   static Widget _buildCanvas({
@@ -636,149 +700,51 @@ class WebsiteBlockRenderer {
     }
   }
 
-  static Color? _parseColor(dynamic value) {
-    if (value == null) return null;
-    final hex = value.toString();
-    if (hex.isEmpty) return null;
-    final buffer = StringBuffer();
-    if (hex.length == 6 || hex.length == 7) buffer.write('ff');
-    buffer.write(hex.replaceFirst('#', ''));
-    try {
-      return Color(int.parse(buffer.toString(), radix: 16));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Parse rgba color string to Color
-  static Color? _parseRgbaColor(String? rgba) {
-    if (rgba == null || rgba.isEmpty) return null;
-    try {
-      // Handle hex colors
-      if (rgba.startsWith('#')) return _parseColor(rgba);
-
-      // Handle rgba(r,g,b,a) format
-      final match = RegExp(r'rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)')
-          .firstMatch(rgba);
-      if (match != null) {
-        final r = int.parse(match.group(1)!);
-        final g = int.parse(match.group(2)!);
-        final b = int.parse(match.group(3)!);
-        final a = match.group(4) != null ? double.parse(match.group(4)!) : 1.0;
-        return Color.fromRGBO(r, g, b, a);
-      }
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Get gradient start alignment from direction string
-  static Alignment _getGradientBegin(String direction) {
-    switch (direction) {
-      case 'to-top':
-        return Alignment.bottomCenter;
-      case 'to-top-right':
-        return Alignment.bottomLeft;
-      case 'to-right':
-        return Alignment.centerLeft;
-      case 'to-bottom-right':
-        return Alignment.topLeft;
-      case 'to-bottom':
-        return Alignment.topCenter;
-      case 'to-bottom-left':
-        return Alignment.topRight;
-      case 'to-left':
-        return Alignment.centerRight;
-      case 'to-top-left':
-        return Alignment.bottomRight;
-      default:
-        return Alignment.topCenter;
-    }
-  }
-
-  /// Get gradient end alignment from direction string
-  static Alignment _getGradientEnd(String direction) {
-    switch (direction) {
-      case 'to-top':
-        return Alignment.topCenter;
-      case 'to-top-right':
-        return Alignment.topRight;
-      case 'to-right':
-        return Alignment.centerRight;
-      case 'to-bottom-right':
-        return Alignment.bottomRight;
-      case 'to-bottom':
-        return Alignment.bottomCenter;
-      case 'to-bottom-left':
-        return Alignment.bottomLeft;
-      case 'to-left':
-        return Alignment.centerLeft;
-      case 'to-top-left':
-        return Alignment.topLeft;
-      default:
-        return Alignment.bottomCenter;
-    }
-  }
-
-  static EdgeInsets _parsePadding(
-    Map<String, dynamic> data, {
-    double defaultVertical = 64,
-    double defaultHorizontal = 24,
-    double? screenWidth,
-    double mobileHorizontal = 16,
-    double mobileBreakpoint = 600,
+  static EdgeInsets _surfacePadding(
+    WebsiteBlockSurfaceStyle surfaceStyle, {
+    required WebsiteBlockType blockType,
+    required Map<String, dynamic> data,
+    EdgeInsets? fallback,
   }) {
-    final resolvedDefaultHorizontal =
-        (screenWidth != null && screenWidth < mobileBreakpoint)
-            ? mobileHorizontal
-            : defaultHorizontal;
+    return surfaceStyle.paddingWithFallback(
+      fallback ??
+          WebsiteBlockSurfaceDefaults.paddingFor(
+            blockType: blockType,
+            viewport: surfaceStyle.viewport,
+            data: data,
+          ),
+    );
+  }
 
-    final style = data['style'] as Map<String, dynamic>?;
-    if (style == null) {
-      return EdgeInsets.symmetric(
-        vertical: defaultVertical,
-        horizontal: resolvedDefaultHorizontal,
-      );
-    }
-
-    final top = (style['paddingTop'] as num?)?.toDouble() ?? defaultVertical;
-    final bottom =
-        (style['paddingBottom'] as num?)?.toDouble() ?? defaultVertical;
-    final left =
-        (style['paddingLeft'] as num?)?.toDouble() ?? resolvedDefaultHorizontal;
-    final right = (style['paddingRight'] as num?)?.toDouble() ??
-        resolvedDefaultHorizontal;
-
-    return EdgeInsets.only(
-      top: top,
-      right: right,
-      bottom: bottom,
-      left: left,
+  static Widget _applySurfacePadding(
+    WebsiteBlockSurfaceStyle surfaceStyle,
+    Widget child, {
+    required WebsiteBlockType blockType,
+    required Map<String, dynamic> data,
+  }) {
+    if (!surfaceStyle.hasAuthoredPadding) return child;
+    return Padding(
+      padding: _surfacePadding(
+        surfaceStyle,
+        blockType: blockType,
+        data: data,
+      ),
+      child: child,
     );
   }
 
   static Widget _withResponsiveContentPadding({
-    required BuildContext context,
+    required WebsiteBlockSurfaceStyle surfaceStyle,
+    required WebsiteBlockType blockType,
     required Map<String, dynamic> data,
     required Widget Function(EdgeInsets padding) builder,
-    double defaultVertical = 64,
-    double defaultHorizontal = 24,
   }) {
-    return ConstraintLayoutBuilder(
-      builder: (context, constraints) {
-        final frameWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.sizeOf(context).width;
-        return builder(
-          _parsePadding(
-            data,
-            defaultVertical: defaultVertical,
-            defaultHorizontal: defaultHorizontal,
-            screenWidth: frameWidth,
-          ),
-        );
-      },
+    return builder(
+      _surfacePadding(
+        surfaceStyle,
+        blockType: blockType,
+        data: data,
+      ),
     );
   }
 
@@ -789,139 +755,20 @@ class WebsiteBlockRenderer {
     Alignment? imageAlignmentParam,
     bool skipImage = false,
   }) {
-    final style = Map<String, dynamic>.from(data['style'] ?? {});
-    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
-    final backgroundType = style['backgroundType']?.toString() ?? 'solid';
-
-    // Parse border
-    final hasBorder = (style['borderWidth'] as num?)?.toDouble() != null &&
-        (style['borderWidth'] as num).toDouble() > 0;
-    final borderWidth = (style['borderWidth'] as num?)?.toDouble() ?? 0.0;
-    final borderColor =
-        _parseColor(style['borderColor']?.toString()) ?? Colors.grey;
-    final borderStyle = style['borderStyle']?.toString() ?? 'solid';
-
-    // Parse shadow
-    final hasShadow = style['shadowEnabled'] == true;
-    final shadowOffsetX = (style['shadowOffsetX'] as num?)?.toDouble() ?? 0.0;
-    final shadowOffsetY = (style['shadowOffsetY'] as num?)?.toDouble() ?? 4.0;
-    final shadowBlur = (style['shadowBlur'] as num?)?.toDouble() ?? 12.0;
-    final shadowSpread = (style['shadowSpread'] as num?)?.toDouble() ?? 0.0;
-    final shadowColor =
-        _parseRgbaColor(style['shadowColor']?.toString()) ?? Colors.black26;
-
-    final imageAlignment = imageAlignmentParam ?? _resolveFocalAlignment(data);
-
-    // Parse border radius (note: typically handled by ClipRRect parent, but we can set it here too)
-    final borderRadius = (style['borderRadius'] as num?)?.toDouble() ?? 0.0;
-
-    // Image background takes precedence for the image property,
-    // but we might still want a color/gradient behind it (visible while loading or if transparent)
-    DecorationImage? image;
-    if (hasImage && !skipImage) {
-      image = DecorationImage(
-        image: NetworkImage(imageUrl),
-        fit: BoxFit.cover,
-        alignment: imageAlignment,
-        // on top of everything. Applying a color filter forces rasterization.
-        // We use a slightly off-white (FEFEFE) to prevent the engine from
-        // optimizing it away as a no-op identity filter.
-        colorFilter: kIsWeb
-            ? const ColorFilter.mode(Color(0xFFFEFEFE), BlendMode.modulate)
-            : null,
-      );
-    }
-
-    // Default background color (legacy fallback)
-    final bgColor = _parseColor(style['backgroundColor']) ?? defaultColor;
-
-    // Construct Border
-    BoxBorder? border;
-    if (hasBorder) {
-      border = Border.all(
-        color: borderColor,
-        width: borderWidth,
-        style: borderStyle == 'dotted' || borderStyle == 'dashed'
-            ? BorderStyle
-                .none // Flutter Border doesn't support dotted easily without custom painter, fallback to solid or none?
-            // Actually BorderStyle.solid is likely what we want unless completely hidden
-            : BorderStyle.solid,
-      );
-    }
-
-    // Construct Shadow
-    List<BoxShadow>? boxShadow;
-    if (hasShadow) {
-      boxShadow = [
-        BoxShadow(
-          offset: Offset(shadowOffsetX, shadowOffsetY),
-          blurRadius: shadowBlur,
-          spreadRadius: shadowSpread,
-          color: shadowColor,
-        ),
-      ];
-    }
-
-    if (backgroundType == 'gradient') {
-      final gradientColor1 =
-          _parseColor(style['gradientColor1']?.toString()) ?? Colors.white;
-      final gradientColor2 = _parseColor(style['gradientColor2']?.toString()) ??
-          Colors.grey.shade100;
-      final gradientDirection =
-          style['gradientDirection']?.toString() ?? 'to-bottom';
-
-      return BoxDecoration(
-        color: bgColor, // Fallback color
-        image: image,
-        gradient: !hasImage
-            ? LinearGradient(
-                begin: _getGradientBegin(gradientDirection),
-                end: _getGradientEnd(gradientDirection),
-                colors: [gradientColor1, gradientColor2],
-              )
-            : null,
-        border: border,
-        borderRadius:
-            borderRadius > 0 ? BorderRadius.circular(borderRadius) : null,
-        boxShadow: boxShadow,
-      );
-    }
-
-    // Solid color (or default legacy gradient if no image and no specific style)
-    // If style is explicitly 'solid', we use bgColor.
-    // Legacy behavior: if no style defined, we created a subtle gradient.
-    // We preserve legacy behavior only if style is strictly empty or explicitly asks for it?
-    // For now, let's trust the style data.
-
-    // If hasImage is false, and no specific gradient is requested, legacy code did a subtle gradient.
-    // We can keep that as a fallback if style is missing.
-    final hasStyle = data['style'] != null;
-
-    if (!hasImage && !hasStyle) {
-      return BoxDecoration(
-        color: bgColor,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            bgColor,
-            Color.lerp(bgColor, Colors.black, 0.2)!,
-          ],
-        ),
-        border: border,
-        borderRadius:
-            borderRadius > 0 ? BorderRadius.circular(borderRadius) : null,
-        boxShadow: boxShadow,
-      );
-    }
-
-    return BoxDecoration(
-      color: bgColor,
-      image: image,
-      border: border,
-      borderRadius:
-          borderRadius > 0 ? BorderRadius.circular(borderRadius) : null,
-      boxShadow: boxShadow,
+    final hasConfiguredImage = imageUrl != null && imageUrl.isNotEmpty;
+    final style = WebsiteBlockSurfaceStyle.resolve(
+      data: data,
+      viewport: WebsiteViewport.desktop,
+    );
+    return style.decorationWithMedia(
+      fallbackColor: defaultColor,
+      imageProvider:
+          hasConfiguredImage && !skipImage ? NetworkImage(imageUrl) : null,
+      imageAlignment: imageAlignmentParam ?? _resolveFocalAlignment(data),
+      imageColorFilter: kIsWeb && hasConfiguredImage && !skipImage
+          ? const ColorFilter.mode(Color(0xFFFEFEFE), BlendMode.modulate)
+          : null,
+      preserveLegacyFallbackGradient: !hasConfiguredImage,
     );
   }
 
@@ -942,17 +789,9 @@ class WebsiteBlockRenderer {
     );
   }
 
-  static Alignment _resolveFocalAlignment(
-    Map<String, dynamic> data, {
-    double? screenWidth,
-  }) {
-    final useMobile = screenWidth != null && screenWidth < 600;
-    final xKey = useMobile ? 'mobileFocalPointX' : 'focalPointX';
-    final yKey = useMobile ? 'mobileFocalPointY' : 'focalPointY';
-    final fallbackX = (data['focalPointX'] as num?)?.toDouble();
-    final fallbackY = (data['focalPointY'] as num?)?.toDouble();
-    final focalX = (data[xKey] as num?)?.toDouble() ?? fallbackX ?? 0.5;
-    final focalY = (data[yKey] as num?)?.toDouble() ?? fallbackY ?? 0.5;
+  static Alignment _resolveFocalAlignment(Map<String, dynamic> data) {
+    final focalX = (data['focalPointX'] as num?)?.toDouble() ?? 0.5;
+    final focalY = (data['focalPointY'] as num?)?.toDouble() ?? 0.5;
 
     return Alignment(
       (focalX.clamp(0.0, 1.0) * 2) - 1,
@@ -974,6 +813,7 @@ class WebsiteBlockRenderer {
   static Widget _buildCarousel({
     required BuildContext context,
     required Map<String, dynamic> data,
+    required WebsiteBlockSurfaceStyle surfaceStyle,
     required Color primaryColor,
     required Color accentColor,
     bool previewMode = false,
@@ -994,6 +834,7 @@ class WebsiteBlockRenderer {
     return WebsiteCarouselBlockContent(
       key: ValueKey('carousel_$blockId'),
       data: data,
+      surfaceStyle: surfaceStyle,
       primaryColor: primaryColor,
       accentColor: accentColor,
       previewMode: previewMode,
@@ -1012,6 +853,7 @@ class WebsiteBlockRenderer {
   static Widget _buildProducts({
     required BuildContext context,
     required Map<String, dynamic> data,
+    required WebsiteBlockSurfaceStyle surfaceStyle,
     required Color primaryColor,
     required Color accentColor,
     List<Product>? featuredProducts,
@@ -1026,6 +868,7 @@ class WebsiteBlockRenderer {
     // Delegate to stateful widget that can fetch its own products
     return _ProductsBlockWidget(
       data: data,
+      surfaceStyle: surfaceStyle,
       primaryColor: primaryColor,
       accentColor: accentColor,
       featuredProducts: featuredProducts,
@@ -1042,6 +885,7 @@ class WebsiteBlockRenderer {
   static Widget _buildVideoBanner({
     required BuildContext context,
     required Map<String, dynamic> data,
+    required WebsiteBlockSurfaceStyle surfaceStyle,
     required Color primaryColor,
     required Color accentColor,
     String? headingFont,
@@ -1087,6 +931,7 @@ class WebsiteBlockRenderer {
     final hasPlayableVideo = youtubeVideoId != null || hasVideoFile;
 
     return _VideoBannerWidget(
+      surfaceStyle: surfaceStyle,
       title: title,
       subtitle: subtitle,
       imageUrl: hasImage ? imageUrl : null,
@@ -1110,10 +955,7 @@ class WebsiteBlockRenderer {
       visitorInteractionsEnabled: visitorInteractionsEnabled,
       onNavigate: onNavigate,
       hasPlayableVideo: hasPlayableVideo,
-      focalAlignment: _resolveFocalAlignment(
-        data,
-        screenWidth: MediaQuery.of(context).size.width,
-      ),
+      focalAlignment: _resolveFocalAlignment(data),
     );
   }
 
@@ -1165,6 +1007,7 @@ class WebsiteBlockRenderer {
   static Widget _buildPartnersBanner({
     required BuildContext context,
     required Map<String, dynamic> data,
+    required WebsiteBlockSurfaceStyle surfaceStyle,
     required Color primaryColor,
     String? headingFont,
     String? bodyFont,
@@ -1200,26 +1043,36 @@ class WebsiteBlockRenderer {
     return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
-        final containerPadding = _parsePadding(
-          data,
-          screenWidth: constraints.maxWidth,
-          defaultVertical: 64,
-          defaultHorizontal: 24,
+        final containerPadding = _surfacePadding(
+          surfaceStyle,
+          blockType: WebsiteBlockType.partnersBanner,
+          data: data,
+        );
+        final fixedPadding = EdgeInsets.only(
+          top: surfaceStyle
+                  .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingTop)
+              ? containerPadding.top
+              : 0,
+          right: containerPadding.right,
+          bottom: surfaceStyle
+                  .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingBottom)
+              ? containerPadding.bottom
+              : 0,
+          left: containerPadding.left,
         );
 
         return Container(
           width: double.infinity,
           height: hasFixedHeight ? constraints.maxHeight : null,
           decoration: BoxDecoration(
-            color: const Color(0xFF1a1a1a),
+            color: surfaceStyle.hasAuthoredBackground
+                ? Colors.transparent
+                : const Color(0xFF1a1a1a),
             image: hasImage
                 ? DecorationImage(
                     image: NetworkImage(imageUrl),
                     fit: BoxFit.cover,
-                    alignment: _resolveFocalAlignment(
-                      data,
-                      screenWidth: constraints.maxWidth,
-                    ),
+                    alignment: _resolveFocalAlignment(data),
                     colorFilter: const ColorFilter.mode(
                       Colors.black54,
                       BlendMode.darken,
@@ -1227,54 +1080,45 @@ class WebsiteBlockRenderer {
                   )
                 : null,
           ),
-          padding: hasFixedHeight ? null : containerPadding,
+          padding: hasFixedHeight ? fixedPadding : containerPadding,
           child: Center(
-            child: Padding(
-              padding: hasFixedHeight
-                  ? EdgeInsets.only(
-                      left: containerPadding.left,
-                      right: containerPadding.right,
-                    )
-                  : EdgeInsets.zero,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 800),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (title.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 24),
-                        child: Text(
-                          title.toUpperCase(),
-                          style: titleFormatting.applyTo(
-                            theme.textTheme.labelLarge?.copyWith(
-                                  fontFamily: bodyFont,
-                                  color: Colors.white60,
-                                  letterSpacing: 3,
-                                ) ??
-                                const TextStyle(),
-                          ),
-                          textAlign:
-                              titleFormatting.textAlign == TextAlign.start
-                                  ? TextAlign.center
-                                  : titleFormatting.textAlign,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (title.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Text(
+                        title.toUpperCase(),
+                        style: titleFormatting.applyTo(
+                          theme.textTheme.labelLarge?.copyWith(
+                                fontFamily: bodyFont,
+                                color: Colors.white60,
+                                letterSpacing: 3,
+                              ) ??
+                              const TextStyle(),
                         ),
+                        textAlign: titleFormatting.textAlign == TextAlign.start
+                            ? TextAlign.center
+                            : titleFormatting.textAlign,
                       ),
-                    ...items.map((item) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Text(
-                            item.toUpperCase(),
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontFamily: headingFont,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                            ),
-                            textAlign: TextAlign.center,
+                    ),
+                  ...items.map((item) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          item.toUpperCase(),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontFamily: headingFont,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
                           ),
-                        )),
-                  ],
-                ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )),
+                ],
               ),
             ),
           ),
@@ -1291,6 +1135,7 @@ class WebsiteBlockRenderer {
   static Widget _buildBrandLogos({
     required BuildContext context,
     required Map<String, dynamic> data,
+    required WebsiteBlockSurfaceStyle surfaceStyle,
     required Color primaryColor,
     String? headingFont,
     String? bodyFont,
@@ -1353,24 +1198,41 @@ class WebsiteBlockRenderer {
     return ConstraintLayoutBuilder(
       builder: (context, constraints) {
         final hasFixedHeight = constraints.maxHeight.isFinite;
-        final containerPadding = _parsePadding(
-          data,
-          screenWidth: constraints.maxWidth,
-          defaultVertical: 48,
-          defaultHorizontal: 16,
-          mobileHorizontal: 16,
+        final containerPadding = _surfacePadding(
+          surfaceStyle,
+          blockType: WebsiteBlockType.brandLogos,
+          data: data,
+        );
+        final fixedPadding = EdgeInsets.only(
+          top: surfaceStyle
+                  .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingTop)
+              ? containerPadding.top
+              : 0,
+          right: containerPadding.right,
+          bottom: surfaceStyle
+                  .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingBottom)
+              ? containerPadding.bottom
+              : 0,
+          left: containerPadding.left,
+        );
+        final carouselInset = EdgeInsets.only(
+          left: surfaceStyle
+                  .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingLeft)
+              ? 0
+              : containerPadding.left,
+          right: surfaceStyle
+                  .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingRight)
+              ? 0
+              : containerPadding.right,
         );
 
         return Container(
           width: double.infinity,
           height: hasFixedHeight ? constraints.maxHeight : null,
-          color: Colors.white,
-          padding: hasFixedHeight
-              ? EdgeInsets.only(
-                  left: containerPadding.left,
-                  right: containerPadding.right,
-                )
-              : containerPadding,
+          color: surfaceStyle.hasAuthoredBackground
+              ? Colors.transparent
+              : Colors.white,
+          padding: hasFixedHeight ? fixedPadding : containerPadding,
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1388,12 +1250,7 @@ class WebsiteBlockRenderer {
                   textAlign: titleFormatting.textAlign,
                 ),
                 Padding(
-                  padding: hasFixedHeight
-                      ? EdgeInsets.zero
-                      : EdgeInsets.only(
-                          left: containerPadding.left,
-                          right: containerPadding.right,
-                        ),
+                  padding: hasFixedHeight ? EdgeInsets.zero : carouselInset,
                   child: _BrandLogosCarousel(
                     brands: brands,
                     bodyFont: bodyFont,
@@ -1634,6 +1491,7 @@ class _BrandLogoItem extends StatelessWidget {
 // ============================================================================
 class _AutoCategoryGrid extends StatefulWidget {
   final Map<String, dynamic> data;
+  final WebsiteBlockSurfaceStyle surfaceStyle;
   final Color primaryColor;
   final Color accentColor;
   final String? headingFont;
@@ -1644,6 +1502,7 @@ class _AutoCategoryGrid extends StatefulWidget {
 
   const _AutoCategoryGrid({
     required this.data,
+    required this.surfaceStyle,
     required this.primaryColor,
     required this.accentColor,
     this.headingFont,
@@ -1771,8 +1630,27 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final transparentBackground = widget.surfaceStyle.hasAuthoredBackground;
+    final headerPadding = EdgeInsets.only(
+      left: widget.surfaceStyle
+              .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingLeft)
+          ? 0
+          : 24,
+      right: widget.surfaceStyle
+              .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingRight)
+          ? 0
+          : 24,
+    );
     final title = (widget.data['title'] ?? '').toString().trim();
     final subtitle = (widget.data['subtitle'] ?? '').toString().trim();
+    // The inspector has always saved `titleFormatting` for this family; this
+    // grid was the one consumer that dropped it, so bold/size/colour/alignment
+    // survived a save and never reached the storefront. Same owner and same
+    // resolution as every other block here — no second writer, no new key.
+    final titleFormatting = WebsiteBlockRenderer._resolveTextFormatting(
+      widget.data,
+      'titleFormatting',
+    );
 
     // Publication comes only from Catálogo web. Manual block data may style or
     // order cards, but an empty authoritative result must remain empty.
@@ -1782,8 +1660,14 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
     if (_isLoading) {
       return Container(
         width: double.infinity,
-        color: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 48),
+        color: transparentBackground ? Colors.transparent : Colors.white,
+        padding: widget.surfaceStyle.paddingWithFallback(
+          WebsiteBlockSurfaceDefaults.paddingFor(
+            blockType: WebsiteBlockType.categoryGrid,
+            viewport: widget.surfaceStyle.viewport,
+            data: widget.data,
+          ),
+        ),
         child: const Center(
           child: SizedBox(
             width: 24,
@@ -1799,8 +1683,10 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
       if (widget.previewMode) {
         return Container(
           width: double.infinity,
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+          color: transparentBackground ? Colors.transparent : Colors.white,
+          padding: widget.surfaceStyle.paddingWithFallback(
+            const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+          ),
           child: Center(
             child: Text(
               'Activa categorías en Catálogo web > Categorías para mostrarlas aquí',
@@ -1814,26 +1700,42 @@ class _AutoCategoryGridState extends State<_AutoCategoryGrid> {
 
     return Container(
       width: double.infinity,
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 48),
+      color: transparentBackground ? Colors.transparent : Colors.white,
+      padding: widget.surfaceStyle.paddingWithFallback(
+        WebsiteBlockSurfaceDefaults.paddingFor(
+          blockType: WebsiteBlockType.categoryGrid,
+          viewport: widget.surfaceStyle.viewport,
+          data: widget.data,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (title.isNotEmpty) ...[
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: headerPadding,
               child: Text(
                 title,
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontFamily: widget.headingFont,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                style: titleFormatting.applyTo(
+                  theme.textTheme.displaySmall?.copyWith(
+                        fontFamily: widget.headingFont,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ) ??
+                      const TextStyle(),
                 ),
+                // `start` means "not set" across the product, so the block's
+                // own default wins until the author chooses an alignment.
+                textAlign: titleFormatting.textAlign == TextAlign.start
+                    ? TextAlign.start
+                    : titleFormatting.textAlign,
               ),
             ),
             if (subtitle.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(top: 8, left: 24, right: 24),
+                padding: headerPadding.copyWith(
+                  top: 8,
+                ),
                 child: Text(
                   subtitle,
                   style: theme.textTheme.bodyLarge?.copyWith(
@@ -2060,10 +1962,7 @@ class _CategoryCard extends StatelessWidget {
             ? DecorationImage(
                 image: NetworkImage(imageUrl),
                 fit: BoxFit.cover,
-                alignment: WebsiteBlockRenderer._resolveFocalAlignment(
-                  data,
-                  screenWidth: MediaQuery.of(context).size.width,
-                ),
+                alignment: WebsiteBlockRenderer._resolveFocalAlignment(data),
                 colorFilter: const ColorFilter.mode(
                   Colors.black38,
                   BlendMode.darken,
@@ -2207,6 +2106,7 @@ class WebsiteCarouselBlockContent extends StatefulWidget {
   const WebsiteCarouselBlockContent({
     super.key,
     required this.data,
+    required this.surfaceStyle,
     required this.primaryColor,
     required this.accentColor,
     required this.previewMode,
@@ -2244,6 +2144,7 @@ class WebsiteCarouselBlockContent extends StatefulWidget {
       ValueKey<String>('website-carousel-indicator-$index');
 
   final Map<String, dynamic> data;
+  final WebsiteBlockSurfaceStyle surfaceStyle;
   final Color primaryColor;
   final Color accentColor;
   final bool previewMode;
@@ -2534,69 +2435,6 @@ class _WebsiteCarouselBlockContentState
     );
   }
 
-  /// The slide's canonical Canvas contract, forwarded into the nested
-  /// composition document so a nested Canvas is classified and projected
-  /// exactly like a standalone one.
-  ///
-  /// Two deliberate limits:
-  ///
-  /// - It is forwarded ONLY when the slide declares the canonical contract,
-  ///   through the marker or a versioned container. `overrideEntry` reads a
-  ///   branch without checking its version, so carrying an unversioned legacy
-  ///   container would let a `mobile` branch reach a legacy Canvas and move
-  ///   pixels. A legacy slide contributes nothing and its composition data
-  ///   stays byte-for-byte what it was.
-  /// - Only keys the Canvas owner accepts at its ROOT travel. A slide's own
-  ///   responsive copy and media keys are not this document's vocabulary, and
-  ///   the base `designHeight` -> `blockHeight` mapping below stays the base
-  ///   mapping: inside the container the height override is the owner's own
-  ///   `blockHeight`, not a second alias.
-  static Map<String, dynamic> _slideCanvasResponsiveContract(
-    Map<String, dynamic> slide,
-  ) {
-    final marker = slide[WebsiteCanvasResponsiveDocument.schemaVersionKey];
-    final rawContainer = slide[WebsiteResponsiveDataCodec.containerKey];
-    final containerVersion = rawContainer is Map
-        ? rawContainer[WebsiteResponsiveDataCodec.versionKey]
-        : null;
-    final declaresCanonical = (marker is num &&
-            marker.toInt() >= WebsiteCanvasResponsiveDocument.schemaVersion) ||
-        (containerVersion is num &&
-            containerVersion.toInt() >=
-                WebsiteResponsiveDataCodec.schemaVersion);
-    if (!declaresCanonical) return const <String, dynamic>{};
-
-    final contract = <String, dynamic>{};
-    if (marker is num) {
-      contract[WebsiteCanvasResponsiveDocument.schemaVersionKey] =
-          marker.toInt();
-    }
-    if (rawContainer is! Map) return contract;
-
-    final allowed = WebsiteCanvasResponsivePolicy.allowedRootOverrideKeys();
-    final container = <String, dynamic>{};
-    for (final viewport in WebsiteViewport.values) {
-      if (!viewport.supportsOverride) continue;
-      final branch = rawContainer[viewport.wireName];
-      if (branch is! Map) continue;
-      final values = <String, dynamic>{};
-      for (final entry in branch.entries) {
-        final key = entry.key.toString();
-        if (!allowed.contains(key)) continue;
-        values[key] = entry.value;
-      }
-      if (values.isNotEmpty) container[viewport.wireName] = values;
-    }
-    if (container.isEmpty) return contract;
-
-    if (containerVersion is num) {
-      container[WebsiteResponsiveDataCodec.versionKey] =
-          containerVersion.toInt();
-    }
-    contract[WebsiteResponsiveDataCodec.containerKey] = container;
-    return contract;
-  }
-
   Widget _buildSlide(
     BuildContext context,
     Map<String, dynamic> slide,
@@ -2819,19 +2657,11 @@ class _WebsiteCarouselBlockContentState
     );
 
     if (usesComposition) {
-      final compositionData = <String, dynamic>{
-        'backgroundColor': '#00000000',
-        'showGrid': widget.editBinding != null,
-        'snap': true,
-        'designWidth': (slide['designWidth'] as num?)?.toDouble() ?? 1200.0,
-        'mobileDesignWidth':
-            (slide['mobileDesignWidth'] as num?)?.toDouble() ?? 390.0,
-        'constrainElementsToSafeArea':
-            slide['constrainElementsToSafeArea'] != false,
-        'blockHeight': (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
-        'elements': compositionElements,
-        ..._slideCanvasResponsiveContract(slide),
-      };
+      final compositionData =
+          WebsiteCanvasResponsiveDocument.carouselAuthoringDocument(
+        slide: slide,
+        showGrid: widget.editBinding != null,
+      );
       contentWidget = Stack(
         fit: StackFit.expand,
         children: [
@@ -2892,69 +2722,37 @@ class _WebsiteCarouselBlockContentState
       );
     }
 
-    // No video or web not supported - use image/gradient background
-    // Use the block's style data for gradients (fall back to slide's image if present)
-    final slideWithStyle = Map<String, dynamic>.from(slide);
-    // If the slide doesn't have its own style, use the block's style
-    if (slide['style'] == null && widget.data['style'] != null) {
-      slideWithStyle['style'] = widget.data['style'];
-    }
+    // No video or web not supported: the slide owns only its own authored
+    // media/style. The block surface is already painted outside this carousel;
+    // inheriting it here was the second application that hid/doubled it.
+    final slideStyle = WebsiteBlockSurfaceStyle.resolve(
+      data: slide,
+      viewport: widget.surfaceStyle.viewport,
+    );
 
-    // Resolve Mobile Background Alignment for Carousel Slide
-    // Priority: focal point values > legacy preset alignment > center default
-    Alignment? slideBgAlignment;
-    final isMobile = maxWidth < 600;
+    final slideBgAlignment = WebsiteBlockRenderer._resolveFocalAlignment(slide);
 
-    if (isMobile) {
-      final focalX = (slide['mobileFocalPointX'] as num?)?.toDouble();
-      final focalY = (slide['mobileFocalPointY'] as num?)?.toDouble();
-
-      if (focalX != null && focalY != null) {
-        // Convert from 0-1 range to -1 to 1 range for Alignment
-        slideBgAlignment = Alignment(
-          (focalX * 2) - 1,
-          (focalY * 2) - 1,
-        );
-      } else if (slide['mobileBgAlignment'] != null) {
-        // Legacy fallback
-        switch (slide['mobileBgAlignment'].toString()) {
-          case 'left':
-          case 'centerLeft':
-            slideBgAlignment = Alignment.centerLeft;
-            break;
-          case 'right':
-          case 'centerRight':
-            slideBgAlignment = Alignment.centerRight;
-            break;
-          case 'top':
-          case 'topCenter':
-            slideBgAlignment = Alignment.topCenter;
-            break;
-          case 'bottom':
-          case 'bottomCenter':
-            slideBgAlignment = Alignment.bottomCenter;
-            break;
-          case 'center':
-          default:
-            slideBgAlignment = Alignment.center;
-        }
-      }
-    }
-
-    final decoration = WebsiteBlockRenderer._resolveBackgroundDecoration(
-      data: slideWithStyle,
-      defaultColor: const Color(0xFF1a1a1a),
-      imageUrl: hasImage ? imageUrl.toString() : null,
-      imageAlignmentParam: slideBgAlignment,
+    final letsBlockBackgroundThrough =
+        widget.surfaceStyle.hasAuthoredBackground &&
+            !slideStyle.hasAuthoredBackground;
+    final fallbackColor = letsBlockBackgroundThrough
+        ? Colors.transparent
+        : const Color(0xFF1a1a1a);
+    final decoration = slideStyle.decorationWithMedia(
+      fallbackColor: fallbackColor,
+      imageProvider: hasImage ? NetworkImage(imageUrl.toString()) : null,
+      imageAlignment: slideBgAlignment,
+      imageColorFilter: kIsWeb
+          ? const ColorFilter.mode(Color(0xFFFEFEFE), BlendMode.modulate)
+          : null,
+      preserveLegacyFallbackGradient: !letsBlockBackgroundThrough,
     );
     final mediaPresenter = widget.presenters?.media;
     if (mediaPresenter != null) {
-      final fallbackDecoration =
-          WebsiteBlockRenderer._resolveBackgroundDecoration(
-        data: slideWithStyle,
-        defaultColor: const Color(0xFF1a1a1a),
-        imageUrl: null,
-        imageAlignmentParam: slideBgAlignment,
+      final fallbackDecoration = slideStyle.decorationWithMedia(
+        fallbackColor: fallbackColor,
+        imageAlignment: slideBgAlignment,
+        preserveLegacyFallbackGradient: !letsBlockBackgroundThrough,
       );
       return Stack(
         key: WebsiteCarouselBlockContent.slideKey(index),
@@ -2967,7 +2765,7 @@ class _WebsiteCarouselBlockContentState
               url: hasImage ? imageUrl.toString() : null,
               valueKeys: const <String>['imageUrl'],
               fit: BoxFit.cover,
-              alignment: slideBgAlignment ?? Alignment.center,
+              alignment: slideBgAlignment,
               fallback: DecoratedBox(decoration: fallbackDecoration),
               semanticLabel:
                   (slide['imageAltText'] ?? slide['altText'])?.toString(),
@@ -3236,6 +3034,7 @@ class _WebsiteCarouselBlockContentState
 /// Stateful Products block widget that fetches products based on block settings
 class _ProductsBlockWidget extends StatefulWidget {
   final Map<String, dynamic> data;
+  final WebsiteBlockSurfaceStyle surfaceStyle;
   final Color primaryColor;
   final Color accentColor;
   final List<Product>? featuredProducts;
@@ -3249,6 +3048,7 @@ class _ProductsBlockWidget extends StatefulWidget {
 
   const _ProductsBlockWidget({
     required this.data,
+    required this.surfaceStyle,
     required this.primaryColor,
     required this.accentColor,
     this.featuredProducts,
@@ -3307,14 +3107,14 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   @override
   void didUpdateWidget(_ProductsBlockWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final ownerChanged =
-        oldWidget.data['productSource'] != widget.data['productSource'] ||
-            oldWidget.data['selectedProducts']?.toString() !=
-                widget.data['selectedProducts']?.toString() ||
-            oldWidget.data['categoryId'] != widget.data['categoryId'] ||
-            oldWidget.data['maxProducts'] != widget.data['maxProducts'] ||
-            oldWidget.tenantId != widget.tenantId ||
-            oldWidget.previewMode != widget.previewMode;
+    final oldContract = WebsiteProductsBlockContract.fromData(oldWidget.data);
+    final nextContract = _contract;
+    final ownerChanged = oldContract.productSource !=
+            nextContract.productSource ||
+        oldContract.selectionFingerprint != nextContract.selectionFingerprint ||
+        oldContract.categoryId != nextContract.categoryId ||
+        oldContract.maxProducts != nextContract.maxProducts ||
+        oldWidget.tenantId != widget.tenantId;
     final featuredInputChanged =
         oldWidget.featuredProductsReady != widget.featuredProductsReady ||
             !_samePublicProductSnapshots(
@@ -3330,7 +3130,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
   }
 
   void _handlePublicInventoryInvalidated() {
-    if (!mounted || widget.previewMode || _usesParentFeaturedProducts) return;
+    if (!mounted || _usesParentFeaturedProducts) return;
     _inventoryRevalidationPending = true;
     _scheduleInventoryRevalidation();
   }
@@ -3358,21 +3158,16 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     });
   }
 
-  String get _productSource =>
-      widget.data['productSource']?.toString() ?? 'featured';
+  WebsiteProductsBlockContract get _contract =>
+      WebsiteProductsBlockContract.fromData(widget.data);
+
+  String get _productSource => _contract.productSource;
   bool get _usesParentFeaturedProducts =>
-      !widget.previewMode &&
-      _productSource == 'featured' &&
-      widget.featuredProducts != null;
+      _productSource == 'featured' && widget.featuredProducts != null;
 
-  List<String> get _selectedProductIds {
-    final raw = widget.data['selectedProducts'];
-    if (raw is List) return raw.map((e) => e.toString()).toList();
-    return [];
-  }
-
-  String? get _categoryId => widget.data['categoryId']?.toString();
-  int get _maxProducts => (widget.data['maxProducts'] as num?)?.toInt() ?? 8;
+  List<String> get _selectedProductIds => _contract.productIds;
+  String? get _categoryId => _contract.categoryId;
+  int get _maxProducts => _contract.maxProducts;
 
   Future<void> _loadProducts({bool preserveVisible = false}) async {
     if (!mounted) return;
@@ -3395,121 +3190,15 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
 
       // If no tenantId yet, stay in loading state and wait for didUpdateWidget.
       if (tenantId == null || tenantId.isEmpty) return;
-      if (!widget.previewMode &&
-          _productSource == 'featured' &&
+      if (_productSource == 'featured' &&
           widget.featuredProducts != null &&
           !widget.featuredProductsReady) {
         return;
       }
 
-      final supabase = Supabase.instance.client;
-      List<Product> products = [];
-
-      if (!widget.previewMode) {
-        products = await _loadPublicProductsFromPolicy();
-        _applyLoadedProducts(products, loadToken: loadToken);
-        return;
-      }
-
-      // We have tenantId - fetch based on source
-      switch (_productSource) {
-        case 'manual':
-          // Fetch specific products by ID
-          if (_selectedProductIds.isNotEmpty) {
-            dynamic query = supabase
-                .from('products')
-                .select(Product.storefrontPreviewSelect)
-                .eq('tenant_id', tenantId)
-                .inFilter('id', _selectedProductIds)
-                .eq('is_active', true);
-            if (!widget.previewMode) {
-              query =
-                  query.eq('is_published', true).eq('show_on_website', true);
-            }
-            final response = await query;
-
-            products = _parseProducts(response);
-
-            // Sort by the order in selectedProductIds
-            final idOrder = {
-              for (int i = 0; i < _selectedProductIds.length; i++)
-                _selectedProductIds[i]: i
-            };
-            products.sort((a, b) =>
-                (idOrder[a.id] ?? 999).compareTo(idOrder[b.id] ?? 999));
-          }
-          break;
-
-        case 'category':
-          // Fetch products from a specific category
-          if (_categoryId != null && _categoryId!.isNotEmpty) {
-            dynamic query = supabase
-                .from('products')
-                .select(Product.storefrontPreviewSelect)
-                .eq('tenant_id', tenantId)
-                .eq('category_id', _categoryId!)
-                .eq('is_active', true)
-                .eq('show_on_website', true);
-            if (!widget.previewMode) {
-              query = query.eq('is_published', true);
-            }
-            final response = await query.order('name').limit(_maxProducts);
-
-            products = _parseProducts(response);
-          }
-          break;
-
-        case 'newest':
-          // Fetch newest products
-          dynamic newestQuery = supabase
-              .from('products')
-              .select(Product.storefrontPreviewSelect)
-              .eq('tenant_id', tenantId)
-              .eq('is_active', true)
-              .eq('show_on_website', true);
-          if (!widget.previewMode) {
-            newestQuery = newestQuery.eq('is_published', true);
-          }
-          final response = await newestQuery
-              .order('created_at', ascending: false)
-              .limit(_maxProducts);
-
-          products = _parseProducts(response);
-          break;
-
-        case 'featured':
-        default:
-          // Use the passed featured products or fetch from featured_products table
-          if (widget.featuredProducts != null &&
-              widget.featuredProducts!.isNotEmpty) {
-            products = widget.featuredProducts!
-                .where((p) {
-                  if (!p.isActive) return false;
-                  if (!widget.previewMode && !p.isPublished) return false;
-                  return true;
-                })
-                .take(_maxProducts)
-                .toList();
-          } else {
-            // Fallback: fetch products marked as show_on_website
-            dynamic fallbackQuery = supabase
-                .from('products')
-                .select(Product.storefrontPreviewSelect)
-                .eq('tenant_id', tenantId)
-                .eq('is_active', true)
-                .eq('show_on_website', true);
-            if (!widget.previewMode) {
-              fallbackQuery = fallbackQuery.eq('is_published', true);
-            }
-            final response =
-                await fallbackQuery.order('name').limit(_maxProducts);
-
-            products = _parseProducts(response);
-          }
-          break;
-      }
-
-      products = await _hydratePreviewAvailability(products);
+      // Edit, Preview and Public consume the same catalog truth. Author-only
+      // repair information belongs in the inspector, never in the canvas.
+      final products = await _loadPublicProductsFromPolicy();
       _applyLoadedProducts(products, loadToken: loadToken);
     } catch (e) {
       debugPrint('[ProductsBlock] Error: $e');
@@ -3576,25 +3265,6 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     super.dispose();
   }
 
-  Future<List<Product>> _hydratePreviewAvailability(
-    List<Product> products,
-  ) async {
-    if (products.isEmpty) return products;
-    try {
-      final hydrated = await context.read<InventoryService>().getProductsByIds(
-            products.map((product) => product.id),
-            forceRefresh: true,
-          );
-      final byId = {for (final product in hydrated) product.id: product};
-      return products
-          .map((product) => byId[product.id] ?? product)
-          .toList(growable: false);
-    } catch (error) {
-      debugPrint('[ProductsBlock] Set availability unavailable: $error');
-      return products;
-    }
-  }
-
   Future<List<Product>> _loadPublicProductsFromPolicy() async {
     final tenantId = widget.tenantId;
     if (tenantId == null || tenantId.isEmpty) return const [];
@@ -3658,14 +3328,11 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
               .take(_maxProducts)
               .toList();
         }
-        final page = await inventoryService.getProductPageForTenant(
+        return inventoryService.getFeaturedProductsForTenant(
           tenantId: tenantId,
           policy: policy,
-          onlyInStock: true,
-          sortBy: 'name',
           limit: _maxProducts,
         );
-        return page.products;
     }
   }
 
@@ -3681,73 +3348,13 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
     }
   }
 
-  List<Product> _parseProducts(dynamic response) {
-    if (response is! List) return [];
-
-    return response
-        .map((row) {
-          try {
-            final map = Map<String, dynamic>.from(row as Map);
-            return Product(
-              id: map['id']?.toString() ?? '',
-              name: map['name']?.toString() ?? 'Producto',
-              sku: map['sku']?.toString() ?? '',
-              price: (map['price'] as num?)?.toDouble() ?? 0,
-              cost: (map['cost'] as num?)?.toDouble() ?? 0,
-              stockQuantity: (map['inventory_qty'] as num?)?.toInt() ??
-                  (map['stock_quantity'] as num?)?.toInt() ??
-                  0,
-              imageUrl: map['image_url']?.toString(),
-              imageUrls: (map['image_urls'] as List?)?.cast<String>() ?? [],
-              description: map['description']?.toString() ?? '',
-              category: ProductCategory.other,
-              categoryId: map['category_id']?.toString(),
-              categoryName: map['category_name']?.toString(),
-              brand: map['brand']?.toString() ?? '',
-              model: map['model']?.toString() ?? '',
-              specifications: _parseSpecifications(map['specifications']),
-              tags: (map['tags'] as List?)?.cast<String>() ?? [],
-              unit: ProductUnit.unit,
-              weight: (map['weight'] as num?)?.toDouble() ?? 0,
-              trackStock: map['track_stock'] as bool? ?? true,
-              isActive: map['is_active'] as bool? ?? true,
-              isPublished: map['is_published'] as bool? ??
-                  map['show_on_website'] as bool? ??
-                  true,
-              isSet: map['is_set'] as bool? ?? false,
-              setType: SetType.values.cast<SetType?>().firstWhere(
-                    (type) => type?.name == map['set_type']?.toString(),
-                    orElse: () => null,
-                  ),
-              parentSetId: map['parent_set_id']?.toString(),
-              componentLabel: map['component_label']?.toString(),
-              componentPosition: (map['component_position'] as num?)?.toInt(),
-              productType: ProductType.values.firstWhere(
-                (type) => type.name == map['product_type']?.toString(),
-                orElse: () => ProductType.product,
-              ),
-              createdAt:
-                  DateTime.tryParse(map['created_at']?.toString() ?? '') ??
-                      DateTime.now(),
-              updatedAt:
-                  DateTime.tryParse(map['updated_at']?.toString() ?? '') ??
-                      DateTime.now(),
-            );
-          } catch (e) {
-            debugPrint('[ProductsBlock] Error parsing product: $e');
-            return null;
-          }
-        })
-        .whereType<Product>()
-        .toList();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final rawTitle =
-        (widget.data['title'] ?? 'Productos Destacados').toString().trim();
+    final contract = _contract;
+    final rawTitle = contract.title.trim();
     final title = rawTitle.isEmpty ? 'DESTACADOS' : rawTitle.toUpperCase();
-    final showViewAll = widget.data['showViewAll'] ?? true;
+    final subtitle = contract.subtitle.trim();
+    final showViewAll = contract.showViewAll;
     final viewAllAction = WebsiteBlockRenderer.visibleNavigationAction(
       WebsiteActionValue.resolvePrimary(
         widget.data,
@@ -3756,53 +3363,40 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
         defaultLabel: 'Ver todos los productos',
         defaultHref: '/productos',
         defaultVariant: WebsiteActionVariant.outline,
-        enabled: showViewAll == true,
+        enabled: showViewAll,
       ),
       isNavigationEligible: widget.isNavigationEligible,
     );
-    final layout = widget.data['layout']?.toString() ?? 'grid';
+    final layout = contract.layout;
+    var itemsPerRow = contract.itemsPerRow;
 
-    int itemsPerRow = 3;
-    final rawItemsPerRow = widget.data['itemsPerRow'];
-    if (rawItemsPerRow is int) {
-      itemsPerRow = rawItemsPerRow;
-    } else if (rawItemsPerRow is num) {
-      itemsPerRow = rawItemsPerRow.toInt();
-    } else if (rawItemsPerRow is String) {
-      final parsed = int.tryParse(rawItemsPerRow);
-      if (parsed != null) {
-        itemsPerRow = parsed;
-      }
-    }
-
-    // Responsive override
-    final screenWidth = MediaQuery.of(context).size.width;
-    final padding = WebsiteBlockRenderer._parsePadding(
-      widget.data,
-      defaultVertical: 48,
-      screenWidth: screenWidth,
+    final viewport = widget.surfaceStyle.viewport;
+    final padding = WebsiteBlockRenderer._surfacePadding(
+      widget.surfaceStyle,
+      blockType: WebsiteBlockType.products,
+      data: widget.data,
     );
-    final emptyPadding = WebsiteBlockRenderer._parsePadding(
-      widget.data,
-      defaultVertical: 24,
-      screenWidth: screenWidth,
+    final emptyPadding = WebsiteBlockRenderer._surfacePadding(
+      widget.surfaceStyle,
+      blockType: WebsiteBlockType.products,
+      data: widget.data,
+      fallback: EdgeInsets.symmetric(
+        vertical: 24,
+        horizontal:
+            widget.surfaceStyle.viewport == WebsiteViewport.mobile ? 16 : 24,
+      ),
     );
-    final bgColor = WebsiteBlockRenderer._parseColor(
-          widget.data['style']?['backgroundColor']?.toString(),
-        ) ??
-        Colors.white;
-    // Auto-layout, unchanged. Below 700 this grid is not even mounted — the
-    // mobile auto carousel is — so a per-viewport `itemsPerRow` would be a
-    // control the storefront cannot honour. The property is therefore declared
-    // shared in the registry and the inspector says so, instead of the renderer
-    // pretending to consume an override.
-    if (screenWidth < 450) {
-      itemsPerRow = 1;
-    } else if (screenWidth < 900) {
-      itemsPerRow = 2;
-    } else {
-      itemsPerRow = itemsPerRow.clamp(2, 4);
-    }
+    final bgColor = widget.surfaceStyle.hasAuthoredBackground
+        ? Colors.transparent
+        : Colors.white;
+    // Grid density is automatic below desktop, while the selected layout is
+    // honoured at every width. `itemsPerRow` therefore remains an honest
+    // shared desktop base rather than a fake phone/tablet override.
+    itemsPerRow = switch (viewport) {
+      WebsiteViewport.mobile => 1,
+      WebsiteViewport.tablet => 2,
+      WebsiteViewport.desktop => itemsPerRow.clamp(2, 4),
+    };
 
     // Show placeholders only during loading
     // Show empty message if no products after loading
@@ -3842,6 +3436,18 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                 ),
               ],
             ),
+            if (subtitle.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontFamily: widget.bodyFont,
+                  fontSize: 14,
+                  color: Colors.black54,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: 24),
             Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey[400]),
             const SizedBox(height: 12),
@@ -3896,17 +3502,37 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                   ],
                 ],
               ),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontFamily: widget.bodyFont,
+                      fontSize: 14,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 32),
-              // Responsive override for mobile
-              screenWidth < 700
-                  ? _MobileProductAutoCarousel(
-                      products: displayProducts,
-                      bodyFont: widget.bodyFont,
-                      interactionsEnabled: widget.visitorInteractionsEnabled,
-                      onNavigate: widget.onNavigate,
-                    )
-                  : layout == 'carousel'
-                      ? SizedBox(
+              // Layout is a real rendered property at phone, tablet and
+              // desktop widths. Only the carousel implementation adapts to
+              // touch-sized pages below the canonical 600 boundary.
+              layout == 'carousel'
+                  ? viewport == WebsiteViewport.mobile
+                      ? _MobileProductAutoCarousel(
+                          products: displayProducts,
+                          bodyFont: widget.bodyFont,
+                          showPrice: contract.showPrice,
+                          showSku: contract.showSku,
+                          showBrand: contract.showBrand,
+                          interactionsEnabled:
+                              widget.visitorInteractionsEnabled,
+                          onNavigate: widget.onNavigate,
+                        )
+                      : SizedBox(
                           height: 480,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
@@ -3929,10 +3555,14 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                                 child: PremiumProductCard(
                                   productId: product.id,
                                   productSku: product.sku,
+                                  productBrand: product.brand,
                                   name: product.name,
                                   price: product.price,
                                   imageUrl: product.imageUrl,
                                   bodyFont: widget.bodyFont,
+                                  showPrice: contract.showPrice,
+                                  showSku: contract.showSku,
+                                  showBrand: contract.showBrand,
                                   interactionsEnabled:
                                       widget.visitorInteractionsEnabled,
                                   onNavigate: widget.onNavigate,
@@ -3941,32 +3571,35 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                             },
                           ),
                         )
-                      : GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: itemsPerRow,
-                            childAspectRatio: 0.75,
-                            crossAxisSpacing: 20,
-                            mainAxisSpacing: 20,
-                          ),
-                          itemCount: displayProducts.length,
-                          itemBuilder: (context, index) {
-                            final product = displayProducts[index];
-                            return PremiumProductCard(
-                              productId: product.id,
-                              productSku: product.sku,
-                              name: product.name,
-                              price: product.price,
-                              imageUrl: product.imageUrl,
-                              bodyFont: widget.bodyFont,
-                              interactionsEnabled:
-                                  widget.visitorInteractionsEnabled,
-                              onNavigate: widget.onNavigate,
-                            );
-                          },
-                        ),
+                  : GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: itemsPerRow,
+                        childAspectRatio: 0.75,
+                        crossAxisSpacing: 20,
+                        mainAxisSpacing: 20,
+                      ),
+                      itemCount: displayProducts.length,
+                      itemBuilder: (context, index) {
+                        final product = displayProducts[index];
+                        return PremiumProductCard(
+                          productId: product.id,
+                          productSku: product.sku,
+                          productBrand: product.brand,
+                          name: product.name,
+                          price: product.price,
+                          imageUrl: product.imageUrl,
+                          bodyFont: widget.bodyFont,
+                          showPrice: contract.showPrice,
+                          showSku: contract.showSku,
+                          showBrand: contract.showBrand,
+                          interactionsEnabled:
+                              widget.visitorInteractionsEnabled,
+                          onNavigate: widget.onNavigate,
+                        );
+                      },
+                    ),
               if (viewAllAction != null) ...[
                 const SizedBox(height: 40),
                 Center(
@@ -4026,21 +3659,13 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
       );
     });
   }
-
-  Map<String, String> _parseSpecifications(dynamic raw) {
-    if (raw == null) return {};
-    if (raw is Map) {
-      return raw
-          .map((key, value) => MapEntry(key.toString(), value.toString()));
-    }
-    return {};
-  }
 }
 
 // ============================================================================
 // VIDEO BANNER WIDGET - Stateful widget for video playback
 // ============================================================================
 class _VideoBannerWidget extends StatefulWidget {
+  final WebsiteBlockSurfaceStyle surfaceStyle;
   final String title;
   final String subtitle;
   final String? imageUrl;
@@ -4061,6 +3686,7 @@ class _VideoBannerWidget extends StatefulWidget {
   final Alignment focalAlignment;
 
   const _VideoBannerWidget({
+    required this.surfaceStyle,
     required this.title,
     required this.subtitle,
     this.imageUrl,
@@ -4106,7 +3732,9 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
           width: double.infinity,
           height: height,
           decoration: BoxDecoration(
-            color: const Color(0xFF1a1a1a),
+            color: widget.surfaceStyle.hasAuthoredBackground
+                ? Colors.transparent
+                : const Color(0xFF1a1a1a),
             image: (hasImage && !canPlayVideo)
                 ? DecorationImage(
                     image: NetworkImage(widget.imageUrl!),
@@ -4160,7 +3788,13 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 800),
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: widget.surfaceStyle.paddingWithFallback(
+                      WebsiteBlockSurfaceDefaults.paddingFor(
+                        blockType: WebsiteBlockType.videoBanner,
+                        viewport: widget.surfaceStyle.viewport,
+                        data: const <String, dynamic>{},
+                      ),
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -4239,12 +3873,18 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
 class _MobileProductAutoCarousel extends StatefulWidget {
   final List<Product> products;
   final String? bodyFont;
+  final bool showPrice;
+  final bool showSku;
+  final bool showBrand;
   final bool interactionsEnabled;
   final Function(String)? onNavigate;
 
   const _MobileProductAutoCarousel({
     required this.products,
     this.bodyFont,
+    required this.showPrice,
+    required this.showSku,
+    required this.showBrand,
     this.interactionsEnabled = true,
     this.onNavigate,
   });
@@ -4323,10 +3963,14 @@ class _MobileProductAutoCarouselState
                 child: PremiumProductCard(
                   productId: product.id,
                   productSku: product.sku,
+                  productBrand: product.brand,
                   name: product.name,
                   price: product.price,
                   imageUrl: product.imageUrl,
                   bodyFont: widget.bodyFont,
+                  showPrice: widget.showPrice,
+                  showSku: widget.showSku,
+                  showBrand: widget.showBrand,
                   interactionsEnabled: widget.interactionsEnabled,
                   onNavigate: widget.onNavigate,
                 ),

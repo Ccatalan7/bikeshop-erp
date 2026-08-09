@@ -22,6 +22,8 @@ import 'package:vinabike_erp/shared/services/tenant_detection_service.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/widgets/vb_segmented.dart';
+import 'package:vinabike_erp/shared/widgets/window_chrome_layout_region_scope.dart';
+import 'package:vinabike_erp/shared/widgets/workspace_shell_scope.dart';
 
 /// The editor command bar, in both compositions.
 ///
@@ -37,10 +39,11 @@ class _GrantingWebsiteService extends WebsiteService {
     hasAuthority: true,
   );
 
-  /// Every persisted setting write this service received, in order. The
-  /// publication regression reads it to prove there is exactly ONE writer.
-  final List<MapEntry<String, String>> settingWrites =
-      <MapEntry<String, String>>[];
+  /// Every tenant-explicit settings statement this service received, in order.
+  /// The publication regression reads it to prove there is exactly ONE guarded
+  /// statement owned by the layout.
+  final List<({String tenantId, Map<String, String> settings})>
+      settingStatements = <({String tenantId, Map<String, String> settings})>[];
 
   @override
   WebsiteEditorCapabilitySnapshot? editorCapabilitySync(
@@ -55,8 +58,17 @@ class _GrantingWebsiteService extends WebsiteService {
       _lease;
 
   @override
-  Future<void> saveSetting(String key, String value) async {
-    settingWrites.add(MapEntry(key, value));
+  Future<void> saveSettingsForTenant(
+    String tenantId,
+    Map<String, String> settings, {
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    writeGuard?.call();
+    settingStatements.add((
+      tenantId: tenantId,
+      settings: Map<String, String>.unmodifiable(settings),
+    ));
+    writeGuard?.call();
   }
 }
 
@@ -113,9 +125,23 @@ void main() {
     bool isSaving = false,
     bool dirty = true,
     Brightness brightness = Brightness.light,
+    double topInset = 0,
+    double leftInset = 0,
+    double rightInset = 0,
+    EdgeInsets adaptedMargins = EdgeInsets.zero,
   }) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = Size(width, height);
+    tester.view.viewPadding = FakeViewPadding(
+      top: topInset,
+      left: leftInset,
+      right: rightInset,
+    );
+    tester.view.padding = FakeViewPadding(
+      top: topInset,
+      left: leftInset,
+      right: rightInset,
+    );
     addTearDown(tester.view.reset);
 
     PublicStoreRuntimeConfig.isErpMounted = true;
@@ -163,16 +189,21 @@ void main() {
               // The two scopes the shell publishes in production, supplied
               // directly: this test is about the bar's composition and its
               // single save owner, not about the shell's tenant plumbing.
-              child: WebsiteEditorCommandScope(
-                isSaving: isSaving,
-                onSave: () async => saveCalls++,
-                onDiscard: () => discardCalls++,
-                onRestoreComplete: () async {},
-                child: WebsiteEditorChromeScope(
-                  editorWidth: width,
-                  canvasWidth:
-                      WebsiteEditorChromeGeometry.canvasWidthFor(width),
-                  child: PublicStoreLayout(child: navigationShell),
+              child: WindowChromeLayoutRegionScope(
+                margins: adaptedMargins,
+                child: WebsiteEditorCommandScope(
+                  isSaving: isSaving,
+                  onSave: () async => saveCalls++,
+                  onDiscard: () => discardCalls++,
+                  onRestoreComplete: () async {},
+                  child: WebsiteEditorChromeScope(
+                    editorWidth: width,
+                    canvasWidth:
+                        WebsiteEditorChromeGeometry.canvasWidthFor(width),
+                    topBandHeight:
+                        WebsiteEditorChromeGeometry.topBandHeightFor(topInset),
+                    child: PublicStoreLayout(child: navigationShell),
+                  ),
                 ),
               ),
             );
@@ -227,9 +258,25 @@ void main() {
       expect(find.byKey(const ValueKey('editor-compact-undo')), findsOneWidget);
       expect(find.byKey(const ValueKey('editor-compact-save')), findsOneWidget);
       expect(find.byKey(const ValueKey('editor-compact-more')), findsOneWidget);
-      // El viewport actual se lee sin abrir nada (t10 10e: `móvil · 390`).
-      expect(find.textContaining('· 390'), findsOneWidget);
-      expect(find.textContaining('escritorio · 390'), findsOneWidget);
+      // Identidad visible, UNA línea. t10 10e y t11 11a ponen una sola
+      // etiqueta ahí; la segunda línea acento que había antes agregaba un
+      // tercer peso compitiendo justo donde menos ancho hay, y a 390 se comía
+      // el espacio de la identidad real.
+      final identity = find.descendant(
+        of: find.byKey(const ValueKey('editor-compact-bar-identity')),
+        matching: find.byType(Text),
+      );
+      expect(identity, findsOneWidget);
+      expect(tester.widget<Text>(identity).maxLines, 1);
+      expect(find.textContaining('· 390'), findsNothing);
+
+      // Pero el viewport NO se pierde: sigue anunciado por el owner real de
+      // la identidad, que es lo que lee un lector de pantalla.
+      final semantics = tester.getSemantics(
+        find.byKey(const ValueKey('editor-compact-bar-identity')),
+      );
+      expect(semantics.label, contains('escritorio'));
+      expect(semantics.label, contains('Editando'));
       // Y la barra densa NO está comprimida dentro.
       expect(find.text('Catálogo web'), findsNothing);
       expect(find.text('Publicado'), findsNothing);
@@ -275,15 +322,113 @@ void main() {
     testWidgets('la barra mide exactamente la altura publicada',
         (tester) async {
       await pumpEditor(tester, width: 390);
-      final bar = tester.getSize(
-        find
-            .ancestor(
-              of: find.byKey(const ValueKey('editor-compact-close')),
-              matching: find.byType(Container),
-            )
-            .last,
+      final systemCanvas = find.ancestor(
+        of: find.byKey(const ValueKey('editor-compact-close')),
+        matching: find.byType(WorkspaceSystemUiCanvas),
       );
+
+      expect(systemCanvas, findsOneWidget);
+      final bar = tester.getSize(systemCanvas);
       expect(bar.height, WebsiteEditorChromeGeometry.topBarHeight);
+
+      // The painted status-bar surface and its icon brightness are one owner.
+      // A feature-local Container could keep the height green while silently
+      // inheriting stale system icons, which is the physical iPad regression
+      // this contract protects.
+      expect(
+        find.descendant(
+          of: systemCanvas,
+          matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('el inset físico ocupa una banda propia exactamente una vez',
+        (tester) async {
+      const inset = WebsiteEditorChromeGeometry.publishedPhoneSafeAreaTop;
+      final totalBand = WebsiteEditorChromeGeometry.topBandHeightFor(inset);
+      await pumpEditor(tester, width: 390, topInset: inset);
+
+      final systemCanvas = find.ancestor(
+        of: find.byKey(const ValueKey('editor-compact-close')),
+        matching: find.byType(WorkspaceSystemUiCanvas),
+      );
+      expect(tester.getRect(systemCanvas), Rect.fromLTWH(0, 0, 390, totalBand));
+      expect(
+        tester.getRect(find.byKey(const ValueKey('editor-compact-close'))).top,
+        inset,
+      );
+      expect(
+        tester
+            .getRect(
+              find.byKey(const ValueKey('storefront_content_viewport')),
+            )
+            .top,
+        totalBand,
+      );
+    });
+
+    testWidgets('la fila evita los insets laterales sin estrechar el canvas',
+        (tester) async {
+      const leftInset = 80.0;
+      const rightInset = 24.0;
+      await pumpEditor(
+        tester,
+        width: 390,
+        leftInset: leftInset,
+        rightInset: rightInset,
+      );
+
+      expect(
+        tester.getRect(find.byKey(const ValueKey('editor-compact-close'))).left,
+        greaterThanOrEqualTo(leftInset),
+      );
+      expect(
+        tester.getRect(find.byKey(const ValueKey('editor-compact-more'))).right,
+        lessThanOrEqualTo(390 - rightInset),
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('storefront_content_viewport')),
+        ),
+        const Rect.fromLTWH(
+          0,
+          WebsiteEditorChromeGeometry.topBarHeight,
+          390,
+          844 - WebsiteEditorChromeGeometry.topBarHeight,
+        ),
+      );
+    });
+
+    testWidgets(
+        'la fila consume la región adaptativa aunque SafeArea diga cero',
+        (tester) async {
+      const adapted = EdgeInsets.only(left: 80, right: 24);
+      await pumpEditor(
+        tester,
+        width: 390,
+        adaptedMargins: adapted,
+      );
+
+      expect(
+        tester.getRect(find.byKey(const ValueKey('editor-compact-close'))).left,
+        greaterThanOrEqualTo(adapted.left),
+      );
+      expect(
+        tester.getRect(find.byKey(const ValueKey('editor-compact-more'))).right,
+        lessThanOrEqualTo(390 - adapted.right),
+      );
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('storefront_content_viewport'))),
+        const Rect.fromLTWH(
+          0,
+          WebsiteEditorChromeGeometry.topBarHeight,
+          390,
+          844 - WebsiteEditorChromeGeometry.topBarHeight,
+        ),
+      );
     });
   });
 
@@ -405,7 +550,7 @@ void main() {
         'el switch de publicación delega UNA vez en el owner del '
         'layout y conserva la confirmación', (tester) async {
       await pumpEditor(tester, width: 390);
-      expect(website.settingWrites, isEmpty);
+      expect(website.settingStatements, isEmpty);
 
       await tester.tap(find.byKey(const ValueKey('editor-compact-more')));
       await tester.pumpAndSettle();
@@ -420,9 +565,12 @@ void main() {
 
       // Un solo write, con la clave y el valor que decide el owner. Si la fila
       // compacta volviera a persistir por su cuenta, aquí habría dos.
-      expect(website.settingWrites, hasLength(1));
-      expect(website.settingWrites.single.key, 'site_published');
-      expect(website.settingWrites.single.value, 'false');
+      expect(website.settingStatements, hasLength(1));
+      expect(website.settingStatements.single.tenantId, 'test-tenant');
+      expect(
+        website.settingStatements.single.settings,
+        const <String, String>{'site_published': 'false'},
+      );
       // Y el feedback sigue siendo el mismo que da la barra densa.
       expect(find.text('Sitio despublicado'), findsOneWidget);
     });
@@ -457,6 +605,32 @@ void main() {
   });
 
   group('1440 · la composición de panel queda intacta', () {
+    testWidgets('la barra densa consume la misma región sin mover el canvas',
+        (tester) async {
+      const adapted = EdgeInsets.only(left: 80, right: 40);
+      await pumpEditor(
+        tester,
+        width: 1440,
+        height: 900,
+        adaptedMargins: adapted,
+      );
+
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('editor-dense-nav-menu')))
+            .left,
+        greaterThanOrEqualTo(adapted.left),
+      );
+      expect(
+        tester.getRect(find.byKey(const ValueKey('editor-dense-more'))).right,
+        lessThanOrEqualTo(1440 - adapted.right),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('editor-dense-bar'))).width,
+        1440,
+      );
+    });
+
     testWidgets('conserva la barra densa y sus controles inline, sin desbordar',
         (tester) async {
       await pumpEditor(tester, width: 1440, height: 900);

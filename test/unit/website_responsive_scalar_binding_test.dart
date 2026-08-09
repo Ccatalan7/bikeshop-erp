@@ -55,7 +55,16 @@ void main() {
   }) {
     final provider = WebsiteEditModeProvider()
       ..enterEditMode(blocksWith(data), const <String, dynamic>{})
-      ..setDevicePreviewMode(viewport);
+      ..setDevicePreviewMode(viewport)
+      ..selectBlock('block-1')
+      ..reportRenderedBlockViewport(
+        'block-1',
+        switch (viewport) {
+          DevicePreviewMode.desktop => WebsiteViewport.desktop,
+          DevicePreviewMode.tablet => WebsiteViewport.tablet,
+          DevicePreviewMode.mobile => WebsiteViewport.mobile,
+        },
+      );
     return provider;
   }
 
@@ -276,6 +285,86 @@ void main() {
       );
       expect(dataOf(provider)['buttonStyle'], 'filled');
     });
+
+    test('una misma binding admite escritura rápida y no-op sin congelarse',
+        () {
+      final provider = providerWith(<String, dynamic>{'title': 'Hola'});
+      final binding = bind<String>(
+        provider,
+        sharedOnlyText,
+        WebsiteResponsiveScalarBinding.decodeText,
+      );
+
+      binding.write('Hola'); // no-op admitido: renueva el lease.
+      binding.write('H');
+      binding.write('Ho');
+      binding.write('Hola de nuevo');
+
+      expect(dataOf(provider)['title'], 'Hola de nuevo');
+      expect(provider.canUndo, isTrue);
+      provider.undo();
+      expect(dataOf(provider)['title'], 'Ho');
+      provider.undo();
+      expect(dataOf(provider)['title'], 'H');
+      provider.undo();
+      expect(dataOf(provider)['title'], 'Hola');
+      expect(provider.canUndo, isFalse);
+    });
+
+    test('callback anterior al cambio de scope falla cerrado', () {
+      final provider = providerWith(<String, dynamic>{'overlayOpacity': 0.4});
+      final stale = bind<num>(
+        provider,
+        responsiveNumber,
+        WebsiteResponsiveScalarBinding.decodeNumber,
+      );
+
+      provider.setFieldWriteScope(
+        blockId: 'block-1',
+        propertyKey: responsiveNumber.key,
+        policy: responsiveNumber.responsivePolicy,
+        scope: WebsiteWriteScope.viewport,
+        viewport: WebsiteViewport.mobile,
+      );
+      stale.write(0.8);
+
+      expect(dataOf(provider)['overlayOpacity'], 0.4);
+      expect(dataOf(provider).containsKey('responsive'), isFalse);
+      expect(provider.canUndo, isFalse);
+
+      bind<num>(provider, responsiveNumber,
+              WebsiteResponsiveScalarBinding.decodeNumber)
+          .write(0.8);
+      expect(
+        (dataOf(provider)['responsive'] as Map)['mobile'],
+        containsPair('overlayOpacity', 0.8),
+      );
+    });
+
+    test('callback de una página anterior no puede escribir en un id reciclado',
+        () {
+      final provider = providerWith(<String, dynamic>{'title': 'Página A'});
+      final stale = bind<String>(
+        provider,
+        sharedOnlyText,
+        WebsiteResponsiveScalarBinding.decodeText,
+      );
+
+      provider.openEditorDocument(
+        blocksWith(<String, dynamic>{'title': 'Página B'}),
+        const <String, dynamic>{},
+        mode: WebsiteEditorMode.edit,
+        pageId: 'page-b',
+        pageSlug: 'pagina-b',
+      );
+      provider
+        ..selectBlock('block-1')
+        ..reportRenderedBlockViewport('block-1', WebsiteViewport.mobile);
+      stale.write('Escritura obsoleta');
+
+      expect(dataOf(provider)['title'], 'Página B');
+      expect(provider.canUndo, isFalse);
+    });
   });
 
   group('B · binding repeater', () {
@@ -301,7 +390,9 @@ void main() {
           ],
           const <String, dynamic>{},
         )
-        ..setDevicePreviewMode(DevicePreviewMode.mobile);
+        ..setDevicePreviewMode(DevicePreviewMode.mobile)
+        ..selectBlock('block-1')
+        ..reportRenderedBlockViewport('block-1', WebsiteViewport.mobile);
     }
 
     List<Map<String, dynamic>> slidesOf(WebsiteEditModeProvider provider) {
@@ -370,7 +461,9 @@ void main() {
           ],
           const <String, dynamic>{},
         )
-        ..setDevicePreviewMode(DevicePreviewMode.mobile);
+        ..setDevicePreviewMode(DevicePreviewMode.mobile)
+        ..selectBlock('block-1')
+        ..reportRenderedBlockViewport('block-1', WebsiteViewport.mobile);
 
       final owner = WebsiteResponsiveRepeaterField.forItem(
         collectionKeys: const <String>['slides'],
@@ -386,9 +479,14 @@ void main() {
         field: responsiveSelect,
         owner: owner,
         decode: WebsiteResponsiveScalarBinding.decodeOption,
-      )
-        ..customize()
-        ..write('center');
+      ).customize();
+      WebsiteResponsiveScalarBinding<String>.forField(
+        provider: provider,
+        blockId: 'block-1',
+        field: responsiveSelect,
+        owner: owner,
+        decode: WebsiteResponsiveScalarBinding.decodeOption,
+      ).write('center');
 
       final updated = slidesOf(provider);
       expect(
@@ -413,9 +511,14 @@ void main() {
         field: responsiveSelect,
         owner: owner,
         decode: WebsiteResponsiveScalarBinding.decodeOption,
-      )
-        ..customize()
-        ..write('right');
+      ).customize();
+      WebsiteResponsiveScalarBinding<String>.forField(
+        provider: provider,
+        blockId: 'block-1',
+        field: responsiveSelect,
+        owner: owner,
+        decode: WebsiteResponsiveScalarBinding.decodeOption,
+      ).write('right');
       expect(provider.hasUnsavedChanges, isTrue);
 
       WebsiteResponsiveScalarBinding<String>.forField(
@@ -428,6 +531,41 @@ void main() {
 
       expect(dataOf(provider), original);
       expect(provider.hasUnsavedChanges, isFalse);
+    });
+
+    test('callback de un item anterior no salta al hermano tras reordenar', () {
+      final provider = repeaterProvider();
+      final originalSlides = slidesOf(provider);
+      final owner = WebsiteResponsiveRepeaterField.forItem(
+        collectionKeys: const <String>['slides'],
+        itemIndex: 1,
+        item: originalSlides[1],
+      );
+      final stale = WebsiteResponsiveScalarBinding<String>.forField(
+        provider: provider,
+        blockId: 'block-1',
+        field: responsiveSelect,
+        owner: owner,
+        decode: WebsiteResponsiveScalarBinding.decodeOption,
+      );
+
+      provider.updateBlockData(
+        'block-1',
+        'slides',
+        <Map<String, dynamic>>[originalSlides[1], originalSlides[0]],
+      );
+      stale.write('right');
+
+      final reordered = slidesOf(provider);
+      expect(reordered[0]['id'], 'slide-b');
+      expect(reordered[0]['alignment'], 'left');
+      expect(reordered[1]['id'], 'slide-a');
+      expect(reordered[1]['alignment'], 'left');
+      expect(provider.canUndo, isTrue,
+          reason: 'sólo el reorder externo existe');
+      provider.undo();
+      expect(slidesOf(provider), originalSlides);
+      expect(provider.canUndo, isFalse);
     });
   });
 }

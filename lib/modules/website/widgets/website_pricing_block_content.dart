@@ -23,6 +23,7 @@ class WebsitePricingBlockContent extends StatelessWidget {
     this.onNavigate,
     this.isNavigationEligible,
     this.presenters,
+    this.backgroundColor,
     this.padding = const EdgeInsets.symmetric(
       vertical: 64,
       horizontal: 24,
@@ -50,6 +51,7 @@ class WebsitePricingBlockContent extends StatelessWidget {
   final void Function(String route)? onNavigate;
   final bool Function(String href)? isNavigationEligible;
   final WebsiteBlockContentPresenters? presenters;
+  final Color? backgroundColor;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -99,7 +101,8 @@ class WebsitePricingBlockContent extends StatelessWidget {
     );
 
     return ColoredBox(
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
+      color: backgroundColor ??
+          theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
       child: Padding(
         key: rootKey,
         padding: padding,

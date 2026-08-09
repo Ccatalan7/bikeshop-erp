@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../modules/website/models/website_block_public_visibility.dart';
 import '../../modules/website/models/website_editor_capability.dart';
 import '../../modules/website/models/website_page_composition.dart';
 import '../../modules/website/models/website_page_models.dart';
+import '../../modules/website/models/website_responsive_authoring.dart';
 import '../../modules/website/models/website_seo_settings_aliases.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
@@ -210,10 +210,6 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
       pageId: _pageId,
       pageSlug: widget.slug,
     );
-  }
-
-  String _currentBreakpoint(BuildContext context) {
-    return websitePublicBreakpointForWidth(MediaQuery.sizeOf(context).width);
   }
 
   Future<void> _loadPageData() async {
@@ -696,10 +692,12 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
         : editProvider.isPreviewMode
             ? WebsitePageCompositionMode.preview
             : WebsitePageCompositionMode.public;
+    final logicalWidth = MediaQuery.sizeOf(context).width;
     final composition = WebsitePageComposition.project(
       blocks: blocksToRender,
       mode: mode,
-      breakpoint: _currentBreakpoint(context),
+      breakpoint: WebsiteViewport.fromLogicalWidth(logicalWidth).wireName,
+      logicalWidth: logicalWidth,
       sectionSpacing: resolvedTheme.sectionSpacing,
     );
 

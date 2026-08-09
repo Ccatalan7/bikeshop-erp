@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:vinabike_erp/modules/website/models/canvas_element_factory.dart';
+import 'package:vinabike_erp/modules/website/models/website_canvas_manipulation.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_composition.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/widgets/deferred_canvas_block.dart';
 import 'package:vinabike_erp/modules/website/widgets/deferred_editable_block_renderer.dart';
@@ -24,9 +26,7 @@ Map<String, dynamic> _canvasBlock({
 }
 
 String _breakpoint(double width) {
-  if (width < 600) return 'mobile';
-  if (width < 1200) return 'tablet';
-  return 'desktop';
+  return WebsiteViewport.fromLogicalWidth(width).wireName;
 }
 
 bool _containsActiveElementId(Object? value) {
@@ -88,6 +88,7 @@ Future<void> _pumpPageMode(
         blocks: blocks,
         mode: mode,
         breakpoint: _breakpoint(width),
+        logicalWidth: width,
       ),
       provider: provider,
     ),
@@ -210,6 +211,9 @@ void main() {
                         data: blockData,
                         accentColor: const Color(0xFF00A09D),
                         editorBinding: WebsiteCanvasEditorBinding(
+                          documentTarget: const WebsiteCanvasDocumentTarget(
+                            blockId: 'canvas-block',
+                          ),
                           activeElementId: currentProvider
                               .canvasElementSelection('canvas-block'),
                           // 7B-2B2: the whole-list write is gone from the
@@ -277,10 +281,7 @@ void main() {
               ),
             )
             .firstWhere(
-              (gesture) =>
-                  gesture.onTap != null &&
-                  gesture.onDoubleTap != null &&
-                  gesture.onPanStart != null,
+              (gesture) => gesture.onTap != null && gesture.onDoubleTap != null,
             );
       }
 

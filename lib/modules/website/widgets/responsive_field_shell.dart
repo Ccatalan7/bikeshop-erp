@@ -6,6 +6,62 @@ import '../../../shared/widgets/vb_status_badge.dart';
 import '../models/website_responsive_authoring.dart';
 import '../models/website_responsive_field_state.dart';
 
+/// Compact attribution for a field whose control already owns its label.
+///
+/// It is the small sibling of [ResponsiveFieldShell]: both consume the same
+/// resolved state and the canonical `E-01` badge, but this widget adds no
+/// help, scope sentence or action. That keeps `sharedOnly` controls honest
+/// without wrapping every legacy field in a second vertical form layout.
+class ResponsiveFieldAttribution<T> extends StatelessWidget {
+  const ResponsiveFieldAttribution({
+    super.key,
+    required this.state,
+    this.dense = true,
+  });
+
+  final WebsiteResponsiveFieldState<T> state;
+  final bool dense;
+
+  @visibleForTesting
+  static const Key statusKey = Key('responsive-field-attribution-status');
+
+  static VbStatusTone toneFor(WebsiteResponsiveFieldStatus status) =>
+      switch (status) {
+        WebsiteResponsiveFieldStatus.common => VbStatusTone.neutral,
+        WebsiteResponsiveFieldStatus.inherited => VbStatusTone.neutral,
+        WebsiteResponsiveFieldStatus.sharedOnly => VbStatusTone.neutral,
+        WebsiteResponsiveFieldStatus.unavailable => VbStatusTone.neutral,
+        WebsiteResponsiveFieldStatus.overridden => VbStatusTone.info,
+        WebsiteResponsiveFieldStatus.legacyConflict => VbStatusTone.warning,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion
+        ? VbSegmentedMetrics.motionReduced
+        : VbSegmentedMetrics.motionFast;
+
+    return Semantics(
+      container: true,
+      label: state.semanticSummary,
+      child: AnimatedSwitcher(
+        duration: duration,
+        switchInCurve: VbSegmentedMetrics.motionCurve,
+        switchOutCurve: VbSegmentedMetrics.motionCurve,
+        child: VbStatusBadge(
+          key: ValueKey<WebsiteResponsiveFieldStatus>(state.status),
+          label: state.statusLabel,
+          tone: toneFor(state.status),
+          dense: dense,
+          semanticLabel: state.semanticSummary,
+        ),
+      ),
+    );
+  }
+}
+
 /// The visible authority of the responsive authoring model, per field.
 ///
 /// The plan's rule is that the global viewport/scope control only supplies a
@@ -72,18 +128,6 @@ class ResponsiveFieldShell<T> extends StatelessWidget {
   @visibleForTesting
   static const Key scopeNoticeKey = Key('responsive-field-scope');
 
-  VbStatusTone get _tone => switch (state.status) {
-        // `E-01`: neutral = "sin carga".
-        WebsiteResponsiveFieldStatus.common => VbStatusTone.neutral,
-        WebsiteResponsiveFieldStatus.inherited => VbStatusTone.neutral,
-        WebsiteResponsiveFieldStatus.sharedOnly => VbStatusTone.neutral,
-        WebsiteResponsiveFieldStatus.unavailable => VbStatusTone.neutral,
-        // `E-01`: accent = "necesita criterio humano" -> the `info` role.
-        WebsiteResponsiveFieldStatus.overridden => VbStatusTone.info,
-        // `E-01`: warning = "te toca actuar".
-        WebsiteResponsiveFieldStatus.legacyConflict => VbStatusTone.warning,
-      };
-
   /// The sentence that makes "Común" and "Móvil" impossible to confuse.
   String get _scopeNotice {
     if (state.status == WebsiteResponsiveFieldStatus.unavailable) {
@@ -124,11 +168,6 @@ class ResponsiveFieldShell<T> extends StatelessWidget {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
     final resolvedDensity = density ?? VbDensity.resolve(context);
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion
-        ? VbSegmentedMetrics.motionReduced
-        : VbSegmentedMetrics.motionFast;
 
     final labelStyle =
         (theme.textTheme.labelMedium ?? const TextStyle()).copyWith(
@@ -169,16 +208,10 @@ class ResponsiveFieldShell<T> extends StatelessWidget {
               const SizedBox(width: _gapRow),
               // Fade only: `F-05` forbids displacement under reduce-motion, and
               // a status change must never move the field it describes.
-              AnimatedSwitcher(
-                duration: duration,
-                switchInCurve: VbSegmentedMetrics.motionCurve,
-                switchOutCurve: VbSegmentedMetrics.motionCurve,
-                child: ExcludeSemantics(
-                  key: ValueKey<WebsiteResponsiveFieldStatus>(state.status),
-                  child: VbStatusBadge(
-                    label: state.statusLabel,
-                    tone: _tone,
-                  ),
+              ExcludeSemantics(
+                child: ResponsiveFieldAttribution<T>(
+                  state: state,
+                  dense: false,
                 ),
               ),
             ],

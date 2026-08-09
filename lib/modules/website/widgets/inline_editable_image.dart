@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../providers/website_edit_mode_provider.dart';
 import 'website_block_content_presenters.dart';
 import 'website_media_picker.dart';
 
@@ -40,7 +41,11 @@ class InlineEditableImage extends StatefulWidget {
     this.placeholder,
     this.borderRadius,
     this.editAffordance = WebsiteInlineMediaEditAffordance.hoverOverlay,
+    this.asyncBinding,
   });
+
+  /// Exact page/block/field authority for the asynchronous picker.
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   /// The classic full-surface hover overlay (hoverOverlay policy only).
   @visibleForTesting
@@ -56,15 +61,76 @@ class _InlineEditableImageState extends State<InlineEditableImage> {
 
   Future<void> _pickAndUploadImage() async {
     if (!widget.isEditMode) return;
+    final openingCallback = widget.onChanged;
+    final currentUrl = widget.imageUrl;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    final remoteArm = openingBinding?.capture();
+    if (openingBinding != null && (arm == null || remoteArm == null)) return;
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: remoteArm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'subir una imagen inline del sitio web',
+    );
     try {
       final selection = await showWebsiteMediaPicker(
         context: context,
-        currentUrl: widget.imageUrl,
+        currentUrl: currentUrl,
+        remoteWriteAuthority: remoteAuthority,
       );
-      if (selection != null) widget.onChanged?.call(selection.publicUrl);
+      if (!mounted) return;
+      if (widget.imageUrl != currentUrl) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.rejected,
+          );
+        }
+        return;
+      }
+      if (selection == null) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.unchanged,
+          );
+        }
+        return;
+      }
+
+      final liveBinding = widget.asyncBinding;
+      if (arm != null) {
+        if (liveBinding == null) return;
+        liveBinding.commit(arm, () {
+          if (selection.publicUrl == currentUrl) {
+            return WebsiteInlineMutationResult.unchanged;
+          }
+          widget.onChanged?.call(selection.publicUrl);
+          return WebsiteInlineMutationResult.committed;
+        });
+        return;
+      }
+
+      if (!identical(widget.onChanged, openingCallback)) return;
+      widget.onChanged?.call(selection.publicUrl);
     } catch (e) {
       debugPrint('Error selecting image: $e');
-      if (mounted) {
+      var belongsToLiveOwner = mounted &&
+          widget.imageUrl == currentUrl &&
+          identical(widget.onChanged, openingCallback);
+      if (mounted && arm != null) {
+        final liveBinding = widget.asyncBinding;
+        belongsToLiveOwner = liveBinding != null &&
+            liveBinding
+                .commit(
+                  arm,
+                  () => WebsiteInlineMutationResult.unchanged,
+                )
+                .accepted;
+      }
+      if (belongsToLiveOwner) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al seleccionar imagen: $e'),

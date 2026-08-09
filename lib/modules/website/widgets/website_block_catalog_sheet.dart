@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../models/website_block_catalog.dart';
 import '../models/website_block_type.dart';
+import 'website_editor_contextual_operation_scope.dart';
 
 /// What the catalog sheet resolves to. Null means the operator cancelled.
 @immutable
@@ -10,12 +11,27 @@ class WebsiteBlockCatalogSelection {
   const WebsiteBlockCatalogSelection({
     required this.type,
     required this.atIndex,
+    required this.side,
   });
 
   final WebsiteBlockType type;
 
-  /// The canonical `atIndex` for `onAddBlock(type, atIndex:)`.
+  /// The canonical `atIndex` for `onAddBlock(type, atIndex:)`, computed against
+  /// the document as it was when the sheet opened.
+  ///
+  /// Callers that own an anchor block should prefer [side] and re-resolve the
+  /// index themselves: `Posición` is editable inside the sheet (t11a), and the
+  /// page underneath stays live while it is open, so this number can be stale
+  /// by the time it is read.
   final int atIndex;
+
+  /// Which side of the anchor the operator finally chose.
+  ///
+  /// Returned explicitly instead of being inferred from [atIndex]: the segment
+  /// is part of the task and the operator can change it after the sheet opened,
+  /// and a caller re-resolving a live index cannot recover the side from a
+  /// number computed against a different order.
+  final WebsiteBlockInsertSide side;
 }
 
 /// `O-05 VbBottomSheet` geometry for the catalog, read from Design.
@@ -71,22 +87,42 @@ Future<WebsiteBlockCatalogSelection?> showWebsiteBlockCatalogSheet({
   required Iterable<String> presentBlockTypes,
   WebsiteBlockInsertionAnchor? anchor,
   int fallbackIndex = 0,
-}) {
-  return showModalBottomSheet<WebsiteBlockCatalogSelection>(
-    context: context,
-    // The page stays visible above the sheet: the operator has to see the gap
-    // they are inserting into.
-    barrierColor: Colors.transparent,
-    backgroundColor: Colors.transparent,
-    elevation: 0,
-    isScrollControlled: true,
-    useSafeArea: false,
-    builder: (sheetContext) => WebsiteBlockCatalogSheet(
-      presentBlockTypes: presentBlockTypes.toList(growable: false),
-      anchor: anchor,
-      fallbackIndex: fallbackIndex,
-    ),
-  );
+  ThemeData? theme,
+}) async {
+  final lease = WebsiteEditorContextualOperationScope.maybeControllerOf(
+    context,
+  )?.acquire();
+  try {
+    return await showModalBottomSheet<WebsiteBlockCatalogSelection>(
+      context: context,
+      // Opened from a marker inside the canvas, which is under the Navigator the
+      // contextual dock paints over. Without this the catalog would render
+      // *below* the dock — the same failure the inline CTA editor had.
+      useRootNavigator: true,
+      // The page stays visible above the sheet: the operator has to see the gap
+      // they are inserting into.
+      barrierColor: Colors.transparent,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      isScrollControlled: true,
+      useSafeArea: false,
+      builder: (sheetContext) {
+        final sheet = WebsiteBlockCatalogSheet(
+          presentBlockTypes: presentBlockTypes.toList(growable: false),
+          anchor: anchor,
+          fallbackIndex: fallbackIndex,
+        );
+        // `showModalBottomSheet` captures the CALLING context's inherited themes
+        // and re-applies them under the root navigator, so a caller inside the
+        // storefront would dress this editor surface in the tenant's website
+        // theme — the operator's tool wearing the customer's brand. The caller
+        // passes the ERP theme and it wins here.
+        return theme == null ? sheet : Theme(data: theme, child: sheet);
+      },
+    );
+  } finally {
+    lease?.release();
+  }
 }
 
 /// The `+ Agregar aquí` affordance that lives in a gap between blocks.
@@ -102,18 +138,19 @@ class WebsiteInsertBlockAffordance extends StatelessWidget {
   const WebsiteInsertBlockAffordance({
     super.key,
     required this.anchor,
-    required this.presentBlockTypes,
-    required this.onAddBlock,
-    this.fallbackIndex = 0,
+    required this.onTap,
   });
 
   /// Null only on an empty page.
   final WebsiteBlockInsertionAnchor? anchor;
-  final List<String> presentBlockTypes;
-  final int fallbackIndex;
 
-  /// The canonical page-level command. This widget never touches a provider.
-  final void Function(String blockType, {int? atIndex}) onAddBlock;
+  /// Reports the operator's intent upward. **This widget opens nothing.**
+  ///
+  /// It used to call the catalog and then `onAddBlock` itself, which made every
+  /// marker a separate entry point into the same operation — with nowhere to
+  /// put the reentrancy guard or the index re-resolution that operation needs.
+  /// One owner does that now; this is the leaf that says "here".
+  final VoidCallback onTap;
 
   /// t11a · `insert_affordance: 48`.
   static const double height = 48;
@@ -132,18 +169,6 @@ class WebsiteInsertBlockAffordance extends StatelessWidget {
         '${target.anchorTitle}';
   }
 
-  Future<void> _open(BuildContext context) async {
-    final selection = await showWebsiteBlockCatalogSheet(
-      context: context,
-      presentBlockTypes: presentBlockTypes,
-      anchor: anchor,
-      fallbackIndex: fallbackIndex,
-    );
-    // Cancelling is a true no-op: no write, no history, nothing to restore.
-    if (selection == null) return;
-    onAddBlock(selection.type.name, atIndex: selection.atIndex);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -160,7 +185,7 @@ class WebsiteInsertBlockAffordance extends StatelessWidget {
         key: anchor == null
             ? WebsiteInsertBlockAffordance.affordanceKey
             : keyForIndex(anchor!.indexFor(anchor!.initialSide)),
-        onTap: () => _open(context),
+        onTap: onTap,
         child: Container(
           height: height,
           width: double.infinity,
@@ -331,6 +356,7 @@ class _WebsiteBlockCatalogSheetState extends State<WebsiteBlockCatalogSheet> {
                             entry: entries[index],
                             onSelected: () => Navigator.of(context).pop(
                               WebsiteBlockCatalogSelection(
+                                side: _side,
                                 type: entries[index].type,
                                 atIndex: _atIndex,
                               ),

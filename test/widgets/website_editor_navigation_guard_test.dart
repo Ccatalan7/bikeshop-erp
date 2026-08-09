@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,71 @@ import 'package:vinabike_erp/public_store/widgets/public_store_layout.dart';
 import 'package:vinabike_erp/public_store/widgets/storefront_navigation_guard_scope.dart';
 
 void main() {
+  test('provider replacement rejects and consumes a navigation decision', () {
+    WebsiteEditModeProvider provider() => WebsiteEditModeProvider()
+      ..enterEditMode(
+        const <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'block-1',
+            'block_type': 'about',
+            'block_data': <String, dynamic>{'title': 'Original'},
+          },
+        ],
+        const <String, dynamic>{},
+        pageId: 'page-a',
+        pageSlug: 'page-a',
+      );
+
+    final providerA = provider();
+    final providerB = provider();
+    addTearDown(providerA.dispose);
+    addTearDown(providerB.dispose);
+    var live = providerA;
+    final decision = WebsiteEditorNavigationGuard.decisionForTesting(
+      provider: providerA,
+      intent: WebsiteEditorNavigationIntent.switchPage,
+      discardOnCommit: true,
+      resolveLiveProvider: () => live,
+    );
+
+    live = providerB;
+    expect(decision.claim(), isFalse);
+    live = providerA;
+    expect(
+      decision.commit(),
+      isFalse,
+      reason: 'a rejected authorization is one-shot and cannot resurrect',
+    );
+    expect(providerA.blocks, hasLength(1));
+    expect(providerB.blocks, hasLength(1));
+  });
+
+  test('quick page creation claims before its remote write', () {
+    final source = File(
+      'lib/public_store/widgets/public_store_layout.dart',
+    ).readAsStringSync();
+    final start = source.indexOf('Future<void> _showQuickCreatePageDialog');
+    final end = source.indexOf(
+      'Future<void> _loadPaymentCapabilities',
+      start,
+    );
+    expect(start, greaterThanOrEqualTo(0));
+    expect(end, greaterThan(start));
+    final method = source.substring(start, end);
+    expect(
+      method.indexOf('claimOwner: editorDecision.claim'),
+      greaterThanOrEqualTo(0),
+    );
+    expect(method, isNot(contains('if (!editorDecision.claim())')));
+    expect(
+      method.indexOf('final writeGuard = authority.claimForWrite()'),
+      lessThan(method.indexOf('await websiteService.createPage(')),
+    );
+    expect(method, contains('tenantId: authority.tenantId'));
+    expect(method, contains('writeGuard: writeGuard'));
+    expect(method, contains('editorDecision.releaseClaim()'));
+  });
+
   test('a new tab never replaces the current editor document', () {
     expect(
       WebsiteEditorNavigationGuard.classifyIntent(

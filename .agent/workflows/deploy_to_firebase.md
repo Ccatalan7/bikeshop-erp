@@ -69,7 +69,7 @@ Generates static HTML files for canonical product URLs so `/productos/<uuid>` ca
 dart run scripts/generate_product_seo_snapshots.dart \
 	--build-dir build/web_store \
 	--tenant-id 5443b130-cc28-45af-a420-cd500b288890 \
-	--store-url https://vinabike.cl \
+	--expected-store-url https://vinabike.cl \
 	--product-scope published
 ```
 
@@ -84,6 +84,12 @@ Notes:
 - Firebase Hosting serves these snapshots as static files if present (SPA rewrite is only a fallback).
 - Hosting headers for `/productos/**` are configured in `firebase.json`.
 - `robots.txt` and `sitemap.xml` are generated in the same step so Google can discover the full public product catalog.
+- The consistency guard reads every production owner twice. Every paginated
+  owner must use a total order: URL aliases are ordered by
+  `created_at.asc,alias_path.asc`, where `alias_path` is tenant-unique. A
+  timestamp-only order can duplicate and omit tied rows even with no writes.
+  Never bypass that guard; after an abort, fix the source read and rerun the
+  complete deploy because the local build outputs are incomplete.
 
 ### 3. Build the ERP (Full)
 // turbo

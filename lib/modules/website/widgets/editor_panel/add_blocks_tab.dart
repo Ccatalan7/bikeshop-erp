@@ -137,8 +137,17 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
 
                         return DragTarget<WebsiteEditorDragPayload>(
                           key: ValueKey('block_target_$index'),
-                          onWillAcceptWithDetails: (details) =>
-                              details.data is ExistingWebsiteBlockDragPayload,
+                          onWillAcceptWithDetails: (details) {
+                            final payload = details.data;
+                            final document = editProvider.document;
+                            return payload is ExistingWebsiteBlockDragPayload &&
+                                payload.blockId != id &&
+                                payload.matchesDocument(
+                                  sessionRevision: document.sessionRevision,
+                                  pageId: document.pageId,
+                                  pageSlug: document.pageSlug,
+                                );
+                          },
                           onMove: (details) {
                             if (_hoveringBlockIndex != index) {
                               setState(() {
@@ -147,17 +156,36 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
                             }
                           },
                           onAcceptWithDetails: (details) {
-                            // Compute reordered list
-                            final draggedIndex = blocks
-                                .indexWhere((b) => b['id'] == _draggingBlockId);
-                            if (draggedIndex >= 0 &&
-                                _hoveringBlockIndex != null &&
-                                draggedIndex != _hoveringBlockIndex) {
-                              var newIndex = _hoveringBlockIndex!;
-                              // Adjust for ReorderableListView's convention
-                              if (newIndex > draggedIndex) newIndex += 1;
-                              editProvider.reorderBlocks(
-                                  draggedIndex, newIndex);
+                            final payload = details.data;
+                            final document = editProvider.document;
+                            if (payload is ExistingWebsiteBlockDragPayload &&
+                                payload.matchesDocument(
+                                  sessionRevision: document.sessionRevision,
+                                  pageId: document.pageId,
+                                  pageSlug: document.pageSlug,
+                                )) {
+                              // Resolve BOTH identities at commit time. The row
+                              // index is only preview geometry and may have
+                              // changed while the drag feedback was alive.
+                              final liveBlocks = editProvider.blocks;
+                              final draggedIndex = liveBlocks.indexWhere(
+                                (block) =>
+                                    block['id']?.toString() == payload.blockId,
+                              );
+                              final anchorIndex = liveBlocks.indexWhere(
+                                (block) => block['id']?.toString() == id,
+                              );
+                              if (draggedIndex >= 0 &&
+                                  anchorIndex >= 0 &&
+                                  draggedIndex != anchorIndex) {
+                                final insertIndex = draggedIndex < anchorIndex
+                                    ? anchorIndex + 1
+                                    : anchorIndex;
+                                editProvider.reorderBlocks(
+                                  draggedIndex,
+                                  insertIndex,
+                                );
+                              }
                             }
                             setState(() {
                               _draggingBlockId = null;
@@ -187,8 +215,14 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
                                   child: Row(
                                     children: [
                                       Draggable<WebsiteEditorDragPayload>(
-                                        data:
-                                            ExistingWebsiteBlockDragPayload(id),
+                                        data: ExistingWebsiteBlockDragPayload(
+                                          blockId: id,
+                                          sessionRevision: editProvider
+                                              .documentSessionRevision,
+                                          pageId: editProvider.currentPageId,
+                                          pageSlug:
+                                              editProvider.currentPageSlug,
+                                        ),
                                         dragAnchorStrategy:
                                             pointerDragAnchorStrategy,
                                         onDragStarted: () {

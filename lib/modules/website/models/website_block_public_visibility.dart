@@ -8,6 +8,23 @@ const websitePublicBreakpoints = <String>[
   'mobile',
 ];
 
+/// Persisted generation of the visibility bands, owned by the visibility map.
+///
+/// A block may contain canonical responsive values for media or geometry while
+/// its visibility still belongs to the historical 640/1024 rollout. Keeping
+/// the marker beside `desktop/tablet/mobile` prevents an unrelated responsive
+/// edit from silently migrating what visitors can see at 620 or 1000 px.
+const String websiteVisibilityBreakpointVersionKey = 'version';
+const int websiteVisibilityBreakpointVersion = 2;
+
+enum WebsiteVisibilityBreakpointGeneration { legacy, canonical }
+
+enum WebsiteVisibilityUpdateOutcome {
+  applied,
+  requiresMigrationConfirmation,
+  blockNotFound,
+}
+
 String websitePublicBreakpointForWidth(double width) {
   if (width < 640) return 'mobile';
   if (width < 1024) return 'tablet';
@@ -22,8 +39,64 @@ String websitePublicBreakpointForWidth(double width) {
 WebsiteViewport websitePublicViewportForBlockDataWidth(
   Map<String, dynamic> blockData,
   double width,
-) =>
-    WebsiteResponsiveDataCodec.viewportForDocumentWidth(blockData, width);
+) {
+  final rawVisibility = blockData['visibility'];
+  final visibility = rawVisibility is Map
+      ? rawVisibility.map((key, value) => MapEntry(key.toString(), value))
+      : const <String, dynamic>{};
+  final rawVersion = visibility[websiteVisibilityBreakpointVersionKey];
+  final version = switch (rawVersion) {
+    num value => value.toInt(),
+    String value => int.tryParse(value.trim()),
+    _ => null,
+  };
+  if (version != null && version >= websiteVisibilityBreakpointVersion) {
+    return WebsiteViewport.fromLogicalWidth(width);
+  }
+  if (width < 640) return WebsiteViewport.mobile;
+  if (width < 1024) return WebsiteViewport.tablet;
+  return WebsiteViewport.desktop;
+}
+
+WebsiteVisibilityBreakpointGeneration websiteVisibilityGeneration(
+  dynamic raw,
+) {
+  if (raw is! Map) return WebsiteVisibilityBreakpointGeneration.legacy;
+  final version = raw[websiteVisibilityBreakpointVersionKey];
+  final parsed = switch (version) {
+    num value => value.toInt(),
+    String value => int.tryParse(value.trim()),
+    _ => null,
+  };
+  return parsed != null && parsed >= websiteVisibilityBreakpointVersion
+      ? WebsiteVisibilityBreakpointGeneration.canonical
+      : WebsiteVisibilityBreakpointGeneration.legacy;
+}
+
+/// Whether changing generations preserves both rollout canaries.
+bool canMigrateWebsiteVisibilityWithoutBehaviorChange(dynamic raw) {
+  final visibility = normalizeWebsiteBlockPublicVisibility(raw);
+  return visibility['mobile'] == visibility['tablet'] &&
+      visibility['tablet'] == visibility['desktop'];
+}
+
+/// Payload written by the one responsive-visibility operation.
+Map<String, dynamic> updatedWebsiteBlockVisibility(
+  dynamic raw, {
+  required String breakpoint,
+  required bool isVisible,
+  required bool useCanonicalBreakpoints,
+}) {
+  if (!websitePublicBreakpoints.contains(breakpoint)) {
+    throw ArgumentError.value(breakpoint, 'breakpoint');
+  }
+  return <String, dynamic>{
+    if (useCanonicalBreakpoints)
+      websiteVisibilityBreakpointVersionKey: websiteVisibilityBreakpointVersion,
+    ...normalizeWebsiteBlockPublicVisibility(raw),
+    breakpoint: isVisible,
+  };
+}
 
 bool isWebsiteBlockVisibleAtLogicalWidth(
   Map<String, dynamic> block,

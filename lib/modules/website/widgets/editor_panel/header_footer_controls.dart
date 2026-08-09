@@ -38,6 +38,13 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     'dark': 'Oscuro (texto claro)'
   };
 
+  WebsiteAsyncFieldBinding _headerAsyncBinding(String sourceKey) =>
+      _sitewideAsyncFieldBinding(
+        provider: widget.provider,
+        bucket: WebsiteSitewideDraftBucket.header,
+        sourceKey: sourceKey,
+      );
+
   @override
   void initState() {
     super.initState();
@@ -50,11 +57,19 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
     _headerMenuRailColorController.addListener(_onFieldChanged);
   }
 
+  /// Every keystroke stages, not just the first one.
+  ///
+  /// The guard used to be `if (_loaded && !_hasLocalChanges)`, which made
+  /// `_hasLocalChanges` do two jobs: remember that the control is dirty AND
+  /// gate the sync. Once the first character set it true the condition was
+  /// never true again, so the pending value froze at that first character
+  /// while the field kept accepting text — the canvas previewed `E` for a
+  /// banner the operator had finished renaming. `_markChanged` beside it
+  /// already had the right shape: mark once, sync always.
   void _onFieldChanged() {
-    if (_loaded && !_hasLocalChanges) {
-      _hasLocalChanges = true;
-      _syncPendingSettingsToProvider();
-    }
+    if (!_loaded) return;
+    _hasLocalChanges = true;
+    _syncPendingSettingsToProvider();
   }
 
   void _markChanged() {
@@ -87,6 +102,17 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_loaded) {
+      _loadSettings();
+      _loaded = true;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _HeaderBlockControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.provider, widget.provider)) {
+      _loaded = false;
+      _hasLocalChanges = false;
       _loadSettings();
       _loaded = true;
     }
@@ -183,9 +209,9 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           const SizedBox(height: 12),
           _LogoUploader(
             currentUrl: _logoUrlController.text,
+            asyncBinding: _headerAsyncBinding('logo_url'),
             onChanged: (url) {
               _logoUrlController.text = url;
-              _markChanged();
               setState(() {});
             },
           ),
@@ -259,7 +285,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           _ColorField(
             label: 'Color de fondo',
             controller: _headerBgColorController,
-            onChanged: () => _markChanged(),
+            asyncBinding: _headerAsyncBinding('header_bg_color'),
           ),
 
           const SizedBox(height: 20),
@@ -279,14 +305,14 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
             label: 'Header y panel principal',
             controller: _headerMenuSurfaceColorController,
             allowAlpha: false,
-            onChanged: () => _markChanged(),
+            asyncBinding: _headerAsyncBinding('header_menu_surface_color'),
           ),
           const SizedBox(height: 12),
           _ColorField(
             label: 'Franja de categorías',
             controller: _headerMenuRailColorController,
             allowAlpha: false,
-            onChanged: () => _markChanged(),
+            asyncBinding: _headerAsyncBinding('header_menu_rail_color'),
           ),
           const SizedBox(height: 16),
 
@@ -526,6 +552,43 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
   }
 }
 
+String _footerNavigationSourceSnapshot(
+  Iterable<WebsiteNavigation> navigation,
+) {
+  Map<String, dynamic> snapshot(WebsiteNavigation item) => <String, dynamic>{
+        ...item.toJson(),
+        'children': item.children.map(snapshot).toList(growable: false),
+      };
+
+  return jsonEncode(navigation.map(snapshot).toList(growable: false));
+}
+
+WebsiteNavigation? _findFooterNavigation(
+  Iterable<WebsiteNavigation> navigation,
+  String id,
+) {
+  for (final item in navigation) {
+    if (item.id == id) return item;
+    final nested = _findFooterNavigation(item.children, id);
+    if (nested != null) return nested;
+  }
+  return null;
+}
+
+class _FooterNavigationDragArm {
+  const _FooterNavigationDragArm({
+    required this.intent,
+    required this.sourceSnapshot,
+    required this.itemId,
+    this.parentId,
+  });
+
+  final WebsiteSitewideAsyncIntent intent;
+  final String sourceSnapshot;
+  final String itemId;
+  final String? parentId;
+}
+
 /// Controls for editing the site footer (special element, not a block)
 class _FooterBlockControls extends StatefulWidget {
   final WebsiteEditModeProvider provider;
@@ -575,6 +638,84 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
   // Drag state for visual reordering feedback (links within a section)
   String? _draggingLinkId;
   int? _hoveringLinkIndex;
+  _FooterNavigationDragArm? _sectionDragArm;
+  _FooterNavigationDragArm? _linkDragArm;
+
+  _FooterNavigationDragArm? _captureFooterDragArm({
+    required String itemId,
+    String? parentId,
+  }) {
+    final service = context.read<WebsiteService>();
+    final intent = widget.provider.captureSitewideAsyncIntent(
+      bucket: WebsiteSitewideDraftBucket.footer,
+      sourceKeys: const <String>{
+        WebsiteSitewideAsyncSourceKey.footerNavigation,
+      },
+    );
+    if (intent == null) return null;
+    return _FooterNavigationDragArm(
+      intent: intent,
+      sourceSnapshot: _footerNavigationSourceSnapshot(
+        service.footerNavigation,
+      ),
+      itemId: itemId,
+      parentId: parentId,
+    );
+  }
+
+  void _cancelFooterDragArm(_FooterNavigationDragArm? arm) {
+    if (arm == null) return;
+    widget.provider.commitSitewideAsyncIntent(
+      arm.intent,
+      () => WebsiteInlineMutationResult.unchanged,
+    );
+  }
+
+  bool _commitFooterDragOrder(
+    _FooterNavigationDragArm? arm,
+    List<String> orderedIds,
+  ) {
+    if (arm == null) return false;
+    final service = context.read<WebsiteService>();
+    final provider = widget.provider;
+    final result = provider.commitSitewideAsyncIntent(arm.intent, () {
+      if (_footerNavigationSourceSnapshot(service.footerNavigation) !=
+          arm.sourceSnapshot) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      final effective = provider.getEffectiveFooterNavigation(
+        service.footerNavigation,
+      );
+      final siblings = arm.parentId == null
+          ? effective
+          : _findFooterNavigation(effective, arm.parentId!)?.children;
+      if (siblings == null ||
+          siblings.where((item) => item.id == arm.itemId).length != 1) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      final liveIds = siblings.map((item) => item.id).toList(growable: false);
+      if (orderedIds.length != liveIds.length ||
+          orderedIds.toSet().length != orderedIds.length ||
+          !orderedIds.toSet().containsAll(liveIds)) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      if (arm.parentId == null) {
+        provider.updateFooterSectionOrder(orderedIds);
+      } else {
+        provider.updateFooterLinkOrder(arm.parentId!, orderedIds);
+      }
+      return WebsiteInlineMutationResult.committed;
+    });
+    if (!result.accepted || !mounted) return false;
+    setState(() {
+      if (arm.parentId == null) {
+        _footerSectionOrderOverride = orderedIds;
+      } else {
+        _footerLinkOrderOverrideBySection[arm.parentId!] = orderedIds;
+      }
+    });
+    return true;
+  }
 
   List<WebsiteNavigation> _applyIdOrder(
     List<WebsiteNavigation> items,
@@ -716,6 +857,24 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     }
   }
 
+  @override
+  void didUpdateWidget(covariant _FooterBlockControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.provider, widget.provider)) {
+      _loaded = false;
+      _hasLocalChanges = false;
+      _editingFooterNavId = null;
+      _isSavingInlineNav = false;
+      _selectedFooterSectionId = null;
+      _draggingSectionId = null;
+      _hoveringSectionIndex = null;
+      _draggingLinkId = null;
+      _hoveringLinkIndex = null;
+      _loadSettings();
+      _loaded = true;
+    }
+  }
+
   void _loadSettings() {
     final service = context.read<WebsiteService>();
     _taglineController.text = widget.provider.getEffectiveFooterSetting(
@@ -761,16 +920,16 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
       'tiktok',
       service.getSetting('tiktok', service.getSetting('tiktok_handle', '')),
     );
+    _footerSectionOrderOverride = widget.provider.pendingFooterSectionOrder;
+    _footerLinkOrderOverrideBySection
+      ..clear()
+      ..addAll(widget.provider.pendingFooterLinkOrder);
   }
 
   Future<void> _addFooterSection() async {
     await _showFooterNavDialog(
       title: 'Nueva sección',
       initialIsSection: true,
-      onSave: (nav) async {
-        final editProvider = context.read<WebsiteEditModeProvider>();
-        editProvider.createFooterNavDraft(nav);
-      },
     );
   }
 
@@ -779,10 +938,6 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
       title: 'Nuevo enlace',
       initialParentId: parentId,
       initialIsSection: false,
-      onSave: (nav) async {
-        final editProvider = context.read<WebsiteEditModeProvider>();
-        editProvider.createFooterNavDraft(nav);
-      },
     );
   }
 
@@ -1275,8 +1430,10 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
         }
 
         final currentOrder = orderedLinks.map((l) => l.id).toList();
-        _persistFooterLinkOrder(freshSection.id, currentOrder);
+        final dragArm = _linkDragArm;
+        _commitFooterDragOrder(dragArm, currentOrder);
         setState(() {
+          _linkDragArm = null;
           _draggingLinkId = null;
           _hoveringLinkIndex = null;
         });
@@ -1305,15 +1462,22 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                 data: link.id,
                 dragAnchorStrategy: pointerDragAnchorStrategy,
                 onDragStarted: () {
+                  final arm = _captureFooterDragArm(
+                    itemId: link.id,
+                    parentId: parentSection.id,
+                  );
                   setState(() {
-                    _draggingLinkId = link.id;
+                    _linkDragArm = arm;
+                    _draggingLinkId = arm == null ? null : link.id;
                   });
                 },
                 // Note: Don't clear state in onDragEnd - it races with
                 // onAcceptWithDetails. Let onAcceptWithDetails handle
                 // successful drops, onDraggableCanceled handles failures.
                 onDraggableCanceled: (_, __) {
+                  _cancelFooterDragArm(_linkDragArm);
                   setState(() {
+                    _linkDragArm = null;
                     _draggingLinkId = null;
                     _hoveringLinkIndex = null;
                   });
@@ -1400,15 +1564,19 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                   data: section.id,
                   dragAnchorStrategy: pointerDragAnchorStrategy,
                   onDragStarted: () {
+                    final arm = _captureFooterDragArm(itemId: section.id);
                     setState(() {
-                      _draggingSectionId = section.id;
+                      _sectionDragArm = arm;
+                      _draggingSectionId = arm == null ? null : section.id;
                     });
                   },
                   // Note: Don't clear state in onDragEnd - it races with
                   // onAcceptWithDetails. Let onAcceptWithDetails handle
                   // successful drops, onDraggableCanceled handles failures.
                   onDraggableCanceled: (_, __) {
+                    _cancelFooterDragArm(_sectionDragArm);
                     setState(() {
+                      _sectionDragArm = null;
                       _draggingSectionId = null;
                       _hoveringSectionIndex = null;
                     });
@@ -1576,6 +1744,17 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
   }
 
   Future<void> _deleteFooterNav(WebsiteNavigation nav) async {
+    final websiteService = context.read<WebsiteService>();
+    final sourceNavigation = _footerNavigationSourceSnapshot(
+      websiteService.footerNavigation,
+    );
+    final intent = widget.provider.captureSitewideAsyncIntent(
+      bucket: WebsiteSitewideDraftBucket.footer,
+      sourceKeys: const <String>{
+        WebsiteSitewideAsyncSourceKey.footerNavigation,
+      },
+    );
+    if (intent == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1603,8 +1782,25 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     if (confirmed != true) return;
     if (!mounted) return;
 
-    final editProvider = context.read<WebsiteEditModeProvider>();
-    editProvider.deleteFooterNavItem(nav);
+    final liveWebsiteService = context.read<WebsiteService>();
+    final liveProvider = widget.provider;
+    liveProvider.commitSitewideAsyncIntent(intent, () {
+      if (_footerNavigationSourceSnapshot(
+            liveWebsiteService.footerNavigation,
+          ) !=
+          sourceNavigation) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      final liveNavigation = _findFooterNavigation(
+        liveWebsiteService.footerNavigation,
+        nav.id,
+      );
+      if (liveNavigation == null) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      liveProvider.deleteFooterNavItem(liveNavigation);
+      return WebsiteInlineMutationResult.committed;
+    });
   }
 
   Future<void> _showFooterNavDialog({
@@ -1612,7 +1808,6 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     WebsiteNavigation? existing,
     String? initialParentId,
     required bool initialIsSection,
-    required Future<void> Function(WebsiteNavigation nav) onSave,
   }) async {
     final formKey = GlobalKey<FormState>();
     final labelController = TextEditingController(text: existing?.label ?? '');
@@ -1628,8 +1823,21 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
     var parentId = initialParentId;
 
     final service = context.read<WebsiteService>();
-    final editProvider = context.read<WebsiteEditModeProvider>();
-    final footerParents = editProvider.getEffectiveFooterNavigation(
+    final sourceNavigation = _footerNavigationSourceSnapshot(
+      service.footerNavigation,
+    );
+    final intent = widget.provider.captureSitewideAsyncIntent(
+      bucket: WebsiteSitewideDraftBucket.footer,
+      sourceKeys: const <String>{
+        WebsiteSitewideAsyncSourceKey.footerNavigation,
+      },
+    );
+    if (intent == null) {
+      labelController.dispose();
+      linkValueController.dispose();
+      return;
+    }
+    final footerParents = widget.provider.getEffectiveFooterNavigation(
       service.footerNavigation,
     );
 
@@ -1916,8 +2124,25 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                       updatedAt: DateTime.now(),
                     );
 
-                    await onSave(nav);
+                    final liveService = this.context.read<WebsiteService>();
+                    final liveProvider = widget.provider;
+                    final result = liveProvider.commitSitewideAsyncIntent(
+                      intent,
+                      () {
+                        if (_footerNavigationSourceSnapshot(
+                              liveService.footerNavigation,
+                            ) !=
+                            sourceNavigation) {
+                          return WebsiteInlineMutationResult.rejected;
+                        }
+                        liveProvider.createFooterNavDraft(nav);
+                        return WebsiteInlineMutationResult.committed;
+                      },
+                    );
                     if (context.mounted) Navigator.pop(context);
+                    if (result == WebsiteInlineMutationResult.rejected) {
+                      return;
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF00A09D)),
@@ -1929,6 +2154,8 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
         );
       },
     );
+    labelController.dispose();
+    linkValueController.dispose();
   }
 
   @override
@@ -2244,8 +2471,13 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                                       final currentOrder = orderedSections
                                           .map((s) => s.id)
                                           .toList();
-                                      _persistFooterSectionOrder(currentOrder);
+                                      final dragArm = _sectionDragArm;
+                                      _commitFooterDragOrder(
+                                        dragArm,
+                                        currentOrder,
+                                      );
                                       setState(() {
+                                        _sectionDragArm = null;
                                         _draggingSectionId = null;
                                         _hoveringSectionIndex = null;
                                       });
@@ -2419,9 +2651,13 @@ class _AddItemButton extends StatelessWidget {
           children: [
             const Icon(Icons.add, color: Color(0xFF00A09D), size: 18),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(color: Color(0xFF00A09D), fontSize: 13),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Color(0xFF00A09D), fontSize: 13),
+              ),
             ),
           ],
         ),

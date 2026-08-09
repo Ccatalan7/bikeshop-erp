@@ -133,8 +133,14 @@ void main() {
     expect(shellScope, contains('MediaQuery.viewPaddingOf(context)'));
     expect(shellScope, contains('ClipRect('));
     expect(shellScope, contains('mainAxisSize: MainAxisSize.min'));
-    expect(windowZoom, contains('viewPadding: _toZoomedLogicalInsets('));
-    expect(windowZoom, contains('padding: _toZoomedLogicalInsets('));
+    expect(
+      windowZoom,
+      contains('viewPadding: WindowZoomScope.toZoomedLogicalInsets('),
+    );
+    expect(
+      windowZoom,
+      contains('padding: WindowZoomScope.toZoomedLogicalInsets('),
+    );
   });
 
   test('la regla del brillo vive en un solo sitio y se calcula, no se fija',

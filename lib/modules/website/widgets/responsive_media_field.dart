@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/vb_segmented.dart';
 import '../models/website_responsive_field_state.dart';
+import '../providers/website_edit_mode_provider.dart';
 import 'focal_point_picker.dart';
 import 'responsive_field_shell.dart';
 import 'website_media_picker.dart';
@@ -38,6 +39,8 @@ class ResponsiveMediaField extends StatefulWidget {
     this.onFocalReset,
     this.allowProductLink = false,
     this.density,
+    this.asyncBinding,
+    this.focalAsyncBinding,
   });
 
   /// Inheritance state of the image URL itself.
@@ -64,6 +67,17 @@ class ResponsiveMediaField extends StatefulWidget {
 
   final bool allowProductLink;
   final VbDensity? density;
+
+  /// Exact async authority for the field rendered by the caller.
+  ///
+  /// Page-block consumers use [WebsiteAsyncFieldBinding.pageBlock]. A picker
+  /// result is then delivered only through the binding that is live after the
+  /// await and only if it accepts the arm captured before opening.
+  final WebsiteAsyncFieldBinding? asyncBinding;
+
+  /// Exact owner of the focal pair. URL and framing are separate responsive
+  /// fields, so they deliberately do not share one authority token.
+  final WebsiteAsyncFieldBinding? focalAsyncBinding;
 
   @visibleForTesting
   static const Key replaceActionKey = Key('responsive-media-replace');
@@ -97,12 +111,67 @@ class _ResponsiveMediaFieldState extends State<ResponsiveMediaField> {
       widget.focalState != null && widget.onFocalChanged != null;
 
   Future<void> _replace() async {
+    final currentUrl = _hasImage ? _url : null;
+    final allowProductLink = widget.allowProductLink;
+    final openingCallback = widget.onChanged;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    final remoteArm = openingBinding?.capture();
+    if (openingBinding != null && (arm == null || remoteArm == null)) return;
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: remoteArm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'subir una imagen responsive del sitio web',
+    );
     final asset = await showWebsiteMediaPicker(
       context: context,
-      currentUrl: _hasImage ? _url : null,
-      allowProductLink: widget.allowProductLink,
+      currentUrl: currentUrl,
+      allowProductLink: allowProductLink,
+      remoteWriteAuthority: remoteAuthority,
     );
-    if (asset == null) return;
+    if (!mounted) return;
+    if ((_hasImage ? _url : null) != currentUrl ||
+        widget.allowProductLink != allowProductLink) {
+      if (arm != null) {
+        widget.asyncBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.rejected,
+        );
+      }
+      return;
+    }
+    if (asset == null) {
+      if (arm != null) {
+        widget.asyncBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+      }
+      return;
+    }
+
+    final liveBinding = widget.asyncBinding;
+    if (arm != null) {
+      if (liveBinding == null) return;
+      liveBinding.commit(arm, () {
+        if (asset.publicUrl == currentUrl) {
+          return WebsiteInlineMutationResult.unchanged;
+        }
+        // The callback is deliberately read live, but can run only inside the
+        // canonical token commit. A's callback is never retained and B's
+        // callback cannot adopt A's arm.
+        widget.onChanged(asset.publicUrl);
+        return WebsiteInlineMutationResult.committed;
+      });
+      return;
+    }
+
+    // Non-editor consumers have no Website document owner. Preserve their
+    // local callback contract, while still refusing a retained State that was
+    // rebuilt for another owner during the picker.
+    if (!identical(widget.onChanged, openingCallback)) return;
     widget.onChanged(asset.publicUrl);
   }
 
@@ -148,6 +217,7 @@ class _ResponsiveMediaFieldState extends State<ResponsiveMediaField> {
               onCustomize: widget.onFocalCustomize,
               onReset: widget.onFocalReset,
               density: density,
+              asyncBinding: widget.focalAsyncBinding,
             ),
           ],
         ],
@@ -336,6 +406,7 @@ class _FocalEditor extends StatelessWidget {
     required this.onCustomize,
     required this.onReset,
     required this.density,
+    required this.asyncBinding,
   });
 
   final String url;
@@ -344,6 +415,7 @@ class _FocalEditor extends StatelessWidget {
   final VoidCallback? onCustomize;
   final VoidCallback? onReset;
   final VbDensity density;
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   @override
   Widget build(BuildContext context) {
@@ -358,6 +430,10 @@ class _FocalEditor extends StatelessWidget {
         focalX: focal.dx,
         focalY: focal.dy,
         onChanged: onFocalChanged,
+        // The picker owns the live crosshair locally. Persistence receives one
+        // X/Y pair at pointer-up; pointer-cancel publishes nothing.
+        continuousUpdates: false,
+        asyncBinding: asyncBinding,
       ),
     );
   }

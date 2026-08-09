@@ -43,6 +43,65 @@ void main() {
     );
   });
 
+  test('product aliases keep a total order across timestamp-tied pages',
+      () async {
+    const pageSize = 1000;
+    const aliasCount = 2205;
+    const sharedCreatedAt = '2026-06-14T21:12:47.59316Z';
+    final sourceRows = List.generate(
+      aliasCount,
+      (index) => <String, dynamic>{
+        'product_id': 'product-${index.toString().padLeft(4, '0')}',
+        'alias_path': '/productos/alias-${index.toString().padLeft(4, '0')}',
+        'source': 'historical-import',
+        'created_at': sharedCreatedAt,
+      },
+      growable: false,
+    );
+    final requestedUris = <Uri>[];
+
+    final aliases = await snapshots.fetchSeoSnapshotProductUrlAliases(
+      supabaseUrl: 'https://example.supabase.co',
+      tenantId: 'tenant',
+      serviceRoleKey: 'not-used-by-test-loader',
+      pageSize: pageSize,
+      pageLoader: (uri) async {
+        requestedUris.add(uri);
+        final offset = int.parse(uri.queryParameters['offset']!);
+        final hasTotalOrder =
+            uri.queryParameters['order'] == 'created_at.asc,alias_path.asc';
+        final rowsInDatabaseOrder = hasTotalOrder || requestedUris.length.isOdd
+            ? sourceRows
+            : sourceRows.reversed.toList(growable: false);
+        final end = offset + pageSize < rowsInDatabaseOrder.length
+            ? offset + pageSize
+            : rowsInDatabaseOrder.length;
+        return offset >= sourceRows.length
+            ? const <Map<String, dynamic>>[]
+            : rowsInDatabaseOrder.sublist(offset, end);
+      },
+    );
+
+    expect(requestedUris, hasLength(3));
+    expect(
+      requestedUris.map((uri) => uri.queryParameters['order']).toSet(),
+      {'created_at.asc,alias_path.asc'},
+    );
+    expect(
+      requestedUris.map((uri) => uri.queryParameters['offset']),
+      ['0', '1000', '2000'],
+    );
+    expect(aliases, hasLength(aliasCount));
+    expect(
+      aliases.map((alias) => alias['alias_path']).toSet(),
+      hasLength(aliasCount),
+    );
+    expect(
+      aliases.map((alias) => alias['alias_path']),
+      sourceRows.map((alias) => alias['alias_path']),
+    );
+  });
+
   test('redirect ledger keeps a published product outside current availability',
       () {
     const productId = '85164038-dcd0-424b-880f-082071c8de51';

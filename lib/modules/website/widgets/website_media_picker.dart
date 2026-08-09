@@ -1,11 +1,366 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/services/image_service.dart';
+import '../models/website_editor_capability.dart';
+import '../providers/website_edit_mode_provider.dart';
 import '../services/website_background_removal_service.dart';
 import '../services/website_media_service.dart';
+import '../services/website_service.dart';
 import 'website_background_removal_dialog.dart';
 
+/// Opaque, typed authority captured before an asynchronous Website field
+/// yields control.
+///
+/// The concrete authority remains owned by its canonical provider. This
+/// interface deliberately carries no generation or mutable state of its own;
+/// it only lets a field hand the provider-issued arm to the binding that is
+/// live when the asynchronous surface returns.
+abstract interface class WebsiteAsyncFieldArm {}
+
+/// Opaque owner of one focused/continuous edit (typing, IME composition).
+abstract interface class WebsiteContinuousFieldArm {}
+
+typedef WebsiteAsyncFieldOperation = WebsiteInlineMutationResult Function();
+typedef WebsiteAsyncFieldArmCapture = WebsiteAsyncFieldArm? Function();
+typedef WebsiteAsyncFieldArmCommit = WebsiteInlineMutationResult Function(
+  WebsiteAsyncFieldArm arm,
+  WebsiteAsyncFieldOperation operation,
+);
+typedef WebsiteAsyncRemoteAuthority = WebsiteEditorRemoteWriteAuthority?
+    Function(
+  WebsiteAsyncFieldArm arm,
+  String operation,
+  bool Function() isLiveBinding,
+);
+typedef WebsiteContinuousFieldBegin = WebsiteContinuousFieldArm? Function(
+  Object? baselineValue,
+);
+typedef WebsiteContinuousFieldUpdate = WebsiteInlineMutationResult Function(
+  WebsiteContinuousFieldArm arm,
+  Object? nextValue,
+  WebsiteAsyncFieldOperation operation,
+);
+typedef WebsiteContinuousFieldClose = WebsiteInlineMutationResult Function(
+  WebsiteContinuousFieldArm arm,
+);
+
+/// Exact semantic identity of a field inside one page block.
+///
+/// [scopeKey] names the canonical field/node (for example
+/// `root.backgroundImage` or `slides[id=hero].action`). It prevents a State
+/// retained with the same Flutter key from handing A's result to a different
+/// live field B inside the same unchanged block.
+@immutable
+class WebsiteAsyncFieldTarget {
+  const WebsiteAsyncFieldTarget.block({
+    required this.blockId,
+    required this.scopeKey,
+  });
+
+  final String blockId;
+  final String scopeKey;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WebsiteAsyncFieldTarget &&
+      other.blockId == blockId &&
+      other.scopeKey == scopeKey;
+
+  @override
+  int get hashCode => Object.hash(blockId, scopeKey);
+}
+
+/// Stateless arm -> live-commit transport shared by asynchronous Website
+/// fields.
+///
+/// A widget captures from the binding rendered before its `await`, but commits
+/// through `widget.asyncBinding` after it. Consequently callback A is never
+/// invoked after replacement, and callback B only runs after accepting A's
+/// canonical provider token. Other canonical owners (sitewide settings, for
+/// example) can supply the same typed interface around their own provider
+/// token without adding a second field-local FSM.
+@immutable
+class WebsiteAsyncFieldBinding {
+  const WebsiteAsyncFieldBinding({
+    required this.identity,
+    required this.capture,
+    required this.commit,
+    this.ownerRevision,
+    this.beginContinuous,
+    this.updateContinuous,
+    this.finishContinuous,
+    this.cancelContinuous,
+    this.remoteAuthority,
+  });
+
+  /// Canonical page-block binding backed by [WebsiteEditorAsyncIntent].
+  factory WebsiteAsyncFieldBinding.pageBlock({
+    required WebsiteEditModeProvider provider,
+    required WebsiteAsyncFieldTarget target,
+  }) {
+    WebsiteAsyncFieldArm? capture() {
+      final intent = provider.captureAsyncIntent(blockId: target.blockId);
+      if (intent == null) return null;
+      return _WebsitePageBlockFieldArm(
+        provider: provider,
+        target: target,
+        intent: intent,
+      );
+    }
+
+    WebsiteInlineMutationResult commit(
+      WebsiteAsyncFieldArm arm,
+      WebsiteAsyncFieldOperation operation,
+    ) {
+      if (arm is! _WebsitePageBlockFieldArm) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      if (!identical(provider, arm.provider) || target != arm.target) {
+        // Consume the canonical one-shot token without running either the old
+        // or the new field callback. A later A -> B -> A rebuild cannot reuse
+        // this already-returned asynchronous result.
+        arm.provider.commitAsyncIntent(
+          arm.intent,
+          () => WebsiteInlineMutationResult.rejected,
+        );
+        return WebsiteInlineMutationResult.rejected;
+      }
+      return provider.commitAsyncIntent(arm.intent, operation);
+    }
+
+    WebsiteContinuousFieldArm? beginContinuous(Object? baselineValue) {
+      final edit = provider.beginContinuousFieldEdit(
+        blockId: target.blockId,
+        scopeKey: target.scopeKey,
+        baselineValue: baselineValue,
+      );
+      if (edit == null) return null;
+      return _WebsitePageBlockContinuousArm(
+        provider: provider,
+        target: target,
+        edit: edit,
+      );
+    }
+
+    WebsiteInlineMutationResult updateContinuous(
+      WebsiteContinuousFieldArm arm,
+      Object? nextValue,
+      WebsiteAsyncFieldOperation operation,
+    ) {
+      if (arm is! _WebsitePageBlockContinuousArm) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      if (!identical(provider, arm.provider) || target != arm.target) {
+        arm.provider.cancelContinuousFieldEdit(
+          arm.edit,
+          arm.target.scopeKey,
+        );
+        return WebsiteInlineMutationResult.rejected;
+      }
+      return provider.commitContinuousFieldEdit(
+        arm.edit,
+        target.scopeKey,
+        nextValue,
+        operation,
+      );
+    }
+
+    WebsiteInlineMutationResult finishContinuous(
+      WebsiteContinuousFieldArm arm,
+    ) {
+      if (arm is! _WebsitePageBlockContinuousArm) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      if (!identical(provider, arm.provider) || target != arm.target) {
+        arm.provider.finishContinuousFieldEdit(
+          arm.edit,
+          arm.target.scopeKey,
+        );
+        return WebsiteInlineMutationResult.rejected;
+      }
+      return provider.finishContinuousFieldEdit(arm.edit, target.scopeKey);
+    }
+
+    WebsiteInlineMutationResult cancelContinuous(
+      WebsiteContinuousFieldArm arm,
+    ) {
+      if (arm is! _WebsitePageBlockContinuousArm) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      if (!identical(provider, arm.provider) || target != arm.target) {
+        arm.provider.cancelContinuousFieldEdit(
+          arm.edit,
+          arm.target.scopeKey,
+        );
+        return WebsiteInlineMutationResult.rejected;
+      }
+      return provider.cancelContinuousFieldEdit(arm.edit, target.scopeKey);
+    }
+
+    WebsiteEditorRemoteWriteAuthority? remoteAuthority(
+      WebsiteAsyncFieldArm arm,
+      String operation,
+      bool Function() isLiveBinding,
+    ) {
+      if (arm is! _WebsitePageBlockFieldArm) return null;
+      if (!identical(provider, arm.provider) || target != arm.target) {
+        arm.provider.commitAsyncIntent(
+          arm.intent,
+          () => WebsiteInlineMutationResult.rejected,
+        );
+        return null;
+      }
+
+      final tenantId = provider.sessionOwnerTenantId?.trim() ?? '';
+      final fingerprint = provider.sessionOwnerLeaseFingerprint;
+      if (tenantId.isEmpty || fingerprint == null) {
+        provider.commitAsyncIntent(
+          arm.intent,
+          () => WebsiteInlineMutationResult.rejected,
+        );
+        return null;
+      }
+      final pageId = provider.currentPageId;
+      final pageSlug = provider.currentPageSlug;
+      final sessionRevision = provider.documentSessionRevision;
+      final documentEpoch = provider.pageDocumentEpoch;
+      final entryGeneration = provider.editorEntryLeaseGeneration;
+      final entryIdentityRevision = provider.editorEntryLeaseIdentityRevision;
+
+      bool isCurrent() {
+        return isLiveBinding() &&
+            provider.currentPageId == pageId &&
+            provider.currentPageSlug == pageSlug &&
+            provider.documentSessionRevision == sessionRevision &&
+            provider.pageDocumentEpoch == documentEpoch &&
+            provider.editorEntryLeaseGeneration == entryGeneration &&
+            provider.editorEntryLeaseIdentityRevision ==
+                entryIdentityRevision &&
+            provider.sessionOwnerTenantId == tenantId &&
+            provider.sessionOwnerLeaseFingerprint == fingerprint;
+      }
+
+      return WebsiteEditorRemoteWriteAuthority(
+        tenantId: tenantId,
+        operation: operation,
+        isCurrent: isCurrent,
+        claimOwner: () =>
+            provider.commitAsyncIntent(
+              arm.intent,
+              () => WebsiteInlineMutationResult.unchanged,
+            ) !=
+            WebsiteInlineMutationResult.rejected,
+      );
+    }
+
+    return WebsiteAsyncFieldBinding(
+      identity: _WebsitePageBlockFieldIdentity(provider, target),
+      ownerRevision: (
+        provider,
+        target,
+        provider.currentPageId,
+        provider.currentPageSlug,
+        provider.documentSessionRevision,
+        provider.pageDocumentEpoch,
+        provider.editorEntryLeaseGeneration,
+        provider.editorEntryLeaseIdentityRevision,
+        provider.sessionOwnerTenantId,
+        provider.sessionOwnerLeaseFingerprint,
+      ),
+      capture: capture,
+      commit: commit,
+      beginContinuous: beginContinuous,
+      updateContinuous: updateContinuous,
+      finishContinuous: finishContinuous,
+      cancelContinuous: cancelContinuous,
+      remoteAuthority: remoteAuthority,
+    );
+  }
+
+  /// Stable semantic owner of the field rendered by this binding.
+  ///
+  /// Transactional controls use it to cancel a draft when Flutter retains the
+  /// same State while its provider or exact target changes. It is deliberately
+  /// separate from the one-shot arm: identity detects replacement during a
+  /// synchronous gesture; the canonical provider token admits the later
+  /// asynchronous commit.
+  final Object identity;
+  final Object? ownerRevision;
+  Object get readOwnerIdentity => ownerRevision ?? identity;
+  final WebsiteAsyncFieldArmCapture capture;
+  final WebsiteAsyncFieldArmCommit commit;
+  final WebsiteContinuousFieldBegin? beginContinuous;
+  final WebsiteContinuousFieldUpdate? updateContinuous;
+  final WebsiteContinuousFieldClose? finishContinuous;
+  final WebsiteContinuousFieldClose? cancelContinuous;
+  final WebsiteAsyncRemoteAuthority? remoteAuthority;
+}
+
+WebsiteMediaRemoteAuthorityResolver? websiteRemoteAuthorityResolver({
+  required WebsiteAsyncFieldBinding? openingBinding,
+  required WebsiteAsyncFieldArm? remoteArm,
+  required WebsiteAsyncFieldBinding? Function() liveBinding,
+  required bool Function() isMounted,
+  required String operation,
+}) {
+  if (openingBinding == null || remoteArm == null) return null;
+  final openingIdentity = openingBinding.identity;
+  return () {
+    if (!isMounted()) return null;
+    final live = liveBinding();
+    return live?.remoteAuthority?.call(
+      remoteArm,
+      operation,
+      () => isMounted() && liveBinding()?.identity == openingIdentity,
+    );
+  };
+}
+
+final class _WebsitePageBlockFieldIdentity {
+  const _WebsitePageBlockFieldIdentity(this.provider, this.target);
+
+  final WebsiteEditModeProvider provider;
+  final WebsiteAsyncFieldTarget target;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _WebsitePageBlockFieldIdentity &&
+      identical(provider, other.provider) &&
+      target == other.target;
+
+  @override
+  int get hashCode => Object.hash(identityHashCode(provider), target);
+}
+
+final class _WebsitePageBlockFieldArm implements WebsiteAsyncFieldArm {
+  const _WebsitePageBlockFieldArm({
+    required this.provider,
+    required this.target,
+    required this.intent,
+  });
+
+  final WebsiteEditModeProvider provider;
+  final WebsiteAsyncFieldTarget target;
+  final WebsiteEditorAsyncIntent intent;
+}
+
+final class _WebsitePageBlockContinuousArm
+    implements WebsiteContinuousFieldArm {
+  const _WebsitePageBlockContinuousArm({
+    required this.provider,
+    required this.target,
+    required this.edit,
+  });
+
+  final WebsiteEditModeProvider provider;
+  final WebsiteAsyncFieldTarget target;
+  final WebsiteContinuousFieldEdit edit;
+}
+
 enum WebsiteMediaPickerTab { library, products, upload, url }
+
+typedef WebsiteMediaRemoteAuthorityResolver = WebsiteEditorRemoteWriteAuthority?
+    Function();
 
 /// Opens the canonical Website Builder image picker.
 Future<WebsiteMediaAsset?> showWebsiteMediaPicker({
@@ -13,6 +368,7 @@ Future<WebsiteMediaAsset?> showWebsiteMediaPicker({
   String? currentUrl,
   WebsiteMediaService? mediaService,
   bool allowProductLink = false,
+  WebsiteMediaRemoteAuthorityResolver? remoteWriteAuthority,
 }) {
   return showDialog<WebsiteMediaAsset>(
     context: context,
@@ -21,6 +377,7 @@ Future<WebsiteMediaAsset?> showWebsiteMediaPicker({
       currentUrl: currentUrl,
       mediaService: mediaService,
       allowProductLink: allowProductLink,
+      remoteWriteAuthority: remoteWriteAuthority,
     ),
   );
 }
@@ -31,11 +388,13 @@ class WebsiteMediaPickerDialog extends StatefulWidget {
     this.currentUrl,
     this.mediaService,
     this.allowProductLink = false,
+    this.remoteWriteAuthority,
   });
 
   final String? currentUrl;
   final WebsiteMediaService? mediaService;
   final bool allowProductLink;
+  final WebsiteMediaRemoteAuthorityResolver? remoteWriteAuthority;
 
   @override
   State<WebsiteMediaPickerDialog> createState() =>
@@ -89,10 +448,20 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
     try {
       final picked = await ImageService.pickImage();
       if (picked == null) return;
+      final authority = widget.remoteWriteAuthority?.call();
+      if (widget.remoteWriteAuthority != null && authority == null) {
+        throw const WebsiteEditorWriteSupersededException(
+          'La sesión del editor cambió antes de subir la imagen.',
+        );
+      }
+      final writeGuard = authority?.claimForWrite();
       final asset = await _service.uploadImage(
         bytes: picked.bytes,
         fileName: picked.name,
+        tenantId: authority?.tenantId,
+        writeGuard: writeGuard,
       );
+      authority?.ensureCurrent();
       if (!mounted) return;
       setState(() {
         _selected = asset;
@@ -886,11 +1255,13 @@ class WebsiteImagePickerField extends StatefulWidget {
     required this.onChanged,
     this.currentUrl,
     this.enableBackgroundRemoval = true,
+    this.asyncBinding,
   });
 
   final String? currentUrl;
   final ValueChanged<String> onChanged;
   final bool enableBackgroundRemoval;
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   @override
   State<WebsiteImagePickerField> createState() =>
@@ -901,38 +1272,159 @@ class _WebsiteImagePickerFieldState extends State<WebsiteImagePickerField> {
   bool _removingBackground = false;
 
   Future<void> _openPicker() async {
+    final currentUrl = widget.currentUrl;
+    final openingCallback = widget.onChanged;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    final remoteArm = openingBinding?.capture();
+    if (openingBinding != null && (arm == null || remoteArm == null)) return;
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: remoteArm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'subir una imagen del sitio web',
+    );
     final selection = await showWebsiteMediaPicker(
       context: context,
-      currentUrl: widget.currentUrl,
+      currentUrl: currentUrl,
+      remoteWriteAuthority: remoteAuthority,
     );
-    if (selection != null) widget.onChanged(selection.publicUrl);
+    if (!mounted) return;
+    if (widget.currentUrl != currentUrl) {
+      if (arm != null) {
+        widget.asyncBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.rejected,
+        );
+      }
+      return;
+    }
+    if (selection == null) {
+      if (arm != null) {
+        widget.asyncBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+      }
+      return;
+    }
+    if (arm != null) {
+      final liveBinding = widget.asyncBinding;
+      if (liveBinding == null) return;
+      liveBinding.commit(arm, () {
+        if (selection.publicUrl == currentUrl) {
+          return WebsiteInlineMutationResult.unchanged;
+        }
+        widget.onChanged(selection.publicUrl);
+        return WebsiteInlineMutationResult.committed;
+      });
+      return;
+    }
+    if (!identical(widget.onChanged, openingCallback)) return;
+    widget.onChanged(selection.publicUrl);
   }
 
   Future<void> _removeBackground() async {
     final url = widget.currentUrl?.trim() ?? '';
     if (url.isEmpty || _removingBackground) return;
+    final openingCallback = widget.onChanged;
+    final enableBackgroundRemoval = widget.enableBackgroundRemoval;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    final remoteArm = openingBinding?.capture();
+    if (openingBinding != null && (arm == null || remoteArm == null)) return;
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: remoteArm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'quitar el fondo de una imagen del sitio web',
+    );
     setState(() => _removingBackground = true);
     try {
       final selection = await showWebsiteBackgroundRemovalDialog(
         context: context,
         imageUrl: url,
+        remoteWriteAuthority: remoteAuthority,
       );
-      if (!mounted || selection == null) return;
-      final resultUrl = selection.imageUrl ??
-          await WebsiteBackgroundRemovalService().uploadTransparentPng(
-            selection.pngBytes!,
-            prefix: 'block-no-bg',
-            originalUrl: url,
-          );
       if (!mounted) return;
-      widget.onChanged(resultUrl);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Imagen sin fondo optimizada y guardada.'),
-        ),
-      );
+      if (selection == null) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.unchanged,
+          );
+        }
+        return;
+      }
+      String resultUrl;
+      if (selection.imageUrl != null) {
+        resultUrl = selection.imageUrl!;
+      } else {
+        final authority = remoteAuthority?.call();
+        if (remoteAuthority != null && authority == null) {
+          throw const WebsiteEditorWriteSupersededException(
+            'La sesión del editor cambió antes de guardar la imagen.',
+          );
+        }
+        final writeGuard = authority?.claimForWrite();
+        resultUrl =
+            await WebsiteBackgroundRemovalService().uploadTransparentPng(
+          selection.pngBytes!,
+          prefix: 'block-no-bg',
+          originalUrl: url,
+          tenantId: authority?.tenantId,
+          writeGuard: writeGuard,
+        );
+        authority?.ensureCurrent();
+      }
+      if (!mounted) return;
+      if (widget.currentUrl?.trim() != url ||
+          widget.enableBackgroundRemoval != enableBackgroundRemoval) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.rejected,
+          );
+        }
+        return;
+      }
+      var accepted = false;
+      if (arm != null) {
+        final liveBinding = widget.asyncBinding;
+        accepted = liveBinding != null &&
+            liveBinding.commit(arm, () {
+              if (resultUrl == url) {
+                return WebsiteInlineMutationResult.unchanged;
+              }
+              widget.onChanged(resultUrl);
+              return WebsiteInlineMutationResult.committed;
+            }).accepted;
+      } else if (identical(widget.onChanged, openingCallback)) {
+        widget.onChanged(resultUrl);
+        accepted = true;
+      }
+      if (accepted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Imagen sin fondo optimizada y guardada.'),
+          ),
+        );
+      }
     } catch (error) {
-      if (mounted) {
+      var accepted = mounted && identical(widget.onChanged, openingCallback);
+      if (mounted && arm != null) {
+        final liveBinding = widget.asyncBinding;
+        accepted = liveBinding != null &&
+            liveBinding
+                .commit(
+                  arm,
+                  () => WebsiteInlineMutationResult.unchanged,
+                )
+                .accepted;
+      }
+      if (accepted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(error.toString()), backgroundColor: Colors.red),

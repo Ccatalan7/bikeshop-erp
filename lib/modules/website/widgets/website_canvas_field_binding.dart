@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/website_block_definition.dart';
+import '../models/website_canvas_manipulation.dart';
 import '../models/website_canvas_responsive_document.dart';
 import '../models/website_responsive_authoring.dart';
 import '../models/website_responsive_field_state.dart';
@@ -120,7 +121,12 @@ class WebsiteCanvasFieldBinding<T> {
     final document = provider.canvasDocument(blockId, slideIndex: slideIndex);
     if (document == null) return null;
 
-    final viewport = provider.previewViewport;
+    final documentTarget = WebsiteCanvasDocumentTarget(
+      blockId: blockId,
+      slideIndex: slideIndex,
+    );
+    final viewport = provider.renderedCanvasViewport(documentTarget);
+    if (viewport == null) return null;
     final isLayer = layerId != null;
 
     Map<String, dynamic>? source;
@@ -251,34 +257,62 @@ class WebsiteCanvasFieldBinding<T> {
       unavailableReason: blocked,
     );
 
+    WebsiteEditorAsyncIntent? captureIntent() {
+      if (isLayer &&
+          provider.selectedCanvasLayerTarget !=
+              WebsiteCanvasLayerTarget(
+                document: documentTarget,
+                layerId: layerId,
+              )) {
+        return null;
+      }
+      return provider.captureAsyncIntent(blockId: blockId);
+    }
+
+    final expectedScope = context.effectiveWriteScope(policy);
+    var intent = captureIntent();
+
     void writeMany(Map<String, Object?> values) {
       if (blocked != null || values.isEmpty) return;
-      // Resolved AT WRITE TIME, not captured when the binding was built, so
-      // `customize()` followed by `write()` on the same instance lands in the
-      // viewport branch the user just asked for.
-      final scope = provider.canvasFieldScope(
-        scopeKey,
-        policy: policy,
-        viewport: viewport,
-      );
-      if (isLayer) {
-        provider.setCanvasLayerProperties(
-          blockId,
-          layerId,
-          values,
-          slideIndex: slideIndex,
-          scope: scope,
-          viewport: viewport,
-        );
-        return;
-      }
-      provider.setCanvasRootProperties(
-        blockId,
-        values,
-        slideIndex: slideIndex,
-        scope: scope,
-        viewport: viewport,
-      );
+      final current = intent;
+      if (current == null) return;
+      final result = provider.commitAsyncIntent(current, () {
+        if (provider.renderedCanvasViewport(documentTarget) != viewport ||
+            provider.canvasFieldScope(
+                  scopeKey,
+                  policy: policy,
+                  viewport: viewport,
+                ) !=
+                expectedScope ||
+            (isLayer &&
+                provider.selectedCanvasLayerTarget !=
+                    WebsiteCanvasLayerTarget(
+                      document: documentTarget,
+                      layerId: layerId,
+                    ))) {
+          return WebsiteInlineMutationResult.rejected;
+        }
+        final changed = isLayer
+            ? provider.setCanvasLayerProperties(
+                blockId,
+                layerId,
+                values,
+                slideIndex: slideIndex,
+                scope: expectedScope,
+                viewport: viewport,
+              )
+            : provider.setCanvasRootProperties(
+                blockId,
+                values,
+                slideIndex: slideIndex,
+                scope: expectedScope,
+                viewport: viewport,
+              );
+        return changed
+            ? WebsiteInlineMutationResult.committed
+            : WebsiteInlineMutationResult.unchanged;
+      });
+      intent = result.accepted ? captureIntent() : null;
     }
 
     return WebsiteCanvasFieldBinding<T>(
@@ -287,36 +321,62 @@ class WebsiteCanvasFieldBinding<T> {
       isLegacyValue: hasLegacy,
       write: (value) => writeMany(<String, Object?>{propertyKey: value}),
       writeMany: writeMany,
-      customize: () => provider.setCanvasFieldScope(
-        scopeKey,
-        WebsiteWriteScope.viewport,
-        policy: policy,
-        viewport: viewport,
-      ),
+      customize: () {
+        final current = intent;
+        if (current == null) return;
+        provider.commitAsyncIntent(current, () {
+          if (provider.renderedCanvasViewport(documentTarget) != viewport) {
+            return WebsiteInlineMutationResult.rejected;
+          }
+          provider.setCanvasFieldScope(
+            scopeKey,
+            WebsiteWriteScope.viewport,
+            policy: policy,
+            viewport: viewport,
+          );
+          return WebsiteInlineMutationResult.committed;
+        });
+        intent = null;
+      },
       reset: () {
         if (blocked != null) return;
-        if (isLayer) {
-          provider.clearCanvasLayerOverrides(
-            blockId,
-            layerId,
-            <String>[propertyKey],
-            slideIndex: slideIndex,
+        final current = intent;
+        if (current == null) return;
+        provider.commitAsyncIntent(current, () {
+          if (provider.renderedCanvasViewport(documentTarget) != viewport ||
+              (isLayer &&
+                  provider.selectedCanvasLayerTarget !=
+                      WebsiteCanvasLayerTarget(
+                        document: documentTarget,
+                        layerId: layerId,
+                      ))) {
+            return WebsiteInlineMutationResult.rejected;
+          }
+          final changed = isLayer
+              ? provider.clearCanvasLayerOverrides(
+                  blockId,
+                  layerId,
+                  <String>[propertyKey],
+                  slideIndex: slideIndex,
+                  viewport: viewport,
+                )
+              : provider.clearCanvasRootOverrides(
+                  blockId,
+                  <String>[propertyKey],
+                  slideIndex: slideIndex,
+                  viewport: viewport,
+                );
+          provider.setCanvasFieldScope(
+            scopeKey,
+            WebsiteWriteScope.shared,
+            policy: policy,
             viewport: viewport,
           );
-        } else {
-          provider.clearCanvasRootOverrides(
-            blockId,
-            <String>[propertyKey],
-            slideIndex: slideIndex,
-            viewport: viewport,
-          );
-        }
-        provider.setCanvasFieldScope(
-          scopeKey,
-          WebsiteWriteScope.shared,
-          policy: policy,
-          viewport: viewport,
-        );
+          return changed
+              ? WebsiteInlineMutationResult.committed
+              : WebsiteInlineMutationResult.unchanged;
+        });
+        intent = null;
       },
     );
   }

@@ -41,11 +41,18 @@ void main() {
       final fields = flatFieldsOf(WebsiteBlockType.products);
       expect(
         fields.keys.toSet(),
-        <String>{'itemsPerRow', 'showViewAll'},
+        <String>{
+          'layout',
+          'itemsPerRow',
+          'showPrice',
+          'showSku',
+          'showBrand',
+          'showViewAll',
+        },
         reason: 'el schema de Products declara sólo lo que se expone',
       );
 
-      // La ÚNICA propiedad responsive del bloque: su consumer la lee de verdad.
+      // Cada propiedad responsive declarada tiene consumer en el renderer.
       final showViewAll = fieldOf(WebsiteBlockType.products, 'showViewAll');
       expect(
         showViewAll.responsivePolicy,
@@ -56,6 +63,35 @@ void main() {
         WebsiteResponsivePropertyFamily.action,
       );
       expect(showViewAll.canResetResponsiveOverride, isTrue);
+
+      final layout = fieldOf(WebsiteBlockType.products, 'layout');
+      expect(
+        layout.responsivePolicy,
+        WebsiteResponsivePropertyPolicy.responsiveOptional,
+      );
+      expect(
+        layout.resolvedPropertyFamily,
+        WebsiteResponsivePropertyFamily.geometry,
+      );
+
+      for (final key in const <String>[
+        'showPrice',
+        'showSku',
+        'showBrand',
+      ]) {
+        final field = fieldOf(WebsiteBlockType.products, key);
+        expect(
+          field.responsivePolicy,
+          WebsiteResponsivePropertyPolicy.responsiveOptional,
+          reason: key,
+        );
+        expect(
+          field.resolvedPropertyFamily,
+          WebsiteResponsivePropertyFamily.visibility,
+          reason: key,
+        );
+        expect(field.canResetResponsiveOverride, isTrue, reason: key);
+      }
 
       // `itemsPerRow` se expone como base compartida, no como capacidad: la
       // tienda calcula las columnas por su cuenta. El contrato completo vive
@@ -199,11 +235,7 @@ void main() {
   });
 
   group('deuda declarada, no capacidad fingida', () {
-    test('los toggles de Products sin consumer NO se migraron', () {
-      // `showPrice`, `showSku`, `showBrand` y `showStock` se editan hoy y se
-      // guardan, pero ningún renderer los lee. Declararlos responsive sería
-      // ofrecer un override que no cambia nada en la tienda. Se quedan
-      // compartidos hasta que su consumer exista.
+    test('los toggles visibles de Products llegan hasta la tarjeta', () {
       final rendererSource =
           File('lib/modules/website/widgets/website_block_renderer.dart')
               .readAsStringSync();
@@ -212,35 +244,44 @@ void main() {
               .readAsStringSync();
       final fields = flatFieldsOf(WebsiteBlockType.products);
 
-      for (final key in const <String>[
-        'showPrice',
-        'showSku',
-        'showBrand',
-        'showStock',
-      ]) {
+      for (final key in const <String>['showPrice', 'showSku', 'showBrand']) {
         expect(
           fields.containsKey(key),
-          isFalse,
-          reason: '$key no puede declararse responsive sin consumer',
+          isTrue,
+          reason: '$key debe tener owner responsive',
         );
         expect(
-          rendererSource.contains("'$key'") || cardSource.contains("'$key'"),
-          isFalse,
-          reason: '$key ya tiene consumer: toca migrarlo en su ronda',
+          rendererSource.contains('$key: contract.$key'),
+          isTrue,
+          reason: '$key debe viajar al consumer de la tarjeta',
         );
+        expect(cardSource, contains('widget.$key'));
       }
+
+      expect(fields.containsKey('showStock'), isFalse);
+      expect(
+        WebsiteBlockRegistry.definitionFor(WebsiteBlockType.products)
+            .defaultData
+            .containsKey('showStock'),
+        isFalse,
+        reason: 'el control fantasma sin UI ni consumer no se persiste',
+      );
+      expect(rendererSource, contains('final subtitle = contract.subtitle'));
     });
 
-    test('layout de Products sigue compartido mientras móvil lo ignore', () {
-      // Bajo 700 el renderer impone su carrusel automático, así que un
-      // override móvil de `layout` no se vería. Honrarlo exigiría rediseñar
-      // esa ruta, que no pertenece a este lote.
+    test('layout de Products tiene consumer real también en móvil', () {
       final fields = flatFieldsOf(WebsiteBlockType.products);
-      expect(fields.containsKey('layout'), isFalse);
+      expect(fields.containsKey('layout'), isTrue);
+      expect(
+        fieldOf(WebsiteBlockType.products, 'layout').responsivePolicy,
+        WebsiteResponsivePropertyPolicy.responsiveOptional,
+      );
       final rendererSource =
           File('lib/modules/website/widgets/website_block_renderer.dart')
               .readAsStringSync();
-      expect(rendererSource, contains('screenWidth < 700'));
+      expect(rendererSource, contains("layout == 'carousel'"));
+      expect(rendererSource, contains('screenWidth < 600'));
+      expect(rendererSource, isNot(contains('screenWidth < 700')));
     });
 
     test('accentColor de Brand Logos no existe como capacidad', () {
@@ -254,15 +295,26 @@ void main() {
   });
 
   group('C · projection por viewport, sin cascada', () {
-    test('Products resuelve showViewAll por viewport; itemsPerRow no', () {
+    test('Products proyecta layout/visibilidad; itemsPerRow no', () {
       final document = <String, dynamic>{
+        'layout': 'grid',
         'itemsPerRow': 4,
+        'showPrice': true,
+        'showSku': false,
+        'showBrand': false,
         'showViewAll': true,
         'maxProducts': 8,
         'viewAllLink': '/productos',
         'responsive': <String, dynamic>{
-          'mobile': <String, dynamic>{'itemsPerRow': 1, 'showViewAll': false},
-          'tablet': <String, dynamic>{'itemsPerRow': 2},
+          'mobile': <String, dynamic>{
+            'layout': 'carousel',
+            'itemsPerRow': 1,
+            'showPrice': false,
+            'showSku': true,
+            'showBrand': true,
+            'showViewAll': false,
+          },
+          'tablet': <String, dynamic>{'itemsPerRow': 2, 'showBrand': true},
         },
       };
 
@@ -274,12 +326,24 @@ void main() {
           );
 
       expect(projected(WebsiteViewport.desktop)['showViewAll'], isTrue);
+      expect(projected(WebsiteViewport.desktop)['layout'], 'grid');
+      expect(projected(WebsiteViewport.desktop)['showPrice'], isTrue);
+      expect(projected(WebsiteViewport.desktop)['showSku'], isFalse);
+      expect(projected(WebsiteViewport.desktop)['showBrand'], isFalse);
       expect(
         projected(WebsiteViewport.tablet)['showViewAll'],
         isTrue,
         reason: 'tablet no hereda de móvil',
       );
+      expect(projected(WebsiteViewport.tablet)['layout'], 'grid');
+      expect(projected(WebsiteViewport.tablet)['showPrice'], isTrue);
+      expect(projected(WebsiteViewport.tablet)['showSku'], isFalse);
+      expect(projected(WebsiteViewport.tablet)['showBrand'], isTrue);
       expect(projected(WebsiteViewport.mobile)['showViewAll'], isFalse);
+      expect(projected(WebsiteViewport.mobile)['layout'], 'carousel');
+      expect(projected(WebsiteViewport.mobile)['showPrice'], isFalse);
+      expect(projected(WebsiteViewport.mobile)['showSku'], isTrue);
+      expect(projected(WebsiteViewport.mobile)['showBrand'], isTrue);
 
       // `itemsPerRow` es compartido: ni un override guardado por error puede
       // cambiar lo que la tienda muestra.

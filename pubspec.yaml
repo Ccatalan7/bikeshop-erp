@@ -103,6 +103,12 @@ dependencies:
 
   supabase: any
 dependency_overrides:
+  # Security-patched Android WebView bridge. Returning false from
+  # onConsoleMessage makes Chromium mirror console source URLs (including
+  # possible OAuth query data) into logcat in debuggable builds.
+  flutter_inappwebview_android:
+    path: ./packages/flutter_inappwebview_android
+
   # Stub out Windows local notifications - the real plugin requires ATL headers
   # that cause build issues. Local notifications won't work on Windows.
   flutter_local_notifications_windows:
@@ -125,6 +131,7 @@ flutter:
   
   assets:
     - assets/images/
+    - assets/images/supplier_categories/
     - assets/images/campaigns/products/10ten-butyl-26-cutout.png
     - assets/images/campaigns/products/maxxis-welter-weight-29-cutout.png
     - assets/images/campaigns/products/ridexc-butyl-29-cutout.png

@@ -3,6 +3,16 @@ import 'supplier_ocr_template.dart';
 import 'tax_treatment.dart';
 
 class Supplier {
+  /// Explicit projection for ordinary supplier reads. Credentials are only
+  /// available through SupplierCredentialService and must never enter the
+  /// shared supplier cache.
+  static const String secretFreeSelect =
+      'id,tenant_id,name,legal_name,trade_name,owner_name,aliases,'
+      'email,phone,rut,address,city,region,comuna,type,contact_person,website,'
+      'bank_details,payment_terms,default_tax_treatment,image_url,'
+      'sales_rep_name,sales_rep_phone,sales_rep_email,purchase_instructions,'
+      'ocr_template,notes,is_active,created_at,updated_at';
+
   final String id;
   final String tenantId; // MULTI-TENANT ISOLATION
   final String name;
@@ -25,8 +35,6 @@ class Supplier {
   final TaxTreatment
       defaultTaxTreatment; // suggested tax treatment for purchases
   final String? imageUrl;
-  final String? portalUsername;
-  final String? portalPassword;
   final String? salesRepName;
   final String? salesRepPhone;
   final String? salesRepEmail;
@@ -59,8 +67,6 @@ class Supplier {
     this.paymentTerms = PaymentTerms.net30,
     this.defaultTaxTreatment = TaxTreatment.noTax,
     this.imageUrl,
-    this.portalUsername,
-    this.portalPassword,
     this.salesRepName,
     this.salesRepPhone,
     this.salesRepEmail,
@@ -102,8 +108,6 @@ class Supplier {
       defaultTaxTreatment:
           TaxTreatment.fromString(json['default_tax_treatment']?.toString()),
       imageUrl: json['image_url'] as String?,
-      portalUsername: json['portal_username'] as String?,
-      portalPassword: json['portal_password'] as String?,
       salesRepName: json['sales_rep_name'] as String?,
       salesRepPhone: json['sales_rep_phone'] as String?,
       salesRepEmail: json['sales_rep_email'] as String?,
@@ -139,8 +143,6 @@ class Supplier {
       'payment_terms': paymentTerms.name,
       'default_tax_treatment': defaultTaxTreatment.toValue(),
       'image_url': imageUrl,
-      'portal_username': portalUsername,
-      'portal_password': portalPassword,
       'sales_rep_name': salesRepName,
       'sales_rep_phone': salesRepPhone,
       'sales_rep_email': salesRepEmail,
@@ -175,8 +177,6 @@ class Supplier {
     PaymentTerms? paymentTerms,
     TaxTreatment? defaultTaxTreatment,
     String? imageUrl,
-    String? portalUsername,
-    String? portalPassword,
     String? salesRepName,
     String? salesRepPhone,
     String? salesRepEmail,
@@ -209,8 +209,6 @@ class Supplier {
       paymentTerms: paymentTerms ?? this.paymentTerms,
       defaultTaxTreatment: defaultTaxTreatment ?? this.defaultTaxTreatment,
       imageUrl: imageUrl ?? this.imageUrl,
-      portalUsername: portalUsername ?? this.portalUsername,
-      portalPassword: portalPassword ?? this.portalPassword,
       salesRepName: salesRepName ?? this.salesRepName,
       salesRepPhone: salesRepPhone ?? this.salesRepPhone,
       salesRepEmail: salesRepEmail ?? this.salesRepEmail,

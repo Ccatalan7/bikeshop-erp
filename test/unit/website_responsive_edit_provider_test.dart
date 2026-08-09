@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_editor_capability.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_definition.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_public_visibility.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_field_state.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
@@ -825,6 +826,94 @@ void main() {
         throwsStateError,
       );
       expect(provider.getBlockData('hero-1')['title'], 'New in-memory draft');
+    });
+
+    test('visibility migration is explicit, versioned and one history step',
+        () {
+      final provider = _providerWithData(<String, dynamic>{
+        ..._baseHeroData,
+        'visibility': <String, dynamic>{
+          'desktop': true,
+          'tablet': false,
+          'mobile': true,
+        },
+        'responsive': <String, dynamic>{
+          'version': 2,
+          'mobile': <String, dynamic>{'focalPointX': .7},
+        },
+      });
+      addTearDown(provider.dispose);
+
+      final blocked = provider.updateBlockResponsiveVisibility(
+        'hero-1',
+        'mobile',
+        false,
+      );
+
+      expect(
+        blocked,
+        WebsiteVisibilityUpdateOutcome.requiresMigrationConfirmation,
+      );
+      expect(provider.canUndo, isFalse);
+
+      final applied = provider.updateBlockResponsiveVisibility(
+        'hero-1',
+        'mobile',
+        false,
+        confirmLegacyMigration: true,
+      );
+
+      expect(applied, WebsiteVisibilityUpdateOutcome.applied);
+      expect(
+        provider.getBlockData('hero-1')['visibility'],
+        <String, dynamic>{
+          'version': 2,
+          'desktop': true,
+          'tablet': false,
+          'mobile': false,
+        },
+      );
+      expect(provider.canUndo, isTrue);
+      provider.undo();
+      expect(
+        provider.getBlockData('hero-1')['visibility'],
+        <String, dynamic>{
+          'desktop': true,
+          'tablet': false,
+          'mobile': true,
+        },
+      );
+      expect(provider.canUndo, isFalse);
+    });
+
+    test('uniform legacy visibility can migrate without a confirmation', () {
+      final provider = _providerWithData(<String, dynamic>{
+        ..._baseHeroData,
+        'visibility': <String, dynamic>{
+          'desktop': true,
+          'tablet': true,
+          'mobile': true,
+        },
+      });
+      addTearDown(provider.dispose);
+
+      final outcome = provider.updateBlockResponsiveVisibility(
+        'hero-1',
+        'mobile',
+        false,
+      );
+
+      expect(outcome, WebsiteVisibilityUpdateOutcome.applied);
+      expect(
+        provider.getBlockData('hero-1')['visibility'],
+        <String, dynamic>{
+          'version': 2,
+          'desktop': true,
+          'tablet': true,
+          'mobile': false,
+        },
+      );
+      expect(provider.canUndo, isTrue);
     });
   });
 

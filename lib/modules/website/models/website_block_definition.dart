@@ -137,6 +137,27 @@ class WebsiteBlockFieldSchema {
   bool get canResetResponsiveOverride =>
       allowsViewportOverride && supportsResponsiveReset;
 
+  /// Canonical policy projection for the accessibility copy paired with a
+  /// media field.
+  ///
+  /// The asset and focal point may vary by viewport; its description may not.
+  /// Keeping that rule here prevents each inspector surface from inventing a
+  /// local pseudo-field merely to explain where the alt text writes.
+  WebsiteBlockFieldSchema? get altTextField {
+    if (!supportsAltText) return null;
+    return WebsiteBlockFieldSchema(
+      key: altTextKey,
+      label: 'Texto alternativo',
+      type: WebsiteBlockFieldType.text,
+      helpText: 'Describe la imagen para accesibilidad.',
+      group: group,
+      textRole: WebsiteTextRole.plain,
+      responsivePolicy: WebsiteResponsivePropertyPolicy.sharedOnly,
+      propertyFamily: WebsiteResponsivePropertyFamily.content,
+      authoringSurfaces: authoringSurfaces,
+    );
+  }
+
   WebsiteResponsivePropertyFamily get resolvedPropertyFamily {
     if (propertyFamily != null) return propertyFamily!;
     if (resolvedMediaRole != null) return WebsiteResponsivePropertyFamily.media;
@@ -231,6 +252,43 @@ class WebsiteBlockFieldSchema {
   bool get hasAltTextControl =>
       supportsAltText || type == WebsiteBlockFieldType.image;
   bool get isAction => resolvedActionRole != null;
+}
+
+/// Cross-family page-layout fields owned by page composition.
+///
+/// These values are not content fields of Hero, FAQ, Canvas, etc. Keeping one
+/// schema here prevents every custom inspector from inventing a second policy
+/// for height and inter-block spacing while still letting the universal
+/// responsive binding describe common/inherited/override truth.
+abstract final class WebsiteBlockMetaFields {
+  static const WebsiteBlockFieldSchema blockHeight = WebsiteBlockFieldSchema(
+    key: 'blockHeight',
+    label: 'Altura del bloque',
+    type: WebsiteBlockFieldType.number,
+    responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+    propertyFamily: WebsiteResponsivePropertyFamily.geometry,
+    authoringSurfaces: {
+      WebsiteAuthoringSurface.contextSheet,
+      WebsiteAuthoringSurface.inspector,
+    },
+  );
+
+  static const WebsiteBlockFieldSchema spacingAfter = WebsiteBlockFieldSchema(
+    key: 'spacingAfter',
+    label: 'Espacio después del bloque',
+    type: WebsiteBlockFieldType.number,
+    responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+    propertyFamily: WebsiteResponsivePropertyFamily.spacing,
+    authoringSurfaces: {
+      WebsiteAuthoringSurface.contextSheet,
+      WebsiteAuthoringSurface.inspector,
+    },
+  );
+
+  static const List<WebsiteBlockFieldSchema> fields = <WebsiteBlockFieldSchema>[
+    blockHeight,
+    spacingAfter,
+  ];
 }
 
 class WebsiteBlockControlSection {

@@ -3,6 +3,67 @@ import 'website_block_registry.dart';
 import 'website_block_type.dart';
 import 'website_responsive_authoring.dart';
 
+/// The single compatibility boundary for legacy cover focal-point data.
+///
+/// New documents persist `focalPointX/Y` plus canonical responsive overrides.
+/// Existing documents may still contain a numeric mobile alias or the older
+/// alignment preset. Renderers and inspectors must consume this same adapter so
+/// they cannot disagree about the frame the author is editing.
+enum WebsiteFocalAxis { horizontal, vertical }
+
+abstract final class WebsiteResponsiveFocalProjection {
+  static const String _legacyAlignmentKey = 'mobileBgAlignment';
+
+  /// Canonical precedence after the responsive codec has checked an authored
+  /// override: numeric mobile alias, then legacy preset, then shared value.
+  static WebsiteLegacyResponsiveReader<double> legacyReader({
+    required WebsiteBlockFieldSchema field,
+    required WebsiteFocalAxis axis,
+  }) {
+    final legacyAxisKey = switch (axis) {
+      WebsiteFocalAxis.horizontal => field.mobileFocalPointXKey,
+      WebsiteFocalAxis.vertical => field.mobileFocalPointYKey,
+    };
+    return (data, _, viewport) {
+      if (viewport != WebsiteViewport.mobile) {
+        return const WebsiteResponsiveEntry<double>.absent();
+      }
+      final numeric = _decodeAxis(data[legacyAxisKey]);
+      if (numeric != null) {
+        return WebsiteResponsiveEntry<double>.present(numeric);
+      }
+      final preset = _legacyMobileFocalCoordinate(
+        data[_legacyAlignmentKey],
+        axis,
+      );
+      return preset == null
+          ? const WebsiteResponsiveEntry<double>.absent()
+          : WebsiteResponsiveEntry<double>.present(preset);
+    };
+  }
+
+  /// Every legacy key whose authority is retired when the user resets the
+  /// focal override. The preset affects both axes, so either atomic axis group
+  /// must remove it together with the numeric aliases.
+  static List<String> legacyPropertyKeys({
+    required WebsiteBlockFieldSchema field,
+    required WebsiteFocalAxis axis,
+  }) =>
+      <String>[
+        switch (axis) {
+          WebsiteFocalAxis.horizontal => field.mobileFocalPointXKey,
+          WebsiteFocalAxis.vertical => field.mobileFocalPointYKey,
+        },
+        _legacyAlignmentKey,
+      ];
+
+  static double? _decodeAxis(Object? raw) {
+    if (raw is num) return raw.toDouble();
+    if (raw is String) return double.tryParse(raw.trim());
+    return null;
+  }
+}
+
 /// Projects one persisted Website Builder block into the values rendered by a
 /// concrete storefront viewport.
 ///
@@ -18,9 +79,28 @@ abstract final class WebsiteResponsiveBlockProjection {
     required WebsiteViewport viewport,
     Set<String> displayCopyWhitelist = const <String>{},
   }) {
+    final withMeta = projectMeta(
+      data: data,
+      viewport: viewport,
+      displayCopyWhitelist: displayCopyWhitelist,
+    );
+    return _projectFields(
+      source: withMeta,
+      fields: WebsiteBlockRegistry.definitionFor(type).fields,
+      viewport: viewport,
+      displayCopyWhitelist: displayCopyWhitelist,
+    );
+  }
+
+  /// Resolves the page-composition fields shared by every block family.
+  static Map<String, dynamic> projectMeta({
+    required Map<String, dynamic> data,
+    required WebsiteViewport viewport,
+    Set<String> displayCopyWhitelist = const <String>{},
+  }) {
     return _projectFields(
       source: data,
-      fields: WebsiteBlockRegistry.definitionFor(type).fields,
+      fields: WebsiteBlockMetaFields.fields,
       viewport: viewport,
       displayCopyWhitelist: displayCopyWhitelist,
     );
@@ -83,15 +163,15 @@ abstract final class WebsiteResponsiveBlockProjection {
         _projectSyntheticProperty(
           projected: projected,
           source: source,
-          propertyKey: field.focalPointXKey,
-          legacyMobileKey: field.mobileFocalPointXKey,
+          field: field,
+          axis: WebsiteFocalAxis.horizontal,
           viewport: viewport,
         );
         _projectSyntheticProperty(
           projected: projected,
           source: source,
-          propertyKey: field.focalPointYKey,
-          legacyMobileKey: field.mobileFocalPointYKey,
+          field: field,
+          axis: WebsiteFocalAxis.vertical,
           viewport: viewport,
         );
       }
@@ -161,10 +241,18 @@ abstract final class WebsiteResponsiveBlockProjection {
   static void _projectSyntheticProperty({
     required Map<String, dynamic> projected,
     required Map<String, dynamic> source,
-    required String propertyKey,
-    required String legacyMobileKey,
+    required WebsiteBlockFieldSchema field,
+    required WebsiteFocalAxis axis,
     required WebsiteViewport viewport,
   }) {
+    final propertyKey = switch (axis) {
+      WebsiteFocalAxis.horizontal => field.focalPointXKey,
+      WebsiteFocalAxis.vertical => field.focalPointYKey,
+    };
+    final legacyKeys = WebsiteResponsiveFocalProjection.legacyPropertyKeys(
+      field: field,
+      axis: axis,
+    );
     final hasShared = source.containsKey(propertyKey);
     final hasOverride = WebsiteResponsiveDataCodec.hasOverride(
       source,
@@ -172,21 +260,36 @@ abstract final class WebsiteResponsiveBlockProjection {
       viewport,
     );
     final hasLegacy = viewport == WebsiteViewport.mobile &&
-        source.containsKey(legacyMobileKey);
-    if (!hasShared && !hasOverride && !hasLegacy) return;
+        legacyKeys.any(source.containsKey);
+    if (!hasShared && !hasOverride && !hasLegacy) {
+      return;
+    }
 
-    final resolved = WebsiteResponsiveDataCodec.resolve<Object?>(
+    final resolved = WebsiteResponsiveDataCodec.resolve<double>(
       data: source,
       propertyKey: propertyKey,
       viewport: viewport,
-      decode: _deepCopy,
-      readLegacyOverride: WebsiteLegacyResponsiveAdapters.mobileAlias<Object?>(
-        legacyMobileKey,
-        _deepCopy,
+      decode: WebsiteResponsiveFocalProjection._decodeAxis,
+      readLegacyOverride: WebsiteResponsiveFocalProjection.legacyReader(
+        field: field,
+        axis: axis,
       ),
     );
     projected[propertyKey] = _deepCopy(resolved.value);
   }
+}
+
+double? _legacyMobileFocalCoordinate(Object? raw, WebsiteFocalAxis axis) {
+  final coordinates = switch (raw?.toString()) {
+    'left' || 'centerLeft' => (x: 0.0, y: 0.5),
+    'right' || 'centerRight' => (x: 1.0, y: 0.5),
+    'top' || 'topCenter' => (x: 0.5, y: 0.0),
+    'bottom' || 'bottomCenter' => (x: 0.5, y: 1.0),
+    'center' => (x: 0.5, y: 0.5),
+    _ => null,
+  };
+  if (coordinates == null) return null;
+  return axis == WebsiteFocalAxis.horizontal ? coordinates.x : coordinates.y;
 }
 
 Map<String, dynamic> _deepCopyMap(Map<String, dynamic> source) =>

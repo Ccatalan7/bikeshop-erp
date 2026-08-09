@@ -31,6 +31,8 @@ val androidReleaseKeyPassword =
 val isAndroidReleaseBuild = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
+val useReleaseSigningForLocalDebug =
+    System.getenv("VINABIKE_ANDROID_DEBUG_USE_RELEASE_SIGNING") == "1"
 
 if (isAndroidReleaseBuild) {
     require(!androidReleaseKeystorePath.isNullOrBlank()) {
@@ -83,6 +85,17 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Opt-in only: lets a local Flutter debug session replace the
+            // installed production APK without clearing its on-device data.
+            // No credential is embedded; the existing guarded signing source
+            // is used only when the developer explicitly enables the flag.
+            if (useReleaseSigningForLocalDebug) {
+                signingConfigs.findByName("release")?.let {
+                    signingConfig = it
+                }
+            }
+        }
         release {
             signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false

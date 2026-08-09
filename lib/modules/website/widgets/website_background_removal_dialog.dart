@@ -2,8 +2,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../models/website_editor_capability.dart';
 import '../services/website_background_removal_processor.dart';
 import '../services/website_background_removal_service.dart';
+import '../services/website_service.dart';
 
 class WebsiteBackgroundRemovalSelection {
   final Uint8List? pngBytes;
@@ -24,6 +26,7 @@ Future<WebsiteBackgroundRemovalSelection?> showWebsiteBackgroundRemovalDialog({
   required String imageUrl,
   String? tenantId,
   WebsiteBackgroundRemovalService? service,
+  WebsiteEditorRemoteWriteAuthority? Function()? remoteWriteAuthority,
 }) {
   return showDialog<WebsiteBackgroundRemovalSelection>(
     context: context,
@@ -32,6 +35,7 @@ Future<WebsiteBackgroundRemovalSelection?> showWebsiteBackgroundRemovalDialog({
       imageUrl: imageUrl,
       tenantId: tenantId,
       service: service,
+      remoteWriteAuthority: remoteWriteAuthority,
     ),
   );
 }
@@ -40,12 +44,14 @@ class WebsiteBackgroundRemovalDialog extends StatefulWidget {
   final String imageUrl;
   final String? tenantId;
   final WebsiteBackgroundRemovalService? service;
+  final WebsiteEditorRemoteWriteAuthority? Function()? remoteWriteAuthority;
 
   const WebsiteBackgroundRemovalDialog({
     super.key,
     required this.imageUrl,
     this.tenantId,
     this.service,
+    this.remoteWriteAuthority,
   });
 
   @override
@@ -123,10 +129,19 @@ class _WebsiteBackgroundRemovalDialogState
       _error = null;
     });
     try {
+      final authority = widget.remoteWriteAuthority?.call();
+      if (widget.remoteWriteAuthority != null && authority == null) {
+        throw const WebsiteEditorWriteSupersededException(
+          'La sesión del editor cambió antes de quitar el fondo.',
+        );
+      }
+      final writeGuard = authority?.claimForWrite();
       final result = await _service.removeSmartBackground(
         imageUrl: widget.imageUrl,
-        tenantId: widget.tenantId,
+        tenantId: authority?.tenantId ?? widget.tenantId,
+        writeGuard: writeGuard,
       );
+      authority?.ensureCurrent();
       if (!mounted) return;
       setState(() {
         _smartResultUrl = result.imageUrl;

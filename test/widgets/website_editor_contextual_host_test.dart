@@ -5,10 +5,14 @@ import 'package:provider/provider.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/widgets/block_action_bar.dart';
+import 'package:vinabike_erp/modules/website/widgets/deferred_website_editor_panel.dart';
+import 'package:vinabike_erp/modules/website/widgets/responsive_field_shell.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_edit_section.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_block_sheet.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_chrome_geometry.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_contextual_dock.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_editor_host_theme.dart';
+import 'package:vinabike_erp/shared/widgets/vb_sub_tabs.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
@@ -89,6 +93,17 @@ void main() {
     required double width,
     Brightness brightness = Brightness.light,
   }) {
+    final selectedBlockId = provider.selectedBlockId;
+    if (selectedBlockId != null &&
+        provider.renderedBlockViewportFor(selectedBlockId) == null) {
+      provider.reportRenderedBlockViewport(
+        selectedBlockId,
+        WebsiteResponsiveDataCodec.viewportForDocumentWidth(
+          provider.getBlockData(selectedBlockId),
+          WebsiteEditorChromeGeometry.canvasWidthFor(width),
+        ),
+      );
+    }
     return MaterialApp(
       theme: AppTheme.resolve(
         preset: AppearancePresets.pacific,
@@ -374,6 +389,98 @@ void main() {
   });
 
   group('O-05 · la hoja contextual', () {
+    testWidgets('el placeholder desktop nace sobre el mismo grafito',
+        (tester) async {
+      useViewport(tester, width: 1200);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.pacific,
+            brightness: Brightness.light,
+          ),
+          home: ChangeNotifierProvider<WebsiteEditModeProvider>(
+            create: (_) => newProvider(),
+            child: const Scaffold(
+              body: SizedBox(
+                width: 420,
+                child: DeferredWebsiteEditorPanel(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final spinner = find.byType(CircularProgressIndicator);
+      expect(spinner, findsOneWidget);
+      expect(Theme.of(tester.element(spinner)).brightness, Brightness.dark);
+      expect(
+        tester
+            .widgetList<Material>(find.ancestor(
+              of: spinner,
+              matching: find.byType(Material),
+            ))
+            .any((material) =>
+                material.color == WebsiteEditorInspectorTheme.canvas),
+        isTrue,
+      );
+
+      // Let the deferred-load timer finish after the visual assertion. Leaving
+      // it pending would make this test, rather than the production widget,
+      // own the next suite's load state.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    });
+
+    for (final hostBrightness in Brightness.values) {
+      testWidgets(
+          'el inspector completo permanece oscuro desde un ERP '
+          '${hostBrightness.name}', (tester) async {
+        final provider = newProvider()..selectBlock('block-2');
+        useViewport(tester, width: 390);
+        await tester.pumpWidget(
+          host(
+            provider: provider,
+            width: 390,
+            brightness: hostBrightness,
+          ),
+        );
+        await tester.pump();
+
+        await tester.tap(find.byKey(WebsiteEditorContextualDock.editKey));
+        await tester.pump();
+
+        final sheet = find.byKey(WebsiteBlockEditSheet.sheetKey);
+        expect(sheet, findsOneWidget);
+        final sheetTheme = Theme.of(tester.element(sheet));
+        expect(sheetTheme.brightness, Brightness.dark);
+        expect(
+          sheetTheme.colorScheme.surface,
+          WebsiteEditorInspectorTheme.canvas,
+        );
+        expect(tester.widget<Material>(sheet).color,
+            sheetTheme.colorScheme.surface);
+
+        final tabs = find.byKey(WebsiteBlockEditSheet.sectionTabsKey);
+        expect(Theme.of(tester.element(tabs)).brightness, Brightness.dark);
+        expect(
+          Theme.of(
+            tester.element(find.byKey(WebsiteBlockEditSheet.doneKey)),
+          ).brightness,
+          Brightness.dark,
+        );
+
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byType(TextField), findsWidgets);
+        expect(
+          Theme.of(tester.element(find.byType(TextField).first)).brightness,
+          Brightness.dark,
+        );
+        expect(tester.widget<Material>(sheet).color,
+            sheetTheme.colorScheme.surface);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     testWidgets('Editar abre la hoja y el lienzo sigue montado',
         (tester) async {
       final provider = newProvider()..selectBlock('block-2');
@@ -386,6 +493,22 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.byKey(WebsiteBlockEditSheet.sheetKey), findsOneWidget);
+      expect(
+        tester
+            .widget<WebsiteContextualSheetScaffold>(
+              find.byType(WebsiteContextualSheetScaffold),
+            )
+            .scope,
+        isNull,
+        reason: 'una hoja de bloque mezcla campos comunes y responsive',
+      );
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is ResponsiveFieldAttribution,
+        ),
+        findsWidgets,
+      );
+      expect(find.text('Siempre común'), findsWidgets);
       // El dock — y con él el host del lienzo — nunca se desmonta.
       expect(find.byKey(WebsiteEditorContextualDock.dockKey), findsOneWidget);
       // Y lo que se monta dentro son los controles REALES del inspector, no
@@ -506,12 +629,12 @@ void main() {
 
       for (final section in WebsiteBlockEditSection.values) {
         expect(
-          find.byKey(Key('website-editor-sheet-section-${section.name}')),
+          find.byKey(VbSubTabs.tabKey(section)),
           findsOneWidget,
           reason: 'falta la sección ${section.label}',
         );
         final size = tester.getSize(
-          find.byKey(Key('website-editor-sheet-section-${section.name}')),
+          find.byKey(VbSubTabs.tabKey(section)),
         );
         expect(
           size.height,
@@ -520,7 +643,7 @@ void main() {
       }
 
       await tester.tap(
-        find.byKey(const Key('website-editor-sheet-section-style')),
+        find.byKey(VbSubTabs.tabKey(WebsiteBlockEditSection.style)),
       );
       await tester.pump();
       expect(tester.takeException(), isNull);

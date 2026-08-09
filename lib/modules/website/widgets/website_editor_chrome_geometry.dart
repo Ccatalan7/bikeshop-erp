@@ -50,7 +50,37 @@ abstract final class WebsiteEditorChromeGeometry {
   static const double paneMinimumEditorWidth = 1050;
 
   /// t10 · the editor command bar.
+  ///
+  /// This is the bar itself and **never** includes the system inset. t10 10e
+  /// and t11 11a both draw the phone frame as two stacked bands — a
+  /// `safearea_top: 44` of `--shell` and then a `topbar: 48` of `--shell` — so
+  /// the status bar has its own band and the bar keeps its full height under
+  /// it. Adding the inset into this constant is what produced a 48 bar with
+  /// the clock printed across its identity line.
   static const double topBarHeight = 48;
+
+  /// The whole band the editor bar occupies at the top of the screen.
+  ///
+  /// **One owner for the arithmetic.** The bar, the content anchor below it and
+  /// any overlay stacked with them must agree to the pixel, and they used to
+  /// agree only by three independent literal `48`s — which was correct exactly
+  /// while the top inset was zero. On a device with a status bar the bar was
+  /// laid out at 48 with the inset painted *inside* it (identity under the
+  /// clock, row compressed) and the canvas began at 48 instead of at
+  /// `inset + 48`.
+  ///
+  /// [topInset] is `MediaQuery.padding.top` at the bar's own position, so an
+  /// ancestor that already consumed the inset correctly yields plain
+  /// [topBarHeight].
+  static double topBandHeightFor(double topInset) => topInset + topBarHeight;
+
+  /// The published phone inset in t10 10e / t11 11a (`safearea_top: 44`).
+  ///
+  /// Design's own reference figure, kept for the contract tests. The runtime
+  /// value always comes from `MediaQuery.padding.top` — a device is the only
+  /// authority on its own inset — and this constant exists so a guard can
+  /// state that the bar reserves the band instead of painting into it.
+  static const double publishedPhoneSafeAreaTop = 44;
 
   /// Width the dense command bar needs before it may spread out.
   ///
@@ -188,11 +218,26 @@ class WebsiteEditorChromeScope extends InheritedWidget {
     required this.editorWidth,
     required this.canvasWidth,
     this.contextualDockHeight = 0,
+    this.topBandHeight = WebsiteEditorChromeGeometry.topBarHeight,
     required super.child,
   });
 
   final double editorWidth;
   final double canvasWidth;
+
+  /// The whole band the editor bar occupies at the top, inset included.
+  ///
+  /// Published by the shell, which is the **only** owner allowed to read the
+  /// system inset for the editor. Everything stacked with the bar — the bar's
+  /// own slot, the canvas below it, the inspector pane, the draft-recovery
+  /// notice, any overlay — positions against this one number, so they cannot
+  /// disagree the way three independent literal `48`s did.
+  ///
+  /// It already accounts for the ERP workspace bar: when that bar is above the
+  /// editor it has consumed the status area, and the shell removes the top
+  /// padding for its subtree so this value collapses back to [topBarHeight].
+  /// Reading `MediaQuery.padding.top` again anywhere below would double it.
+  final double topBandHeight;
 
   /// Height the contextual dock currently occupies at the bottom of the
   /// editor, or 0 when no dock is mounted.
@@ -236,6 +281,49 @@ class WebsiteEditorChromeScope extends InheritedWidget {
   bool updateShouldNotify(WebsiteEditorChromeScope oldWidget) {
     return editorWidth != oldWidget.editorWidth ||
         canvasWidth != oldWidget.canvasWidth ||
-        contextualDockHeight != oldWidget.contextualDockHeight;
+        contextualDockHeight != oldWidget.contextualDockHeight ||
+        topBandHeight != oldWidget.topBandHeight;
+  }
+}
+
+/// Publishes the viewport the authoring controls are actually editing.
+///
+/// [WebsiteEditModeProvider.previewViewport] is the operator's requested
+/// device. A compact host may have to shrink that frame, so the rendered page
+/// can legitimately be Mobile while the selector still says Desktop. The
+/// inspector must resolve and write the same document branch the page renders;
+/// keeping requested and effective as separate values also lets chrome explain
+/// the clamp without mutating the operator's selection.
+///
+/// Canvas layers have a stricter, per-document measurement owner. This scope
+/// owns the page/block inspector only; Canvas actions continue to use
+/// `renderedCanvasViewport(documentTarget)`.
+class WebsiteEditorAuthoringViewportScope extends InheritedWidget {
+  const WebsiteEditorAuthoringViewportScope({
+    super.key,
+    required this.requestedViewport,
+    required this.effectiveViewport,
+    required super.child,
+  });
+
+  final WebsiteViewport requestedViewport;
+  final WebsiteViewport effectiveViewport;
+
+  static WebsiteEditorAuthoringViewportScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<
+        WebsiteEditorAuthoringViewportScope>();
+  }
+
+  static WebsiteViewport effectiveOf(
+    BuildContext context, {
+    required WebsiteViewport fallback,
+  }) {
+    return maybeOf(context)?.effectiveViewport ?? fallback;
+  }
+
+  @override
+  bool updateShouldNotify(WebsiteEditorAuthoringViewportScope oldWidget) {
+    return requestedViewport != oldWidget.requestedViewport ||
+        effectiveViewport != oldWidget.effectiveViewport;
   }
 }

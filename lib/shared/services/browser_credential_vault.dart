@@ -9,18 +9,21 @@ class BrowserSavedCredential {
     required this.username,
     required this.password,
     required this.updatedAt,
+    required this.supplierNoMatchConfirmed,
   });
 
   final String origin;
   final String username;
   final String password;
   final DateTime updatedAt;
+  final bool supplierNoMatchConfirmed;
 
   String encode() => jsonEncode({
         'origin': origin,
         'username': username,
         'password': password,
         'updatedAt': updatedAt.toUtc().toIso8601String(),
+        'supplierNoMatchConfirmed': supplierNoMatchConfirmed,
       });
 
   static BrowserSavedCredential? tryDecode(
@@ -51,6 +54,8 @@ class BrowserSavedCredential {
         password: password,
         updatedAt: DateTime.tryParse('${decoded['updatedAt']}')?.toUtc() ??
             DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        supplierNoMatchConfirmed:
+            decoded['supplierNoMatchConfirmed'] as bool? ?? false,
       );
     } catch (_) {
       return null;
@@ -115,6 +120,7 @@ class BrowserCredentialVault {
     required String origin,
     required String username,
     required String password,
+    required bool supplierNoMatchConfirmed,
   }) {
     final identity = _normalizeUserId(userId);
     final normalizedOrigin = normalizeOrigin(origin);
@@ -134,6 +140,7 @@ class BrowserCredentialVault {
         username: cleanUsername,
         password: password,
         updatedAt: DateTime.now().toUtc(),
+        supplierNoMatchConfirmed: supplierNoMatchConfirmed,
       );
       final origins = await _readIndex(identity)
         ..add(normalizedOrigin);

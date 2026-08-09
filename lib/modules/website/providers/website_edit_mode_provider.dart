@@ -7,12 +7,18 @@ import '../models/website_action.dart';
 import '../models/website_editor_capability.dart';
 import '../models/website_block_document_sanitizer.dart';
 import '../models/website_block_definition.dart';
+import '../models/website_block_public_visibility.dart';
 import '../models/canvas_element_factory.dart';
+import '../models/website_canvas_manipulation.dart';
+import '../models/website_canvas_layer_identity.dart';
 import '../models/website_canvas_responsive_document.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_responsive_authoring.dart';
 import '../models/website_responsive_field_state.dart';
+import '../models/website_repeater_mutation.dart';
+
+export '../models/website_repeater_mutation.dart';
 
 const _uuid = Uuid();
 
@@ -78,6 +84,63 @@ class WebsiteEditorDocument {
   final String? ownerLeaseFingerprint;
 }
 
+/// Editor chrome that is selectable but is not a block.
+///
+/// The published header and footer are edited through the same selection field
+/// as blocks, under a reserved id — that is how the desktop inspector has
+/// always reached them (`_EditBlockTab` branches on these two ids before it
+/// looks the selection up in the document). Naming them makes that contract
+/// explicit instead of leaving two bare strings scattered across the module,
+/// and it is what lets the rest of the editor tell "chrome is selected" apart
+/// from "the selection points at a block that no longer exists".
+///
+/// They are deliberately NOT rows in `blocks`: the header is site-wide
+/// settings, not page content, and inserting a synthetic block for it would
+/// put a thing in the document that save, reorder, undo and the block registry
+/// would all have to learn to skip.
+enum WebsiteEditorChromeTarget {
+  header('header', 'Encabezado'),
+  footer('footer', 'Pie de página');
+
+  const WebsiteEditorChromeTarget(this.selectionId, this.label);
+
+  /// The reserved value carried by `selectedBlockId`.
+  final String selectionId;
+
+  /// What the operator is told they are editing.
+  final String label;
+
+  static WebsiteEditorChromeTarget? forSelection(String? selectionId) {
+    if (selectionId == null) return null;
+    for (final target in values) {
+      if (target.selectionId == selectionId) return target;
+    }
+    return null;
+  }
+}
+
+/// Independently persisted site-wide draft buckets.
+///
+/// Async controls bind to one bucket instead of borrowing the active page
+/// document. A page route may change while a header/theme/footer picker is
+/// open; the site-wide session remains the owner, while any write inside the
+/// same bucket invalidates the pending intent through that bucket's epoch.
+enum WebsiteSitewideDraftBucket {
+  header,
+  siteSettings,
+  theme,
+  footer,
+}
+
+/// Canonical synthetic source owned by footer navigation dialogs.
+///
+/// Footer navigation is persisted outside `website_settings`, but it belongs
+/// to the footer draft bucket. Naming its aggregate source lets the same
+/// site-wide intent guard settings and navigation without a second FSM.
+abstract final class WebsiteSitewideAsyncSourceKey {
+  static const String footerNavigation = '@footer/navigation';
+}
+
 /// A request to bring one block back into view after an operation moved it.
 ///
 /// Typed and revisioned on purpose. The provider owns *what* must become
@@ -111,6 +174,359 @@ class WebsiteEditorBlockRevealRequest {
   String toString() => 'WebsiteEditorBlockRevealRequest($blockId, v$revision)';
 }
 
+/// The persisted node owned by one inline manipulation.
+///
+/// Root fields and repeater-item fields share the same transaction contract,
+/// but an item must retain its collection and stable identity. Keeping that
+/// distinction typed prevents a stale inline editor from redirecting a write
+/// to a sibling item after a reorder.
+@immutable
+sealed class WebsiteInlineManipulationOwner {
+  const WebsiteInlineManipulationOwner();
+}
+
+@immutable
+final class WebsiteInlineBlockOwner extends WebsiteInlineManipulationOwner {
+  const WebsiteInlineBlockOwner();
+}
+
+@immutable
+final class WebsiteInlineRepeaterOwner extends WebsiteInlineManipulationOwner {
+  WebsiteInlineRepeaterOwner({
+    required List<String> collectionKeys,
+    required this.itemIndex,
+    this.identityKey,
+    this.identityValue,
+  }) : collectionKeys = List<String>.unmodifiable(collectionKeys);
+
+  final List<String> collectionKeys;
+  final int itemIndex;
+  final String? identityKey;
+  final Object? identityValue;
+}
+
+/// One responsive property participating in an inline transaction.
+///
+/// [sharedCompanionKeys] are compatibility aliases. They are updated only
+/// when the captured write scope is shared; a viewport override owns only the
+/// canonical key.
+@immutable
+class WebsiteInlineManipulationProperty {
+  WebsiteInlineManipulationProperty({
+    required this.canonicalKey,
+    required this.policy,
+    Iterable<String> sharedCompanionKeys = const <String>[],
+  }) : sharedCompanionKeys = Set<String>.unmodifiable(
+          sharedCompanionKeys.where((key) => key != canonicalKey),
+        );
+
+  factory WebsiteInlineManipulationProperty.fromSchema(
+    WebsiteBlockFieldSchema schema, {
+    Iterable<String> sharedCompanionKeys = const <String>[],
+  }) {
+    return WebsiteInlineManipulationProperty(
+      canonicalKey: schema.key,
+      policy: schema.responsivePolicy,
+      sharedCompanionKeys: <String>{
+        ...schema.migrationAliases,
+        ...sharedCompanionKeys,
+      },
+    );
+  }
+
+  final String canonicalKey;
+  final WebsiteResponsivePropertyPolicy policy;
+  final Set<String> sharedCompanionKeys;
+}
+
+/// Exact target rendered when an inline interaction began.
+@immutable
+class WebsiteInlineManipulationTarget {
+  WebsiteInlineManipulationTarget({
+    required this.blockId,
+    required this.owner,
+    required this.viewport,
+    required Iterable<WebsiteInlineManipulationProperty> properties,
+    this.requiresSelection = true,
+  }) : properties = List<WebsiteInlineManipulationProperty>.unmodifiable(
+          properties,
+        );
+
+  final String blockId;
+  final WebsiteInlineManipulationOwner owner;
+  final WebsiteViewport viewport;
+  final List<WebsiteInlineManipulationProperty> properties;
+  final bool requiresSelection;
+}
+
+/// Immutable optimistic lease captured before an inline recognizer enters the
+/// gesture arena.
+///
+/// Equality deliberately remains identity-based. Two arms that look identical
+/// still carry distinct monotonic generations, so an old pointer can never
+/// adopt a later arm (the ABA case).
+class WebsiteInlineManipulationLease {
+  WebsiteInlineManipulationLease._({
+    required Object ownerIdentity,
+    required this.target,
+    required this.generation,
+    required this.pageId,
+    required this.pageSlug,
+    required this.documentSessionRevision,
+    required this.documentEpoch,
+    required this.selectionVersion,
+    required this.stateEpoch,
+    required this.blockStateEpoch,
+    required Map<String, dynamic> sourceBlock,
+    required Map<String, WebsiteWriteScope> writeScopes,
+  })  : _ownerIdentity = ownerIdentity,
+        sourceBlock = Map<String, dynamic>.unmodifiable(sourceBlock),
+        writeScopes = Map<String, WebsiteWriteScope>.unmodifiable(writeScopes);
+
+  final Object _ownerIdentity;
+  final WebsiteInlineManipulationTarget target;
+  final int generation;
+  final String? pageId;
+  final String? pageSlug;
+  final int documentSessionRevision;
+  final int documentEpoch;
+  final int selectionVersion;
+  final int stateEpoch;
+  final int blockStateEpoch;
+  final Map<String, dynamic> sourceBlock;
+  final Map<String, WebsiteWriteScope> writeScopes;
+
+  bool _consumed = false;
+
+  bool _consume() {
+    if (_consumed) return false;
+    _consumed = true;
+    return true;
+  }
+}
+
+/// Outcome of one one-shot discrete inline lease.
+///
+/// `unchanged` is admitted (the lease was current) but intentionally creates
+/// no history. A binding may recapture after it. `rejected` is stale or invalid
+/// and must never be refreshed from that callback.
+enum WebsiteInlineMutationResult {
+  committed,
+  unchanged,
+  rejected;
+
+  bool get accepted => this != WebsiteInlineMutationResult.rejected;
+  bool get changed => this == WebsiteInlineMutationResult.committed;
+}
+
+/// One immutable, one-shot authority token for an asynchronous editor intent.
+///
+/// Pickers, confirmation dialogs and catalogs yield control before they
+/// return. Without a captured owner, their result can otherwise land in a
+/// different page or in a new block that happens to reuse the same id. This
+/// token does not claim an inline/Canvas gesture session and never notifies;
+/// it only lets the provider validate the exact owner synchronously when the
+/// asynchronous surface returns.
+class WebsiteEditorAsyncIntent {
+  WebsiteEditorAsyncIntent._({
+    required Object ownerIdentity,
+    required this.generation,
+    required this.blockId,
+    required this.requiresSelection,
+    required this.pageId,
+    required this.pageSlug,
+    required this.documentSessionRevision,
+    required this.documentEpoch,
+    required this.selectionVersion,
+    required this.stateEpoch,
+    required this.blockStateEpoch,
+    required Map<String, dynamic>? sourceBlock,
+  })  : _ownerIdentity = ownerIdentity,
+        sourceBlock = sourceBlock == null
+            ? null
+            : Map<String, dynamic>.unmodifiable(sourceBlock);
+
+  final Object _ownerIdentity;
+  final int generation;
+  final String? blockId;
+  final bool requiresSelection;
+  final String? pageId;
+  final String? pageSlug;
+  final int documentSessionRevision;
+  final int documentEpoch;
+  final int selectionVersion;
+  final int stateEpoch;
+  final int blockStateEpoch;
+  final Map<String, dynamic>? sourceBlock;
+
+  bool _consumed = false;
+
+  bool _consume() {
+    if (_consumed) return false;
+    _consumed = true;
+    return true;
+  }
+}
+
+/// Provider-owned editing session for a continuous page-block field.
+///
+/// Each input event still updates the live preview, but all accepted events
+/// replace one provisional history slot. The provider keeps the exact initial
+/// document/history so Escape or a net-zero edit can restore it without
+/// clobbering another operation. Callers only transport this opaque token.
+class WebsiteContinuousFieldEdit {
+  WebsiteContinuousFieldEdit._({
+    required Object ownerIdentity,
+    required this.blockId,
+    required this.scopeKey,
+    required Object? baselineValue,
+    required WebsiteEditorAsyncIntent intent,
+    required List<Map<String, dynamic>> initialBlocks,
+    required List<List<Map<String, dynamic>>> initialHistory,
+    required this.initialHistoryIndex,
+  })  : _ownerIdentity = ownerIdentity,
+        _baselineValue = _deepCopyContinuousValue(baselineValue),
+        _intent = intent,
+        _initialBlocks = initialBlocks,
+        _initialHistory = initialHistory;
+
+  final Object _ownerIdentity;
+  final String blockId;
+  final String scopeKey;
+  final Object? _baselineValue;
+  WebsiteEditorAsyncIntent _intent;
+  final List<Map<String, dynamic>> _initialBlocks;
+  final List<List<Map<String, dynamic>>> _initialHistory;
+  final int initialHistoryIndex;
+
+  bool _active = true;
+  bool _hasWrites = false;
+}
+
+Object? _deepCopyContinuousValue(Object? value) {
+  if (value is Map) {
+    return value.map<Object?, Object?>(
+      (key, nested) => MapEntry(key, _deepCopyContinuousValue(nested)),
+    );
+  }
+  if (value is List) return value.map(_deepCopyContinuousValue).toList();
+  if (value is Set) return value.map(_deepCopyContinuousValue).toSet();
+  return value;
+}
+
+/// One immutable, one-shot authority token for a site-wide async control.
+///
+/// Unlike [WebsiteEditorAsyncIntent], this token deliberately does not bind a
+/// page id or block selection. Header, theme and footer drafts survive routed
+/// page changes and are owned by the editor session. The provider instance,
+/// session context, authority generation, bucket epoch and exact source-key
+/// snapshot must all still match when the async surface returns.
+class WebsiteSitewideAsyncIntent {
+  WebsiteSitewideAsyncIntent._({
+    required Object ownerIdentity,
+    required this.generation,
+    required this.bucket,
+    required this.sessionEpoch,
+    required this.entryLeaseGeneration,
+    required this.entryLeaseIdentityRevision,
+    required this.sessionOwnerTenantId,
+    required this.sessionOwnerLeaseFingerprint,
+    required this.bucketEpoch,
+    required Map<String, dynamic> sourceValues,
+  })  : _ownerIdentity = ownerIdentity,
+        sourceValues = Map<String, dynamic>.unmodifiable(sourceValues);
+
+  final Object _ownerIdentity;
+  final int generation;
+  final WebsiteSitewideDraftBucket bucket;
+  final int sessionEpoch;
+  final int entryLeaseGeneration;
+  final int entryLeaseIdentityRevision;
+  final String? sessionOwnerTenantId;
+  final String? sessionOwnerLeaseFingerprint;
+  final int bucketEpoch;
+  final Map<String, dynamic> sourceValues;
+
+  bool _consumed = false;
+
+  bool _consume() {
+    if (_consumed) return false;
+    _consumed = true;
+    return true;
+  }
+}
+
+/// One immutable, one-shot authority token for a semantic repeater command.
+///
+/// The provider constructs it from an exact page/block source. Consumers can
+/// only hand it back once; equality remains identity-based so a callback from
+/// an older build cannot adopt an equal-looking later arm.
+class WebsiteRepeaterMutationLease {
+  WebsiteRepeaterMutationLease._({
+    required Object ownerIdentity,
+    required this.target,
+    required this.generation,
+    required this.pageId,
+    required this.pageSlug,
+    required this.documentSessionRevision,
+    required this.documentEpoch,
+    required this.selectionVersion,
+    required this.stateEpoch,
+    required this.blockStateEpoch,
+    required Map<String, dynamic> sourceBlock,
+  })  : _ownerIdentity = ownerIdentity,
+        sourceBlock = Map<String, dynamic>.unmodifiable(sourceBlock);
+
+  final Object _ownerIdentity;
+  final WebsiteRepeaterCollectionTarget target;
+  final int generation;
+  final String? pageId;
+  final String? pageSlug;
+  final int documentSessionRevision;
+  final int documentEpoch;
+  final int selectionVersion;
+  final int stateEpoch;
+  final int blockStateEpoch;
+  final Map<String, dynamic> sourceBlock;
+
+  bool _consumed = false;
+
+  bool _consume() {
+    if (_consumed) return false;
+    _consumed = true;
+    return true;
+  }
+}
+
+class _AppliedWebsiteRepeaterMutation {
+  const _AppliedWebsiteRepeaterMutation({
+    required this.owner,
+    required this.outcome,
+  });
+
+  final Map<String, dynamic> owner;
+  final WebsiteRepeaterMutationOutcome outcome;
+}
+
+@immutable
+class _PreparedInlineManipulationArm {
+  const _PreparedInlineManipulationArm({
+    required this.generation,
+    required this.property,
+    required this.pageId,
+    required this.pageSlug,
+    required this.documentSessionRevision,
+    required this.documentEpoch,
+  });
+
+  final int generation;
+  final WebsiteInlineManipulationProperty property;
+  final String? pageId;
+  final String? pageSlug;
+  final int documentSessionRevision;
+  final int documentEpoch;
+}
+
 /// Provider for website inline edit mode state.
 /// Tracks edit mode, selected block, and pending changes.
 ///
@@ -119,12 +535,49 @@ class WebsiteEditorBlockRevealRequest {
 /// - Edit mode: Shows the side panel (isEditMode = true)
 class WebsiteEditModeProvider extends ChangeNotifier {
   int _navigationStateRevision = 0;
+  int _pageDocumentEpoch = 0;
+  int _inlineManipulationGeneration = 0;
+  int _repeaterMutationGeneration = 0;
+  int _asyncIntentGeneration = 0;
+  final Object _asyncIntentOwnerIdentity = Object();
+  int _sitewideAsyncSessionEpoch = 0;
+  int _inlineManipulationStateEpoch = 0;
+  final Map<String, int> _inlineManipulationBlockEpochs = {};
+  WebsiteInlineManipulationLease? _inlineManipulationSession;
+  _PreparedInlineManipulationArm? _preparedInlineManipulationArm;
+  WebsiteContinuousFieldEdit? _activeContinuousFieldEdit;
+  bool _committingContinuousFieldEdit = false;
+  bool _suppressContinuousNotifications = false;
+  bool _continuousNotificationPending = false;
+  final Map<String, WebsiteViewport> _renderedBlockViewports = {};
 
   int get navigationStateRevision => _navigationStateRevision;
+  int get pageDocumentEpoch => _pageDocumentEpoch;
+
+  void _markPageDocumentMutation() {
+    _invalidateInlineManipulation();
+    if (!_committingContinuousFieldEdit) {
+      _invalidateContinuousFieldEdit();
+    }
+    _pageDocumentEpoch++;
+  }
 
   @override
   void notifyListeners() {
+    if (_suppressContinuousNotifications) {
+      _continuousNotificationPending = true;
+      return;
+    }
     _navigationStateRevision++;
+    super.notifyListeners();
+  }
+
+  /// Publishes renderer-only geometry without pretending navigation changed.
+  ///
+  /// A Canvas reporting its laid-out width may enable an inspector control,
+  /// but it cannot invalidate a route decision or a save/navigation lease.
+  void _notifyTransientRendererLayout() {
+    if (_isDisposed) return;
     super.notifyListeners();
   }
 
@@ -142,11 +595,18 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       DevicePreviewMode.desktop; // Persist preview options
   WebsiteWriteScope _writeScope = WebsiteWriteScope.shared;
   final Map<String, WebsiteWriteScope> _fieldWriteScopes = {};
+  final Map<WebsiteCanvasDocumentTarget, Size> _renderedCanvasSizes = {};
+  int _renderedCanvasMeasurementGeneration = 0;
+
+  int get renderedCanvasMeasurementGeneration =>
+      _renderedCanvasMeasurementGeneration;
 
   String? _selectedBlockId;
   int _selectionVersion = 0; // Tracks explicit selection events
   WebsiteEditorBlockRevealRequest? _blockRevealRequest;
   int _blockRevealRevision = 0;
+  WebsiteCanvasManipulationSession? _canvasManipulationSession;
+  int _canvasManipulationGeneration = 0;
   final Map<String, int> _carouselSlideSelections = {};
   final Map<String, String?> _canvasElementSelections = {};
   final _WebsiteEditorPageDraftState _pageDraft =
@@ -269,6 +729,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// successful retry of that exact identity continues without data loss.
   bool suspendEditorEntryLease() {
     _entryLeaseGeneration++;
+    _sitewideAsyncSessionEpoch++;
     final hadLease = _entryLease != null;
     // A lease-less programmatic session is attributable through its typed
     // document owner; the suspension retains the drafts for that identity.
@@ -277,6 +738,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         _documentOwnerLease ??
         _sessionOwnerLease;
     _entryLease = null;
+    _resetCanvasTouchMode();
     if (_mode != WebsiteEditorMode.public) {
       _mode = WebsiteEditorMode.public;
       _selectedBlockId = null;
@@ -333,6 +795,1380 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   String? get selectedBlockId => _selectedBlockId;
   int get selectionVersion => _selectionVersion;
 
+  /// The exact inline gesture currently allowed to commit.
+  WebsiteInlineManipulationLease? get inlineManipulationSession =>
+      _inlineManipulationSession;
+
+  /// Records the responsive band one page block actually renders in.
+  ///
+  /// The device selector is only a request. A constrained frame may render a
+  /// different band, so inline height, spacing and text transactions bind to
+  /// this measured/projected value instead of [previewViewport]. This is
+  /// transient geometry: it never dirties the page or creates history.
+  void reportRenderedBlockViewport(
+    String blockId,
+    WebsiteViewport viewport,
+  ) {
+    if (_isDisposed || !_documentContainsBlock(blockId)) return;
+    final previous = _renderedBlockViewports[blockId];
+    if (previous == viewport) return;
+    _renderedBlockViewports[blockId] = viewport;
+    _invalidateInlineManipulation(blockId: blockId);
+    _notifyTransientRendererLayout();
+  }
+
+  /// Last viewport geometry published by the block renderer.
+  WebsiteViewport? renderedBlockViewportFor(String blockId) =>
+      _renderedBlockViewports[blockId];
+
+  /// Arms a callback-only inline control before it knows its block id.
+  ///
+  /// `BlockSpacerHandle` receives an existing `(blockId, value)` closure from
+  /// page composition. Pointer-down happens inside the handle, while that
+  /// closure is the only place the exact block id exists. This synchronous
+  /// handshake lets the next matching [updateBlockData] call bind the target
+  /// without changing page-composition's public API or writing the value.
+  int? prepareInlineManipulationArm(
+    WebsiteInlineManipulationProperty property,
+  ) {
+    if (_isDisposed ||
+        _mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor) {
+      return null;
+    }
+    _inlineManipulationSession = null;
+    final generation = ++_inlineManipulationGeneration;
+    _preparedInlineManipulationArm = _PreparedInlineManipulationArm(
+      generation: generation,
+      property: property,
+      pageId: _pageDraft.pageId,
+      pageSlug: _pageDraft.pageSlug,
+      documentSessionRevision: _pageDraft.sessionRevision,
+      documentEpoch: _pageDocumentEpoch,
+    );
+    return generation;
+  }
+
+  void abandonPreparedInlineManipulationArm(int generation) {
+    if (_preparedInlineManipulationArm?.generation == generation) {
+      _preparedInlineManipulationArm = null;
+    }
+  }
+
+  /// Captures one complete inline transaction before pointer slop.
+  WebsiteInlineManipulationLease? beginInlineManipulation(
+    WebsiteInlineManipulationTarget target,
+  ) {
+    _preparedInlineManipulationArm = null;
+    _inlineManipulationSession = null;
+    final lease = _captureInlineManipulation(
+      target,
+      generation: ++_inlineManipulationGeneration,
+    );
+    _inlineManipulationSession = lease;
+    return lease;
+  }
+
+  /// Captures a one-shot guard for a discrete inspector mutation.
+  ///
+  /// Unlike [beginInlineManipulation], capture neither claims/cancels the
+  /// gesture session nor notifies, writes, dirties or creates history. This is
+  /// what lets every scalar binding retain its own exact callback guard.
+  WebsiteInlineManipulationLease? captureInlineMutationLease(
+    WebsiteInlineManipulationTarget target,
+  ) {
+    return _captureInlineManipulation(
+      target,
+      generation: ++_inlineManipulationGeneration,
+    );
+  }
+
+  /// Captures the exact editor/document owner before an asynchronous surface.
+  ///
+  /// This is deliberately side-effect free: it does not notify, dirty the
+  /// document, create history or claim either manipulation FSM. A caller must
+  /// hand the same token back to [commitAsyncIntent] after its `await`.
+  WebsiteEditorAsyncIntent? captureAsyncIntent({
+    String? blockId,
+    bool requiresSelection = true,
+  }) {
+    if (_isDisposed ||
+        _mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor ||
+        (requiresSelection &&
+            (blockId == null || _selectedBlockId != blockId))) {
+      return null;
+    }
+
+    Map<String, dynamic>? sourceBlock;
+    if (blockId != null) {
+      final block = _pageDraft.blocks.cast<Map<String, dynamic>?>().firstWhere(
+            (candidate) => candidate?['id']?.toString() == blockId,
+            orElse: () => null,
+          );
+      if (block == null) return null;
+      sourceBlock = _deepUnmodifiableMap(_deepCopyMap(block));
+    }
+
+    return WebsiteEditorAsyncIntent._(
+      ownerIdentity: _asyncIntentOwnerIdentity,
+      generation: ++_asyncIntentGeneration,
+      blockId: blockId,
+      requiresSelection: requiresSelection,
+      pageId: _pageDraft.pageId,
+      pageSlug: _pageDraft.pageSlug,
+      documentSessionRevision: _pageDraft.sessionRevision,
+      documentEpoch: _pageDocumentEpoch,
+      selectionVersion: _selectionVersion,
+      stateEpoch: _inlineManipulationStateEpoch,
+      blockStateEpoch:
+          blockId == null ? 0 : (_inlineManipulationBlockEpochs[blockId] ?? 0),
+      sourceBlock: sourceBlock,
+    );
+  }
+
+  /// Validates and consumes one asynchronous intent, then runs its mutation.
+  ///
+  /// Validation and [operation] run in one synchronous provider call, so no
+  /// page, selection, viewport or scope change can slip between admission and
+  /// the canonical write. Rejected intents are consumed permanently.
+  WebsiteInlineMutationResult commitAsyncIntent(
+    WebsiteEditorAsyncIntent expectedIntent,
+    WebsiteInlineMutationResult Function() operation,
+  ) {
+    if (!expectedIntent._consume() || !_validateAsyncIntent(expectedIntent)) {
+      return WebsiteInlineMutationResult.rejected;
+    }
+    return operation();
+  }
+
+  /// Starts one exact continuous edit for a page-block field.
+  ///
+  /// Beginning B finalizes A first. This keeps a single provisional history
+  /// owner and prevents two focused controls from replacing each other's undo
+  /// slot.
+  WebsiteContinuousFieldEdit? beginContinuousFieldEdit({
+    required String blockId,
+    required String scopeKey,
+    required Object? baselineValue,
+  }) {
+    finalizeActiveContinuousFieldEdit();
+    final intent = captureAsyncIntent(blockId: blockId);
+    if (intent == null) return null;
+    final edit = WebsiteContinuousFieldEdit._(
+      ownerIdentity: _asyncIntentOwnerIdentity,
+      blockId: blockId,
+      scopeKey: scopeKey,
+      baselineValue: baselineValue,
+      intent: intent,
+      initialBlocks: _deepCopyBlocks(_pageDraft.blocks),
+      initialHistory:
+          _pageDraft.history.map(_deepCopyBlocks).toList(growable: false),
+      initialHistoryIndex: _pageDraft.historyIndex,
+    );
+    _activeContinuousFieldEdit = edit;
+    return edit;
+  }
+
+  /// Applies one live-preview tick while coalescing the whole focus session
+  /// into one undo slot.
+  WebsiteInlineMutationResult commitContinuousFieldEdit(
+    WebsiteContinuousFieldEdit expectedEdit,
+    String scopeKey,
+    Object? nextValue,
+    WebsiteInlineMutationResult Function() operation,
+  ) {
+    if (!identical(expectedEdit._ownerIdentity, _asyncIntentOwnerIdentity) ||
+        expectedEdit.scopeKey != scopeKey ||
+        !expectedEdit._active ||
+        !identical(_activeContinuousFieldEdit, expectedEdit)) {
+      return WebsiteInlineMutationResult.rejected;
+    }
+    if (_deepEquals(nextValue, expectedEdit._baselineValue)) {
+      return _restoreContinuousFieldEdit(
+        expectedEdit,
+        keepActive: true,
+      );
+    }
+
+    _committingContinuousFieldEdit = true;
+    _suppressContinuousNotifications = true;
+    WebsiteInlineMutationResult result;
+    try {
+      result = commitAsyncIntent(expectedEdit._intent, operation);
+    } finally {
+      _committingContinuousFieldEdit = false;
+      _suppressContinuousNotifications = false;
+    }
+
+    if (!result.accepted) {
+      expectedEdit._active = false;
+      if (identical(_activeContinuousFieldEdit, expectedEdit)) {
+        _activeContinuousFieldEdit = null;
+      }
+      _flushContinuousNotification();
+      return WebsiteInlineMutationResult.rejected;
+    }
+
+    if (result.changed) {
+      _coalesceContinuousHistory(expectedEdit);
+    }
+    final nextIntent = captureAsyncIntent(blockId: expectedEdit.blockId);
+    if (nextIntent == null) {
+      expectedEdit._active = false;
+      _activeContinuousFieldEdit = null;
+    } else {
+      expectedEdit._intent = nextIntent;
+    }
+    _flushContinuousNotification();
+    return result;
+  }
+
+  /// Finalizes the current value. The coalesced history slot remains as the
+  /// single operation the user can undo.
+  WebsiteInlineMutationResult finishContinuousFieldEdit(
+    WebsiteContinuousFieldEdit expectedEdit,
+    String scopeKey,
+  ) {
+    if (!identical(expectedEdit._ownerIdentity, _asyncIntentOwnerIdentity) ||
+        expectedEdit.scopeKey != scopeKey ||
+        !expectedEdit._active ||
+        !identical(_activeContinuousFieldEdit, expectedEdit)) {
+      return WebsiteInlineMutationResult.rejected;
+    }
+    final result = commitAsyncIntent(
+      expectedEdit._intent,
+      () => WebsiteInlineMutationResult.unchanged,
+    );
+    expectedEdit._active = false;
+    _activeContinuousFieldEdit = null;
+    return result;
+  }
+
+  /// Cancels an uncontended edit and restores its exact pre-focus document,
+  /// history (including redo) and dirty state.
+  WebsiteInlineMutationResult cancelContinuousFieldEdit(
+    WebsiteContinuousFieldEdit expectedEdit,
+    String scopeKey,
+  ) {
+    if (!identical(expectedEdit._ownerIdentity, _asyncIntentOwnerIdentity) ||
+        expectedEdit.scopeKey != scopeKey ||
+        !expectedEdit._active ||
+        !identical(_activeContinuousFieldEdit, expectedEdit)) {
+      return WebsiteInlineMutationResult.rejected;
+    }
+    return _restoreContinuousFieldEdit(expectedEdit, keepActive: false);
+  }
+
+  WebsiteInlineMutationResult _restoreContinuousFieldEdit(
+    WebsiteContinuousFieldEdit expectedEdit, {
+    required bool keepActive,
+  }) {
+    final hadWrites = expectedEdit._hasWrites;
+
+    _committingContinuousFieldEdit = true;
+    _suppressContinuousNotifications = true;
+    WebsiteInlineMutationResult admitted;
+    try {
+      admitted = commitAsyncIntent(
+        expectedEdit._intent,
+        () => WebsiteInlineMutationResult.unchanged,
+      );
+      if (admitted.accepted && hadWrites) {
+        _pageDraft.blocks = _deepCopyBlocks(expectedEdit._initialBlocks);
+        _pageDraft.history
+          ..clear()
+          ..addAll(expectedEdit._initialHistory.map(_deepCopyBlocks));
+        _pageDraft.historyIndex = expectedEdit.initialHistoryIndex;
+        expectedEdit._hasWrites = false;
+        _markPageDocumentMutation();
+        _reconcileTransientCanvasSelections();
+        _refreshPageDirtyState();
+        _continuousNotificationPending = true;
+      }
+    } finally {
+      _committingContinuousFieldEdit = false;
+      _suppressContinuousNotifications = false;
+    }
+
+    if (!admitted.accepted) {
+      expectedEdit._active = false;
+      _activeContinuousFieldEdit = null;
+      _flushContinuousNotification();
+      return WebsiteInlineMutationResult.rejected;
+    }
+
+    if (keepActive) {
+      final nextIntent = captureAsyncIntent(blockId: expectedEdit.blockId);
+      if (nextIntent == null) {
+        expectedEdit._active = false;
+        _activeContinuousFieldEdit = null;
+        _flushContinuousNotification();
+        return WebsiteInlineMutationResult.rejected;
+      }
+      expectedEdit._intent = nextIntent;
+    } else {
+      expectedEdit._active = false;
+      _activeContinuousFieldEdit = null;
+    }
+    _flushContinuousNotification();
+    return hadWrites
+        ? WebsiteInlineMutationResult.committed
+        : WebsiteInlineMutationResult.unchanged;
+  }
+
+  /// Save/undo/another focus use this synchronous boundary before reading the
+  /// document. No new write or history entry is created.
+  void finalizeActiveContinuousFieldEdit() {
+    final active = _activeContinuousFieldEdit;
+    if (active != null) finishContinuousFieldEdit(active, active.scopeKey);
+  }
+
+  void _coalesceContinuousHistory(WebsiteContinuousFieldEdit edit) {
+    if (_deepEquals(_pageDraft.blocks, edit._initialBlocks)) {
+      _pageDraft.history
+        ..clear()
+        ..addAll(edit._initialHistory.map(_deepCopyBlocks));
+      _pageDraft.historyIndex = edit.initialHistoryIndex;
+      edit._hasWrites = false;
+      _refreshPageDirtyState();
+      return;
+    }
+
+    final prefix = <List<Map<String, dynamic>>>[];
+    final prefixEnd = (edit.initialHistoryIndex + 1).clamp(
+      0,
+      edit._initialHistory.length,
+    );
+    for (var index = 0; index < prefixEnd; index++) {
+      prefix.add(_deepCopyBlocks(edit._initialHistory[index]));
+    }
+    if (prefix.isEmpty) prefix.add(_deepCopyBlocks(edit._initialBlocks));
+    prefix.add(_deepCopyBlocks(_pageDraft.blocks));
+    if (prefix.length > _maxHistory) prefix.removeAt(1);
+    _pageDraft.history
+      ..clear()
+      ..addAll(prefix);
+    _pageDraft.historyIndex = _pageDraft.history.length - 1;
+    edit._hasWrites = true;
+    _refreshPageDirtyState();
+  }
+
+  void _invalidateContinuousFieldEdit() {
+    final active = _activeContinuousFieldEdit;
+    if (active == null) return;
+    active._active = false;
+    _activeContinuousFieldEdit = null;
+  }
+
+  void _flushContinuousNotification() {
+    if (!_continuousNotificationPending) return;
+    _continuousNotificationPending = false;
+    _notifyAfterFrame();
+  }
+
+  /// Captures the exact site-wide owner before a picker or dialog awaits.
+  ///
+  /// [sourceKeys] is mandatory and intentionally narrow. It records the
+  /// effective values the control was displaying, while [bucket] supplies the
+  /// coarse anti-ABA epoch that also rejects a concurrent write to a sibling
+  /// field in the same persisted bucket.
+  WebsiteSitewideAsyncIntent? captureSitewideAsyncIntent({
+    required WebsiteSitewideDraftBucket bucket,
+    required Iterable<String> sourceKeys,
+  }) {
+    if (_isDisposed ||
+        _mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor) {
+      return null;
+    }
+
+    final normalizedKeys = sourceKeys
+        .map((key) => key.trim())
+        .where((key) => key.isNotEmpty)
+        .toSet();
+    if (normalizedKeys.isEmpty) return null;
+
+    final sourceValues = <String, dynamic>{
+      for (final key in normalizedKeys)
+        key: _deepUnmodifiableValue(
+          _sitewideAsyncSourceValue(bucket, key),
+        ),
+    };
+    return WebsiteSitewideAsyncIntent._(
+      ownerIdentity: _asyncIntentOwnerIdentity,
+      generation: ++_asyncIntentGeneration,
+      bucket: bucket,
+      sessionEpoch: _sitewideAsyncSessionEpoch,
+      entryLeaseGeneration: _entryLeaseGeneration,
+      entryLeaseIdentityRevision: _entryLeaseIdentityRevision,
+      sessionOwnerTenantId: sessionOwnerTenantId,
+      sessionOwnerLeaseFingerprint: sessionOwnerLeaseFingerprint,
+      bucketEpoch: _sitewideBucketEpoch(bucket),
+      sourceValues: sourceValues,
+    );
+  }
+
+  /// Validates and consumes one site-wide async intent, then performs exactly
+  /// one synchronous canonical provider transaction.
+  WebsiteInlineMutationResult commitSitewideAsyncIntent(
+    WebsiteSitewideAsyncIntent expectedIntent,
+    WebsiteInlineMutationResult Function() operation,
+  ) {
+    if (!expectedIntent._consume() ||
+        !_validateSitewideAsyncIntent(expectedIntent)) {
+      return WebsiteInlineMutationResult.rejected;
+    }
+    return operation();
+  }
+
+  bool _validateSitewideAsyncIntent(
+    WebsiteSitewideAsyncIntent expectedIntent,
+  ) {
+    if (_isDisposed ||
+        !identical(
+          expectedIntent._ownerIdentity,
+          _asyncIntentOwnerIdentity,
+        ) ||
+        _mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor ||
+        _sitewideAsyncSessionEpoch != expectedIntent.sessionEpoch ||
+        _entryLeaseGeneration != expectedIntent.entryLeaseGeneration ||
+        _entryLeaseIdentityRevision !=
+            expectedIntent.entryLeaseIdentityRevision ||
+        sessionOwnerTenantId != expectedIntent.sessionOwnerTenantId ||
+        sessionOwnerLeaseFingerprint !=
+            expectedIntent.sessionOwnerLeaseFingerprint ||
+        _sitewideBucketEpoch(expectedIntent.bucket) !=
+            expectedIntent.bucketEpoch) {
+      return false;
+    }
+
+    for (final entry in expectedIntent.sourceValues.entries) {
+      if (!_deepEquals(
+        _sitewideAsyncSourceValue(expectedIntent.bucket, entry.key),
+        entry.value,
+      )) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  int _sitewideBucketEpoch(WebsiteSitewideDraftBucket bucket) =>
+      switch (bucket) {
+        WebsiteSitewideDraftBucket.header => _sitewideDraft.headerEpoch,
+        WebsiteSitewideDraftBucket.siteSettings =>
+          _sitewideDraft.siteSettingsEpoch,
+        WebsiteSitewideDraftBucket.theme => _sitewideDraft.themeEpoch,
+        WebsiteSitewideDraftBucket.footer => _sitewideDraft.footerEpoch,
+      };
+
+  void _markSitewideBucketMutation(WebsiteSitewideDraftBucket bucket) {
+    switch (bucket) {
+      case WebsiteSitewideDraftBucket.header:
+        _sitewideDraft.headerEpoch++;
+        return;
+      case WebsiteSitewideDraftBucket.siteSettings:
+        _sitewideDraft.siteSettingsEpoch++;
+        return;
+      case WebsiteSitewideDraftBucket.theme:
+        _sitewideDraft.themeEpoch++;
+        return;
+      case WebsiteSitewideDraftBucket.footer:
+        _sitewideDraft.footerEpoch++;
+        return;
+    }
+  }
+
+  dynamic _sitewideAsyncSourceValue(
+    WebsiteSitewideDraftBucket bucket,
+    String key,
+  ) {
+    if (bucket == WebsiteSitewideDraftBucket.footer &&
+        key == WebsiteSitewideAsyncSourceKey.footerNavigation) {
+      return _footerNavigationAsyncSourceSnapshot();
+    }
+
+    final pending = switch (bucket) {
+      WebsiteSitewideDraftBucket.header => _sitewideDraft.pendingHeaderSettings,
+      WebsiteSitewideDraftBucket.siteSettings =>
+        _sitewideDraft.pendingSiteSettings,
+      WebsiteSitewideDraftBucket.theme => _sitewideDraft.pendingThemeSettings,
+      WebsiteSitewideDraftBucket.footer => _sitewideDraft.pendingFooterSettings,
+    };
+    if (pending.containsKey(key)) return pending[key];
+    return _settings[key]?.toString();
+  }
+
+  Map<String, dynamic> _footerNavigationAsyncSourceSnapshot() =>
+      <String, dynamic>{
+        'sectionOrder': _deepCopyValue(
+          _sitewideDraft.pendingFooterSectionOrder,
+        ),
+        'linkOrder': _deepCopyValue(
+          _sitewideDraft.pendingFooterLinkOrder,
+        ),
+        'labels': _deepCopyValue(_sitewideDraft.pendingFooterNavLabels),
+        'linkTypes': _sitewideDraft.pendingFooterNavLinkTypes.map(
+          (id, type) => MapEntry(id, type.value),
+        ),
+        'linkValues': _deepCopyValue(_sitewideDraft.pendingFooterNavLinkValues),
+        'openInNewTab':
+            _deepCopyValue(_sitewideDraft.pendingFooterNavOpenInNewTab),
+        'items': _sitewideDraft.pendingFooterNavItems.map(
+          (id, navigation) => MapEntry(
+            id,
+            _websiteNavigationAsyncSourceSnapshot(navigation),
+          ),
+        ),
+        'creates': _sitewideDraft.pendingFooterNavCreates.map(
+          (id, navigation) => MapEntry(
+            id,
+            _websiteNavigationAsyncSourceSnapshot(navigation),
+          ),
+        ),
+        'deletes': Set<String>.from(
+          _sitewideDraft.pendingFooterNavDeletes,
+        ),
+      };
+
+  Map<String, dynamic> _websiteNavigationAsyncSourceSnapshot(
+    WebsiteNavigation navigation,
+  ) =>
+      <String, dynamic>{
+        'id': navigation.id,
+        'tenantId': navigation.tenantId,
+        'menuLocation': navigation.menuLocation.name,
+        'label': navigation.label,
+        'icon': navigation.icon,
+        'linkType': navigation.linkType.value,
+        'linkValue': navigation.linkValue,
+        'openInNewTab': navigation.openInNewTab,
+        'parentId': navigation.parentId,
+        'orderIndex': navigation.orderIndex,
+        'isVisible': navigation.isVisible,
+        'showOnDesktop': navigation.showOnDesktop,
+        'showOnMobile': navigation.showOnMobile,
+        'cssClass': navigation.cssClass,
+        'highlight': navigation.highlight,
+        'children': navigation.children
+            .map(_websiteNavigationAsyncSourceSnapshot)
+            .toList(growable: false),
+      };
+
+  bool _validateAsyncIntent(WebsiteEditorAsyncIntent expectedIntent) {
+    if (_isDisposed ||
+        !identical(
+          expectedIntent._ownerIdentity,
+          _asyncIntentOwnerIdentity,
+        ) ||
+        _mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor ||
+        _pageDraft.pageId != expectedIntent.pageId ||
+        _pageDraft.pageSlug != expectedIntent.pageSlug ||
+        _pageDraft.sessionRevision != expectedIntent.documentSessionRevision ||
+        _pageDocumentEpoch != expectedIntent.documentEpoch ||
+        _inlineManipulationStateEpoch != expectedIntent.stateEpoch ||
+        (expectedIntent.requiresSelection &&
+            (_selectedBlockId != expectedIntent.blockId ||
+                _selectionVersion != expectedIntent.selectionVersion))) {
+      return false;
+    }
+
+    final blockId = expectedIntent.blockId;
+    if (blockId == null) return expectedIntent.sourceBlock == null;
+    if ((_inlineManipulationBlockEpochs[blockId] ?? 0) !=
+        expectedIntent.blockStateEpoch) {
+      return false;
+    }
+    final block = _pageDraft.blocks.cast<Map<String, dynamic>?>().firstWhere(
+          (candidate) => candidate?['id']?.toString() == blockId,
+          orElse: () => null,
+        );
+    return block != null &&
+        expectedIntent.sourceBlock != null &&
+        _deepEquals(block, expectedIntent.sourceBlock);
+  }
+
+  /// Captures one exact, side-effect-free guard for a semantic collection
+  /// command.
+  ///
+  /// Capture never writes, dirties, notifies or creates history. A malformed
+  /// path, ambiguous persisted identity or missing selection fails closed.
+  WebsiteRepeaterMutationLease? captureRepeaterMutationLease(
+    WebsiteRepeaterCollectionTarget target,
+  ) {
+    if (_isDisposed ||
+        _mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor ||
+        !_validRepeaterTarget(target) ||
+        (target.requiresSelection && _selectedBlockId != target.blockId)) {
+      return null;
+    }
+
+    final block = _pageDraft.blocks.cast<Map<String, dynamic>?>().firstWhere(
+          (candidate) => candidate?['id']?.toString() == target.blockId,
+          orElse: () => null,
+        );
+    if (block == null || _repeaterTargetCollection(block, target) == null) {
+      return null;
+    }
+
+    return WebsiteRepeaterMutationLease._(
+      ownerIdentity: _asyncIntentOwnerIdentity,
+      target: target,
+      generation: ++_repeaterMutationGeneration,
+      pageId: _pageDraft.pageId,
+      pageSlug: _pageDraft.pageSlug,
+      documentSessionRevision: _pageDraft.sessionRevision,
+      documentEpoch: _pageDocumentEpoch,
+      selectionVersion: _selectionVersion,
+      stateEpoch: _inlineManipulationStateEpoch,
+      blockStateEpoch: _inlineManipulationBlockEpochs[target.blockId] ?? 0,
+      sourceBlock: _deepUnmodifiableMap(_deepCopyMap(block)),
+    );
+  }
+
+  /// Applies one semantic collection command under its captured exact source.
+  ///
+  /// The command is resolved inside the current provider document, never from
+  /// a widget-authored replacement list. Admission, mutation, one history
+  /// entry and notification are synchronous in this owner.
+  WebsiteRepeaterMutationOutcome commitRepeaterMutation(
+    WebsiteRepeaterMutationLease expectedLease,
+    WebsiteRepeaterCommand command,
+  ) {
+    if (!expectedLease._consume() ||
+        !_validateRepeaterMutationLease(expectedLease)) {
+      return const WebsiteRepeaterMutationOutcome.rejected();
+    }
+
+    final target = expectedLease.target;
+    final blockIndex = _pageDraft.blocks.indexWhere(
+      (block) => block['id']?.toString() == target.blockId,
+    );
+    if (blockIndex == -1) {
+      return const WebsiteRepeaterMutationOutcome.rejected();
+    }
+
+    final block = _pageDraft.blocks[blockIndex];
+    final rawData = block['block_data'];
+    if (rawData is! Map) {
+      return const WebsiteRepeaterMutationOutcome.rejected();
+    }
+    final currentData = _deepCopyMap(
+      rawData.map((key, value) => MapEntry(key.toString(), value)),
+    );
+    final applied = _applyRepeaterMutationAtOwner(
+      currentData,
+      target: target,
+      ancestorIndex: 0,
+      command: command,
+    );
+    if (applied == null) {
+      return const WebsiteRepeaterMutationOutcome.rejected();
+    }
+    if (!applied.outcome.result.changed) return applied.outcome;
+
+    final nextBlock = sanitizeWebsiteBlockForPersistence(<String, dynamic>{
+      ...block,
+      'block_data': applied.owner,
+    });
+    if (_deepEquals(nextBlock, block)) {
+      return WebsiteRepeaterMutationOutcome.unchanged(
+        selectionIndex: applied.outcome.selectionIndex,
+        selectionItem: applied.outcome.selectionItem,
+      );
+    }
+
+    final structuralKeys = target.ancestors.isEmpty
+        ? target.collectionKeys
+        : target.ancestors.first.collectionKeys;
+    _resetCanvasManipulationForStructuralWrite(
+      target.blockId,
+      structuralKeys,
+    );
+    _pageDraft.blocks[blockIndex] = nextBlock;
+    _reconcileTransientCanvasSelections();
+    _saveToHistory();
+    notifyListeners();
+    return applied.outcome;
+  }
+
+  WebsiteInlineManipulationLease? _captureInlineManipulation(
+    WebsiteInlineManipulationTarget target, {
+    required int generation,
+  }) {
+    if (_isDisposed ||
+        _mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor ||
+        target.properties.isEmpty ||
+        _renderedBlockViewports[target.blockId] != target.viewport ||
+        (target.requiresSelection && _selectedBlockId != target.blockId)) {
+      return null;
+    }
+
+    final blockIndex = _pageDraft.blocks.indexWhere(
+      (block) => block['id']?.toString() == target.blockId,
+    );
+    if (blockIndex == -1) return null;
+    if (target.owner
+        case WebsiteInlineRepeaterOwner(
+          collectionKeys: final collectionKeys,
+          itemIndex: final itemIndex,
+          identityKey: final identityKey,
+          identityValue: final identityValue,
+        )) {
+      if (_blockRepeaterItemData(
+            target.blockId,
+            collectionKeys: collectionKeys,
+            itemIndex: itemIndex,
+            identityKey: identityKey,
+            identityValue: identityValue,
+          ) ==
+          null) {
+        return null;
+      }
+    }
+
+    final writeScopes = <String, WebsiteWriteScope>{};
+    for (final property in target.properties) {
+      if (writeScopes.containsKey(property.canonicalKey)) return null;
+      writeScopes[property.canonicalKey] = _inlineWriteScope(
+        target: target,
+        property: property,
+      );
+    }
+    final sourceBlock = _deepUnmodifiableMap(
+      _deepCopyMap(_pageDraft.blocks[blockIndex]),
+    );
+    final lease = WebsiteInlineManipulationLease._(
+      ownerIdentity: _asyncIntentOwnerIdentity,
+      target: target,
+      generation: generation,
+      pageId: _pageDraft.pageId,
+      pageSlug: _pageDraft.pageSlug,
+      documentSessionRevision: _pageDraft.sessionRevision,
+      documentEpoch: _pageDocumentEpoch,
+      selectionVersion: _selectionVersion,
+      stateEpoch: _inlineManipulationStateEpoch,
+      blockStateEpoch: _inlineManipulationBlockEpochs[target.blockId] ?? 0,
+      sourceBlock: sourceBlock,
+      writeScopes: writeScopes,
+    );
+    return lease;
+  }
+
+  WebsiteWriteScope _inlineWriteScope({
+    required WebsiteInlineManipulationTarget target,
+    required WebsiteInlineManipulationProperty property,
+  }) {
+    return switch (target.owner) {
+      WebsiteInlineBlockOwner() => fieldWriteScope(
+          blockId: target.blockId,
+          propertyKey: property.canonicalKey,
+          policy: property.policy,
+          viewport: target.viewport,
+        ),
+      WebsiteInlineRepeaterOwner(
+        collectionKeys: final collectionKeys,
+        itemIndex: final itemIndex,
+        identityKey: final identityKey,
+        identityValue: final identityValue,
+      ) =>
+        repeaterFieldWriteScope(
+          blockId: target.blockId,
+          collectionKeys: collectionKeys,
+          itemIndex: itemIndex,
+          propertyKey: property.canonicalKey,
+          policy: property.policy,
+          viewport: target.viewport,
+          identityKey: identityKey,
+          identityValue: identityValue,
+        ),
+    };
+  }
+
+  /// Cancels only the exact generation named by the caller.
+  bool cancelInlineManipulation(
+    WebsiteInlineManipulationLease expectedLease,
+  ) {
+    if (!identical(_inlineManipulationSession, expectedLease) ||
+        !expectedLease._consume()) {
+      return false;
+    }
+    _inlineManipulationSession = null;
+    return true;
+  }
+
+  /// Commits all changed inline values as one provider transaction/history
+  /// entry, even when different properties captured different responsive
+  /// scopes.
+  bool commitInlineManipulation(
+    WebsiteInlineManipulationLease expectedLease,
+    Map<String, Object?> values,
+  ) {
+    if (!expectedLease._consume() ||
+        !_validateInlineManipulation(
+          expectedLease,
+          values,
+          requiresActiveSession: true,
+        )) {
+      return false;
+    }
+    _inlineManipulationSession = null;
+    return _commitInlineMutationValues(expectedLease, values);
+  }
+
+  /// Applies a captured discrete mutation once, or fails without side effects.
+  WebsiteInlineMutationResult commitInlineMutation(
+    WebsiteInlineManipulationLease expectedLease,
+    Map<String, Object?> values,
+  ) {
+    if (!expectedLease._consume() ||
+        !_validateInlineManipulation(
+          expectedLease,
+          values,
+          requiresActiveSession: false,
+        )) {
+      return WebsiteInlineMutationResult.rejected;
+    }
+    return _commitInlineMutationValues(expectedLease, values)
+        ? WebsiteInlineMutationResult.committed
+        : WebsiteInlineMutationResult.unchanged;
+  }
+
+  bool _commitInlineMutationValues(
+    WebsiteInlineManipulationLease expectedLease,
+    Map<String, Object?> values,
+  ) {
+    final target = expectedLease.target;
+    return switch (target.owner) {
+      WebsiteInlineBlockOwner() => _transformBlockData(
+          target.blockId,
+          (current) => _applyInlineManipulationValues(
+            current,
+            lease: expectedLease,
+            values: values,
+          ),
+        ),
+      WebsiteInlineRepeaterOwner(
+        collectionKeys: final collectionKeys,
+        itemIndex: final itemIndex,
+        identityKey: final identityKey,
+        identityValue: final identityValue,
+      ) =>
+        _transformBlockRepeaterItemData(
+          target.blockId,
+          collectionKeys: collectionKeys,
+          itemIndex: itemIndex,
+          identityKey: identityKey,
+          identityValue: identityValue,
+          operation: 'commitInlineManipulation',
+          transform: (item) => _applyInlineManipulationValues(
+            item,
+            lease: expectedLease,
+            values: values,
+          ),
+        ),
+    };
+  }
+
+  bool _validateInlineManipulation(
+    WebsiteInlineManipulationLease expectedLease,
+    Map<String, Object?> values, {
+    required bool requiresActiveSession,
+  }) {
+    bool reject() {
+      if (identical(_inlineManipulationSession, expectedLease)) {
+        _inlineManipulationSession = null;
+      }
+      return false;
+    }
+
+    if (_isDisposed ||
+        !identical(
+          expectedLease._ownerIdentity,
+          _asyncIntentOwnerIdentity,
+        ) ||
+        values.isEmpty ||
+        (requiresActiveSession &&
+            !identical(_inlineManipulationSession, expectedLease)) ||
+        _mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor ||
+        _pageDraft.pageId != expectedLease.pageId ||
+        _pageDraft.pageSlug != expectedLease.pageSlug ||
+        _pageDraft.sessionRevision != expectedLease.documentSessionRevision ||
+        _pageDocumentEpoch != expectedLease.documentEpoch ||
+        _inlineManipulationStateEpoch != expectedLease.stateEpoch ||
+        (_inlineManipulationBlockEpochs[expectedLease.target.blockId] ?? 0) !=
+            expectedLease.blockStateEpoch ||
+        _renderedBlockViewports[expectedLease.target.blockId] !=
+            expectedLease.target.viewport ||
+        (expectedLease.target.requiresSelection &&
+            (_selectedBlockId != expectedLease.target.blockId ||
+                _selectionVersion != expectedLease.selectionVersion))) {
+      return reject();
+    }
+
+    final block = _pageDraft.blocks.cast<Map<String, dynamic>?>().firstWhere(
+          (candidate) =>
+              candidate?['id']?.toString() == expectedLease.target.blockId,
+          orElse: () => null,
+        );
+    if (block == null || !_deepEquals(block, expectedLease.sourceBlock)) {
+      return reject();
+    }
+
+    final properties = <String, WebsiteInlineManipulationProperty>{
+      for (final property in expectedLease.target.properties)
+        property.canonicalKey: property,
+    };
+    for (final entry in values.entries) {
+      final property = properties[entry.key];
+      if (property == null || !_validInlineValue(entry.key, entry.value)) {
+        return reject();
+      }
+    }
+    for (final property in expectedLease.target.properties) {
+      if (_inlineWriteScope(
+            target: expectedLease.target,
+            property: property,
+          ) !=
+          expectedLease.writeScopes[property.canonicalKey]) {
+        return reject();
+      }
+    }
+    return true;
+  }
+
+  bool _validInlineValue(String propertyKey, Object? value) {
+    if (value is! num) return true;
+    final number = value.toDouble();
+    if (!number.isFinite) return false;
+    if (propertyKey == WebsiteBlockMetaFields.spacingAfter.key) {
+      return number >= 0;
+    }
+    if (propertyKey == WebsiteBlockMetaFields.blockHeight.key ||
+        propertyKey.toLowerCase().contains('width')) {
+      return number > 0;
+    }
+    return true;
+  }
+
+  Map<String, dynamic> _applyInlineManipulationValues(
+    Map<String, dynamic> source, {
+    required WebsiteInlineManipulationLease lease,
+    required Map<String, Object?> values,
+  }) {
+    final properties = <String, WebsiteInlineManipulationProperty>{
+      for (final property in lease.target.properties)
+        property.canonicalKey: property,
+    };
+    var next = source;
+    for (final entry in values.entries) {
+      final property = properties[entry.key]!;
+      final scope = lease.writeScopes[entry.key]!;
+      if (scope == WebsiteWriteScope.viewport) {
+        next = WebsiteResponsiveDataCodec.setForViewport(
+          data: next,
+          propertyKey: entry.key,
+          value: entry.value,
+          viewport: lease.target.viewport,
+          policy: property.policy,
+        );
+        continue;
+      }
+      next = WebsiteResponsiveDataCodec.setShared(
+        data: next,
+        propertyKey: entry.key,
+        value: entry.value,
+        policies: <String, WebsiteResponsivePropertyPolicy>{
+          entry.key: property.policy,
+        },
+      );
+      for (final companion in property.sharedCompanionKeys) {
+        next = WebsiteResponsiveDataCodec.setShared(
+          data: next,
+          propertyKey: companion,
+          value: entry.value,
+          policies: <String, WebsiteResponsivePropertyPolicy>{
+            companion: property.policy,
+          },
+        );
+      }
+    }
+    return next;
+  }
+
+  bool _bindPreparedInlineManipulation(
+    String blockId,
+    String propertyKey,
+  ) {
+    final prepared = _preparedInlineManipulationArm;
+    if (prepared == null || prepared.property.canonicalKey != propertyKey) {
+      return false;
+    }
+    _preparedInlineManipulationArm = null;
+    if (_pageDraft.pageId != prepared.pageId ||
+        _pageDraft.pageSlug != prepared.pageSlug ||
+        _pageDraft.sessionRevision != prepared.documentSessionRevision ||
+        _pageDocumentEpoch != prepared.documentEpoch) {
+      return true;
+    }
+    final viewport = _renderedBlockViewports[blockId];
+    if (viewport == null) return true;
+    final lease = _captureInlineManipulation(
+      WebsiteInlineManipulationTarget(
+        blockId: blockId,
+        owner: const WebsiteInlineBlockOwner(),
+        viewport: viewport,
+        properties: <WebsiteInlineManipulationProperty>[prepared.property],
+        requiresSelection: false,
+      ),
+      generation: prepared.generation,
+    );
+    _inlineManipulationSession = lease;
+    return true;
+  }
+
+  void _invalidateInlineManipulation({String? blockId}) {
+    if (blockId == null) {
+      _inlineManipulationStateEpoch++;
+    } else {
+      _inlineManipulationBlockEpochs[blockId] =
+          (_inlineManipulationBlockEpochs[blockId] ?? 0) + 1;
+    }
+    final session = _inlineManipulationSession;
+    if (blockId == null || session?.target.blockId == blockId) {
+      _inlineManipulationSession = null;
+    }
+    if (blockId == null) _preparedInlineManipulationArm = null;
+  }
+
+  /// The one direct-manipulation session, bound to one block/slide/layer.
+  WebsiteCanvasManipulationSession? get canvasManipulationSession =>
+      _canvasManipulationSession;
+
+  WebsiteCanvasDocumentTarget? get selectedCanvasDocumentTarget {
+    final blockId = _selectedBlockId;
+    if (blockId == null) return null;
+    final block = getBlock(blockId);
+    if (block == null) return null;
+    final type = (block['block_type'] ?? block['type'] ?? '').toString();
+    if (type == WebsiteBlockType.canvas.name) {
+      return WebsiteCanvasDocumentTarget(blockId: blockId);
+    }
+    if (type != WebsiteBlockType.carousel.name) return null;
+    final data = Map<String, dynamic>.from(block['block_data'] ?? const {});
+    final slides = data['slides'];
+    final count = slides is List ? slides.length : 0;
+    if (count <= 0) return null;
+    return WebsiteCanvasDocumentTarget(
+      blockId: blockId,
+      slideIndex: carouselSlideSelection(blockId, count),
+    );
+  }
+
+  /// The viewport one concrete Canvas document is rendering right now.
+  ///
+  /// This cannot be inferred from [previewViewport]: a compact authoring host,
+  /// block padding, or a Carousel slide may constrain the Canvas to a different
+  /// logical width. Until the renderer reports a real size there is no safe
+  /// direct-manipulation target, so callers fail closed instead of guessing.
+  WebsiteViewport? renderedCanvasViewport(
+    WebsiteCanvasDocumentTarget target,
+  ) {
+    final size = _renderedCanvasSizes[target];
+    if (size == null || !size.width.isFinite || size.width <= 0) return null;
+    final document = canvasDocument(
+      target.blockId,
+      slideIndex: target.slideIndex,
+    );
+    if (document == null) return null;
+    return WebsiteCanvasResponsiveDocument.viewportForRenderedCanvasWidth(
+      document,
+      size.width,
+    );
+  }
+
+  /// Records renderer geometry without dirtying the document or its history.
+  ///
+  /// The report is posted after layout by [CanvasBlock]. Crossing a responsive
+  /// band invalidates an armed session for that document immediately: a touch
+  /// admitted against one projection may never commit into another.
+  void reportRenderedCanvasSize(
+    WebsiteCanvasDocumentTarget target,
+    Size size, {
+    required int expectedMeasurementGeneration,
+  }) {
+    if (_isDisposed ||
+        expectedMeasurementGeneration != _renderedCanvasMeasurementGeneration ||
+        !size.width.isFinite ||
+        !size.height.isFinite ||
+        size.width <= 0 ||
+        size.height <= 0) {
+      return;
+    }
+    if (canvasDocument(
+          target.blockId,
+          slideIndex: target.slideIndex,
+        ) ==
+        null) {
+      return;
+    }
+    final previousViewport = renderedCanvasViewport(target);
+    final previous = _renderedCanvasSizes[target];
+    final sameSize = previous != null &&
+        (previous.width - size.width).abs() < 0.5 &&
+        (previous.height - size.height).abs() < 0.5;
+    if (!sameSize) _renderedCanvasSizes[target] = size;
+    final nextViewport = renderedCanvasViewport(target);
+    final session = _canvasManipulationSession;
+    var invalidatedSession = false;
+    if (session?.target.document == target &&
+        (nextViewport == null || session!.viewport != nextViewport)) {
+      _resetCanvasTouchMode();
+      invalidatedSession = true;
+    } else if (previousViewport != nextViewport) {
+      _invalidateInlineManipulation(blockId: target.blockId);
+    }
+    if (invalidatedSession) {
+      notifyListeners();
+    } else if (previousViewport != nextViewport || previous == null) {
+      _notifyTransientRendererLayout();
+    }
+  }
+
+  /// The selected layer, named the way the operator reads it.
+  ///
+  /// One owner for the sentence the dock and the `O-05` sheet both say.
+  String? get selectedCanvasLayerLabel {
+    final target = selectedCanvasLayerTarget;
+    if (target == null) return null;
+    final document = canvasDocument(
+      target.document.blockId,
+      slideIndex: target.document.slideIndex,
+    );
+    if (document == null) return null;
+    final effectiveViewport =
+        renderedCanvasViewport(target.document) ?? previewViewport;
+    final layers = WebsiteCanvasResponsiveDocument.projectLayers(
+      data: document,
+      viewport: effectiveViewport,
+    );
+    for (final layer in layers) {
+      if (layer.id == target.layerId) {
+        return WebsiteCanvasLayerIdentity.describe(layer);
+      }
+    }
+    return null;
+  }
+
+  WebsiteCanvasLayerTarget? get selectedCanvasLayerTarget {
+    final document = selectedCanvasDocumentTarget;
+    if (document == null) return null;
+    final layerId = canvasElementSelection(
+      document.blockId,
+      slideIndex: document.slideIndex,
+    );
+    if (layerId == null || layerId.isEmpty) return null;
+    return WebsiteCanvasLayerTarget(document: document, layerId: layerId);
+  }
+
+  WebsiteCanvasManipulationAvailability canvasManipulationAvailability(
+    WebsiteCanvasManipulationMode mode, {
+    WebsiteCanvasLayerTarget? target,
+    WebsiteViewport? viewport,
+  }) {
+    if (_mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.editorInactive,
+      );
+    }
+    final resolved = target ?? selectedCanvasLayerTarget;
+    if (resolved == null || resolved != selectedCanvasLayerTarget) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.selectionMismatch,
+      );
+    }
+    final document = canvasDocument(
+      resolved.document.blockId,
+      slideIndex: resolved.document.slideIndex,
+    );
+    if (document == null) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.documentMissing,
+      );
+    }
+    final renderedViewport = renderedCanvasViewport(resolved.document);
+    if (renderedViewport == null) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.canvasNotMeasured,
+      );
+    }
+    final requestedViewport = viewport ?? renderedViewport;
+    if (requestedViewport != renderedViewport) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.viewportMismatch,
+      );
+    }
+    final layers = WebsiteCanvasResponsiveDocument.projectLayers(
+      data: document,
+      viewport: requestedViewport,
+    );
+    final matches =
+        layers.where((layer) => layer.id == resolved.layerId).toList();
+    if (matches.isEmpty) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.layerMissing,
+      );
+    }
+    if (matches.length != 1) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.layerAmbiguous,
+      );
+    }
+    final layer = matches.single;
+    if (!layer.visible) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.layerHidden,
+      );
+    }
+    if (layer.data['locked'] == true) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.layerLocked,
+      );
+    }
+    if (mode == WebsiteCanvasManipulationMode.crop &&
+        layer.kind != WebsiteCanvasLayerKind.image) {
+      return const WebsiteCanvasManipulationAvailability.blocked(
+        WebsiteCanvasManipulationBlockReason.modeUnsupported,
+      );
+    }
+    return const WebsiteCanvasManipulationAvailability.available();
+  }
+
+  bool startCanvasManipulation(
+    WebsiteCanvasManipulationMode mode, {
+    required WebsiteCanvasLayerTarget target,
+    required WebsiteViewport viewport,
+  }) {
+    if (_isDisposed) return false;
+    if (!canvasManipulationAvailability(
+      mode,
+      target: target,
+      viewport: viewport,
+    ).isAvailable) {
+      return false;
+    }
+    final current = _canvasManipulationSession;
+    if (current != null &&
+        current.matches(
+          document: target.document,
+          layerId: target.layerId,
+          mode: mode,
+          viewport: viewport,
+        )) {
+      return true;
+    }
+    final next = WebsiteCanvasManipulationSession(
+      target: target,
+      mode: mode,
+      viewport: viewport,
+      generation: ++_canvasManipulationGeneration,
+    );
+    _canvasManipulationSession = next;
+    notifyListeners();
+    return true;
+  }
+
+  bool stopCanvasManipulation({
+    required WebsiteCanvasManipulationSession expectedSession,
+  }) {
+    if (_isDisposed) return false;
+    final current = _canvasManipulationSession;
+    if (current == null) return false;
+    if (current != expectedSession) return false;
+    _canvasManipulationSession = null;
+    notifyListeners();
+    return true;
+  }
+
+  /// Commits one direct-manipulation patch under the exact arm that admitted
+  /// its pointer.
+  ///
+  /// Session comparison, live availability and persistence are synchronous in
+  /// this owner. A stale pointer therefore cannot reuse a later arm with the
+  /// same target, mode and viewport (the ABA case).
+  bool commitCanvasManipulation(
+    WebsiteCanvasManipulationSession expectedSession,
+    Map<String, dynamic> expectedDocument,
+    int expectedDocumentEpoch,
+    Map<String, Object?> values, {
+    required WebsiteWriteScope scope,
+  }) {
+    if (_isDisposed) return false;
+    if (values.isEmpty || _canvasManipulationSession != expectedSession) {
+      return false;
+    }
+    if (!canvasManipulationAvailability(
+      expectedSession.mode,
+      target: expectedSession.target,
+      viewport: expectedSession.viewport,
+    ).isAvailable) {
+      return false;
+    }
+    final document = expectedSession.target.document;
+    final liveDocument = canvasDocument(
+      document.blockId,
+      slideIndex: document.slideIndex,
+    );
+    // The pointer owns an optimistic lease over one exact source document.
+    // Comparing that snapshot here, in the same synchronous owner that writes,
+    // closes the no-frame race: another command, undo/redo or a rebaseline may
+    // replace the document after pointer-down and before pointer-up without a
+    // widget rebuild ever advancing CanvasBlock's local source epoch.
+    if (_pageDocumentEpoch != expectedDocumentEpoch ||
+        liveDocument == null ||
+        !_deepEquals(liveDocument, expectedDocument)) {
+      return false;
+    }
+    // Attribution is transaction state too. A gesture admitted while writes
+    // were common cannot silently land as a viewport override merely because
+    // the default scope changed before the finger lifted.
+    if (scope != _writeScope) return false;
+    return setCanvasLayerProperties(
+      document.blockId,
+      expectedSession.target.layerId,
+      values,
+      slideIndex: document.slideIndex,
+      scope: scope,
+      viewport: expectedSession.viewport,
+    );
+  }
+
+  /// Compatibility projection while the dock migrates to the typed session.
+
+  /// Direct manipulation never survives a selection or document change.
+  void _resetCanvasTouchMode() {
+    _canvasManipulationSession = null;
+    _invalidateInlineManipulation();
+  }
+
+  void _resetCanvasManipulationForStructuralWrite(
+    String blockId,
+    Iterable<String> keys,
+  ) {
+    final session = _canvasManipulationSession;
+    if (session == null || session.target.document.blockId != blockId) return;
+    if (keys.any((key) => key == 'elements' || key == 'slides')) {
+      _canvasManipulationSession = null;
+    }
+  }
+
   /// The block the canvas still owes the operator a look at, or null.
   ///
   /// Only an *operation* that displaced a block publishes one — the three
@@ -367,6 +2203,25 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   bool _documentContainsBlock(String blockId) =>
       _pageDraft.blocks.any((block) => block['id']?.toString() == blockId);
 
+  /// The chrome the selection points at, or null when it points at a block.
+  ///
+  /// Consumers use this to decide *what kind of thing* is selected before they
+  /// look it up in the document — the contextual dock could not mount for the
+  /// header precisely because it skipped this question and went straight to
+  /// `blocks.indexWhere`, which is -1 for chrome by construction.
+  WebsiteEditorChromeTarget? get selectedChromeTarget =>
+      WebsiteEditorChromeTarget.forSelection(_selectedBlockId);
+
+  /// A selection is valid when it names a live block **or** editor chrome.
+  ///
+  /// Chrome ids are never dangling: the header and the footer exist for as
+  /// long as the site does. Treating them as missing is what made selecting
+  /// the header and then undoing, reordering or crossing Preview silently
+  /// deselect it — on every host, not only on touch.
+  bool _selectionStillExists(String selectionId) =>
+      WebsiteEditorChromeTarget.forSelection(selectionId) != null ||
+      _documentContainsBlock(selectionId);
+
   /// Transient inspector/canvas selection. This is UI state and must never be
   /// persisted into block data or mark the page as changed.
   int carouselSlideSelection(String blockId, int slideCount) {
@@ -394,7 +2249,24 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     int? slideIndex,
     int? slideCount,
   }) {
+    final nextTarget = elementId == null
+        ? null
+        : WebsiteCanvasLayerTarget(
+            document: WebsiteCanvasDocumentTarget(
+              blockId: blockId,
+              slideIndex: slideIndex,
+            ),
+            layerId: elementId,
+          );
     _selectedBlockId = blockId;
+    // A nested editor re-emits the already-active selection at the end of a
+    // gesture so the inspector can restore focus. That is not a selection
+    // change and must not silently turn off the explicit touch mode the
+    // operator armed in O-05. A genuinely different document/layer (or a
+    // cleared layer) still invalidates the exact session before publication.
+    if (_canvasManipulationSession?.target != nextTarget) {
+      _resetCanvasTouchMode();
+    }
     if (slideIndex != null && slideCount != null && slideCount > 0) {
       _carouselSlideSelections[blockId] =
           slideIndex.clamp(0, slideCount - 1).toInt();
@@ -432,6 +2304,10 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void selectCarouselSlide(String blockId, int index, int slideCount) {
     if (slideCount <= 0) return;
     final normalized = index.clamp(0, slideCount - 1).toInt();
+    final previous = carouselSlideSelection(blockId, slideCount);
+    if (_selectedBlockId != blockId || previous != normalized) {
+      _resetCanvasTouchMode();
+    }
     _carouselSlideSelections[blockId] = normalized;
     _selectedBlockId = blockId;
     _selectionVersion++;
@@ -561,6 +2437,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// Switch task surfaces without reloading or clearing the current page draft.
   void openWorkspace(WebsiteWorkspaceMode mode) {
     if (_workspaceMode == mode) return;
+    _resetCanvasTouchMode();
+    _sitewideAsyncSessionEpoch++;
     _workspaceMode = mode;
     notifyListeners();
   }
@@ -578,6 +2456,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     String? pageSlug,
   }) {
     if (_pageDraft.pageId == pageId && _pageDraft.pageSlug == pageSlug) return;
+    _resetCanvasTouchMode();
     _pageDraft.pageId = pageId;
     _pageDraft.pageSlug = pageSlug;
     _pageDraft.sessionRevision++;
@@ -601,12 +2480,14 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Mark header as having unsaved changes
   void markHeaderChanged() {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.header);
     _sitewideDraft.hasHeaderChanges = true;
     notifyListeners();
   }
 
   /// Update pending header settings (will be saved with main save button)
   void updateHeaderSettings(Map<String, String> settings) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.header);
     _sitewideDraft.pendingHeaderSettings = Map<String, String>.from(settings);
     _sitewideDraft.hasHeaderChanges = true;
     debugPrint(
@@ -620,6 +2501,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// prevents that newer draft from being erased when the older request
   /// completes.
   void acknowledgeSavedHeaderSettings(Map<String, String> savedSnapshot) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.header);
     _mergeSavedSettingsBaseline(savedSnapshot);
     _removeMatchingMapEntries(
         _sitewideDraft.pendingHeaderSettings, savedSnapshot);
@@ -630,6 +2512,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Update a single footer setting for live preview
   void updateFooterSetting(String key, String value) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _sitewideDraft.pendingFooterSettings[key] = value;
     _sitewideDraft.hasFooterChanges = true;
     debugPrint('🦶 [EditProvider] Footer setting updated: $key = $value');
@@ -638,6 +2521,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Update multiple footer settings at once
   void updateFooterSettings(Map<String, String> settings) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _sitewideDraft.pendingFooterSettings.addAll(settings);
     _sitewideDraft.hasFooterChanges = true;
     debugPrint(
@@ -669,6 +2553,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Update pending footer section order (does not save until Guardar)
   void updateFooterSectionOrder(List<String> orderedIds) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _sitewideDraft.pendingFooterSectionOrder =
         List<String>.from(orderedIds, growable: false);
     _sitewideDraft.hasFooterChanges = true;
@@ -678,6 +2563,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Update pending footer link order for a section (does not save until Guardar)
   void updateFooterLinkOrder(String sectionId, List<String> orderedIds) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _sitewideDraft.pendingFooterLinkOrder[sectionId] =
         List<String>.from(orderedIds, growable: false);
     _sitewideDraft.hasFooterChanges = true;
@@ -697,6 +2583,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Update a footer navigation label (live preview + saved with Guardar).
   void updateFooterNavLabel(String navId, String label) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _sitewideDraft.pendingFooterNavLabels[navId] = label;
     _sitewideDraft.hasFooterChanges = true;
     debugPrint('🦶 [EditProvider] Footer nav label updated: $navId = $label');
@@ -710,6 +2597,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     required String? linkValue,
     bool? openInNewTab,
   }) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _sitewideDraft.pendingFooterNavLinkTypes[navId] = linkType;
     _sitewideDraft.pendingFooterNavLinkValues[navId] = linkValue;
     if (openInNewTab != null) {
@@ -726,6 +2614,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// Used by the side-panel footer editor for fields beyond label/destination
   /// such as visibility, parent section, and device visibility.
   void updateFooterNavItem(WebsiteNavigation nav) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     final storedNavigation = _immutableNavigation(nav);
     if (_sitewideDraft.pendingFooterNavCreates.containsKey(nav.id)) {
       _sitewideDraft.pendingFooterNavCreates[nav.id] = storedNavigation;
@@ -738,6 +2627,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }
 
   WebsiteNavigation createFooterNavDraft(WebsiteNavigation nav) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     final draftId = nav.id.trim().isEmpty ? 'draft_${_uuid.v4()}' : nav.id;
     final draft = WebsiteNavigation(
       id: draftId,
@@ -772,6 +2662,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }
 
   void deleteFooterNavItem(WebsiteNavigation nav) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     final ids = <String>{};
 
     void collect(WebsiteNavigation item) {
@@ -920,6 +2811,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }
 
   void acknowledgeSavedFooterSettings(Map<String, String> savedSnapshot) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _mergeSavedSettingsBaseline(savedSnapshot);
     _removeMatchingMapEntries(
         _sitewideDraft.pendingFooterSettings, savedSnapshot);
@@ -932,6 +2824,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// This acknowledgement happens per successful operation so a later block
   /// or navigation failure cannot replay an old delete on retry.
   void acknowledgeSavedNavigationDeletes(Set<String> savedNavigationIds) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _sitewideDraft.pendingFooterNavDeletes.removeAll(savedNavigationIds);
     _recomputeFooterChanges();
     notifyListeners();
@@ -949,6 +2842,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     required Map<String, bool> navigationOpenInNewTab,
     required Map<String, WebsiteNavigation> navigationItems,
   }) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _removeMatchingMapEntry(
       _sitewideDraft.pendingFooterNavLabels,
       navigationLabels,
@@ -980,6 +2874,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }
 
   void acknowledgeSavedFooterSectionOrder(List<String> savedOrder) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     if (_deepEquals(
       _sitewideDraft.pendingFooterSectionOrder,
       savedOrder,
@@ -994,6 +2889,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     String sectionId,
     List<String> savedOrder,
   ) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     final pending = _sitewideDraft.pendingFooterLinkOrder[sectionId];
     if (_deepEquals(pending, savedOrder)) {
       _sitewideDraft.pendingFooterLinkOrder.remove(sectionId);
@@ -1020,6 +2916,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     required Map<String, WebsiteNavigation> navigationCreates,
     required Set<String> navigationDeletes,
   }) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _mergeSavedSettingsBaseline(footerSettings);
     _removeMatchingMapEntries(
         _sitewideDraft.pendingFooterSettings, footerSettings);
@@ -1088,6 +2985,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Update a single theme setting for live preview
   void updateThemeSetting(String key, String value) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.theme);
     _sitewideDraft.pendingThemeSettings[key] = value;
     _sitewideDraft.hasThemeChanges = true;
     debugPrint('🎨 [EditProvider] Theme setting updated: $key = $value');
@@ -1096,6 +2994,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Update multiple theme settings at once
   void updateThemeSettings(Map<String, String> settings) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.theme);
     _sitewideDraft.pendingThemeSettings.addAll(settings);
     _sitewideDraft.hasThemeChanges = true;
     debugPrint(
@@ -1129,6 +3028,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }
 
   void acknowledgeSavedThemeSettings(Map<String, String> savedSnapshot) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.theme);
     _mergeSavedSettingsBaseline(savedSnapshot);
     _removeMatchingMapEntries(
         _sitewideDraft.pendingThemeSettings, savedSnapshot);
@@ -1139,6 +3039,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Update a single site-wide setting for live preview (saved with Guardar)
   void updateSiteSetting(String key, String value) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.siteSettings);
     _sitewideDraft.pendingSiteSettings[key] = value;
     _sitewideDraft.hasSiteSettingsChanges = true;
     debugPrint('🏁 [EditProvider] Site setting updated: $key = $value');
@@ -1147,6 +3048,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Update multiple site-wide settings at once (saved with Guardar)
   void updateSiteSettings(Map<String, String> settings) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.siteSettings);
     _sitewideDraft.pendingSiteSettings.addAll(settings);
     _sitewideDraft.hasSiteSettingsChanges = true;
     debugPrint(
@@ -1165,6 +3067,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }
 
   void acknowledgeSavedSiteSettings(Map<String, String> savedSnapshot) {
+    _markSitewideBucketMutation(WebsiteSitewideDraftBucket.siteSettings);
     _mergeSavedSettingsBaseline(savedSnapshot);
     _removeMatchingMapEntries(
         _sitewideDraft.pendingSiteSettings, savedSnapshot);
@@ -1211,17 +3114,29 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void _clearActivePageDraftState() {
     _pageDraft.hasUnsavedChanges = false;
     _selectedBlockId = null;
+    _resetCanvasTouchMode();
     // A pending reveal belongs to the document that requested it. Carrying one
     // across a page/session change would scroll a new canvas to a stale id.
     _blockRevealRequest = null;
     _selectedFooterNavId = null;
     _carouselSlideSelections.clear();
     _canvasElementSelections.clear();
+    _clearRenderedCanvasMeasurements();
+    _renderedBlockViewports.clear();
+    _inlineManipulationBlockEpochs.clear();
     _fieldWriteScopes.clear();
     _canvasFieldScopes.clear();
   }
 
+  void _clearRenderedCanvasMeasurements() {
+    _renderedCanvasSizes.clear();
+    _renderedCanvasMeasurementGeneration++;
+  }
+
   void _clearSitewideAndSeoDrafts() {
+    for (final bucket in WebsiteSitewideDraftBucket.values) {
+      _markSitewideBucketMutation(bucket);
+    }
     _sitewideDraft.hasHeaderChanges = false;
     _sitewideDraft.hasSiteSettingsChanges = false;
     _seoDraft.hasChanges = false;
@@ -1252,6 +3167,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   void _rebaselineBlockHistory() {
     _pageDraft.blocks = _deepCopyBlocks(_pageDraft.blocks);
+    _markPageDocumentMutation();
     _reconcileTransientCanvasSelections();
     _pageDraft.history
       ..clear()
@@ -1261,6 +3177,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   void _reconcileTransientCanvasSelections() {
     final validCanvasKeys = <String>{};
+    final validCanvasTargets = <WebsiteCanvasDocumentTarget>{};
     final elementIdsByCanvasKey = <String, Set<String>>{};
     final validCarouselBlockIds = <String>{};
     final blockIds = <String>{};
@@ -1289,6 +3206,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       if (blockType == WebsiteBlockType.canvas.name) {
         final key = _canvasSelectionKey(blockId, null);
         validCanvasKeys.add(key);
+        validCanvasTargets.add(WebsiteCanvasDocumentTarget(blockId: blockId));
         elementIdsByCanvasKey[key] = elementIds(data['elements']);
         continue;
       }
@@ -1309,6 +3227,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       for (var slideIndex = 0; slideIndex < slides.length; slideIndex++) {
         final key = _canvasSelectionKey(blockId, slideIndex);
         validCanvasKeys.add(key);
+        validCanvasTargets.add(
+          WebsiteCanvasDocumentTarget(
+            blockId: blockId,
+            slideIndex: slideIndex,
+          ),
+        );
         final rawSlide = slides[slideIndex];
         elementIdsByCanvasKey[key] =
             elementIds(rawSlide is Map ? rawSlide['elements'] : null);
@@ -1323,8 +3247,26 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       return elementId != null &&
           !(elementIdsByCanvasKey[key]?.contains(elementId) ?? false);
     });
-    if (_selectedBlockId != null && !blockIds.contains(_selectedBlockId)) {
+    _renderedCanvasSizes.removeWhere(
+      (target, _) => !validCanvasTargets.contains(target),
+    );
+    // Chrome is exempt: it is not in `blockIds` and never will be. See
+    // [_selectionStillExists].
+    final selected = _selectedBlockId;
+    if (selected != null &&
+        !blockIds.contains(selected) &&
+        WebsiteEditorChromeTarget.forSelection(selected) == null) {
       _selectedBlockId = null;
+    }
+
+    final manipulation = _canvasManipulationSession;
+    if (manipulation != null &&
+        !canvasManipulationAvailability(
+          manipulation.mode,
+          target: manipulation.target,
+          viewport: manipulation.viewport,
+        ).isAvailable) {
+      _canvasManipulationSession = null;
     }
   }
 
@@ -1386,9 +3328,18 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     final settingsChanged = !_deepEquals(_settings, nextSettings);
     var blocksChanged = false;
 
+    if (modeChanged || workspaceChanged) {
+      _resetCanvasTouchMode();
+      _sitewideAsyncSessionEpoch++;
+    }
     _mode = mode;
     _workspaceMode = WebsiteWorkspaceMode.pageEditor;
-    if (settingsChanged) _settings = nextSettings;
+    if (settingsChanged) {
+      _settings = nextSettings;
+      for (final bucket in WebsiteSitewideDraftBucket.values) {
+        _markSitewideBucketMutation(bucket);
+      }
+    }
 
     if (!samePage || !_pageDraft.hasUnsavedChanges) {
       blocksChanged = !_deepEquals(_pageDraft.blocks, nextBlocks);
@@ -1560,7 +3511,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     if (next != WebsiteEditorMode.edit) return;
     final selected = _selectedBlockId;
     if (selected == null) return;
-    if (_documentContainsBlock(selected)) return;
+    if (_selectionStillExists(selected)) return;
     _selectedBlockId = null;
   }
 
@@ -1576,6 +3527,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     if (_mode == next && _workspaceMode == WebsiteWorkspaceMode.pageEditor) {
       return;
     }
+    _resetCanvasTouchMode();
+    _sitewideAsyncSessionEpoch++;
     _mode = next;
     _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     _dropDanglingSelectionForEdit(next);
@@ -1599,6 +3552,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     if (request == WebsiteEditorMode.public) return;
     if (!editorEntryLeaseGranted) return;
     if (_mode == request) return;
+    _resetCanvasTouchMode();
+    _sitewideAsyncSessionEpoch++;
     _mode = request;
     _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     // Same retention rule as [setMode]: the URL is the other door into the very
@@ -1612,6 +3567,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     final scopeChanged = mode == DevicePreviewMode.desktop &&
         _writeScope != WebsiteWriteScope.shared;
     if (_devicePreviewMode == mode && !scopeChanged) return;
+    _resetCanvasTouchMode();
     _devicePreviewMode = mode;
     if (scopeChanged) _writeScope = WebsiteWriteScope.shared;
     notifyListeners();
@@ -1627,6 +3583,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         ? WebsiteWriteScope.shared
         : scope;
     if (_writeScope == next) return;
+    _invalidateInlineManipulation();
     _writeScope = next;
     notifyListeners();
   }
@@ -1678,6 +3635,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
         : scope;
     final key = _fieldWriteScopeKey(blockId, propertyKey, targetViewport);
     if (_fieldWriteScopes[key] == next) return;
+    _invalidateInlineManipulation(blockId: blockId);
     _fieldWriteScopes[key] = next;
     notifyListeners();
   }
@@ -1768,6 +3726,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     final contentChanged = !_deepEquals(baseline, recovered);
 
     _pageDraft.blocks = recovered;
+    _markPageDocumentMutation();
     _pageDraft.history
       ..clear()
       ..add(_deepCopyBlocks(baseline));
@@ -1839,10 +3798,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// sitewide/SEO buckets, history, settings and the suspended-lease
   /// fingerprint. Never notifies by itself.
   void _clearEditorSessionState() {
+    _sitewideAsyncSessionEpoch++;
     _mode = WebsiteEditorMode.public;
     _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     _selectedBlockId = null;
     _blockRevealRequest = null;
+    _resetCanvasTouchMode();
     _suspendedLease = null;
     _documentOwnerLease = null;
     _sessionOwnerLease = null;
@@ -1891,6 +3852,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// Select a block for editing
   void selectBlock(String? blockId) {
     _selectedBlockId = blockId;
+    _resetCanvasTouchMode();
     _selectionVersion++;
     debugPrint(
         '👉 [EditProvider] Block Selected: $blockId (v$_selectionVersion)');
@@ -2603,6 +4565,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     if (saveHistory) {
       _saveToHistory();
     } else {
+      _markPageDocumentMutation();
       _refreshPageDirtyState();
     }
     notifyListeners();
@@ -2614,6 +4577,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   void updateBlockDataSilent(String blockId, String key, dynamic value) {
     final blockIndex = _pageDraft.blocks.indexWhere((b) => b['id'] == blockId);
     if (blockIndex == -1) return;
+
+    _resetCanvasManipulationForStructuralWrite(blockId, <String>[key]);
 
     final block = _pageDraft.blocks[blockIndex];
     final blockData = Map<String, dynamic>.from(block['block_data'] ?? {});
@@ -2628,6 +4593,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       return;
     }
     _pageDraft.blocks[blockIndex] = nextBlock;
+    _markPageDocumentMutation();
     _reconcileTransientCanvasSelections();
     _pageDraft.hasUnsavedChanges = true;
     // Don't call notifyListeners() - caller is responsible for UI updates
@@ -2637,11 +4603,18 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// [saveHistory] - Set to false for transient updates (like activeElementId changes) to avoid history pollution
   void updateBlockData(String blockId, String key, dynamic value,
       {bool saveHistory = true}) {
+    // Callback-only direct-manipulation controls use this first invocation as
+    // a synchronous target handshake. Binding consumes the call deliberately:
+    // pointer-down must never mutate the document or create history.
+    if (_bindPreparedInlineManipulation(blockId, key)) return;
+
     final blockIndex = _pageDraft.blocks.indexWhere((b) => b['id'] == blockId);
     if (blockIndex == -1) {
       debugPrint('⚠️ [EditProvider] updateBlockData: block $blockId not found');
       return;
     }
+
+    _resetCanvasManipulationForStructuralWrite(blockId, <String>[key]);
 
     final block = _pageDraft.blocks[blockIndex];
     final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
@@ -2670,10 +4643,57 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _pageDraft.hasUnsavedChanges = true;
     if (saveHistory) {
       _saveToHistory();
+    } else {
+      _markPageDocumentMutation();
     }
     debugPrint('✅ [EditProvider] updateBlockData: blockId=$blockId, key=$key, '
         'hasUnsavedChanges=${_pageDraft.hasUnsavedChanges}');
     notifyListeners();
+  }
+
+  /// Migrates and changes one responsive-visibility value atomically.
+  ///
+  /// Visibility has its own breakpoint generation because changing an image,
+  /// focal point or Canvas override must never change public visibility at the
+  /// 620/1000 legacy canaries. Only this explicit operator action stamps the
+  /// canonical 600/900 generation.
+  WebsiteVisibilityUpdateOutcome updateBlockResponsiveVisibility(
+    String blockId,
+    String breakpoint,
+    bool isVisible, {
+    bool confirmLegacyMigration = false,
+  }) {
+    final block = _pageDraft.blocks.cast<Map<String, dynamic>?>().firstWhere(
+          (candidate) => candidate?['id']?.toString() == blockId,
+          orElse: () => null,
+        );
+    if (block == null) return WebsiteVisibilityUpdateOutcome.blockNotFound;
+    final blockData = block['block_data'];
+    final data = blockData is Map
+        ? blockData.map((key, value) => MapEntry(key.toString(), value))
+        : const <String, dynamic>{};
+    final rawVisibility = data['visibility'];
+    final generation = websiteVisibilityGeneration(rawVisibility);
+    final needsConfirmation =
+        generation == WebsiteVisibilityBreakpointGeneration.legacy &&
+            !canMigrateWebsiteVisibilityWithoutBehaviorChange(rawVisibility);
+    if (needsConfirmation && !confirmLegacyMigration) {
+      return WebsiteVisibilityUpdateOutcome.requiresMigrationConfirmation;
+    }
+    updateBlockData(
+      blockId,
+      'visibility',
+      updatedWebsiteBlockVisibility(
+        rawVisibility,
+        breakpoint: breakpoint,
+        isVisible: isVisible,
+        useCanonicalBreakpoints:
+            generation == WebsiteVisibilityBreakpointGeneration.canonical ||
+                !needsConfirmation ||
+                confirmLegacyMigration,
+      ),
+    );
+    return WebsiteVisibilityUpdateOutcome.applied;
   }
 
   /// Update multiple block data keys atomically (single notification)
@@ -2686,6 +4706,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
           '⚠️ [EditProvider] updateBlockDataMultiple: block $blockId not found');
       return;
     }
+
+    _resetCanvasManipulationForStructuralWrite(blockId, updates.keys);
 
     final block = _pageDraft.blocks[blockIndex];
     final blockType = (block['block_type'] ?? block['type'] ?? '').toString();
@@ -2737,10 +4759,450 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _pageDraft.hasUnsavedChanges = true;
     if (saveHistory) {
       _saveToHistory();
+    } else {
+      _markPageDocumentMutation();
     }
     debugPrint(
         '✅ [EditProvider] updateBlockDataMultiple: blockId=$blockId, keys=${updates.keys.join(", ")}');
     notifyListeners();
+  }
+
+  bool _validRepeaterTarget(WebsiteRepeaterCollectionTarget target) {
+    bool validKeys(List<String> keys) {
+      return keys.isNotEmpty &&
+          keys.every((key) => key.trim().isNotEmpty) &&
+          keys.toSet().length == keys.length;
+    }
+
+    if (target.blockId.isEmpty ||
+        !validKeys(target.collectionKeys) ||
+        target.itemIdentityKey.isEmpty ||
+        (target.minItems != null && target.minItems! < 0) ||
+        (target.maxItems != null && target.maxItems! < 0) ||
+        (target.minItems != null &&
+            target.maxItems != null &&
+            target.minItems! > target.maxItems!)) {
+      return false;
+    }
+    for (final ancestor in target.ancestors) {
+      if (!validKeys(ancestor.collectionKeys) ||
+          ancestor.itemIdentityKey.isEmpty ||
+          ancestor.item.fallbackIndex < 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _validateRepeaterMutationLease(
+    WebsiteRepeaterMutationLease expectedLease,
+  ) {
+    final target = expectedLease.target;
+    if (_isDisposed ||
+        !identical(
+          expectedLease._ownerIdentity,
+          _asyncIntentOwnerIdentity,
+        ) ||
+        _mode != WebsiteEditorMode.edit ||
+        _workspaceMode != WebsiteWorkspaceMode.pageEditor ||
+        _pageDraft.pageId != expectedLease.pageId ||
+        _pageDraft.pageSlug != expectedLease.pageSlug ||
+        _pageDraft.sessionRevision != expectedLease.documentSessionRevision ||
+        _pageDocumentEpoch != expectedLease.documentEpoch ||
+        _inlineManipulationStateEpoch != expectedLease.stateEpoch ||
+        (_inlineManipulationBlockEpochs[target.blockId] ?? 0) !=
+            expectedLease.blockStateEpoch ||
+        (target.requiresSelection &&
+            (_selectedBlockId != target.blockId ||
+                _selectionVersion != expectedLease.selectionVersion))) {
+      return false;
+    }
+
+    final block = _pageDraft.blocks.cast<Map<String, dynamic>?>().firstWhere(
+          (candidate) => candidate?['id']?.toString() == target.blockId,
+          orElse: () => null,
+        );
+    return block != null &&
+        _deepEquals(block, expectedLease.sourceBlock) &&
+        _repeaterTargetCollection(block, target) != null;
+  }
+
+  List<dynamic>? _repeaterTargetCollection(
+    Map<String, dynamic> block,
+    WebsiteRepeaterCollectionTarget target,
+  ) {
+    final rawData = block['block_data'];
+    if (rawData is! Map) return null;
+    var owner = rawData.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    for (final ancestor in target.ancestors) {
+      final collection = _readRepeaterCollection(
+        owner,
+        ancestor.collectionKeys,
+      );
+      if (collection == null ||
+          !_validRepeaterCollection(
+            collection,
+            identityKey: ancestor.itemIdentityKey,
+          )) {
+        return null;
+      }
+      final index = _resolveRepeaterItemIndex(
+        collection,
+        ancestor.item,
+        identityKey: ancestor.itemIdentityKey,
+      );
+      if (index == null) return null;
+      final rawItem = collection[index];
+      if (rawItem is! Map) return null;
+      owner = rawItem.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+    }
+
+    final collection = _readRepeaterCollection(owner, target.collectionKeys);
+    if (collection == null ||
+        !_validRepeaterCollection(
+          collection,
+          identityKey: target.itemIdentityKey,
+        )) {
+      return null;
+    }
+    return collection;
+  }
+
+  List<dynamic>? _readRepeaterCollection(
+    Map<String, dynamic> owner,
+    List<String> collectionKeys,
+  ) {
+    for (final key in collectionKeys) {
+      if (!owner.containsKey(key)) continue;
+      final value = owner[key];
+      return value is List ? value : null;
+    }
+    return null;
+  }
+
+  bool _validRepeaterCollection(
+    List<dynamic> collection, {
+    required String identityKey,
+  }) {
+    final identities = <Object>{};
+    for (final rawItem in collection) {
+      if (rawItem is! Map) return false;
+      final identity = rawItem[identityKey];
+      if (identity == null || identity == '') continue;
+      if (!_validRepeaterIdentity(identity) || !identities.add(identity)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _validRepeaterIdentity(Object? value) {
+    return value is String && value.isNotEmpty || value is num || value is bool;
+  }
+
+  int? _resolveRepeaterItemIndex(
+    List<dynamic> collection,
+    WebsiteRepeaterItemRef reference, {
+    required String identityKey,
+  }) {
+    if (reference.fallbackIndex < 0) return null;
+    if (reference.hasIdentity) {
+      if (reference.identityKey != identityKey ||
+          !_validRepeaterIdentity(reference.identityValue)) {
+        return null;
+      }
+      final matches = <int>[];
+      for (var index = 0; index < collection.length; index++) {
+        final rawItem = collection[index];
+        if (rawItem is Map && rawItem[identityKey] == reference.identityValue) {
+          matches.add(index);
+        }
+      }
+      return matches.length == 1 ? matches.single : null;
+    }
+
+    if (reference.fallbackIndex >= collection.length) return null;
+    final rawItem = collection[reference.fallbackIndex];
+    if (rawItem is! Map) return null;
+    // Once an item owns a persisted identity the caller must name it. An
+    // index-only reference is reserved for genuinely identity-less legacy
+    // items and cannot opt out of the stronger address.
+    if (_validRepeaterIdentity(rawItem[identityKey])) return null;
+    return reference.fallbackIndex;
+  }
+
+  _AppliedWebsiteRepeaterMutation? _applyRepeaterMutationAtOwner(
+    Map<String, dynamic> owner, {
+    required WebsiteRepeaterCollectionTarget target,
+    required int ancestorIndex,
+    required WebsiteRepeaterCommand command,
+  }) {
+    if (ancestorIndex >= target.ancestors.length) {
+      final source = _readRepeaterCollection(owner, target.collectionKeys);
+      if (source == null ||
+          !_validRepeaterCollection(
+            source,
+            identityKey: target.itemIdentityKey,
+          )) {
+        return null;
+      }
+      final applied = _applyRepeaterCommand(
+        source,
+        target: target,
+        command: command,
+      );
+      if (applied == null || !applied.outcome.result.changed) return applied;
+      final nextOwner = Map<String, dynamic>.from(owner);
+      final nextCollection =
+          _readRepeaterCollection(applied.owner, target.collectionKeys);
+      if (nextCollection == null) return null;
+      for (final key in target.collectionKeys) {
+        nextOwner[key] = _deepCopyValue(nextCollection);
+      }
+      return _AppliedWebsiteRepeaterMutation(
+        owner: nextOwner,
+        outcome: applied.outcome,
+      );
+    }
+
+    final ancestor = target.ancestors[ancestorIndex];
+    final source = _readRepeaterCollection(owner, ancestor.collectionKeys);
+    if (source == null ||
+        !_validRepeaterCollection(
+          source,
+          identityKey: ancestor.itemIdentityKey,
+        )) {
+      return null;
+    }
+    final itemIndex = _resolveRepeaterItemIndex(
+      source,
+      ancestor.item,
+      identityKey: ancestor.itemIdentityKey,
+    );
+    if (itemIndex == null) return null;
+    final rawItem = source[itemIndex];
+    if (rawItem is! Map) return null;
+    final item = _deepCopyMap(
+      rawItem.map((key, value) => MapEntry(key.toString(), value)),
+    );
+    final nested = _applyRepeaterMutationAtOwner(
+      item,
+      target: target,
+      ancestorIndex: ancestorIndex + 1,
+      command: command,
+    );
+    if (nested == null || !nested.outcome.result.changed) {
+      return nested == null
+          ? null
+          : _AppliedWebsiteRepeaterMutation(
+              owner: owner,
+              outcome: nested.outcome,
+            );
+    }
+
+    final nextCollection = List<dynamic>.from(
+      _deepCopyValue(source) as List,
+    );
+    nextCollection[itemIndex] = nested.owner;
+    final nextOwner = Map<String, dynamic>.from(owner);
+    for (final key in ancestor.collectionKeys) {
+      nextOwner[key] = _deepCopyValue(nextCollection);
+    }
+    return _AppliedWebsiteRepeaterMutation(
+      owner: nextOwner,
+      outcome: nested.outcome,
+    );
+  }
+
+  _AppliedWebsiteRepeaterMutation? _applyRepeaterCommand(
+    List<dynamic> source, {
+    required WebsiteRepeaterCollectionTarget target,
+    required WebsiteRepeaterCommand command,
+  }) {
+    final next = List<dynamic>.from(_deepCopyValue(source) as List);
+
+    WebsiteRepeaterItemRef refAt(int index) {
+      return target.itemRef(
+        Map<String, dynamic>.from(next[index] as Map),
+        index,
+      );
+    }
+
+    _AppliedWebsiteRepeaterMutation result(
+      WebsiteRepeaterMutationOutcome outcome,
+    ) {
+      final owner = <String, dynamic>{
+        for (final key in target.collectionKeys) key: _deepCopyValue(next),
+      };
+      return _AppliedWebsiteRepeaterMutation(owner: owner, outcome: outcome);
+    }
+
+    switch (command) {
+      case WebsiteRepeaterAddItem(seed: final frozenSeed):
+        if (target.maxItems != null && next.length >= target.maxItems!) {
+          return null;
+        }
+        final seed = Map<String, dynamic>.from(
+          _deepCopyValue(frozenSeed) as Map,
+        );
+        next.add(seed);
+        if (!_validRepeaterCollection(
+          next,
+          identityKey: target.itemIdentityKey,
+        )) {
+          return null;
+        }
+        final index = next.length - 1;
+        return result(
+          WebsiteRepeaterMutationOutcome.committed(
+            selectionIndex: index,
+            selectionItem: refAt(index),
+          ),
+        );
+
+      case WebsiteRepeaterDuplicateItem(source: final sourceRef):
+        if (target.maxItems != null && next.length >= target.maxItems!) {
+          return null;
+        }
+        final sourceIndex = _resolveRepeaterItemIndex(
+          next,
+          sourceRef,
+          identityKey: target.itemIdentityKey,
+        );
+        if (sourceIndex == null) return null;
+        final rawSource = next[sourceIndex];
+        if (rawSource is! Map) return null;
+        final copy = _deepCopyMap(
+          rawSource.map((key, value) => MapEntry(key.toString(), value)),
+        )..remove(target.itemIdentityKey);
+        final insertIndex = sourceIndex + 1;
+        next.insert(insertIndex, copy);
+        return result(
+          WebsiteRepeaterMutationOutcome.committed(
+            selectionIndex: insertIndex,
+            selectionItem: refAt(insertIndex),
+          ),
+        );
+
+      case WebsiteRepeaterDeleteItem(target: final itemRef):
+        if (target.minItems != null && next.length <= target.minItems!) {
+          return null;
+        }
+        final itemIndex = _resolveRepeaterItemIndex(
+          next,
+          itemRef,
+          identityKey: target.itemIdentityKey,
+        );
+        if (itemIndex == null) return null;
+        next.removeAt(itemIndex);
+        final selectionIndex =
+            next.isEmpty ? 0 : itemIndex.clamp(0, next.length - 1).toInt();
+        return result(
+          WebsiteRepeaterMutationOutcome.committed(
+            selectionIndex: selectionIndex,
+            selectionItem: next.isEmpty ? null : refAt(selectionIndex),
+          ),
+        );
+
+      case WebsiteRepeaterMoveItem(
+          source: final sourceRef,
+          anchor: final anchorRef,
+          placement: final placement,
+        ):
+        final sourceIndex = _resolveRepeaterItemIndex(
+          next,
+          sourceRef,
+          identityKey: target.itemIdentityKey,
+        );
+        final anchorIndex = _resolveRepeaterItemIndex(
+          next,
+          anchorRef,
+          identityKey: target.itemIdentityKey,
+        );
+        if (sourceIndex == null || anchorIndex == null) return null;
+        if (sourceIndex == anchorIndex) {
+          return result(
+            WebsiteRepeaterMutationOutcome.unchanged(
+              selectionIndex: sourceIndex,
+              selectionItem: refAt(sourceIndex),
+            ),
+          );
+        }
+        final moved = next.removeAt(sourceIndex);
+        final adjustedAnchor =
+            sourceIndex < anchorIndex ? anchorIndex - 1 : anchorIndex;
+        final insertIndex = placement == WebsiteRepeaterMovePlacement.before
+            ? adjustedAnchor
+            : adjustedAnchor + 1;
+        next.insert(insertIndex, moved);
+        if (_deepEquals(next, source)) {
+          return result(
+            WebsiteRepeaterMutationOutcome.unchanged(
+              selectionIndex: sourceIndex,
+              selectionItem: refAt(sourceIndex),
+            ),
+          );
+        }
+        return result(
+          WebsiteRepeaterMutationOutcome.committed(
+            selectionIndex: insertIndex,
+            selectionItem: refAt(insertIndex),
+          ),
+        );
+
+      case WebsiteRepeaterPatchItem(
+          target: final itemRef,
+          updates: final frozenUpdates,
+        ):
+        if (frozenUpdates.isEmpty) return null;
+        final itemIndex = _resolveRepeaterItemIndex(
+          next,
+          itemRef,
+          identityKey: target.itemIdentityKey,
+        );
+        if (itemIndex == null) return null;
+        final rawItem = next[itemIndex];
+        if (rawItem is! Map) return null;
+        final currentItem = _deepCopyMap(
+          rawItem.map((key, value) => MapEntry(key.toString(), value)),
+        );
+        if (frozenUpdates.containsKey(target.itemIdentityKey) &&
+            !_deepEquals(
+              frozenUpdates[target.itemIdentityKey],
+              currentItem[target.itemIdentityKey],
+            )) {
+          return null;
+        }
+        final nextItem = Map<String, dynamic>.from(currentItem);
+        for (final entry in frozenUpdates.entries) {
+          nextItem[entry.key] = _deepCopyValue(entry.value);
+        }
+        if (_deepEquals(currentItem, nextItem)) {
+          return result(
+            WebsiteRepeaterMutationOutcome.unchanged(
+              selectionIndex: itemIndex,
+              selectionItem: refAt(itemIndex),
+            ),
+          );
+        }
+        next[itemIndex] = nextItem;
+        if (!_validRepeaterCollection(
+          next,
+          identityKey: target.itemIdentityKey,
+        )) {
+          return null;
+        }
+        return result(
+          WebsiteRepeaterMutationOutcome.committed(
+            selectionIndex: itemIndex,
+            selectionItem: target.itemRef(nextItem, itemIndex),
+          ),
+        );
+    }
   }
 
   /// Atomically updates fields on one item in a schema-defined collection.
@@ -2832,7 +5294,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _pageDraft.blocks[blockIndex] = nextBlock;
     _reconcileTransientCanvasSelections();
     _pageDraft.hasUnsavedChanges = true;
-    if (saveHistory) _saveToHistory();
+    if (saveHistory) {
+      _saveToHistory();
+    } else {
+      _markPageDocumentMutation();
+    }
     debugPrint(
       '✅ [EditProvider] $operation: blockId=$blockId, '
       'collections=${collectionKeys.join(", ")}, item=$resolvedIndex',
@@ -3304,6 +5770,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     // The entry is kept even when it equals the current default: an explicit
     // "shared" has to survive the editor default being switched to viewport.
     if (_canvasFieldScopes[scopeKey] == next) return;
+    _invalidateInlineManipulation();
     _canvasFieldScopes[scopeKey] = next;
     notifyListeners();
   }
@@ -3318,9 +5785,17 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     final block = _pageDraft.blocks.firstWhere((b) => b['id'] == blockId);
     final blockData =
         Map<String, dynamic>.from(block['block_data'] ?? const {});
-    if (slideIndex == null) return blockData;
+    if (slideIndex == null) return _deepUnmodifiableMap(blockData);
     final slides = blockData['slides'] as List;
-    return Map<String, dynamic>.from(slides[slideIndex] as Map);
+    final slide = Map<String, dynamic>.from(slides[slideIndex] as Map);
+    return _deepUnmodifiableMap(
+      WebsiteCanvasResponsiveDocument.carouselAuthoringDocument(
+        slide: slide,
+        // A binding exists only in Edit, so the provider side of the
+        // transaction compares the same transient projection as the renderer.
+        showGrid: true,
+      ),
+    );
   }
 
   /// Adds one canonical layer. Structure is shared across viewports.
@@ -3674,6 +6149,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// Save current state to history
   void _saveToHistory() {
     _pageDraft.blocks = _deepCopyBlocks(_pageDraft.blocks);
+    _markPageDocumentMutation();
     _reconcileTransientCanvasSelections();
 
     // Remove any future history if we're not at the end
@@ -3704,11 +6180,13 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Undo last change
   void undo() {
+    finalizeActiveContinuousFieldEdit();
     if (!canUndo) return;
 
     _pageDraft.historyIndex--;
     _pageDraft.blocks =
         _deepCopyBlocks(_pageDraft.history[_pageDraft.historyIndex]);
+    _markPageDocumentMutation();
     _reconcileTransientCanvasSelections();
     _refreshPageDirtyState();
     // Reverting a move is itself a move: the operator has to see the restored
@@ -3724,11 +6202,13 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   /// Redo last undone change
   void redo() {
+    finalizeActiveContinuousFieldEdit();
     if (!canRedo) return;
 
     _pageDraft.historyIndex++;
     _pageDraft.blocks =
         _deepCopyBlocks(_pageDraft.history[_pageDraft.historyIndex]);
+    _markPageDocumentMutation();
     _reconcileTransientCanvasSelections();
     _refreshPageDirtyState();
     _requestSelectedBlockRevealIfPresent();
@@ -3924,6 +6404,14 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _selectionVersion++;
     _pageDraft.hasUnsavedChanges = true;
     _saveToHistory();
+    // t11b: after inserting, "el lienzo lo deja visible". Inserting displaces
+    // the page exactly like a move does, and the new block can land off-screen
+    // — so it asks for the same reveal, through the same owner, instead of the
+    // insertion path growing a scrolling rule of its own.
+    final insertedId = newBlock['id']?.toString();
+    if (insertedId != null && insertedId.isNotEmpty) {
+      _requestBlockReveal(insertedId);
+    }
     notifyListeners();
   }
 
@@ -4350,12 +6838,15 @@ class _WebsiteEditorPageDraftState {
 }
 
 class _WebsiteEditorSitewideDraftState {
+  int headerEpoch = 0;
   bool hasHeaderChanges = false;
   Map<String, String> pendingHeaderSettings = {};
 
+  int siteSettingsEpoch = 0;
   bool hasSiteSettingsChanges = false;
   Map<String, String> pendingSiteSettings = {};
 
+  int footerEpoch = 0;
   bool hasFooterChanges = false;
   Map<String, String> pendingFooterSettings = {};
   List<String>? pendingFooterSectionOrder;
@@ -4368,6 +6859,7 @@ class _WebsiteEditorSitewideDraftState {
   final Map<String, WebsiteNavigation> pendingFooterNavCreates = {};
   final Set<String> pendingFooterNavDeletes = {};
 
+  int themeEpoch = 0;
   bool hasThemeChanges = false;
   Map<String, String> pendingThemeSettings = {};
 }

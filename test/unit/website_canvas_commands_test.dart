@@ -496,6 +496,36 @@ void main() {
       expectNoTrace(probe, reason: 'value-identical write');
     });
 
+    test('invalid geometry is refused atomically without owner traces', () {
+      for (final values in <Map<String, Object?>>[
+        <String, Object?>{'x': double.nan},
+        <String, Object?>{'y': double.infinity},
+        <String, Object?>{'rotation': double.negativeInfinity},
+        <String, Object?>{'w': 0.0},
+        <String, Object?>{'h': -1.0},
+        <String, Object?>{'x': '10'},
+        <String, Object?>{'x': 777.0, 'w': 0.0},
+      ]) {
+        final probe = _Probe(
+          <Map<String, dynamic>>[_canvasBlock(_document())],
+        );
+        addTearDown(probe.dispose);
+
+        expect(
+          probe.provider.setCanvasLayerProperties(
+            'canvas-block',
+            'layer-a',
+            values,
+            scope: WebsiteWriteScope.shared,
+            viewport: WebsiteViewport.desktop,
+          ),
+          isFalse,
+          reason: '$values',
+        );
+        expectNoTrace(probe, reason: 'invalid geometry $values');
+      }
+    });
+
     test('an unknown id on a valid document is refused', () {
       final probe = _Probe(<Map<String, dynamic>>[_canvasBlock(_document())]);
       addTearDown(probe.dispose);
@@ -1135,5 +1165,33 @@ void main() {
       isFalse,
       reason: 'selection is never serialized into the document',
     );
+  });
+
+  test('canvasDocument is deeply immutable for standalone and nested owners',
+      () {
+    for (final nested in <bool>[false, true]) {
+      final provider = _provider(<Map<String, dynamic>>[
+        nested ? _carouselBlock(_document()) : _canvasBlock(_document()),
+      ]);
+      addTearDown(provider.dispose);
+      final before = jsonEncode(provider.blocks);
+      final epoch = provider.pageDocumentEpoch;
+      final document = provider.canvasDocument(
+        nested ? 'carousel-block' : 'canvas-block',
+        slideIndex: nested ? 0 : null,
+      )!;
+      final elements = document['elements'] as List;
+      final layer = elements.first as Map;
+
+      expect(
+        () => elements.add(<String, dynamic>{'id': 'injected'}),
+        throwsUnsupportedError,
+      );
+      expect(() => layer['x'] = 999.0, throwsUnsupportedError);
+      expect(jsonEncode(provider.blocks), before);
+      expect(provider.pageDocumentEpoch, epoch);
+      expect(provider.canUndo, isFalse);
+      expect(provider.hasPageDraftChanges, isFalse);
+    }
   });
 }

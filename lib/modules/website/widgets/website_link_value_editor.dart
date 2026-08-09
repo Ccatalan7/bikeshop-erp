@@ -6,7 +6,9 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/website_catalog_presentation.dart';
 import '../models/website_catalog_query.dart';
 import '../models/website_destination.dart';
+import '../providers/website_edit_mode_provider.dart';
 import '../services/website_destination_audit_service.dart';
+import 'website_media_picker.dart';
 import 'website_workspace_scope.dart';
 
 typedef WebsiteLinkCategoryLoader = Future<List<WebsiteLinkCategoryOptionData>>
@@ -66,8 +68,13 @@ class WebsiteLinkValueEditor extends StatelessWidget {
     this.dense = false,
     this.darkStyle = false,
     this.categoryLoader,
+    this.asyncBinding,
     bool showValuePreview = true, // Legacy param, ignored now
   });
+
+  /// Canonical authority for the exact destination field that opened the
+  /// configurator.
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   /// Opens the standardized link configurator dialog and returns the selected
   /// href (or null if cancelled). This is the canonical way to invoke the
@@ -82,19 +89,14 @@ class WebsiteLinkValueEditor extends StatelessWidget {
     @visibleForTesting WebsiteLinkCategoryLoader? categoryLoader,
   }) {
     final workspace = WebsiteWorkspaceScope.maybeOf(context);
-    return showDialog<_WebsiteLinkPickerResult>(
+    return _pickLinkResult(
       context: context,
-      builder: (context) => Theme(
-        data: darkStyle ? ThemeData.dark() : Theme.of(context),
-        child: _WebsiteLinkConfigurator(
-          initialValue: initialValue,
-          allowInternal: allowInternal,
-          allowExternal: allowExternal,
-          allowAnchor: allowAnchor,
-          hasWorkspaceScope: workspace != null,
-          categoryLoader: categoryLoader,
-        ),
-      ),
+      initialValue: initialValue,
+      allowInternal: allowInternal,
+      allowExternal: allowExternal,
+      allowAnchor: allowAnchor,
+      darkStyle: darkStyle,
+      categoryLoader: categoryLoader,
     ).then((result) {
       if (result == null) return null;
       final panel = result.openPanel;
@@ -105,6 +107,32 @@ class WebsiteLinkValueEditor extends StatelessWidget {
       }
       return result.href;
     });
+  }
+
+  static Future<_WebsiteLinkPickerResult?> _pickLinkResult({
+    required BuildContext context,
+    required String initialValue,
+    required bool allowInternal,
+    required bool allowExternal,
+    required bool allowAnchor,
+    required bool darkStyle,
+    WebsiteLinkCategoryLoader? categoryLoader,
+  }) {
+    final hasWorkspaceScope = WebsiteWorkspaceScope.maybeOf(context) != null;
+    return showDialog<_WebsiteLinkPickerResult>(
+      context: context,
+      builder: (context) => Theme(
+        data: darkStyle ? ThemeData.dark() : Theme.of(context),
+        child: _WebsiteLinkConfigurator(
+          initialValue: initialValue,
+          allowInternal: allowInternal,
+          allowExternal: allowExternal,
+          allowAnchor: allowAnchor,
+          hasWorkspaceScope: hasWorkspaceScope,
+          categoryLoader: categoryLoader,
+        ),
+      ),
+    );
   }
 
   @override
@@ -201,9 +229,14 @@ class WebsiteLinkValueEditor extends StatelessWidget {
   }
 
   Future<void> _openConfigDialog(BuildContext context) async {
-    final newValue = await WebsiteLinkValueEditor.pickLink(
+    final initialValue = value;
+    final openingCallback = onChanged;
+    final openingBinding = asyncBinding;
+    final arm = openingBinding?.capture();
+    if (openingBinding != null && arm == null) return;
+    final result = await WebsiteLinkValueEditor._pickLinkResult(
       context: context,
-      initialValue: value,
+      initialValue: initialValue,
       allowInternal: allowInternal,
       allowExternal: allowExternal,
       allowAnchor: allowAnchor,
@@ -211,8 +244,55 @@ class WebsiteLinkValueEditor extends StatelessWidget {
       categoryLoader: categoryLoader,
     );
 
-    if (newValue != null && newValue != value) {
-      onChanged(newValue);
+    if (!context.mounted) return;
+    final currentWidget = context.widget;
+    if (currentWidget is! WebsiteLinkValueEditor) return;
+    if (currentWidget.value != initialValue ||
+        currentWidget.allowInternal != allowInternal ||
+        currentWidget.allowExternal != allowExternal ||
+        currentWidget.allowAnchor != allowAnchor) {
+      if (arm != null) {
+        currentWidget.asyncBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.rejected,
+        );
+      }
+      return;
+    }
+    if (result == null) {
+      if (arm != null) {
+        currentWidget.asyncBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+      }
+      return;
+    }
+
+    final newValue = result.href;
+    var accepted = false;
+    if (arm != null) {
+      final liveBinding = currentWidget.asyncBinding;
+      if (liveBinding == null) return;
+      accepted = liveBinding.commit(arm, () {
+        if (newValue == initialValue) {
+          return WebsiteInlineMutationResult.unchanged;
+        }
+        currentWidget.onChanged(newValue);
+        return WebsiteInlineMutationResult.committed;
+      }).accepted;
+    } else {
+      if (!identical(currentWidget.onChanged, openingCallback)) return;
+      if (newValue != initialValue) currentWidget.onChanged(newValue);
+      accepted = true;
+    }
+
+    if (!accepted) return;
+    final panel = result.openPanel;
+    if (panel != null) {
+      // The handoff is part of the same accepted intent. Resolve the workspace
+      // live only after the field owner admitted the result.
+      WebsiteWorkspaceScope.maybeOf(context)?.open(panel);
     }
   }
 

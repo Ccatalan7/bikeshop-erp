@@ -3,28 +3,34 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../shared/services/tenant_service.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
+import '../../../shared/widgets/vb_sub_tabs.dart';
 import '../../../shared/widgets/vb_notice.dart';
 import '../../../shared/widgets/vb_segmented.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
 import '../models/website_block_catalog.dart';
 import '../models/website_block_definition.dart';
+import '../models/website_block_surface_style.dart';
 import '../models/website_responsive_authoring.dart';
 import '../models/website_block_capabilities.dart';
 import '../models/website_block_geometry.dart';
+import '../models/website_block_public_visibility.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
+import '../models/website_canvas_alignment.dart';
 import '../models/website_canvas_responsive_document.dart';
 import '../models/website_responsive_field_state.dart';
 import '../models/website_page_composition.dart';
+import '../models/website_editor_capability.dart';
 import '../models/website_font_registry.dart';
 import '../models/website_action.dart';
 import '../models/website_editor_drag_payload.dart';
@@ -50,6 +56,8 @@ import 'website_background_removal_dialog.dart';
 import 'website_color_picker.dart';
 import 'website_block_edit_section.dart';
 import 'website_editor_chrome_geometry.dart';
+import 'website_editor_control_density.dart';
+import 'website_editor_host_theme.dart';
 import 'website_media_picker.dart';
 import 'website_workspace_scope.dart';
 
@@ -73,12 +81,14 @@ class WebsiteEditorPanel extends StatefulWidget {
   final Future<void> Function()? onSave;
   final Future<void> Function()? onRestoreComplete;
   final VoidCallback? onDiscard;
+  final WebsiteBackupService? backupService;
 
   const WebsiteEditorPanel({
     super.key,
     this.onSave,
     this.onRestoreComplete,
     this.onDiscard,
+    this.backupService,
   });
 
   @override
@@ -93,6 +103,8 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   String? _previousActiveElementId;
   int _previousSelectionVersion = -1;
   bool _ignoreNextSelection = false;
+  WebsiteEditModeProvider? _hostProviderIdentity;
+  final ValueNotifier<int> _hostProviderRevision = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -130,12 +142,17 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   @override
   void dispose() {
     _tabController.dispose();
+    _hostProviderRevision.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final editProvider = context.watch<WebsiteEditModeProvider>();
+    if (!identical(_hostProviderIdentity, editProvider)) {
+      _hostProviderIdentity = editProvider;
+      _hostProviderRevision.value++;
+    }
 
     // Check selection changes after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -146,6 +163,37 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
       return const SizedBox.shrink();
     }
 
+    final inspectorTheme = WebsiteEditorInspectorTheme.resolveFrom(context);
+    final selectedBlockId = editProvider.selectedBlockId;
+    final effectiveViewport = (selectedBlockId == null
+            ? null
+            : editProvider.renderedBlockViewportFor(selectedBlockId)) ??
+        WebsiteEditorChromeScope.maybeOf(context)?.canvasViewport ??
+        editProvider.previewViewport;
+    return WebsiteEditorAuthoringViewportScope(
+      requestedViewport: editProvider.previewViewport,
+      effectiveViewport: effectiveViewport,
+      child: Theme(
+        data: inspectorTheme,
+        child: Builder(
+          builder: (inspectorContext) =>
+              WebsiteEditorControlDensityScope.resolved(
+            context: inspectorContext,
+            child: _buildInspectorFrame(
+              inspectorContext,
+              editProvider,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInspectorFrame(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final theme = Theme.of(context);
     return Container(
       // The pane width has one owner. Inside the shell this Container already
       // receives the slot width, so the constraint is a floor for hosts that
@@ -153,17 +201,17 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
       width: WebsiteEditorChromeScope.maybeOf(context)?.paneWidth ??
           WebsiteEditorChromeGeometry.inspectorWidth,
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
+        color: theme.colorScheme.surface,
         border: Border(
           left: BorderSide(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: theme.dividerColor,
             width: 1,
           ),
         ),
       ),
       child: Column(
         children: [
-          _buildHeader(editProvider),
+          _buildHeader(context, editProvider),
           _buildTabBar(),
           Expanded(
             child: _buildTabContent(editProvider),
@@ -173,13 +221,17 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     );
   }
 
-  Widget _buildHeader(WebsiteEditModeProvider editProvider) {
+  Widget _buildHeader(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+  ) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
+        color: theme.colorScheme.surfaceContainerHigh,
         border: Border(
-          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          bottom: BorderSide(color: theme.dividerColor),
         ),
       ),
       child: Row(
@@ -251,9 +303,21 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
   }
 
   void _showBackupsDialog(BuildContext context) {
+    final backupService = widget.backupService ?? WebsiteBackupService();
     showDialog(
       context: context,
       builder: (dialogContext) => _BackupsDialog(
+        backupService: backupService,
+        ownsBackupService: widget.backupService == null,
+        hostProviderRevision: _hostProviderRevision,
+        liveProvider: () {
+          if (!mounted) return null;
+          try {
+            return this.context.read<WebsiteEditModeProvider>();
+          } catch (_) {
+            return null;
+          }
+        },
         onRestoreComplete: widget.onRestoreComplete,
       ),
     );
@@ -278,62 +342,25 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     );
   }
 
-  Widget _buildTabBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
-        border: Border(
-          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-      ),
-      child: Row(
-        children: [
-          _buildTab('add', 'Agregar', Icons.add_box_outlined),
-          _buildTab('edit', 'Editar', Icons.edit_outlined),
-          _buildTab('page', 'Página', Icons.article_outlined),
-          _buildTab('theme', 'Tema', Icons.palette_outlined),
-          _buildTab('sync', 'Google', Icons.store_mall_directory_outlined),
-        ],
-      ),
-    );
-  }
+  /// The pane's destinations. `O-01` caps a menu at seven and there are five,
+  /// so the overflow drawer can always hold whatever does not fit inline.
+  static const List<VbSubTab<String>> _inspectorTabs = <VbSubTab<String>>[
+    VbSubTab<String>(value: 'add', label: 'Agregar'),
+    VbSubTab<String>(value: 'edit', label: 'Editar'),
+    VbSubTab<String>(value: 'page', label: 'Página'),
+    VbSubTab<String>(value: 'theme', label: 'Tema'),
+    VbSubTab<String>(value: 'sync', label: 'Google'),
+  ];
 
-  Widget _buildTab(String id, String label, IconData icon) {
-    final isActive = _activeTab == id;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _activeTab = id),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: isActive ? const Color(0xFF00A09D) : Colors.transparent,
-                width: 2,
-              ),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: isActive ? const Color(0xFF00A09D) : Colors.white54,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isActive ? Colors.white : Colors.white54,
-                  fontSize: 13,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+  Widget _buildTabBar() {
+    // `T-04` through its canonical owner. Five tabs in five `Expanded`s with an
+    // icon each is what overflowed the published 420 pane on every host, in
+    // light and in dark. See `InspectorTabBar`.
+    return VbSubTabs<String>(
+      tabs: _inspectorTabs,
+      value: _activeTab,
+      onChanged: (id) => setState(() => _activeTab = id),
+      overflowTooltip: 'Más secciones del inspector',
     );
   }
 
@@ -351,7 +378,7 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
       case 'page':
         return _PageSettingsTab(editProvider: editProvider);
       case 'theme':
-        return _ThemeTab();
+        return _ThemeTab(provider: editProvider);
       case 'sync':
         return const _SyncTab();
       default:
@@ -397,15 +424,18 @@ class WebsiteBlockEditSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _EditBlockTab(
-      editProvider: editProvider,
-      showBlockHeader: false,
-      showSectionNavigation: false,
-      section: switch (section) {
-        WebsiteBlockEditSection.content => _InspectorSection.content,
-        WebsiteBlockEditSection.layout => _InspectorSection.layout,
-        WebsiteBlockEditSection.style => _InspectorSection.style,
-      },
+    return WebsiteEditorControlDensityScope.resolved(
+      context: context,
+      child: _EditBlockTab(
+        editProvider: editProvider,
+        showBlockHeader: false,
+        showSectionNavigation: false,
+        section: switch (section) {
+          WebsiteBlockEditSection.content => _InspectorSection.content,
+          WebsiteBlockEditSection.layout => _InspectorSection.layout,
+          WebsiteBlockEditSection.style => _InspectorSection.style,
+        },
+      ),
     );
   }
 }

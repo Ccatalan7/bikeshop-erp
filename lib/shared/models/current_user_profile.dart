@@ -196,6 +196,11 @@ class CurrentUserProfile {
       role == 'accountant' ||
       permissions['access_accounting'] == true;
 
+  /// Mirrors the server-owned capability returned by get_my_erp_profile.
+  /// Role names are intentionally not reinterpreted in Flutter.
+  bool get canManageSupplierCredentials =>
+      permissions['can_manage_supplier_credentials'] == true;
+
   String get initials {
     final words = displayName
         .split(RegExp(r'\s+'))

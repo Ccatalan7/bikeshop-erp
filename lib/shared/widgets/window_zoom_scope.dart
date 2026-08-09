@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../services/window_chrome_layout_region_service.dart';
 import '../services/window_zoom_service.dart';
 import '../utils/responsive_breakpoints.dart';
+import 'window_chrome_layout_region_scope.dart';
 
 enum ZoomCommand { zoomIn, zoomOut, reset }
 
@@ -16,6 +18,38 @@ class WindowZoomScope extends StatelessWidget {
   const WindowZoomScope({super.key, required this.child});
 
   final Widget child;
+
+  /// Accept adaptive-window geometry only for the root viewport that produced
+  /// it. UIKit and Flutter can publish resize frames one callback apart; using
+  /// old margins against a new size is worse than a one-frame fail-closed
+  /// zero because it can place controls under the opposite window chrome.
+  @visibleForTesting
+  static EdgeInsets validatedLayoutRegion(
+    WindowChromeLayoutSnapshot snapshot,
+    Size viewportSize, {
+    double tolerance = 1,
+  }) {
+    if (snapshot.revision < 0 ||
+        (snapshot.viewSize.width - viewportSize.width).abs() > tolerance ||
+        (snapshot.viewSize.height - viewportSize.height).abs() > tolerance) {
+      return EdgeInsets.zero;
+    }
+    return snapshot.margins;
+  }
+
+  @visibleForTesting
+  static EdgeInsets toZoomedLogicalInsets(
+    EdgeInsets physicalLogicalInsets,
+    double appliedScale,
+  ) {
+    if (appliedScale == 1) return physicalLogicalInsets;
+    return EdgeInsets.fromLTRB(
+      physicalLogicalInsets.left / appliedScale,
+      physicalLogicalInsets.top / appliedScale,
+      physicalLogicalInsets.right / appliedScale,
+      physicalLogicalInsets.bottom / appliedScale,
+    );
+  }
 
   /// Windows uses Ctrl, macOS uses Cmd (meta)
   static Map<ShortcutActivator, Intent> get _shortcuts {
@@ -56,8 +90,18 @@ class WindowZoomScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final snapshot =
+        context.watch<WindowChromeLayoutRegionService?>()?.snapshot ??
+            WindowChromeLayoutSnapshot.zero;
+    final layoutRegion = validatedLayoutRegion(
+      snapshot,
+      MediaQuery.sizeOf(context),
+    );
     if (!WindowZoomService.isSupportedPlatform) {
-      return child;
+      return WindowChromeLayoutRegionScope(
+        margins: layoutRegion,
+        child: child,
+      );
     }
 
     final zoomService = context.watch<WindowZoomService>();
@@ -87,6 +131,7 @@ class WindowZoomScope extends StatelessWidget {
           },
           child: _ZoomContent(
             scale: zoomService.scale,
+            layoutRegionMargins: layoutRegion,
             child: child,
           ),
         ),
@@ -116,23 +161,15 @@ class WindowViewportMetrics extends InheritedWidget {
 }
 
 class _ZoomContent extends StatelessWidget {
-  const _ZoomContent({required this.scale, required this.child});
+  const _ZoomContent({
+    required this.scale,
+    required this.layoutRegionMargins,
+    required this.child,
+  });
 
   final double scale;
+  final EdgeInsets layoutRegionMargins;
   final Widget child;
-
-  EdgeInsets _toZoomedLogicalInsets(
-    EdgeInsets physicalLogicalInsets,
-    double appliedScale,
-  ) {
-    if (appliedScale == 1) return physicalLogicalInsets;
-    return EdgeInsets.fromLTRB(
-      physicalLogicalInsets.left / appliedScale,
-      physicalLogicalInsets.top / appliedScale,
-      physicalLogicalInsets.right / appliedScale,
-      physicalLogicalInsets.bottom / appliedScale,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -173,24 +210,30 @@ class _ZoomContent extends StatelessWidget {
                       constraints.maxWidth / appliedScale,
                       constraints.maxHeight / appliedScale,
                     ),
-                    padding: _toZoomedLogicalInsets(
+                    padding: WindowZoomScope.toZoomedLogicalInsets(
                       rootMediaQuery.padding,
                       appliedScale,
                     ),
-                    viewPadding: _toZoomedLogicalInsets(
+                    viewPadding: WindowZoomScope.toZoomedLogicalInsets(
                       rootMediaQuery.viewPadding,
                       appliedScale,
                     ),
-                    viewInsets: _toZoomedLogicalInsets(
+                    viewInsets: WindowZoomScope.toZoomedLogicalInsets(
                       rootMediaQuery.viewInsets,
                       appliedScale,
                     ),
-                    systemGestureInsets: _toZoomedLogicalInsets(
+                    systemGestureInsets: WindowZoomScope.toZoomedLogicalInsets(
                       rootMediaQuery.systemGestureInsets,
                       appliedScale,
                     ),
                   ),
-                  child: child,
+                  child: WindowChromeLayoutRegionScope(
+                    margins: WindowZoomScope.toZoomedLogicalInsets(
+                      layoutRegionMargins,
+                      appliedScale,
+                    ),
+                    child: child,
+                  ),
                 ),
               ),
             ),

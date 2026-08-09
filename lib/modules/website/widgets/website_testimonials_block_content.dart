@@ -17,6 +17,7 @@ class WebsiteTestimonialsBlockContent extends StatelessWidget {
     this.headingFont,
     this.bodyFont,
     this.presenters,
+    this.backgroundColor,
     this.padding = const EdgeInsets.symmetric(
       vertical: 64,
       horizontal: 24,
@@ -38,6 +39,7 @@ class WebsiteTestimonialsBlockContent extends StatelessWidget {
   final String? headingFont;
   final String? bodyFont;
   final WebsiteBlockContentPresenters? presenters;
+  final Color? backgroundColor;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -70,7 +72,8 @@ class WebsiteTestimonialsBlockContent extends StatelessWidget {
     );
 
     return ColoredBox(
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+      color: backgroundColor ??
+          theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
       child: Padding(
         key: rootKey,
         padding: padding,

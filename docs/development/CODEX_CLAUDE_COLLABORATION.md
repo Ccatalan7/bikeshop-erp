@@ -40,6 +40,19 @@ while changing Home/Code or chat state. Immediately before pressing Send,
 confirm the intended chat title or URL as well as all four preflight signals;
 changing a selector can move focus to another conversation.
 
+**Correction 2026-08-08 — shared Claude task collision.** The Claude desktop
+window is shared mutable UI: another Codex task can change the selected chat
+after this task has inspected it, or even between filling the composer and
+pressing Send. That race twice redirected supplier-design follow-ups into an
+unrelated Website Builder chat and cost a full recovery round each time. Treat
+chat identity and composer identity as one short-lived lease: immediately
+before filling, read the exact selected task title or URL; immediately after
+filling, read the same task and the filled composer again; locate Send from
+that same composer rather than from a previously captured coordinate; and do
+not send while the target task reports Running. If any identity changes, stop
+and reacquire the intended task instead of trying to repair the prompt in the
+new chat.
+
 Extra and every effort below `xhigh` are below the acceptance boundary for this
 ERP. Anthropic defines Ultracode as `xhigh` plus automatic workflow
 orchestration: do not re-enable workflows merely to obtain that label while a
@@ -216,9 +229,15 @@ the broad invariants above, promote it to this gate.
 
 ## Safety boundary
 
-- Read-only production evidence may be gathered through the guarded repository
-  workflow. Production writes, deployment, publication, messages, commits, and
-  pushes require the owner's explicit authorization.
+- Read-only production evidence is gathered through the guarded repository
+  workflow. For an implementation, fix, finish, ship, or deploy request, Codex
+  also owns the reviewed non-destructive production write/deployment,
+  read-back, registration, and smoke needed to make the result active; Claude
+  hands that rollout to Codex without asking the owner again. Analysis-only,
+  diagnosis-only, draft, and local-only tasks remain read-only. Destructive
+  repair, credential rotation, ambiguous targets, unrelated pending changes,
+  messages sent on the owner's behalf, and materially broader publication
+  still require an explicit owner decision.
 - Never print credential values or place them in prompts, settings, MCP files,
   logs, or handoffs.
 - Do not add direct Supabase/database MCP access. It bypasses the repository's
@@ -231,14 +250,13 @@ the broad invariants above, promote it to this gate.
   `supabase db|migration`, history rewrites, open-scope `git restore`, generic
   process signaling and recursive deletion. It **no longer** blocks
   `git add/commit/push` or `scripts/publish_*` / `scripts/releases/*`.
-- **That change did not move the rule.** The guard measures **capability, not
-  permission**. Commits, pushes, PRs, deployment, publication and production
-  writes still require the owner's explicit authorization, **per action**, as
-  the first bullet of this section states; a one-off authorization never
-  becomes a standing one. An agent that infers permission from "nothing stopped
-  me" has misread this section. An owner-authorized external mutation is handed
-  back to Codex or performed from a fresh non-bypass session with the guard
-  deliberately reviewed for that exact action.
+- **Correction 2026-08-09:** the guard measures **routing and capability, not a
+  second permission ceremony**. Claude still does not bypass a denied deploy;
+  it hands an in-scope rollout to Codex, which executes the guarded repository
+  path under the task authorization defined above. A stale `local-only` or `no
+  production writes` handoff stops applying when a later owner instruction asks
+  to implement, fix, finish, ship, or deploy the same result. The guard remains
+  a hard stop for bypass paths and destructive or ambiguous effects.
 - Do not pattern-kill Flutter, Dart, browser, or preview processes. Use the
   canonical preview owner and verified process identity.
 - **Sin techo de herramientas** (decisión del owner, 2026-07-31): Workflows,
@@ -264,9 +282,10 @@ the broad invariants above, promote it to this gate.
   primary Claude session. Let the selected effort mode adapt to the problem;
   cost control applies to fan-out and repetitive exploration, not to truncating
   a coherent investigation before it can synthesize.
-- Anidar agentes está permitido. Lo que sigue requiriendo autorización no es
-  la herramienta sino el EFECTO REAL: commit, push, deploy, publicación y
-  escrituras en producción.
+- Anidar agentes está permitido. El efecto real se rige por el alcance vigente:
+  una implementación/fix/ship incluye su rollout normal no destructivo; una
+  reparación destructiva, target ambiguo, mensaje en nombre del dueño o
+  expansión ajena al resultado sigue requiriendo su decisión.
 - Reviewers reserve capacity for synthesis. When a reviewer is already near its
   conclusion, let it finish; if exploration is becoming repetitive, request a
   conclusion with current evidence instead of interrupting or enforcing an
@@ -336,9 +355,13 @@ Use this prompt for a new Claude session in this checkout:
 > los mismos archivos que otro agente. Mientras siga la suspensión de Nóminas,
 > no uses Workflow, agent teams ni subagentes; realiza el cross-review directo
 > con Codex al cierre de cada bloque coherente. Cuando el owner levante esa
-> suspensión vuelve a regir el techo abierto de herramientas. No hagas commit, push,
-> deploy, publicación ni escritura en producción sin autorización explícita.
-> Entrega evidencia real y desacuerdos pendientes; no respondas por deferencia.
+> suspensión vuelve a regir el techo abierto de herramientas. No rodees el
+> guard para ejecutar efectos externos: entrega a Codex todo rollout normal,
+> no destructivo e in-scope que complete una implementación/fix/ship, sin pedir
+> otra confirmación al dueño. Mantén read-only un análisis o `local-only`, y
+> escala sólo destrucción, credenciales, target ambiguo, mensajes o expansión de
+> alcance. Entrega evidencia real y desacuerdos pendientes; no respondas por
+> deferencia.
 
 For a review-only continuation, append:
 

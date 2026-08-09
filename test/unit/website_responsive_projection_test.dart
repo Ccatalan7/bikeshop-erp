@@ -69,6 +69,68 @@ void main() {
       expect(tablet['focalPointY'], 0.4);
     });
 
+    test('canonical focal override wins without deleting legacy aliases', () {
+      final source = <String, dynamic>{
+        'backgroundImage': 'https://cdn.test/shared.webp',
+        'focalPointX': 0.5,
+        'focalPointY': 0.4,
+        'mobileFocalPointX': 0.1,
+        'mobileFocalPointY': 0.9,
+        'mobileBgAlignment': 'right',
+        'responsive': <String, dynamic>{
+          'version': 2,
+          'mobile': <String, dynamic>{
+            'focalPointX': 0.25,
+            'focalPointY': 0.75,
+          },
+        },
+      };
+
+      final mobile = WebsiteResponsiveBlockProjection.project(
+        type: WebsiteBlockType.hero,
+        data: source,
+        viewport: WebsiteViewport.mobile,
+      );
+
+      expect(mobile['focalPointX'], 0.25);
+      expect(mobile['focalPointY'], 0.75);
+      expect(mobile['mobileFocalPointX'], 0.1);
+      expect(mobile['mobileFocalPointY'], 0.9);
+      expect(mobile['mobileBgAlignment'], 'right');
+      expect(source['focalPointX'], 0.5, reason: 'projection is immutable');
+      expect(
+        (source['responsive'] as Map)['mobile'],
+        <String, dynamic>{'focalPointX': 0.25, 'focalPointY': 0.75},
+      );
+    });
+
+    test('legacy mobile alignment preset is adapted by the projection owner',
+        () {
+      final source = <String, dynamic>{
+        'backgroundImage': 'https://cdn.test/shared.webp',
+        'focalPointX': 0.2,
+        'focalPointY': 0.8,
+        'mobileBgAlignment': 'topCenter',
+      };
+
+      final mobile = WebsiteResponsiveBlockProjection.project(
+        type: WebsiteBlockType.hero,
+        data: source,
+        viewport: WebsiteViewport.mobile,
+      );
+      final desktop = WebsiteResponsiveBlockProjection.project(
+        type: WebsiteBlockType.hero,
+        data: source,
+        viewport: WebsiteViewport.desktop,
+      );
+
+      expect(mobile['focalPointX'], 0.5);
+      expect(mobile['focalPointY'], 0.0);
+      expect(desktop['focalPointX'], 0.2);
+      expect(desktop['focalPointY'], 0.8);
+      expect(source['mobileBgAlignment'], 'topCenter');
+    });
+
     test('nested carousel overrides remain isolated per slide', () {
       final source = <String, dynamic>{
         'slides': <Map<String, dynamic>>[
@@ -108,6 +170,36 @@ void main() {
       expect(slides[1]['imageUrl'], 'https://cdn.test/b-shared.webp');
       expect(slides[1]['focalPointX'], 0.75);
       expect(slides[1]['altText'], 'Alt común B');
+    });
+
+    test('cross-family height and spacing use the same projection owner', () {
+      final source = <String, dynamic>{
+        'blockHeight': 640,
+        'spacingAfter': 72,
+        'responsive': <String, dynamic>{
+          'version': 2,
+          'mobile': <String, dynamic>{
+            'blockHeight': 360,
+            'spacingAfter': 24,
+          },
+        },
+      };
+
+      final mobile = WebsiteResponsiveBlockProjection.project(
+        type: WebsiteBlockType.hero,
+        data: source,
+        viewport: WebsiteViewport.mobile,
+      );
+      final desktop = WebsiteResponsiveBlockProjection.project(
+        type: WebsiteBlockType.hero,
+        data: source,
+        viewport: WebsiteViewport.desktop,
+      );
+
+      expect(mobile['blockHeight'], 360);
+      expect(mobile['spacingAfter'], 24);
+      expect(desktop['blockHeight'], 640);
+      expect(desktop['spacingAfter'], 72);
     });
 
     test('a nested v2 item opts the document into canonical 600/900 bands', () {

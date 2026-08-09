@@ -1,8 +1,122 @@
 part of '../website_editor_panel.dart';
 
+final class _WebsiteSitewideFieldArm implements WebsiteAsyncFieldArm {
+  const _WebsiteSitewideFieldArm({
+    required this.provider,
+    required this.bucket,
+    required this.sourceKey,
+    required this.intent,
+  });
+
+  final WebsiteEditModeProvider provider;
+  final WebsiteSitewideDraftBucket bucket;
+  final String sourceKey;
+  final WebsiteSitewideAsyncIntent intent;
+}
+
+WebsiteAsyncFieldBinding _sitewideAsyncFieldBinding({
+  required WebsiteEditModeProvider provider,
+  required WebsiteSitewideDraftBucket bucket,
+  required String sourceKey,
+}) {
+  WebsiteAsyncFieldArm? capture() {
+    final intent = provider.captureSitewideAsyncIntent(
+      bucket: bucket,
+      sourceKeys: <String>{sourceKey},
+    );
+    if (intent == null) return null;
+    return _WebsiteSitewideFieldArm(
+      provider: provider,
+      bucket: bucket,
+      sourceKey: sourceKey,
+      intent: intent,
+    );
+  }
+
+  WebsiteInlineMutationResult commit(
+    WebsiteAsyncFieldArm arm,
+    WebsiteAsyncFieldOperation operation,
+  ) {
+    if (arm is! _WebsiteSitewideFieldArm) {
+      return WebsiteInlineMutationResult.rejected;
+    }
+    if (!identical(provider, arm.provider) ||
+        bucket != arm.bucket ||
+        sourceKey != arm.sourceKey) {
+      // Commit through the live owner so the foreign one-shot arm is consumed
+      // without invoking either the detached callback A or the live callback
+      // B. An A -> B -> A rebuild cannot reuse the returned value later.
+      return provider.commitSitewideAsyncIntent(
+        arm.intent,
+        () => WebsiteInlineMutationResult.rejected,
+      );
+    }
+    return provider.commitSitewideAsyncIntent(arm.intent, operation);
+  }
+
+  WebsiteEditorRemoteWriteAuthority? remoteAuthority(
+    WebsiteAsyncFieldArm arm,
+    String operation,
+    bool Function() isLiveBinding,
+  ) {
+    if (arm is! _WebsiteSitewideFieldArm) return null;
+    if (!identical(provider, arm.provider) ||
+        bucket != arm.bucket ||
+        sourceKey != arm.sourceKey) {
+      arm.provider.commitSitewideAsyncIntent(
+        arm.intent,
+        () => WebsiteInlineMutationResult.rejected,
+      );
+      return null;
+    }
+
+    final tenantId = provider.sessionOwnerTenantId?.trim() ?? '';
+    final fingerprint = provider.sessionOwnerLeaseFingerprint;
+    if (tenantId.isEmpty || fingerprint == null) {
+      provider.commitSitewideAsyncIntent(
+        arm.intent,
+        () => WebsiteInlineMutationResult.rejected,
+      );
+      return null;
+    }
+    final entryGeneration = provider.editorEntryLeaseGeneration;
+    final entryIdentityRevision = provider.editorEntryLeaseIdentityRevision;
+
+    bool isCurrent() =>
+        isLiveBinding() &&
+        provider.editorEntryLeaseGeneration == entryGeneration &&
+        provider.editorEntryLeaseIdentityRevision == entryIdentityRevision &&
+        provider.sessionOwnerTenantId == tenantId &&
+        provider.sessionOwnerLeaseFingerprint == fingerprint;
+
+    return WebsiteEditorRemoteWriteAuthority(
+      tenantId: tenantId,
+      operation: operation,
+      isCurrent: isCurrent,
+      claimOwner: () =>
+          provider.commitSitewideAsyncIntent(
+            arm.intent,
+            () => WebsiteInlineMutationResult.unchanged,
+          ) !=
+          WebsiteInlineMutationResult.rejected,
+    );
+  }
+
+  return WebsiteAsyncFieldBinding(
+    identity: (provider, bucket, sourceKey),
+    capture: capture,
+    commit: commit,
+    remoteAuthority: remoteAuthority,
+  );
+}
+
 /// Theme tab for global site-wide settings (colors, typography, button styles)
 /// Header and Footer are edited via the "Editar" tab when selected
 class _ThemeTab extends StatefulWidget {
+  const _ThemeTab({required this.provider});
+
+  final WebsiteEditModeProvider provider;
+
   @override
   State<_ThemeTab> createState() => _ThemeTabState();
 }
@@ -41,8 +155,16 @@ class _ThemeTabState extends State<_ThemeTab> {
   String _pageBackground = '#FFFFFF';
 
   bool _loaded = false;
+  int _loadGeneration = 0;
 
   static const _fonts = WebsiteFontRegistry.supportedFamilies;
+
+  WebsiteAsyncFieldBinding _themeAsyncBinding(String sourceKey) =>
+      _sitewideAsyncFieldBinding(
+        provider: widget.provider,
+        bucket: WebsiteSitewideDraftBucket.theme,
+        sourceKey: sourceKey,
+      );
 
   final _sizes = {
     'small': 'Pequeño',
@@ -108,65 +230,103 @@ class _ThemeTabState extends State<_ThemeTab> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_loaded) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadSettings();
-      });
       _loaded = true;
+      _applyResolvedTheme(
+        widget.provider,
+        context.read<WebsiteService>(),
+      );
+      _scheduleSettingsLoad();
     }
   }
 
-  Future<void> _loadSettings() async {
+  @override
+  void didUpdateWidget(covariant _ThemeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.provider, widget.provider)) {
+      // Rebaseline synchronously from B's pending draft before this retained
+      // State can render or arm a picker again. The service refresh below may
+      // yield, so leaving A's controllers live until it completes would expose
+      // the wrong source value even though the async binding already owns B.
+      _applyResolvedTheme(
+        widget.provider,
+        context.read<WebsiteService>(),
+      );
+      _scheduleSettingsLoad();
+    }
+  }
+
+  void _scheduleSettingsLoad() {
+    final expectedProvider = widget.provider;
+    final generation = ++_loadGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSettings(
+        expectedProvider: expectedProvider,
+        generation: generation,
+      );
+    });
+  }
+
+  Future<void> _loadSettings({
+    required WebsiteEditModeProvider expectedProvider,
+    required int generation,
+  }) async {
     try {
       final service = context.read<WebsiteService>();
       await service.loadSettings();
 
-      if (mounted) {
-        final editProvider = context.read<WebsiteEditModeProvider>();
-        final resolved = WebsiteResolvedTheme.resolve(
-          (key, fallback) {
-            final saved = service.getSetting(key, fallback);
-            return editProvider.isInEditorContext
-                ? editProvider.getEffectiveThemeSetting(key, saved)
-                : saved;
-          },
-        );
+      if (mounted &&
+          generation == _loadGeneration &&
+          identical(widget.provider, expectedProvider)) {
         setState(() {
-          _primaryColorController.text =
-              serializeWebsiteEditorColor(resolved.primaryColor);
-          _accentColorController.text =
-              serializeWebsiteEditorColor(resolved.accentColor);
-          _textColorController.text =
-              serializeWebsiteEditorColor(resolved.textColor);
-          _productDetailAccent = serializeWebsiteEditorColor(
-            resolved.commerceAccentColor,
-          );
-          _productDetailText = serializeWebsiteEditorColor(
-            resolved.commerceTextColor,
-          );
-          _productDetailLine = serializeWebsiteEditorColor(
-            resolved.commerceLineColor,
-          );
-          _headingFont = resolved.headingFont;
-          _bodyFont = resolved.bodyFont;
-          _headingSize = _sizeKeyFromStoredValue(
-            isHeading: true,
-            raw: resolved.headingSize.toString(),
-          );
-          _bodySize = _sizeKeyFromStoredValue(
-            isHeading: false,
-            raw: resolved.bodySize.toString(),
-          );
-          _buttonStyle = resolved.buttonStyle;
-          _buttonSize = resolved.buttonSize;
-          _sectionSpacing = resolved.sectionSpacing;
-          _containerPadding = resolved.containerPadding;
-          _pageBackground =
-              serializeWebsiteEditorColor(resolved.backgroundColor);
+          _applyResolvedTheme(expectedProvider, service);
         });
       }
     } catch (e) {
       debugPrint('Error loading theme: $e');
     }
+  }
+
+  void _applyResolvedTheme(
+    WebsiteEditModeProvider provider,
+    WebsiteService service,
+  ) {
+    final resolved = WebsiteResolvedTheme.resolve(
+      (key, fallback) {
+        final saved = service.getSetting(key, fallback);
+        return provider.isInEditorContext
+            ? provider.getEffectiveThemeSetting(key, saved)
+            : saved;
+      },
+    );
+    _primaryColorController.text =
+        serializeWebsiteEditorColor(resolved.primaryColor);
+    _accentColorController.text =
+        serializeWebsiteEditorColor(resolved.accentColor);
+    _textColorController.text = serializeWebsiteEditorColor(resolved.textColor);
+    _productDetailAccent = serializeWebsiteEditorColor(
+      resolved.commerceAccentColor,
+    );
+    _productDetailText = serializeWebsiteEditorColor(
+      resolved.commerceTextColor,
+    );
+    _productDetailLine = serializeWebsiteEditorColor(
+      resolved.commerceLineColor,
+    );
+    _headingFont = resolved.headingFont;
+    _bodyFont = resolved.bodyFont;
+    _headingSize = _sizeKeyFromStoredValue(
+      isHeading: true,
+      raw: resolved.headingSize.toString(),
+    );
+    _bodySize = _sizeKeyFromStoredValue(
+      isHeading: false,
+      raw: resolved.bodySize.toString(),
+    );
+    _buttonStyle = resolved.buttonStyle;
+    _buttonSize = resolved.buttonSize;
+    _sectionSpacing = resolved.sectionSpacing;
+    _containerPadding = resolved.containerPadding;
+    _pageBackground = serializeWebsiteEditorColor(resolved.backgroundColor);
   }
 
   @override
@@ -338,11 +498,10 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Color principal',
               value: _primaryColorController.text,
               allowAlpha: false,
+              asyncBinding: _themeAsyncBinding('theme_primary_color'),
               onChanged: (val) {
                 setState(() => _primaryColorController.text = val);
-                context
-                    .read<WebsiteEditModeProvider>()
-                    .updateThemeSetting('theme_primary_color', val);
+                widget.provider.updateThemeSetting('theme_primary_color', val);
               },
             ),
             const SizedBox(height: 24),
@@ -352,11 +511,10 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Color de acento',
               value: _accentColorController.text,
               allowAlpha: false,
+              asyncBinding: _themeAsyncBinding('theme_accent_color'),
               onChanged: (val) {
                 setState(() => _accentColorController.text = val);
-                context
-                    .read<WebsiteEditModeProvider>()
-                    .updateThemeSetting('theme_accent_color', val);
+                widget.provider.updateThemeSetting('theme_accent_color', val);
               },
             ),
             const SizedBox(height: 24),
@@ -366,11 +524,10 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Color de texto',
               value: _textColorController.text,
               allowAlpha: false,
+              asyncBinding: _themeAsyncBinding('theme_text_color'),
               onChanged: (val) {
                 setState(() => _textColorController.text = val);
-                context
-                    .read<WebsiteEditModeProvider>()
-                    .updateThemeSetting('theme_text_color', val);
+                widget.provider.updateThemeSetting('theme_text_color', val);
               },
             ),
             const SizedBox(height: 28),
@@ -387,12 +544,14 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Acciones y precio',
               value: _productDetailAccent,
               allowAlpha: false,
+              asyncBinding:
+                  _themeAsyncBinding('theme_product_detail_accent_color'),
               onChanged: (val) {
                 setState(() => _productDetailAccent = val);
-                context.read<WebsiteEditModeProvider>().updateThemeSetting(
-                      'theme_product_detail_accent_color',
-                      val,
-                    );
+                widget.provider.updateThemeSetting(
+                  'theme_product_detail_accent_color',
+                  val,
+                );
               },
             ),
             const SizedBox(height: 16),
@@ -400,12 +559,14 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Títulos y texto principal',
               value: _productDetailText,
               allowAlpha: false,
+              asyncBinding:
+                  _themeAsyncBinding('theme_product_detail_text_color'),
               onChanged: (val) {
                 setState(() => _productDetailText = val);
-                context.read<WebsiteEditModeProvider>().updateThemeSetting(
-                      'theme_product_detail_text_color',
-                      val,
-                    );
+                widget.provider.updateThemeSetting(
+                  'theme_product_detail_text_color',
+                  val,
+                );
               },
             ),
             const SizedBox(height: 16),
@@ -413,12 +574,14 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Divisores',
               value: _productDetailLine,
               allowAlpha: false,
+              asyncBinding:
+                  _themeAsyncBinding('theme_product_detail_line_color'),
               onChanged: (val) {
                 setState(() => _productDetailLine = val);
-                context.read<WebsiteEditModeProvider>().updateThemeSetting(
-                      'theme_product_detail_line_color',
-                      val,
-                    );
+                widget.provider.updateThemeSetting(
+                  'theme_product_detail_line_color',
+                  val,
+                );
               },
             ),
           ],
@@ -542,10 +705,10 @@ class _ThemeTabState extends State<_ThemeTab> {
               label: 'Color de fondo',
               value: _pageBackground,
               allowAlpha: false,
+              asyncBinding: _themeAsyncBinding('theme_background_color'),
               onChanged: (val) {
                 setState(() => _pageBackground = val);
-                context
-                    .read<WebsiteEditModeProvider>()
+                widget.provider
                     .updateThemeSetting('theme_background_color', val);
               },
             ),
@@ -559,6 +722,7 @@ class _ThemeTabState extends State<_ThemeTab> {
             const _SectionHeader('SEPARACIÓN ENTRE SECCIONES'),
             const SizedBox(height: 8),
             _buildThemeDimensionControl(
+              sourceKey: 'theme_section_spacing',
               label: 'Espaciado base',
               description:
                   'Se aplica a los bloques que heredan el espaciado global.',
@@ -579,6 +743,7 @@ class _ThemeTabState extends State<_ThemeTab> {
             const _SectionHeader('MARGEN INTERIOR DEL CONTENIDO'),
             const SizedBox(height: 8),
             _buildThemeDimensionControl(
+              sourceKey: 'theme_container_padding',
               label: 'Margen del contenedor',
               description:
                   'Define el espacio interior global del contenido de página.',
@@ -604,6 +769,7 @@ class _ThemeTabState extends State<_ThemeTab> {
   }
 
   Widget _buildThemeDimensionControl({
+    required String sourceKey,
     required String label,
     required String description,
     required double value,
@@ -613,6 +779,7 @@ class _ThemeTabState extends State<_ThemeTab> {
     required List<double> presets,
     required ValueChanged<double> onChanged,
   }) {
+    final asyncBinding = _themeAsyncBinding(sourceKey);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -656,12 +823,14 @@ class _ThemeTabState extends State<_ThemeTab> {
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
             trackHeight: 3,
           ),
-          child: Slider(
+          child: WebsiteTransactionalSlider(
             value: value.clamp(min, max),
             min: min,
             max: max,
             divisions: divisions,
-            onChanged: (next) => onChanged(next.roundToDouble()),
+            transactionIdentity: asyncBinding.identity,
+            asyncBinding: asyncBinding,
+            onCommit: (next) => onChanged(next.roundToDouble()),
           ),
         ),
         Text(
@@ -763,10 +932,12 @@ class _ThemeTabState extends State<_ThemeTab> {
 class _LogoUploader extends StatefulWidget {
   final String? currentUrl;
   final Function(String) onChanged;
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   const _LogoUploader({
     this.currentUrl,
     required this.onChanged,
+    this.asyncBinding,
   });
 
   @override
@@ -777,23 +948,61 @@ class _LogoUploaderState extends State<_LogoUploader> {
   bool _isUploading = false;
 
   Future<void> _pickAndUploadLogo() async {
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    if (openingBinding != null && arm == null) return;
+    final initialUrl = widget.currentUrl;
+    final openingCallback = widget.onChanged;
+    final remoteArm = openingBinding?.capture();
+    if (openingBinding != null && remoteArm == null) return;
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: remoteArm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'subir el logo del sitio web',
+    );
     try {
       final asset = await showWebsiteMediaPicker(
         context: context,
-        currentUrl: widget.currentUrl,
+        currentUrl: initialUrl,
+        remoteWriteAuthority: remoteAuthority,
       );
       if (asset == null) return;
-      widget.onChanged(asset.publicUrl);
+      if (!mounted) return;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Logo actualizado'),
-            backgroundColor: Color(0xFF00A09D),
-            duration: Duration(seconds: 2),
-          ),
-        );
+      WebsiteInlineMutationResult result;
+      final liveBinding = widget.asyncBinding;
+      if (openingBinding != null) {
+        if (arm == null || liveBinding == null) return;
+        result = liveBinding.commit(arm, () {
+          if (widget.currentUrl != initialUrl) {
+            return WebsiteInlineMutationResult.rejected;
+          }
+          final liveUrl = widget.currentUrl ?? '';
+          if (liveUrl == asset.publicUrl) {
+            return WebsiteInlineMutationResult.unchanged;
+          }
+          widget.onChanged(asset.publicUrl);
+          return WebsiteInlineMutationResult.committed;
+        });
+      } else {
+        if (!identical(widget.onChanged, openingCallback) ||
+            widget.currentUrl != initialUrl) {
+          return;
+        }
+        openingCallback(asset.publicUrl);
+        result = WebsiteInlineMutationResult.committed;
       }
+      if (!result.changed) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Logo actualizado'),
+          backgroundColor: Color(0xFF00A09D),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
       debugPrint('Error uploading logo: $e');
       if (mounted) {
@@ -820,7 +1029,7 @@ class _LogoUploaderState extends State<_LogoUploader> {
           onTap: _isUploading ? null : _pickAndUploadLogo,
           borderRadius: BorderRadius.circular(8),
           child: Container(
-            height: 110,
+            constraints: const BoxConstraints(minHeight: 110),
             width: double.infinity,
             padding: hasLogo && !_isUploading
                 ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)

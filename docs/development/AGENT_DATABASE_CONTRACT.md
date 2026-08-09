@@ -52,19 +52,21 @@ hand the user a query, a test, or a migration the repository can execute.
 > costo de la regla anterior fue real: un admin recién invitado quedó fuera
 > por metadatos corruptos, el arreglo era un `UPDATE` de una fila, y la regla
 > lo devolvía a un Codex sin cupo. La denegación mecánica vivía en
-> `.claude/hooks/guard-dangerous-bash.sh` (bloque «Production database
-> writes»); mientras el dueño no la retire, el guard sigue denegando por
-> capacidad lo que esta política ya permite.
+> `.claude/hooks/guard-dangerous-bash.sh` (antiguo bloque «Production database
+> writes»). Ese bloqueo general ya no existe: el hook conserva la denegación de
+> bypasses/raw paths, mientras el write guardado in-scope se ejecuta por el
+> wrapper canónico.
 
 | Autonomous | Requires the owner's explicit go-ahead in the task |
 |---|---|
-| Guarded reads on `local` and `production` | Any `--write` (the write guard exists to make this deliberate) |
-| `just db-test`, `just db-gate`, pgTAP | Migration-history registration (`migration repair`) |
-| `db-trace`, `db-fingerprint`, `db-drift`, `db-health`, `db-smoke` | Mutating probes on production, even in `BEGIN`/`ROLLBACK` |
-| `production_validation.sh prepare/reuse/test` | `production_validation.sh refresh` (forced redump) |
-| Control-plane reads: `projects list`, `secrets list`, `backups list` | Secret removal, function deletion, Edge Function deploy |
-| Reading a hosted PII column by explicit name | `--allow-pii` (star projection over a sensitive table) |
-| Anything on `staging` | Staging is dormant; only the owner reactivates it |
+| Guarded reads on `local` and `production` | A write during an analysis-only, diagnosis-only, draft, local-only, or ambiguous-target task |
+| The smallest reviewed `--write` required by an implementation/fix/ship request, with exact read-back | Destructive deletion/repair, broad corrective backfill, credential rotation, or an unrelated pending migration |
+| `just db-test`, `just db-gate`, pgTAP | Mutating probes on production, even in `BEGIN`/`ROLLBACK` |
+| Registration of the exact deployed migration after successful live read-back | Arbitrary migration-history repair or registration without a verified matching deployment |
+| `db-trace`, `db-fingerprint`, `db-drift`, `db-health`, `db-smoke` | `production_validation.sh refresh` (forced redump) |
+| `production_validation.sh prepare/reuse/test` | Secret removal or function deletion |
+| Control-plane reads and deployment of an in-scope reviewed Edge Function | `--allow-pii` (star projection over a sensitive table) |
+| Reading a hosted PII column by explicit name | Anything on `staging`; staging is dormant until the owner reactivates it |
 
 ### Production completion is part of database ownership
 
@@ -74,6 +76,13 @@ that exact reviewed change through the guarded production workflow, verifying
 it live, and registering its migration version are part of completing the same
 task. A second routine confirmation is not required unless the task explicitly
 says `local-only`, `draft`, or `no production writes`.
+
+**2026-08-09 clarification:** those scope labels are not sticky across later
+owner instructions. If the owner subsequently asks to implement, fix, finish,
+ship, or deploy the same result, the newest instruction controls and the normal
+non-destructive production completion above resumes. Do not preserve an older
+read-only handoff as a permanent blocker, and do not call a backend-dependent
+client surface complete while its production objects are absent.
 
 Never call database work complete while its production SQL is merely local,
 and never hide a pending deployment in the final notes. If credentials, drift,
@@ -94,10 +103,12 @@ In Claude Code this boundary is also mechanical: `.claude/settings.json` — the
 committed, machine-shared file, not the git-ignored `settings.local.json` —
 pre-approves the guarded read and test commands so they never interrupt the
 user, and denies the bypass paths (`supabase db …`, ad hoc `psql`, forced
-redump). An authorized write is always prefixed with
-`VINABIKE_DB_WRITE_CONFIRM=…`, which matches no pre-approved pattern and
-therefore always surfaces for confirmation. Keep that property when editing the
-allowlist: pre-approve read verbs, never the write confirmation.
+redump). An in-scope write is always prefixed with
+`VINABIKE_DB_WRITE_CONFIRM=…`; this is a deliberate, task-bound execution
+marker, not a request for another owner confirmation. If Claude's permission
+surface cannot execute it, Claude hands the reviewed operation and evidence to
+Codex, which completes it through the guarded wrapper. Never remove the marker
+or pre-approve a bypass path merely to avoid that routing boundary.
 
 ## Antes de afirmar que un dato falta, comprueba que no falle tu lectura
 
@@ -228,6 +239,25 @@ deployed schema, and it is never applied wholesale to production. The full
 deployment, read-back, and registration contract is in `STAGING_SUPABASE.md`
 ("Production change contract"); the commands are in `SUPABASE_WORKFLOW.md`
 ("Authorized production writes").
+
+## JSONB backup redaction preserves structure and derived metadata
+
+**2026-08-09 — supplier historical-backup gate.** Removing sensitive keys
+from a JSONB snapshot is a structural rewrite, not just a security predicate.
+When the payload contains arrays, expand them `WITH ORDINALITY` and aggregate
+with an explicit `ORDER BY`; otherwise PostgreSQL does not guarantee that the
+restored business rows retain their original order. In the same atomic update,
+recalculate every payload-derived field such as `backup_size_bytes`, and make
+the command result report the persisted post-redaction value rather than the
+pre-redaction estimate.
+
+The minimum regression is one sequence: dry-run identifies the exact manifest
+without mutation; apply removes only the intended keys while preserving row,
+array order and unrelated JSON; read-back reports zero candidates and correct
+derived metadata; a second apply is a no-op with byte-identical payload and
+metadata. A production gate must additionally scan the complete JSON tree
+read-only, because checking only the canonical array can turn an unexpected
+legacy shape into a false zero.
 
 ## Credentials
 

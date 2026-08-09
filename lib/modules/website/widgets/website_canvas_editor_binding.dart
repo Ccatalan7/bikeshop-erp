@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../models/website_canvas_manipulation.dart';
 import '../models/website_responsive_authoring.dart';
+import '../providers/website_edit_mode_provider.dart';
+import '../services/website_service.dart';
 
 /// Writes several root properties of the Canvas document as one transaction.
 ///
@@ -63,6 +66,67 @@ typedef WebsiteCanvasLayerReorder = bool Function(
   required WebsiteViewport viewport,
 });
 
+/// Starts one direct-manipulation mode for one layer in this binding's exact
+/// Canvas document.
+typedef WebsiteCanvasManipulationRequest = bool Function(
+  String layerId,
+  WebsiteCanvasManipulationMode mode, {
+  required WebsiteViewport viewport,
+});
+
+typedef WebsiteCanvasManipulationAvailabilityReader
+    = WebsiteCanvasManipulationAvailability Function(
+  String layerId,
+  WebsiteCanvasManipulationMode mode, {
+  required WebsiteViewport viewport,
+});
+
+/// Writes a manipulation patch only while [expectedSession] is still the arm
+/// that admitted the pointer. The owner compares, revalidates and persists in
+/// one synchronous operation.
+typedef WebsiteCanvasManipulationCommit = bool Function(
+  WebsiteCanvasManipulationSession expectedSession,
+  Map<String, dynamic> expectedDocument,
+  int expectedDocumentEpoch,
+  Map<String, Object?> values, {
+  required WebsiteWriteScope scope,
+});
+
+/// Stops the exact session only. An old Canvas must not cancel a newer arm,
+/// even when document, layer, mode and viewport happen to be identical.
+typedef WebsiteCanvasManipulationStop = bool Function(
+  WebsiteCanvasManipulationSession expectedSession,
+);
+
+/// Captures one exact editor owner before an asynchronous Canvas command.
+typedef WebsiteCanvasAsyncIntentCapture = WebsiteEditorAsyncIntent? Function(
+  String layerId, {
+  required WebsiteWriteScope scope,
+  required WebsiteViewport viewport,
+});
+
+/// Commits one async layer patch only through the intent captured before the
+/// picker/dialog was opened.
+typedef WebsiteCanvasAsyncLayerCommit = WebsiteInlineMutationResult Function(
+  WebsiteEditorAsyncIntent expectedIntent,
+  String layerId,
+  Map<String, Object?> values, {
+  required WebsiteWriteScope scope,
+  required WebsiteViewport viewport,
+});
+
+/// Claims tenant-exact remote side effects (uploads/background removal) with
+/// the same Canvas intent captured before the picker yielded.
+typedef WebsiteCanvasAsyncRemoteAuthority = WebsiteEditorRemoteWriteAuthority?
+    Function(
+  WebsiteEditorAsyncIntent expectedIntent,
+  String layerId, {
+  required WebsiteWriteScope scope,
+  required WebsiteViewport viewport,
+  required String operation,
+  required bool Function() isLiveBinding,
+});
+
 /// Edit-only commands and transient selection for one Canvas content tree.
 ///
 /// The persisted Canvas payload never owns [activeElementId]. Public and
@@ -75,12 +139,23 @@ typedef WebsiteCanvasLayerReorder = bool Function(
 /// is one transaction: one document, one notification, one history entry.
 class WebsiteCanvasEditorBinding {
   const WebsiteCanvasEditorBinding({
+    required this.documentTarget,
     required this.activeElementId,
     required this.onActiveElementChanged,
+    this.manipulationSession,
+    this.manipulationAvailability,
+    this.requestManipulation,
+    this.commitManipulation,
+    this.stopManipulation,
+    this.captureAsyncIntent,
+    this.commitAsyncLayerProperties,
+    this.remoteWriteAuthority,
     this.insertLayer,
     this.removeLayer,
     this.duplicateLayer,
     this.readDocument,
+    this.documentEpoch,
+    this.canvasMeasurementGeneration = 0,
     this.onCanvasSizeChanged,
     this.onBackgroundTap,
     this.writeScope,
@@ -91,7 +166,39 @@ class WebsiteCanvasEditorBinding {
     this.reorderLayer,
   });
 
+  /// Stable identity of the document every command closure below addresses.
+  ///
+  /// This belongs to the binding rather than ambient Provider state because
+  /// multiple Canvas blocks and carousel slides may retain local selections at
+  /// the same time. Direct manipulation must never leak between them.
+  final WebsiteCanvasDocumentTarget documentTarget;
+
   final String? activeElementId;
+
+  /// The one application-level manipulation session. Consumers must use
+  /// [isManipulating] instead of inspecting only its mode.
+  final WebsiteCanvasManipulationSession? manipulationSession;
+
+  final WebsiteCanvasManipulationAvailabilityReader? manipulationAvailability;
+  final WebsiteCanvasManipulationRequest? requestManipulation;
+  final WebsiteCanvasManipulationCommit? commitManipulation;
+  final WebsiteCanvasManipulationStop? stopManipulation;
+  final WebsiteCanvasAsyncIntentCapture? captureAsyncIntent;
+  final WebsiteCanvasAsyncLayerCommit? commitAsyncLayerProperties;
+  final WebsiteCanvasAsyncRemoteAuthority? remoteWriteAuthority;
+
+  bool isManipulating(
+    String layerId,
+    WebsiteCanvasManipulationMode mode, {
+    required WebsiteViewport viewport,
+  }) =>
+      manipulationSession?.matches(
+        document: documentTarget,
+        layerId: layerId,
+        mode: mode,
+        viewport: viewport,
+      ) ??
+      false;
 
   /// The scope the NEXT property write is attributed to.
   ///
@@ -113,6 +220,21 @@ class WebsiteCanvasEditorBinding {
   /// Read-only view of the addressed document, used to mint an id that does
   /// not collide with an identity it already carries.
   final WebsiteCanvasDocumentReader? readDocument;
+
+  /// Monotonic owner epoch for the page document.
+  ///
+  /// The immutable snapshot catches ordinary source drift; this epoch also
+  /// catches ABA (`B -> A -> B`) where bytes happen to equal the pointer-down
+  /// document again before release.
+  final int Function()? documentEpoch;
+
+  /// Lease for renderer geometry reports.
+  ///
+  /// Clearing or replacing the active page invalidates every prior report,
+  /// even when the replacement Canvas happens to have the same target and
+  /// size. [CanvasBlock] uses this generation to re-run the handshake and to
+  /// discard a post-frame callback born under an older document.
+  final int canvasMeasurementGeneration;
   final ValueChanged<Size>? onCanvasSizeChanged;
   final VoidCallback? onBackgroundTap;
 

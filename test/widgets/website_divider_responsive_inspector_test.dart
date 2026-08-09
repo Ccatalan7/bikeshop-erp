@@ -43,7 +43,15 @@ void main() {
         const <String, dynamic>{},
       )
       ..selectBlock('block-1')
-      ..setDevicePreviewMode(viewport);
+      ..setDevicePreviewMode(viewport)
+      ..reportRenderedBlockViewport(
+        'block-1',
+        switch (viewport) {
+          DevicePreviewMode.desktop => WebsiteViewport.desktop,
+          DevicePreviewMode.tablet => WebsiteViewport.tablet,
+          DevicePreviewMode.mobile => WebsiteViewport.mobile,
+        },
+      );
   }
 
   Map<String, dynamic> dataOf(WebsiteEditModeProvider provider) =>
@@ -248,14 +256,16 @@ void main() {
               )
               .onChanged(value as String);
         default:
-          tester
-              .widget<Slider>(
-                find.descendant(
-                  of: shellFor(key),
-                  matching: find.byType(Slider),
-                ),
-              )
-              .onChanged!((value as num).toDouble());
+          final slider = tester.widget<Slider>(
+            find.descendant(
+              of: shellFor(key),
+              matching: find.byType(Slider),
+            ),
+          );
+          final next = (value as num).toDouble();
+          slider.onChangeStart!(slider.value);
+          slider.onChanged!(next);
+          slider.onChangeEnd!(next);
       }
     }
 

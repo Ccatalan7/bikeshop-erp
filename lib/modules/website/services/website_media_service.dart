@@ -6,6 +6,7 @@ import '../../../shared/constants/storage_constants.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import 'website_image_upload_processor.dart';
+import 'website_service.dart';
 
 /// A reusable image stored in the Website Builder media library.
 class WebsiteMediaAsset {
@@ -296,28 +297,32 @@ class WebsiteMediaService {
   Future<WebsiteMediaAsset> uploadImage({
     required Uint8List bytes,
     required String fileName,
+    String? tenantId,
+    WebsiteEditorWriteGuard? writeGuard,
     String operation = 'upload',
     String? originalUrl,
   }) async {
-    final tenantId = await (_tenantService ?? TenantService()).getTenantId();
-    if (tenantId == null || tenantId.isEmpty) {
+    final resolvedTenantId =
+        tenantId ?? await (_tenantService ?? TenantService()).getTenantId();
+    if (resolvedTenantId == null || resolvedTenantId.isEmpty) {
       throw StateError('No se pudo determinar la tienda activa.');
     }
     final prepared = await WebsiteImageUploadProcessor.prepare(
       bytes: bytes,
       fileName: fileName,
     );
+    writeGuard?.call();
     final uploadedSource = await ImageService.uploadBytesWithDetails(
       bytes: prepared.bytes,
       fileName: prepared.fileName,
       bucket: StorageConfig.defaultBucket,
-      folder: '$sourceFolder/$tenantId',
+      folder: '$sourceFolder/$resolvedTenantId',
       contentType: prepared.contentType,
       cacheControl: '31536000',
       upsert: false,
       metadata: <String, dynamic>{
         'website_variant': 'source',
-        'tenant_id': tenantId,
+        'tenant_id': resolvedTenantId,
         'operation': operation,
         'original_file_name': fileName,
         'original_width': prepared.originalWidth,
@@ -334,12 +339,14 @@ class WebsiteMediaService {
     );
 
     try {
+      writeGuard?.call();
       return await optimizeStoredImage(
         sourcePath: uploadedSource.objectPath,
         sourceUrl: uploadedSource.publicUrl,
         fileName: fileName,
         operation: operation,
         originalUrl: originalUrl,
+        writeGuard: writeGuard,
         sourceMetadata: <String, dynamic>{
           'originalWidth': prepared.originalWidth,
           'originalHeight': prepared.originalHeight,
@@ -369,8 +376,10 @@ class WebsiteMediaService {
     required String fileName,
     String operation = 'upload',
     String? originalUrl,
+    WebsiteEditorWriteGuard? writeGuard,
     Map<String, dynamic> sourceMetadata = const <String, dynamic>{},
   }) async {
+    writeGuard?.call();
     final response = await _client.functions.invoke(
       'website-optimize-image',
       body: <String, dynamic>{
@@ -383,6 +392,7 @@ class WebsiteMediaService {
         'sourceMetadata': sourceMetadata,
       },
     );
+    writeGuard?.call();
     final data = response.data;
     if (response.status < 200 || response.status >= 300 || data is! Map) {
       final message = data is Map

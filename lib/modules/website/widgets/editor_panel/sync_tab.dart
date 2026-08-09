@@ -9,6 +9,237 @@ class _SyncTab extends StatefulWidget {
 
 class _SyncTabState extends State<_SyncTab> {
   bool _attemptedProviderTokenEnsure = false;
+  bool _locationsInFlight = false;
+  bool _reviewsInFlight = false;
+
+  // The host revision closes the provider/service A -> B -> A hole. Equal
+  // lease fields on the remounted A instance do not erase that B owned this
+  // State in between.
+  WebsiteEditModeProvider? _remoteWriteProviderIdentity;
+  GoogleBusinessService? _remoteWriteGoogleServiceIdentity;
+  WebsiteService? _remoteWriteWebsiteServiceIdentity;
+  int _remoteWriteHostRevision = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WebsiteEditModeProvider? provider;
+    GoogleBusinessService? googleService;
+    WebsiteService? websiteService;
+    try {
+      provider = context.read<WebsiteEditModeProvider>();
+      googleService = context.read<GoogleBusinessService>();
+      websiteService = context.read<WebsiteService>();
+    } catch (_) {
+      // Without the complete owner set this tab cannot issue a remote write.
+    }
+
+    if ((_remoteWriteProviderIdentity != null &&
+            !identical(_remoteWriteProviderIdentity, provider)) ||
+        (_remoteWriteGoogleServiceIdentity != null &&
+            !identical(_remoteWriteGoogleServiceIdentity, googleService)) ||
+        (_remoteWriteWebsiteServiceIdentity != null &&
+            !identical(_remoteWriteWebsiteServiceIdentity, websiteService))) {
+      _remoteWriteHostRevision++;
+    }
+    _remoteWriteProviderIdentity = provider;
+    _remoteWriteGoogleServiceIdentity = googleService;
+    _remoteWriteWebsiteServiceIdentity = websiteService;
+  }
+
+  ({
+    WebsiteEditorRemoteWriteAuthority authority,
+    WebsiteEditModeProvider provider,
+    GoogleBusinessService googleService,
+    WebsiteService websiteService,
+  })? _captureRemoteWrite({
+    required String operation,
+    required Iterable<String> sourceKeys,
+  }) {
+    WebsiteEditModeProvider provider;
+    GoogleBusinessService googleService;
+    WebsiteService websiteService;
+    try {
+      provider = context.read<WebsiteEditModeProvider>();
+      googleService = context.read<GoogleBusinessService>();
+      websiteService = context.read<WebsiteService>();
+    } catch (_) {
+      return null;
+    }
+
+    final intent = provider.captureSitewideAsyncIntent(
+      bucket: WebsiteSitewideDraftBucket.siteSettings,
+      sourceKeys: sourceKeys,
+    );
+    final tenantId = provider.sessionOwnerTenantId?.trim() ?? '';
+    final fingerprint = provider.sessionOwnerLeaseFingerprint;
+    if (intent == null || tenantId.isEmpty || fingerprint == null) return null;
+
+    final hostRevision = _remoteWriteHostRevision;
+    final entryLeaseGeneration = provider.editorEntryLeaseGeneration;
+    final entryLeaseIdentityRevision =
+        provider.editorEntryLeaseIdentityRevision;
+    bool isCurrent() {
+      if (!mounted || _remoteWriteHostRevision != hostRevision) return false;
+      try {
+        final liveProvider = context.read<WebsiteEditModeProvider>();
+        final liveGoogleService = context.read<GoogleBusinessService>();
+        final liveWebsiteService = context.read<WebsiteService>();
+        return identical(liveProvider, provider) &&
+            identical(liveGoogleService, googleService) &&
+            identical(liveWebsiteService, websiteService) &&
+            liveProvider.editorEntryLeaseGeneration == entryLeaseGeneration &&
+            liveProvider.editorEntryLeaseIdentityRevision ==
+                entryLeaseIdentityRevision &&
+            liveProvider.sessionOwnerTenantId == tenantId &&
+            liveProvider.sessionOwnerLeaseFingerprint == fingerprint;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    return (
+      authority: WebsiteEditorRemoteWriteAuthority(
+        tenantId: tenantId,
+        operation: operation,
+        isCurrent: isCurrent,
+        claimOwner: () =>
+            provider.commitSitewideAsyncIntent(
+              intent,
+              () => WebsiteInlineMutationResult.unchanged,
+            ) !=
+            WebsiteInlineMutationResult.rejected,
+      ),
+      provider: provider,
+      googleService: googleService,
+      websiteService: websiteService,
+    );
+  }
+
+  Future<void> _syncLocations() async {
+    if (_locationsInFlight || _reviewsInFlight) return;
+    final scope = _captureRemoteWrite(
+      operation: 'sincronizar los datos de Google',
+      sourceKeys: const <String>{
+        'business_name',
+        'business_google_location_id',
+        'business_phone',
+        'contact_phone',
+        'seo_phone',
+        'contact_address',
+        'seo_address_street',
+        'seo_address_city',
+        'seo_address_region',
+        'seo_address_postal',
+        'seo_address_country',
+        'google_business_regular_hours',
+        'business_google_maps_url',
+        'seo_google_maps_url',
+        'business_google_review_url',
+      },
+    );
+    if (scope == null) return;
+    setState(() => _locationsInFlight = true);
+
+    try {
+      final hasAccess = await _ensureGoogleApiAccess(scope);
+      scope.authority.ensureCurrent();
+      if (!hasAccess) return;
+
+      final locations = await scope.googleService.fetchLocations();
+      scope.authority.ensureCurrent();
+      if (locations.isEmpty) {
+        _showMessage('No se encontraron ubicaciones');
+        return;
+      }
+
+      final selected = await _showLocationSelectionDialog(locations);
+      scope.authority.ensureCurrent();
+      if (selected == null) return;
+
+      final writeGuard = scope.authority.claimForWrite();
+      await scope.websiteService.saveSettingsForTenant(
+        scope.authority.tenantId,
+        _settingsForLocation(selected),
+        writeGuard: writeGuard,
+      );
+      scope.authority.ensureCurrent();
+      _showMessage(
+        'Datos sincronizados correctamente!',
+        backgroundColor: const Color(0xFF00A09D),
+      );
+    } on WebsiteEditorWriteSupersededException {
+      _showMessage(
+        'La sesión del editor cambió. No se guardaron los datos de Google.',
+      );
+    } catch (error) {
+      _showMessage('Error: $error', backgroundColor: Colors.red);
+    } finally {
+      if (mounted) setState(() => _locationsInFlight = false);
+    }
+  }
+
+  Future<void> _syncReviews() async {
+    if (_locationsInFlight || _reviewsInFlight) return;
+    final scope = _captureRemoteWrite(
+      operation: 'sincronizar las reseñas de Google',
+      sourceKeys: const <String>{
+        'business_google_location_id',
+        'google_reviews_data',
+      },
+    );
+    if (scope == null) return;
+    setState(() => _reviewsInFlight = true);
+
+    try {
+      final hasAccess = await _ensureGoogleApiAccess(scope);
+      scope.authority.ensureCurrent();
+      if (!hasAccess) return;
+
+      final locationName =
+          scope.websiteService.getSetting('business_google_location_id').trim();
+      if (locationName.isEmpty) {
+        _showMessage(
+          'Primero debes sincronizar los datos del negocio para obtener la ubicación.',
+        );
+        return;
+      }
+
+      final reviews = await scope.googleService.fetchReviews(locationName);
+      scope.authority.ensureCurrent();
+      if (reviews.isEmpty) {
+        _showMessage('No se encontraron reseñas para esta ubicación.');
+        return;
+      }
+
+      final writeGuard = scope.authority.claimForWrite();
+      await scope.websiteService.saveSettingsForTenant(
+        scope.authority.tenantId,
+        <String, String>{'google_reviews_data': jsonEncode(reviews)},
+        writeGuard: writeGuard,
+      );
+      scope.authority.ensureCurrent();
+      _showMessage(
+        'Se descargaron ${reviews.length} reseñas correctamente!',
+        backgroundColor: const Color(0xFF00A09D),
+      );
+    } on WebsiteEditorWriteSupersededException {
+      _showMessage(
+        'La sesión del editor cambió. No se guardaron las reseñas.',
+      );
+    } catch (error) {
+      _showMessage('Error: $error', backgroundColor: Colors.red);
+    } finally {
+      if (mounted) setState(() => _reviewsInFlight = false);
+    }
+  }
+
+  void _showMessage(String message, {Color? backgroundColor}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: backgroundColor),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -304,37 +535,10 @@ class _SyncTabState extends State<_SyncTab> {
                 ? 'Importar dirección, horario y teléfono.'
                 : 'Renovar permiso para actualizar desde Google.',
             icon: Icons.sync,
-            enabled: !googleService.isLoading,
-            onTap: () async {
-              try {
-                final hasAccess = await _ensureGoogleApiAccess(
-                  context,
-                  googleService,
-                );
-                if (!hasAccess || !context.mounted) return;
-
-                final locations = await googleService.fetchLocations();
-                if (!context.mounted) return;
-
-                if (locations.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('No se encontraron ubicaciones')),
-                  );
-                } else {
-                  _showLocationSelectionDialog(
-                      context, locations, websiteService);
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text('Error: $e'),
-                        backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
+            enabled: !googleService.isLoading &&
+                !_locationsInFlight &&
+                !_reviewsInFlight,
+            onTap: _syncLocations,
           ),
           const SizedBox(height: 12),
           _ActionCard(
@@ -343,62 +547,10 @@ class _SyncTabState extends State<_SyncTab> {
                 ? 'Descargar últimas reseñas de Google.'
                 : 'Renovar permiso para descargar reseñas.',
             icon: Icons.reviews,
-            enabled: !googleService.isLoading,
-            onTap: () async {
-              try {
-                final hasAccess = await _ensureGoogleApiAccess(
-                  context,
-                  googleService,
-                );
-                if (!hasAccess) return;
-                if (!context.mounted) return;
-
-                // 1. Get location name from settings (saved in previous step)
-                final locationName =
-                    websiteService.getSetting('business_google_location_id');
-
-                if (locationName.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            'Primero debes sincronizar los datos del negocio para obtener la ubicación.')),
-                  );
-                  return;
-                }
-
-                // 2. Fetch reviews
-                final reviews = await googleService.fetchReviews(locationName);
-                if (!context.mounted) return;
-
-                // 3. Save to settings
-                if (reviews.isNotEmpty) {
-                  await websiteService.saveSetting(
-                      'google_reviews_data', jsonEncode(reviews));
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          'Se descargaron ${reviews.length} reseñas correctamente!'),
-                      backgroundColor: const Color(0xFF00A09D),
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            'No se encontraron reseñas para esta ubicación.')),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text('Error: $e'),
-                        backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
+            enabled: !googleService.isLoading &&
+                !_locationsInFlight &&
+                !_reviewsInFlight,
+            onTap: _syncReviews,
           ),
         ],
       ),
@@ -421,9 +573,14 @@ class _SyncTabState extends State<_SyncTab> {
   }
 
   Future<bool> _ensureGoogleApiAccess(
-    BuildContext context,
-    GoogleBusinessService googleService,
-  ) async {
+      ({
+        WebsiteEditorRemoteWriteAuthority authority,
+        WebsiteEditModeProvider provider,
+        GoogleBusinessService googleService,
+        WebsiteService websiteService,
+      }) scope) async {
+    final googleService = scope.googleService;
+    scope.authority.ensureCurrent();
     if (googleService.hasProviderToken) return true;
     if (googleService.isLoading) return false;
 
@@ -431,28 +588,25 @@ class _SyncTabState extends State<_SyncTab> {
       final restored = await googleService.ensureProviderToken(
         timeout: const Duration(seconds: 3),
       );
+      scope.authority.ensureCurrent();
       if (restored) return true;
     }
 
-    if (!context.mounted) return false;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Los datos guardados siguen conectados. Para refrescarlos desde Google, renueva el permiso.',
-        ),
-      ),
+    _showMessage(
+      'Los datos guardados siguen conectados. Para refrescarlos desde Google, renueva el permiso.',
     );
+    scope.authority.ensureCurrent();
     await googleService.connect(
-      editorCapability:
-          context.read<WebsiteEditModeProvider>().editorEntryLease,
+      editorCapability: scope.provider.editorEntryLease,
     );
+    scope.authority.ensureCurrent();
     return false;
   }
 
-  void _showLocationSelectionDialog(BuildContext context,
-      List<GoogleLocation> locations, WebsiteService websiteService) {
-    showDialog(
+  Future<GoogleLocation?> _showLocationSelectionDialog(
+    List<GoogleLocation> locations,
+  ) {
+    return showDialog<GoogleLocation>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
@@ -470,69 +624,58 @@ class _SyncTabState extends State<_SyncTab> {
                     style: const TextStyle(color: Colors.white)),
                 subtitle: Text(loc.addressLine ?? '',
                     style: const TextStyle(color: Colors.white70)),
-                onTap: () async {
-                  final settings = <String, String>{
-                    'business_name': loc.title,
-                    'business_google_location_id': loc.name,
-                  };
-
-                  if (loc.phone != null) {
-                    settings['business_phone'] = loc.phone!;
-                    settings['contact_phone'] = loc.phone!;
-                    settings['seo_phone'] = loc.phone!;
-                  }
-
-                  if (loc.addressLine != null) {
-                    settings['contact_address'] = loc.addressLine!;
-                  }
-                  if (loc.addressStreet != null) {
-                    settings['seo_address_street'] = loc.addressStreet!;
-                  }
-                  if (loc.addressCity != null) {
-                    settings['seo_address_city'] = loc.addressCity!;
-                  }
-                  if (loc.addressRegion != null) {
-                    settings['seo_address_region'] = loc.addressRegion!;
-                  }
-                  if (loc.addressPostalCode != null) {
-                    settings['seo_address_postal'] = loc.addressPostalCode!;
-                  }
-                  if (loc.addressCountry != null) {
-                    settings['seo_address_country'] = loc.addressCountry!;
-                  }
-
-                  if (loc.hours != null && loc.hours!.isNotEmpty) {
-                    settings['google_business_regular_hours'] =
-                        jsonEncode(loc.hours);
-                  }
-
-                  final mapsUrl = loc.mapsUri;
-                  if (mapsUrl != null && mapsUrl.trim().isNotEmpty) {
-                    settings['business_google_maps_url'] = mapsUrl.trim();
-                    settings['seo_google_maps_url'] = mapsUrl.trim();
-                  }
-
-                  final reviewUrl = loc.newReviewUri;
-                  if (reviewUrl != null && reviewUrl.trim().isNotEmpty) {
-                    settings['business_google_review_url'] = reviewUrl.trim();
-                  }
-
-                  await websiteService.saveSettings(settings);
-                  if (!ctx.mounted || !context.mounted) return;
-
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Datos sincronizados correctamente!'),
-                      backgroundColor: Color(0xFF00A09D),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.pop(ctx, loc),
               );
             },
           ),
         ),
       ),
     );
+  }
+
+  Map<String, String> _settingsForLocation(GoogleLocation location) {
+    final settings = <String, String>{
+      'business_name': location.title,
+      'business_google_location_id': location.name,
+    };
+
+    final phone = location.phone;
+    if (phone != null) {
+      settings['business_phone'] = phone;
+      settings['contact_phone'] = phone;
+      settings['seo_phone'] = phone;
+    }
+    if (location.addressLine != null) {
+      settings['contact_address'] = location.addressLine!;
+    }
+    if (location.addressStreet != null) {
+      settings['seo_address_street'] = location.addressStreet!;
+    }
+    if (location.addressCity != null) {
+      settings['seo_address_city'] = location.addressCity!;
+    }
+    if (location.addressRegion != null) {
+      settings['seo_address_region'] = location.addressRegion!;
+    }
+    if (location.addressPostalCode != null) {
+      settings['seo_address_postal'] = location.addressPostalCode!;
+    }
+    if (location.addressCountry != null) {
+      settings['seo_address_country'] = location.addressCountry!;
+    }
+    if (location.hours != null && location.hours!.isNotEmpty) {
+      settings['google_business_regular_hours'] = jsonEncode(location.hours);
+    }
+
+    final mapsUrl = location.mapsUri?.trim() ?? '';
+    if (mapsUrl.isNotEmpty) {
+      settings['business_google_maps_url'] = mapsUrl;
+      settings['seo_google_maps_url'] = mapsUrl;
+    }
+    final reviewUrl = location.newReviewUri?.trim() ?? '';
+    if (reviewUrl.isNotEmpty) {
+      settings['business_google_review_url'] = reviewUrl;
+    }
+    return settings;
   }
 }

@@ -186,6 +186,53 @@ void main() {
       expect(find.text('Foco móvil'), findsNothing);
     });
 
+    testWidgets(
+        'arrastra localmente y publica una sola vez; cancelar no escribe',
+        (tester) async {
+      final writes = <Offset>[];
+      await tester.pumpWidget(
+        host(
+          url: urlState(viewport: WebsiteViewport.mobile),
+          focal: focalState(viewport: WebsiteViewport.mobile),
+          onFocalChanged: (x, y) => writes.add(Offset(x, y)),
+        ),
+      );
+
+      await tester.tap(find.byKey(ResponsiveMediaField.reframeActionKey));
+      await tester.pumpAndSettle();
+
+      final picker = find.byType(FocalPointPicker);
+      final rect = tester.getRect(picker);
+      final drag = await tester.startGesture(
+        Offset(rect.left + rect.width * 0.25, rect.center.dy),
+      );
+      await drag.moveTo(
+        Offset(rect.left + rect.width * 0.75, rect.top + rect.height * 0.25),
+      );
+      await tester.pump();
+      expect(writes, isEmpty,
+          reason: 'el movimiento sólo actualiza el preview');
+
+      await drag.up();
+      await tester.pump();
+      expect(writes, hasLength(1));
+
+      final cancelled = await tester.startGesture(rect.center);
+      await cancelled.moveTo(
+        Offset(rect.left + rect.width * 0.1, rect.top + rect.height * 0.9),
+      );
+      await tester.pump();
+      expect(writes, hasLength(1));
+
+      await cancelled.cancel();
+      await tester.pump();
+      expect(
+        writes,
+        hasLength(1),
+        reason: 'pointer-cancel no publica el encuadre transiente',
+      );
+    });
+
     testWidgets('sin capacidad focal no hay acción ni editor', (tester) async {
       await tester.pumpWidget(
         MaterialApp(

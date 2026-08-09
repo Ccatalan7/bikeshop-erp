@@ -430,17 +430,47 @@ void main() {
       );
     });
 
-    test('el umbral propio del renderer de Canvas queda declarado', () {
-      // `canvas_block.dart` conmuta a 600 mientras un documento heredado se
-      // clasifica con 640: entre 600 y 639 discrepan, y 7B tiene que elegir
-      // antes de conectar esta proyección al renderer.
+    test('renderer y comandos comparten el umbral de Canvas heredado', () {
+      // El documento legacy conserva 640/1024 para lectura general, pero el
+      // Canvas editable históricamente conmuta su única variante compacta a
+      // 600. El renderer y el owner del gesto deben consumir esta misma API.
       expect(WebsiteCanvasResponsiveDocument.legacyCanvasCompactWidth, 600);
       final legacy = legacyTwinsDocument();
+      for (final (width, expected) in <(double, WebsiteViewport)>[
+        (599, WebsiteViewport.mobile),
+        (600, WebsiteViewport.desktop),
+        (620, WebsiteViewport.desktop),
+      ]) {
+        expect(
+          WebsiteCanvasResponsiveDocument.viewportForRenderedCanvasWidth(
+            legacy,
+            width,
+          ),
+          expected,
+          reason: 'Canvas legacy a $width',
+        );
+      }
       expect(
         WebsiteCanvasResponsiveDocument.viewportForCanvasWidth(legacy, 620),
         WebsiteViewport.mobile,
         reason: 'la banda heredada del documento dice móvil a 620',
       );
+      final canonical = canonicalDocument();
+      for (final (width, expected) in <(double, WebsiteViewport)>[
+        (599, WebsiteViewport.mobile),
+        (600, WebsiteViewport.tablet),
+        (899, WebsiteViewport.tablet),
+        (900, WebsiteViewport.desktop),
+      ]) {
+        expect(
+          WebsiteCanvasResponsiveDocument.viewportForRenderedCanvasWidth(
+            canonical,
+            width,
+          ),
+          expected,
+          reason: 'Canvas canónico a $width',
+        );
+      }
     });
 
     test('los alias de raíz y el par de visibilidad se leen sin migrar', () {
@@ -1331,6 +1361,48 @@ void main() {
         ).map((item) => item.id),
         <String>['b', 'a'],
       );
+    });
+
+    test('la geometría inválida se rechaza antes de un patch parcial', () {
+      final document = <String, dynamic>{
+        'elements': <Map<String, dynamic>>[layer('a')],
+      };
+      final baseline = <String, dynamic>{
+        'elements': <Map<String, dynamic>>[layer('a')],
+      };
+
+      for (final values in <Map<String, Object?>>[
+        <String, Object?>{'x': double.nan},
+        <String, Object?>{'y': double.infinity},
+        <String, Object?>{'rotation': double.negativeInfinity},
+        <String, Object?>{'w': 0.0},
+        <String, Object?>{'h': -1.0},
+        <String, Object?>{'x': '10'},
+        <String, Object?>{'x': 300.0, 'w': 0.0},
+      ]) {
+        expect(
+          () => WebsiteCanvasResponsiveDocument.setLayerProperties(
+            data: document,
+            layerId: 'a',
+            values: values,
+            scope: WebsiteWriteScope.shared,
+            viewport: WebsiteViewport.desktop,
+          ),
+          throwsA(isA<StateError>()),
+          reason: '$values',
+        );
+        expect(document, baseline, reason: '$values must not mutate input');
+      }
+
+      final small = WebsiteCanvasResponsiveDocument.setLayerProperties(
+        data: document,
+        layerId: 'a',
+        values: const <String, Object?>{'w': 24.0, 'h': 24.0},
+        scope: WebsiteWriteScope.shared,
+        viewport: WebsiteViewport.desktop,
+      );
+      expect(elementsOf(small).single['w'], 24.0);
+      expect(elementsOf(small).single['h'], 24.0);
     });
 
     test('un marcador preexistente vuelve exactamente como estaba', () {

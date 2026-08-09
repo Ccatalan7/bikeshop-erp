@@ -1,3 +1,7 @@
 # Generated release assets are verified byte-for-byte by the pinned build gate.
 web/spreadsheet_engine/univer.bundle.js -whitespace
 web/spreadsheet_engine/univer.bundle.css -whitespace
+
+# Vendored upstream plugin; preserve its published bytes except for the
+# documented security patch in packages/flutter_inappwebview_android/VINABIKE_PATCH.md.
+packages/flutter_inappwebview_android/** -whitespace

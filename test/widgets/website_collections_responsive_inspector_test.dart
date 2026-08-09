@@ -55,7 +55,15 @@ void main() {
         const <String, dynamic>{},
       )
       ..selectBlock('block-1')
-      ..setDevicePreviewMode(viewport);
+      ..setDevicePreviewMode(viewport)
+      ..reportRenderedBlockViewport(
+        'block-1',
+        switch (viewport) {
+          DevicePreviewMode.desktop => WebsiteViewport.desktop,
+          DevicePreviewMode.tablet => WebsiteViewport.tablet,
+          DevicePreviewMode.mobile => WebsiteViewport.mobile,
+        },
+      );
   }
 
   Map<String, dynamic> dataOf(WebsiteEditModeProvider provider) =>
@@ -510,7 +518,9 @@ void main() {
       expect(media.focalState, isNotNull, reason: 'la galería sí reencuadra');
       media.onFocalCustomize!();
       await settle(tester);
-      media.onFocalChanged!(0.75, 0.25);
+      tester
+          .widget<ResponsiveMediaField>(find.byType(ResponsiveMediaField))
+          .onFocalChanged!(0.75, 0.25);
       await settle(tester);
 
       final images = imagesOf(provider);
@@ -889,6 +899,7 @@ void main() {
                 },
                 WebsiteViewport.mobile,
               ),
+              effectiveViewport: WebsiteViewport.mobile,
               primaryColor: Colors.teal,
               accentColor: Colors.tealAccent,
               previewMode: true,
@@ -1277,7 +1288,10 @@ void main() {
       expect(sliderWithMax(5), findsOneWidget, reason: 'minRating');
       expect(sliderWithMax(20), findsOneWidget, reason: 'maxItems');
 
-      tester.widget<Slider>(sliderWithMax(5)).onChanged!(5);
+      final minRatingSlider = tester.widget<Slider>(sliderWithMax(5));
+      minRatingSlider.onChangeStart!(minRatingSlider.value);
+      minRatingSlider.onChanged!(5);
+      minRatingSlider.onChangeEnd!(5);
       await settle(tester);
       expect(dataOf(provider)['minRating'], 5);
       // Es un filtro de negocio: se guarda compartido, nunca como override.
@@ -1311,7 +1325,10 @@ void main() {
         width: 1440,
         viewport: DevicePreviewMode.desktop,
       );
-      tester.widget<Slider>(sliderWithMax(20)).onChanged!(1);
+      final maxItemsSlider = tester.widget<Slider>(sliderWithMax(20));
+      maxItemsSlider.onChangeStart!(maxItemsSlider.value);
+      maxItemsSlider.onChanged!(1);
+      maxItemsSlider.onChangeEnd!(1);
       await settle(tester);
       expect(dataOf(second)['maxItems'], 1);
 

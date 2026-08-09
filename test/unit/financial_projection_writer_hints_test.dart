@@ -500,6 +500,7 @@ class _WriterHintDatabaseService extends DatabaseService {
     String id,
     Map<String, dynamic> data, {
     bool applyTimestamps = true,
+    String? selectColumns,
   }) async {
     return {'id': id, ...data};
   }

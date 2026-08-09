@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vinabike_erp/modules/website/models/website_block_definition.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_type.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_field_state.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_projection.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_responsive_media_binding.dart';
 
@@ -39,6 +41,13 @@ void main() {
       const {},
       pageId: 'page-1',
       pageSlug: 'inicio',
+    );
+    provider.selectBlock('hero-1');
+    // The real renderer publishes this geometry post-frame. Binding tests use
+    // a phone canvas unless a case explicitly supplies another viewport.
+    provider.reportRenderedBlockViewport(
+      'hero-1',
+      WebsiteViewport.mobile,
     );
     return provider;
   }
@@ -170,9 +179,9 @@ void main() {
       });
       provider.setDevicePreviewMode(DevicePreviewMode.mobile);
 
+      slideBinding(provider, index: 0, id: 'a').customizeUrl();
       slideBinding(provider, index: 0, id: 'a')
-        ..customizeUrl()
-        ..writeUrl('https://cdn/a-mobile.webp');
+          .writeUrl('https://cdn/a-mobile.webp');
 
       expect(
         ((slideData(provider, 'a')['responsive'] as Map)['mobile']
@@ -182,7 +191,7 @@ void main() {
       expect(slideData(provider, 'b').containsKey('responsive'), isFalse);
     });
 
-    test('la identidad estable gana al índice stale después de reorder', () {
+    test('reorder rechaza binding stale; el rebuild conserva identidad', () {
       final provider = providerWith({
         'slides': [
           {'id': 'a', 'imageUrl': 'https://cdn/a.webp'},
@@ -196,9 +205,14 @@ void main() {
         {'id': 'a', 'imageUrl': 'https://cdn/a.webp'},
       ]);
 
-      binding
-        ..customizeUrl()
-        ..writeUrl('https://cdn/a-mobile.webp');
+      binding.writeUrl('https://cdn/stale.webp');
+
+      expect(slideData(provider, 'a').containsKey('responsive'), isFalse);
+      expect(slideData(provider, 'b').containsKey('responsive'), isFalse);
+
+      slideBinding(provider, index: 0, id: 'a').customizeUrl();
+      slideBinding(provider, index: 0, id: 'a')
+          .writeUrl('https://cdn/a-mobile.webp');
 
       expect(slideData(provider, 'a')['responsive'], isNotNull);
       expect(slideData(provider, 'b').containsKey('responsive'), isFalse);
@@ -273,6 +287,59 @@ void main() {
   });
 
   group('7 · el encuadre es una decisión, no dos', () {
+    test('preset legacy y renderer comparten una sola proyección focal', () {
+      final source = <String, dynamic>{
+        'imageUrl': 'https://cdn/base.webp',
+        'focalPointX': 0.2,
+        'focalPointY': 0.8,
+        'mobileBgAlignment': 'right',
+      };
+      final provider = providerWith(source);
+      provider.setDevicePreviewMode(DevicePreviewMode.mobile);
+
+      final focal = WebsiteResponsiveMediaBinding.root(
+        provider: provider,
+        blockId: 'hero-1',
+        field: coverField,
+      ).focalState!;
+      final projected = WebsiteResponsiveBlockProjection.project(
+        type: WebsiteBlockType.hero,
+        data: source,
+        viewport: WebsiteViewport.mobile,
+      );
+
+      expect(focal.resolved.value, const Offset(1, 0.5));
+      expect(focal.resolved.value!.dx, projected['focalPointX']);
+      expect(focal.resolved.value!.dy, projected['focalPointY']);
+      expect(focal.status, WebsiteResponsiveFieldStatus.legacyConflict);
+      expect(source['mobileBgAlignment'], 'right', reason: 'read is pure');
+    });
+
+    test('canonical vence alias numérico, preset y shared en inspector', () {
+      final provider = providerWith({
+        'imageUrl': 'https://cdn/base.webp',
+        'focalPointX': 0.2,
+        'focalPointY': 0.8,
+        'mobileFocalPointX': 0.9,
+        'mobileFocalPointY': 0.1,
+        'mobileBgAlignment': 'right',
+        'responsive': {
+          'version': 2,
+          'mobile': {'focalPointX': 0.25, 'focalPointY': 0.75},
+        },
+      });
+      provider.setDevicePreviewMode(DevicePreviewMode.mobile);
+
+      final focal = WebsiteResponsiveMediaBinding.root(
+        provider: provider,
+        blockId: 'hero-1',
+        field: coverField,
+      ).focalState!;
+
+      expect(focal.resolved.value, const Offset(0.25, 0.75));
+      expect(focal.status, WebsiteResponsiveFieldStatus.overridden);
+    });
+
     test('escribir X/Y produce una sola historia', () {
       final provider = providerWith({'imageUrl': 'https://cdn/base.webp'});
       provider.setDevicePreviewMode(DevicePreviewMode.mobile);
@@ -302,13 +369,41 @@ void main() {
       );
     });
 
-    test('reset borra canónico y legacy X/Y en una sola historia', () {
+    test('customize invalida el callback focal viejo; sólo el rebuild escribe',
+        () {
+      final provider = providerWith({'imageUrl': 'https://cdn/base.webp'});
+      provider.setDevicePreviewMode(DevicePreviewMode.mobile);
+      final stale = WebsiteResponsiveMediaBinding.root(
+        provider: provider,
+        blockId: 'hero-1',
+        field: coverField,
+      );
+
+      stale.customizeFocal!();
+      stale.writeFocal!(0.8, 0.2);
+      expect(provider.canUndo, isFalse);
+      expect(dataOf(provider).containsKey('responsive'), isFalse);
+
+      final rebuilt = WebsiteResponsiveMediaBinding.root(
+        provider: provider,
+        blockId: 'hero-1',
+        field: coverField,
+      );
+      rebuilt.writeFocal!(0.8, 0.2);
+      final mobile = (dataOf(provider)['responsive'] as Map)['mobile'] as Map;
+      expect(mobile['focalPointX'], 0.8);
+      expect(mobile['focalPointY'], 0.2);
+      expect(historyDepth(provider), 1);
+    });
+
+    test('reset borra canónico, aliases y preset en una sola historia', () {
       final provider = providerWith({
         'imageUrl': 'https://cdn/base.webp',
         'focalPointX': 0.5,
         'focalPointY': 0.5,
         'mobileFocalPointX': 0.9,
         'mobileFocalPointY': 0.1,
+        'mobileBgAlignment': 'right',
         'responsive': {
           'mobile': {'focalPointX': 0.7, 'focalPointY': 0.3},
         },
@@ -324,6 +419,70 @@ void main() {
       final after = dataOf(provider);
       expect(after.containsKey('mobileFocalPointX'), isFalse);
       expect(after.containsKey('mobileFocalPointY'), isFalse);
+      expect(after.containsKey('mobileBgAlignment'), isFalse);
+      final inherited = WebsiteResponsiveMediaBinding.root(
+        provider: provider,
+        blockId: 'hero-1',
+        field: coverField,
+      ).focalState!;
+      expect(inherited.resolved.value, const Offset(0.5, 0.5));
+      expect(historyDepth(provider), 1);
+    });
+
+    test('preset legacy de slide coincide con renderer y reset vuelve a shared',
+        () {
+      final source = <String, dynamic>{
+        'slides': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'a',
+            'imageUrl': 'https://cdn/a.webp',
+            'focalPointX': 0.2,
+            'focalPointY': 0.8,
+            'mobileBgAlignment': 'topCenter',
+          },
+        ],
+      };
+      final provider = providerWith(source);
+      provider.setDevicePreviewMode(DevicePreviewMode.mobile);
+      final binding = WebsiteResponsiveMediaBinding.repeaterItem(
+        provider: provider,
+        blockId: 'hero-1',
+        field: coverField,
+        collectionKeys: const <String>['slides'],
+        itemIndex: 0,
+        identityKey: 'id',
+        identityValue: 'a',
+      );
+      final projected = WebsiteResponsiveBlockProjection.project(
+        type: WebsiteBlockType.carousel,
+        data: source,
+        viewport: WebsiteViewport.mobile,
+      );
+      final projectedSlide = (projected['slides'] as List).single as Map;
+
+      expect(binding.focalState!.resolved.value, const Offset(0.5, 0));
+      expect(
+        binding.focalState!.resolved.value!.dx,
+        projectedSlide['focalPointX'],
+      );
+      expect(
+        binding.focalState!.resolved.value!.dy,
+        projectedSlide['focalPointY'],
+      );
+
+      binding.resetFocal!();
+      final afterSlide = (dataOf(provider)['slides'] as List).single as Map;
+      expect(afterSlide.containsKey('mobileBgAlignment'), isFalse);
+      final inherited = WebsiteResponsiveMediaBinding.repeaterItem(
+        provider: provider,
+        blockId: 'hero-1',
+        field: coverField,
+        collectionKeys: const <String>['slides'],
+        itemIndex: 0,
+        identityKey: 'id',
+        identityValue: 'a',
+      ).focalState!;
+      expect(inherited.resolved.value, const Offset(0.2, 0.8));
       expect(historyDepth(provider), 1);
     });
 

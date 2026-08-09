@@ -1,5 +1,31 @@
 part of '../website_editor_panel.dart';
 
+class _EditorFieldLabel extends StatelessWidget {
+  const _EditorFieldLabel({
+    required this.label,
+    required this.style,
+    this.attribution,
+  });
+
+  final String label;
+  final TextStyle style;
+  final Widget? attribution;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLabel = label.trim().isNotEmpty;
+    if (!hasLabel && attribution == null) return const SizedBox.shrink();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (hasLabel) Expanded(child: Text(label, style: style)),
+        if (hasLabel && attribution != null) const SizedBox(width: 6),
+        if (attribution != null) Flexible(child: attribution!),
+      ],
+    );
+  }
+}
+
 class _SectionHeader extends StatelessWidget {
   final String title;
 
@@ -187,6 +213,8 @@ class _EditorTextField extends StatefulWidget {
   final TextEditingController? controller;
   final int maxLines;
   final String? hint;
+  final Widget? attribution;
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   const _EditorTextField({
     required this.label,
@@ -195,6 +223,8 @@ class _EditorTextField extends StatefulWidget {
     this.controller,
     this.maxLines = 1,
     this.hint,
+    this.attribution,
+    this.asyncBinding,
   });
 
   @override
@@ -203,6 +233,9 @@ class _EditorTextField extends StatefulWidget {
 
 class _EditorTextFieldState extends State<_EditorTextField> {
   TextEditingController? _internalController;
+  final FocusNode _focusNode = FocusNode();
+  WebsiteContinuousFieldArm? _continuousArm;
+  WebsiteAsyncFieldBinding? _openingBinding;
 
   TextEditingController get _effectiveController {
     return widget.controller ??
@@ -215,87 +248,174 @@ class _EditorTextFieldState extends State<_EditorTextField> {
     // Only create internal controller if external not provided
     if (widget.controller == null) {
       _internalController = TextEditingController(text: widget.value);
-      // Add listener to catch paste events that onChanged might miss on web
-      _internalController!.addListener(_onControllerChanged);
     }
-  }
-
-  void _onControllerChanged() {
-    // This fires on ANY text change including paste
-    final text = _effectiveController.text;
-    if (text != widget.value) {
-      debugPrint(
-          '📝 [_EditorTextField] controller listener: label="${widget.label}", value="$text"');
-      widget.onChanged(text);
-    }
+    _focusNode.addListener(_handleFocusChanged);
   }
 
   @override
   void didUpdateWidget(covariant _EditorTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final ownerChanged =
+        oldWidget.asyncBinding?.identity != widget.asyncBinding?.identity;
+    if (ownerChanged && _continuousArm != null) {
+      _cancelTransaction(
+        liveBinding: widget.asyncBinding ?? oldWidget.asyncBinding,
+      );
+    }
     // Only update internal controller if we own it and value changed externally
     if (widget.controller == null && _internalController != null) {
-      if (oldWidget.value != widget.value &&
+      if ((ownerChanged || !_focusNode.hasFocus) &&
+          oldWidget.value != widget.value &&
           _internalController!.text != widget.value) {
-        // Remove listener temporarily to avoid triggering onChanged
-        _internalController!.removeListener(_onControllerChanged);
         _internalController!.text = widget.value;
-        _internalController!.addListener(_onControllerChanged);
       }
     }
   }
 
+  void _handleFocusChanged() {
+    if (_focusNode.hasFocus) {
+      _beginTransaction();
+    } else {
+      _finishTransaction();
+    }
+  }
+
+  void _beginTransaction() {
+    if (_continuousArm != null) return;
+    final binding = widget.asyncBinding;
+    final begin = binding?.beginContinuous;
+    if (binding == null || begin == null) return;
+    final arm = begin(widget.value);
+    if (arm == null) return;
+    _continuousArm = arm;
+    _openingBinding = binding;
+  }
+
+  void _publish(String value) {
+    if (_continuousArm == null) _beginTransaction();
+    final arm = _continuousArm;
+    final binding = widget.asyncBinding;
+    final update = binding?.updateContinuous;
+    if (arm != null && update != null) {
+      final result = update(arm, value, () {
+        final callbackResult = widget.onChanged(value);
+        return callbackResult is WebsiteInlineMutationResult
+            ? callbackResult
+            : WebsiteInlineMutationResult.committed;
+      });
+      if (!result.accepted) {
+        _continuousArm = null;
+        _openingBinding = null;
+        _restoreVisibleValue();
+      }
+      return;
+    }
+    if (widget.asyncBinding != null) return;
+    widget.onChanged(value);
+  }
+
+  void _finishTransaction() {
+    final arm = _continuousArm;
+    final binding = widget.asyncBinding ?? _openingBinding;
+    _continuousArm = null;
+    _openingBinding = null;
+    if (arm != null) {
+      final result = binding?.finishContinuous?.call(arm);
+      if (result == WebsiteInlineMutationResult.rejected) {
+        _restoreVisibleValue();
+      }
+    }
+  }
+
+  void _cancelTransaction({WebsiteAsyncFieldBinding? liveBinding}) {
+    final arm = _continuousArm;
+    final binding = liveBinding ?? widget.asyncBinding ?? _openingBinding;
+    _continuousArm = null;
+    _openingBinding = null;
+    if (arm != null) binding?.cancelContinuous?.call(arm);
+    _restoreVisibleValue();
+  }
+
+  void _restoreVisibleValue() {
+    final controller = _effectiveController;
+    if (controller.text == widget.value) return;
+    controller.value = TextEditingValue(
+      text: widget.value,
+      selection: TextSelection.collapsed(offset: widget.value.length),
+    );
+  }
+
   @override
   void dispose() {
-    _internalController?.removeListener(_onControllerChanged);
+    _finishTransaction();
+    _focusNode
+      ..removeListener(_handleFocusChanged)
+      ..dispose();
     _internalController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasLabel =
+        widget.label.trim().isNotEmpty || widget.attribution != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.label,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: _effectiveController,
-          maxLines: widget.maxLines,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          decoration: InputDecoration(
-            hintText: widget.hint,
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
-            filled: true,
-            fillColor: const Color(0xFF2D2D2D),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
-              borderSide:
-                  BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
-              borderSide:
-                  BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
-              borderSide: const BorderSide(color: Color(0xFF00A09D)),
+        if (hasLabel) ...[
+          _EditorFieldLabel(
+            label: widget.label,
+            attribution: widget.attribution,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
             ),
           ),
-          onChanged: (v) {
-            debugPrint(
-                '📝 [_EditorTextField] onChanged: label="${widget.label}", value="$v"');
-            widget.onChanged(v);
+          const SizedBox(height: 6),
+        ],
+        Focus(
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent &&
+                event.logicalKey == LogicalKeyboardKey.escape) {
+              _cancelTransaction();
+              node.unfocus();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
           },
+          child: TextFormField(
+            focusNode: _focusNode,
+            controller: _effectiveController,
+            maxLines: widget.maxLines,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: widget.hint,
+              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+              filled: true,
+              fillColor: const Color(0xFF2D2D2D),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide:
+                    BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide:
+                    BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: const BorderSide(color: Color(0xFF00A09D)),
+              ),
+            ),
+            onChanged: _publish,
+            onEditingComplete: () {
+              _finishTransaction();
+              _focusNode.unfocus();
+            },
+          ),
         ),
       ],
     );
@@ -306,11 +426,13 @@ class _EditorToggle extends StatelessWidget {
   final String label;
   final bool value;
   final Function(bool) onChanged;
+  final Widget? attribution;
 
   const _EditorToggle({
     required this.label,
     required this.value,
     required this.onChanged,
+    this.attribution,
   });
 
   @override
@@ -319,10 +441,9 @@ class _EditorToggle extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
-          child: Text(
-            label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          child: _EditorFieldLabel(
+            label: label,
+            attribution: attribution,
             style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
         ),
@@ -349,57 +470,72 @@ class _EditorSlider extends StatelessWidget {
   final double max;
   final int? divisions;
   final String? valueLabel;
-  final Function(double) onChanged;
+  final ValueChanged<double> onCommit;
+  final Object transactionIdentity;
+  final WebsiteAsyncFieldBinding asyncBinding;
+  final Widget? attribution;
 
   const _EditorSlider({
     required this.label,
     required this.value,
     required this.min,
     required this.max,
-    required this.onChanged,
+    required this.onCommit,
+    required this.transactionIdentity,
+    required this.asyncBinding,
     this.divisions,
     this.valueLabel,
+    this.attribution,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label,
-                style: const TextStyle(color: Colors.white70, fontSize: 12)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2D2D2D),
-                borderRadius: BorderRadius.circular(4),
+    return WebsiteTransactionalSlider(
+      value: value,
+      min: min,
+      max: max,
+      divisions: divisions,
+      onCommit: onCommit,
+      transactionIdentity: transactionIdentity,
+      asyncBinding: asyncBinding,
+      builder: (context, draft, slider) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _EditorFieldLabel(
+                  label: label,
+                  attribution: attribution,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
               ),
-              child: Text(
-                valueLabel ?? value.toInt().toString(),
-                style: const TextStyle(color: Color(0xFF00A09D), fontSize: 12),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  valueLabel ?? draft.toInt().toString(),
+                  style:
+                      const TextStyle(color: Color(0xFF00A09D), fontSize: 12),
+                ),
               ),
+            ],
+          ),
+          SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: const Color(0xFF00A09D),
+              inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
+              thumbColor: const Color(0xFF00A09D),
+              overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
             ),
-          ],
-        ),
-        SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: const Color(0xFF00A09D),
-            inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
-            thumbColor: const Color(0xFF00A09D),
-            overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
+            child: slider,
           ),
-          child: Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -409,12 +545,14 @@ class _EditorDropdown extends StatelessWidget {
   final String value;
   final List<(String, String)> options; // (value, label)
   final Function(String) onChanged;
+  final Widget? attribution;
 
   const _EditorDropdown({
     required this.label,
     required this.value,
     required this.options,
     required this.onChanged,
+    this.attribution,
   });
 
   @override
@@ -429,9 +567,14 @@ class _EditorDropdown extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(color: Colors.white70, fontSize: 12)),
-        const SizedBox(height: 6),
+        if (label.trim().isNotEmpty || attribution != null) ...[
+          _EditorFieldLabel(
+            label: label,
+            attribution: attribution,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+        ],
         MenuAnchor(
           style: MenuStyle(
             backgroundColor: WidgetStateProperty.all(const Color(0xFF2D2D2D)),
@@ -516,12 +659,14 @@ class _ImagePicker extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final ValueChanged<WebsiteMediaAsset>? onAssetChanged;
   final bool allowProductLink;
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   const _ImagePicker({
     this.currentUrl,
     this.onChanged,
     this.onAssetChanged,
     this.allowProductLink = false,
+    this.asyncBinding,
   }) : assert(onChanged != null || onAssetChanged != null);
 
   @override
@@ -531,10 +676,12 @@ class _ImagePicker extends StatefulWidget {
 class _VideoPicker extends StatefulWidget {
   final String? currentUrl;
   final Function(String) onChanged;
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   const _VideoPicker({
     this.currentUrl,
     required this.onChanged,
+    this.asyncBinding,
   });
 
   @override
@@ -568,6 +715,19 @@ class _VideoPickerState extends State<_VideoPicker> {
   }
 
   Future<void> _uploadVideoFile() async {
+    final openingCallback = widget.onChanged;
+    final currentUrl = widget.currentUrl;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    final remoteArm = openingBinding?.capture();
+    if (openingBinding != null && (arm == null || remoteArm == null)) return;
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: remoteArm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'subir un video del bloque web',
+    );
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.video,
@@ -575,11 +735,31 @@ class _VideoPickerState extends State<_VideoPicker> {
         withData: true,
       );
 
-      if (result == null || result.files.isEmpty) return;
+      if (!mounted) return;
+      if (result == null || result.files.isEmpty) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.unchanged,
+          );
+        }
+        return;
+      }
 
       final file = result.files.first;
       if (file.bytes == null) {
-        if (mounted) {
+        var accepted =
+            arm == null && identical(widget.onChanged, openingCallback);
+        if (arm != null) {
+          accepted = widget.asyncBinding
+                  ?.commit(
+                    arm,
+                    () => WebsiteInlineMutationResult.unchanged,
+                  )
+                  .accepted ??
+              false;
+        }
+        if (accepted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Error: No se pudo leer el archivo')),
           );
@@ -589,12 +769,20 @@ class _VideoPickerState extends State<_VideoPicker> {
 
       setState(() => _isUploading = true);
 
-      final tenantId = await _getTenantId();
+      final authority = remoteAuthority?.call();
+      if (remoteAuthority != null && authority == null) {
+        throw const WebsiteEditorWriteSupersededException(
+          'La sesión del editor cambió antes de subir el video.',
+        );
+      }
+      final writeGuard = authority?.claimForWrite();
+      final tenantId = authority?.tenantId ?? await _getTenantId();
 
       final fileName =
           'video_${DateTime.now().millisecondsSinceEpoch}_${file.name}';
       final storagePath = '$tenantId/videos/$fileName';
 
+      writeGuard?.call();
       await Supabase.instance.client.storage
           .from('website-assets')
           .uploadBinary(
@@ -602,14 +790,41 @@ class _VideoPickerState extends State<_VideoPicker> {
             file.bytes!,
             fileOptions: FileOptions(contentType: _videoContentType(file)),
           );
+      writeGuard?.call();
+      authority?.ensureCurrent();
 
       final publicUrl = Supabase.instance.client.storage
           .from('website-assets')
           .getPublicUrl(storagePath);
 
-      widget.onChanged(publicUrl);
+      if (!mounted) return;
+      if (widget.currentUrl != currentUrl) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.rejected,
+          );
+        }
+        return;
+      }
 
-      if (mounted) {
+      var accepted = false;
+      if (arm != null) {
+        final liveBinding = widget.asyncBinding;
+        accepted = liveBinding != null &&
+            liveBinding.commit(arm, () {
+              if (publicUrl == currentUrl) {
+                return WebsiteInlineMutationResult.unchanged;
+              }
+              widget.onChanged(publicUrl);
+              return WebsiteInlineMutationResult.committed;
+            }).accepted;
+      } else if (identical(widget.onChanged, openingCallback)) {
+        widget.onChanged(publicUrl);
+        accepted = true;
+      }
+
+      if (mounted && accepted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ Video subido correctamente'),
@@ -620,7 +835,18 @@ class _VideoPickerState extends State<_VideoPicker> {
       }
     } catch (e) {
       debugPrint('[VideoPicker] Error uploading video: $e');
-      if (mounted) {
+      var accepted = mounted && identical(widget.onChanged, openingCallback);
+      if (mounted && arm != null) {
+        final liveBinding = widget.asyncBinding;
+        accepted = liveBinding != null &&
+            liveBinding
+                .commit(
+                  arm,
+                  () => WebsiteInlineMutationResult.unchanged,
+                )
+                .accepted;
+      }
+      if (accepted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al subir video: $e'),
@@ -734,54 +960,194 @@ class _ImagePickerState extends State<_ImagePicker> {
   Future<void> _removeBackground() async {
     final currentUrl = widget.currentUrl?.trim() ?? '';
     if (currentUrl.isEmpty || _isRemovingBackground) return;
+    final openingOnChanged = widget.onChanged;
+    final openingOnAssetChanged = widget.onAssetChanged;
+    final allowProductLink = widget.allowProductLink;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    final remoteArm = openingBinding?.capture();
+    if (openingBinding != null && (arm == null || remoteArm == null)) return;
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: remoteArm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'quitar el fondo de una imagen del bloque web',
+    );
     setState(() => _isRemovingBackground = true);
     try {
-      final tenantId = await _currentTenantId();
-      if (!mounted) return;
       final selection = await showWebsiteBackgroundRemovalDialog(
         context: context,
         imageUrl: currentUrl,
-        tenantId: tenantId,
+        remoteWriteAuthority: remoteAuthority,
       );
-      if (!mounted || selection == null) return;
-      final service = WebsiteBackgroundRemovalService();
-      final resultUrl = selection.imageUrl ??
-          await service.uploadTransparentPng(
-            selection.pngBytes!,
-            prefix: 'block-no-bg',
-            originalUrl: currentUrl,
+      if (!mounted) return;
+      if (selection == null) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.unchanged,
           );
+        }
+        return;
+      }
+      final service = WebsiteBackgroundRemovalService();
+      String resultUrl;
+      if (selection.imageUrl != null) {
+        resultUrl = selection.imageUrl!;
+      } else {
+        final authority = remoteAuthority?.call();
+        if (remoteAuthority != null && authority == null) {
+          throw const WebsiteEditorWriteSupersededException(
+            'La sesión del editor cambió antes de guardar la imagen.',
+          );
+        }
+        final writeGuard = authority?.claimForWrite();
+        resultUrl = await service.uploadTransparentPng(
+          selection.pngBytes!,
+          prefix: 'block-no-bg',
+          originalUrl: currentUrl,
+          tenantId: authority?.tenantId ?? await _currentTenantId(),
+          writeGuard: writeGuard,
+        );
+        authority?.ensureCurrent();
+      }
       if (!mounted) return;
-      _emitUrl(resultUrl);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Fondo eliminado y versión web optimizada guardada.'),
-        ),
+      if (widget.currentUrl?.trim() != currentUrl ||
+          widget.allowProductLink != allowProductLink) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.rejected,
+          );
+        }
+        return;
+      }
+      final asset = WebsiteMediaAsset(
+        name: 'Imagen seleccionada',
+        path: resultUrl,
+        publicUrl: resultUrl,
       );
+      var accepted = false;
+      if (arm != null) {
+        final liveBinding = widget.asyncBinding;
+        accepted = liveBinding != null &&
+            liveBinding.commit(arm, () {
+              _emitAsset(asset);
+              return WebsiteInlineMutationResult.committed;
+            }).accepted;
+      } else if (identical(widget.onChanged, openingOnChanged) &&
+          identical(widget.onAssetChanged, openingOnAssetChanged)) {
+        _emitAsset(asset);
+        accepted = true;
+      }
+      if (accepted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Fondo eliminado y versión web optimizada guardada.'),
+          ),
+        );
+      }
     } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.red,
-        ),
-      );
+      var accepted = mounted &&
+          identical(widget.onChanged, openingOnChanged) &&
+          identical(widget.onAssetChanged, openingOnAssetChanged);
+      if (mounted && arm != null) {
+        final liveBinding = widget.asyncBinding;
+        accepted = liveBinding != null &&
+            liveBinding
+                .commit(
+                  arm,
+                  () => WebsiteInlineMutationResult.unchanged,
+                )
+                .accepted;
+      }
+      if (accepted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isRemovingBackground = false);
     }
   }
 
   Future<void> _pickAndUploadImage() async {
+    final currentUrl = widget.currentUrl;
+    final openingOnChanged = widget.onChanged;
+    final openingOnAssetChanged = widget.onAssetChanged;
+    final allowProductLink = widget.allowProductLink;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    final remoteArm = openingBinding?.capture();
+    if (openingBinding != null && (arm == null || remoteArm == null)) return;
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: remoteArm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'subir una imagen del bloque web',
+    );
     try {
       final selection = await showWebsiteMediaPicker(
         context: context,
-        currentUrl: widget.currentUrl,
-        allowProductLink: widget.allowProductLink,
+        currentUrl: currentUrl,
+        allowProductLink: allowProductLink,
+        remoteWriteAuthority: remoteAuthority,
       );
-      if (selection != null) _emitAsset(selection);
+      if (!mounted) return;
+      if (widget.currentUrl != currentUrl ||
+          widget.allowProductLink != allowProductLink) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.rejected,
+          );
+        }
+        return;
+      }
+      if (selection == null) {
+        if (arm != null) {
+          widget.asyncBinding?.commit(
+            arm,
+            () => WebsiteInlineMutationResult.unchanged,
+          );
+        }
+        return;
+      }
+      if (arm != null) {
+        final liveBinding = widget.asyncBinding;
+        if (liveBinding == null) return;
+        liveBinding.commit(arm, () {
+          _emitAsset(selection);
+          return WebsiteInlineMutationResult.committed;
+        });
+        return;
+      }
+      if (!identical(widget.onChanged, openingOnChanged) ||
+          !identical(widget.onAssetChanged, openingOnAssetChanged)) {
+        return;
+      }
+      _emitAsset(selection);
     } catch (e) {
       debugPrint('Error selecting image: $e');
-      if (mounted) {
+      var accepted = mounted &&
+          identical(widget.onChanged, openingOnChanged) &&
+          identical(widget.onAssetChanged, openingOnAssetChanged);
+      if (mounted && arm != null) {
+        final liveBinding = widget.asyncBinding;
+        accepted = liveBinding != null &&
+            liveBinding
+                .commit(
+                  arm,
+                  () => WebsiteInlineMutationResult.unchanged,
+                )
+                .accepted;
+      }
+      if (accepted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al seleccionar imagen: $e'),
@@ -926,13 +1292,13 @@ class _ColorField extends StatefulWidget {
   final String label;
   final TextEditingController controller;
   final bool allowAlpha;
-  final VoidCallback? onChanged;
+  final WebsiteAsyncFieldBinding asyncBinding;
 
   const _ColorField({
     required this.label,
     required this.controller,
+    required this.asyncBinding,
     this.allowAlpha = true,
-    this.onChanged,
   });
 
   @override
@@ -958,9 +1324,9 @@ class _ColorFieldState extends State<_ColorField> {
               ? '#FFFFFF'
               : widget.controller.text,
           allowAlpha: widget.allowAlpha,
+          asyncBinding: widget.asyncBinding,
           onChanged: (value) {
             widget.controller.text = value;
-            widget.onChanged?.call();
             setState(() {});
           },
         ),
@@ -984,8 +1350,15 @@ class _ColorFieldState extends State<_ColorField> {
   Future<void> _activateEyedropper(BuildContext context) async {
     final provider = context.read<WebsiteEditModeProvider>();
     final boundaryKey = provider.previewRepaintKey;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding.capture();
+    if (arm == null) return;
 
     if (boundaryKey.currentContext == null) {
+      openingBinding.commit(
+        arm,
+        () => WebsiteInlineMutationResult.unchanged,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text(
@@ -1004,7 +1377,12 @@ class _ColorFieldState extends State<_ColorField> {
             behavior: HitTestBehavior.opaque,
             onTapDown: (details) {
               // Capture position and process
-              _processColorPick(details.globalPosition, boundaryKey);
+              _processColorPick(
+                details.globalPosition,
+                boundaryKey,
+                arm: arm,
+                openingBinding: openingBinding,
+              );
               entry?.remove();
               entry = null;
             },
@@ -1028,11 +1406,23 @@ class _ColorFieldState extends State<_ColorField> {
     );
   }
 
-  Future<void> _processColorPick(Offset globalPosition, GlobalKey key) async {
+  Future<void> _processColorPick(
+    Offset globalPosition,
+    GlobalKey key, {
+    required WebsiteAsyncFieldArm arm,
+    required WebsiteAsyncFieldBinding openingBinding,
+  }) async {
+    var consumed = false;
     try {
       final renderBox =
           key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (renderBox == null) return;
+      if (renderBox == null) {
+        openingBinding.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+        return;
+      }
 
       // Convert global tap position to local coordinates of the boundary
       final localPosition = renderBox.globalToLocal(globalPosition);
@@ -1063,8 +1453,16 @@ class _ColorFieldState extends State<_ColorField> {
         final color = Color.fromARGB(255, r, g, b);
 
         if (mounted) {
-          widget.controller.text = _colorToHex(color);
-          widget.onChanged?.call();
+          final serialized = _colorToHex(color);
+          final accepted = widget.asyncBinding.commit(arm, () {
+            if (widget.controller.text == serialized) {
+              return WebsiteInlineMutationResult.unchanged;
+            }
+            widget.controller.text = serialized;
+            return WebsiteInlineMutationResult.committed;
+          }).accepted;
+          consumed = true;
+          if (!accepted) return;
           setState(() {});
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1077,9 +1475,29 @@ class _ColorFieldState extends State<_ColorField> {
               duration: const Duration(seconds: 1),
             ),
           );
+        } else {
+          openingBinding.commit(
+            arm,
+            () => WebsiteInlineMutationResult.unchanged,
+          );
+          consumed = true;
         }
+      } else {
+        final liveBinding = mounted ? widget.asyncBinding : openingBinding;
+        liveBinding.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+        consumed = true;
       }
     } catch (e) {
+      if (!consumed) {
+        final liveBinding = mounted ? widget.asyncBinding : openingBinding;
+        liveBinding.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+      }
       debugPrint('Eyedropper error: $e');
     }
   }

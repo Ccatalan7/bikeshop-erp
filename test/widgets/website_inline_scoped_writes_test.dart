@@ -107,6 +107,11 @@ void main() {
                   data: Map<String, dynamic>.from(
                     watched.blocks.single['block_data'] as Map,
                   ),
+                  effectiveViewport:
+                      WebsiteResponsiveDataCodec.viewportForDocumentWidth(
+                    data,
+                    width,
+                  ),
                   primaryColor: Colors.teal,
                   accentColor: Colors.tealAccent,
                   onNavigate: (_) {},
@@ -222,6 +227,7 @@ void main() {
         'imageUrl',
         policy: WebsiteResponsivePropertyPolicy.responsiveOptional,
       );
+      await settle(tester);
 
       imageAt(tester, 0).onChanged!('https://cdn/hero-vertical.webp');
       await settle(tester);
@@ -261,6 +267,7 @@ void main() {
         identityKey: 'id',
         identityValue: 'img-a',
       );
+      await settle(tester);
 
       imageAt(tester, 0).onChanged!('https://cdn/taller-vertical.webp');
       await settle(tester);
@@ -354,6 +361,7 @@ void main() {
         identityKey: 'id',
         identityValue: 'mbr-a',
       );
+      await settle(tester);
 
       imageAt(tester, 0).onChanged!('https://cdn/daniela-2.webp');
       await settle(tester);
@@ -390,6 +398,7 @@ void main() {
         'maxWidth',
         policy: WebsiteResponsivePropertyPolicy.responsiveOptional,
       );
+      await settle(tester);
       final editable = textWith(tester, 'Cuidamos tu bicicleta');
       editable.onWidthChanged!(320);
       await settle(tester);
@@ -403,6 +412,7 @@ void main() {
         'text',
         policy: WebsiteResponsivePropertyPolicy.sharedOnly,
       );
+      await settle(tester);
       textWith(tester, 'Cuidamos tu bicicleta').onTextChanged!('Texto nuevo');
       await settle(tester);
       expect(dataOf(provider)['text'], 'Texto nuevo');
@@ -459,6 +469,7 @@ void main() {
         'ctaLink',
         policy: WebsiteResponsivePropertyPolicy.sharedOnly,
       );
+      await settle(tester);
 
       final editor = tester.widget<WebsiteInlineActionEditor>(
         find.byType(WebsiteInlineActionEditor),
@@ -543,6 +554,7 @@ void main() {
         'imageUrl',
         policy: WebsiteResponsivePropertyPolicy.responsiveOptional,
       );
+      await settle(tester);
 
       imageAt(tester, 0).onChanged!('https://cdn/tablet.webp');
       await settle(tester);
@@ -567,6 +579,7 @@ void main() {
         'imageUrl',
         policy: WebsiteResponsivePropertyPolicy.responsiveOptional,
       );
+      await settle(tester);
 
       imageAt(tester, 0).onChanged!('https://cdn/hero-2.webp');
       await settle(tester);
@@ -584,9 +597,14 @@ void main() {
         File('lib/modules/website/widgets/editable_block_renderer.dart')
             .readAsStringSync();
 
-    test('los presenters pasan por el writer canónico', () {
-      expect(rendererSource, contains('WebsiteInlineResponsiveWriter('));
-      expect(rendererSource, contains('WebsiteInlinePropertyWrite('));
+    test('los presenters pasan por leases exactos y one-shot', () {
+      expect(rendererSource, contains('captureInlineMutationLease('));
+      expect(rendererSource, contains('commitInlineMutation('));
+      expect(
+        rendererSource,
+        isNot(contains('WebsiteInlineResponsiveWriter(')),
+        reason: 'el writer live podía redirigir un callback stale',
+      );
       expect(
         rendererSource,
         isNot(contains('updateBoundValues')),

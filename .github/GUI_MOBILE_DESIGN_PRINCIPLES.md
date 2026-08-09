@@ -331,6 +331,88 @@ full-screen or routed flow only when the task itself needs that focus.
 For drag/reorder behavior, provide a touch alternative such as labelled move
 up/down controls when precise drag is not reliable or accessible.
 
+### Stateful direct manipulation is an owned transaction
+
+- **Problem observed:** A Canvas pointer admitted under one touch mode could
+  finish after that mode was stopped and re-armed for the same layer. Because
+  target/mode/viewport were structurally equal, the stale pointer could write
+  under the newer arm. Locking, removing or undoing the layer mid-gesture could
+  also leave its local draft painted, and eight separate 48px resize
+  recognizers overlapped on compact layers.
+- **Cause:** Gesture admission, availability and persistence were separate
+  reads; the session had no generation; cancellation did not rejoin the live
+  document; and enlarging desktop handles was mistaken for touch arbitration.
+- **Approved pattern:** The operation owner issues a monotonic generation for
+  every real arm. At pointer-down, before slop or arena acceptance, the
+  recognizer captures one immutable lease containing that exact session, a
+  deep snapshot of the rendered document, the owner document epoch, source
+  epoch, projected viewport, visible write scope, initial position and resolved
+  intention. It never rereads ambient selection, session or scope state in
+  `onPanStart`. One synchronous owner command then compares the generation,
+  document epoch, deep document value and write scope, revalidates the live
+  target, and persists at most one patch. The deep snapshot rejects ordinary
+  source drift; the owner epoch advances for every page-document mutation,
+  including undo, redo, rebaseline and durable restore, so a byte-identical
+  A→B→A transition cannot admit an old pointer. UI start callbacks name their
+  captured target, viewport and visible scope; stop and dispose name the exact
+  session generation. Mode/workspace transitions invalidate the session even
+  when they reopen the same page with byte-identical content. Every read-only
+  owner view is deeply immutable. A composed Carousel exposes one pure Canvas
+  authoring projection — including its exact defaults and aliases — to the
+  renderer, binding and provider, rather than comparing the rendered Canvas to
+  a raw slide map. Any source, scope or responsive-band change cancels the lease.
+  Cancellation or rejection discards the draft and immediately rereads the
+  owner document; an owner reader returning null means the document disappeared
+  and must not fall back to stale widget data. On compact resize, one
+  48px-minimum arena participant, clamped inside the Canvas bounds, resolves the
+  nearest visible edge/corner at pointer-down; visual handles are not eight
+  competing recognizers. That touch owner stays axis-aligned and covers the
+  complete rotated visual bounds while only the element chrome rotates;
+  admission inverse-rotates the pointer into frame space. Compact rotation
+  likewise owns a Canvas-clamped 48px surface instead of depending on painted
+  overflow. O-05 has mixed policy and therefore publishes no false global
+  scope badge: transformation callbacks capture target, viewport, selection
+  version and the visible default write scope from the projection that rendered
+  them; shared-only lock and viewport visibility state their own effective
+  scope beside the row. A stale callback cannot redirect itself to a later
+  viewport, selection or scope. Alignment, ordering and geometry follow that
+  visible common/viewport scope, while an asynchronous destructive confirmation
+  revalidates the same projection after its await. The document owner
+  rejects non-finite `x/y/w/h/rotation` and non-positive `w/h` atomically;
+  gesture-specific minimum sizes remain UI policy, so valid small authored
+  layers are not rewritten. Pointer surfaces may keep precise handles where
+  they do not overlap.
+- **Anti-pattern:** Checking only layer/mode at pointer-up; rereading the
+  current session when `onPanStart` fires; starting from ambient selection or
+  stopping without an exact generation; using a generic property writer after
+  a separate availability check; falling back to stale widget data or a
+  whole-list writer when the atomic owner refuses; returning from `onPanStart`
+  after already entering the gesture arena; or making every small handle 48px
+  without defining who arbitrates their overlap.
+- **Minimum test:** With the production provider and renderer, arm S1, put a
+  pointer down, stop and re-arm an equal-looking S2 before slop and without
+  pumping, then move/release and prove zero writes/history from S1. Repeat for
+  a source mutation before slop, a source mutation after start both with and
+  without a frame pump, undo, byte-identical undo→redo ABA, a write-scope
+  change, an Edit→Preview→Edit ABA, a 390→834 viewport transition, another mode
+  and exact unmount/dispose. A composed Carousel must mount through the real
+  provider/renderer, accept one touch command and undo it once; attempts to
+  mutate a nested value returned by its read owner must throw without changing
+  bytes, epoch or history. A removed owner
+  document must leave no ghost and no legacy fallback. Stale O-05/dock callbacks
+  may neither arm the new selection nor stop a newer generation. At a 390px
+  host, exercise all eight resize intentions, including a handle selected at
+  pointer-down and rotated 24px layers on every Canvas corner; verify exact
+  axes, anchors, bounded hit surfaces and one command. Repeat rotation with
+  24/48/72px corner layers and resize a normal 120×56 layer at 45° from a
+  visible rotated corner. Prove O-05 common writes change base without an
+  override, viewport writes change only that override, and callbacks rendered
+  before a scope change or destructive confirmation cannot write. Submit zero,
+  negative, NaN and infinite geometry and
+  prove no bytes, dirty flag, history or false field value changed. Invoke stale
+  O-05 callbacks after a viewport/selection transition and prove they neither
+  arm nor write. Browse touch must still scroll the page.
+
 ## Forms, focus, and the virtual keyboard
 
 Compact forms must be designed with the keyboard open, not only with an empty
@@ -906,15 +988,30 @@ Every record must contain these exact fields:
   viewport inset into its pre-transform coordinate space (`inset / scale`)
   before publishing the descendant `MediaQuery`; otherwise root overlays and
   ordinary `SafeArea` consumers both land inside the physical system boundary.
+  **iPadOS 26 window controls are not a `SafeArea` inset.** UIKit owns them
+  through `UIView.edgeInsets(for: .margins(cornerAdaptation: .horizontal))`,
+  while Flutter 3.38 publishes only `UIView.safeAreaInsets`. A native host must
+  therefore publish those adaptive horizontal margins as a separate geometry
+  family. `WindowZoomScope` accepts them only when the native snapshot size
+  matches the current pre-zoom root viewport, normalizes them by the applied
+  scale, and a top-level control row resolves each edge with
+  `max(safe, adapted, design)` — never by adding the three. Only the control
+  row consumes that region; its painted canvas and the authored page remain
+  edge-to-edge.
 - **Anti-pattern:** Wrapping the authenticated workspace in a top `SafeArea`;
   stacking a second AppBar below a protected blank strip; relying on a literal
   native/status-bar color under mandatory edge-to-edge; painting a full-screen
   replacement without publishing the matching icon contrast; positioning a
   root banner from `padding.top` or a fixed `top`; or accepting a source-string
-  check without proving rendered geometry.
+  check without proving rendered geometry; faking iPad window controls by
+  injecting `MediaQuery.padding`; or copying adaptive margins into the global
+  `MediaQuery`, which over-insets every routed surface.
 - **Reference implementation:** `lib/main.dart`,
   `lib/shared/widgets/main_layout.dart`,
   `lib/shared/widgets/workspace_shell_scope.dart`,
+  `lib/shared/widgets/window_chrome_layout_region_scope.dart`,
+  `lib/shared/services/window_chrome_layout_region_service.dart`,
+  `ios/Runner/WindowChromeLayoutViewController.swift`,
   `lib/shared/widgets/right_toolbar.dart`, and
   `lib/shared/themes/vinabike_theme_roles.dart`.
 - **Minimum test:** With a non-zero simulated top system inset, render the real
@@ -931,6 +1028,12 @@ Every record must contain these exact fields:
   and prove both its settled geometry and its clip start below the system bar.
   Repeat at application scale `1.0` and `0.8` and prove the clip lands on the
   same physical system boundary. Re-run the transition at `899/900`. Then
+  render the real compact and dense top control rows with zero safe padding
+  and non-zero adaptive margins, proving that controls clear both sides while
+  the canvas retains its full width; reject a stale native-size snapshot and
+  repeat at application scale `0.8`. Rebuild the iOS host (hot reload cannot
+  load the bridge) and resize an iPad window to prove the native revision and
+  row geometry update together. Then
   inspect the built Android artifact and verify status-bar continuity plus
   legible icons on a current Android device or emulator; a Dart contract alone
   is insufficient.

@@ -1163,37 +1163,37 @@ Se construye el candidato contra **esa** base, no contra la que uno supone.
 
 ---
 
-## 6. Qué necesita al dueño
+## 6. Qué ejecuta el agente y qué sí necesita al dueño
 
-**Todo efecto que salga de este checkout se pide, y se pide por acción:**
-commit, push, publicar la actualización, desplegar migraciones o funciones,
-`scripts/deploy.sh` y CHECKPOINT B (writes reales de conciliación).
+**Corrección del dueño, 2026-08-09:** implementar, arreglar, terminar, ship o
+deploy incluye los efectos normales, no destructivos y revisados necesarios
+para que el resultado quede activo: migraciones, funciones, despliegue,
+read-back y smoke. Claude los entrega a Codex si su guard no le permite
+ejecutarlos; ninguno de los dos vuelve al dueño por una confirmación rutinaria.
+Un `local-only`, `draft` o `no production writes` limita sólo el subtask mientras
+sea la instrucción vigente y no sobrevive a una orden posterior de terminar.
 
-El contrato que manda es `CODEX_CLAUDE_COLLABORATION.md` §Safety boundary:
-«Production writes, deployment, publication, messages, commits, and pushes
-require the owner's explicit authorization.» Una autorización puntual **no** se
-convierte en permiso permanente — se vuelve a pedir la próxima vez.
+Sí vuelven al dueño una reparación destructiva, rotación de credenciales,
+target ambiguo, publicación materialmente más amplia, mensaje enviado en su
+nombre o expansión ajena al resultado pedido.
 
 ### El guard mecánico mide capacidad, no permiso
 
-Son dos cosas distintas y confundirlas es lo que esta sección existe para
-impedir: hasta el 2026-08-01 este mismo documento decía «commit y push ya no
-[se piden]», y con eso un agente quedaba autorizándose solo.
+Son dos cosas distintas: el hook decide qué proceso puede ejecutar una acción;
+el alcance vigente decide si el resultado incluye esa acción. Un deploy
+in-scope denegado a Claude se enruta a Codex; no se transforma en trabajo del
+dueño ni en un módulo local incompleto.
 
 | | Hoy el hook `.claude/hooks/guard-dangerous-bash.sh` |
 |---|---|
 | **Deja pasar** | `git add` · `commit` · `push` · `restore -- <rutas nombradas>` · `scripts/publish_*` · `scripts/releases/*` |
 | **Sigue denegando** | `git rebase` · `restore` de alcance abierto · `supabase db\|migration` · `firebase deploy` · `supabase functions deploy` · `scripts/deploy.sh` · `production_validation.sh refresh` |
 
-Que el hook **deje de impedir** algo no concede permiso: sólo deja de
-bloquearlo. El contrato no se movió cuando se movió el hook. Lo que la fila de
-la izquierda describe es qué comandos no van a fallar, no cuáles se pueden
-ejecutar.
-
-Ya con la autorización en la mano, antes de mover `origin` se comprueba que
-Codex no esté publicando desde este checkout (§ el bloque de arranque del
-handoff de Nóminas). El guard deniega lo de la fila derecha y **no se rodea**:
-se le entrega al dueño el comando exacto y la evidencia.
+La tabla describe capacidad de Claude, no una exigencia de segunda
+confirmación. Antes de mover `origin` se comprueba que Codex no esté publicando
+desde este checkout (§ el bloque de arranque del handoff de Nóminas). El guard
+no se rodea: un efecto normal in-scope se entrega a Codex con la evidencia; sólo
+los casos excepcionales definidos arriba se entregan al dueño.
 
 ### Publicar: dos targets, un solo workflow
 

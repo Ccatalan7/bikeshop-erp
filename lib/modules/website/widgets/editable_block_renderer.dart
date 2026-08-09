@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/website_edit_mode_provider.dart';
@@ -8,17 +10,77 @@ import '../widgets/block_action_bar.dart';
 import '../models/website_font_registry.dart';
 import '../models/website_action.dart';
 import '../models/website_block_capabilities.dart';
+import '../models/website_block_definition.dart';
 import '../models/website_block_geometry.dart';
+import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
+import '../models/website_canvas_manipulation.dart';
 import '../models/website_responsive_authoring.dart';
 import 'website_block_content_presenters.dart';
-import 'website_responsive_scalar_binding.dart';
 import 'website_block_renderer.dart';
 import 'website_editor_chrome_geometry.dart';
 import 'website_canvas_editor_binding.dart';
 import 'website_carousel_edit_binding.dart';
 import 'website_inline_action_editor.dart';
+import 'website_media_picker.dart';
+import '../services/website_service.dart';
 import '../../../shared/models/product.dart';
+
+WebsiteEditorRemoteWriteAuthority? _canvasRemoteWriteAuthority({
+  required WebsiteEditModeProvider provider,
+  required WebsiteCanvasDocumentTarget documentTarget,
+  required WebsiteEditorAsyncIntent expectedIntent,
+  required String layerId,
+  required WebsiteWriteScope scope,
+  required WebsiteViewport viewport,
+  required String operation,
+  required bool Function() isLiveBinding,
+}) {
+  final target = WebsiteCanvasLayerTarget(
+    document: documentTarget,
+    layerId: layerId,
+  );
+  final tenantId = provider.sessionOwnerTenantId?.trim() ?? '';
+  final fingerprint = provider.sessionOwnerLeaseFingerprint;
+  if (tenantId.isEmpty || fingerprint == null) return null;
+  if (provider.selectedCanvasLayerTarget != target ||
+      provider.renderedCanvasViewport(documentTarget) != viewport ||
+      provider.writeScope != scope) {
+    return null;
+  }
+  final pageId = provider.currentPageId;
+  final pageSlug = provider.currentPageSlug;
+  final sessionRevision = provider.documentSessionRevision;
+  final documentEpoch = provider.pageDocumentEpoch;
+  final entryGeneration = provider.editorEntryLeaseGeneration;
+  final entryIdentityRevision = provider.editorEntryLeaseIdentityRevision;
+
+  bool isCurrent() =>
+      isLiveBinding() &&
+      provider.currentPageId == pageId &&
+      provider.currentPageSlug == pageSlug &&
+      provider.documentSessionRevision == sessionRevision &&
+      provider.pageDocumentEpoch == documentEpoch &&
+      provider.editorEntryLeaseGeneration == entryGeneration &&
+      provider.editorEntryLeaseIdentityRevision == entryIdentityRevision &&
+      provider.sessionOwnerTenantId == tenantId &&
+      provider.sessionOwnerLeaseFingerprint == fingerprint &&
+      provider.selectedCanvasLayerTarget == target &&
+      provider.renderedCanvasViewport(documentTarget) == viewport &&
+      provider.writeScope == scope;
+
+  return WebsiteEditorRemoteWriteAuthority(
+    tenantId: tenantId,
+    operation: operation,
+    isCurrent: isCurrent,
+    claimOwner: () =>
+        provider.commitAsyncIntent(
+          expectedIntent,
+          () => WebsiteInlineMutationResult.unchanged,
+        ) !=
+        WebsiteInlineMutationResult.rejected,
+  );
+}
 
 /// Renders website blocks with inline editing capability when in edit mode.
 /// This wraps the standard WebsiteBlockRenderer and adds editable overlays.
@@ -31,6 +93,7 @@ class EditableBlockRenderer {
     required String blockId,
     required String blockType,
     required Map<String, dynamic> data,
+    required WebsiteViewport effectiveViewport,
     required Color primaryColor,
     required Color accentColor,
     List<Product>? featuredProducts,
@@ -55,6 +118,7 @@ class EditableBlockRenderer {
           blockId: blockId,
           blockType: blockType,
           data: data,
+          effectiveViewport: effectiveViewport,
           primaryColor: primaryColor,
           accentColor: accentColor,
           featuredProducts: featuredProducts,
@@ -77,6 +141,7 @@ class _EditableBlockWrapper extends StatefulWidget {
   final String blockId;
   final String blockType;
   final Map<String, dynamic> data;
+  final WebsiteViewport effectiveViewport;
   final Color primaryColor;
   final Color accentColor;
   final List<Product>? featuredProducts;
@@ -99,6 +164,7 @@ class _EditableBlockWrapper extends StatefulWidget {
     required this.blockId,
     required this.blockType,
     required this.data,
+    required this.effectiveViewport,
     required this.primaryColor,
     required this.accentColor,
     this.featuredProducts,
@@ -123,6 +189,11 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
   double?
       _localDragHeight; // Local height during drag (avoids Provider rebuilds)
   bool _isDragging = false;
+  WebsiteInlineManipulationLease? _heightLease;
+  WebsiteEditModeProvider? _heightProvider;
+  bool _viewportReportScheduled = false;
+  WebsiteViewport? _pendingViewportReport;
+  WebsiteEditModeProvider? _pendingViewportProvider;
 
   @override
   void initState() {
@@ -156,12 +227,45 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     }
   }
 
-  /// Handle drag start
-  void _onDragStart(double startHeight) {
+  WebsiteInlineManipulationTarget _rootManipulationTarget({
+    required WebsiteViewport viewport,
+    required Iterable<WebsiteInlineManipulationProperty> properties,
+    bool requiresSelection = true,
+  }) {
+    return WebsiteInlineManipulationTarget(
+      blockId: widget.blockId,
+      owner: const WebsiteInlineBlockOwner(),
+      viewport: viewport,
+      properties: properties,
+      requiresSelection: requiresSelection,
+    );
+  }
+
+  /// Arm the exact height transaction before the drag recognizer wins.
+  bool _onDragStart(
+    double startHeight,
+    WebsiteEditModeProvider editProvider,
+    WebsiteViewport viewport,
+  ) {
+    _cancelHeightManipulation(updateLocalState: false);
+    final lease = editProvider.beginInlineManipulation(
+      _rootManipulationTarget(
+        viewport: viewport,
+        properties: <WebsiteInlineManipulationProperty>[
+          WebsiteInlineManipulationProperty.fromSchema(
+            WebsiteBlockMetaFields.blockHeight,
+          ),
+        ],
+      ),
+    );
+    if (lease == null) return false;
+    _heightLease = lease;
+    _heightProvider = editProvider;
     setState(() {
       _isDragging = true;
       _localDragHeight = startHeight;
     });
+    return true;
   }
 
   /// Handle drag update (local state only, no Provider rebuild)
@@ -173,27 +277,101 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
   /// Handle drag end (commit to Provider)
   void _onDragEnd(double finalHeight, WebsiteEditModeProvider editProvider) {
-    editProvider.updateBlockData(widget.blockId, 'blockHeight', finalHeight);
+    final lease = _heightLease;
+    _heightLease = null;
+    _heightProvider = null;
+    setState(() {
+      _isDragging = false;
+      _localDragHeight = null;
+    });
+    if (lease == null) return;
+    editProvider.commitInlineManipulation(
+      lease,
+      <String, Object?>{
+        WebsiteBlockMetaFields.blockHeight.key: finalHeight,
+      },
+    );
+  }
+
+  /// Handle height reset
+  void _onResetHeight(
+    WebsiteEditModeProvider editProvider,
+    WebsiteViewport viewport,
+  ) {
+    _cancelHeightManipulation(updateLocalState: false);
+    final lease = editProvider.captureInlineMutationLease(
+      _rootManipulationTarget(
+        viewport: viewport,
+        properties: <WebsiteInlineManipulationProperty>[
+          WebsiteInlineManipulationProperty.fromSchema(
+            WebsiteBlockMetaFields.blockHeight,
+          ),
+        ],
+      ),
+    );
+    setState(() {
+      _isDragging = false;
+      _localDragHeight = null;
+    });
+    if (lease != null) {
+      editProvider.commitInlineMutation(
+        lease,
+        <String, Object?>{WebsiteBlockMetaFields.blockHeight.key: null},
+      );
+    }
+    // Re-measure after reset
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureHeight());
+  }
+
+  void _cancelHeightManipulation({bool updateLocalState = true}) {
+    final lease = _heightLease;
+    final provider = _heightProvider;
+    _heightLease = null;
+    _heightProvider = null;
+    if (lease != null) provider?.cancelInlineManipulation(lease);
+    if (!updateLocalState || !mounted) return;
     setState(() {
       _isDragging = false;
       _localDragHeight = null;
     });
   }
 
-  /// Handle height reset
-  void _onResetHeight(WebsiteEditModeProvider editProvider) {
-    editProvider.updateBlockData(widget.blockId, 'blockHeight', null);
-    setState(() {
-      _isDragging = false;
-      _localDragHeight = null;
+  void _scheduleViewportReport(
+    WebsiteEditModeProvider provider,
+    WebsiteViewport viewport,
+  ) {
+    if (provider.renderedBlockViewportFor(widget.blockId) == viewport) return;
+    _pendingViewportProvider = provider;
+    _pendingViewportReport = viewport;
+    if (_viewportReportScheduled) return;
+    _viewportReportScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportReportScheduled = false;
+      final pendingProvider = _pendingViewportProvider;
+      final pendingViewport = _pendingViewportReport;
+      _pendingViewportProvider = null;
+      _pendingViewportReport = null;
+      if (!mounted || pendingProvider == null || pendingViewport == null) {
+        return;
+      }
+      pendingProvider.reportRenderedBlockViewport(
+        widget.blockId,
+        pendingViewport,
+      );
     });
-    // Re-measure after reset
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measureHeight());
+  }
+
+  @override
+  void dispose() {
+    _cancelHeightManipulation(updateLocalState: false);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final editProvider = context.read<WebsiteEditModeProvider>();
+    final effectiveViewport = widget.effectiveViewport;
+    _scheduleViewportReport(editProvider, effectiveViewport);
     final blocks = editProvider.blocks;
     final blockIndex = blocks.indexWhere((b) => b['id'] == widget.blockId);
     final isFirst = blockIndex == 0;
@@ -232,18 +410,6 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     // Build the editable content based on block type
     Widget blockContent = _buildEditableBlock(context);
 
-    // Canvas owns its public geometry and background inside the shared content
-    // renderer. Applying a second Edit-only style wrapper would make
-    // Edit/Preview/Public disagree on size, padding, clipping, and decoration.
-    if (widget.blockType != WebsiteBlockType.canvas.name) {
-      // A shared adapted-content override already carries its canonical
-      // presentation from the common adapter path; re-applying the persisted
-      // style decoration ONLY in Edit would diverge from Preview/Public.
-      if (widget.contentOverride == null) {
-        blockContent = _applyStyleDecoration(blockContent);
-      }
-    }
-
     // Wrap with selection and action bar
     // Resize handles are INSIDE the Stack so they don't add extra space
 
@@ -252,7 +418,15 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       // Pointer-down participates in event propagation instead of the gesture
       // arena, so clicking inline text, a CTA, or a Canvas layer always selects
       // its owning block before the nested editor handles the same pointer.
-      onPointerDown: (_) => editProvider.selectBlock(widget.blockId),
+      onPointerDown: (_) {
+        // Nested controls re-emit their precise selection themselves. Calling
+        // selectBlock for an already-selected owner is not harmless: it is the
+        // explicit boundary that clears a Canvas manipulation session. Only
+        // restore the owning block when the pointer truly crossed blocks.
+        if (editProvider.selectedBlockId != widget.blockId) {
+          editProvider.selectBlock(widget.blockId);
+        }
+      },
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -344,11 +518,19 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 onMoveUp: () => editProvider.moveBlockUp(widget.blockId),
                 onMoveDown: () => editProvider.moveBlockDown(widget.blockId),
                 onDuplicate: () => editProvider.duplicateBlock(widget.blockId),
-                onDelete: () => _confirmDelete(context, editProvider),
+                onDelete: () {
+                  _confirmDelete(context, editProvider);
+                },
                 onToggleVisibility: () =>
                     editProvider.toggleBlockVisibility(widget.blockId),
               ),
             ),
+
+          // The contextual host's reorder handle is NOT here: it belongs to the
+          // chrome overlay in `PageComposition`, pinned to the same seam as the
+          // insert markers. Inside this Stack it was unreachable — a block
+          // shorter than 48 cannot hit-test a 48 child, and the full-width
+          // «Agregar aquí» band paints over every block's top corner.
 
           // Top resize handle - positioned INSIDE the block at top edge
           if (showsPointerBlockChrome &&
@@ -365,16 +547,18 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 isActive: true,
                 isTopHandle: true,
                 snapIncrement: 10,
+                onHeightChangeStart: (startHeight) => _onDragStart(
+                  startHeight,
+                  editProvider,
+                  effectiveViewport,
+                ),
                 onHeightChanged: (newHeight) {
-                  if (!_isDragging) {
-                    _onDragStart(newHeight);
-                  } else {
-                    _onDragUpdate(newHeight);
-                  }
+                  if (_isDragging) _onDragUpdate(newHeight);
                 },
                 onHeightChangeEnd: (finalHeight) {
                   _onDragEnd(finalHeight, editProvider);
                 },
+                onHeightChangeCancel: _cancelHeightManipulation,
               ),
             ),
 
@@ -393,17 +577,20 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 isActive: true,
                 isTopHandle: false,
                 snapIncrement: 10,
+                onHeightChangeStart: (startHeight) => _onDragStart(
+                  startHeight,
+                  editProvider,
+                  effectiveViewport,
+                ),
                 onHeightChanged: (newHeight) {
-                  if (!_isDragging) {
-                    _onDragStart(newHeight);
-                  } else {
-                    _onDragUpdate(newHeight);
-                  }
+                  if (_isDragging) _onDragUpdate(newHeight);
                 },
                 onHeightChangeEnd: (finalHeight) {
                   _onDragEnd(finalHeight, editProvider);
                 },
-                onResetHeight: () => _onResetHeight(editProvider),
+                onHeightChangeCancel: _cancelHeightManipulation,
+                onResetHeight: () =>
+                    _onResetHeight(editProvider, effectiveViewport),
               ),
             ),
         ],
@@ -417,241 +604,6 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       if (type.name.toLowerCase() == normalized) return type;
     }
     return null;
-  }
-
-  /// Apply style decoration from block's style data
-  Widget _applyStyleDecoration(Widget child) {
-    final rawStyle = widget.data['style'];
-    // Standalone buttons use the legacy scalar `style` alias for their action
-    // variant. Only a map represents block decoration.
-    if (rawStyle is! Map) return child;
-    final style = Map<String, dynamic>.from(rawStyle);
-
-    // Check if there's any styling to apply
-    final hasBackground = style['backgroundColor'] != null ||
-        style['backgroundType'] == 'gradient';
-    final hasBorder = (style['borderWidth'] as num?)?.toDouble() != null &&
-        (style['borderWidth'] as num).toDouble() > 0;
-    final hasShadow = style['shadowEnabled'] == true;
-    final hasBorderRadius =
-        (style['borderRadius'] as num?)?.toDouble() != null &&
-            (style['borderRadius'] as num).toDouble() > 0;
-    final hasPadding = style['paddingTop'] != null ||
-        style['paddingRight'] != null ||
-        style['paddingBottom'] != null ||
-        style['paddingLeft'] != null;
-
-    // Return child as-is if no styling
-    if (!hasBackground &&
-        !hasBorder &&
-        !hasShadow &&
-        !hasBorderRadius &&
-        !hasPadding) {
-      return child;
-    }
-
-    // Parse padding
-    final paddingTop = (style['paddingTop'] as num?)?.toDouble() ?? 0.0;
-    final paddingRight = (style['paddingRight'] as num?)?.toDouble() ?? 0.0;
-    final paddingBottom = (style['paddingBottom'] as num?)?.toDouble() ?? 0.0;
-    final paddingLeft = (style['paddingLeft'] as num?)?.toDouble() ?? 0.0;
-
-    // Parse border
-    final borderWidth = (style['borderWidth'] as num?)?.toDouble() ?? 0.0;
-    final borderColor =
-        _parseColor(style['borderColor']?.toString()) ?? Colors.grey;
-    final borderRadius = (style['borderRadius'] as num?)?.toDouble() ?? 0.0;
-    final borderStyle = style['borderStyle']?.toString() ?? 'solid';
-
-    // Parse shadow
-    final shadowOffsetX = (style['shadowOffsetX'] as num?)?.toDouble() ?? 0.0;
-    final shadowOffsetY = (style['shadowOffsetY'] as num?)?.toDouble() ?? 4.0;
-    final shadowBlur = (style['shadowBlur'] as num?)?.toDouble() ?? 12.0;
-    final shadowSpread = (style['shadowSpread'] as num?)?.toDouble() ?? 0.0;
-    final shadowColor =
-        _parseRgbaColor(style['shadowColor']?.toString()) ?? Colors.black26;
-
-    // Parse background
-    final backgroundType = style['backgroundType']?.toString() ?? 'solid';
-    Decoration? decoration;
-
-    if (backgroundType == 'gradient') {
-      final gradientColor1 =
-          _parseColor(style['gradientColor1']?.toString()) ?? Colors.white;
-      final gradientColor2 = _parseColor(style['gradientColor2']?.toString()) ??
-          Colors.grey.shade100;
-      final gradientDirection =
-          style['gradientDirection']?.toString() ?? 'to-bottom';
-
-      decoration = BoxDecoration(
-        gradient: LinearGradient(
-          begin: _getGradientBegin(gradientDirection),
-          end: _getGradientEnd(gradientDirection),
-          colors: [gradientColor1, gradientColor2],
-        ),
-        border: hasBorder
-            ? Border.all(
-                color: borderColor,
-                width: borderWidth,
-                style: borderStyle == 'dotted' || borderStyle == 'dashed'
-                    ? BorderStyle.none
-                    : BorderStyle.solid,
-              )
-            : null,
-        borderRadius:
-            hasBorderRadius ? BorderRadius.circular(borderRadius) : null,
-        boxShadow: hasShadow
-            ? [
-                BoxShadow(
-                  offset: Offset(shadowOffsetX, shadowOffsetY),
-                  blurRadius: shadowBlur,
-                  spreadRadius: shadowSpread,
-                  color: shadowColor,
-                ),
-              ]
-            : null,
-      );
-    } else {
-      final backgroundColor = _parseColor(style['backgroundColor']?.toString());
-
-      decoration = BoxDecoration(
-        color: backgroundColor,
-        border: hasBorder
-            ? Border.all(
-                color: borderColor,
-                width: borderWidth,
-              )
-            : null,
-        borderRadius:
-            hasBorderRadius ? BorderRadius.circular(borderRadius) : null,
-        boxShadow: hasShadow
-            ? [
-                BoxShadow(
-                  offset: Offset(shadowOffsetX, shadowOffsetY),
-                  blurRadius: shadowBlur,
-                  spreadRadius: shadowSpread,
-                  color: shadowColor,
-                ),
-              ]
-            : null,
-      );
-    }
-
-    final typeLower = widget.blockType.trim().toLowerCase();
-    final hasVideoFileUrl =
-        (widget.data['videoFileUrl']?.toString() ?? '').trim().isNotEmpty;
-    final hasVideoUrl =
-        (widget.data['videoUrl']?.toString() ?? '').trim().isNotEmpty;
-
-    // Platform views (HtmlElementView) are fragile under clipping on Flutter Web.
-    // If this block contains an embedded video, prefer not to clip.
-    final avoidClipForPlatformView =
-        typeLower == 'videobanner' && (hasVideoFileUrl || hasVideoUrl);
-
-    // Apply ClipRRect for border radius to clip child content
-    Widget result = Container(
-      decoration: decoration,
-      padding: hasPadding
-          ? EdgeInsets.only(
-              top: paddingTop,
-              right: paddingRight,
-              bottom: paddingBottom,
-              left: paddingLeft,
-            )
-          : null,
-      child: hasBorderRadius && !avoidClipForPlatformView
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(borderRadius),
-              child: child,
-            )
-          : child,
-    );
-
-    return result;
-  }
-
-  /// Parse hex color string to Color
-  Color? _parseColor(String? hex) {
-    if (hex == null || hex.isEmpty) return null;
-    try {
-      final buffer = StringBuffer();
-      if (hex.length == 6 || hex.length == 7) buffer.write('ff');
-      buffer.write(hex.replaceFirst('#', ''));
-      return Color(int.parse(buffer.toString(), radix: 16));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Parse rgba color string to Color
-  Color? _parseRgbaColor(String? rgba) {
-    if (rgba == null || rgba.isEmpty) return null;
-    try {
-      // Handle hex colors
-      if (rgba.startsWith('#')) return _parseColor(rgba);
-
-      // Handle rgba(r,g,b,a) format
-      final match = RegExp(r'rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)')
-          .firstMatch(rgba);
-      if (match != null) {
-        final r = int.parse(match.group(1)!);
-        final g = int.parse(match.group(2)!);
-        final b = int.parse(match.group(3)!);
-        final a = match.group(4) != null ? double.parse(match.group(4)!) : 1.0;
-        return Color.fromRGBO(r, g, b, a);
-      }
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Get gradient start alignment from direction string
-  Alignment _getGradientBegin(String direction) {
-    switch (direction) {
-      case 'to-top':
-        return Alignment.bottomCenter;
-      case 'to-top-right':
-        return Alignment.bottomLeft;
-      case 'to-right':
-        return Alignment.centerLeft;
-      case 'to-bottom-right':
-        return Alignment.topLeft;
-      case 'to-bottom':
-        return Alignment.topCenter;
-      case 'to-bottom-left':
-        return Alignment.topRight;
-      case 'to-left':
-        return Alignment.centerRight;
-      case 'to-top-left':
-        return Alignment.bottomRight;
-      default:
-        return Alignment.topCenter;
-    }
-  }
-
-  /// Get gradient end alignment from direction string
-  Alignment _getGradientEnd(String direction) {
-    switch (direction) {
-      case 'to-top':
-        return Alignment.topCenter;
-      case 'to-top-right':
-        return Alignment.topRight;
-      case 'to-right':
-        return Alignment.centerRight;
-      case 'to-bottom-right':
-        return Alignment.bottomRight;
-      case 'to-bottom':
-        return Alignment.bottomCenter;
-      case 'to-bottom-left':
-        return Alignment.bottomLeft;
-      case 'to-left':
-        return Alignment.centerLeft;
-      case 'to-top-left':
-        return Alignment.topLeft;
-      default:
-        return Alignment.bottomCenter;
-    }
   }
 
   /// Get minimum height for block type
@@ -711,23 +663,21 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
   Widget _buildSharedContent(BuildContext context) {
     final editProvider = context.read<WebsiteEditModeProvider>();
-
-    // The inline half of the responsive protocol. Every schema-bound gesture
-    // below goes through it, so an edit made on a phone canvas lands where the
-    // visible scope says it will — instead of always rewriting the base.
-    final inlineWriter = WebsiteInlineResponsiveWriter(
-      provider: editProvider,
-      blockId: widget.blockId,
-      blockType: _registeredBlockType(widget.blockType),
-      hostClass: WebsiteEditorChromeScope.maybeOf(context)?.hostClass ??
-          WebsiteAuthoringHostClass.desktop,
+    final manipulationSession = context
+        .select<WebsiteEditModeProvider, WebsiteCanvasManipulationSession?>(
+      (provider) {
+        final session = provider.canvasManipulationSession;
+        return session?.target.document.blockId == widget.blockId
+            ? session
+            : null;
+      },
     );
 
-    WebsiteResponsiveFieldOwner ownerFor(WebsiteInlineRepeaterTarget? target) {
-      if (target == null) return const WebsiteResponsiveRootField();
-      // The item's own identity when it already persists one; otherwise the
-      // explicit index. Nothing is invented, and a sibling is never touched.
-      return WebsiteResponsiveRepeaterField(
+    WebsiteInlineManipulationOwner manipulationOwnerFor(
+      WebsiteInlineRepeaterTarget? target,
+    ) {
+      if (target == null) return const WebsiteInlineBlockOwner();
+      return WebsiteInlineRepeaterOwner(
         collectionKeys: target.collectionKeys,
         itemIndex: target.itemIndex,
         identityKey: target.identityKey,
@@ -735,28 +685,129 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       );
     }
 
-    void writeInline(
-      WebsiteInlineRepeaterTarget? target,
-      List<WebsiteInlinePropertyWrite> writes,
-    ) {
-      if (writes.isEmpty) return;
-      inlineWriter.write(owner: ownerFor(target), writes: writes);
-    }
-
-    void updateBoundValue(
+    WebsiteBlockFieldSchema? schemaFieldFor(
       WebsiteInlineRepeaterTarget? target,
       List<String> keys,
-      Object? value, {
+    ) {
+      final type = _registeredBlockType(widget.blockType);
+      if (type == null) return null;
+      if (target == null) {
+        for (final key in keys) {
+          final field = WebsiteBlockRegistry.fieldForPath(type, key);
+          if (field != null) return field;
+        }
+        return null;
+      }
+      for (final collectionKey in target.collectionKeys) {
+        for (final key in keys) {
+          final field = WebsiteBlockRegistry.fieldForPath(
+            type,
+            '$collectionKey.$key',
+          );
+          if (field != null) return field;
+        }
+      }
+      return null;
+    }
+
+    WebsiteInlineManipulationProperty? manipulationPropertyFor(
+      WebsiteInlineRepeaterTarget? target,
+      List<String> keys, {
       List<String> policyKeys = const <String>[],
+      bool mayLackSchema = false,
     }) {
-      if (keys.isEmpty) return;
-      writeInline(target, <WebsiteInlinePropertyWrite>[
-        WebsiteInlinePropertyWrite(
-          keys: keys,
-          value: value,
-          policyKeys: policyKeys,
+      if (keys.isEmpty) return null;
+      final policySource = policyKeys.isEmpty ? keys : policyKeys;
+      final field = schemaFieldFor(target, policySource);
+      assert(
+        _registeredBlockType(widget.blockType) == null ||
+            field != null ||
+            mayLackSchema,
+        'Inline transaction for "${keys.first}" has no schema field on '
+        '${widget.blockType}.',
+      );
+      final canonical =
+          policyKeys.isEmpty && field != null ? field.key : keys.first;
+      final companions = <String>{
+        ...keys,
+        if (policyKeys.isEmpty && field != null) ...field.migrationAliases,
+      }..remove(canonical);
+      return WebsiteInlineManipulationProperty(
+        canonicalKey: canonical,
+        policy: field?.responsivePolicy ??
+            WebsiteResponsivePropertyPolicy.sharedOnly,
+        sharedCompanionKeys: companions,
+      );
+    }
+
+    WebsiteInlineManipulationTarget? discreteTargetFor(
+      WebsiteInlineRepeaterTarget? target,
+      List<WebsiteInlineManipulationProperty> properties, {
+      bool requiresSelection = true,
+    }) {
+      final viewport = editProvider.renderedBlockViewportFor(widget.blockId);
+      if (viewport == null || properties.isEmpty) return null;
+      return WebsiteInlineManipulationTarget(
+        blockId: widget.blockId,
+        owner: manipulationOwnerFor(target),
+        viewport: viewport,
+        properties: properties,
+        requiresSelection: requiresSelection,
+      );
+    }
+
+    WebsiteInlineManipulationLease? captureDiscreteLease(
+      WebsiteInlineManipulationTarget? target,
+    ) {
+      return target == null
+          ? null
+          : editProvider.captureInlineMutationLease(target);
+    }
+
+    WebsiteAsyncFieldBinding? asyncFieldBindingFor(
+      WebsiteInlineManipulationTarget? target, {
+      required String kind,
+      required String slotId,
+    }) {
+      if (target == null) return null;
+      final owner = switch (target.owner) {
+        WebsiteInlineBlockOwner() => <String, Object?>{'kind': 'root'},
+        WebsiteInlineRepeaterOwner(
+          collectionKeys: final collectionKeys,
+          itemIndex: final itemIndex,
+          identityKey: final identityKey,
+          identityValue: final identityValue,
+        ) =>
+          <String, Object?>{
+            'kind': 'repeater',
+            'collections': collectionKeys,
+            'index': itemIndex,
+            'identityKey': identityKey,
+            'identityValue': identityValue,
+          },
+      };
+      return WebsiteAsyncFieldBinding.pageBlock(
+        provider: editProvider,
+        target: WebsiteAsyncFieldTarget.block(
+          blockId: widget.blockId,
+          scopeKey: jsonEncode(<String, Object?>{
+            'surface': 'inline',
+            'kind': kind,
+            'slot': slotId,
+            'viewport': target.viewport.name,
+            'owner': owner,
+            'properties': target.properties
+                .map(
+                  (property) => <String, Object?>{
+                    'key': property.canonicalKey,
+                    'policy': property.policy.name,
+                    'companions': property.sharedCompanionKeys.toList()..sort(),
+                  },
+                )
+                .toList(growable: false),
+          }),
         ),
-      ]);
+      );
     }
 
     Map<String, dynamic>? currentRepeaterItem(
@@ -793,6 +844,36 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
     final contentPresenters = WebsiteBlockContentPresenters(
       text: (presenterContext, slot) {
+        final textProperty = manipulationPropertyFor(
+          slot.repeaterTarget,
+          slot.valueKeys,
+        );
+        final formattingProperty = manipulationPropertyFor(
+          slot.repeaterTarget,
+          slot.formattingKeys,
+          policyKeys: slot.valueKeys,
+        );
+        final widthProperty = manipulationPropertyFor(
+          slot.repeaterTarget,
+          slot.widthKeys,
+        );
+        final properties = <WebsiteInlineManipulationProperty>[
+          if (textProperty != null) textProperty,
+          if (formattingProperty != null) formattingProperty,
+          if (widthProperty != null) widthProperty,
+        ];
+        final discreteTarget =
+            discreteTargetFor(slot.repeaterTarget, properties);
+        var discreteLease = captureDiscreteLease(discreteTarget);
+
+        void writeDiscrete(Map<String, Object?> values) {
+          final lease = discreteLease;
+          if (lease == null) return;
+          final result = editProvider.commitInlineMutation(lease, values);
+          discreteLease =
+              result.accepted ? captureDiscreteLease(discreteTarget) : null;
+        }
+
         return InlineEditableTextV2(
           key: ValueKey<String>(slot.id == 'standalone-text'
               ? 'website-text-inline-content-${widget.blockId}'
@@ -810,104 +891,176 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           allowWidthResize: slot.widthKeys.isNotEmpty,
           editorPadding: EdgeInsets.zero,
           displayTransform: slot.displayTransform,
-          onTextChanged: (value) => updateBoundValue(
-            slot.repeaterTarget,
-            slot.valueKeys,
-            value,
-          ),
+          onSessionStart: () {
+            final target = discreteTargetFor(slot.repeaterTarget, properties);
+            return target == null
+                ? null
+                : editProvider.beginInlineManipulation(target);
+          },
+          onSessionCommit: (session, value) {
+            if (session is! WebsiteInlineManipulationLease ||
+                textProperty == null) {
+              return false;
+            }
+            return editProvider.commitInlineManipulation(
+              session,
+              <String, Object?>{
+                textProperty.canonicalKey: value.text,
+                if (formattingProperty != null)
+                  formattingProperty.canonicalKey: value.formatting.toJson(),
+                if (widthProperty != null)
+                  widthProperty.canonicalKey: value.maxWidth,
+              },
+            );
+          },
+          onSessionCancel: (session) {
+            if (session is WebsiteInlineManipulationLease) {
+              editProvider.cancelInlineManipulation(session);
+            }
+          },
+          onTextChanged: textProperty == null
+              ? null
+              : (value) => writeDiscrete(
+                    <String, Object?>{textProperty.canonicalKey: value},
+                  ),
           // Formatting and width are companions of the text property: the
           // registry says which one owns them (`formattingKey`), so they
           // follow ITS policy instead of inventing one.
           onFormattingChanged: slot.formattingKeys.isEmpty
               ? null
-              : (formatting) => updateBoundValue(
-                    slot.repeaterTarget,
-                    slot.formattingKeys,
-                    formatting.toJson(),
-                    policyKeys: slot.valueKeys,
+              : (formatting) => writeDiscrete(
+                    <String, Object?>{
+                      formattingProperty!.canonicalKey: formatting.toJson(),
+                    },
                   ),
           // Width is a declared property of its own where the schema has one
           // (`Text.maxWidth`), so it resolves — and can be per viewport — by
           // itself.
           onWidthChanged: slot.widthKeys.isEmpty
               ? null
-              : (width) => updateBoundValue(
-                    slot.repeaterTarget,
-                    slot.widthKeys,
-                    width,
+              : (width) => writeDiscrete(
+                    <String, Object?>{widthProperty!.canonicalKey: width},
                   ),
         );
       },
-      media: (presenterContext, slot) => InlineEditableImage(
-        key: ValueKey<String>(
-          'website-inline-media-${widget.blockId}-${slot.id}',
-        ),
-        imageUrl: slot.url,
-        width: double.infinity,
-        height: double.infinity,
-        fit: slot.fit,
-        alignment: slot.alignment,
-        isEditMode: true,
-        tenantId: widget.tenantId,
-        placeholder: slot.fallback,
-        borderRadius: slot.borderRadius,
-        editAffordance: slot.editAffordance,
-        onChanged: (url) => updateBoundValue(
+      media: (presenterContext, slot) {
+        final property = manipulationPropertyFor(
           slot.repeaterTarget,
           slot.valueKeys,
-          url,
-        ),
-      ),
-      action: (presenterContext, slot) => WebsiteInlineActionEditor(
-        key: ValueKey<String>(slot.id == 'standalone-button'
-            ? 'website-button-inline-label-${widget.blockId}'
-            : 'website-inline-action-${widget.blockId}-${slot.id}'),
-        action: slot.action,
-        onChanged: (action) {
-          final target = slot.repeaterTarget;
-          final actionOwner =
-              target == null ? widget.data : currentRepeaterItem(target);
-          // One gesture, one history entry. Label, destination and variant are
-          // three declared properties of the same action: each resolves its
-          // own policy — today all shared — and the composite `actions` mirror
-          // stays common so the three never drift apart.
-          writeInline(target, <WebsiteInlinePropertyWrite>[
-            WebsiteInlinePropertyWrite(
-              keys: slot.labelKeys,
-              value: action.label,
-            ),
-            WebsiteInlinePropertyWrite(
-              keys: slot.hrefKeys,
-              value: action.href,
-            ),
-            if (slot.variantKeys.isNotEmpty)
-              WebsiteInlinePropertyWrite(
-                keys: slot.variantKeys,
-                value: action.variant.storageValue,
-                // Presentation of the action, persisted next to it. Where a
-                // family declares it as a field it resolves like any other;
-                // where it does not, it stays common with the destination it
-                // belongs to.
-                mayLackSchema: true,
-              ),
-            WebsiteInlinePropertyWrite(
-              keys: <String>[slot.actionsKey],
-              value: WebsiteActionValue.mergePrimary(
-                actionOwner?[slot.actionsKey],
-                action,
-              ),
-              mayLackSchema: true,
-            ),
-          ]);
-        },
-        onOpen: widget.onNavigate == null ||
-                widget.blockType == 'hero' ||
-                widget.blockType == 'carousel'
-            ? null
-            : (href) => widget.onNavigate!(href),
-        openOnFirstTap: slot.id == 'standalone-button',
-        child: slot.child,
-      ),
+        );
+        final target = discreteTargetFor(
+          slot.repeaterTarget,
+          <WebsiteInlineManipulationProperty>[
+            if (property != null) property,
+          ],
+        );
+        var lease = captureDiscreteLease(target);
+        return InlineEditableImage(
+          key: ValueKey<String>(
+            'website-inline-media-${widget.blockId}-${slot.id}',
+          ),
+          imageUrl: slot.url,
+          width: double.infinity,
+          height: double.infinity,
+          fit: slot.fit,
+          alignment: slot.alignment,
+          isEditMode: true,
+          tenantId: widget.tenantId,
+          placeholder: slot.fallback,
+          borderRadius: slot.borderRadius,
+          editAffordance: slot.editAffordance,
+          asyncBinding: asyncFieldBindingFor(
+            target,
+            kind: 'media',
+            slotId: slot.id,
+          ),
+          onChanged: property == null
+              ? null
+              : (url) {
+                  final current = lease;
+                  if (current == null) return;
+                  final result = editProvider.commitInlineMutation(
+                    current,
+                    <String, Object?>{property.canonicalKey: url},
+                  );
+                  lease = result.accepted ? captureDiscreteLease(target) : null;
+                },
+        );
+      },
+      action: (presenterContext, slot) {
+        final labelProperty = manipulationPropertyFor(
+          slot.repeaterTarget,
+          slot.labelKeys,
+        );
+        final hrefProperty = manipulationPropertyFor(
+          slot.repeaterTarget,
+          slot.hrefKeys,
+        );
+        final variantProperty = manipulationPropertyFor(
+          slot.repeaterTarget,
+          slot.variantKeys,
+          mayLackSchema: true,
+        );
+        final actionsProperty = manipulationPropertyFor(
+          slot.repeaterTarget,
+          <String>[slot.actionsKey],
+          mayLackSchema: true,
+        );
+        final properties = <WebsiteInlineManipulationProperty>[
+          if (labelProperty != null) labelProperty,
+          if (hrefProperty != null) hrefProperty,
+          if (variantProperty != null) variantProperty,
+          if (actionsProperty != null) actionsProperty,
+        ];
+        final target = discreteTargetFor(slot.repeaterTarget, properties);
+        var lease = captureDiscreteLease(target);
+        return WebsiteInlineActionEditor(
+          key: ValueKey<String>(slot.id == 'standalone-button'
+              ? 'website-button-inline-label-${widget.blockId}'
+              : 'website-inline-action-${widget.blockId}-${slot.id}'),
+          action: slot.action,
+          asyncBinding: asyncFieldBindingFor(
+            target,
+            kind: 'action',
+            slotId: slot.id,
+          ),
+          onChanged: (action) {
+            final ownerTarget = slot.repeaterTarget;
+            final actionOwner = ownerTarget == null
+                ? widget.data
+                : currentRepeaterItem(ownerTarget);
+            final current = lease;
+            if (current == null ||
+                labelProperty == null ||
+                hrefProperty == null ||
+                actionsProperty == null) {
+              return WebsiteInlineMutationResult.rejected;
+            }
+            final result = editProvider.commitInlineMutation(
+              current,
+              <String, Object?>{
+                labelProperty.canonicalKey: action.label,
+                hrefProperty.canonicalKey: action.href,
+                if (variantProperty != null)
+                  variantProperty.canonicalKey: action.variant.storageValue,
+                actionsProperty.canonicalKey: WebsiteActionValue.mergePrimary(
+                  actionOwner?[slot.actionsKey],
+                  action,
+                ),
+              },
+            );
+            lease = result.accepted ? captureDiscreteLease(target) : null;
+            return result;
+          },
+          onOpen: widget.onNavigate == null ||
+                  widget.blockType == 'hero' ||
+                  widget.blockType == 'carousel'
+              ? null
+              : (href) => widget.onNavigate!(href),
+          openOnFirstTap: slot.id == 'standalone-button',
+          child: slot.child,
+        );
+      },
     );
     WebsiteCarouselEditBinding? carouselEditBinding;
     if (widget.blockType == 'carousel') {
@@ -936,100 +1089,232 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           index,
           slides.length,
         ),
-        canvasBindingForSlide: (slideIndex) => WebsiteCanvasEditorBinding(
-          activeElementId: slideIndex == selectedSlideIndex
-              ? selectedCanvasElement
-              : editProvider.canvasElementSelection(
-                  widget.blockId,
-                  slideIndex: slideIndex,
+        canvasBindingForSlide: (slideIndex) {
+          final documentTarget = WebsiteCanvasDocumentTarget(
+            blockId: widget.blockId,
+            slideIndex: slideIndex,
+          );
+          final measurementGeneration =
+              editProvider.renderedCanvasMeasurementGeneration;
+          return WebsiteCanvasEditorBinding(
+            documentTarget: documentTarget,
+            canvasMeasurementGeneration: measurementGeneration,
+            onCanvasSizeChanged: (size) =>
+                editProvider.reportRenderedCanvasSize(
+              documentTarget,
+              size,
+              expectedMeasurementGeneration: measurementGeneration,
+            ),
+            activeElementId: slideIndex == selectedSlideIndex
+                ? selectedCanvasElement
+                : editProvider.canvasElementSelection(
+                    widget.blockId,
+                    slideIndex: slideIndex,
+                  ),
+            manipulationSession: manipulationSession,
+            manipulationAvailability: (
+              layerId,
+              mode, {
+              required viewport,
+            }) =>
+                editProvider.canvasManipulationAvailability(
+              mode,
+              target: WebsiteCanvasLayerTarget(
+                document: documentTarget,
+                layerId: layerId,
+              ),
+              viewport: viewport,
+            ),
+            requestManipulation: (
+              layerId,
+              mode, {
+              required viewport,
+            }) =>
+                editProvider.startCanvasManipulation(
+              mode,
+              target: WebsiteCanvasLayerTarget(
+                document: documentTarget,
+                layerId: layerId,
+              ),
+              viewport: viewport,
+            ),
+            commitManipulation: (
+              expected,
+              expectedDocument,
+              expectedDocumentEpoch,
+              values, {
+              required scope,
+            }) {
+              if (expected.target.document != documentTarget) return false;
+              return editProvider.commitCanvasManipulation(
+                expected,
+                expectedDocument,
+                expectedDocumentEpoch,
+                values,
+                scope: scope,
+              );
+            },
+            stopManipulation: (expected) =>
+                expected.target.document == documentTarget &&
+                editProvider.stopCanvasManipulation(
+                  expectedSession: expected,
                 ),
-          // Read at write time, so changing the attribution between two
-          // gestures does not need this binding rebuilt.
-          writeScope: () => editProvider.writeScope,
-          readDocument: () => editProvider.canvasDocument(
-            widget.blockId,
-            slideIndex: slideIndex,
-          ),
-          insertLayer: (layer, {required index}) =>
-              editProvider.insertCanvasLayer(
-            widget.blockId,
-            layer,
-            slideIndex: slideIndex,
-            index: index,
-          ),
-          removeLayer: (layerId) => editProvider.removeCanvasLayer(
-            widget.blockId,
-            layerId,
-            slideIndex: slideIndex,
-          ),
-          duplicateLayer: (layerId, newLayerId) =>
-              editProvider.duplicateCanvasLayer(
-            widget.blockId,
-            layerId,
-            newLayerId,
-            slideIndex: slideIndex,
-          ),
-          setRootProperties: (values, {required scope, required viewport}) =>
-              editProvider.setCanvasRootProperties(
-            widget.blockId,
-            values,
-            slideIndex: slideIndex,
-            scope: scope,
-            viewport: viewport,
-          ),
-          clearRootOverrides: (keys, {required viewport}) =>
-              editProvider.clearCanvasRootOverrides(
-            widget.blockId,
-            keys,
-            slideIndex: slideIndex,
-            viewport: viewport,
-          ),
-          setLayerProperties: (
-            layerId,
-            values, {
-            required scope,
-            required viewport,
-          }) =>
-              editProvider.setCanvasLayerProperties(
-            widget.blockId,
-            layerId,
-            values,
-            slideIndex: slideIndex,
-            scope: scope,
-            viewport: viewport,
-          ),
-          clearLayerOverrides: (layerId, keys, {required viewport}) =>
-              editProvider.clearCanvasLayerOverrides(
-            widget.blockId,
-            layerId,
-            keys,
-            slideIndex: slideIndex,
-            viewport: viewport,
-          ),
-          reorderLayer: (
-            layerId,
-            targetIndex, {
-            required scope,
-            required viewport,
-          }) =>
-              editProvider.reorderCanvasLayer(
-            widget.blockId,
-            layerId,
-            targetIndex,
-            slideIndex: slideIndex,
-            scope: scope,
-            viewport: viewport,
-          ),
-          onActiveElementChanged: (elementId) {
-            editProvider.selectCanvasElement(
+            captureAsyncIntent: (
+              layerId, {
+              required scope,
+              required viewport,
+            }) {
+              final target = WebsiteCanvasLayerTarget(
+                document: documentTarget,
+                layerId: layerId,
+              );
+              if (editProvider.selectedCanvasLayerTarget != target ||
+                  editProvider.renderedCanvasViewport(documentTarget) !=
+                      viewport ||
+                  editProvider.writeScope != scope) {
+                return null;
+              }
+              return editProvider.captureAsyncIntent(
+                blockId: documentTarget.blockId,
+              );
+            },
+            commitAsyncLayerProperties: (
+              expectedIntent,
+              layerId,
+              values, {
+              required scope,
+              required viewport,
+            }) =>
+                editProvider.commitAsyncIntent(expectedIntent, () {
+              final target = WebsiteCanvasLayerTarget(
+                document: documentTarget,
+                layerId: layerId,
+              );
+              if (editProvider.selectedCanvasLayerTarget != target ||
+                  editProvider.renderedCanvasViewport(documentTarget) !=
+                      viewport ||
+                  editProvider.writeScope != scope) {
+                return WebsiteInlineMutationResult.rejected;
+              }
+              final changed = editProvider.setCanvasLayerProperties(
+                documentTarget.blockId,
+                layerId,
+                values,
+                slideIndex: documentTarget.slideIndex,
+                scope: scope,
+                viewport: viewport,
+              );
+              return changed
+                  ? WebsiteInlineMutationResult.committed
+                  : WebsiteInlineMutationResult.unchanged;
+            }),
+            remoteWriteAuthority: (
+              expectedIntent,
+              layerId, {
+              required scope,
+              required viewport,
+              required operation,
+              required isLiveBinding,
+            }) =>
+                _canvasRemoteWriteAuthority(
+              provider: editProvider,
+              documentTarget: documentTarget,
+              expectedIntent: expectedIntent,
+              layerId: layerId,
+              scope: scope,
+              viewport: viewport,
+              operation: operation,
+              isLiveBinding: isLiveBinding,
+            ),
+            // Read at write time, so changing the attribution between two
+            // gestures does not need this binding rebuilt.
+            writeScope: () => editProvider.writeScope,
+            readDocument: () => editProvider.canvasDocument(
               widget.blockId,
-              elementId,
               slideIndex: slideIndex,
-              slideCount: slides.length,
-            );
-          },
-          onBackgroundTap: () => editProvider.selectBlock(widget.blockId),
-        ),
+            ),
+            documentEpoch: () => editProvider.pageDocumentEpoch,
+            insertLayer: (layer, {required index}) =>
+                editProvider.insertCanvasLayer(
+              widget.blockId,
+              layer,
+              slideIndex: slideIndex,
+              index: index,
+            ),
+            removeLayer: (layerId) => editProvider.removeCanvasLayer(
+              widget.blockId,
+              layerId,
+              slideIndex: slideIndex,
+            ),
+            duplicateLayer: (layerId, newLayerId) =>
+                editProvider.duplicateCanvasLayer(
+              widget.blockId,
+              layerId,
+              newLayerId,
+              slideIndex: slideIndex,
+            ),
+            setRootProperties: (values, {required scope, required viewport}) =>
+                editProvider.setCanvasRootProperties(
+              widget.blockId,
+              values,
+              slideIndex: slideIndex,
+              scope: scope,
+              viewport: viewport,
+            ),
+            clearRootOverrides: (keys, {required viewport}) =>
+                editProvider.clearCanvasRootOverrides(
+              widget.blockId,
+              keys,
+              slideIndex: slideIndex,
+              viewport: viewport,
+            ),
+            setLayerProperties: (
+              layerId,
+              values, {
+              required scope,
+              required viewport,
+            }) =>
+                editProvider.setCanvasLayerProperties(
+              widget.blockId,
+              layerId,
+              values,
+              slideIndex: slideIndex,
+              scope: scope,
+              viewport: viewport,
+            ),
+            clearLayerOverrides: (layerId, keys, {required viewport}) =>
+                editProvider.clearCanvasLayerOverrides(
+              widget.blockId,
+              layerId,
+              keys,
+              slideIndex: slideIndex,
+              viewport: viewport,
+            ),
+            reorderLayer: (
+              layerId,
+              targetIndex, {
+              required scope,
+              required viewport,
+            }) =>
+                editProvider.reorderCanvasLayer(
+              widget.blockId,
+              layerId,
+              targetIndex,
+              slideIndex: slideIndex,
+              scope: scope,
+              viewport: viewport,
+            ),
+            onActiveElementChanged: (elementId) {
+              editProvider.selectCanvasElement(
+                widget.blockId,
+                elementId,
+                slideIndex: slideIndex,
+                slideCount: slides.length,
+              );
+            },
+            onBackgroundTap: () => editProvider.selectBlock(widget.blockId),
+          );
+        },
       );
     }
     WebsiteCanvasEditorBinding? canvasEditBinding;
@@ -1038,12 +1323,138 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           context.select<WebsiteEditModeProvider, String?>(
         (provider) => provider.canvasElementSelection(widget.blockId),
       );
+      final documentTarget = WebsiteCanvasDocumentTarget(
+        blockId: widget.blockId,
+      );
+      final measurementGeneration =
+          editProvider.renderedCanvasMeasurementGeneration;
       canvasEditBinding = WebsiteCanvasEditorBinding(
+        documentTarget: documentTarget,
+        canvasMeasurementGeneration: measurementGeneration,
+        onCanvasSizeChanged: (size) => editProvider.reportRenderedCanvasSize(
+          documentTarget,
+          size,
+          expectedMeasurementGeneration: measurementGeneration,
+        ),
         activeElementId: selectedCanvasElement,
+        manipulationSession: manipulationSession,
+        manipulationAvailability: (
+          layerId,
+          mode, {
+          required viewport,
+        }) =>
+            editProvider.canvasManipulationAvailability(
+          mode,
+          target: WebsiteCanvasLayerTarget(
+            document: documentTarget,
+            layerId: layerId,
+          ),
+          viewport: viewport,
+        ),
+        requestManipulation: (
+          layerId,
+          mode, {
+          required viewport,
+        }) =>
+            editProvider.startCanvasManipulation(
+          mode,
+          target: WebsiteCanvasLayerTarget(
+            document: documentTarget,
+            layerId: layerId,
+          ),
+          viewport: viewport,
+        ),
+        commitManipulation: (
+          expected,
+          expectedDocument,
+          expectedDocumentEpoch,
+          values, {
+          required scope,
+        }) {
+          if (expected.target.document != documentTarget) return false;
+          return editProvider.commitCanvasManipulation(
+            expected,
+            expectedDocument,
+            expectedDocumentEpoch,
+            values,
+            scope: scope,
+          );
+        },
+        stopManipulation: (expected) =>
+            expected.target.document == documentTarget &&
+            editProvider.stopCanvasManipulation(
+              expectedSession: expected,
+            ),
+        captureAsyncIntent: (
+          layerId, {
+          required scope,
+          required viewport,
+        }) {
+          final target = WebsiteCanvasLayerTarget(
+            document: documentTarget,
+            layerId: layerId,
+          );
+          if (editProvider.selectedCanvasLayerTarget != target ||
+              editProvider.renderedCanvasViewport(documentTarget) != viewport ||
+              editProvider.writeScope != scope) {
+            return null;
+          }
+          return editProvider.captureAsyncIntent(
+            blockId: documentTarget.blockId,
+          );
+        },
+        commitAsyncLayerProperties: (
+          expectedIntent,
+          layerId,
+          values, {
+          required scope,
+          required viewport,
+        }) =>
+            editProvider.commitAsyncIntent(expectedIntent, () {
+          final target = WebsiteCanvasLayerTarget(
+            document: documentTarget,
+            layerId: layerId,
+          );
+          if (editProvider.selectedCanvasLayerTarget != target ||
+              editProvider.renderedCanvasViewport(documentTarget) != viewport ||
+              editProvider.writeScope != scope) {
+            return WebsiteInlineMutationResult.rejected;
+          }
+          final changed = editProvider.setCanvasLayerProperties(
+            documentTarget.blockId,
+            layerId,
+            values,
+            slideIndex: documentTarget.slideIndex,
+            scope: scope,
+            viewport: viewport,
+          );
+          return changed
+              ? WebsiteInlineMutationResult.committed
+              : WebsiteInlineMutationResult.unchanged;
+        }),
+        remoteWriteAuthority: (
+          expectedIntent,
+          layerId, {
+          required scope,
+          required viewport,
+          required operation,
+          required isLiveBinding,
+        }) =>
+            _canvasRemoteWriteAuthority(
+          provider: editProvider,
+          documentTarget: documentTarget,
+          expectedIntent: expectedIntent,
+          layerId: layerId,
+          scope: scope,
+          viewport: viewport,
+          operation: operation,
+          isLiveBinding: isLiveBinding,
+        ),
         // Read at write time, so changing the attribution between two
         // gestures does not need this binding rebuilt.
         writeScope: () => editProvider.writeScope,
         readDocument: () => editProvider.canvasDocument(widget.blockId),
+        documentEpoch: () => editProvider.pageDocumentEpoch,
         insertLayer: (layer, {required index}) =>
             editProvider.insertCanvasLayer(
           widget.blockId,
@@ -1117,6 +1528,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       context: context,
       blockType: widget.blockType,
       data: widget.data,
+      effectiveViewport: widget.effectiveViewport,
       primaryColor: widget.primaryColor,
       accentColor: widget.accentColor,
       featuredProducts: widget.featuredProducts,
@@ -1133,9 +1545,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     );
   }
 
-  void _confirmDelete(
-      BuildContext context, WebsiteEditModeProvider editProvider) {
-    showDialog(
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+  ) async {
+    final blockId = widget.blockId;
+    final intent = editProvider.captureAsyncIntent(blockId: blockId);
+    if (intent == null) return;
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Bloque'),
@@ -1143,19 +1560,25 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             const Text('¿Estás seguro de que deseas eliminar este bloque?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
-              editProvider.deleteBlock(widget.blockId);
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Eliminar'),
           ),
         ],
       ),
     );
+    if (confirmed != true || !context.mounted) return;
+    final live = context.read<WebsiteEditModeProvider>();
+    live.commitAsyncIntent(intent, () {
+      final before = live.blocks.length;
+      live.deleteBlock(blockId);
+      return live.blocks.length < before
+          ? WebsiteInlineMutationResult.committed
+          : WebsiteInlineMutationResult.unchanged;
+    });
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/website_block_type.dart';
+import '../models/website_responsive_authoring.dart';
 import '../../../shared/models/product.dart';
 import 'editable_block_renderer.dart' deferred as editable;
 
@@ -20,6 +21,7 @@ class DeferredEditableBlockRenderer {
     required String blockId,
     required String blockType,
     required Map<String, dynamic> data,
+    required WebsiteViewport effectiveViewport,
     required Color primaryColor,
     required Color accentColor,
     List<Product>? featuredProducts,
@@ -46,6 +48,7 @@ class DeferredEditableBlockRenderer {
         blockId: blockId,
         blockType: blockType,
         data: data,
+        effectiveViewport: effectiveViewport,
         primaryColor: primaryColor,
         accentColor: accentColor,
         featuredProducts: featuredProducts,
@@ -91,6 +94,7 @@ class DeferredEditableBlockRenderer {
           blockId: blockId,
           blockType: blockType,
           data: data,
+          effectiveViewport: effectiveViewport,
           primaryColor: primaryColor,
           accentColor: accentColor,
           featuredProducts: featuredProducts,

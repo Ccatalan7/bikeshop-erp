@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'website_color_picker.dart';
+import 'website_media_picker.dart';
+
 /// Text formatting options that can be applied
 class TextFormatting {
   final bool isBold;
@@ -153,11 +156,15 @@ class TextFormattingToolbar extends StatefulWidget {
   final bool showAdvancedOptions;
   final TextToolbarPreset preset;
   final Offset? position; // If null, toolbar decides position
+  final Object transactionIdentity;
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   const TextFormattingToolbar({
     super.key,
     required this.currentFormatting,
     required this.onFormattingChanged,
+    required this.transactionIdentity,
+    this.asyncBinding,
     this.onClose,
     this.baseStyle,
     this.showAdvancedOptions = true,
@@ -315,6 +322,8 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
                 currentSize: widget.currentFormatting.fontSize ??
                     widget.baseStyle?.fontSize ??
                     16,
+                transactionIdentity: widget.transactionIdentity,
+                asyncBinding: widget.asyncBinding,
                 onSizeChanged: (size) {
                   _setFontSize(size);
                 },
@@ -341,6 +350,8 @@ class _TextFormattingToolbarState extends State<TextFormattingToolbar> {
               _AdvancedOptionsPanel(
                 formatting: widget.currentFormatting,
                 onFormattingChanged: widget.onFormattingChanged,
+                transactionIdentity: widget.transactionIdentity,
+                asyncBinding: widget.asyncBinding,
               ),
           ],
         ),
@@ -580,11 +591,15 @@ class _FontSizePickerPanel extends StatelessWidget {
   final double currentSize;
   final ValueChanged<double> onSizeChanged;
   final ValueChanged<double> onPresetSelected;
+  final Object transactionIdentity;
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   const _FontSizePickerPanel({
     required this.currentSize,
     required this.onSizeChanged,
     required this.onPresetSelected,
+    required this.transactionIdentity,
+    this.asyncBinding,
   });
 
   static const List<double> presetSizes = [
@@ -653,35 +668,37 @@ class _FontSizePickerPanel extends StatelessWidget {
 
           const SizedBox(height: 8),
 
-          // Custom size slider
-          Row(
-            children: [
-              const Icon(Icons.text_fields, size: 14, color: Colors.white54),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 2,
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 6),
-                  ),
-                  child: Slider(
-                    value: currentSize.clamp(8, 120),
-                    min: 8,
-                    max: 120,
-                    divisions: 112,
-                    onChanged: onSizeChanged,
+          WebsiteTransactionalSlider(
+            value: currentSize.clamp(8, 120),
+            min: 8,
+            max: 120,
+            divisions: 112,
+            transactionIdentity: (transactionIdentity, 'fontSize'),
+            asyncBinding: asyncBinding,
+            onCommit: onSizeChanged,
+            builder: (context, draft, slider) => Row(
+              children: [
+                const Icon(Icons.text_fields, size: 14, color: Colors.white54),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 2,
+                      thumbShape:
+                          const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    ),
+                    child: slider,
                   ),
                 ),
-              ),
-              SizedBox(
-                width: 40,
-                child: Text(
-                  '${currentSize.toInt()}px',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                SizedBox(
+                  width: 40,
+                  child: Text(
+                    '${draft.toInt()}px',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -950,10 +967,14 @@ class _HexColorInputState extends State<_HexColorInput> {
 class _AdvancedOptionsPanel extends StatelessWidget {
   final TextFormatting formatting;
   final ValueChanged<TextFormatting> onFormattingChanged;
+  final Object transactionIdentity;
+  final WebsiteAsyncFieldBinding? asyncBinding;
 
   const _AdvancedOptionsPanel({
     required this.formatting,
     required this.onFormattingChanged,
+    required this.transactionIdentity,
+    this.asyncBinding,
   });
 
   @override
@@ -975,11 +996,12 @@ class _AdvancedOptionsPanel extends StatelessWidget {
             value: formatting.letterSpacing ?? 0,
             min: -2,
             max: 10,
-            onChanged: (value) => onFormattingChanged(
+            transactionIdentity: (transactionIdentity, 'letterSpacing'),
+            asyncBinding: asyncBinding,
+            onCommit: (value) => onFormattingChanged(
               formatting.copyWith(letterSpacing: value),
             ),
-            valueLabel:
-                '${(formatting.letterSpacing ?? 0).toStringAsFixed(1)}px',
+            valueLabel: (value) => '${value.toStringAsFixed(1)}px',
           ),
 
           const SizedBox(height: 8),
@@ -991,10 +1013,12 @@ class _AdvancedOptionsPanel extends StatelessWidget {
             value: formatting.lineHeight ?? 1.2,
             min: 0.8,
             max: 3.0,
-            onChanged: (value) => onFormattingChanged(
+            transactionIdentity: (transactionIdentity, 'lineHeight'),
+            asyncBinding: asyncBinding,
+            onCommit: (value) => onFormattingChanged(
               formatting.copyWith(lineHeight: value),
             ),
-            valueLabel: (formatting.lineHeight ?? 1.2).toStringAsFixed(1),
+            valueLabel: (value) => value.toStringAsFixed(1),
           ),
 
           const SizedBox(height: 8),
@@ -1019,8 +1043,10 @@ class _SliderOption extends StatelessWidget {
   final double value;
   final double min;
   final double max;
-  final ValueChanged<double> onChanged;
-  final String valueLabel;
+  final ValueChanged<double> onCommit;
+  final Object transactionIdentity;
+  final WebsiteAsyncFieldBinding? asyncBinding;
+  final String Function(double) valueLabel;
 
   const _SliderOption({
     required this.label,
@@ -1028,49 +1054,54 @@ class _SliderOption extends StatelessWidget {
     required this.value,
     required this.min,
     required this.max,
-    required this.onChanged,
+    required this.onCommit,
+    required this.transactionIdentity,
+    this.asyncBinding,
     required this.valueLabel,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: Colors.white54),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(color: Colors.white70, fontSize: 11),
-              ),
-              SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 2,
-                  thumbShape:
-                      const RoundSliderThumbShape(enabledThumbRadius: 5),
+    return WebsiteTransactionalSlider(
+      value: value.clamp(min, max),
+      min: min,
+      max: max,
+      transactionIdentity: transactionIdentity,
+      asyncBinding: asyncBinding,
+      onCommit: onCommit,
+      builder: (context, draft, slider) => Row(
+        children: [
+          Icon(icon, size: 14, color: Colors.white54),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
                 ),
-                child: Slider(
-                  value: value.clamp(min, max),
-                  min: min,
-                  max: max,
-                  onChanged: onChanged,
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 5),
+                  ),
+                  child: slider,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        SizedBox(
-          width: 45,
-          child: Text(
-            valueLabel,
-            style: const TextStyle(color: Colors.white70, fontSize: 11),
-            textAlign: TextAlign.right,
+          SizedBox(
+            width: 45,
+            child: Text(
+              valueLabel(draft),
+              style: const TextStyle(color: Colors.white70, fontSize: 11),
+              textAlign: TextAlign.right,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -1919,11 +1919,18 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
     try {
       final dbService = DatabaseService();
-      final suppliers = await dbService.select('suppliers');
-      final allSuppliers = suppliers
-          .map((s) => shared_supplier.Supplier.fromJson(s))
-          .toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
+      final suppliers = await dbService.select(
+        'suppliers',
+        selectColumns: shared_supplier.Supplier.secretFreeSelect,
+        orderBy: 'id',
+        fetchAll: true,
+      );
+      final allSuppliers =
+          suppliers.map((s) => shared_supplier.Supplier.fromJson(s)).toList()
+            ..sort((a, b) {
+              final byName = a.name.compareTo(b.name);
+              return byName != 0 ? byName : a.id.compareTo(b.id);
+            });
 
       if (mounted) {
         Navigator.pop(context); // Close loading start
@@ -4643,8 +4650,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     setState(() => _isSavingSupplierTemplate = true);
     try {
       final purchaseService = context.read<PurchaseService>();
-      final updatedSupplier = await purchaseService.saveSupplier(
-        _ocrSupplier!.copyWith(ocrTemplate: template),
+      final updatedSupplier = await purchaseService.updateSupplierOcrTemplate(
+        supplier: _ocrSupplier!,
+        template: template,
       );
 
       if (!mounted) return;

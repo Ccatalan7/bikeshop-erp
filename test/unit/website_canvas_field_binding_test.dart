@@ -1,8 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart' show Size;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_field_state.dart';
+import 'package:vinabike_erp/modules/website/models/website_canvas_manipulation.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_canvas_field_binding.dart';
 
@@ -80,6 +82,12 @@ WebsiteCanvasFieldBinding<num>? _numberField(
   int? slideIndex,
   String propertyKey = 'x',
 }) {
+  _prepareCanvasFieldHost(
+    provider,
+    blockId: blockId,
+    layerId: layerId,
+    slideIndex: slideIndex,
+  );
   return WebsiteCanvasFieldBinding.resolve<num>(
     provider: provider,
     blockId: blockId,
@@ -88,6 +96,46 @@ WebsiteCanvasFieldBinding<num>? _numberField(
     slideIndex: slideIndex,
     layerId: layerId,
     decode: (raw) => raw is num ? raw : null,
+  );
+}
+
+/// Reproduces the two host-owned prerequisites production publishes before an
+/// inspector field can exist: measured Canvas geometry and exact layer
+/// selection. A unit binding is intentionally fail-closed without them.
+void _prepareCanvasFieldHost(
+  WebsiteEditModeProvider provider, {
+  required String blockId,
+  String? layerId,
+  int? slideIndex,
+}) {
+  final width = switch (provider.previewViewport) {
+    WebsiteViewport.mobile => 390.0,
+    WebsiteViewport.tablet => 834.0,
+    WebsiteViewport.desktop => 1200.0,
+  };
+  provider.reportRenderedCanvasSize(
+    WebsiteCanvasDocumentTarget(
+      blockId: blockId,
+      slideIndex: slideIndex,
+    ),
+    Size(width, 480),
+    expectedMeasurementGeneration: provider.renderedCanvasMeasurementGeneration,
+  );
+  if (layerId == null) return;
+  int? slideCount;
+  if (slideIndex != null) {
+    final block = provider.blocks.firstWhere(
+      (candidate) => candidate['id']?.toString() == blockId,
+    );
+    final data = block['block_data'];
+    final slides = data is Map ? data['slides'] : null;
+    slideCount = slides is List ? slides.length : null;
+  }
+  provider.selectCanvasElement(
+    blockId,
+    layerId,
+    slideIndex: slideIndex,
+    slideCount: slideCount,
   );
 }
 
@@ -216,8 +264,10 @@ void main() {
     var notifications = 0;
     provider.addListener(() => notifications++);
 
-    _numberField(provider, blockId: 'canvas-block', layerId: 'layer-a')!
-        .writeMany(<String, Object?>{'x': 11.0, 'y': 22.0});
+    final field =
+        _numberField(provider, blockId: 'canvas-block', layerId: 'layer-a')!;
+    notifications = 0;
+    field.writeMany(<String, Object?>{'x': 11.0, 'y': 22.0});
 
     final layer = _layerById(provider, 'layer-a');
     expect(layer['x'], 11.0);
@@ -341,7 +391,7 @@ void main() {
     );
   });
 
-  test('customize then write on the SAME instance lands in the override', () {
+  test('customize consumes the old intent; the rebuilt binding writes', () {
     final provider = _provider(<Map<String, dynamic>>[_canvasBlock()]);
     addTearDown(provider.dispose);
     provider.setDevicePreviewMode(DevicePreviewMode.mobile);
@@ -351,7 +401,18 @@ void main() {
     binding.customize();
     binding.write(66.0);
 
-    final layer = _layerById(provider, 'layer-a');
+    var layer = _layerById(provider, 'layer-a');
+    expect(layer['x'], 100.0);
+    expect(
+      (layer['responsive'] as Map).containsKey('mobile'),
+      isFalse,
+      reason: 'a callback rendered before customize is one-shot and stale',
+    );
+
+    _numberField(provider, blockId: 'canvas-block', layerId: 'layer-a')!
+        .write(66.0);
+
+    layer = _layerById(provider, 'layer-a');
     expect(layer['x'], 100.0, reason: 'the base is untouched');
     expect(
       (layer['responsive'] as Map)['mobile'],
@@ -384,6 +445,11 @@ void main() {
     final before = jsonEncode(provider.blocks);
 
     provider.setDevicePreviewMode(DevicePreviewMode.mobile);
+    _prepareCanvasFieldHost(
+      provider,
+      blockId: 'canvas-block',
+      layerId: 'layer-b',
+    );
     final visible = WebsiteCanvasFieldBinding.resolve<bool>(
       provider: provider,
       blockId: 'canvas-block',

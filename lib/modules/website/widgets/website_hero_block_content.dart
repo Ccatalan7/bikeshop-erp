@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/website_action.dart';
+import '../models/website_block_surface_style.dart';
+import '../models/website_block_type.dart';
 import 'text_formatting_toolbar.dart';
 import 'website_action_button.dart';
 import 'website_block_content_presenters.dart';
@@ -19,6 +21,7 @@ class WebsiteHeroBlockContent extends StatelessWidget {
   const WebsiteHeroBlockContent({
     super.key,
     required this.data,
+    required this.surfaceStyle,
     required this.primaryColor,
     required this.accentColor,
     this.previewMode = false,
@@ -42,6 +45,7 @@ class WebsiteHeroBlockContent extends StatelessWidget {
   static const actionKey = ValueKey<String>('website-hero-action');
 
   final Map<String, dynamic> data;
+  final WebsiteBlockSurfaceStyle surfaceStyle;
 
   /// Kept in the campaign-content API alongside [accentColor]. The established
   /// Hero surface itself uses a neutral dark fallback when no media/style is
@@ -141,10 +145,7 @@ class WebsiteHeroBlockContent extends StatelessWidget {
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
         final isMobile = availableWidth < 600;
-        final backgroundAlignment = _resolveFocalAlignment(
-          data,
-          useMobile: isMobile,
-        );
+        final backgroundAlignment = _resolveFocalAlignment(data);
         final viewportHeight = MediaQuery.sizeOf(context).height;
         final configuredHeight = _positiveFiniteDouble(data['blockHeight']);
         final height = configuredHeight ??
@@ -257,7 +258,13 @@ class WebsiteHeroBlockContent extends StatelessWidget {
           key: contentKey,
           alignment: geometryAlignment,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: surfaceStyle.paddingWithFallback(
+              WebsiteBlockSurfaceDefaults.paddingFor(
+                blockType: WebsiteBlockType.hero,
+                viewport: surfaceStyle.viewport,
+                data: data,
+              ),
+            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: crossAxisAlignment,
@@ -277,13 +284,16 @@ class WebsiteHeroBlockContent extends StatelessWidget {
         );
 
         Widget buildBackground({required bool skipImage}) {
+          final imageProvider = hasImage && !skipImage
+              ? imageProviderBuilder?.call(imageUrl) ?? NetworkImage(imageUrl)
+              : null;
           final fallback = DecoratedBox(
-            decoration: _resolveBackgroundDecoration(
-              data: data,
-              imageUrl: hasImage && !skipImage ? imageUrl : null,
+            decoration: surfaceStyle.contentBackgroundDecoration(
+              fallbackColor: const Color(0xFF1A1A1A),
+              imageProvider: imageProvider,
               imageAlignment: backgroundAlignment,
-              imageProviderBuilder: imageProviderBuilder,
-              imageConfigured: hasImage,
+              preserveLegacyFallbackGradient: !hasImage,
+              onImageError: _ignoreBackgroundImageError,
             ),
           );
           final mediaPresenter = presenters?.media;
@@ -413,120 +423,10 @@ class WebsiteHeroBlockContent extends StatelessWidget {
     return isNavigationEligible(href) ? action : null;
   }
 
-  static BoxDecoration _resolveBackgroundDecoration({
-    required Map<String, dynamic> data,
-    required String? imageUrl,
-    required Alignment imageAlignment,
-    required WebsiteHeroImageProviderBuilder? imageProviderBuilder,
-    required bool imageConfigured,
-  }) {
-    final style = _stringMap(data['style']);
-    final backgroundColor =
-        _parseColor(style['backgroundColor']) ?? const Color(0xFF1A1A1A);
-    final imageProvider = imageUrl == null || imageUrl.isEmpty
-        ? null
-        : imageProviderBuilder?.call(imageUrl) ?? NetworkImage(imageUrl);
-    final borderWidth = _positiveFiniteDouble(style['borderWidth']) ?? 0;
-    final borderColor =
-        _parseColor(style['borderColor']) ?? Colors.grey.shade500;
-    final borderRadius = _positiveFiniteDouble(style['borderRadius']) ?? 0;
-    final shadowEnabled = style['shadowEnabled'] == true;
-    final shadowColor = _parseRgbaColor(style['shadowColor']) ?? Colors.black26;
-    final shadowOffsetX = _finiteDouble(style['shadowOffsetX']) ?? 0;
-    final shadowOffsetY = _finiteDouble(style['shadowOffsetY']) ?? 4;
-    final shadowBlur = _positiveFiniteDouble(style['shadowBlur']) ?? 12;
-    final shadowSpread = _finiteDouble(style['shadowSpread']) ?? 0;
-    final backgroundType =
-        style['backgroundType']?.toString().trim().toLowerCase();
-    final useGradient = backgroundType == 'gradient' && !imageConfigured;
-    final hasStyle = data['style'] is Map;
-
-    return BoxDecoration(
-      color: backgroundColor,
-      image: imageProvider == null
-          ? null
-          : DecorationImage(
-              image: imageProvider,
-              fit: BoxFit.cover,
-              alignment: imageAlignment,
-              onError: _ignoreBackgroundImageError,
-            ),
-      gradient: useGradient
-          ? LinearGradient(
-              begin: _gradientBegin(style['gradientDirection']?.toString()),
-              end: _gradientEnd(style['gradientDirection']?.toString()),
-              colors: <Color>[
-                _parseColor(style['gradientColor1']) ?? Colors.white,
-                _parseColor(style['gradientColor2']) ?? Colors.grey.shade100,
-              ],
-            )
-          : !imageConfigured && !hasStyle
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[
-                    backgroundColor,
-                    Color.lerp(backgroundColor, Colors.black, 0.2)!,
-                  ],
-                )
-              : null,
-      border: borderWidth > 0
-          ? Border.all(
-              color: borderColor,
-              width: borderWidth,
-              style: style['borderStyle'] == 'dotted' ||
-                      style['borderStyle'] == 'dashed'
-                  ? BorderStyle.none
-                  : BorderStyle.solid,
-            )
-          : null,
-      borderRadius:
-          borderRadius > 0 ? BorderRadius.circular(borderRadius) : null,
-      boxShadow: shadowEnabled
-          ? <BoxShadow>[
-              BoxShadow(
-                offset: Offset(shadowOffsetX, shadowOffsetY),
-                blurRadius: shadowBlur,
-                spreadRadius: shadowSpread,
-                color: shadowColor,
-              ),
-            ]
-          : null,
-    );
-  }
-
-  static Alignment _resolveFocalAlignment(
-    Map<String, dynamic> data, {
-    required bool useMobile,
-  }) {
-    final desktopX =
-        (_finiteDouble(data['focalPointX']) ?? 0.5).clamp(0.0, 1.0);
-    final desktopY =
-        (_finiteDouble(data['focalPointY']) ?? 0.5).clamp(0.0, 1.0);
-    if (useMobile) {
-      final mobileX = _finiteDouble(data['mobileFocalPointX']);
-      final mobileY = _finiteDouble(data['mobileFocalPointY']);
-      if (mobileX != null && mobileY != null) {
-        return Alignment(
-          mobileX.clamp(0.0, 1.0) * 2 - 1,
-          mobileY.clamp(0.0, 1.0) * 2 - 1,
-        );
-      }
-      final legacy = _legacyMobileAlignment(data['mobileBgAlignment']);
-      if (legacy != null) return legacy;
-    }
-    return Alignment(desktopX * 2 - 1, desktopY * 2 - 1);
-  }
-
-  static Alignment? _legacyMobileAlignment(Object? raw) {
-    return switch (raw?.toString()) {
-      'left' || 'centerLeft' => Alignment.centerLeft,
-      'right' || 'centerRight' => Alignment.centerRight,
-      'top' || 'topCenter' => Alignment.topCenter,
-      'bottom' || 'bottomCenter' => Alignment.bottomCenter,
-      'center' => Alignment.center,
-      _ => null,
-    };
+  static Alignment _resolveFocalAlignment(Map<String, dynamic> data) {
+    final focalX = (_finiteDouble(data['focalPointX']) ?? 0.5).clamp(0.0, 1.0);
+    final focalY = (_finiteDouble(data['focalPointY']) ?? 0.5).clamp(0.0, 1.0);
+    return Alignment(focalX * 2 - 1, focalY * 2 - 1);
   }
 
   static TextStyle _applyFont(TextStyle base, String? fontFamily) {
@@ -565,12 +465,6 @@ class WebsiteHeroBlockContent extends StatelessWidget {
     return null;
   }
 
-  static Map<String, dynamic> _stringMap(Object? raw) {
-    return raw is Map
-        ? Map<String, dynamic>.from(raw)
-        : const <String, dynamic>{};
-  }
-
   static double? _finiteDouble(Object? raw) {
     final value = raw is num ? raw.toDouble() : double.tryParse('$raw');
     return value != null && value.isFinite ? value : null;
@@ -596,49 +490,6 @@ class WebsiteHeroBlockContent extends StatelessWidget {
       return null;
     }
     return null;
-  }
-
-  static Color? _parseRgbaColor(Object? raw) {
-    final value = raw?.toString().trim();
-    if (value == null || value.isEmpty) return null;
-    if (value.startsWith('#')) return _parseColor(value);
-    final match = RegExp(r'rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)')
-        .firstMatch(value);
-    if (match == null) return null;
-    return Color.fromRGBO(
-      int.parse(match.group(1)!),
-      int.parse(match.group(2)!),
-      int.parse(match.group(3)!),
-      double.tryParse(match.group(4) ?? '') ?? 1,
-    );
-  }
-
-  static Alignment _gradientBegin(String? raw) {
-    return switch (raw) {
-      'to-top' => Alignment.bottomCenter,
-      'to-top-right' => Alignment.bottomLeft,
-      'to-right' => Alignment.centerLeft,
-      'to-bottom-right' => Alignment.topLeft,
-      'to-bottom' => Alignment.topCenter,
-      'to-bottom-left' => Alignment.topRight,
-      'to-left' => Alignment.centerRight,
-      'to-top-left' => Alignment.bottomRight,
-      _ => Alignment.topCenter,
-    };
-  }
-
-  static Alignment _gradientEnd(String? raw) {
-    return switch (raw) {
-      'to-top' => Alignment.topCenter,
-      'to-top-right' => Alignment.topRight,
-      'to-right' => Alignment.centerRight,
-      'to-bottom-right' => Alignment.bottomRight,
-      'to-bottom' => Alignment.bottomCenter,
-      'to-bottom-left' => Alignment.bottomLeft,
-      'to-left' => Alignment.centerLeft,
-      'to-top-left' => Alignment.topLeft,
-      _ => Alignment.bottomCenter,
-    };
   }
 
   static void _ignoreBackgroundImageError(

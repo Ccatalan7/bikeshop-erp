@@ -33,8 +33,7 @@ void main() {
     expect(isWebsiteBlockVisibleAtLogicalWidth(block, 1000), isFalse);
   });
 
-  test('canonical documents use 600/900 without changing visibility storage',
-      () {
+  test('unrelated canonical overrides do not migrate legacy visibility', () {
     const block = <String, dynamic>{
       'is_visible': true,
       'block_data': {
@@ -46,6 +45,37 @@ void main() {
         'responsive': {
           'version': 2,
           'mobile': {'focalPointX': 0.7},
+        },
+      },
+    };
+
+    expect(
+      websitePublicViewportForBlockDataWidth(
+        block['block_data'] as Map<String, dynamic>,
+        620,
+      ),
+      WebsiteViewport.mobile,
+    );
+    expect(isWebsiteBlockVisibleAtLogicalWidth(block, 620), isTrue);
+    expect(
+      websitePublicViewportForBlockDataWidth(
+        block['block_data'] as Map<String, dynamic>,
+        1000,
+      ),
+      WebsiteViewport.tablet,
+    );
+    expect(isWebsiteBlockVisibleAtLogicalWidth(block, 1000), isFalse);
+  });
+
+  test('an explicit visibility migration uses the canonical 600/900 bands', () {
+    const block = <String, dynamic>{
+      'is_visible': true,
+      'block_data': {
+        'visibility': {
+          'version': 2,
+          'desktop': true,
+          'tablet': false,
+          'mobile': true,
         },
       },
     };

@@ -7,6 +7,132 @@ import 'website_block_definition.dart';
 import 'website_block_type.dart';
 import 'website_responsive_authoring.dart';
 
+/// Canonical data contract for the Website Builder Products block.
+///
+/// Historical documents used `selectedProducts`, while the registry-created
+/// document used `productIds`. Reading only either key made a manual collection
+/// disappear depending on how the block had been created. The resolver keeps
+/// both generations readable without dropping IDs; explicit selection writes
+/// publish one normalized ordered list to the canonical key and its legacy
+/// compatibility mirror atomically.
+@immutable
+class WebsiteProductsBlockContract {
+  const WebsiteProductsBlockContract({
+    required this.title,
+    required this.subtitle,
+    required this.productSource,
+    required this.categoryId,
+    required this.productIds,
+    required this.layout,
+    required this.itemsPerRow,
+    required this.maxProducts,
+    required this.showPrice,
+    required this.showSku,
+    required this.showBrand,
+    required this.showViewAll,
+  });
+
+  static const String productIdsKey = 'productIds';
+  static const String legacySelectedProductsKey = 'selectedProducts';
+
+  final String title;
+  final String subtitle;
+  final String productSource;
+  final String? categoryId;
+  final List<String> productIds;
+  final String layout;
+  final int itemsPerRow;
+  final int maxProducts;
+  final bool showPrice;
+  final bool showSku;
+  final bool showBrand;
+  final bool showViewAll;
+
+  factory WebsiteProductsBlockContract.fromData(Map<String, dynamic> data) {
+    final rawSource = data['productSource']?.toString().trim();
+    final productSource = const <String>{
+      'featured',
+      'category',
+      'manual',
+      'newest',
+    }.contains(rawSource)
+        ? rawSource!
+        : 'featured';
+    final rawLayout = data['layout']?.toString().trim();
+    final layout = rawLayout == 'carousel' ? 'carousel' : 'grid';
+    final rawCategoryId = data['categoryId']?.toString().trim();
+
+    return WebsiteProductsBlockContract(
+      title: data['title']?.toString() ?? 'Productos Destacados',
+      subtitle: data['subtitle']?.toString() ?? '',
+      productSource: productSource,
+      categoryId:
+          rawCategoryId == null || rawCategoryId.isEmpty ? null : rawCategoryId,
+      productIds: resolveProductIds(data),
+      layout: layout,
+      itemsPerRow:
+          _boundedInt(data['itemsPerRow'], fallback: 3, min: 2, max: 4),
+      maxProducts:
+          _boundedInt(data['maxProducts'], fallback: 8, min: 4, max: 16),
+      showPrice: data['showPrice'] is bool ? data['showPrice'] as bool : true,
+      showSku: data['showSku'] is bool ? data['showSku'] as bool : false,
+      showBrand: data['showBrand'] is bool ? data['showBrand'] as bool : false,
+      showViewAll:
+          data['showViewAll'] is bool ? data['showViewAll'] as bool : true,
+    );
+  }
+
+  /// Resolves both persisted generations in stable order and without loss.
+  ///
+  /// Canonical IDs lead; legacy-only IDs are appended. Blank, null and
+  /// duplicate representations are discarded, and numeric UUID-era payloads
+  /// remain readable through their string representation.
+  static List<String> resolveProductIds(Map<String, dynamic> data) {
+    final result = <String>[];
+    final seen = <String>{};
+
+    void append(dynamic raw) {
+      if (raw is! List) return;
+      for (final value in raw) {
+        if (value == null) continue;
+        final id = value.toString().trim();
+        if (id.isEmpty || !seen.add(id)) continue;
+        result.add(id);
+      }
+    }
+
+    append(data[productIdsKey]);
+    append(data[legacySelectedProductsKey]);
+    return List<String>.unmodifiable(result);
+  }
+
+  /// Atomic persisted representation used by the inspector selection command.
+  static Map<String, dynamic> selectionWrite(Iterable<Object?> ids) {
+    final normalized = resolveProductIds(<String, dynamic>{
+      productIdsKey: ids.toList(growable: false),
+    });
+    return <String, dynamic>{
+      productIdsKey: normalized,
+      // Compatibility mirror for documents and clients created before the
+      // registry key became canonical. It is never read as a second owner.
+      legacySelectedProductsKey: normalized,
+    };
+  }
+
+  String get selectionFingerprint => productIds.join('\u001f');
+
+  static int _boundedInt(
+    dynamic raw, {
+    required int fallback,
+    required int min,
+    required int max,
+  }) {
+    final value =
+        raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
+    return (value ?? fallback).clamp(min, max);
+  }
+}
+
 /// Central catalogue of website block definitions used across the editor and
 /// the public storefront. This enables declarative registration of block
 /// metadata, default payloads, and generic field schemas for quick wins while
@@ -35,9 +161,10 @@ class WebsiteBlockRegistry {
         'overlayOpacity': 0.5,
         'isFullScreen': false,
         'alignment': 'center',
-        // Mobile background focal point (0..1). Edited via a special control.
-        'mobileFocalPointX': 0.5,
-        'mobileFocalPointY': 0.5,
+        // New blocks start on the canonical shared authority. Legacy mobile
+        // aliases remain read-only compatibility inputs for existing pages.
+        'focalPointX': 0.5,
+        'focalPointY': 0.5,
       },
       fields: [
         WebsiteBlockFieldSchema(
@@ -269,6 +396,7 @@ class WebsiteBlockRegistry {
       description:
           'Sección de diseño libre con elementos arrastrables (tipo Wix).',
       defaultData: {
+        'canvasResponsiveVersion': 2,
         'blockHeight': 420.0,
         'heightMode': 'fixed',
         'vhPct': 0.7,
@@ -281,8 +409,6 @@ class WebsiteBlockRegistry {
         'backgroundFit': 'cover',
         'focalPointX': 0.5,
         'focalPointY': 0.5,
-        'mobileFocalPointX': 0.5,
-        'mobileFocalPointY': 0.5,
         'overlayEnabled': false,
         'overlayOpacity': 0.35,
         'overlayColor': '#000000',
@@ -472,10 +598,15 @@ class WebsiteBlockRegistry {
       description: 'Lista productos seleccionados desde tu inventario.',
       defaultData: {
         'title': 'Productos Destacados',
+        'subtitle': '',
+        'productSource': 'featured',
         'layout': 'grid',
+        'itemsPerRow': 3,
+        'maxProducts': 8,
         'showPrice': true,
-        'showStock': false,
-        'productIds': <int>[],
+        'showSku': false,
+        'showBrand': false,
+        'productIds': <String>[],
         'showViewAll': true,
         'viewAllText': 'Ver todos los productos',
         'viewAllLink': '/productos',
@@ -493,12 +624,23 @@ class WebsiteBlockRegistry {
       // selected ids, maxProducts, the "view all" copy and destination — is
       // business identity and stays shared, edited by the custom controls.
       fields: [
+        WebsiteBlockFieldSchema(
+          key: 'layout',
+          label: 'Diseño',
+          type: WebsiteBlockFieldType.select,
+          defaultValue: 'grid',
+          options: [
+            WebsiteBlockFieldOption(value: 'grid', label: 'Cuadrícula'),
+            WebsiteBlockFieldOption(value: 'carousel', label: 'Carrusel'),
+          ],
+          group: 'layout',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.geometry,
+        ),
         // SHARED on purpose. The storefront computes the column count itself:
-        // below 700 it mounts the mobile auto carousel, which shows one card at
-        // a time and never reads this value, and between 700 and 900 the grid
-        // forces two columns. A per-viewport override would be a control the
-        // renderer cannot honour, so the property stays the desktop base and
-        // the inspector states — in words — why it is not editable elsewhere.
+        // phone/tablet grids use their safe automatic density while Desktop
+        // honours this base. A per-viewport override would still be a control
+        // the renderer cannot honour, so the inspector states that explicitly.
         WebsiteBlockFieldSchema(
           key: 'itemsPerRow',
           label: 'Productos por fila',
@@ -509,6 +651,33 @@ class WebsiteBlockRegistry {
           defaultValue: 3,
           group: 'layout',
           propertyFamily: WebsiteResponsivePropertyFamily.geometry,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'showPrice',
+          label: 'Mostrar precios',
+          type: WebsiteBlockFieldType.toggle,
+          defaultValue: true,
+          group: 'display',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.visibility,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'showSku',
+          label: 'Mostrar SKU',
+          type: WebsiteBlockFieldType.toggle,
+          defaultValue: false,
+          group: 'display',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.visibility,
+        ),
+        WebsiteBlockFieldSchema(
+          key: 'showBrand',
+          label: 'Mostrar marca',
+          type: WebsiteBlockFieldType.toggle,
+          defaultValue: false,
+          group: 'display',
+          responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
+          propertyFamily: WebsiteResponsivePropertyFamily.visibility,
         ),
         WebsiteBlockFieldSchema(
           key: 'showViewAll',
@@ -532,8 +701,7 @@ class WebsiteBlockRegistry {
     WebsiteBlockType.services: const WebsiteBlockDefinition(
       type: WebsiteBlockType.services,
       title: 'Servicios',
-      description:
-          'Describe servicios clave con iconos y llamadas a la acción.',
+      description: 'Describe servicios clave con iconos, títulos y detalle.',
       defaultData: {
         'title': 'Nuestros Servicios',
         'services': <Map<String, dynamic>>[],

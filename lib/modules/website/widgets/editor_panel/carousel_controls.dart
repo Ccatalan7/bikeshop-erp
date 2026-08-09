@@ -21,7 +21,11 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   WebsiteEditModeProvider get editProvider => widget.provider;
 
   void _selectSlide(int index, {bool rebuild = true}) {
-    final count = _slides.length;
+    // Against the LIVE document, not this widget's snapshot: a selection that
+    // follows an add/duplicate/reorder runs in the same frame as the write, so
+    // `widget.data` still holds the previous list and clamping against it
+    // would land the selection on the wrong slide.
+    final count = _liveSlideCount();
     if (count <= 0) return;
     final normalized = index.clamp(0, count - 1).toInt();
     if (rebuild && mounted) {
@@ -32,6 +36,13 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     widget.provider.selectCarouselSlide(widget.blockId, normalized, count);
   }
 
+  /// How many slides the document has RIGHT NOW.
+  int _liveSlideCount() {
+    final raw = widget.provider.getBlockData(widget.blockId)['slides'];
+    if (raw is List) return raw.length;
+    return _slides.length;
+  }
+
   List<Map<String, dynamic>> get _slides {
     final rawSlides = widget.data['slides'];
     if (rawSlides is List) {
@@ -40,38 +51,97 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     return [];
   }
 
-  void _updateSlides(List<Map<String, dynamic>> newSlides) {
-    debugPrint(
-        '🎠 [CarouselControls] _updateSlides: saving ${newSlides.length} slides to provider');
-    debugPrint(
-        '🎠 [CarouselControls] First slide data: ${newSlides.isNotEmpty ? newSlides[0] : "empty"}');
-    widget.provider.updateBlockData(widget.blockId, 'slides', newSlides);
+  WebsiteRepeaterCollectionTarget get _slidesTarget =>
+      WebsiteRepeaterCollectionTarget(
+        blockId: widget.blockId,
+        collectionKeys: const <String>['slides'],
+        minItems: _slidesSchema.minItems,
+        maxItems: _slidesSchema.maxItems,
+      );
+
+  WebsiteRepeaterItemRef _slideRef(
+    Map<String, dynamic> slide,
+    int index,
+  ) =>
+      _slidesTarget.itemRef(slide, index);
+
+  _RepeaterCommandCallback _slidesCommandBinding({
+    bool recaptureAccepted = false,
+  }) {
+    final target = _slidesTarget;
+    var lease = widget.provider.captureRepeaterMutationLease(target);
+    return (command) {
+      final currentLease = lease;
+      if (currentLease == null) {
+        return const WebsiteRepeaterMutationOutcome.rejected();
+      }
+      lease = null;
+      final outcome =
+          widget.provider.commitRepeaterMutation(currentLease, command);
+      if (recaptureAccepted && outcome.result.accepted) {
+        lease = widget.provider.captureRepeaterMutationLease(target);
+      }
+      return outcome;
+    };
   }
 
-  void _updateSlide(int index, String key, dynamic value) {
-    debugPrint(
-        '🎠🎠 [CarouselControls] _updateSlide CALLED: index=$index, key=$key, value=$value');
-    final slides = List<Map<String, dynamic>>.from(_slides);
-    if (index >= 0 && index < slides.length) {
-      slides[index] = {...slides[index], key: value};
-      debugPrint(
-          '🎠 [CarouselControls] _updateSlide: index=$index, key=$key, value=$value');
-      _updateSlides(slides);
-    } else {
-      debugPrint(
-          '🎠⚠️ [CarouselControls] _updateSlide: INVALID INDEX index=$index, slides.length=${slides.length}');
-    }
+  WebsiteRepeaterMutationResult Function(Map<String, dynamic>)
+      _slidePatchBinding(
+    Map<String, dynamic> slide,
+    int index,
+  ) {
+    final itemRef = _slideRef(slide, index);
+    final commit = _slidesCommandBinding(recaptureAccepted: true);
+    return (updates) => commit(
+          WebsiteRepeaterPatchItem(target: itemRef, updates: updates),
+        ).result;
   }
 
-  /// Update multiple slide properties atomically
-  void _updateSlideMultiple(int index, Map<String, dynamic> updates) {
-    final slides = List<Map<String, dynamic>>.from(_slides);
-    if (index >= 0 && index < slides.length) {
-      slides[index] = {...slides[index], ...updates};
-      debugPrint(
-          '🎠 [CarouselControls] _updateSlideMultiple: index=$index, keys=${updates.keys.join(", ")}');
-      _updateSlides(slides);
-    }
+  WebsiteInlineManipulationProperty _sharedRootProperty(
+    String key, {
+    Iterable<String> companionKeys = const <String>[],
+  }) {
+    return WebsiteInlineManipulationProperty(
+      canonicalKey: key,
+      policy: WebsiteResponsivePropertyPolicy.sharedOnly,
+      sharedCompanionKeys: companionKeys,
+    );
+  }
+
+  WebsiteInlineManipulationLease? _captureSharedRootLease(
+    BuildContext context,
+    Iterable<WebsiteInlineManipulationProperty> properties,
+  ) {
+    final target = WebsiteInlineManipulationTarget(
+      blockId: widget.blockId,
+      owner: const WebsiteInlineBlockOwner(),
+      viewport: WebsiteEditorAuthoringViewportScope.effectiveOf(
+        context,
+        fallback: widget.provider.previewViewport,
+      ),
+      properties: properties,
+      requiresSelection: true,
+    );
+    return widget.provider.captureInlineMutationLease(target);
+  }
+
+  WebsiteInlineMutationResult Function(Map<String, Object?>) _sharedRootBinding(
+    BuildContext context,
+    Iterable<WebsiteInlineManipulationProperty> properties,
+  ) {
+    final frozenProperties = List<WebsiteInlineManipulationProperty>.of(
+      properties,
+      growable: false,
+    );
+    var lease = _captureSharedRootLease(context, frozenProperties);
+    return (values) {
+      final currentLease = lease;
+      if (currentLease == null) return WebsiteInlineMutationResult.rejected;
+      // Root toggles/dropdowns are discrete commands. A second callback from
+      // the same rendered control must fail until the provider rebuilds it.
+      lease = null;
+      return widget.provider.commitInlineMutation(currentLease, values);
+    };
   }
 
   /// "Diseño avanzado por capas".
@@ -86,7 +156,11 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   ///
   /// On an already composed slide the toggle is just a property of the Canvas
   /// document, so it goes through the same Canvas command as every other one.
-  void _setCompositionEnabled(Map<String, dynamic> slide, bool enabled) {
+  void _setCompositionEnabled(
+    Map<String, dynamic> slide,
+    int slideIndex,
+    bool enabled,
+  ) {
     final existing = slide['elements'];
     final composed = slide['useComposition'] == true ||
         (existing is List && existing.isNotEmpty);
@@ -95,7 +169,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       widget.provider.setCanvasRootProperties(
         widget.blockId,
         <String, Object?>{'useComposition': enabled},
-        slideIndex: _selectedSlideIndex,
+        slideIndex: slideIndex,
         scope: WebsiteWriteScope.shared,
         viewport: widget.provider.previewViewport,
       );
@@ -105,59 +179,56 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
 
     widget.provider.initializeCanvasComposition(
       widget.blockId,
-      slideIndex: _selectedSlideIndex,
+      slideIndex: slideIndex,
     );
   }
 
-  void _addSlide() {
-    final slides = List<Map<String, dynamic>>.from(_slides);
-    slides.add({
-      'title': 'Nuevo Slide',
-      'subtitle': 'Descripción del slide',
-      'imageUrl': '',
-      'ctaText': 'Ver más',
-      'ctaLink': '/productos',
-      'showOverlay': true,
-      'overlayOpacity': 0.55,
-    });
-    _updateSlides(slides);
-    setState(() => _selectedSlideIndex = slides.length - 1);
-    widget.provider.selectCarouselSlide(
-      widget.blockId,
-      _selectedSlideIndex,
-      slides.length,
-    );
-  }
-
-  void _removeSlide(int index) {
-    final slides = List<Map<String, dynamic>>.from(_slides);
-    if (slides.length > 1 && index >= 0 && index < slides.length) {
-      slides.removeAt(index);
-      _updateSlides(slides);
-      final nextIndex = _selectedSlideIndex >= slides.length
-          ? slides.length - 1
-          : _selectedSlideIndex;
-      setState(() => _selectedSlideIndex = nextIndex);
-      widget.provider.selectCarouselSlide(
-        widget.blockId,
-        nextIndex,
-        slides.length,
+  /// The registry's own declaration of this collection — label, item label and
+  /// `minItems: 1`, which is what keeps the last slide undeletable without a
+  /// rule written twice.
+  WebsiteBlockFieldSchema get _slidesSchema =>
+      WebsiteBlockRegistry.fieldForPath(
+        WebsiteBlockType.carousel,
+        'slides',
+      ) ??
+      const WebsiteBlockFieldSchema(
+        key: 'slides',
+        label: 'Slides',
+        type: WebsiteBlockFieldType.repeater,
+        itemLabel: 'Slide',
+        minItems: 1,
       );
-    }
-  }
+
+  /// The content a new slide starts with.
+  ///
+  /// Adding a slide is now the shared collection operation, but the authored
+  /// defaults are this family's business content and do not change by adopting
+  /// that owner.
+  Map<String, dynamic> _newSlideSeed() => <String, dynamic>{
+        'title': 'Nuevo Slide',
+        'subtitle': 'Descripción del slide',
+        'imageUrl': '',
+        'ctaText': 'Ver más',
+        'ctaLink': '/productos',
+        'showOverlay': true,
+        'overlayOpacity': 0.55,
+      };
 
   /// Build slide fields inline (same pattern as VideoBanner)
-  Widget _buildSlideFields(Map<String, dynamic> slide) {
+  Widget _buildSlideFields(Map<String, dynamic> slide, int slideIndex) {
+    final writeSlide = _slidePatchBinding(slide, slideIndex);
     // Both overlay properties resolve through the canonical binding, so the
     // inspector shows — and gates on — the value the renderer will use for the
     // previewed viewport, not the shared one.
     final overlayToggle = _slideScalarBinding<bool>(
       slide: slide,
+      slideIndex: slideIndex,
       fieldPath: 'slides.showOverlay',
       decode: WebsiteResponsiveScalarBinding.decodeBoolean,
     );
     final overlayOpacityBinding = _slideScalarBinding<num>(
       slide: slide,
+      slideIndex: slideIndex,
       fieldPath: 'slides.overlayOpacity',
       decode: WebsiteResponsiveScalarBinding.decodeNumber,
     );
@@ -173,12 +244,23 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           ? Map<String, dynamic>.from(slide['subtitleFormatting'] as Map)
           : null,
     );
+    final titleFormattingBinding = _slideAsyncBinding(
+      slide,
+      slideIndex,
+      'titleFormatting',
+    );
+    final subtitleFormattingBinding = _slideAsyncBinding(
+      slide,
+      slideIndex,
+      'subtitleFormatting',
+    );
     // Whether this slide is a Canvas at all — the same condition the Canvas
     // commands validate. The layers themselves are read by the inspector from
     // the document, never copied out into this widget.
     final slideLayers = slide['elements'];
     final usesComposition = slide['useComposition'] == true ||
         (slideLayers is List && slideLayers.isNotEmpty);
+    Object? workingActions = slide['actions'];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,7 +273,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             _EditorToggle(
               label: 'Diseño avanzado por capas',
               value: usesComposition,
-              onChanged: (value) => _setCompositionEnabled(slide, value),
+              onChanged: (value) =>
+                  _setCompositionEnabled(slide, slideIndex, value),
             ),
             const SizedBox(height: 8),
             Text(
@@ -208,7 +291,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
               _CanvasBlockControls(
                 blockId: widget.blockId,
                 provider: widget.provider,
-                slideIndex: _selectedSlideIndex,
+                slideIndex: slideIndex,
                 elementsOnly: true,
               ),
               _buildNestedLayers(widget.provider.blocks),
@@ -217,25 +300,36 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
               _EditorTextField(
                 label: 'Título',
                 value: slide['title']?.toString() ?? '',
-                onChanged: (v) => _updateSlide(_selectedSlideIndex, 'title', v),
+                asyncBinding: _slideAsyncBinding(
+                  slide,
+                  slideIndex,
+                  'title',
+                ),
+                onChanged: (value) =>
+                    writeSlide(<String, dynamic>{'title': value}),
               ),
               const SizedBox(height: 8),
               TextFormattingToolbar(
                 currentFormatting: titleFormatting,
                 preset: TextToolbarPreset.basic,
                 showAdvancedOptions: false,
-                onFormattingChanged: (value) => _updateSlide(
-                  _selectedSlideIndex,
-                  'titleFormatting',
-                  value.toJson(),
+                transactionIdentity: titleFormattingBinding.identity,
+                asyncBinding: titleFormattingBinding,
+                onFormattingChanged: (value) => writeSlide(
+                  <String, dynamic>{'titleFormatting': value.toJson()},
                 ),
               ),
               const SizedBox(height: 12),
               _EditorTextField(
                 label: 'Subtítulo',
                 value: slide['subtitle']?.toString() ?? '',
-                onChanged: (v) =>
-                    _updateSlide(_selectedSlideIndex, 'subtitle', v),
+                asyncBinding: _slideAsyncBinding(
+                  slide,
+                  slideIndex,
+                  'subtitle',
+                ),
+                onChanged: (value) =>
+                    writeSlide(<String, dynamic>{'subtitle': value}),
                 maxLines: 2,
               ),
               const SizedBox(height: 8),
@@ -243,15 +337,20 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                 currentFormatting: subtitleFormatting,
                 preset: TextToolbarPreset.basic,
                 showAdvancedOptions: false,
-                onFormattingChanged: (value) => _updateSlide(
-                  _selectedSlideIndex,
-                  'subtitleFormatting',
-                  value.toJson(),
+                transactionIdentity: subtitleFormattingBinding.identity,
+                asyncBinding: subtitleFormattingBinding,
+                onFormattingChanged: (value) => writeSlide(
+                  <String, dynamic>{'subtitleFormatting': value.toJson()},
                 ),
               ),
               const SizedBox(height: 12),
               WebsiteActionEditor(
                 showVariant: true,
+                asyncBinding: _slideAsyncBinding(
+                  slide,
+                  slideIndex,
+                  'action',
+                ),
                 value: WebsiteActionValue.resolvePrimary(
                       slide,
                       labelKeys: const ['ctaText', 'buttonText'],
@@ -265,20 +364,24 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                       href: '/productos',
                       variant: WebsiteActionVariant.outline,
                     ),
-                onChanged: (action) => _updateSlideMultiple(
-                  _selectedSlideIndex,
-                  {
+                onChanged: (action) {
+                  final updates = <String, dynamic>{
                     'ctaText': action.label,
                     'buttonText': action.label,
                     'ctaLink': action.href,
                     'buttonLink': action.href,
                     'actionVariant': action.variant.storageValue,
                     'actions': WebsiteActionValue.mergePrimary(
-                      slide['actions'],
+                      workingActions,
                       action,
                     ),
-                  },
-                ),
+                  };
+                  final result = writeSlide(updates);
+                  if (result.accepted) {
+                    workingActions = updates['actions'];
+                  }
+                  return result;
+                },
               ),
               const SizedBox(height: 4),
             ],
@@ -293,13 +396,18 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             // editor on demand, for the viewport being previewed. The separate
             // "Foco móvil" editor is gone, and with it the divergent rule that
             // made the inspector disagree with the renderer.
-            _buildSlideMedia(slide),
+            _buildSlideMedia(slide, slideIndex),
             const SizedBox(height: 12),
             _EditorTextField(
               label: 'Texto alternativo',
               value: slide['altText']?.toString() ?? '',
+              asyncBinding: _slideAsyncBinding(
+                slide,
+                slideIndex,
+                'altText',
+              ),
               onChanged: (value) =>
-                  _updateSlide(_selectedSlideIndex, 'altText', value),
+                  writeSlide(<String, dynamic>{'altText': value}),
             ),
           ],
         ),
@@ -319,7 +427,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _uploadSlideVideoFile,
+                onPressed: () => _uploadSlideVideoFile(slide, slideIndex),
                 icon: const Icon(Icons.upload_file, size: 18),
                 label: const Text('Subir archivo de video'),
                 style: ElevatedButton.styleFrom(
@@ -355,8 +463,9 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                     IconButton(
                       icon: const Icon(Icons.close,
                           size: 16, color: Colors.green),
-                      onPressed: () =>
-                          _updateSlide(_selectedSlideIndex, 'videoFileUrl', ''),
+                      onPressed: () => writeSlide(
+                        <String, dynamic>{'videoFileUrl': ''},
+                      ),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
@@ -374,12 +483,15 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                 _EditorTextField(
                   label: 'URL de YouTube',
                   value: slide['videoUrl']?.toString() ?? '',
-                  onChanged: (v) {
-                    _updateSlide(_selectedSlideIndex, 'videoUrl', v);
-                    if (v.isNotEmpty) {
-                      _updateSlide(_selectedSlideIndex, 'videoFileUrl', '');
-                    }
-                  },
+                  asyncBinding: _slideAsyncBinding(
+                    slide,
+                    slideIndex,
+                    'videoUrl',
+                  ),
+                  onChanged: (value) => writeSlide(<String, dynamic>{
+                    'videoUrl': value,
+                    if (value.isNotEmpty) 'videoFileUrl': '',
+                  }),
                   hint: 'https://youtube.com/watch?v=...',
                 ),
               ],
@@ -410,6 +522,11 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                 (binding) {
                   final value =
                       (binding.value?.toDouble() ?? 0.55).clamp(0.0, 1.0);
+                  final asyncBinding = _slideAsyncBinding(
+                    slide,
+                    slideIndex,
+                    'overlayOpacity',
+                  );
                   return _EditorSlider(
                     label: '',
                     value: value,
@@ -417,7 +534,9 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                     max: 1.0,
                     divisions: 20,
                     valueLabel: value.toStringAsFixed(2),
-                    onChanged: binding.write,
+                    transactionIdentity: asyncBinding.identity,
+                    asyncBinding: asyncBinding,
+                    onCommit: binding.write,
                   );
                 },
               ),
@@ -646,7 +765,17 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
         _ => 'Elemento',
       };
 
-  Future<void> _uploadSlideVideoFile() async {
+  Future<void> _uploadSlideVideoFile(
+    Map<String, dynamic> slide,
+    int slideIndex,
+  ) async {
+    // Capture before the file picker or network yields. Completion belongs to
+    // this exact slide/page/selection epoch and can never consult the later
+    // ambient `_selectedSlideIndex`.
+    final target = _slidesTarget;
+    final lease = widget.provider.captureRepeaterMutationLease(target);
+    final slideRef = _slideRef(slide, slideIndex);
+    if (lease == null) return;
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.video,
@@ -697,9 +826,30 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           .from('website-assets')
           .getPublicUrl(storagePath);
 
-      _updateSlide(_selectedSlideIndex, 'videoFileUrl', publicUrl);
-      // Clear the YouTube URL if uploading a file
-      _updateSlide(_selectedSlideIndex, 'videoUrl', '');
+      if (!mounted) return;
+      final outcome = widget.provider.commitRepeaterMutation(
+        lease,
+        WebsiteRepeaterPatchItem(
+          target: slideRef,
+          updates: <String, dynamic>{
+            'videoFileUrl': publicUrl,
+            // The two mutually exclusive sources are one history operation.
+            'videoUrl': '',
+          },
+        ),
+      );
+      if (!outcome.result.accepted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'El slide cambió mientras se subía el video. Vuelve a intentarlo.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -730,11 +880,46 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
   ///
   /// Identity is used when the slide already has one; otherwise the explicit
   /// index addresses it. Nothing is invented and no document is migrated.
-  WebsiteResponsiveRepeaterField _slideOwner(Map<String, dynamic> slide) {
+  WebsiteResponsiveRepeaterField _slideOwner(
+    Map<String, dynamic> slide,
+    int slideIndex,
+  ) {
     return WebsiteResponsiveRepeaterField.forItem(
       collectionKeys: const <String>['slides'],
-      itemIndex: _selectedSlideIndex,
+      itemIndex: slideIndex,
       item: slide,
+    );
+  }
+
+  String _slideScopeKey(
+    Map<String, dynamic> slide,
+    int slideIndex,
+    String propertyKey,
+  ) {
+    final owner = _slideOwner(slide, slideIndex);
+    return jsonEncode(<String, Object?>{
+      'surface': 'carousel',
+      'viewport': _effectiveViewport.name,
+      'owner': 'repeater',
+      'collections': owner.collectionKeys,
+      'index': owner.itemIndex,
+      'identityKey': owner.identityKey,
+      'identityValue': owner.identityValue,
+      'property': propertyKey,
+    });
+  }
+
+  WebsiteAsyncFieldBinding _slideAsyncBinding(
+    Map<String, dynamic> slide,
+    int slideIndex,
+    String propertyKey,
+  ) {
+    return WebsiteAsyncFieldBinding.pageBlock(
+      provider: widget.provider,
+      target: WebsiteAsyncFieldTarget.block(
+        blockId: widget.blockId,
+        scopeKey: _slideScopeKey(slide, slideIndex, propertyKey),
+      ),
     );
   }
 
@@ -742,12 +927,19 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       WebsiteEditorChromeScope.maybeOf(context)?.hostClass ??
       WebsiteAuthoringHostClass.desktop;
 
+  WebsiteViewport get _effectiveViewport =>
+      WebsiteEditorAuthoringViewportScope.effectiveOf(
+        context,
+        fallback: widget.provider.previewViewport,
+      );
+
   /// Binds one non-media slide property through the canonical scalar owner.
   ///
   /// Null only when the registry has no such field, which would be a schema
   /// bug rather than a state to render.
   WebsiteResponsiveScalarBinding<T>? _slideScalarBinding<T>({
     required Map<String, dynamic> slide,
+    required int slideIndex,
     required String fieldPath,
     required WebsiteResponsiveDecoder<T> decode,
   }) {
@@ -761,9 +953,10 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       provider: widget.provider,
       blockId: widget.blockId,
       field: field,
-      owner: _slideOwner(slide),
+      owner: _slideOwner(slide, slideIndex),
       decode: decode,
       hostClass: _hostClass,
+      viewport: _effectiveViewport,
     );
   }
 
@@ -785,14 +978,14 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
     );
   }
 
-  Widget _buildSlideMedia(Map<String, dynamic> slide) {
+  Widget _buildSlideMedia(Map<String, dynamic> slide, int slideIndex) {
     final field = WebsiteBlockRegistry.fieldForPath(
       WebsiteBlockType.carousel,
       'slides.imageUrl',
     );
     if (field == null) return const SizedBox.shrink();
 
-    final owner = _slideOwner(slide);
+    final owner = _slideOwner(slide, slideIndex);
 
     final binding = WebsiteResponsiveMediaBinding.repeaterItem(
       provider: widget.provider,
@@ -803,6 +996,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       identityKey: owner.identityKey,
       identityValue: owner.identityValue,
       hostClass: _hostClass,
+      viewport: _effectiveViewport,
     );
 
     return ResponsiveMediaField(
@@ -814,11 +1008,48 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       onReset: binding.resetUrl,
       onFocalCustomize: binding.customizeFocal,
       onFocalReset: binding.resetFocal,
+      asyncBinding: _slideAsyncBinding(slide, slideIndex, field.key),
+      focalAsyncBinding: _slideAsyncBinding(
+        slide,
+        slideIndex,
+        '${field.key}.focal',
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final autoPlayProperties = <WebsiteInlineManipulationProperty>[
+      _sharedRootProperty('autoPlay'),
+    ];
+    final intervalProperties = <WebsiteInlineManipulationProperty>[
+      _sharedRootProperty('intervalSeconds'),
+    ];
+    final durationProperties = <WebsiteInlineManipulationProperty>[
+      _sharedRootProperty(
+        'animationDurationMs',
+        companionKeys: const <String>['transitionDuration'],
+      ),
+    ];
+    final writeAutoPlay = _sharedRootBinding(context, autoPlayProperties);
+    final writeAnimation = _sharedRootBinding(
+      context,
+      <WebsiteInlineManipulationProperty>[
+        _sharedRootProperty('animation'),
+      ],
+    );
+    final writeIndicators = _sharedRootBinding(
+      context,
+      <WebsiteInlineManipulationProperty>[
+        _sharedRootProperty('showIndicators'),
+      ],
+    );
+    final writeArrows = _sharedRootBinding(
+      context,
+      <WebsiteInlineManipulationProperty>[
+        _sharedRootProperty('showArrows'),
+      ],
+    );
     final slides = _slides;
     final sharedSelection =
         widget.provider.carouselSlideSelection(widget.blockId, slides.length);
@@ -843,36 +1074,43 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             _EditorToggle(
               label: 'Reproducción automática',
               value: autoPlay,
-              onChanged: (v) => widget.provider
-                  .updateBlockData(widget.blockId, 'autoPlay', v),
+              onChanged: (value) => writeAutoPlay(
+                <String, Object?>{'autoPlay': value},
+              ),
             ),
             const SizedBox(height: 12),
             if (autoPlay) ...[
-              _EditorSlider(
+              _InlineLeaseCommitSlider(
                 label: 'Intervalo (segundos)',
                 value: intervalSeconds.toDouble(),
                 min: 2,
                 max: 15,
                 divisions: 13,
-                onChanged: (v) => widget.provider.updateBlockData(
-                    widget.blockId, 'intervalSeconds', v.toInt()),
+                onLeaseStart: () =>
+                    _captureSharedRootLease(context, intervalProperties),
+                onCommitted: (lease, value) =>
+                    widget.provider.commitInlineMutation(
+                  lease,
+                  <String, Object?>{'intervalSeconds': value.toInt()},
+                ),
               ),
               const SizedBox(height: 12),
             ],
-            _EditorSlider(
+            _InlineLeaseCommitSlider(
               label: 'Duración animación (ms)',
-              value: (widget.data['animationDurationMs'] as num?)?.toDouble() ??
+              value: ((widget.data['animationDurationMs'] ??
+                          widget.data['transitionDuration']) as num?)
+                      ?.toDouble() ??
                   600,
               min: 200,
               max: 2000,
               divisions: 18, // (2000-200)/100 = 18 steps of 100ms
-              onChanged: (v) => widget.provider.updateBlockDataMultiple(
-                widget.blockId,
-                {
-                  'animationDurationMs': v.toInt(),
-                  // Keep legacy field in sync until all persisted data is normalized.
-                  'transitionDuration': v.toInt(),
-                },
+              onLeaseStart: () =>
+                  _captureSharedRootLease(context, durationProperties),
+              onCommitted: (lease, value) =>
+                  widget.provider.commitInlineMutation(
+                lease,
+                <String, Object?>{'animationDurationMs': value.toInt()},
               ),
             ),
             const SizedBox(height: 12),
@@ -884,22 +1122,25 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                 ('fade', 'Desvanecer'),
                 ('zoom', 'Zoom'),
               ],
-              onChanged: (v) => widget.provider
-                  .updateBlockData(widget.blockId, 'animation', v),
+              onChanged: (value) => writeAnimation(
+                <String, Object?>{'animation': value},
+              ),
             ),
             const SizedBox(height: 12),
             _EditorToggle(
               label: 'Mostrar indicadores',
               value: showIndicators,
-              onChanged: (v) => widget.provider
-                  .updateBlockData(widget.blockId, 'showIndicators', v),
+              onChanged: (value) => writeIndicators(
+                <String, Object?>{'showIndicators': value},
+              ),
             ),
             const SizedBox(height: 12),
             _EditorToggle(
               label: 'Mostrar flechas',
               value: showArrows,
-              onChanged: (v) => widget.provider
-                  .updateBlockData(widget.blockId, 'showArrows', v),
+              onChanged: (value) => writeArrows(
+                <String, Object?>{'showArrows': value},
+              ),
             ),
           ],
         ),
@@ -908,120 +1149,25 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           icon: Icons.view_carousel_outlined,
           initiallyExpanded: true,
           children: [
-            Row(
-              children: [
-                const Expanded(child: _SectionHeader('Slides')),
-                InkWell(
-                  onTap: _addSlide,
-                  borderRadius: BorderRadius.circular(4),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00A09D).withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add, size: 14, color: Color(0xFF00A09D)),
-                        SizedBox(width: 4),
-                        Text('Agregar',
-                            style: TextStyle(
-                                color: Color(0xFF00A09D), fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            // ONE collection owner for the whole product. The Carousel used to
+            // keep a private strip that could only add and remove — no
+            // duplicate, no reorder, a 14 px close target — while every
+            // schema-defined family already had all five operations here.
+            // Selection stays the provider's, because the active slide also
+            // drives the canvas and the inline presenters.
+            _SchemaRepeaterEditor(
+              field: _slidesSchema,
+              target: _slidesTarget,
+              items: slides,
+              onCommand: _slidesCommandBinding(),
+              selectedIndex: slides.isEmpty
+                  ? 0
+                  : _selectedSlideIndex.clamp(0, slides.length - 1).toInt(),
+              onSelectedIndexChanged: _selectSlide,
+              itemSeed: _newSlideSeed,
+              itemBuilder: (context, index, item, itemContext) =>
+                  _buildSlideFields(item, index),
             ),
-            const SizedBox(height: 12),
-
-            // Slide tabs
-            if (slides.isNotEmpty) ...[
-              SizedBox(
-                height: 40,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: slides.length,
-                  itemBuilder: (context, index) {
-                    final isSelected = index == _selectedSlideIndex;
-                    return GestureDetector(
-                      onTap: () => _selectSlide(index),
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF00A09D)
-                              : Colors.white.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        alignment: Alignment.center,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Slide ${index + 1}',
-                              style: TextStyle(
-                                color: isSelected
-                                    ? Colors.white70
-                                    : Colors.white70,
-                                fontSize: 13,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            if (slides.length > 1) ...[
-                              const SizedBox(width: 6),
-                              InkWell(
-                                onTap: () => _removeSlide(index),
-                                child: Icon(
-                                  Icons.close,
-                                  size: 14,
-                                  color: isSelected
-                                      ? Colors.white70
-                                      : Colors.white38,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Selected slide editor - INLINE fields (not nested StatefulWidget)
-              if (_selectedSlideIndex < slides.length)
-                _buildSlideFields(slides[_selectedSlideIndex]),
-            ] else
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Icon(Icons.image_outlined,
-                          size: 40, color: Colors.white.withValues(alpha: 0.3)),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No hay slides',
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.5)),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: _addSlide,
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Agregar slide'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
           ],
         ),
       ],
@@ -1033,10 +1179,14 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
 class _SlideEditor extends StatefulWidget {
   final Map<String, dynamic> slide;
   final void Function(String key, dynamic value) onUpdate;
+  final Object transactionIdentity;
+  final WebsiteAsyncFieldBinding asyncBinding;
 
   const _SlideEditor({
     required this.slide,
     required this.onUpdate,
+    required this.transactionIdentity,
+    required this.asyncBinding,
   });
 
   @override
@@ -1047,6 +1197,8 @@ class _SlideEditorState extends State<_SlideEditor> {
   bool _isUploading = false;
 
   Future<void> _uploadVideoFile() async {
+    final arm = widget.asyncBinding.capture();
+    if (arm == null) return;
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.video,
@@ -1054,11 +1206,20 @@ class _SlideEditorState extends State<_SlideEditor> {
         withData: true,
       );
 
-      if (result == null || result.files.isEmpty) return;
+      if (!mounted) return;
+      if (result == null || result.files.isEmpty) {
+        widget.asyncBinding.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+        return;
+      }
 
       final file = result.files.first;
       if (file.bytes == null) {
-        if (mounted) {
+        if (widget.asyncBinding
+            .commit(arm, () => WebsiteInlineMutationResult.unchanged)
+            .accepted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Error: No se pudo leer el archivo')),
           );
@@ -1099,11 +1260,15 @@ class _SlideEditorState extends State<_SlideEditor> {
           .from('website-assets')
           .getPublicUrl(storagePath);
 
-      widget.onUpdate('videoFileUrl', publicUrl);
-      // Clear the YouTube URL if uploading a file
-      widget.onUpdate('videoUrl', '');
+      if (!mounted) return;
+      final accepted = widget.asyncBinding.commit(arm, () {
+        widget.onUpdate('videoFileUrl', publicUrl);
+        // Clear the YouTube URL in the same admitted intent.
+        widget.onUpdate('videoUrl', '');
+        return WebsiteInlineMutationResult.committed;
+      }).accepted;
 
-      if (mounted) {
+      if (accepted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Video subido correctamente'),
@@ -1112,7 +1277,10 @@ class _SlideEditorState extends State<_SlideEditor> {
       }
     } catch (e) {
       debugPrint('[SlideEditor] Error uploading video: $e');
-      if (mounted) {
+      if (mounted &&
+          widget.asyncBinding
+              .commit(arm, () => WebsiteInlineMutationResult.unchanged)
+              .accepted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text('Error al subir video: $e'),
@@ -1142,12 +1310,14 @@ class _SlideEditorState extends State<_SlideEditor> {
         _EditorTextField(
           label: 'Título',
           value: widget.slide['title']?.toString() ?? '',
+          asyncBinding: widget.asyncBinding,
           onChanged: (v) => widget.onUpdate('title', v),
         ),
         const SizedBox(height: 12),
         _EditorTextField(
           label: 'Subtítulo',
           value: widget.slide['subtitle']?.toString() ?? '',
+          asyncBinding: widget.asyncBinding,
           onChanged: (v) => widget.onUpdate('subtitle', v),
           maxLines: 2,
         ),
@@ -1156,6 +1326,7 @@ class _SlideEditorState extends State<_SlideEditor> {
         const SizedBox(height: 8),
         _ImagePicker(
           currentUrl: widget.slide['imageUrl']?.toString(),
+          asyncBinding: widget.asyncBinding,
           onChanged: (url) => widget.onUpdate('imageUrl', url),
         ),
 
@@ -1271,6 +1442,7 @@ class _SlideEditorState extends State<_SlideEditor> {
             _EditorTextField(
               label: 'URL de YouTube',
               value: widget.slide['videoUrl']?.toString() ?? '',
+              asyncBinding: widget.asyncBinding,
               onChanged: (v) {
                 widget.onUpdate('videoUrl', v);
                 if (v.isNotEmpty) {
@@ -1296,7 +1468,9 @@ class _SlideEditorState extends State<_SlideEditor> {
             min: 0.1,
             max: 0.9,
             divisions: 8,
-            onChanged: (v) => widget.onUpdate('overlayOpacity', v),
+            transactionIdentity: (widget.transactionIdentity, 'overlayOpacity'),
+            asyncBinding: widget.asyncBinding,
+            onCommit: (v) => widget.onUpdate('overlayOpacity', v),
           ),
         ],
         const SizedBox(height: 16),
@@ -1304,6 +1478,7 @@ class _SlideEditorState extends State<_SlideEditor> {
         const SizedBox(height: 8),
         WebsiteActionEditor(
           showVariant: true,
+          asyncBinding: widget.asyncBinding,
           value: WebsiteActionValue.resolvePrimary(
                 widget.slide,
                 labelKeys: const ['ctaText', 'buttonText'],

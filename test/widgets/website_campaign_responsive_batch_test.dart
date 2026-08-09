@@ -43,7 +43,15 @@ void main() {
         const <String, dynamic>{},
       )
       ..selectBlock('block-1')
-      ..setDevicePreviewMode(viewport);
+      ..setDevicePreviewMode(viewport)
+      ..reportRenderedBlockViewport(
+        'block-1',
+        switch (viewport) {
+          DevicePreviewMode.desktop => WebsiteViewport.desktop,
+          DevicePreviewMode.tablet => WebsiteViewport.tablet,
+          DevicePreviewMode.mobile => WebsiteViewport.mobile,
+        },
+      );
   }
 
   Map<String, dynamic> dataOf(WebsiteEditModeProvider provider) =>
@@ -194,14 +202,15 @@ void main() {
         shellFor('overlayOpacity'),
         ResponsiveFieldShell.customizeActionKey,
       );
-      tester
-          .widget<Slider>(
-            find.descendant(
-              of: shellFor('overlayOpacity'),
-              matching: find.byType(Slider),
-            ),
-          )
-          .onChanged!(0.2);
+      final opacitySlider = tester.widget<Slider>(
+        find.descendant(
+          of: shellFor('overlayOpacity'),
+          matching: find.byType(Slider),
+        ),
+      );
+      opacitySlider.onChangeStart!(opacitySlider.value);
+      opacitySlider.onChanged!(0.2);
+      opacitySlider.onChangeEnd!(0.2);
       await settle(tester);
 
       // --- visibilidad del overlay: personalizar, escribir ---
@@ -420,14 +429,15 @@ void main() {
         shellFor('overlayOpacity'),
         ResponsiveFieldShell.customizeActionKey,
       );
-      tester
-          .widget<Slider>(
-            find.descendant(
-              of: shellFor('overlayOpacity'),
-              matching: find.byType(Slider),
-            ),
-          )
-          .onChanged!(0.85);
+      final opacitySlider = tester.widget<Slider>(
+        find.descendant(
+          of: shellFor('overlayOpacity'),
+          matching: find.byType(Slider),
+        ),
+      );
+      opacitySlider.onChangeStart!(opacitySlider.value);
+      opacitySlider.onChanged!(0.85);
+      opacitySlider.onChangeEnd!(0.85);
       await settle(tester);
 
       expect(dataOf(provider)['overlayOpacity'], 0.5);

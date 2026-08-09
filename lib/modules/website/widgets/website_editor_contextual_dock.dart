@@ -7,6 +7,7 @@ import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_responsive_authoring.dart';
 import '../providers/website_edit_mode_provider.dart';
+import '../models/website_canvas_manipulation.dart';
 import 'website_editor_block_sheet.dart';
 
 /// The contextual dock — the compact host's answer to the desktop pane.
@@ -57,6 +58,63 @@ class WebsiteEditorContextualDock extends StatelessWidget {
   @visibleForTesting
   static const Key editKey = Key('website-editor-dock-edit');
 
+  /// Enters/leaves a direct-manipulation mode on the selected Canvas layer.
+  @visibleForTesting
+  static Key manipulationKey(WebsiteCanvasManipulationMode mode) =>
+      Key('website-editor-dock-canvas-${mode.name}');
+
+  /// Opens the `O-05` group that holds every layer operation.
+  @visibleForTesting
+  static const Key layerActionsKey = Key('website-editor-dock-layer-actions');
+
+  /// Leaves whatever mode is active.
+  @visibleForTesting
+  static const Key exitManipulationKey = Key('website-editor-dock-canvas-exit');
+
+  /// The operator-facing word for each mode.
+  static String labelForMode(WebsiteCanvasManipulationMode mode) =>
+      switch (mode) {
+        WebsiteCanvasManipulationMode.move => 'Mover',
+        WebsiteCanvasManipulationMode.resize => 'Redimensionar',
+        WebsiteCanvasManipulationMode.rotate => 'Rotar',
+        WebsiteCanvasManipulationMode.crop => 'Recortar',
+      };
+
+  static String viewportLabel(WebsiteViewport viewport) => switch (viewport) {
+        WebsiteViewport.mobile => 'móvil',
+        WebsiteViewport.tablet => 'tablet',
+        WebsiteViewport.desktop => 'escritorio',
+      };
+
+  /// Why a mode cannot start, in the operator's words.
+  ///
+  /// `A-01` — a disabled control always explains itself. A silent no-op on a
+  /// locked or hidden layer is the worst outcome: the operator taps, nothing
+  /// happens, and nothing tells them the layer is locked.
+  static String reasonFor(WebsiteCanvasManipulationBlockReason reason) =>
+      switch (reason) {
+        WebsiteCanvasManipulationBlockReason.editorInactive =>
+          'Sólo se puede manipular en Edición.',
+        WebsiteCanvasManipulationBlockReason.selectionMismatch =>
+          'Selecciona la capa primero.',
+        WebsiteCanvasManipulationBlockReason.canvasNotMeasured =>
+          'Preparando el lienzo para esta ventana.',
+        WebsiteCanvasManipulationBlockReason.viewportMismatch =>
+          'La vista efectiva del lienzo cambió. Inténtalo de nuevo.',
+        WebsiteCanvasManipulationBlockReason.documentMissing =>
+          'Este bloque ya no tiene un lienzo.',
+        WebsiteCanvasManipulationBlockReason.layerMissing =>
+          'La capa ya no existe en este viewport.',
+        WebsiteCanvasManipulationBlockReason.layerAmbiguous =>
+          'Hay dos capas con la misma identidad. Revísalas antes de moverla.',
+        WebsiteCanvasManipulationBlockReason.layerHidden =>
+          'La capa está oculta en este viewport. Muéstrala para manipularla.',
+        WebsiteCanvasManipulationBlockReason.layerLocked =>
+          'La capa está bloqueada. Desbloquéala para manipularla.',
+        WebsiteCanvasManipulationBlockReason.modeUnsupported =>
+          'Esta capa no admite esta operación.',
+      };
+
   /// `F-06` · below 900 the density is touch, so every target is 48.
   static const double touchTarget = 48;
 
@@ -78,11 +136,17 @@ class WebsiteEditorContextualDock extends StatelessWidget {
     final selectedId = provider.selectedBlockId;
     if (selectedId == null) return const SizedBox.shrink();
 
+    // What KIND of thing is selected is asked before the document is searched.
+    // Going straight to `indexWhere` is why the published header — selectable
+    // on every host, and edited through the same sheet body as any block —
+    // had no dock, and therefore no `Editar`, on the contextual host: its id
+    // is reserved chrome, so the lookup was always -1 and the dock vanished.
+    final chrome = provider.selectedChromeTarget;
     final blocks = provider.blocks;
     final index = blocks.indexWhere((block) => block['id'] == selectedId);
-    if (index == -1) return const SizedBox.shrink();
+    if (chrome == null && index == -1) return const SizedBox.shrink();
 
-    final block = blocks[index];
+    final block = index == -1 ? const <String, dynamic>{} : blocks[index];
     final isVisible = block['is_visible'] != false;
     final roles = VinabikeThemeRoles.maybeOf(context);
     final theme = Theme.of(context);
@@ -120,6 +184,7 @@ class WebsiteEditorContextualDock extends StatelessWidget {
                   provider: provider,
                   blockId: selectedId,
                   block: block,
+                  chrome: chrome,
                 ),
                 _ActionRow(
                   provider: provider,
@@ -127,6 +192,7 @@ class WebsiteEditorContextualDock extends StatelessWidget {
                   isFirst: index == 0,
                   isLast: index == blocks.length - 1,
                   isVisible: isVisible,
+                  chrome: chrome,
                 ),
               ],
             ),
@@ -144,6 +210,24 @@ class WebsiteEditorContextualDock extends StatelessWidget {
   ///
   /// Public because the contextual sheet header must say the same sentence;
   /// two copies of this rule is how a header and a dock start disagreeing.
+  /// The scope sentence for whatever is selected.
+  ///
+  /// Editor chrome is **always** common: the header and the footer are
+  /// site-wide settings written through `updateHeaderSettings` /
+  /// `updateFooterSettings`, which have no per-viewport slot at all. Passing
+  /// them through [scopeLabelFor] would have printed `Escribe en: móvil`
+  /// whenever the viewport selector said mobile — a sentence the write cannot
+  /// honour. The dock states what the write will do, never what the selector
+  /// happens to be set to.
+  static String scopeLabelForSelection({
+    required WebsiteEditorChromeTarget? chrome,
+    required WebsiteViewport viewport,
+    required WebsiteWriteScope scope,
+  }) {
+    if (chrome != null) return 'Escribe en: común';
+    return scopeLabelFor(viewport: viewport, scope: scope);
+  }
+
   static String scopeLabelFor({
     required WebsiteViewport viewport,
     required WebsiteWriteScope scope,
@@ -158,6 +242,16 @@ class WebsiteEditorContextualDock extends StatelessWidget {
       WebsiteViewport.desktop => 'Escribe en: común',
     };
   }
+
+  /// What the dock and the sheet call the current selection.
+  ///
+  /// Chrome names itself; a block asks the registry. One function so the dock
+  /// and the sheet header can never disagree about what is being edited.
+  static String identityLabelForSelection({
+    required WebsiteEditorChromeTarget? chrome,
+    required Map<String, dynamic> block,
+  }) =>
+      chrome?.label ?? identityLabelFor(block);
 
   /// The block's own name, from the registry — never the serialized key.
   ///
@@ -179,19 +273,50 @@ class _IdentityRow extends StatelessWidget {
     required this.provider,
     required this.blockId,
     required this.block,
+    required this.chrome,
   });
 
   final WebsiteEditModeProvider provider;
   final String blockId;
   final Map<String, dynamic> block;
+  final WebsiteEditorChromeTarget? chrome;
 
   @override
   Widget build(BuildContext context) {
-    final identity = WebsiteEditorContextualDock.identityLabelFor(block);
-    final scope = WebsiteEditorContextualDock.scopeLabelFor(
-      viewport: provider.previewViewport,
-      scope: provider.writeScope,
+    var identity = WebsiteEditorContextualDock.identityLabelForSelection(
+      chrome: chrome,
+      block: block,
     );
+    // The identity of the SELECTED LAYER reaches the dock, not just the block.
+    // `Bloque · capa` named nothing: a canvas holds a headline, a button and
+    // three shapes, and they are not interchangeable. t10 frame 10d shows what
+    // a layer row says — kind plus its own useful words — and that naming has
+    // one owner so the dock and the sheet cannot describe it differently.
+    final layerTarget = provider.selectedCanvasLayerTarget;
+    final effectiveCanvasViewport = layerTarget == null
+        ? null
+        : provider.renderedCanvasViewport(layerTarget.document);
+    if (layerTarget != null && effectiveCanvasViewport == null) {
+      // The selector is only a request. Until the renderer reports the real
+      // Canvas width, neither layer projection nor write scope may borrow it
+      // and present that guess as the effective viewport.
+      identity = '$identity · vista efectiva sin medir';
+    } else {
+      final layerLabel = provider.selectedCanvasLayerLabel;
+      if (layerLabel != null) identity = '$identity · $layerLabel';
+      if (effectiveCanvasViewport != null &&
+          effectiveCanvasViewport != provider.previewViewport) {
+        identity = '$identity · vista '
+            '${WebsiteEditorContextualDock.viewportLabel(effectiveCanvasViewport)}';
+      }
+    }
+    final scope = layerTarget != null && effectiveCanvasViewport == null
+        ? 'Preparando el lienzo'
+        : WebsiteEditorContextualDock.scopeLabelForSelection(
+            chrome: chrome,
+            viewport: effectiveCanvasViewport ?? provider.previewViewport,
+            scope: provider.writeScope,
+          );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
@@ -226,6 +351,7 @@ class _ActionRow extends StatelessWidget {
     required this.isFirst,
     required this.isLast,
     required this.isVisible,
+    required this.chrome,
   });
 
   final WebsiteEditModeProvider provider;
@@ -233,10 +359,37 @@ class _ActionRow extends StatelessWidget {
   final bool isFirst;
   final bool isLast;
   final bool isVisible;
+  final WebsiteEditorChromeTarget? chrome;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // The header and the footer are site-wide chrome: they have no position in
+    // the page, no duplicate and no delete. `A-01` says a boundary is stated,
+    // not hidden — so the controls keep their place and their 48, go inert and
+    // say why. Removing them would make the dock reflow under the finger and
+    // would teach the operator that the phone editor has fewer capabilities
+    // than it does.
+    final chromeReason = chrome == null
+        ? null
+        : '${chrome!.label} es del sitio, no de esta página.';
+    final isChrome = chrome != null;
+    // A Canvas layer is selected when the block owns one and the operator
+    // picked it. The dock states that identity and offers its operations, so
+    // the capability does not depend on hitting a small handle.
+    // The exact layer this dock operates on, from the session contract — not
+    // an ambient guess. Null means there is no layer to manipulate.
+    final layerTarget = isChrome ? null : provider.selectedCanvasLayerTarget;
+    final effectiveCanvasViewport = layerTarget == null
+        ? null
+        : provider.renderedCanvasViewport(layerTarget.document);
+    final activeSession = provider.canvasManipulationSession;
+    final activeMode = activeSession?.target == layerTarget &&
+            effectiveCanvasViewport != null &&
+            activeSession?.viewport == effectiveCanvasViewport
+        ? activeSession?.mode
+        : null;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 2, 8, 4),
       child: Row(
@@ -247,29 +400,76 @@ class _ActionRow extends StatelessWidget {
             label: 'Mover arriba',
             // A boundary is stated, not hidden: the control stays in place and
             // goes inert so the row never reflows under the finger.
-            onPressed: isFirst ? null : () => provider.moveBlockUp(blockId),
-            disabledReason: 'Ya es el primer bloque de la página.',
+            onPressed: isChrome || isFirst
+                ? null
+                : () => provider.moveBlockUp(blockId),
+            disabledReason:
+                chromeReason ?? 'Ya es el primer bloque de la página.',
           ),
           _DockIconButton(
             buttonKey: WebsiteEditorContextualDock.moveDownKey,
             icon: Icons.arrow_downward,
             label: 'Mover abajo',
-            onPressed: isLast ? null : () => provider.moveBlockDown(blockId),
-            disabledReason: 'Ya es el último bloque de la página.',
+            onPressed: isChrome || isLast
+                ? null
+                : () => provider.moveBlockDown(blockId),
+            disabledReason:
+                chromeReason ?? 'Ya es el último bloque de la página.',
           ),
           _DockIconButton(
             buttonKey: WebsiteEditorContextualDock.visibilityKey,
             icon: isVisible ? Icons.visibility : Icons.visibility_off,
             label: isVisible ? 'Ocultar bloque' : 'Mostrar bloque',
-            onPressed: () => provider.toggleBlockVisibility(blockId),
+            onPressed:
+                isChrome ? null : () => provider.toggleBlockVisibility(blockId),
+            disabledReason: chromeReason,
           ),
           _DockIconButton(
             buttonKey: WebsiteEditorContextualDock.duplicateKey,
             icon: Icons.content_copy,
             label: 'Duplicar bloque',
-            onPressed: () => provider.duplicateBlock(blockId),
+            onPressed: isChrome ? null : () => provider.duplicateBlock(blockId),
+            disabledReason: chromeReason,
           ),
-          _DockOverflowMenu(provider: provider, blockId: blockId),
+          // ONE canvas control in the dock, and the modes in the sheet.
+          //
+          // Four 48 buttons for move/resize/rotate/crop plus the five block
+          // actions overflowed the row at 390 — the same mistake as five tabs
+          // in a `Row` of `Expanded`s, in a different place. `F-06` says every
+          // target is 48, so the answer is not smaller buttons: it is that the
+          // dock carries identity and frequent actions while `O-05` carries
+          // groups. The dock keeps the entry and the way out; the modes and
+          // every layer operation live in the sheet's `Capa` group.
+          if (layerTarget != null)
+            _DockIconButton(
+              buttonKey: WebsiteEditorContextualDock.layerActionsKey,
+              icon: Icons.layers_outlined,
+              label: activeMode == null
+                  ? 'Acciones de la capa'
+                  : '${WebsiteEditorContextualDock.labelForMode(activeMode)} activo',
+              isActive: activeMode != null,
+              onPressed: () => showWebsiteBlockEditSheet(
+                context: context,
+                provider: provider,
+                task: WebsiteBlockEditSheetTask.canvasLayerActions,
+                effectiveViewport: effectiveCanvasViewport,
+              ),
+            ),
+          if (activeMode != null)
+            _DockIconButton(
+              buttonKey: WebsiteEditorContextualDock.exitManipulationKey,
+              icon: Icons.close_fullscreen,
+              label: 'Salir de '
+                  '${WebsiteEditorContextualDock.labelForMode(activeMode).toLowerCase()}',
+              onPressed: () => provider.stopCanvasManipulation(
+                expectedSession: activeSession!,
+              ),
+            ),
+          _DockOverflowMenu(
+            provider: provider,
+            blockId: blockId,
+            chromeReason: chromeReason,
+          ),
           const Spacer(),
           Flexible(
             child: ConstrainedBox(
@@ -281,6 +481,7 @@ class _ActionRow extends StatelessWidget {
                 onPressed: () => showWebsiteBlockEditSheet(
                   context: context,
                   provider: provider,
+                  task: WebsiteBlockEditSheetTask.inspector,
                 ),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(
@@ -312,6 +513,7 @@ class _DockIconButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.disabledReason,
+    this.isActive = false,
   });
 
   final Key buttonKey;
@@ -322,26 +524,41 @@ class _DockIconButton extends StatelessWidget {
   /// `A-01` · a disabled control always explains itself.
   final String? disabledReason;
 
+  /// Whether this control's mode is the one currently running.
+  ///
+  /// Announced through `Semantics.selected` as well as painted, so "which mode
+  /// am I in" never depends on telling two tints apart.
+  final bool isActive;
+
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     final message = enabled ? label : (disabledReason ?? label);
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final theme = Theme.of(context);
     return Tooltip(
       message: message,
-      child: IconButton(
-        key: buttonKey,
-        onPressed: onPressed,
-        icon: Icon(icon, size: WebsiteEditorContextualDock.glyphSize),
-        iconSize: WebsiteEditorContextualDock.glyphSize,
-        tooltip: null,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(
-          minWidth: WebsiteEditorContextualDock.touchTarget,
-          minHeight: WebsiteEditorContextualDock.touchTarget,
-        ),
-        style: IconButton.styleFrom(
-          fixedSize: const Size.square(
-            WebsiteEditorContextualDock.touchTarget,
+      child: Semantics(
+        selected: isActive,
+        child: IconButton(
+          key: buttonKey,
+          onPressed: onPressed,
+          icon: Icon(icon, size: WebsiteEditorContextualDock.glyphSize),
+          iconSize: WebsiteEditorContextualDock.glyphSize,
+          tooltip: null,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(
+            minWidth: WebsiteEditorContextualDock.touchTarget,
+            minHeight: WebsiteEditorContextualDock.touchTarget,
+          ),
+          isSelected: isActive,
+          style: IconButton.styleFrom(
+            fixedSize: const Size.square(
+              WebsiteEditorContextualDock.touchTarget,
+            ),
+            backgroundColor: isActive
+                ? (roles?.info.container ?? theme.colorScheme.primaryContainer)
+                : null,
           ),
         ),
       ),
@@ -354,10 +571,17 @@ class _DockIconButton extends StatelessWidget {
 /// Delete lives here on purpose: `GUI_DESIGN_PRINCIPLES` §5 keeps destructive
 /// commands in a discoverable secondary location, and it still confirms.
 class _DockOverflowMenu extends StatelessWidget {
-  const _DockOverflowMenu({required this.provider, required this.blockId});
+  const _DockOverflowMenu({
+    required this.provider,
+    required this.blockId,
+    this.chromeReason,
+  });
 
   final WebsiteEditModeProvider provider;
   final String blockId;
+
+  /// Non-null when the selection is site chrome, which cannot be deleted.
+  final String? chromeReason;
 
   @override
   Widget build(BuildContext context) {
@@ -402,12 +626,14 @@ class _DockOverflowMenu extends StatelessWidget {
             ),
           ),
           const PopupMenuDivider(),
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'delete',
+            enabled: chromeReason == null,
             child: _MenuRow(
               icon: Icons.delete_outline,
               label: 'Eliminar bloque',
-              destructive: true,
+              reason: chromeReason,
+              destructive: chromeReason == null,
             ),
           ),
         ],
@@ -427,6 +653,8 @@ class _DockOverflowMenu extends StatelessWidget {
   /// `O-03 VbConfirmDialog` · the safe exit holds the initial focus and the
   /// buttons name the act. Never Sí/No.
   Future<void> _confirmDelete(BuildContext context) async {
+    final intent = provider.captureAsyncIntent(blockId: blockId);
+    if (intent == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -447,7 +675,15 @@ class _DockOverflowMenu extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) provider.deleteBlock(blockId);
+    if (confirmed != true || !context.mounted) return;
+    final live = context.read<WebsiteEditModeProvider>();
+    live.commitAsyncIntent(intent, () {
+      final before = live.blocks.length;
+      live.deleteBlock(blockId);
+      return live.blocks.length < before
+          ? WebsiteInlineMutationResult.committed
+          : WebsiteInlineMutationResult.unchanged;
+    });
   }
 }
 
@@ -468,9 +704,8 @@ class _MenuRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.maybeOf(context);
-    final color = destructive
-        ? (roles?.danger.accent ?? theme.colorScheme.error)
-        : null;
+    final color =
+        destructive ? (roles?.danger.accent ?? theme.colorScheme.error) : null;
     return Row(
       children: [
         Icon(icon, size: 18, color: color),

@@ -5,6 +5,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_surface_style.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_type.dart';
+import 'package:vinabike_erp/modules/website/models/website_canvas_manipulation.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_projection.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_action_button.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_content_presenters.dart';
@@ -33,6 +38,10 @@ Widget _host({
           width: double.infinity,
           child: WebsiteCarouselBlockContent(
             data: data,
+            surfaceStyle: WebsiteBlockSurfaceStyle.forLogicalWidth(
+              data: data,
+              logicalWidth: mediaQueryData.size.width,
+            ),
             primaryColor: const Color(0xFF123456),
             accentColor: const Color(0xFF00A09D),
             previewMode: previewMode,
@@ -52,8 +61,12 @@ Widget _host({
 /// identity; there is no callback that hands back a rebuilt `elements` list.
 /// These tests only need the binding to exist, so every command is omitted —
 /// the Canvas then simply has no way to mutate a document from here.
-WebsiteCanvasEditorBinding _inertCanvasBinding(int _) {
+WebsiteCanvasEditorBinding _inertCanvasBinding(int slideIndex) {
   return WebsiteCanvasEditorBinding(
+    documentTarget: WebsiteCanvasDocumentTarget(
+      blockId: 'carousel-block',
+      slideIndex: slideIndex,
+    ),
     activeElementId: null,
     onActiveElementChanged: (_) {},
   );
@@ -79,6 +92,54 @@ void main() {
     expect(find.text('Título del Banner'), findsNothing);
     expect(find.text('Ver catálogo'), findsNothing);
     expect(find.text('Ver más'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'slide media consumes canonical focal projection over legacy aliases',
+      (tester) async {
+    WebsiteInlineMediaSlot? mediaSlot;
+    final projected = WebsiteResponsiveBlockProjection.project(
+      type: WebsiteBlockType.carousel,
+      viewport: WebsiteViewport.mobile,
+      data: const <String, dynamic>{
+        'autoPlay': false,
+        'slides': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'slide-a',
+            'imageUrl': 'https://example.invalid/slide.jpg',
+            'focalPointX': 0.5,
+            'focalPointY': 0.5,
+            'mobileFocalPointX': 0.1,
+            'mobileFocalPointY': 0.9,
+            'mobileBgAlignment': 'right',
+            'responsive': <String, dynamic>{
+              'version': 2,
+              'mobile': <String, dynamic>{
+                'focalPointX': 0.25,
+                'focalPointY': 0.75,
+              },
+            },
+          },
+        ],
+      },
+    );
+
+    await tester.pumpWidget(
+      _host(
+        data: projected,
+        mediaQueryData: const MediaQueryData(size: Size(390, 900)),
+        presenters: WebsiteBlockContentPresenters(
+          media: (context, slot) {
+            mediaSlot = slot;
+            return const ColoredBox(color: Color(0xFF1A1A1A));
+          },
+        ),
+      ),
+    );
+
+    expect(mediaSlot, isNotNull);
+    expect(mediaSlot!.alignment, const Alignment(-0.5, 0.5));
     expect(tester.takeException(), isNull);
   });
 

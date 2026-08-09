@@ -163,8 +163,12 @@ void main() {
       // enlaces salen de `block_data`.
       expect(
         rendererSource,
-        contains(
-            'case WebsiteBlockType.footer:\n        return const SizedBox(height: 64);'),
+        matches(
+          RegExp(
+            r'case WebsiteBlockType\.footer:\s*'
+            r'return const SizedBox\(height: 64\);',
+          ),
+        ),
       );
     });
 

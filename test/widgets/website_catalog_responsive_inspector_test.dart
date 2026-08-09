@@ -40,7 +40,15 @@ void main() {
         const <String, dynamic>{},
       )
       ..selectBlock('block-1')
-      ..setDevicePreviewMode(viewport);
+      ..setDevicePreviewMode(viewport)
+      ..reportRenderedBlockViewport(
+        'block-1',
+        switch (viewport) {
+          DevicePreviewMode.desktop => WebsiteViewport.desktop,
+          DevicePreviewMode.tablet => WebsiteViewport.tablet,
+          DevicePreviewMode.mobile => WebsiteViewport.mobile,
+        },
+      );
   }
 
   Map<String, dynamic> dataOf(WebsiteEditModeProvider provider) =>
@@ -166,11 +174,15 @@ void main() {
 
   Map<String, dynamic> productsData() => <String, dynamic>{
         'title': 'Productos Destacados',
+        'subtitle': 'Elegidos para tu próxima salida',
         'productSource': 'featured',
         'maxProducts': 8,
+        'layout': 'grid',
         'itemsPerRow': 4,
         'showViewAll': true,
         'showPrice': true,
+        'showSku': false,
+        'showBrand': false,
         'viewAllText': 'Ver todos los productos',
         'viewAllLink': '/productos',
       };
@@ -204,7 +216,7 @@ void main() {
       };
 
   group('B · Products: el editor custom pasa por el owner canónico', () {
-    testWidgets('390 Móvil y 834 Tablet: showViewAll ofrece personalizar',
+    testWidgets('390 Móvil y 834 Tablet: la presentación ofrece personalizar',
         (tester) async {
       for (final (width, viewport) in const <(double, DevicePreviewMode)>[
         (390, DevicePreviewMode.mobile),
@@ -218,20 +230,28 @@ void main() {
           viewport: viewport,
         );
 
-        expect(shellFor('showViewAll'), findsOneWidget, reason: '@ $width');
-        expect(
-          stateOf(tester, 'showViewAll').status,
-          WebsiteResponsiveFieldStatus.inherited,
-          reason: '@ $width',
-        );
-        expect(
-          find.descendant(
-            of: shellFor('showViewAll'),
-            matching: find.byKey(ResponsiveFieldShell.customizeActionKey),
-          ),
-          findsOneWidget,
-          reason: '@ $width',
-        );
+        for (final key in const [
+          'layout',
+          'showPrice',
+          'showSku',
+          'showBrand',
+          'showViewAll',
+        ]) {
+          expect(shellFor(key), findsOneWidget, reason: '$key @ $width');
+          expect(
+            stateOf(tester, key).status,
+            WebsiteResponsiveFieldStatus.inherited,
+            reason: '$key @ $width',
+          );
+          expect(
+            find.descendant(
+              of: shellFor(key),
+              matching: find.byKey(ResponsiveFieldShell.customizeActionKey),
+            ),
+            findsOneWidget,
+            reason: '$key @ $width',
+          );
+        }
         expect(tester.takeException(), isNull);
       }
     });
@@ -241,7 +261,7 @@ void main() {
         'con su razón verdadera', (tester) async {
       for (final (width, viewport, fragment)
           in const <(double, DevicePreviewMode, String)>[
-        (390, DevicePreviewMode.mobile, 'carrusel automático'),
+        (390, DevicePreviewMode.mobile, 'cuadrícula usa una columna'),
         (834, DevicePreviewMode.tablet, 'se calculan solas'),
       ]) {
         final provider = await pumpBlock(
@@ -301,17 +321,33 @@ void main() {
         viewport: DevicePreviewMode.desktop,
       );
 
-      // `showViewAll` puede variar por viewport, así que en la base dice Común.
-      expect(
-        stateOf(tester, 'showViewAll').status,
-        WebsiteResponsiveFieldStatus.common,
-      );
+      // La presentación puede variar por viewport; en la base dice Común.
+      for (final key in const [
+        'layout',
+        'showPrice',
+        'showSku',
+        'showBrand',
+        'showViewAll',
+      ]) {
+        expect(
+          stateOf(tester, key).status,
+          WebsiteResponsiveFieldStatus.common,
+          reason: key,
+        );
+      }
       // `itemsPerRow` nunca varía: dice que es siempre común.
       expect(
         stateOf(tester, 'itemsPerRow').status,
         WebsiteResponsiveFieldStatus.sharedOnly,
       );
-      for (final key in const ['itemsPerRow', 'showViewAll']) {
+      for (final key in const [
+        'layout',
+        'itemsPerRow',
+        'showPrice',
+        'showSku',
+        'showBrand',
+        'showViewAll',
+      ]) {
         expect(
           find.descendant(
             of: shellFor(key),
@@ -402,12 +438,13 @@ void main() {
         'maxProducts',
         'productSource',
         'viewAllLink',
-        'showPrice',
       ]) {
         expect(shellFor(key), findsNothing, reason: key);
       }
-      // Y sus controles siguen existiendo con su etiqueta de siempre.
+      // Los datos de negocio siguen directos; showPrice ya tiene owner y
+      // consumer responsive reales.
       expect(find.text('Máximo de productos'), findsOneWidget);
+      expect(shellFor('showPrice'), findsOneWidget);
       expect(find.text('Mostrar precios'), findsOneWidget);
     });
   });
@@ -562,6 +599,10 @@ void main() {
           );
 
           expect(shellFor('itemsPerRow'), findsOneWidget);
+          expect(shellFor('layout'), findsOneWidget);
+          expect(shellFor('showPrice'), findsOneWidget);
+          expect(shellFor('showSku'), findsOneWidget);
+          expect(shellFor('showBrand'), findsOneWidget);
           expect(find.text('Productos por fila'), findsOneWidget);
           expect(find.text('Mostrar botón "Ver todos"'), findsOneWidget);
           expect(tester.takeException(), isNull);

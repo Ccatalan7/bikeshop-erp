@@ -481,9 +481,11 @@ class WebsiteResponsiveScalarBinding<T> {
     required WebsiteResponsiveDecoder<T> decode,
     T? fallback,
     WebsiteAuthoringHostClass hostClass = WebsiteAuthoringHostClass.desktop,
+    WebsiteViewport? viewport,
     List<String> sharedCompanionKeys = const <String>[],
     String? unavailableReason,
   }) {
+    final targetViewport = viewport ?? provider.previewViewport;
     final aliases = field.legacyResponsiveAliases;
     final legacyReader = aliases.isEmpty
         // Shared helper, not a media concept: "read a pre-migration mobile-only
@@ -497,6 +499,54 @@ class WebsiteResponsiveScalarBinding<T> {
       ...sharedCompanionKeys,
     }..remove(field.key);
 
+    final mutationOwner = switch (owner) {
+      WebsiteResponsiveRootField() => const WebsiteInlineBlockOwner(),
+      WebsiteResponsiveRepeaterField(
+        collectionKeys: final collectionKeys,
+        itemIndex: final itemIndex,
+        identityKey: final identityKey,
+        identityValue: final identityValue,
+      ) =>
+        WebsiteInlineRepeaterOwner(
+          collectionKeys: collectionKeys,
+          itemIndex: itemIndex,
+          identityKey: identityKey,
+          identityValue: identityValue,
+        ),
+    };
+    final mutationTarget = WebsiteInlineManipulationTarget(
+      blockId: blockId,
+      owner: mutationOwner,
+      viewport: targetViewport,
+      properties: <WebsiteInlineManipulationProperty>[
+        WebsiteInlineManipulationProperty.fromSchema(
+          field,
+          sharedCompanionKeys: companions,
+        ),
+      ],
+      requiresSelection: true,
+    );
+
+    // A binding may receive several edits before Flutter rebuilds it (IME
+    // composition and rapid TextField input are the common cases). Keep one
+    // exact one-shot lease in the closure and refresh it only after an
+    // admitted commit/no-op. A rejected callback is stale by definition and
+    // is never allowed to recapture against whatever page, item, scope or
+    // viewport happens to be current now.
+    var mutationLease = provider.captureInlineMutationLease(mutationTarget);
+    void guardedWrite(Object? value) {
+      final lease = mutationLease;
+      if (lease == null) return;
+      mutationLease = null;
+      final result = provider.commitInlineMutation(
+        lease,
+        <String, Object?>{field.key: value},
+      );
+      if (result.accepted) {
+        mutationLease = provider.captureInlineMutationLease(mutationTarget);
+      }
+    }
+
     switch (owner) {
       case WebsiteResponsiveRootField():
         final state = provider.responsiveFieldState<T>(
@@ -504,53 +554,20 @@ class WebsiteResponsiveScalarBinding<T> {
           schema: field,
           decode: decode,
           hostClass: hostClass,
+          viewport: targetViewport,
           fallback: fallback,
           readLegacyOverride: legacyReader,
           unavailableReason: unavailableReason,
         );
         return WebsiteResponsiveScalarBinding<T>(
           state: state,
-          write: (value) {
-            // Resolved AT WRITE TIME, never from the state snapshot: between
-            // building this binding and the user's change, `Personalizar` may
-            // have moved the scope. A snapshot would silently write the shared
-            // value right after the user asked for an override.
-            final scope = WebsiteAuthoringContext(
-              hostClass: hostClass,
-              previewViewport: provider.previewViewport,
-              writeScope: provider.fieldWriteScope(
-                blockId: blockId,
-                propertyKey: field.key,
-                policy: policy,
-              ),
-            ).effectiveWriteScope(policy);
-            if (scope == WebsiteWriteScope.viewport) {
-              provider.setBlockResponsiveProperty(
-                blockId,
-                field.key,
-                value,
-                policy: policy,
-              );
-              return;
-            }
-            provider.setBlockResponsiveProperties(
-              blockId,
-              <String, Object?>{
-                field.key: value,
-                for (final companion in companions) companion: value,
-              },
-              policies: <String, WebsiteResponsivePropertyPolicy>{
-                field.key: policy,
-                for (final companion in companions) companion: policy,
-              },
-              scope: WebsiteWriteScope.shared,
-            );
-          },
+          write: guardedWrite,
           customize: () => provider.setFieldWriteScope(
             blockId: blockId,
             propertyKey: field.key,
             policy: policy,
             scope: WebsiteWriteScope.viewport,
+            viewport: targetViewport,
           ),
           reset: () => provider.clearBlockResponsiveOverride(
             blockId,
@@ -558,6 +575,7 @@ class WebsiteResponsiveScalarBinding<T> {
             policies: <String, WebsiteResponsivePropertyPolicy>{
               field.key: policy,
             },
+            viewport: targetViewport,
             legacyPropertyKeys: aliases,
           ),
         );
@@ -577,59 +595,14 @@ class WebsiteResponsiveScalarBinding<T> {
           schema: field,
           decode: decode,
           hostClass: hostClass,
+          viewport: targetViewport,
           fallback: fallback,
           readLegacyOverride: legacyReader,
           unavailableReason: unavailableReason,
         );
         return WebsiteResponsiveScalarBinding<T>(
           state: state,
-          write: (value) {
-            // Same rule as the root owner: the scope is read live, so a write
-            // that follows `Personalizar` in the same frame still lands on the
-            // override the user just asked for.
-            final scope = WebsiteAuthoringContext(
-              hostClass: hostClass,
-              previewViewport: provider.previewViewport,
-              writeScope: provider.repeaterFieldWriteScope(
-                blockId: blockId,
-                collectionKeys: collectionKeys,
-                itemIndex: itemIndex,
-                propertyKey: field.key,
-                policy: policy,
-                identityKey: identityKey,
-                identityValue: identityValue,
-              ),
-            ).effectiveWriteScope(policy);
-            if (scope == WebsiteWriteScope.viewport) {
-              provider.setBlockRepeaterItemResponsiveProperty(
-                blockId,
-                collectionKeys: collectionKeys,
-                itemIndex: itemIndex,
-                propertyKey: field.key,
-                value: value,
-                policy: policy,
-                identityKey: identityKey,
-                identityValue: identityValue,
-              );
-              return;
-            }
-            provider.setBlockRepeaterItemResponsiveProperties(
-              blockId,
-              collectionKeys: collectionKeys,
-              itemIndex: itemIndex,
-              values: <String, Object?>{
-                field.key: value,
-                for (final companion in companions) companion: value,
-              },
-              policies: <String, WebsiteResponsivePropertyPolicy>{
-                field.key: policy,
-                for (final companion in companions) companion: policy,
-              },
-              scope: WebsiteWriteScope.shared,
-              identityKey: identityKey,
-              identityValue: identityValue,
-            );
-          },
+          write: guardedWrite,
           customize: () => provider.setRepeaterFieldWriteScope(
             blockId: blockId,
             collectionKeys: collectionKeys,
@@ -637,6 +610,7 @@ class WebsiteResponsiveScalarBinding<T> {
             propertyKey: field.key,
             policy: policy,
             scope: WebsiteWriteScope.viewport,
+            viewport: targetViewport,
             identityKey: identityKey,
             identityValue: identityValue,
           ),
@@ -648,6 +622,7 @@ class WebsiteResponsiveScalarBinding<T> {
             policies: <String, WebsiteResponsivePropertyPolicy>{
               field.key: policy,
             },
+            viewport: targetViewport,
             legacyPropertyKeys: aliases,
             identityKey: identityKey,
             identityValue: identityValue,

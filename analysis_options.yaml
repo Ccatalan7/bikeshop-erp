@@ -15,6 +15,7 @@ analyzer:
   # throughout the Vinabike app workspace.
   exclude:
     - packages/excel_localized/**
+    - packages/flutter_inappwebview_android/**
     - node_modules/**
 
 linter:

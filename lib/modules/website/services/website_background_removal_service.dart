@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'website_background_removal_processor.dart';
 import 'website_media_service.dart';
+import 'website_service.dart';
 
 class WebsiteBackgroundRemovalSmartResult {
   final String imageUrl;
@@ -61,12 +62,16 @@ class WebsiteBackgroundRemovalService {
     Uint8List pngBytes, {
     String prefix = 'website-no-bg',
     String? originalUrl,
+    String? tenantId,
+    WebsiteEditorWriteGuard? writeGuard,
   }) async {
     final asset = await WebsiteMediaService(client: _supabase).uploadImage(
       bytes: pngBytes,
       fileName: '${prefix}_${DateTime.now().millisecondsSinceEpoch}.png',
       operation: 'background-removal-local',
       originalUrl: originalUrl,
+      tenantId: tenantId,
+      writeGuard: writeGuard,
     );
     if (asset.publicUrl.isEmpty) {
       throw Exception('No se pudo guardar la imagen transparente.');
@@ -77,7 +82,9 @@ class WebsiteBackgroundRemovalService {
   Future<WebsiteBackgroundRemovalSmartResult> removeSmartBackground({
     required String imageUrl,
     String? tenantId,
+    WebsiteEditorWriteGuard? writeGuard,
   }) async {
+    writeGuard?.call();
     final response = await _supabase.functions.invoke(
       'website-remove-background',
       body: {
@@ -85,6 +92,7 @@ class WebsiteBackgroundRemovalService {
         if (tenantId != null && tenantId.isNotEmpty) 'tenantId': tenantId,
       },
     );
+    writeGuard?.call();
     final data = response.data;
     if (response.status < 200 || response.status >= 300 || data is! Map) {
       throw Exception(_smartErrorMessage(data, response.status));
@@ -101,7 +109,9 @@ class WebsiteBackgroundRemovalService {
       fileName: 'smart-no-bg.png',
       operation: 'background-removal-smart',
       originalUrl: imageUrl,
+      writeGuard: writeGuard,
     );
+    writeGuard?.call();
     return WebsiteBackgroundRemovalSmartResult(
       imageUrl: optimized.publicUrl,
       sourceUrl: sourceUrl,

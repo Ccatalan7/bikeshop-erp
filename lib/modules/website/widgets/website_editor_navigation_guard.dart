@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -15,6 +14,7 @@ class WebsiteEditorNavigationDecision {
   WebsiteEditorNavigationDecision._({
     required this.isAllowed,
     this.provider,
+    this.resolveLiveProvider,
     this.intent,
     this.expectedProviderRevision,
     this.discardOnCommit = false,
@@ -22,22 +22,61 @@ class WebsiteEditorNavigationDecision {
 
   final bool isAllowed;
   final WebsiteEditModeProvider? provider;
+  final WebsiteEditModeProvider? Function()? resolveLiveProvider;
   final WebsiteEditorNavigationIntent? intent;
   final int? expectedProviderRevision;
   final bool discardOnCommit;
-  bool _isCommitted = false;
+  _WebsiteEditorNavigationDecisionState _state =
+      _WebsiteEditorNavigationDecisionState.pending;
 
   /// Discards the authorized scope only when the caller is ready to navigate.
   ///
   /// This is intentionally separate from the confirmation dialog: another
   /// boundary (for example checkout) may still cancel the operation.
-  bool get isCurrent =>
-      provider == null ||
-      provider!.navigationStateRevision == expectedProviderRevision;
+  bool get isCurrent {
+    final captured = provider;
+    if (captured == null) return true;
+    final live = resolveLiveProvider?.call();
+    return identical(live, captured) &&
+        captured.navigationStateRevision == expectedProviderRevision;
+  }
+
+  /// Claims the authorization before starting a remote side effect.
+  ///
+  /// The claim is one-shot and validates the provider currently mounted above
+  /// the caller. It does not discard a draft yet: [commit] owns that final
+  /// transition after the remote operation succeeds.
+  bool claim() {
+    if (_state != _WebsiteEditorNavigationDecisionState.pending) return false;
+    if (!isAllowed || !isCurrent) {
+      _state = _WebsiteEditorNavigationDecisionState.rejected;
+      return false;
+    }
+    _state = _WebsiteEditorNavigationDecisionState.claimed;
+    return true;
+  }
+
+  /// Releases a failed remote attempt only while the same live provider and
+  /// revision still own the authorization.
+  bool releaseClaim() {
+    if (_state != _WebsiteEditorNavigationDecisionState.claimed) return false;
+    if (!isCurrent) {
+      _state = _WebsiteEditorNavigationDecisionState.rejected;
+      return false;
+    }
+    _state = _WebsiteEditorNavigationDecisionState.pending;
+    return true;
+  }
 
   bool commit() {
-    if (!isAllowed || _isCommitted || !isCurrent) return false;
-    _isCommitted = true;
+    if (_state == _WebsiteEditorNavigationDecisionState.pending && !claim()) {
+      return false;
+    }
+    if (_state != _WebsiteEditorNavigationDecisionState.claimed || !isCurrent) {
+      _state = _WebsiteEditorNavigationDecisionState.rejected;
+      return false;
+    }
+    _state = _WebsiteEditorNavigationDecisionState.committed;
     if (!discardOnCommit) {
       // The leaveEditor intent owns closing the session even when there was
       // no draft to confirm: the FSM must never stay in Edit/Preview after
@@ -65,6 +104,13 @@ class WebsiteEditorNavigationDecision {
   }
 }
 
+enum _WebsiteEditorNavigationDecisionState {
+  pending,
+  claimed,
+  committed,
+  rejected,
+}
+
 /// Single confirmation boundary for navigation that can replace editor content.
 class WebsiteEditorNavigationGuard {
   const WebsiteEditorNavigationGuard._();
@@ -77,10 +123,12 @@ class WebsiteEditorNavigationGuard {
     required WebsiteEditModeProvider provider,
     required WebsiteEditorNavigationIntent intent,
     required bool discardOnCommit,
+    WebsiteEditModeProvider? Function()? resolveLiveProvider,
   }) =>
       WebsiteEditorNavigationDecision._(
         isAllowed: true,
         provider: provider,
+        resolveLiveProvider: resolveLiveProvider ?? () => provider,
         intent: intent,
         expectedProviderRevision: provider.navigationStateRevision,
         discardOnCommit: discardOnCommit,
@@ -124,6 +172,15 @@ class WebsiteEditorNavigationGuard {
       return WebsiteEditorNavigationDecision._(isAllowed: true);
     }
 
+    WebsiteEditModeProvider? resolveLiveProvider() {
+      if (!context.mounted) return null;
+      try {
+        return context.read<WebsiteEditModeProvider>();
+      } catch (_) {
+        return null;
+      }
+    }
+
     final hasRelevantDraft = switch (intent) {
       WebsiteEditorNavigationIntent.switchPage => provider.hasPageDraftChanges,
       WebsiteEditorNavigationIntent.leaveEditor => provider.hasUnsavedChanges,
@@ -136,6 +193,7 @@ class WebsiteEditorNavigationGuard {
       return WebsiteEditorNavigationDecision._(
         isAllowed: true,
         provider: provider,
+        resolveLiveProvider: resolveLiveProvider,
         intent: intent,
         expectedProviderRevision: expectedProviderRevision,
       );
@@ -178,6 +236,7 @@ class WebsiteEditorNavigationGuard {
     return WebsiteEditorNavigationDecision._(
       isAllowed: true,
       provider: provider,
+      resolveLiveProvider: resolveLiveProvider,
       intent: intent,
       expectedProviderRevision: expectedProviderRevision,
       discardOnCommit: true,

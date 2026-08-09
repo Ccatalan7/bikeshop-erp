@@ -6,10 +6,12 @@ import 'package:provider/provider.dart';
 
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_field_state.dart';
+import 'package:vinabike_erp/modules/website/models/website_action.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/widgets/responsive_field_shell.dart';
 import 'package:vinabike_erp/modules/website/widgets/responsive_media_field.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_edit_section.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_action_editor.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_chrome_geometry.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_panel.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
@@ -41,7 +43,15 @@ void main() {
     return WebsiteEditModeProvider()
       ..enterEditMode(<Map<String, dynamic>>[source], const <String, dynamic>{})
       ..selectBlock('block-1')
-      ..setDevicePreviewMode(viewport);
+      ..setDevicePreviewMode(viewport)
+      ..reportRenderedBlockViewport(
+        'block-1',
+        switch (viewport) {
+          DevicePreviewMode.desktop => WebsiteViewport.desktop,
+          DevicePreviewMode.tablet => WebsiteViewport.tablet,
+          DevicePreviewMode.mobile => WebsiteViewport.mobile,
+        },
+      );
   }
 
   Map<String, dynamic> dataOf(WebsiteEditModeProvider provider) =>
@@ -95,6 +105,16 @@ void main() {
             widget is ResponsiveFieldShell && widget.state.schema.key == key,
       );
 
+  Finder attributionFor(String key) => find.byWidgetPredicate(
+        (widget) =>
+            widget is ResponsiveFieldAttribution &&
+            widget.state.schema.key == key,
+      );
+
+  Finder textFieldWithValue(String value) => find.byWidgetPredicate(
+        (widget) => widget is TextFormField && widget.controller?.text == value,
+      );
+
   WebsiteResponsiveFieldState<dynamic> stateOf(
     WidgetTester tester,
     String key,
@@ -127,10 +147,17 @@ void main() {
   /// disclosure. A collapsed section builds nothing, so the responsive fields
   /// have to be disclosed the same way the operator discloses them.
   Future<void> discloseSections(WidgetTester tester) async {
-    int shellCount() => find
-        .byWidgetPredicate((widget) => widget is ResponsiveFieldShell)
-        .evaluate()
-        .length;
+    int disclosedFieldCount() =>
+        find
+            .byWidgetPredicate((widget) => widget is ResponsiveFieldShell)
+            .evaluate()
+            .length +
+        find
+            .byWidgetPredicate(
+              (widget) => widget is ResponsiveFieldAttribution,
+            )
+            .evaluate()
+            .length;
 
     // Two passes: an item's own groups only exist once its collection section
     // is open. A tap that REDUCES the disclosed fields just closed a section
@@ -142,16 +169,21 @@ void main() {
         'Estilo',
         'Diseño',
         'Contenido',
+        'Video',
         'Otros',
         'Imagen y medios',
         'Texto y datos',
       ]) {
-        final header = find.text(title);
+        // Target the disclosure owner, not an arbitrary text node with the
+        // same value (for example a block title equal to "Video").
+        final header = find.widgetWithText(InkWell, title);
         if (header.evaluate().isEmpty) continue;
-        final before = shellCount();
+        await tester.ensureVisible(header.first);
+        await settle(tester);
+        final before = disclosedFieldCount();
         await tester.tap(header.first, warnIfMissed: false);
         await settle(tester);
-        if (shellCount() < before) {
+        if (disclosedFieldCount() < before) {
           await tester.tap(header.first, warnIfMissed: false);
           await settle(tester);
         }
@@ -237,7 +269,9 @@ void main() {
           matching: find.byType(Slider),
         ),
       );
+      slider.onChangeStart!(slider.value);
       slider.onChanged!(0.9);
+      slider.onChangeEnd!(0.9);
       await settle(tester);
 
       expect(dataOf(provider)['overlayOpacity'], 0.4,
@@ -318,8 +352,163 @@ void main() {
       expect(stateOf(tester, 'preset').resolved.value, 'paragraph');
       expect(stateOf(tester, 'maxWidth').resolved.value, 800);
 
-      // El contenido de texto sigue siendo compartido y top-level: sin shell.
+      // El contenido compartido no recibe el formulario responsive completo,
+      // pero su control sí declara la atribución compacta canónica.
       expect(shellFor('text'), findsNothing);
+      expect(attributionFor('text'), findsOneWidget);
+      expect(
+        (tester.widget(attributionFor('text')) as ResponsiveFieldAttribution)
+            .state
+            .status,
+        WebsiteResponsiveFieldStatus.sharedOnly,
+      );
+      expect(find.text('Siempre común'), findsOneWidget);
+    });
+
+    testWidgets(
+        'el texto sharedOnly usa el mismo lease y admite escritura IME rápida',
+        (tester) async {
+      useViewport(tester, width: 420, height: 1400);
+      final provider = providerFor(
+        block(
+          type: 'text',
+          data: <String, dynamic>{
+            'text': 'Hola',
+            'preset': 'paragraph',
+          },
+        ),
+      );
+      await tester.pumpWidget(host(provider: provider, editorWidth: 420));
+      await settle(tester);
+      await discloseSections(tester);
+
+      final field = textFieldWithValue('Hola');
+      expect(field, findsOneWidget);
+      final onChanged = tester.widget<TextFormField>(field).onChanged!;
+
+      // El mismo callback puede recibir varias composiciones antes del
+      // rebuild. Cada commit aceptado recaptura un lease nuevo; no se congela
+      // tras el primer carácter ni cae al writer live anterior.
+      onChanged('Hola 1');
+      onChanged('Hola 12');
+      onChanged('Hola 123');
+      await settle(tester);
+
+      expect(dataOf(provider)['text'], 'Hola 123');
+      expect(dataOf(provider).containsKey('responsive'), isFalse);
+      expect(provider.canUndo, isTrue);
+    });
+
+    testWidgets('CTA subtitle y alias description se escriben atómicamente',
+        (tester) async {
+      useViewport(tester, width: 420, height: 1600);
+      final provider = providerFor(
+        block(
+          type: 'cta',
+          data: <String, dynamic>{
+            'title': 'Oferta',
+            'subtitle': 'Bajada',
+            'description': 'Bajada',
+            'buttonText': 'Comprar',
+            'buttonLink': '/productos',
+          },
+        ),
+      );
+      await tester.pumpWidget(host(provider: provider, editorWidth: 420));
+      await settle(tester);
+      await discloseSections(tester);
+
+      final field = textFieldWithValue('Bajada');
+      expect(field, findsOneWidget);
+      tester.widget<TextFormField>(field).onChanged!('Nueva bajada');
+      await settle(tester);
+
+      expect(dataOf(provider)['subtitle'], 'Nueva bajada');
+      expect(dataOf(provider)['description'], 'Nueva bajada');
+      provider.undo();
+      expect(dataOf(provider)['subtitle'], 'Bajada');
+      expect(dataOf(provider)['description'], 'Bajada');
+    });
+
+    testWidgets('Video Banner cambia fuente y limpia la alternativa en un undo',
+        (tester) async {
+      useViewport(tester, width: 420, height: 1800);
+      final provider = providerFor(
+        block(
+          type: 'videoBanner',
+          data: <String, dynamic>{
+            'title': 'Video',
+            'videoUrl': 'https://youtube.example/old',
+            'videoFileUrl': 'https://cdn.example/old.mp4',
+          },
+        ),
+      );
+      await tester.pumpWidget(host(provider: provider, editorWidth: 420));
+      await settle(tester);
+      await discloseSections(tester);
+
+      final visibleTextValues = tester
+          .widgetList<TextFormField>(find.byType(TextFormField))
+          .map((field) => field.controller?.text)
+          .toList(growable: false);
+      expect(
+        visibleTextValues,
+        contains('https://youtube.example/old'),
+        reason: 'campos visibles: $visibleTextValues',
+      );
+      final youtube = textFieldWithValue('https://youtube.example/old');
+      tester
+          .widget<TextFormField>(youtube)
+          .onChanged!('https://youtube.example/new');
+      await settle(tester);
+
+      expect(dataOf(provider)['videoUrl'], 'https://youtube.example/new');
+      expect(dataOf(provider)['videoFileUrl'], '');
+      provider.undo();
+      expect(dataOf(provider)['videoUrl'], 'https://youtube.example/old');
+      expect(
+        dataOf(provider)['videoFileUrl'],
+        'https://cdn.example/old.mp4',
+      );
+    });
+
+    testWidgets('un callback sharedOnly viejo no salta a otro documento',
+        (tester) async {
+      useViewport(tester, width: 420, height: 1400);
+      final provider = providerFor(
+        block(
+          type: 'text',
+          data: <String, dynamic>{'text': 'Primero', 'preset': 'paragraph'},
+        ),
+      );
+      await tester.pumpWidget(host(provider: provider, editorWidth: 420));
+      await settle(tester);
+      await discloseSections(tester);
+
+      final stale = tester
+          .widget<TextFormField>(textFieldWithValue('Primero'))
+          .onChanged!;
+      provider
+        ..enterEditMode(
+          <Map<String, dynamic>>[
+            block(
+              type: 'text',
+              data: <String, dynamic>{
+                'text': 'Segundo',
+                'preset': 'paragraph',
+              },
+            ),
+          ],
+          const <String, dynamic>{},
+        )
+        ..selectBlock('block-1')
+        ..reportRenderedBlockViewport('block-1', WebsiteViewport.mobile);
+
+      // Sin pump: el callback viejo no puede recapturar contra el bloque con
+      // el mismo id del documento nuevo.
+      stale('No debe aterrizar');
+      expect(dataOf(provider)['text'], 'Segundo');
+      expect(provider.canUndo, isFalse);
     });
 
     testWidgets('Button: style usa el binding y el destino sigue compartido',
@@ -344,9 +533,88 @@ void main() {
 
       expect(shellFor('style'), findsOneWidget);
       expect(stateOf(tester, 'style').resolved.value, 'filled');
-      // Etiqueta y destino son sharedOnly: no se montan bajo el shell.
+      // Etiqueta y destino son sharedOnly: no montan el shell completo y el
+      // editor de acción atribuye el grupo una sola vez.
       expect(shellFor('link'), findsNothing);
       expect(shellFor('label'), findsNothing);
+      expect(attributionFor('link'), findsOneWidget);
+      expect(find.text('Siempre común'), findsOneWidget);
+
+      final actionEditor =
+          tester.widget<WebsiteActionEditor>(find.byType(WebsiteActionEditor));
+      expect(actionEditor.showVariant, isFalse,
+          reason: 'style ya tiene su propio shell responsive');
+      actionEditor.onChanged(
+        const WebsiteActionValue(
+          label: 'Ver bicicletas',
+          href: '/bicicletas',
+          variant: WebsiteActionVariant.outline,
+        ),
+      );
+      await settle(tester);
+
+      expect(dataOf(provider)['label'], 'Ver bicicletas');
+      expect(dataOf(provider)['link'], '/bicicletas');
+      expect(dataOf(provider)['style'], 'filled',
+          reason: 'el action editor no duplica el control de estilo');
+      expect(dataOf(provider)['actions'], isNotEmpty);
+      provider.undo();
+      expect(dataOf(provider)['label'], 'Comprar');
+      expect(dataOf(provider)['link'], '/productos');
+    });
+
+    testWidgets('editar la etiqueta de acción completa crea un solo undo',
+        (tester) async {
+      useViewport(tester, width: 420, height: 1400);
+      final provider = providerFor(
+        block(
+          type: 'button',
+          data: <String, dynamic>{
+            'label': 'Comprar',
+            'link': '/productos',
+            'style': 'filled',
+          },
+        ),
+      );
+      await tester.pumpWidget(host(provider: provider, editorWidth: 420));
+      await settle(tester);
+      await discloseSections(tester);
+
+      final labelField = find.byWidgetPredicate(
+        (widget) => widget is TextField && widget.controller?.text == 'Comprar',
+      );
+      expect(labelField, findsOneWidget);
+      await tester.ensureVisible(labelField);
+      await tester.tap(labelField);
+      await tester.pump();
+
+      await tester.enterText(labelField, 'V');
+      await settle(tester);
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (widget) => widget is TextField && widget.controller?.text == 'V',
+        ),
+        'Ver',
+      );
+      await settle(tester);
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (widget) => widget is TextField && widget.controller?.text == 'Ver',
+        ),
+        'Ver bicicletas',
+      );
+      await settle(tester);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await settle(tester);
+
+      expect(dataOf(provider)['label'], 'Ver bicicletas');
+      expect(dataOf(provider)['link'], '/productos');
+      expect(dataOf(provider)['actions'], isNotEmpty);
+      expect(provider.canUndo, isTrue);
+
+      provider.undo();
+      expect(dataOf(provider)['label'], 'Comprar');
+      expect(provider.canUndo, isFalse);
     });
 
     testWidgets('en Escritorio el campo dice Común y no ofrece personalizar',
@@ -391,8 +659,16 @@ void main() {
           data: <String, dynamic>{
             'title': 'Galería',
             'images': <Map<String, dynamic>>[
-              {'id': 'img-a', 'imageUrl': 'https://cdn/a.webp'},
-              {'id': 'img-b', 'imageUrl': 'https://cdn/b.webp'},
+              {
+                'id': 'img-a',
+                'imageUrl': 'https://cdn/a.webp',
+                'altText': 'Foto A',
+              },
+              {
+                'id': 'img-b',
+                'imageUrl': 'https://cdn/b.webp',
+                'altText': 'Foto B',
+              },
             ],
           },
         ),
@@ -459,6 +735,17 @@ void main() {
         stateOf(tester, 'imageUrl').resolved.value,
         'https://cdn/a-mobile.webp',
       );
+
+      final altField = textFieldWithValue('Foto A');
+      expect(altField, findsOneWidget);
+      tester.widget<TextFormField>(altField).onChanged!('Detalle de A');
+      await settle(tester);
+      final afterAlt = (dataOf(provider)['images'] as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList(growable: false);
+      expect(afterAlt[0]['altText'], 'Detalle de A');
+      expect(afterAlt[1]['altText'], 'Foto B');
+      expect(dataOf(provider).containsKey('altText'), isFalse);
     });
   });
 

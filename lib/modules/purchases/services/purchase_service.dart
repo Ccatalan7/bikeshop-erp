@@ -5,25 +5,54 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/supplier.dart' as shared_supplier;
+import '../../../shared/models/supplier_ocr_template.dart';
+import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../accounting/services/accounting_service.dart';
 import '../../accounting/services/financial_projection_refresh_coordinator.dart';
+import '../models/legacy_supplier_adapter.dart';
 import '../models/purchase_invoice.dart';
 import '../models/purchase_payment.dart';
+import '../models/supplier_foundation.dart';
+import 'supplier_relationship_service.dart';
+
+@visibleForTesting
+class SupplierCommandRetryLedger {
+  SupplierCommandRetryLedger({String Function()? newOperationId})
+      : _newOperationId = newOperationId ?? (() => const Uuid().v4());
+
+  final String Function() _newOperationId;
+  final Map<String, String> _operationIds = {};
+
+  String retain(String requestFingerprint) =>
+      _operationIds.putIfAbsent(requestFingerprint, _newOperationId);
+
+  void complete(String requestFingerprint, String operationId) {
+    if (_operationIds[requestFingerprint] == operationId) {
+      _operationIds.remove(requestFingerprint);
+    }
+  }
+
+  void clear() => _operationIds.clear();
+}
 
 class PurchaseService extends ChangeNotifier {
   PurchaseService(
     this._db,
     this._tenantService, {
     FinancialProjectionRefreshCoordinator? financialProjectionRefresh,
-  }) : _financialProjectionRefresh = financialProjectionRefresh ??
-            FinancialProjectionRefreshCoordinator.fallback;
+    SupplierRelationshipService? supplierRelationshipService,
+  })  : _financialProjectionRefresh = financialProjectionRefresh ??
+            FinancialProjectionRefreshCoordinator.fallback,
+        _supplierRelationshipService = supplierRelationshipService ??
+            SupplierRelationshipService(tenantService: _tenantService);
 
   final DatabaseService _db;
   final TenantService _tenantService;
   final FinancialProjectionRefreshCoordinator _financialProjectionRefresh;
+  final SupplierRelationshipService _supplierRelationshipService;
   static AccountingService? _accountingService;
 
   // Helper to get Supabase client
@@ -38,6 +67,10 @@ class PurchaseService extends ChangeNotifier {
   bool _paymentsLoaded = false;
   bool _isLoadingListInvoices = false;
   final AuthorityCacheScope _supplierCacheScope = AuthorityCacheScope();
+  final SupplierCommandRetryLedger _supplierCreateRetries =
+      SupplierCommandRetryLedger();
+  final SupplierCommandRetryLedger _supplierOcrRetries =
+      SupplierCommandRetryLedger();
   late final AuthorityScopedLoad<List<shared_supplier.Supplier>>
       _suppliersLoad =
       AuthorityScopedLoad<List<shared_supplier.Supplier>>(_supplierCacheScope);
@@ -122,6 +155,8 @@ class PurchaseService extends ChangeNotifier {
     final hadCache = _supplierCache.isNotEmpty;
     _suppliersLoad.detach();
     _supplierCache = const [];
+    _supplierCreateRetries.clear();
+    _supplierOcrRetries.clear();
     _suppliersCacheTime = null;
     _suppliersLoaded = false;
     if (hadCache) notifyListeners();
@@ -335,7 +370,12 @@ class PurchaseService extends ChangeNotifier {
     try {
       final suppliers = await _suppliersLoad.run(
         load: (lease) async {
-          final data = await _db.select('suppliers');
+          final data = await _db.select(
+            'suppliers',
+            selectColumns: shared_supplier.Supplier.secretFreeSelect,
+            orderBy: 'id',
+            fetchAll: true,
+          );
           final loadedSuppliers = data
               .map((row) => shared_supplier.Supplier.fromJson(row))
               .toList();
@@ -346,7 +386,10 @@ class PurchaseService extends ChangeNotifier {
               'Supplier query returned data outside the authority tenant',
             );
           }
-          loadedSuppliers.sort((a, b) => a.name.compareTo(b.name));
+          loadedSuppliers.sort((a, b) {
+            final byName = a.name.compareTo(b.name);
+            return byName != 0 ? byName : a.id.compareTo(b.id);
+          });
           return loadedSuppliers;
         },
         publish: (loadedSuppliers, _) {
@@ -382,7 +425,11 @@ class PurchaseService extends ChangeNotifier {
     } catch (_) {}
 
     try {
-      final data = await _db.selectById('suppliers', id);
+      final data = await _db.selectById(
+        'suppliers',
+        id,
+        selectColumns: shared_supplier.Supplier.secretFreeSelect,
+      );
       if (data == null) return null;
       return shared_supplier.Supplier.fromJson(data);
     } catch (e) {
@@ -395,20 +442,44 @@ class PurchaseService extends ChangeNotifier {
     try {
       final lease = await _requireSupplierAuthorityLease();
       final tenantId = lease.scope.tenantId;
+      final displayName = name.trim();
+      if (displayName.isEmpty) {
+        throw ArgumentError.value(name, 'name', 'Supplier name is required');
+      }
 
-      final result = await _db.insert('suppliers', {
-        'tenant_id': tenantId,
-        'name': name,
-        'default_tax_treatment': 'tax_included', // Most suppliers charge IVA
-      });
-      final supplier = shared_supplier.Supplier.fromJson(result);
+      // Quick-create intentionally does not infer role, accounting behavior or
+      // IVA from the screen that happened to create the counterparty. Those
+      // dimensions stay open for the supplier profile to define explicitly.
+      final provisionalPartyId = const Uuid().v4();
+      final retryKey = displayName.toLowerCase();
+      final operationId = _supplierCreateRetries.retain(retryKey);
+      final result = await _supplierRelationshipService.saveProfile(
+        SaveSupplierRelationshipProfileCommand(
+          operationId: operationId,
+          party: ExternalParty(
+            id: provisionalPartyId,
+            tenantId: tenantId,
+            kind: ExternalPartyKind.other,
+            name: displayName,
+          ),
+          relationship: SupplierRelationship(
+            id: provisionalPartyId,
+            tenantId: tenantId,
+            externalPartyId: provisionalPartyId,
+            name: displayName,
+            status: SupplierRelationshipStatus.active,
+          ),
+          defaultTaxTreatment: TaxTreatment.noTax,
+        ),
+      );
+      final supplier = LegacySupplierAdapter.toLegacy(result.profile);
       if (supplier.tenantId != tenantId) {
         throw StateError(
-          'Supplier insert returned data outside the authority tenant',
+          'Supplier command returned data outside the authority tenant',
         );
       }
+      _supplierCreateRetries.complete(retryKey, operationId);
       if (_supplierCacheScope.owns(lease)) {
-        _supplierCache = [..._supplierCache, supplier];
         invalidateSuppliersCache();
         notifyListeners();
       }
@@ -418,67 +489,49 @@ class PurchaseService extends ChangeNotifier {
     }
   }
 
-  Future<shared_supplier.Supplier> saveSupplier(
-      shared_supplier.Supplier supplier) async {
+  Future<shared_supplier.Supplier> updateSupplierOcrTemplate({
+    required shared_supplier.Supplier supplier,
+    required SupplierOcrTemplate template,
+  }) async {
     try {
       final lease = await _requireSupplierAuthorityLease();
       final tenantId = lease.scope.tenantId;
-
-      final payload = supplier.toJson();
-      // Ensure tenant_id is set
-      payload['tenant_id'] = tenantId;
-
-      if (supplier.id.isEmpty) {
-        final inserted = await _db.insert('suppliers', payload..remove('id'));
-        final created = shared_supplier.Supplier.fromJson(inserted);
-        if (created.tenantId != tenantId) {
-          throw StateError(
-            'Supplier insert returned data outside the authority tenant',
-          );
-        }
-        if (!_supplierCacheScope.owns(lease)) return created;
-        invalidateSuppliersCache();
-        try {
-          await getSuppliers(forceRefresh: true);
-        } on AuthorityScopeChangedException {
-          return created;
-        }
-        notifyListeners();
-        return created;
-      } else {
-        payload.remove('created_at');
-        await _db.update('suppliers', supplier.id, payload);
-        final saved = supplier.copyWith(tenantId: tenantId);
-        if (!_supplierCacheScope.owns(lease)) return saved;
-        invalidateSuppliersCache();
-        try {
-          await getSuppliers(forceRefresh: true);
-        } on AuthorityScopeChangedException {
-          return saved;
-        }
-        notifyListeners();
-        final refreshed = await getSupplier(supplier.id);
-        return refreshed ?? saved;
+      if (supplier.tenantId != tenantId || supplier.id.isEmpty) {
+        throw const AuthorityScopeChangedException();
       }
-    } catch (e) {
-      throw Exception('No se pudo guardar el proveedor: $e');
-    }
-  }
-
-  Future<void> deleteSupplier(String id) async {
-    try {
-      final lease = await _requireSupplierAuthorityLease();
-      await _db.delete('suppliers', id);
-      if (!_supplierCacheScope.owns(lease)) return;
-      invalidateSuppliersCache();
-      try {
-        await getSuppliers(forceRefresh: true);
-      } on AuthorityScopeChangedException {
-        return;
+      final retryKey = [
+        supplier.id,
+        supplier.updatedAt.toUtc().toIso8601String(),
+        template.enabled,
+        template.discountParser.name,
+      ].join('|');
+      final operationId = _supplierOcrRetries.retain(retryKey);
+      final result = await _supplierRelationshipService.updateOcrTemplate(
+        UpdateSupplierOcrTemplateCommand(
+          operationId: operationId,
+          supplierId: supplier.id,
+          expectedUpdatedAt: supplier.updatedAt,
+          template: template,
+        ),
+      );
+      if (result.tenantId != tenantId || result.supplierId != supplier.id) {
+        throw const AuthorityScopeChangedException();
       }
+      _supplierOcrRetries.complete(retryKey, operationId);
+      final updated = supplier.copyWith(
+        tenantId: tenantId,
+        ocrTemplate: result.template,
+        updatedAt: result.updatedAt,
+      );
+      if (!_supplierCacheScope.owns(lease)) return updated;
+      _supplierCache = _supplierCache
+          .map((item) => item.id == updated.id ? updated : item)
+          .toList(growable: false);
+      _suppliersCacheTime = DateTime.now();
       notifyListeners();
+      return updated;
     } catch (e) {
-      throw Exception('No se pudo eliminar el proveedor: $e');
+      throw Exception('No se pudo actualizar la plantilla OCR: $e');
     }
   }
 

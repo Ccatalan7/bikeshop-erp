@@ -126,9 +126,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.responsiveFocalPoint,
         WebsiteEditorCapability.animation,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.shallowRepeater,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.canvas: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.canvas,
@@ -148,12 +146,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.structuredList,
         WebsiteEditorCapability.animation,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.blockLocalTextToolbar,
-        WebsiteEditorGap.nonPersistedTextFormatting,
-        WebsiteEditorGap.missingTextStyleInspector,
-        WebsiteEditorGap.missingResponsiveOverrides,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.text: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.text,
@@ -222,7 +215,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.inlineText,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{WebsiteEditorGap.missingActionModel},
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.about: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.about,
@@ -251,7 +244,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.inlineText,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{WebsiteEditorGap.shallowRepeater},
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.features: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.features,
@@ -265,7 +258,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.inlineText,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{WebsiteEditorGap.missingActionModel},
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.cta: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.cta,
@@ -297,9 +290,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.inlineMedia,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.shallowRepeater,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.contact: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.contact,
@@ -327,7 +318,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.inlineText,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{WebsiteEditorGap.shallowRepeater},
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.pricing: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.pricing,
@@ -342,7 +333,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.repeater,
         WebsiteEditorCapability.linkAction,
       },
-      gaps: <WebsiteEditorGap>{WebsiteEditorGap.shallowRepeater},
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.team: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.team,
@@ -357,7 +348,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.inlineMedia,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{WebsiteEditorGap.shallowRepeater},
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.stats: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.stats,
@@ -372,7 +363,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.repeater,
         WebsiteEditorCapability.animation,
       },
-      gaps: <WebsiteEditorGap>{WebsiteEditorGap.missingActionModel},
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.footer: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.footer,
@@ -387,9 +378,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.linkAction,
         WebsiteEditorCapability.specialElement,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.shallowRepeater,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.categoryGrid: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.categoryGrid,
@@ -404,9 +393,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.coverMedia,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.videoBanner: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.videoBanner,
@@ -435,9 +422,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.coverMedia,
         WebsiteEditorCapability.responsiveFocalPoint,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.nonPersistedTextFormatting,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
     WebsiteBlockType.brandLogos: WebsiteBlockCapabilityProfile(
       type: WebsiteBlockType.brandLogos,
@@ -464,9 +449,7 @@ class WebsiteBlockCapabilityRegistry {
         WebsiteEditorCapability.externalSync,
         WebsiteEditorCapability.repeater,
       },
-      gaps: <WebsiteEditorGap>{
-        WebsiteEditorGap.incompleteThemeConsumption,
-      },
+      gaps: <WebsiteEditorGap>{},
     ),
   };
 

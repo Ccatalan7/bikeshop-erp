@@ -5,9 +5,30 @@ sealed class WebsiteEditorDragPayload {
 }
 
 final class ExistingWebsiteBlockDragPayload extends WebsiteEditorDragPayload {
-  const ExistingWebsiteBlockDragPayload(this.blockId);
+  const ExistingWebsiteBlockDragPayload({
+    required this.blockId,
+    required this.sessionRevision,
+    required this.pageId,
+    required this.pageSlug,
+  });
 
   final String blockId;
+  final int sessionRevision;
+  final String? pageId;
+  final String? pageSlug;
+
+  /// A drag is a command lease over one editor document, not merely a block
+  /// id. Re-opening the same page produces a new [sessionRevision], so a drag
+  /// born before a page switch cannot be accepted by the later session even
+  /// when its ids happen to match again (the ABA case).
+  bool matchesDocument({
+    required int sessionRevision,
+    required String? pageId,
+    required String? pageSlug,
+  }) =>
+      this.sessionRevision == sessionRevision &&
+      this.pageId == pageId &&
+      this.pageSlug == pageSlug;
 }
 
 final class NewWebsiteBlockDragPayload extends WebsiteEditorDragPayload {

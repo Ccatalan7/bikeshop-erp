@@ -3965,32 +3965,41 @@ class _AppDrawerState extends State<AppDrawer> {
           ),
           children: [
             for (final workspace in workspaces)
-              ListTile(
-                key: ValueKey('mobile-workspace-${workspace.id}'),
-                minTileHeight: 48,
-                selected: workspace.id == activeId,
-                // Va sobre el navy del drawer: la tinta se dice acá.
-                iconColor: chrome.mutedForeground,
-                textColor: chrome.foreground,
-                title: Text(
-                  workspace.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: chrome.foreground),
-                ),
-                onTap: () {
-                  manager.switchToWorkspaceById(workspace.id);
-                  Navigator.pop(context);
+              Builder(
+                builder: (context) {
+                  final theme = Theme.of(context);
+                  final selected = workspace.id == activeId;
+                  return ListTile(
+                    key: ValueKey('mobile-workspace-${workspace.id}'),
+                    minTileHeight: 48,
+                    selected: selected,
+                    // Congelar también la selección contra el chrome: el
+                    // ListTile heredaba el primaryContainer claro de la app.
+                    selectedColor: theme.colorScheme.onPrimaryContainer,
+                    selectedTileColor: theme.colorScheme.primaryContainer,
+                    iconColor: chrome.mutedForeground,
+                    textColor: chrome.foreground,
+                    title: Text(
+                      workspace.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () {
+                      manager.switchToWorkspaceById(workspace.id);
+                      Navigator.pop(context);
+                    },
+                    trailing: workspaces.length <= 1
+                        ? null
+                        : IconButton(
+                            onPressed: () async {
+                              await manager
+                                  .requestCloseWorkspaceById(workspace.id);
+                            },
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            tooltip: 'Cerrar ${workspace.title}',
+                          ),
+                  );
                 },
-                trailing: workspaces.length <= 1
-                    ? null
-                    : IconButton(
-                        onPressed: () async {
-                          await manager.requestCloseWorkspaceById(workspace.id);
-                        },
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                        tooltip: 'Cerrar ${workspace.title}',
-                      ),
               ),
           ],
         );

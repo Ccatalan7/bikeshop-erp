@@ -51,7 +51,15 @@ void main() {
         const <String, dynamic>{},
       )
       ..selectBlock('block-1')
-      ..setDevicePreviewMode(viewport);
+      ..setDevicePreviewMode(viewport)
+      ..reportRenderedBlockViewport(
+        'block-1',
+        switch (viewport) {
+          DevicePreviewMode.desktop => WebsiteViewport.desktop,
+          DevicePreviewMode.tablet => WebsiteViewport.tablet,
+          DevicePreviewMode.mobile => WebsiteViewport.mobile,
+        },
+      );
   }
 
   Map<String, dynamic> dataOf(WebsiteEditModeProvider provider) =>
@@ -837,6 +845,7 @@ void main() {
                     data: Map<String, dynamic>.from(
                       watched.blocks.single['block_data'] as Map,
                     ),
+                    effectiveViewport: WebsiteViewport.mobile,
                     primaryColor: Colors.teal,
                     accentColor: Colors.tealAccent,
                   ),

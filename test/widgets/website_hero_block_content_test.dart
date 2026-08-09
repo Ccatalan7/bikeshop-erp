@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_action.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_surface_style.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_action_button.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_content_presenters.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_hero_block_content.dart';
@@ -24,6 +25,10 @@ Widget _host({
             width: width,
             child: WebsiteHeroBlockContent(
               data: data,
+              surfaceStyle: WebsiteBlockSurfaceStyle.forLogicalWidth(
+                data: data,
+                logicalWidth: width,
+              ),
               primaryColor: const Color(0xFF143D59),
               accentColor: const Color(0xFFF4B41A),
               previewMode: previewMode,
@@ -140,7 +145,7 @@ void main() {
   });
 
   testWidgets(
-      'projects cover aliases, focal point, overlay and image semantics',
+      'consumes canonical focal projection despite conflicting legacy aliases',
       (tester) async {
     WebsiteInlineMediaSlot? capturedMedia;
     await _pumpHero(
@@ -151,8 +156,11 @@ void main() {
         'title': 'Campaña',
         'backgroundImage': 'https://cdn.example.test/hero.webp',
         'imageAltText': 'Bicicleta de montaña en el taller',
-        'mobileFocalPointX': 0.25,
-        'mobileFocalPointY': 0.75,
+        'focalPointX': 0.25,
+        'focalPointY': 0.75,
+        'mobileFocalPointX': 0.9,
+        'mobileFocalPointY': 0.1,
+        'mobileBgAlignment': 'right',
         'showOverlay': true,
         'overlayOpacity': 0.4,
         'overlayColor': '#112233',

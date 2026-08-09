@@ -13,11 +13,59 @@ class _PageSettingsTab extends StatefulWidget {
   State<_PageSettingsTab> createState() => _PageSettingsTabState();
 }
 
+class _PageSettingsLoadStamp {
+  const _PageSettingsLoadStamp({
+    required this.provider,
+    required this.service,
+    required this.generation,
+    required this.route,
+    required this.pageId,
+    required this.pageSlug,
+    required this.documentSessionRevision,
+    required this.entryLeaseGeneration,
+    required this.entryLeaseIdentityRevision,
+    required this.serviceIdentityEpoch,
+  });
+
+  final WebsiteEditModeProvider provider;
+  final WebsiteService service;
+  final int generation;
+  final String route;
+  final String? pageId;
+  final String? pageSlug;
+  final int documentSessionRevision;
+  final int entryLeaseGeneration;
+  final int entryLeaseIdentityRevision;
+  final int serviceIdentityEpoch;
+
+  bool matches({
+    required WebsiteEditModeProvider liveProvider,
+    required WebsiteService liveService,
+    required String liveRoute,
+  }) {
+    return identical(provider, liveProvider) &&
+        identical(service, liveService) &&
+        route == liveRoute &&
+        pageId == liveProvider.currentPageId &&
+        pageSlug == liveProvider.currentPageSlug &&
+        documentSessionRevision == liveProvider.documentSessionRevision &&
+        entryLeaseGeneration == liveProvider.editorEntryLeaseGeneration &&
+        entryLeaseIdentityRevision ==
+            liveProvider.editorEntryLeaseIdentityRevision &&
+        serviceIdentityEpoch == liveService.identityEpoch;
+  }
+}
+
 class _PageSettingsTabState extends State<_PageSettingsTab> {
   final _metaTitleController = TextEditingController();
   final _metaDescriptionController = TextEditingController();
   bool _isLoading = true;
-  bool _isDetecting = false; // Prevent concurrent detection
+  int _loadGeneration = 0;
+  bool _reloadScheduled = false;
+  _PageSettingsLoadStamp? _activeLoad;
+  _PageSettingsLoadStamp? _appliedLoad;
+  WebsiteService? _listenedService;
+  int _observedServiceIdentityEpoch = -1;
   // ignore: unused_field
   WebsitePage? _currentPage;
   String _currentRoute = '';
@@ -26,51 +74,122 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
   @override
   void initState() {
     super.initState();
-    // Use addPostFrameCallback to ensure context is available for router
-    WidgetsBinding.instance.addPostFrameCallback((_) => _detectCurrentPage());
+    // Resolve the router and service after the first frame.
+    _scheduleReload();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final service = context.read<WebsiteService>();
+    if (!identical(_listenedService, service)) {
+      _listenedService?.removeListener(_handleServiceChanged);
+      _listenedService = service;
+      _observedServiceIdentityEpoch = service.identityEpoch;
+      service.addListener(_handleServiceChanged);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PageSettingsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.editProvider, widget.editProvider)) {
+      _scheduleReload();
+    }
   }
 
   @override
   void dispose() {
+    _listenedService?.removeListener(_handleServiceChanged);
     _metaTitleController.dispose();
     _metaDescriptionController.dispose();
     super.dispose();
   }
 
-  Future<void> _detectCurrentPage() async {
-    if (!mounted || _isDetecting) return;
-    _isDetecting = true;
+  void _handleServiceChanged() {
+    final service = _listenedService;
+    if (!mounted || service == null) return;
+    if (_observedServiceIdentityEpoch == service.identityEpoch) return;
+    _observedServiceIdentityEpoch = service.identityEpoch;
+    _scheduleReload();
+  }
 
+  String _resolvedRoute() {
+    var route =
+        _getSlugFromRoute() ?? widget.editProvider.currentPageSlug ?? 'inicio';
+    if (route.isEmpty) route = 'inicio';
+    return route;
+  }
+
+  void _scheduleReload() {
+    if (!mounted || _reloadScheduled) return;
+    _reloadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reloadScheduled = false;
+      if (!mounted) return;
+      _detectCurrentPage(force: true);
+    });
+  }
+
+  Future<void> _detectCurrentPage({bool force = false}) async {
+    if (!mounted || (!force && _activeLoad != null)) return;
+
+    // Prefer detecting route from actual URL, fallback to provider.
+    final newRoute = _resolvedRoute();
+
+    debugPrint('📄 [PageSettingsTab] Detecting page: $newRoute');
+
+    // Avoid reloading if neither route nor exact owner changed.
+    final service = context.read<WebsiteService>();
+    final current = _appliedLoad;
+    if (!force &&
+        newRoute == _currentRoute &&
+        !_isLoading &&
+        current != null &&
+        current.matches(
+          liveProvider: widget.editProvider,
+          liveService: service,
+          liveRoute: newRoute,
+        )) {
+      return;
+    }
+
+    final generation = ++_loadGeneration;
+    final stamp = _PageSettingsLoadStamp(
+      provider: widget.editProvider,
+      service: service,
+      generation: generation,
+      route: newRoute,
+      pageId: widget.editProvider.currentPageId,
+      pageSlug: widget.editProvider.currentPageSlug,
+      documentSessionRevision: widget.editProvider.documentSessionRevision,
+      entryLeaseGeneration: widget.editProvider.editorEntryLeaseGeneration,
+      entryLeaseIdentityRevision:
+          widget.editProvider.editorEntryLeaseIdentityRevision,
+      serviceIdentityEpoch: service.identityEpoch,
+    );
+    _activeLoad = stamp;
+
+    setState(() {
+      _currentRoute = newRoute;
+      _currentPage = null;
+      _metaTitleController.clear();
+      _metaDescriptionController.clear();
+      _isLoading = true;
+    });
+
+    // Check if this is a special route (not a CMS page).
+    const specialRoutes = ['productos', 'contacto', 'carrito', 'checkout'];
+    _isSpecialRoute = specialRoutes.any((r) => newRoute.startsWith(r));
+
+    // Special route check logic preserved, but early return removed.
+    // We now attempt to load from DB first for ALL routes.
     try {
-      // Prefer detecting route from actual URL, fallback to provider
-      var newRoute = _getSlugFromRoute() ??
-          widget.editProvider.currentPageSlug ??
-          'inicio';
-      if (newRoute.isEmpty) newRoute = 'inicio';
-
-      debugPrint('📄 [PageSettingsTab] Detecting page: $newRoute');
-
-      // Avoid reloading if route hasn't changed
-      if (newRoute == _currentRoute && !_isLoading) {
-        _isDetecting = false;
-        return;
-      }
-
-      setState(() {
-        _currentRoute = newRoute;
-        _isLoading = true;
-      });
-
-      // Check if this is a special route (not a CMS page)
-      final specialRoutes = ['productos', 'contacto', 'carrito', 'checkout'];
-      _isSpecialRoute = specialRoutes.any((r) => _currentRoute.startsWith(r));
-
-      // Special route check logic preserved, but early return removed.
-      // We now attempt to load from DB first for ALL routes.
-
-      await _loadPageData();
+      await _loadPageData(stamp);
     } finally {
-      _isDetecting = false;
+      if (identical(_activeLoad, stamp)) {
+        _activeLoad = null;
+      }
     }
   }
 
@@ -122,73 +241,93 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
     }
   }
 
-  Future<void> _loadPageData() async {
-    final pageSlug = _currentRoute; // Use the route we detected, not provider
+  bool _ownsLoad(_PageSettingsLoadStamp stamp) {
+    if (!mounted ||
+        _loadGeneration != stamp.generation ||
+        !identical(_activeLoad, stamp)) {
+      return false;
+    }
+    return stamp.matches(
+      liveProvider: widget.editProvider,
+      liveService: context.read<WebsiteService>(),
+      liveRoute: _resolvedRoute(),
+    );
+  }
 
-    // Clear old page data first to avoid stale display
+  void _rejectStaleLoad(_PageSettingsLoadStamp stamp) {
+    if (!identical(_activeLoad, stamp)) return;
+    _activeLoad = null;
+    _scheduleReload();
+  }
+
+  Future<void> _loadPageData(_PageSettingsLoadStamp stamp) async {
+    // Clear old page data first to avoid stale display. Controllers remain
+    // hidden behind the loading state until this exact owner returns.
     _currentPage = null;
 
-    // Home page check removed to use standard website_pages table logic
-
     try {
-      final service = context.read<WebsiteService>();
       WebsitePage? page;
 
-      // Only use provider's pageId if it matches our current route
-      final providerSlug = widget.editProvider.currentPageSlug ?? '';
-      final providerPageId = widget.editProvider.currentPageId;
-
-      if (providerPageId != null && providerSlug == pageSlug) {
-        page = await service.getPageById(providerPageId);
+      // Only use the captured page id when it belongs to the captured slug.
+      if (stamp.pageId != null && stamp.pageSlug == stamp.route) {
+        page = await stamp.service.getPageById(stamp.pageId!);
       } else {
-        // Lookup by slug (our detected route)
-        page = await service.getPageBySlug(pageSlug);
+        page = await stamp.service.getPageBySlug(stamp.route);
       }
 
-      if (!mounted) return;
+      if (!_ownsLoad(stamp)) {
+        _rejectStaleLoad(stamp);
+        return;
+      }
 
+      final routeKey = stamp.route.split('/').first;
+      final pending = stamp.provider.getPendingPageSeo(routeKey);
       if (page != null) {
         _currentPage = page;
-        // Don't override _currentRoute here - keep what we detected
-        final routeKey = _currentRoute.split('/').first;
-        final pending = widget.editProvider.getPendingPageSeo(routeKey);
         _metaTitleController.text =
             pending?['meta_title'] ?? page.metaTitle ?? '';
         _metaDescriptionController.text =
             pending?['meta_description'] ?? page.metaDescription ?? '';
-        setState(() => _isLoading = false);
+      } else if (_isSpecialRoute) {
+        // Fallback: Try loading from legacy website_settings.
+        _metaTitleController.text = pending?['meta_title'] ??
+            stamp.service.getSetting('seo_${routeKey}_title', '');
+        _metaDescriptionController.text = pending?['meta_description'] ??
+            stamp.service.getSetting('seo_${routeKey}_description', '');
       } else {
-        // Page not found in DB - use _currentRoute for display
-        if (_isSpecialRoute) {
-          // Fallback: Try loading from legacy website_settings
-          final service = context.read<WebsiteService>();
-          final routeKey = _currentRoute.split('/').first;
-          final pending = widget.editProvider.getPendingPageSeo(routeKey);
-          _metaTitleController.text = pending?['meta_title'] ??
-              service.getSetting('seo_${routeKey}_title', '');
-          _metaDescriptionController.text = pending?['meta_description'] ??
-              service.getSetting('seo_${routeKey}_description', '');
-        }
-        setState(() {
-          // Keep _isSpecialRoute as determined earlier
-          _isLoading = false;
-        });
+        _metaTitleController.clear();
+        _metaDescriptionController.clear();
       }
+      _appliedLoad = stamp;
+      setState(() => _isLoading = false);
     } catch (e) {
       debugPrint('Error loading page for SEO: $e');
-      if (mounted) {
-        setState(() {
-          _isSpecialRoute = true;
-          _isLoading = false;
-        });
+      if (!_ownsLoad(stamp)) {
+        _rejectStaleLoad(stamp);
+        return;
       }
+      _appliedLoad = stamp;
+      setState(() {
+        _isSpecialRoute = true;
+        _isLoading = false;
+      });
     }
   }
 
   void _stageSeoChanges() {
-    final routeKey = _currentRoute.split('/').first;
+    final stamp = _appliedLoad;
+    if (stamp == null ||
+        !stamp.matches(
+          liveProvider: widget.editProvider,
+          liveService: context.read<WebsiteService>(),
+          liveRoute: _resolvedRoute(),
+        )) {
+      _scheduleReload();
+      return;
+    }
+    final routeKey = stamp.route.split('/').first;
     if (routeKey.isEmpty) return;
-    widget.editProvider.updatePageSeo(
+    stamp.provider.updatePageSeo(
       routeKey: routeKey,
       metaTitle: _metaTitleController.text,
       metaDescription: _metaDescriptionController.text,
@@ -197,16 +336,21 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
 
   @override
   Widget build(BuildContext context) {
-    // Check if route changed on every build (navigation might not trigger didUpdateWidget)
-    final routeSlug = _getSlugFromRoute();
-    if (routeSlug != null &&
-        routeSlug != _currentRoute &&
-        !_isLoading &&
-        !_isDetecting) {
-      // Schedule re-detection after this build
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_isDetecting) _detectCurrentPage();
-      });
+    // Navigation and page-document changes can retain this State. Compare the
+    // immutable owner stamp on every parent rebuild and schedule one fresh
+    // load; an in-flight response from the old owner can never populate these
+    // controllers.
+    final liveRoute = _resolvedRoute();
+    final liveService = context.read<WebsiteService>();
+    final owner = _activeLoad ?? _appliedLoad;
+    if (liveRoute != _currentRoute ||
+        (owner != null &&
+            !owner.matches(
+              liveProvider: widget.editProvider,
+              liveService: liveService,
+              liveRoute: liveRoute,
+            ))) {
+      _scheduleReload();
     }
 
     if (_isLoading) {

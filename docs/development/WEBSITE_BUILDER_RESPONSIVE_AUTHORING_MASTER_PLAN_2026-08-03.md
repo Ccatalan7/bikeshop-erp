@@ -1047,7 +1047,8 @@ Entregables:
 2. guard estático de breakpoints y aliases legacy;
 3. guard de registry/capability/policy para 24 tipos;
 4. documentación canónica actualizada;
-5. feature flags y rollback;
+5. decisión de rollout sin runtime feature flag y rollback probado por
+   artefacto/datos/documento;
 6. migración gradual sólo con autorización;
 7. cierre visual en app real por Claude.
 
@@ -1056,6 +1057,32 @@ Gate:
 - Definition of Done de la sección 19;
 - no deuda P0/P1 abierta;
 - publicación, si se solicita, tiene autorización y verificación separadas.
+
+### Decisión de rollout y rollback
+
+No se agrega un runtime feature flag que elija editor, renderer, provider,
+resolver o formato viejo versus nuevo. Ese switch duplicaría owners y
+contradiría el reemplazo progresivo en el mismo lote. La admisión gradual, si
+producto la necesita, vive fuera del árbol de authoring (workflow, allowlist o
+autorización de migración), nunca como una segunda implementación activa.
+
+El rollback tiene tres fronteras explícitas:
+
+1. **Código/release:** candidato y referencia de rollback son artefactos de SHA
+   exacto que pasan el mismo integrity gate y se leen de vuelta desde los
+   manifests publicados.
+2. **Compatibilidad de datos:** la lectura sigue aceptando legacy y preserva
+   claves desconocidas. Después de una escritura canónica sólo se permite
+   volver a un binario anterior si su matriz demuestra round-trip sin pérdida;
+   si no, el rollback seguro es un SHA de forward recovery que conserva los
+   codecs/adapters vigentes.
+3. **Canvas:** migración y restore son operaciones versionadas, idempotentes y
+   reversibles del documento. Preview/read nunca migran ni guardan, y no hay
+   backfill masivo sin autorización separada.
+
+Esta decisión arquitectónica no sustituye el drill operacional: Phase 8 sólo
+cierra cuando el SHA candidato, el read-back y una referencia de rollback
+practicada quedan registrados.
 
 ## 15. Matriz de verificación
 

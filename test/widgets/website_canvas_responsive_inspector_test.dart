@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:vinabike_erp/modules/website/models/website_canvas_responsive_document.dart';
+import 'package:vinabike_erp/modules/website/models/website_canvas_manipulation.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_field_state.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
@@ -127,7 +128,7 @@ void main() {
     required String selected,
     DevicePreviewMode viewport = DevicePreviewMode.desktop,
   }) {
-    return WebsiteEditModeProvider()
+    final provider = WebsiteEditModeProvider()
       ..enterEditMode(
         blocks,
         const <String, dynamic>{},
@@ -136,6 +137,48 @@ void main() {
       )
       ..selectBlock(selected)
       ..setDevicePreviewMode(viewport);
+    final effectiveViewport = switch (viewport) {
+      DevicePreviewMode.mobile => WebsiteViewport.mobile,
+      DevicePreviewMode.tablet => WebsiteViewport.tablet,
+      DevicePreviewMode.desktop => WebsiteViewport.desktop,
+    };
+    final renderedWidth = switch (effectiveViewport) {
+      WebsiteViewport.mobile => 390.0,
+      WebsiteViewport.tablet => 834.0,
+      WebsiteViewport.desktop => 1440.0,
+    };
+    for (final block in blocks) {
+      final blockId = block['id']?.toString();
+      if (blockId == null || blockId.isEmpty) continue;
+      provider.reportRenderedBlockViewport(blockId, effectiveViewport);
+      final type = block['block_type']?.toString();
+      if (type == 'canvas') {
+        provider.reportRenderedCanvasSize(
+          WebsiteCanvasDocumentTarget(blockId: blockId),
+          Size(renderedWidth, 480),
+          expectedMeasurementGeneration:
+              provider.renderedCanvasMeasurementGeneration,
+        );
+      } else if (type == 'carousel') {
+        final data = block['block_data'];
+        final slides = data is Map ? data['slides'] : null;
+        if (slides is! List) continue;
+        for (var slideIndex = 0; slideIndex < slides.length; slideIndex++) {
+          final slide = slides[slideIndex];
+          if (slide is! Map || slide['useComposition'] != true) continue;
+          provider.reportRenderedCanvasSize(
+            WebsiteCanvasDocumentTarget(
+              blockId: blockId,
+              slideIndex: slideIndex,
+            ),
+            Size(renderedWidth, 480),
+            expectedMeasurementGeneration:
+                provider.renderedCanvasMeasurementGeneration,
+          );
+        }
+      }
+    }
+    return provider;
   }
 
   Map<String, dynamic> documentOf(
@@ -1489,7 +1532,9 @@ void main() {
         of: find
             .ancestor(
               of: find.text('Diseño avanzado por capas'),
-              matching: find.byType(Row),
+              matching: find.byWidgetPredicate(
+                (widget) => widget.runtimeType.toString() == '_EditorToggle',
+              ),
             )
             .first,
         matching: find.byType(Switch),

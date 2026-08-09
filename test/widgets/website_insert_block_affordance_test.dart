@@ -9,9 +9,13 @@ import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provide
 import 'package:vinabike_erp/modules/website/widgets/deferred_editable_block_renderer.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_catalog_sheet.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_chrome_geometry.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_editor_block_sheet.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_editor_contextual_operation_scope.dart';
 import 'package:vinabike_erp/public_store/widgets/page_composition.dart';
+import 'package:vinabike_erp/public_store/widgets/website_insertion_host.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
+import 'package:vinabike_erp/shared/widgets/workspace_shell_scope.dart';
 
 /// In-page block insertion on the contextual host.
 ///
@@ -71,37 +75,84 @@ void main() {
   Widget host({
     required WebsitePageComposition composition,
     required double editorWidth,
-    required void Function(String type, {int? atIndex}) onAddBlock,
+    void Function(String type, {int? atIndex})? onAddBlock,
     WebsiteEditModeProvider? provider,
     Brightness brightness = Brightness.light,
+    double canvasTopInset = 0,
+    double contextualDockHeight = 0,
+    double nestedNavigatorTopInset = 0,
+    ScrollController? outerScrollController,
+    double outerEditorTop = 0,
+    double outerEditorHeight = 0,
+    WebsiteEditorContextualOperationController? contextualOperations,
   }) {
+    final canvas = SingleChildScrollView(
+      child: PageComposition(
+        composition: composition,
+        primaryColor: Colors.blue,
+        accentColor: Colors.green,
+        textColor: Colors.black,
+        containerPadding: 16,
+        onAddBlock: onAddBlock,
+      ),
+    );
+    final chrome = WebsiteEditorChromeScope(
+      editorWidth: editorWidth,
+      canvasWidth: WebsiteEditorChromeGeometry.canvasWidthFor(editorWidth),
+      contextualDockHeight: contextualDockHeight,
+      child: canvasTopInset == 0
+          ? canvas
+          : Column(
+              children: [
+                SizedBox(height: canvasTopInset),
+                Expanded(child: canvas),
+              ],
+            ),
+    );
+    final nestedEditor = nestedNavigatorTopInset == 0
+        ? chrome
+        : Padding(
+            padding: EdgeInsets.only(top: nestedNavigatorTopInset),
+            child: Navigator(
+              onGenerateRoute: (_) => PageRouteBuilder<void>(
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+                pageBuilder: (_, __, ___) => chrome,
+              ),
+            ),
+          );
+    final body = outerScrollController == null
+        ? nestedEditor
+        : SingleChildScrollView(
+            controller: outerScrollController,
+            child: Column(
+              children: [
+                SizedBox(height: outerEditorTop),
+                SizedBox(height: outerEditorHeight, child: nestedEditor),
+                const SizedBox(height: 844),
+              ],
+            ),
+          );
     final content = MaterialApp(
       theme: AppTheme.resolve(
         preset: AppearancePresets.pacific,
         brightness: brightness,
       ),
-      home: Scaffold(
-        body: WebsiteEditorChromeScope(
-          editorWidth: editorWidth,
-          canvasWidth: WebsiteEditorChromeGeometry.canvasWidthFor(editorWidth),
-          child: SingleChildScrollView(
-            child: PageComposition(
-              composition: composition,
-              primaryColor: Colors.blue,
-              accentColor: Colors.green,
-              textColor: Colors.black,
-              containerPadding: 16,
-              onAddBlock: onAddBlock,
-            ),
-          ),
-        ),
-      ),
+      home: Scaffold(body: body),
     );
-    if (provider == null) return content;
-    return ChangeNotifierProvider<WebsiteEditModeProvider>.value(
-      value: provider,
-      child: content,
-    );
+    Widget result = provider == null
+        ? content
+        : ChangeNotifierProvider<WebsiteEditModeProvider>.value(
+            value: provider,
+            child: content,
+          );
+    if (contextualOperations != null) {
+      result = WebsiteEditorContextualOperationScope(
+        controller: contextualOperations,
+        child: result,
+      );
+    }
+    return result;
   }
 
   Future<void> pumpHost(WidgetTester tester, Widget widget) async {
@@ -126,9 +177,17 @@ void main() {
 
   Future<void> openSheet(WidgetTester tester, int affordanceIndex) async {
     final target = affordances().at(affordanceIndex);
-    // A tall page scrolls: an affordance below the fold has to be brought into
-    // view before it can be tapped, exactly as the operator would.
-    await tester.ensureVisible(target);
+    // NO `ensureVisible` here. A marker is chrome in the host's overlay: its
+    // layout box sits at that layer's origin while it PAINTS on the seam, so
+    // asking the framework to scroll it into view scrolls the canvas back to
+    // the top and takes the seam with it. The marker is tapped where it is
+    // painted, which is what `getCenter` reports; a caller that needs a seam
+    // further down scrolls the canvas itself, like the operator does.
+    //
+    // Two pumps first: a follower's transform is written during paint, so
+    // right after a scroll `getCenter` would still report the previous frame's
+    // position and the tap would land on the seam's old place.
+    await tester.pump();
     await tester.pump();
     await tester.tap(target, warnIfMissed: false);
     await tester.pump();
@@ -160,7 +219,7 @@ void main() {
   }
 
   group('dónde vive la afordancia', () {
-    testWidgets('390: una al inicio, una entre bloques y una al final',
+    testWidgets('390: contextual a la selección, NO una banda por costura',
         (tester) async {
       useViewport(tester, width: 390);
       final provider = WebsiteEditModeProvider()
@@ -175,8 +234,16 @@ void main() {
         ),
       );
 
-      // 3 bloques ⇒ 4 huecos: inicio, dos intermedios y final.
-      expect(affordances(), findsNWidgets(4));
+      // Sin selección la página ofrece su final, y NADA más. Tres bloques
+      // solían producir cuatro bandas permanentes de 48: un riel a lo largo de
+      // la página que además era layout real.
+      expect(affordances(), findsOneWidget);
+
+      // Con un bloque seleccionado, sus dos costuras: antes y después de ÉL.
+      provider.selectBlock('b-products');
+      await tester.pump();
+      expect(affordances(), findsNWidgets(2));
+
       for (final element in affordances().evaluate()) {
         final size = tester.getSize(find.byWidget(element.widget));
         expect(
@@ -190,7 +257,8 @@ void main() {
     testWidgets('834 contextual mantiene la misma composición', (tester) async {
       useViewport(tester, width: 834, height: 700);
       final provider = WebsiteEditModeProvider()
-        ..enterEditMode(pageBlocks, const <String, dynamic>{});
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-products');
       await pumpHost(
         tester,
         host(
@@ -201,7 +269,7 @@ void main() {
         ),
       );
 
-      expect(affordances(), findsNWidgets(4));
+      expect(affordances(), findsNWidgets(2));
       expect(
         tester.getSize(affordances().first).height,
         WebsiteInsertBlockAffordance.height,
@@ -210,11 +278,16 @@ void main() {
 
     testWidgets('página vacía: exactamente UNA', (tester) async {
       useViewport(tester, width: 390);
+      // La inserción pasa por el host único, que consulta la identidad del
+      // documento para sus guardas; el harness la provee como en producción.
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(const <Map<String, dynamic>>[], const {});
       await pumpHost(
         tester,
         host(
           composition: compositionOf(const <Map<String, dynamic>>[]),
           editorWidth: 390,
+          provider: provider,
           onAddBlock: (type, {atIndex}) {},
         ),
       );
@@ -226,7 +299,8 @@ void main() {
         (tester) async {
       useViewport(tester, width: 1440, height: 900);
       final provider = WebsiteEditModeProvider()
-        ..enterEditMode(pageBlocks, const <String, dynamic>{});
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
       await pumpHost(
         tester,
         host(
@@ -266,8 +340,11 @@ void main() {
         (tester) async {
       useViewport(tester, width: 390);
       final calls = <(String, int?)>[];
+      // La costura de "antes del primer bloque" pertenece a ese bloque, así
+      // que se ofrece cuando ese bloque está seleccionado.
       final provider = WebsiteEditModeProvider()
-        ..enterEditMode(pageBlocks, const <String, dynamic>{});
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
       await pumpHost(
         tester,
         host(
@@ -292,7 +369,8 @@ void main() {
       useViewport(tester, width: 390);
       final calls = <(String, int?)>[];
       final provider = WebsiteEditModeProvider()
-        ..enterEditMode(pageBlocks, const <String, dynamic>{});
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
       await pumpHost(
         tester,
         host(
@@ -303,7 +381,8 @@ void main() {
         ),
       );
 
-      // Índice 1 = el hueco inmediatamente bajo el primer bloque.
+      // Con el primer bloque seleccionado, el marcador 1 es su costura
+      // `Después de`: el hueco inmediatamente bajo ese bloque.
       await openSheet(tester, 1);
       await chooseBlock(tester, WebsiteBlockType.text, 'text');
 
@@ -325,7 +404,28 @@ void main() {
         ),
       );
 
-      await openSheet(tester, 3);
+      // Sin selección la página ofrece exactamente su final. El marcador sigue
+      // a la costura final, así que se alcanza llegando al final de la página
+      // — que es exactamente lo que hace el operador para agregar al final.
+      expect(affordances(), findsOneWidget);
+      // El scroll del LIENZO, no el de un bloque: un `first` genérico puede
+      // encontrar un scroll interno y no mover la página.
+      await tester.drag(
+        find
+            .ancestor(
+              of: find.byType(PageComposition),
+              matching: find.byType(SingleChildScrollView),
+            )
+            .first,
+        const Offset(0, -4000),
+      );
+      for (var frame = 0; frame < 6; frame++) {
+        await tester.pump(const Duration(milliseconds: 40));
+      }
+      // El marcador de cierre queda ENTERO sobre el borde de la página.
+      expect(
+          tester.getRect(affordances().first).bottom, lessThanOrEqualTo(844));
+      await openSheet(tester, 0);
       await chooseBlock(tester, WebsiteBlockType.text, 'text');
 
       expect(calls, [('text', 3)]);
@@ -347,6 +447,11 @@ void main() {
         ),
       );
 
+      // La costura «Después de» pertenece al bloque seleccionado.
+      provider.selectBlock('b-hero');
+      await tester.pump();
+      await tester.pump();
+
       await openSheet(tester, 1);
       // Nace en «Después de» el primer bloque ⇒ 1. Al pasar a «Antes de» ⇒ 0.
       await tester.tap(find.text('Antes de'));
@@ -361,7 +466,8 @@ void main() {
       useViewport(tester, width: 390);
       final calls = <(String, int?)>[];
       final provider = WebsiteEditModeProvider()
-        ..enterEditMode(pageBlocks, const <String, dynamic>{});
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
       final blocksBefore = provider.blocks;
       final dirtyBefore = provider.hasUnsavedChanges;
       final canUndoBefore = provider.canUndo;
@@ -393,7 +499,8 @@ void main() {
       useViewport(tester, width: 390);
       final calls = <(String, int?)>[];
       final provider = WebsiteEditModeProvider()
-        ..enterEditMode(pageBlocks, const <String, dynamic>{});
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
       await pumpHost(
         tester,
         host(
@@ -428,7 +535,8 @@ void main() {
     testWidgets('buscar filtra y el vacío se nombra', (tester) async {
       useViewport(tester, width: 390);
       final provider = WebsiteEditModeProvider()
-        ..enterEditMode(pageBlocks, const <String, dynamic>{});
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
       await pumpHost(
         tester,
         host(
@@ -524,7 +632,8 @@ void main() {
     testWidgets('las categorías están y filtran', (tester) async {
       useViewport(tester, width: 390);
       final provider = WebsiteEditModeProvider()
-        ..enterEditMode(pageBlocks, const <String, dynamic>{});
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
       await pumpHost(
         tester,
         host(
@@ -567,7 +676,8 @@ void main() {
       for (final inset in const <double>[0, 292]) {
         useViewport(tester, width: 390, bottomViewInset: inset);
         final provider = WebsiteEditModeProvider()
-          ..enterEditMode(pageBlocks, const <String, dynamic>{});
+          ..enterEditMode(pageBlocks, const <String, dynamic>{})
+          ..selectBlock('b-hero');
         await pumpHost(
           tester,
           host(
@@ -614,7 +724,8 @@ void main() {
       for (final brightness in Brightness.values) {
         useViewport(tester, width: 390);
         final provider = WebsiteEditModeProvider()
-          ..enterEditMode(pageBlocks, const <String, dynamic>{});
+          ..enterEditMode(pageBlocks, const <String, dynamic>{})
+          ..selectBlock('b-hero');
         await pumpHost(
           tester,
           host(
@@ -646,7 +757,8 @@ void main() {
         'deja EXACTAMENTE un paso de deshacer', (tester) async {
       useViewport(tester, width: 390);
       final provider = WebsiteEditModeProvider()
-        ..enterEditMode(pageBlocks, const <String, dynamic>{});
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
       expect(provider.canUndo, isFalse);
 
       await pumpHost(
@@ -687,6 +799,266 @@ void main() {
         ['b-hero', 'b-products', 'b-contact'],
       );
       expect(provider.canUndo, isFalse);
+    });
+  });
+  group('el host es el único owner de la operación', () {
+    test('las leases anidadas liberan el chrome sólo al final', () {
+      final controller = WebsiteEditorContextualOperationController();
+      addTearDown(controller.dispose);
+      final first = controller.acquire();
+      final second = controller.acquire();
+
+      expect(controller.isActive, isTrue);
+      expect(controller.depth, 2);
+      first.release();
+      first.release();
+      expect(controller.isActive, isTrue);
+      expect(controller.depth, 1);
+      second.release();
+      expect(controller.isActive, isFalse);
+      expect(controller.depth, 0);
+    });
+
+    testWidgets('O-05 suspende el chrome inline de inserción', (tester) async {
+      useViewport(tester, width: 390);
+      final contextualOperations = WebsiteEditorContextualOperationController();
+      addTearDown(contextualOperations.dispose);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-products');
+      await pumpHost(
+        tester,
+        host(
+          composition: compositionOf(pageBlocks),
+          editorWidth: 390,
+          provider: provider,
+          contextualOperations: contextualOperations,
+          onAddBlock: (type, {atIndex}) {},
+        ),
+      );
+
+      expect(affordances(), findsNWidgets(2));
+      final canvasContext = tester.element(find.byType(PageComposition));
+      showWebsiteContextualSheet<void>(
+        context: canvasContext,
+        builder: (_) => const SizedBox(height: 300),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        affordances(),
+        findsNothing,
+        reason: 'el root Overlay no puede pintar marcadores sobre una hoja',
+      );
+      expect(contextualOperations.isActive, isTrue);
+
+      Navigator.of(canvasContext).pop();
+      await settle(tester);
+      expect(affordances(), findsNWidgets(2));
+      expect(contextualOperations.isActive, isFalse);
+    });
+
+    testWidgets('la geometría del lienzo no cambia por existir marcadores',
+        (tester) async {
+      // El aislamiento que pide el gate: MISMO renderer de Edit, mismos
+      // bloques, con y sin `onAddBlock`. Lo único que difiere es que existan
+      // afordancias, así que cualquier diferencia de rects es culpa de ellas.
+      useViewport(tester, width: 390);
+      Future<List<Rect>> rectsWith({required bool withAffordances}) async {
+        final provider = WebsiteEditModeProvider()
+          ..enterEditMode(pageBlocks, const <String, dynamic>{})
+          ..selectBlock('b-products');
+        await pumpHost(
+          tester,
+          host(
+            composition: compositionOf(pageBlocks),
+            editorWidth: 390,
+            provider: provider,
+            onAddBlock: withAffordances ? (type, {atIndex}) {} : null,
+          ),
+        );
+        return [
+          for (final block in pageBlocks)
+            tester.getRect(
+              find.byKey(
+                ValueKey<String>('page-composition-block-${block['id']}'),
+              ),
+            ),
+        ];
+      }
+
+      final without = await rectsWith(withAffordances: false);
+      final with_ = await rectsWith(withAffordances: true);
+      expect(with_, without,
+          reason: 'los marcadores no pueden mover un solo pixel del documento');
+    });
+
+    testWidgets('doble toque abre UNA sola hoja', (tester) async {
+      useViewport(tester, width: 390);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
+      await pumpHost(
+        tester,
+        host(
+          composition: compositionOf(pageBlocks),
+          editorWidth: 390,
+          provider: provider,
+          onAddBlock: (type, {atIndex}) {},
+        ),
+      );
+
+      final target = affordances().first;
+      await tester.pump();
+      await tester.tap(target, warnIfMissed: false);
+      await tester.tap(target, warnIfMissed: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byKey(WebsiteBlockCatalogSheet.sheetKey), findsOneWidget);
+    });
+
+    testWidgets('si el documento cambia mientras la hoja está abierta, aborta',
+        (tester) async {
+      useViewport(tester, width: 390);
+      final calls = <(String, int?)>[];
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(pageBlocks, const <String, dynamic>{}, pageId: 'page-a')
+        ..selectBlock('b-hero');
+      await pumpHost(
+        tester,
+        host(
+          composition: compositionOf(pageBlocks),
+          editorWidth: 390,
+          provider: provider,
+          onAddBlock: (type, {atIndex}) => calls.add((type, atIndex)),
+        ),
+      );
+
+      await openSheet(tester, 0);
+      // Otra página bajo la hoja abierta: el índice que nació con el marcador
+      // ya no significa nada, y un append «a donde sea» sería una escritura
+      // fail-open en una costura que el operador nunca señaló.
+      provider.openEditorDocument(
+        const <Map<String, dynamic>>[
+          {'id': 'otro', 'block_type': 'text', 'block_data': {}},
+        ],
+        const <String, dynamic>{},
+        mode: WebsiteEditorMode.edit,
+        pageId: 'page-b',
+      );
+      await tester.pump();
+      await chooseBlock(tester, WebsiteBlockType.text, 'text');
+
+      expect(calls, isEmpty);
+    });
+
+    testWidgets(
+        'el overlay sólo pinta y recibe taps entre topbar y dock medidos',
+        (tester) async {
+      useViewport(tester, width: 390);
+      final topBand = WebsiteEditorChromeGeometry.topBandHeightFor(
+        WebsiteEditorChromeGeometry.publishedPhoneSafeAreaTop,
+      );
+      // This is a measured input supplied by the shell, not a visual value
+      // chosen by the insertion host. Reusing the published bar height keeps
+      // the assertion readable while proving the cap responds to its owner.
+      const dockBand = WebsiteEditorChromeGeometry.topBarHeight;
+      const workspaceBand = WorkspaceShellScope.workspaceBarHeight;
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
+      await pumpHost(
+        tester,
+        host(
+          composition: compositionOf(pageBlocks),
+          editorWidth: 390,
+          provider: provider,
+          canvasTopInset: topBand,
+          contextualDockHeight: dockBand,
+          nestedNavigatorTopInset: workspaceBand,
+          onAddBlock: (type, {atIndex}) {},
+        ),
+      );
+
+      final hostState = tester.state<WebsiteInsertionHostState>(
+        find.byType(WebsiteInsertionHost),
+      );
+      expect(
+        hostState.interactiveViewportRect,
+        Rect.fromLTRB(0, workspaceBand + topBand, 390, 844 - dockBand),
+      );
+
+      // The first marker straddles the first block's leading seam. Its upper
+      // half exists geometrically behind the editor bar, but the viewport clip
+      // must remove it from both paint and hit testing.
+      await tester.tapAt(Offset(195, workspaceBand + topBand - 12));
+      await tester.pump();
+      expect(find.byKey(WebsiteBlockCatalogSheet.sheetKey), findsNothing);
+      expect(hostState.isResolving, isFalse);
+
+      // The same marker remains interactive on the canvas side of the seam.
+      await tester.tapAt(Offset(195, workspaceBand + topBand + 12));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byKey(WebsiteBlockCatalogSheet.sheetKey), findsOneWidget);
+    });
+
+    testWidgets('intersecta viewports anidados y sigue el scroll exterior',
+        (tester) async {
+      useViewport(tester, width: 390);
+      final outer = ScrollController();
+      addTearDown(outer.dispose);
+      final topBand = WebsiteEditorChromeGeometry.topBandHeightFor(
+        WebsiteEditorChromeGeometry.publishedPhoneSafeAreaTop,
+      );
+      const dockBand = WebsiteEditorChromeGeometry.topBarHeight;
+      const editorTop = 120.0;
+      const editorHeight = 700.0;
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(pageBlocks, const <String, dynamic>{})
+        ..selectBlock('b-hero');
+      await pumpHost(
+        tester,
+        host(
+          composition: compositionOf(pageBlocks),
+          editorWidth: 390,
+          provider: provider,
+          canvasTopInset: topBand,
+          contextualDockHeight: dockBand,
+          outerScrollController: outer,
+          outerEditorTop: editorTop,
+          outerEditorHeight: editorHeight,
+          onAddBlock: (type, {atIndex}) {},
+        ),
+      );
+
+      final state = tester.state<WebsiteInsertionHostState>(
+        find.byType(WebsiteInsertionHost),
+      );
+      // Inner canvas: 120 + 92 .. 120 + 700. The measured dock caps its
+      // bottom at 844 - 48.
+      expect(
+        state.interactiveViewportRect,
+        Rect.fromLTRB(0, editorTop + topBand, 390, 844 - dockBand),
+      );
+
+      // Moving the INNER viewport with an OUTER ScrollPosition must refresh
+      // the clip even though WebsiteInsertionHost itself did not rebuild.
+      outer.jumpTo(180);
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        state.interactiveViewportRect,
+        Rect.fromLTRB(
+          0,
+          editorTop - 180 + topBand,
+          390,
+          editorTop - 180 + editorHeight,
+        ),
+      );
     });
   });
 }

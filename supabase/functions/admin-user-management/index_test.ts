@@ -242,6 +242,7 @@ class FakeQuery {
               delete_invoices: false,
               access_accounting: false,
               manage_users: false,
+              can_manage_supplier_credentials: false,
               edit_settings: false,
             },
           }
@@ -703,6 +704,7 @@ Deno.test("strict role hierarchy blocks peer admins and manager elevation", () =
         delete_invoices: false,
         access_accounting: false,
         manage_users: false,
+        can_manage_supplier_credentials: false,
         edit_settings: false,
       },
     },
@@ -856,6 +858,7 @@ Deno.test("principal owner can legitimately manage an admin and canonical permis
     delete_invoices: true,
     access_accounting: true,
     manage_users: true,
+    can_manage_supplier_credentials: true,
     edit_settings: true,
   };
   assertEquals(

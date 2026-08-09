@@ -219,6 +219,24 @@ class _CanvasBlockControls extends StatelessWidget {
     );
   }
 
+  WebsiteAsyncFieldBinding _asyncFieldBinding<T>(
+    WebsiteCanvasFieldBinding<T> binding,
+  ) {
+    return WebsiteAsyncFieldBinding.pageBlock(
+      provider: provider,
+      target: WebsiteAsyncFieldTarget.block(
+        blockId: blockId,
+        // `scopeKey` is the Canvas owner's canonical semantic address:
+        // block + slide + root/layer + property + viewport. Keeping it intact
+        // means a retained picker or slider can never adopt a sibling layer.
+        scopeKey: jsonEncode(<String, Object?>{
+          'surface': 'canvas',
+          'field': binding.scopeKey,
+        }),
+      ),
+    );
+  }
+
   /// The two framing axes presented as ONE value.
   ///
   /// The status is the strongest of the two, so a single overridden axis still
@@ -273,6 +291,7 @@ class _CanvasBlockControls extends StatelessWidget {
     return _CanvasFocalField(
       state: _framingState(x: x, y: y, label: label),
       imageUrl: imageUrl,
+      asyncBinding: _asyncFieldBinding(x),
       onChanged: (nextX, nextY) => x.writeMany(<String, Object?>{
         'focalPointX': nextX,
         'focalPointY': nextY,
@@ -353,26 +372,27 @@ class _CanvasBlockControls extends StatelessWidget {
     var x = (active.data['x'] as num?)?.toDouble() ?? 0;
     var y = (active.data['y'] as num?)?.toDouble() ?? 0;
 
-    switch (alignment) {
-      case 'left':
-        x = 0;
-        break;
-      case 'hCenter':
-        x = (designWidth - width) / 2;
-        break;
-      case 'right':
-        x = designWidth - width;
-        break;
-      case 'top':
-        y = 0;
-        break;
-      case 'vCenter':
-        y = (designHeight - height) / 2;
-        break;
-      case 'bottom':
-        y = designHeight - height;
-        break;
-    }
+    // Same canonical math as the canvas toolbar. Only the design surface is
+    // this caller's own: the inspector is authoritative about the document's
+    // declared roots, the canvas about what it rendered.
+    final origin = WebsiteCanvasAlignmentMath.align(
+      alignment: switch (alignment) {
+        'left' => WebsiteCanvasAlignment.left,
+        'hCenter' => WebsiteCanvasAlignment.horizontalCenter,
+        'right' => WebsiteCanvasAlignment.right,
+        'top' => WebsiteCanvasAlignment.top,
+        'vCenter' => WebsiteCanvasAlignment.verticalCenter,
+        _ => WebsiteCanvasAlignment.bottom,
+      },
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+      designWidth: designWidth,
+      designHeight: designHeight,
+    );
+    x = origin.x;
+    y = origin.y;
     geometry.writeMany(<String, Object?>{'x': x, 'y': y});
   }
 
@@ -652,7 +672,9 @@ class _CanvasBlockControls extends StatelessWidget {
                       max: 1.0,
                       divisions: 16,
                       valueLabel: '${(value * 100).toStringAsFixed(0)}%',
-                      onChanged: binding.write,
+                      transactionIdentity: (provider, binding.scopeKey),
+                      asyncBinding: _asyncFieldBinding(binding),
+                      onCommit: binding.write,
                     );
                   },
                 )
@@ -669,7 +691,9 @@ class _CanvasBlockControls extends StatelessWidget {
                       max: 1600,
                       divisions: 69,
                       valueLabel: '${value.toStringAsFixed(0)}px',
-                      onChanged: binding.write,
+                      transactionIdentity: (provider, binding.scopeKey),
+                      asyncBinding: _asyncFieldBinding(binding),
+                      onCommit: binding.write,
                     );
                   },
                 ),
@@ -680,6 +704,7 @@ class _CanvasBlockControls extends StatelessWidget {
                   label: '',
                   value: binding.value ?? '#FFFFFF',
                   allowAlpha: true,
+                  asyncBinding: _asyncFieldBinding(binding),
                   onChanged: binding.write,
                 ),
               ),
@@ -700,6 +725,7 @@ class _CanvasBlockControls extends StatelessWidget {
                 ),
                 (binding) => _ImagePicker(
                   currentUrl: binding.value ?? '',
+                  asyncBinding: _asyncFieldBinding(binding),
                   onChanged: binding.write,
                 ),
               ),
@@ -719,6 +745,7 @@ class _CanvasBlockControls extends StatelessWidget {
                   (binding) => _EditorTextField(
                     label: '',
                     value: binding.value ?? '',
+                    asyncBinding: _asyncFieldBinding(binding),
                     onChanged: binding.write,
                   ),
                 ),
@@ -734,6 +761,7 @@ class _CanvasBlockControls extends StatelessWidget {
                 ),
                 (binding) => _VideoPicker(
                   currentUrl: binding.value ?? '',
+                  asyncBinding: _asyncFieldBinding(binding),
                   onChanged: (url) => binding.writeMany(<String, Object?>{
                     'backgroundVideoUrl': url,
                     if (url.isNotEmpty) 'backgroundYoutubeId': '',
@@ -763,6 +791,7 @@ class _CanvasBlockControls extends StatelessWidget {
                     (binding) => _EditorTextField(
                       label: '',
                       value: binding.value ?? '',
+                      asyncBinding: _asyncFieldBinding(binding),
                       onChanged: binding.write,
                     ),
                   ),
@@ -775,6 +804,7 @@ class _CanvasBlockControls extends StatelessWidget {
                     (binding) => _EditorTextField(
                       label: '',
                       value: binding.value ?? '',
+                      asyncBinding: _asyncFieldBinding(binding),
                       onChanged: (v) => binding.write(_youtubeIdOf(v)),
                       hint: 'Pega el enlace o ID',
                     ),
@@ -815,6 +845,7 @@ class _CanvasBlockControls extends StatelessWidget {
                     label: '',
                     value: binding.value ?? '#000000',
                     allowAlpha: false,
+                    asyncBinding: _asyncFieldBinding(binding),
                     onChanged: binding.write,
                   ),
                 ),
@@ -831,7 +862,9 @@ class _CanvasBlockControls extends StatelessWidget {
                       max: 0.9,
                       divisions: 18,
                       valueLabel: value.toStringAsFixed(2),
-                      onChanged: binding.write,
+                      transactionIdentity: (provider, binding.scopeKey),
+                      asyncBinding: _asyncFieldBinding(binding),
+                      onCommit: binding.write,
                     );
                   },
                 ),
@@ -874,7 +907,9 @@ class _CanvasBlockControls extends StatelessWidget {
                     max: 24,
                     divisions: 20,
                     valueLabel: '${value.toStringAsFixed(0)}px',
-                    onChanged: binding.write,
+                    transactionIdentity: (provider, binding.scopeKey),
+                    asyncBinding: _asyncFieldBinding(binding),
+                    onCommit: binding.write,
                   );
                 },
               ),
@@ -890,7 +925,9 @@ class _CanvasBlockControls extends StatelessWidget {
                     max: 16,
                     divisions: 14,
                     valueLabel: '${value.toStringAsFixed(0)}px',
-                    onChanged: binding.write,
+                    transactionIdentity: (provider, binding.scopeKey),
+                    asyncBinding: _asyncFieldBinding(binding),
+                    onCommit: binding.write,
                   );
                 },
               ),
@@ -1099,6 +1136,7 @@ class _CanvasBlockControls extends StatelessWidget {
                 (binding) => _EditorTextField(
                   label: '',
                   value: (binding.value?.toDouble() ?? 0).toStringAsFixed(0),
+                  asyncBinding: _asyncFieldBinding(binding),
                   onChanged: (v) {
                     final parsed = double.tryParse(v);
                     if (parsed != null) binding.write(parsed);
@@ -1111,6 +1149,7 @@ class _CanvasBlockControls extends StatelessWidget {
                 (binding) => _EditorTextField(
                   label: '',
                   value: (binding.value?.toDouble() ?? 0).toStringAsFixed(0),
+                  asyncBinding: _asyncFieldBinding(binding),
                   onChanged: (v) {
                     final parsed = double.tryParse(v);
                     if (parsed != null) binding.write(parsed);
@@ -1123,6 +1162,7 @@ class _CanvasBlockControls extends StatelessWidget {
                 (binding) => _EditorTextField(
                   label: '',
                   value: (binding.value?.toDouble() ?? 200).toStringAsFixed(0),
+                  asyncBinding: _asyncFieldBinding(binding),
                   onChanged: (v) {
                     final parsed = double.tryParse(v);
                     if (parsed != null) {
@@ -1137,6 +1177,7 @@ class _CanvasBlockControls extends StatelessWidget {
                 (binding) => _EditorTextField(
                   label: '',
                   value: (binding.value?.toDouble() ?? 56).toStringAsFixed(0),
+                  asyncBinding: _asyncFieldBinding(binding),
                   onChanged: (v) {
                     final parsed = double.tryParse(v);
                     if (parsed != null) {
@@ -1162,7 +1203,9 @@ class _CanvasBlockControls extends StatelessWidget {
                         max: 180,
                         divisions: 360,
                         valueLabel: '${value.toStringAsFixed(0)}°',
-                        onChanged: binding.write,
+                        transactionIdentity: (provider, binding.scopeKey),
+                        asyncBinding: _asyncFieldBinding(binding),
+                        onCommit: binding.write,
                       ),
                       if (value.abs() > 0.01)
                         Align(
@@ -1290,6 +1333,7 @@ class _CanvasBlockControls extends StatelessWidget {
           (binding) => _EditorTextField(
             label: '',
             value: binding.value ?? '',
+            asyncBinding: _asyncFieldBinding(binding),
             onChanged: binding.write,
             maxLines: 3,
           ),
@@ -1306,7 +1350,9 @@ class _CanvasBlockControls extends StatelessWidget {
               max: 80,
               divisions: 70,
               valueLabel: '${value.toStringAsFixed(0)}px',
-              onChanged: binding.write,
+              transactionIdentity: (provider, binding.scopeKey),
+              asyncBinding: _asyncFieldBinding(binding),
+              onCommit: binding.write,
             );
           },
         ),
@@ -1374,6 +1420,7 @@ class _CanvasBlockControls extends StatelessWidget {
             label: '',
             value: binding.value ?? '#111111',
             allowAlpha: true,
+            asyncBinding: _asyncFieldBinding(binding),
             onChanged: binding.write,
           ),
         ),
@@ -1390,7 +1437,9 @@ class _CanvasBlockControls extends StatelessWidget {
               max: 8,
               divisions: 18,
               valueLabel: value.toStringAsFixed(1),
-              onChanged: binding.write,
+              transactionIdentity: (provider, binding.scopeKey),
+              asyncBinding: _asyncFieldBinding(binding),
+              onCommit: binding.write,
             );
           },
         ),
@@ -1406,7 +1455,9 @@ class _CanvasBlockControls extends StatelessWidget {
               max: 2.0,
               divisions: 12,
               valueLabel: value.toStringAsFixed(1),
-              onChanged: binding.write,
+              transactionIdentity: (provider, binding.scopeKey),
+              asyncBinding: _asyncFieldBinding(binding),
+              onCommit: binding.write,
             );
           },
         ),
@@ -1467,6 +1518,7 @@ class _CanvasBlockControls extends StatelessWidget {
           surface.text('label', label: 'Acción', layerId: id),
           (binding) => WebsiteActionEditor(
             showVariant: false,
+            asyncBinding: _asyncFieldBinding(binding),
             // Label, destination and variant are all shared for this layer, so
             // the editor shows the shared action itself.
             value: sharedAction,
@@ -1517,6 +1569,7 @@ class _CanvasBlockControls extends StatelessWidget {
               label: '',
               value: binding.value ?? '#00A09D',
               allowAlpha: true,
+              asyncBinding: _asyncFieldBinding(binding),
               onChanged: binding.write,
             ),
           ),
@@ -1527,6 +1580,7 @@ class _CanvasBlockControls extends StatelessWidget {
               label: '',
               value: binding.value ?? '#FFFFFF',
               allowAlpha: true,
+              asyncBinding: _asyncFieldBinding(binding),
               onChanged: binding.write,
             ),
           ),
@@ -1542,7 +1596,9 @@ class _CanvasBlockControls extends StatelessWidget {
                 max: 32,
                 divisions: 32,
                 valueLabel: '${value.toStringAsFixed(0)}px',
-                onChanged: binding.write,
+                transactionIdentity: (provider, binding.scopeKey),
+                asyncBinding: _asyncFieldBinding(binding),
+                onCommit: binding.write,
               );
             },
           ),
@@ -1577,7 +1633,9 @@ class _CanvasBlockControls extends StatelessWidget {
                 max: 6,
                 divisions: 12,
                 valueLabel: value.toStringAsFixed(1),
-                onChanged: binding.write,
+                transactionIdentity: (provider, binding.scopeKey),
+                asyncBinding: _asyncFieldBinding(binding),
+                onCommit: binding.write,
               );
             },
           ),
@@ -1604,6 +1662,7 @@ class _CanvasBlockControls extends StatelessWidget {
           surface.text('productId', label: 'Producto', layerId: id),
           (binding) => _CanvasProductSelector(
             currentProductId: binding.value ?? '',
+            asyncBinding: _asyncFieldBinding(binding),
             onChanged: (next) => binding.writeMany(<String, Object?>{
               'productId': next,
               'imageSource': next.isEmpty ? 'manual' : 'product',
@@ -1659,6 +1718,7 @@ class _CanvasBlockControls extends StatelessWidget {
           (binding) => _ImagePicker(
             currentUrl: binding.value ?? '',
             allowProductLink: true,
+            asyncBinding: _asyncFieldBinding(binding),
             onAssetChanged: (selection) => binding.writeMany(<String, Object?>{
               'imageUrl': selection.publicUrl,
               if (selection.linksProduct) ...<String, Object?>{
@@ -1678,6 +1738,7 @@ class _CanvasBlockControls extends StatelessWidget {
           (binding) => _EditorTextField(
             label: '',
             value: binding.value ?? '',
+            asyncBinding: _asyncFieldBinding(binding),
             onChanged: binding.write,
           ),
         ),
@@ -1723,7 +1784,9 @@ class _CanvasBlockControls extends StatelessWidget {
               max: 32,
               divisions: 32,
               valueLabel: '${value.toStringAsFixed(0)}px',
-              onChanged: binding.write,
+              transactionIdentity: (provider, binding.scopeKey),
+              asyncBinding: _asyncFieldBinding(binding),
+              onCommit: binding.write,
             );
           },
         ),
@@ -1765,6 +1828,7 @@ class _CanvasBlockControls extends StatelessWidget {
             label: '',
             value: binding.value ?? '#1F2937',
             allowAlpha: true,
+            asyncBinding: _asyncFieldBinding(binding),
             onChanged: binding.write,
           ),
         ),
@@ -1775,6 +1839,7 @@ class _CanvasBlockControls extends StatelessWidget {
             label: '',
             value: binding.value ?? '#1F2937',
             allowAlpha: true,
+            asyncBinding: _asyncFieldBinding(binding),
             onChanged: binding.write,
           ),
         ),
@@ -1790,7 +1855,9 @@ class _CanvasBlockControls extends StatelessWidget {
               max: 16,
               divisions: 16,
               valueLabel: '${value.toStringAsFixed(0)}px',
-              onChanged: binding.write,
+              transactionIdentity: (provider, binding.scopeKey),
+              asyncBinding: _asyncFieldBinding(binding),
+              onCommit: binding.write,
             );
           },
         ),
@@ -1807,7 +1874,9 @@ class _CanvasBlockControls extends StatelessWidget {
                 max: 80,
                 divisions: 40,
                 valueLabel: '${value.toStringAsFixed(0)}px',
-                onChanged: binding.write,
+                transactionIdentity: (provider, binding.scopeKey),
+                asyncBinding: _asyncFieldBinding(binding),
+                onCommit: binding.write,
               );
             },
           ),
@@ -1826,6 +1895,7 @@ class _CanvasBlockControls extends StatelessWidget {
           surface.text('productId', label: 'Producto', layerId: id),
           (binding) => _CanvasProductSelector(
             currentProductId: binding.value ?? '',
+            asyncBinding: _asyncFieldBinding(binding),
             onChanged: binding.write,
           ),
         ),
@@ -1883,7 +1953,9 @@ class _CanvasBlockControls extends StatelessWidget {
               max: 24,
               divisions: 23,
               valueLabel: '${value.round()}',
-              onChanged: (v) => binding.write(v.round()),
+              transactionIdentity: (provider, binding.scopeKey),
+              asyncBinding: _asyncFieldBinding(binding),
+              onCommit: (v) => binding.write(v.round()),
             );
           },
         ),
@@ -1898,6 +1970,7 @@ class _CanvasBlockControls extends StatelessWidget {
             ),
             (binding) => _CanvasProductsMultiSelector(
               selectedIds: binding.value ?? const <String>[],
+              asyncBinding: _asyncFieldBinding(binding),
               onConfirm: binding.write,
             ),
           ),
@@ -1934,7 +2007,9 @@ class _CanvasBlockControls extends StatelessWidget {
                 max: 4,
                 divisions: 3,
                 valueLabel: '${value.round()}',
-                onChanged: (v) => binding.write(v.round()),
+                transactionIdentity: (provider, binding.scopeKey),
+                asyncBinding: _asyncFieldBinding(binding),
+                onCommit: (v) => binding.write(v.round()),
               );
             },
           )
@@ -1950,7 +2025,9 @@ class _CanvasBlockControls extends StatelessWidget {
                 max: 380,
                 divisions: 32,
                 valueLabel: '${value.toStringAsFixed(0)}px',
-                onChanged: binding.write,
+                transactionIdentity: (provider, binding.scopeKey),
+                asyncBinding: _asyncFieldBinding(binding),
+                onCommit: binding.write,
               );
             },
           ),
@@ -2010,6 +2087,7 @@ class _CanvasFocalField extends StatefulWidget {
   const _CanvasFocalField({
     required this.state,
     required this.imageUrl,
+    required this.asyncBinding,
     required this.onChanged,
     this.onCustomize,
     this.onReset,
@@ -2017,6 +2095,7 @@ class _CanvasFocalField extends StatefulWidget {
 
   final WebsiteResponsiveFieldState<Offset> state;
   final String imageUrl;
+  final WebsiteAsyncFieldBinding asyncBinding;
   final void Function(double x, double y) onChanged;
   final VoidCallback? onCustomize;
   final VoidCallback? onReset;
@@ -2084,6 +2163,7 @@ class _CanvasFocalFieldState extends State<_CanvasFocalField> {
               label: null,
               // One drag is one change: local feedback, one atomic write.
               continuousUpdates: false,
+              asyncBinding: widget.asyncBinding,
               onChanged: widget.onChanged,
             ),
           ],
@@ -2404,10 +2484,12 @@ class _CanvasNotComposedNotice extends StatelessWidget {
 class _CanvasProductSelector extends StatefulWidget {
   final String currentProductId;
   final ValueChanged<String> onChanged;
+  final WebsiteAsyncFieldBinding asyncBinding;
 
   const _CanvasProductSelector({
     required this.currentProductId,
     required this.onChanged,
+    required this.asyncBinding,
   });
 
   @override
@@ -2417,10 +2499,12 @@ class _CanvasProductSelector extends StatefulWidget {
 class _CanvasProductsMultiSelector extends StatefulWidget {
   final List<String> selectedIds;
   final ValueChanged<List<String>> onConfirm;
+  final WebsiteAsyncFieldBinding asyncBinding;
 
   const _CanvasProductsMultiSelector({
     required this.selectedIds,
     required this.onConfirm,
+    required this.asyncBinding,
   });
 
   @override
@@ -2428,19 +2512,20 @@ class _CanvasProductsMultiSelector extends StatefulWidget {
       _CanvasProductsMultiSelectorState();
 }
 
+bool _sameCanvasProductIds(List<String> left, List<String> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
+}
+
 class _CanvasProductsMultiSelectorState
     extends State<_CanvasProductsMultiSelector> {
   bool _isLoadingProducts = true;
   List<Map<String, dynamic>> _availableProducts = const [];
-
-  Future<String?> _resolveTenantId() async {
-    try {
-      final service = context.read<TenantService>();
-      return await service.getTenantId();
-    } catch (_) {
-      return await TenantService().getTenantId();
-    }
-  }
+  int _loadGeneration = 0;
+  Object? _loadedOwnerRevision;
 
   @override
   void initState() {
@@ -2448,52 +2533,132 @@ class _CanvasProductsMultiSelectorState
     _loadProducts();
   }
 
+  @override
+  void didUpdateWidget(covariant _CanvasProductsMultiSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_loadedOwnerRevision != widget.asyncBinding.readOwnerIdentity) {
+      _availableProducts = const [];
+      _loadProducts();
+    }
+  }
+
   Future<void> _loadProducts() async {
+    final openingBinding = widget.asyncBinding;
+    final ownerRevision = openingBinding.readOwnerIdentity;
+    final generation = ++_loadGeneration;
+    _loadedOwnerRevision = ownerRevision;
+    final arm = openingBinding.capture();
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: arm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'cargar productos del selector Canvas',
+    );
     setState(() => _isLoadingProducts = true);
     try {
-      final tenantId = await _resolveTenantId();
-      if (tenantId == null) {
-        _availableProducts = const [];
-        return;
+      final authority = remoteAuthority?.call();
+      if (authority == null) {
+        throw const WebsiteEditorWriteSupersededException(
+          'La sesión del catálogo Canvas cambió.',
+        );
       }
+      final readGuard = authority.claimForWrite();
       final supabase = Supabase.instance.client;
+      readGuard();
       final productsResponse = await supabase
           .from('products')
           .select(
               'id, name, sku, price, image_url, is_active, is_published, stock_quantity, inventory_qty')
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', authority.tenantId)
           .order('name', ascending: true)
           .limit(2000);
+      readGuard();
+      authority.ensureCurrent();
+      if (!mounted ||
+          generation != _loadGeneration ||
+          widget.asyncBinding.readOwnerIdentity != ownerRevision) {
+        return;
+      }
       _availableProducts = List<Map<String, dynamic>>.from(productsResponse);
+    } on WebsiteEditorWriteSupersededException {
+      if (mounted && generation == _loadGeneration) {
+        _availableProducts = const [];
+      }
     } catch (_) {
-      _availableProducts = const [];
+      if (mounted &&
+          generation == _loadGeneration &&
+          widget.asyncBinding.readOwnerIdentity == ownerRevision) {
+        _availableProducts = const [];
+      }
     } finally {
-      if (mounted) setState(() => _isLoadingProducts = false);
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _isLoadingProducts = false);
+      }
     }
   }
 
   Future<void> _openPicker() async {
+    final selectedIds = List<String>.unmodifiable(widget.selectedIds);
     if (_isLoadingProducts) return;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding.capture();
+    if (arm == null) return;
     if (_availableProducts.isEmpty) {
       await _loadProducts();
       if (!mounted) return;
-      if (_availableProducts.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudieron cargar los productos')),
+      if (widget.asyncBinding.identity != openingBinding.identity ||
+          !_sameCanvasProductIds(widget.selectedIds, selectedIds)) {
+        widget.asyncBinding.commit(
+          arm,
+          () => WebsiteInlineMutationResult.rejected,
         );
+        return;
+      }
+      if (_availableProducts.isEmpty) {
+        final accepted = widget.asyncBinding
+            .commit(arm, () => WebsiteInlineMutationResult.unchanged)
+            .accepted;
+        if (accepted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se pudieron cargar los productos'),
+            ),
+          );
+        }
         return;
       }
     }
 
+    var armConsumed = false;
     // ignore: use_build_context_synchronously
     await showDialog(
       context: context,
       builder: (ctx) => _ProductPickerDialog(
         availableProducts: _availableProducts,
-        selectedIds: widget.selectedIds,
-        onConfirm: (selectedIds) => widget.onConfirm(selectedIds),
+        selectedIds: selectedIds,
+        onConfirm: (next) {
+          if (!mounted || armConsumed) return;
+          armConsumed = true;
+          widget.asyncBinding.commit(arm, () {
+            if (!_sameCanvasProductIds(widget.selectedIds, selectedIds)) {
+              return WebsiteInlineMutationResult.rejected;
+            }
+            if (_sameCanvasProductIds(next, selectedIds)) {
+              return WebsiteInlineMutationResult.unchanged;
+            }
+            widget.onConfirm(next);
+            return WebsiteInlineMutationResult.committed;
+          });
+        },
       ),
     );
+    if (mounted && !armConsumed) {
+      widget.asyncBinding.commit(
+        arm,
+        () => WebsiteInlineMutationResult.unchanged,
+      );
+    }
   }
 
   @override
@@ -2567,6 +2732,8 @@ class _CanvasProductSelectorState extends State<_CanvasProductSelector> {
   bool _isLoadingProducts = true;
   List<Map<String, dynamic>> _availableProducts = const [];
   bool _showAdvanced = false;
+  int _loadGeneration = 0;
+  Object? _loadedOwnerRevision;
 
   @override
   void initState() {
@@ -2575,38 +2742,61 @@ class _CanvasProductSelectorState extends State<_CanvasProductSelector> {
   }
 
   @override
+  void didUpdateWidget(covariant _CanvasProductSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_loadedOwnerRevision != widget.asyncBinding.readOwnerIdentity) {
+      _skuController.clear();
+      _availableProducts = const [];
+      _isSearchingSku = false;
+      _loadProducts();
+    }
+  }
+
+  @override
   void dispose() {
     _skuController.dispose();
     super.dispose();
   }
 
-  Future<String?> _resolveTenantId() async {
-    try {
-      final service = context.read<TenantService>();
-      return await service.getTenantId();
-    } catch (_) {
-      return await TenantService().getTenantId();
-    }
-  }
-
   Future<void> _loadProducts() async {
+    final openingBinding = widget.asyncBinding;
+    final ownerRevision = openingBinding.readOwnerIdentity;
+    final generation = ++_loadGeneration;
+    _loadedOwnerRevision = ownerRevision;
+    final arm = openingBinding.capture();
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: arm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'cargar el producto del selector Canvas',
+    );
     setState(() => _isLoadingProducts = true);
     try {
-      final tenantId = await _resolveTenantId();
-      if (tenantId == null) {
-        _availableProducts = const [];
-        return;
+      final authority = remoteAuthority?.call();
+      if (authority == null) {
+        throw const WebsiteEditorWriteSupersededException(
+          'La sesión del catálogo Canvas cambió.',
+        );
       }
+      final readGuard = authority.claimForWrite();
       final supabase = Supabase.instance.client;
 
       // Load active products for picker (and also load currently selected, even if inactive)
+      readGuard();
       final productsResponse = await supabase
           .from('products')
           .select(
               'id, name, sku, price, image_url, is_active, is_published, stock_quantity, inventory_qty')
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', authority.tenantId)
           .order('name', ascending: true)
           .limit(2000);
+      readGuard();
+      if (!mounted ||
+          generation != _loadGeneration ||
+          widget.asyncBinding.readOwnerIdentity != ownerRevision) {
+        return;
+      }
 
       var allProducts = List<Map<String, dynamic>>.from(productsResponse);
 
@@ -2619,80 +2809,151 @@ class _CanvasProductSelectorState extends State<_CanvasProductSelector> {
               .from('products')
               .select(
                   'id, name, sku, price, image_url, is_active, is_published, stock_quantity, inventory_qty')
-              .eq('tenant_id', tenantId)
+              .eq('tenant_id', authority.tenantId)
               .inFilter('id', [selectedId]);
+          readGuard();
+          if (!mounted ||
+              generation != _loadGeneration ||
+              widget.asyncBinding.readOwnerIdentity != ownerRevision) {
+            return;
+          }
           for (final selected in selectedResponse) {
             allProducts.add(Map<String, dynamic>.from(selected));
           }
         }
       }
 
+      authority.ensureCurrent();
       _availableProducts = allProducts;
+    } on WebsiteEditorWriteSupersededException {
+      if (mounted && generation == _loadGeneration) {
+        _availableProducts = const [];
+      }
     } catch (_) {
-      _availableProducts = const [];
+      if (mounted &&
+          generation == _loadGeneration &&
+          widget.asyncBinding.readOwnerIdentity == ownerRevision) {
+        _availableProducts = const [];
+      }
     } finally {
-      if (mounted) setState(() => _isLoadingProducts = false);
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _isLoadingProducts = false);
+      }
     }
   }
 
   Future<void> _pickProduct() async {
+    final currentProductId = widget.currentProductId;
     if (_isLoadingProducts) return;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding.capture();
+    if (arm == null) return;
     if (_availableProducts.isEmpty) {
       await _loadProducts();
       if (!mounted) return;
-      if (_availableProducts.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudieron cargar los productos')),
+      if (widget.asyncBinding.identity != openingBinding.identity ||
+          widget.currentProductId != currentProductId) {
+        widget.asyncBinding.commit(
+          arm,
+          () => WebsiteInlineMutationResult.rejected,
         );
+        return;
+      }
+      if (_availableProducts.isEmpty) {
+        final accepted = widget.asyncBinding
+            .commit(arm, () => WebsiteInlineMutationResult.unchanged)
+            .accepted;
+        if (accepted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se pudieron cargar los productos'),
+            ),
+          );
+        }
         return;
       }
     }
 
-    final current = widget.currentProductId.trim();
+    final current = currentProductId.trim();
     final initial = current.isEmpty ? const <String>[] : <String>[current];
 
     // Reuse the exact same picker dialog used by the Products banner.
     // It is multi-select by design; for single product we just take the first selection.
     // ignore: use_build_context_synchronously
+    var armConsumed = false;
     await showDialog(
       context: context,
       builder: (ctx) => _ProductPickerDialog(
         availableProducts: _availableProducts,
         selectedIds: initial,
         onConfirm: (selectedIds) {
+          if (!mounted || armConsumed) return;
+          armConsumed = true;
           final next = selectedIds.isNotEmpty ? selectedIds.first : '';
-          widget.onChanged(next);
+          widget.asyncBinding.commit(arm, () {
+            if (widget.currentProductId != currentProductId) {
+              return WebsiteInlineMutationResult.rejected;
+            }
+            if (next == currentProductId) {
+              return WebsiteInlineMutationResult.unchanged;
+            }
+            widget.onChanged(next);
+            return WebsiteInlineMutationResult.committed;
+          });
         },
       ),
     );
+    if (mounted && !armConsumed) {
+      widget.asyncBinding.commit(
+        arm,
+        () => WebsiteInlineMutationResult.unchanged,
+      );
+    }
   }
 
   Future<void> _findBySku() async {
     final sku = _skuController.text.trim();
     if (sku.isEmpty) return;
+    final currentProductId = widget.currentProductId;
+    final openingBinding = widget.asyncBinding;
+    final ownerRevision = openingBinding.readOwnerIdentity;
+    final arm = openingBinding.capture();
+    final remoteArm = openingBinding.capture();
+    if (arm == null || remoteArm == null) return;
+    final remoteAuthority = websiteRemoteAuthorityResolver(
+      openingBinding: openingBinding,
+      remoteArm: remoteArm,
+      liveBinding: () => widget.asyncBinding,
+      isMounted: () => mounted,
+      operation: 'buscar un producto Canvas por SKU',
+    );
 
     setState(() => _isSearchingSku = true);
     try {
-      final tenantId = await _resolveTenantId();
-      if (tenantId == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No se pudo identificar el tenant')),
-          );
-        }
-        return;
+      final authority = remoteAuthority?.call();
+      if (authority == null) {
+        throw const WebsiteEditorWriteSupersededException(
+          'La sesión del catálogo Canvas cambió.',
+        );
       }
+      final readGuard = authority.claimForWrite();
 
+      readGuard();
       final response = await Supabase.instance.client
           .from('products')
           .select('id, sku, name')
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', authority.tenantId)
           .eq('sku', sku)
           .maybeSingle();
+      readGuard();
+      authority.ensureCurrent();
 
       final id = response?['id']?.toString();
       if (id == null || id.isEmpty) {
-        if (mounted) {
+        if (mounted &&
+            widget.asyncBinding
+                .commit(arm, () => WebsiteInlineMutationResult.unchanged)
+                .accepted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('No se encontró producto con SKU "$sku"')),
           );
@@ -2700,16 +2961,38 @@ class _CanvasProductSelectorState extends State<_CanvasProductSelector> {
         return;
       }
 
-      widget.onChanged(id);
-      if (mounted) {
+      if (!mounted) return;
+      final outcome = widget.asyncBinding.commit(arm, () {
+        if (widget.currentProductId != currentProductId ||
+            _skuController.text.trim() != sku) {
+          return WebsiteInlineMutationResult.rejected;
+        }
+        if (id == currentProductId) {
+          return WebsiteInlineMutationResult.unchanged;
+        }
+        widget.onChanged(id);
+        return WebsiteInlineMutationResult.committed;
+      });
+      if (outcome.accepted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content:
                   Text('Producto seleccionado: ${response?['name'] ?? sku}')),
         );
       }
+    } catch (error) {
+      if (mounted &&
+          widget.asyncBinding
+              .commit(arm, () => WebsiteInlineMutationResult.unchanged)
+              .accepted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo buscar el SKU: $error')),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _isSearchingSku = false);
+      if (mounted && widget.asyncBinding.readOwnerIdentity == ownerRevision) {
+        setState(() => _isSearchingSku = false);
+      }
     }
   }
 
@@ -2839,6 +3122,7 @@ class _CanvasProductSelectorState extends State<_CanvasProductSelector> {
           _EditorTextField(
             label: 'Product ID (interno)',
             value: widget.currentProductId,
+            asyncBinding: widget.asyncBinding,
             onChanged: (v) => widget.onChanged(v.trim()),
           ),
           const SizedBox(height: 6),

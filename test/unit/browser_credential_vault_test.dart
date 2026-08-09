@@ -2,6 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/shared/services/browser_credential_vault.dart';
 
 void main() {
+  test('legacy entries are not trusted as supplier no-match credentials', () {
+    final decoded = BrowserSavedCredential.tryDecode(
+      '{"origin":"https://supplier.example","username":"buyer",'
+      '"password":"secret","updatedAt":"2026-08-08T12:00:00Z"}',
+      expectedOrigin: 'https://supplier.example',
+    );
+
+    expect(decoded, isNotNull);
+    expect(decoded!.supplierNoMatchConfirmed, isFalse);
+  });
+
   test('vault stores credentials by ERP user and exact HTTPS origin', () async {
     final store = _MemorySecureStore();
     final vault = BrowserCredentialVault(store: store);
@@ -11,6 +22,7 @@ void main() {
       origin: 'https://supplier.example/login?ignored=yes',
       username: 'buyer@example.com',
       password: 'secret-a',
+      supplierNoMatchConfirmed: true,
     );
 
     final saved = await vault.load(
@@ -47,18 +59,21 @@ void main() {
       origin: 'http://supplier.example',
       username: 'buyer',
       password: 'secret',
+      supplierNoMatchConfirmed: true,
     );
     await vault.save(
       userId: 'anonymous',
       origin: 'https://supplier.example',
       username: 'buyer',
       password: 'secret',
+      supplierNoMatchConfirmed: true,
     );
     await vault.save(
       userId: 'erp-user',
       origin: 'https://supplier.example',
       username: '',
       password: 'secret',
+      supplierNoMatchConfirmed: true,
     );
 
     expect(store.values, isEmpty);
@@ -77,6 +92,7 @@ void main() {
         origin: origin,
         username: 'buyer-a',
         password: 'secret-a',
+        supplierNoMatchConfirmed: true,
       );
     }
     await vault.save(
@@ -84,6 +100,7 @@ void main() {
       origin: 'https://one.example',
       username: 'buyer-b',
       password: 'secret-b',
+      supplierNoMatchConfirmed: true,
     );
 
     await vault.delete(

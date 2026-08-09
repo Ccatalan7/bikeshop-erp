@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
+import '../providers/website_edit_mode_provider.dart';
+import 'website_media_picker.dart';
 
 /// A widget that displays an image with a draggable focal point crosshair.
 /// Used to set where the image should be centered when cropped on mobile.
@@ -53,6 +55,13 @@ class FocalPointPicker extends StatefulWidget {
   /// preview it was showing. Only reachable when [continuousUpdates] is false.
   final VoidCallback? onCancel;
 
+  /// Exact page/block/field owner for a persisted focal edit.
+  ///
+  /// The arm is captured at pointer-down and returned through the binding that
+  /// is live at pointer-up. A retained picker can therefore never redirect A's
+  /// drag into a replacement document B with the same visible coordinates.
+  final WebsiteAsyncFieldBinding? asyncBinding;
+
   const FocalPointPicker({
     super.key,
     this.imageUrl,
@@ -64,7 +73,11 @@ class FocalPointPicker extends StatefulWidget {
     this.continuousUpdates = true,
     this.onPreview,
     this.onCancel,
-  });
+    this.asyncBinding,
+  }) : assert(
+          asyncBinding == null || !continuousUpdates,
+          'An armed focal edit publishes once at pointer-up.',
+        );
 
   @override
   State<FocalPointPicker> createState() => _FocalPointPickerState();
@@ -74,6 +87,8 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
   late double _localX;
   late double _localY;
   bool _isDragging = false;
+  WebsiteAsyncFieldArm? _arm;
+  WebsiteAsyncFieldBinding? _openingBinding;
 
   @override
   void initState() {
@@ -85,10 +100,33 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
   @override
   void didUpdateWidget(FocalPointPicker oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final ownerChanged =
+        oldWidget.asyncBinding?.identity != widget.asyncBinding?.identity ||
+            oldWidget.imageUrl != widget.imageUrl ||
+            oldWidget.focalX != widget.focalX ||
+            oldWidget.focalY != widget.focalY;
+    if (_isDragging && ownerChanged) {
+      _rejectArm();
+      _isDragging = false;
+      oldWidget.onCancel?.call();
+    }
     if (!_isDragging) {
       _localX = widget.focalX;
       _localY = widget.focalY;
     }
+  }
+
+  bool _beginGesture() {
+    final binding = widget.asyncBinding;
+    final arm = binding?.capture();
+    if (binding != null && arm == null) {
+      widget.onCancel?.call();
+      return false;
+    }
+    _arm = arm;
+    _openingBinding = binding;
+    _isDragging = true;
+    return true;
   }
 
   /// Moves the crosshair, and reports it the way this host asked to be told.
@@ -111,6 +149,7 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
     _isDragging = false;
     if (widget.continuousUpdates) return;
     if (cancelled) {
+      _rejectArm();
       setState(() {
         _localX = widget.focalX;
         _localY = widget.focalY;
@@ -118,7 +157,69 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
       widget.onCancel?.call();
       return;
     }
-    widget.onChanged(_localX, _localY);
+    final arm = _arm;
+    final openingBinding = _openingBinding;
+    _arm = null;
+    _openingBinding = null;
+    if (arm == null) {
+      if (widget.asyncBinding == null) {
+        widget.onChanged(_localX, _localY);
+      } else {
+        widget.onCancel?.call();
+      }
+      return;
+    }
+    final liveBinding = widget.asyncBinding;
+    if (liveBinding == null) {
+      openingBinding?.commit(
+        arm,
+        () => WebsiteInlineMutationResult.rejected,
+      );
+      widget.onCancel?.call();
+      return;
+    }
+    final result = liveBinding.commit(arm, () {
+      widget.onChanged(_localX, _localY);
+      return WebsiteInlineMutationResult.committed;
+    });
+    if (!result.accepted) {
+      setState(() {
+        _localX = widget.focalX;
+        _localY = widget.focalY;
+      });
+      widget.onCancel?.call();
+    }
+  }
+
+  void _rejectArm() {
+    final arm = _arm;
+    final openingBinding = _openingBinding;
+    _arm = null;
+    _openingBinding = null;
+    if (arm == null) return;
+    (widget.asyncBinding ?? openingBinding)?.commit(
+      arm,
+      () => WebsiteInlineMutationResult.rejected,
+    );
+  }
+
+  void _center() {
+    final binding = widget.asyncBinding;
+    final arm = binding?.capture();
+    if (binding != null && arm == null) return;
+    if (arm != null) {
+      final result = binding!.commit(arm, () {
+        widget.onChanged(0.5, 0.5);
+        return WebsiteInlineMutationResult.committed;
+      });
+      if (!result.accepted) return;
+    } else {
+      widget.onChanged(0.5, 0.5);
+    }
+    setState(() {
+      _localX = 0.5;
+      _localY = 0.5;
+    });
   }
 
   @override
@@ -168,7 +269,7 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
                   builder: (context, constraints) {
                     return Listener(
                       onPointerDown: (event) {
-                        _isDragging = true;
+                        if (!_beginGesture()) return;
                         _moveTo(
                           (event.localPosition.dx / constraints.maxWidth)
                               .clamp(0.0, 1.0),
@@ -309,11 +410,7 @@ class _FocalPointPickerState extends State<FocalPointPicker> {
             // Reset button. Discrete in both modes: one press is one change.
             TextButton.icon(
               onPressed: () {
-                setState(() {
-                  _localX = 0.5;
-                  _localY = 0.5;
-                });
-                widget.onChanged(0.5, 0.5);
+                _center();
               },
               icon: const Icon(Icons.center_focus_strong, size: 14),
               label: const Text('Centrar'),

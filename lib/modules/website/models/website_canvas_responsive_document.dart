@@ -287,11 +287,10 @@ class WebsiteCanvasLayerProjection {
 /// nested maps are never mutated.
 abstract final class WebsiteCanvasResponsiveDocument {
   /// The Canvas renderer's own compact threshold, kept here as the documented
-  /// fact it is: `canvas_block.dart` switches layer visibility, design width
-  /// and background focal at 600 logical px, while a legacy page document is
-  /// still classified with the 640/1024 bands. Between 600 and 639 the two
-  /// disagree, and 7B must choose deliberately before wiring this projection
-  /// into the renderer.
+  /// fact it is: legacy Canvas presentation switches at 600 logical px while
+  /// canonical responsive authoring uses the shared 600/900 bands. The
+  /// renderer and command owner both consume
+  /// [viewportForRenderedCanvasWidth], so there is no second classifier.
   static const double legacyCanvasCompactWidth = 600;
 
   /// The persisted marker that says "this Canvas speaks the canonical
@@ -305,6 +304,92 @@ abstract final class WebsiteCanvasResponsiveDocument {
   /// artificial empty `responsive` map is never written to stand in for it.
   static const String schemaVersionKey = 'canvasResponsiveVersion';
   static const int schemaVersion = 2;
+
+  /// The Canvas document one composed Carousel slide exposes to authoring.
+  ///
+  /// A Carousel slide owns campaign fields as well as a nested Canvas. The
+  /// renderer historically synthesized this Canvas inline while the command
+  /// binding read the raw slide map, so an optimistic touch lease compared two
+  /// different vocabularies and failed closed. This pure projection is now the
+  /// single read owner used by renderer, binding and provider.
+  ///
+  /// [showGrid] is transient renderer state. Direct manipulation exists only
+  /// in Edit, where all three transaction participants pass `true`; Preview
+  /// and Public may render `false` because they own no manipulation lease.
+  static Map<String, dynamic> carouselAuthoringDocument({
+    required Map<String, dynamic> slide,
+    required bool showGrid,
+  }) {
+    final rawElements = slide[WebsiteCanvasResponsivePolicy.elementsKey];
+    final elements = rawElements is List
+        ? rawElements
+            .whereType<Map>()
+            .map(
+              (element) => _deepCopyMap(
+                Map<String, dynamic>.from(element),
+              ),
+            )
+            .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    return <String, dynamic>{
+      'backgroundColor': '#00000000',
+      'showGrid': showGrid,
+      'snap': true,
+      'designWidth': (slide['designWidth'] as num?)?.toDouble() ?? 1200.0,
+      'mobileDesignWidth':
+          (slide['mobileDesignWidth'] as num?)?.toDouble() ?? 390.0,
+      'constrainElementsToSafeArea':
+          slide['constrainElementsToSafeArea'] != false,
+      'blockHeight': (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
+      WebsiteCanvasResponsivePolicy.elementsKey: elements,
+      ..._carouselResponsiveContract(slide),
+    };
+  }
+
+  /// Forwards only the nested Canvas root override vocabulary.
+  ///
+  /// An unversioned legacy responsive container is deliberately ignored: its
+  /// aliases belong to the slide, not automatically to the nested Canvas.
+  static Map<String, dynamic> _carouselResponsiveContract(
+    Map<String, dynamic> slide,
+  ) {
+    final marker = slide[schemaVersionKey];
+    final rawContainer = slide[WebsiteResponsiveDataCodec.containerKey];
+    final containerVersion = rawContainer is Map
+        ? rawContainer[WebsiteResponsiveDataCodec.versionKey]
+        : null;
+    final declaresCanonical =
+        (marker is num && marker.toInt() >= schemaVersion) ||
+            (containerVersion is num &&
+                containerVersion.toInt() >=
+                    WebsiteResponsiveDataCodec.schemaVersion);
+    if (!declaresCanonical) return const <String, dynamic>{};
+
+    final contract = <String, dynamic>{};
+    if (marker is num) contract[schemaVersionKey] = marker.toInt();
+    if (rawContainer is! Map) return contract;
+
+    final allowed = WebsiteCanvasResponsivePolicy.allowedRootOverrideKeys();
+    final container = <String, dynamic>{};
+    for (final viewport in WebsiteViewport.values) {
+      if (!viewport.supportsOverride) continue;
+      final branch = rawContainer[viewport.wireName];
+      if (branch is! Map) continue;
+      final values = <String, dynamic>{};
+      for (final entry in branch.entries) {
+        final key = entry.key.toString();
+        if (allowed.contains(key)) values[key] = _deepCopy(entry.value);
+      }
+      if (values.isNotEmpty) container[viewport.wireName] = values;
+    }
+    if (container.isEmpty) return contract;
+    if (containerVersion is num) {
+      container[WebsiteResponsiveDataCodec.versionKey] =
+          containerVersion.toInt();
+    }
+    contract[WebsiteResponsiveDataCodec.containerKey] = container;
+    return contract;
+  }
 
   /// Stamps the marker. The surface that authors a canonical Canvas — the
   /// migration here, and the editor in 7B — is the one that declares it.
@@ -345,6 +430,25 @@ abstract final class WebsiteCanvasResponsiveDocument {
       data,
       canvasWidth,
     );
+  }
+
+  /// The viewport an editable Canvas actually renders at [canvasWidth].
+  ///
+  /// Canonical documents use the shared 600/900 bands. Legacy Canvas data is
+  /// deliberately kept on its historical compact split until an explicit
+  /// migration stamps the canonical schema: its mobile aliases and flags have
+  /// no independent tablet representation. This is the single projection
+  /// rule consumed by both the renderer and the editor command owner.
+  static WebsiteViewport viewportForRenderedCanvasWidth(
+    Map<String, dynamic> data,
+    double canvasWidth,
+  ) {
+    if (isCanonical(data)) {
+      return viewportForCanvasWidth(data, canvasWidth);
+    }
+    return canvasWidth < legacyCanvasCompactWidth
+        ? WebsiteViewport.mobile
+        : WebsiteViewport.desktop;
   }
 
   /// The whole block projected for [viewport]: root presentation resolved and
@@ -677,6 +781,7 @@ abstract final class WebsiteCanvasResponsiveDocument {
     required WebsiteViewport viewport,
   }) {
     if (values.isEmpty) return _deepCopyMap(data);
+    _validateLayerGeometryValues(values);
     return _transformLayer(data, layerId, (layer) {
       var next = layer;
       for (final entry in values.entries) {
@@ -690,6 +795,28 @@ abstract final class WebsiteCanvasResponsiveDocument {
       }
       return next;
     });
+  }
+
+  /// Geometry entering the document must remain renderable regardless of
+  /// which control produced it. Gesture-specific minimum sizes are UI policy,
+  /// not document policy: small authored layers are valid, but non-finite
+  /// coordinates/rotation and non-positive extents are not.
+  static void _validateLayerGeometryValues(Map<String, Object?> values) {
+    for (final entry in values.entries) {
+      final isExtent = entry.key == 'w' || entry.key == 'h';
+      final isGeometry = isExtent ||
+          entry.key == 'x' ||
+          entry.key == 'y' ||
+          entry.key == 'rotation';
+      if (!isGeometry) continue;
+      final value = entry.value;
+      if (value is! num || !value.toDouble().isFinite) {
+        throw StateError('Canvas geometry must be a finite number.');
+      }
+      if (isExtent && value.toDouble() <= 0) {
+        throw StateError('Canvas width and height must be greater than zero.');
+      }
+    }
   }
 
   static Map<String, dynamic> _writeLayerProperty({

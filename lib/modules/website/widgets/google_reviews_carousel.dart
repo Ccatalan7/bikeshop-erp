@@ -6,6 +6,40 @@ import 'text_formatting_toolbar.dart';
 /// read once. Filter and stars therefore agree by construction.
 typedef _VisibleReview = ({Map<String, dynamic> data, int rating});
 
+/// The only two colours in this block that are NOT the storefront's.
+///
+/// They identify Google itself — the star gold and the wordmark blue — so they
+/// stay literal on purpose and are named as brand. Everything else (surfaces,
+/// ink, borders, shadow) resolves through the storefront theme, which is what
+/// `Website Builder Responsive Authoring` t11 requires of every consumer in
+/// `lib/modules/website`.
+abstract final class _GoogleBrand {
+  static const Color star = Color(0xFFFBBC04);
+  static const Color wordmark = Color(0xFF4285F4);
+}
+
+/// The ink pair legible on the surface this block actually paints.
+///
+/// The section keeps honouring an authored `backgroundColor`, so when that
+/// colour's brightness disagrees with the host theme the scheme's inverse ink
+/// is the legible one — by definition, since `inverseSurface` is the opposite
+/// brightness. No literal, and no guessing.
+({Color ink, Color mutedInk}) _inkFor(
+  ThemeData theme,
+  Color? authoredSurface,
+) {
+  final scheme = theme.colorScheme;
+  if (authoredSurface == null) {
+    return (ink: scheme.onSurface, mutedInk: scheme.onSurfaceVariant);
+  }
+  final authoredIsDark =
+      ThemeData.estimateBrightnessForColor(authoredSurface) == Brightness.dark;
+  if (authoredIsDark == (theme.brightness == Brightness.dark)) {
+    return (ink: scheme.onSurface, mutedInk: scheme.onSurfaceVariant);
+  }
+  return (ink: scheme.onInverseSurface, mutedInk: scheme.onInverseSurface);
+}
+
 class GoogleReviewsCarousel extends StatelessWidget {
   final Map<String, dynamic> data;
   final Color primaryColor;
@@ -13,6 +47,8 @@ class GoogleReviewsCarousel extends StatelessWidget {
   final String? headingFont;
   final String? bodyFont;
   final bool previewMode;
+  final EdgeInsets? padding;
+  final Color? backgroundColorOverride;
 
   const GoogleReviewsCarousel({
     super.key,
@@ -22,6 +58,8 @@ class GoogleReviewsCarousel extends StatelessWidget {
     this.headingFont,
     this.bodyFont,
     this.previewMode = false,
+    this.padding,
+    this.backgroundColorOverride,
   });
 
   @override
@@ -30,11 +68,13 @@ class GoogleReviewsCarousel extends StatelessWidget {
     final title =
         (data['title'] ?? 'Lo que dicen nuestros clientes').toString();
     final titleFormatting = _resolveFormatting(data['titleFormatting']);
-    final backgroundColor = _parseColor(data['backgroundColor']);
-    final isDark =
-        backgroundColor != null && backgroundColor.computeLuminance() < 0.5;
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final subTextColor = isDark ? Colors.white70 : Colors.black54;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final authoredBackgroundColor = _parseColor(data['backgroundColor']);
+    final backgroundColor = backgroundColorOverride ?? authoredBackgroundColor;
+    final ink = _inkFor(theme, backgroundColor);
+    final textColor = ink.ink;
+    final subTextColor = ink.mutedInk;
 
     // 2. Reviews: only what Google really returned, filtered by the block's
     // own settings. An empty source stays empty — no sample people.
@@ -51,14 +91,16 @@ class GoogleReviewsCarousel extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      color: backgroundColor ?? Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 64),
+      color: backgroundColor ?? scheme.surface,
+      padding: padding ?? const EdgeInsets.symmetric(vertical: 64),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: padding == null
+                ? const EdgeInsets.symmetric(horizontal: 24)
+                : EdgeInsets.zero,
             child: Column(
               children: [
                 Text(
@@ -83,8 +125,11 @@ class GoogleReviewsCarousel extends StatelessWidget {
                 // with five empty stars would be a score the shop never got.
                 if (displayedRating != null) ...[
                   const SizedBox(height: 12),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       Text(
                         displayedRating.toStringAsFixed(1),
@@ -92,22 +137,24 @@ class GoogleReviewsCarousel extends StatelessWidget {
                           fontFamily: bodyFont,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: textColor,
+                          // The aggregate is the shop's own headline number:
+                          // it wears the storefront's primary, which this
+                          // block received and never used.
+                          color: primaryColor,
                         ),
                       ),
-                      const SizedBox(width: 8),
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: List.generate(5, (index) {
                           return Icon(
                             index < displayedRating.round()
                                 ? Icons.star
                                 : Icons.star_border,
-                            color: const Color(0xFFFBBC04),
+                            color: _GoogleBrand.star,
                             size: 20,
                           );
                         }),
                       ),
-                      const SizedBox(width: 8),
                       Text(
                         totalReviews == null
                             ? 'en Google'
@@ -132,7 +179,9 @@ class GoogleReviewsCarousel extends StatelessWidget {
             SizedBox(
               height: 280,
               child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: padding == null
+                    ? const EdgeInsets.symmetric(horizontal: 24)
+                    : EdgeInsets.zero,
                 scrollDirection: Axis.horizontal,
                 itemCount: reviews.length,
                 separatorBuilder: (c, i) => const SizedBox(width: 24),
@@ -142,6 +191,7 @@ class GoogleReviewsCarousel extends StatelessWidget {
                     review: review.data,
                     rating: review.rating,
                     bodyFont: bodyFont,
+                    accentColor: accentColor,
                   );
                 },
               ),
@@ -295,9 +345,14 @@ class _ReviewCard extends StatelessWidget {
   final int rating;
   final String? bodyFont;
 
+  /// The storefront's accent, used for the reviewer's monogram so a card with
+  /// no photo still belongs to this shop instead of a grey plate.
+  final Color accentColor;
+
   const _ReviewCard({
     required this.review,
     required this.rating,
+    required this.accentColor,
     this.bodyFont,
   });
 
@@ -343,20 +398,23 @@ class _ReviewCard extends StatelessWidget {
             ? (review['text'] ?? review['comment']).toString().trim()
             : 'Calificación publicada en Google.';
 
+    // Same geometry and the same shadow strength as before; only the source of
+    // each colour changed, from literal to the storefront's own scheme.
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: 320,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: scheme.shadow.withValues(alpha: 0.05),
             offset: const Offset(0, 4),
             blurRadius: 12,
           ),
         ],
-        border: Border.all(color: Colors.grey.shade100),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -368,14 +426,16 @@ class _ReviewCard extends StatelessWidget {
                 radius: 20,
                 backgroundImage:
                     photoUrl != null ? NetworkImage(photoUrl) : null,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: accentColor,
                 child: photoUrl == null
                     ? Text(
                         authorName.isNotEmpty
                             ? authorName[0].toUpperCase()
                             : 'U',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, color: Colors.white),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: scheme.onSecondary,
+                        ),
                       )
                     : null,
               ),
@@ -390,7 +450,7 @@ class _ReviewCard extends StatelessWidget {
                         fontFamily: bodyFont,
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
-                        color: Colors.black87,
+                        color: scheme.onSurface,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -401,7 +461,7 @@ class _ReviewCard extends StatelessWidget {
                         style: TextStyle(
                           fontFamily: bodyFont,
                           fontSize: 12,
-                          color: Colors.grey,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                   ],
@@ -418,7 +478,7 @@ class _ReviewCard extends StatelessWidget {
                     fontFamily: bodyFont,
                     fontWeight: FontWeight.w900,
                     fontSize: 20,
-                    color: const Color(0xFF4285F4), // Google Blue
+                    color: _GoogleBrand.wordmark,
                   ),
                 ),
               ),
@@ -431,9 +491,8 @@ class _ReviewCard extends StatelessWidget {
               5,
               (index) => Icon(
                 Icons.star,
-                color: index < rating
-                    ? const Color(0xFFFBBC04)
-                    : Colors.grey.shade300,
+                color:
+                    index < rating ? _GoogleBrand.star : scheme.outlineVariant,
                 size: 16,
               ),
             ),
@@ -446,7 +505,7 @@ class _ReviewCard extends StatelessWidget {
               style: TextStyle(
                 fontFamily: bodyFont,
                 fontSize: 14,
-                color: Colors.black87,
+                color: scheme.onSurface,
                 height: 1.5,
               ),
               maxLines: 6,

@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/widgets/editable_block_renderer.dart';
 import 'package:vinabike_erp/modules/website/widgets/inline_editable_image.dart';
@@ -82,6 +83,11 @@ void main() {
                   blockId: blockId,
                   blockType: blockType,
                   data: data,
+                  effectiveViewport:
+                      WebsiteResponsiveDataCodec.viewportForDocumentWidth(
+                    data,
+                    1200,
+                  ),
                   primaryColor: const Color(0xFF123456),
                   accentColor: const Color(0xFF00A09D),
                 ),

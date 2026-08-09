@@ -10,11 +10,10 @@ import 'package:vinabike_erp/modules/website/models/website_responsive_projectio
 /// `Productos por fila` is a SHARED base value, and this file says why.
 ///
 /// The property was briefly declared responsive. It was a false capability:
-/// below 700 the storefront does not mount the grid at all — it mounts the
-/// mobile auto carousel, which shows one card at a time and never reads the
-/// value — and between 700 and 900 the grid forces two columns. An override
-/// would have been a control the page cannot honour, and the inspector would
-/// have shown a number the renderer ignores.
+/// a phone grid forces one safe column and tablet grids force two; carousel
+/// cards size themselves independently. An override would have been a control
+/// the page cannot honour, and the inspector would have shown a number the
+/// renderer ignores. Layout itself is separate and is honoured at every width.
 ///
 /// The correction: the renderer keeps its auto-layout untouched, the registry
 /// declares the property shared, and the inspector states the reason per
@@ -55,7 +54,7 @@ void main() {
     });
   });
 
-  group('el renderer conserva su auto-layout, sin rama de override', () {
+  group('el renderer conserva densidad automática, sin rama de override', () {
     test('la lectura del override desapareció del consumer', () {
       expect(
         rendererSource,
@@ -68,12 +67,18 @@ void main() {
       );
     });
 
-    test('el auto-layout legacy sigue textualmente en su sitio', () {
-      expect(rendererSource, contains('itemsPerRow = 1;'));
-      expect(rendererSource, contains('itemsPerRow = 2;'));
+    test('la densidad automática sigue textualmente en su sitio', () {
+      expect(rendererSource, contains('WebsiteViewport.mobile => 1'));
+      expect(rendererSource, contains('WebsiteViewport.tablet => 2'));
       expect(rendererSource, contains('itemsPerRow.clamp(2, 4)'));
-      // Y la razón por la que móvil no puede honrar el valor sigue viva.
-      expect(rendererSource, contains('screenWidth < 700'));
+      expect(rendererSource, isNot(contains('screenWidth < 450')));
+      expect(rendererSource, isNot(contains('screenWidth < 700')));
+      expect(rendererSource, contains("layout == 'carousel'"));
+      // El carrusel adapta su implementación, no el valor guardado de layout.
+      expect(
+        rendererSource,
+        contains('viewport == WebsiteViewport.mobile'),
+      );
       expect(rendererSource, contains('_MobileProductAutoCarousel'));
     });
 

@@ -8,6 +8,7 @@ import 'package:vinabike_erp/modules/website/models/website_block_registry.dart'
 import 'package:vinabike_erp/modules/website/models/website_block_type.dart';
 import 'package:vinabike_erp/modules/website/models/website_font_registry.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import '../support/library_source.dart';
 
@@ -150,6 +151,15 @@ void main() {
     );
   });
 
+  test('capability registry has no unresolved editor gaps', () {
+    final unresolved = <String>[
+      for (final profile in WebsiteBlockCapabilityRegistry.all)
+        for (final gap in profile.gaps) '${profile.type.name}:${gap.name}',
+    ];
+
+    expect(unresolved, isEmpty);
+  });
+
   test('capability registry is the single owner of block height behavior', () {
     const exact = <WebsiteBlockType>{
       WebsiteBlockType.hero,
@@ -214,6 +224,12 @@ void main() {
     for (final field in imageFields) {
       expect(field.resolvedMediaRole, isNotNull, reason: field.key);
       expect(field.hasAltTextControl, isTrue, reason: field.key);
+      expect(field.altTextField, isNotNull, reason: field.key);
+      expect(
+        field.altTextField!.responsivePolicy,
+        WebsiteResponsivePropertyPolicy.sharedOnly,
+        reason: '${field.key}.${field.altTextKey}',
+      );
     }
     for (final field in linkFields) {
       expect(field.resolvedActionRole, isNotNull, reason: field.key);
@@ -260,7 +276,10 @@ void main() {
     expect(panelSource, contains('field.resolvedFormattingKey'));
     expect(panelSource, contains('TextFormattingToolbar('));
     expect(panelSource, contains("'titleFormatting'"));
-    expect(mediaBindingSource, contains('field.mobileFocalPointXKey'));
+    expect(
+      mediaBindingSource,
+      contains('WebsiteResponsiveFocalProjection.legacyReader('),
+    );
     expect(rendererSource, contains('_resolveFocalAlignment('));
     expect(rendererSource, contains('_resolveTextFormatting('));
     expect(

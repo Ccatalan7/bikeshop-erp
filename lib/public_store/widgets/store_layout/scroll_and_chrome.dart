@@ -197,6 +197,7 @@ class _StickyHeaderScaffold extends StatefulWidget {
     required List<WebsiteNavigation> navItems,
     required PublicCategoryNavigationProjection categoryNavigationProjection,
     bool isOverlay,
+    bool overlaysDocument,
   }) buildHeader;
   final Widget child;
   final Widget footer;
@@ -482,6 +483,11 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
                   categoryNavigationProjection:
                       widget.categoryNavigationProjection,
                   isOverlay: allowOverlayAtTop && !isScrolled,
+                  // GEOMETRY, not paint. `isOverlay` above flips at scroll 50
+                  // when the header turns solid; the header still covers the
+                  // top of the document either way, because this scaffold
+                  // never reserves its height while `allowOverlayAtTop`.
+                  overlaysDocument: allowOverlayAtTop,
                 ),
               );
             },
@@ -499,6 +505,163 @@ class _StickyHeaderScaffoldState extends State<_StickyHeaderScaffold> {
 /// few frames, which can try to paint against a detached RenderPadding on
 /// Flutter desktop. This control keeps the same professional interaction and
 /// keyboard semantics without retaining paint state outside its own subtree.
+/// Editor chrome around a published site-wide surface: the header or the
+/// footer.
+///
+/// **One owner for both.** They were two copies with two literal palettes — the
+/// header permanently ringed in `Colors.blue`, the footer in `Colors.green` —
+/// and neither could answer to a palette or to dark mode. t11
+/// `verification_that_makes_role_consumption_checkable` forbids a Website
+/// Builder widget from declaring a hex at all.
+///
+/// Two states, told apart by more than colour: unselected is a hairline plus an
+/// outline chip, selected is the published selection ring (`F-04` fila
+/// seleccionada 3) plus a filled chip. Both name the object in words, so the
+/// state survives a monochrome screenshot and a colour-blind operator.
+class _EditableChromeSurface extends StatelessWidget {
+  const _EditableChromeSurface({
+    required this.target,
+    required this.child,
+  });
+
+  final WebsiteEditorChromeTarget target;
+  final Widget child;
+
+  @visibleForTesting
+  static Key badgeKeyFor(WebsiteEditorChromeTarget target) =>
+      Key('website-editor-chrome-badge-${target.selectionId}');
+
+  @visibleForTesting
+  static Key surfaceKeyFor(WebsiteEditorChromeTarget target) =>
+      Key('website-editor-chrome-surface-${target.selectionId}');
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = context.select<WebsiteEditModeProvider, bool>(
+      (provider) => provider.selectedBlockId == target.selectionId,
+    );
+    void select() =>
+        context.read<WebsiteEditModeProvider>().selectBlock(target.selectionId);
+
+    // The operator's chrome wears the ERP, never the tenant's site.
+    //
+    // This widget is mounted INSIDE the storefront's `Theme(data: websiteTheme)`
+    // and inside whatever `VinabikeThemeRoles` that theme carries, so reading
+    // `Theme.of` here dressed the editor's own selection ring in the customer's
+    // brand — and made it change when the tenant changed their palette. The ERP
+    // host theme published above the storefront is restored for this subtree.
+    final host = WebsiteEditorHostTheme.maybeOf(context);
+    final theme = host?.theme ?? Theme.of(context);
+    final roles = host?.roles ?? VinabikeThemeRoles.maybeOf(context);
+
+    // Selection is a SELECTION role, not the informational accent. `roles.info`
+    // is what a notice uses; t11 traces selection to its own published value
+    // (`paletas 2b`, `selectionContainer` / `onSelectionContainer`), so the
+    // ring and the chip take that pair and the badge reads against it.
+    final accent = roles?.focusRing ?? theme.colorScheme.primary;
+    final selectionFill =
+        roles?.selectionContainer ?? theme.colorScheme.primaryContainer;
+    final onSelection =
+        roles?.onSelectionContainer ?? theme.colorScheme.onPrimaryContainer;
+    final hairline = roles?.neutral.border ?? theme.dividerColor;
+
+    final chrome = Stack(
+      children: [
+        child,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  // `F-04`: hairline 1, selected row 3.
+                  color: selected ? accent : hairline,
+                  width: selected ? 3 : 1,
+                ),
+              ),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color:
+                          selected ? selectionFill : theme.colorScheme.surface,
+                      border: Border.all(color: accent),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      child: Row(
+                        key: _EditableChromeSurface.badgeKeyFor(target),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 12,
+                            color: selected ? onSelection : accent,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            target.label,
+                            style: TextStyle(
+                              color: selected ? onSelection : accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    return Theme(
+      data: theme,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: '${target.label} del sitio',
+        child: FocusableActionDetector(
+          // Reachable and operable without a pointer. `Enter` and `Space` are
+          // the same operation as a tap — a selectable object that only a
+          // finger can reach is not selectable for a keyboard operator.
+          shortcuts: const <ShortcutActivator, Intent>{
+            SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
+          },
+          actions: <Type, Action<Intent>>{
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                select();
+                return null;
+              },
+            ),
+          },
+          child: GestureDetector(
+            key: _EditableChromeSurface.surfaceKeyFor(target),
+            // Translucent, not opaque: the published header's own links and
+            // menu keep receiving their taps. Selecting the surface must not
+            // cost the operator the ability to operate what is inside it.
+            behavior: HitTestBehavior.translucent,
+            onTap: select,
+            child: chrome,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CmsModeButton extends StatefulWidget {
   const _CmsModeButton({
     required this.label,

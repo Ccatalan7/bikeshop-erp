@@ -138,6 +138,56 @@ void main() {
         throwsArgumentError,
       );
     });
+
+    test('logical width resolves each block visibility generation separately',
+        () {
+      final mixed = <Map<String, dynamic>>[
+        _block(
+          id: 'legacy',
+          orderIndex: 0,
+          blockData: <String, dynamic>{
+            'visibility': <String, dynamic>{
+              'mobile': true,
+              'tablet': false,
+              'desktop': true,
+            },
+            'responsive': <String, dynamic>{
+              'version': 2,
+              'mobile': <String, dynamic>{'focalPointX': .7},
+            },
+          },
+        ),
+        _block(
+          id: 'canonical',
+          orderIndex: 1,
+          blockData: <String, dynamic>{
+            'visibility': <String, dynamic>{
+              'version': 2,
+              'mobile': true,
+              'tablet': false,
+              'desktop': true,
+            },
+          },
+        ),
+      ];
+
+      final at620 = WebsitePageComposition.project(
+        blocks: mixed,
+        mode: WebsitePageCompositionMode.public,
+        breakpoint: 'mobile',
+        logicalWidth: 620,
+      );
+      final at1000 = WebsitePageComposition.project(
+        blocks: mixed,
+        mode: WebsitePageCompositionMode.public,
+        breakpoint: 'tablet',
+        logicalWidth: 1000,
+      );
+
+      expect(_ids(at620), <String>['legacy']);
+      expect(_ids(at1000), <String>['canonical']);
+      expect(at620.logicalWidth, 620);
+    });
   });
 
   group('WebsitePageComposition ordering', () {
@@ -292,6 +342,45 @@ void main() {
   });
 
   group('WebsitePageComposition geometry', () {
+    test('height and spacing use the same responsive meta owner', () {
+      final blocks = <Map<String, dynamic>>[
+        _block(
+          id: 'responsive-layout',
+          blockType: 'hero',
+          orderIndex: 0,
+          blockData: <String, dynamic>{
+            'blockHeight': 640,
+            'spacingAfter': 72,
+            'responsive': <String, dynamic>{
+              'version': 2,
+              'mobile': <String, dynamic>{
+                'blockHeight': 360,
+                'spacingAfter': 24,
+              },
+            },
+          },
+        ),
+      ];
+
+      final mobile = WebsitePageComposition.project(
+        blocks: blocks,
+        mode: WebsitePageCompositionMode.edit,
+        breakpoint: 'mobile',
+        logicalWidth: 390,
+      ).blocks.single.geometry;
+      final desktop = WebsitePageComposition.project(
+        blocks: blocks,
+        mode: WebsitePageCompositionMode.edit,
+        breakpoint: 'desktop',
+        logicalWidth: 1440,
+      ).blocks.single.geometry;
+
+      expect(mobile.blockHeight, 360);
+      expect(mobile.spacingAfter, 24);
+      expect(desktop.blockHeight, 640);
+      expect(desktop.spacingAfter, 72);
+    });
+
     test('normalizes finite spacing with one bounded theme fallback', () {
       final composition = WebsitePageComposition.project(
         blocks: <Map<String, dynamic>>[

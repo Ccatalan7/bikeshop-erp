@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/website_action.dart';
+import '../models/website_block_surface_style.dart';
+import '../models/website_block_type.dart';
 import 'text_formatting_toolbar.dart';
 import 'website_action_button.dart';
 import 'website_block_content_presenters.dart';
@@ -18,6 +20,7 @@ class WebsiteCtaBlockContent extends StatelessWidget {
   const WebsiteCtaBlockContent({
     super.key,
     required this.data,
+    required this.surfaceStyle,
     required this.primaryColor,
     required this.accentColor,
     this.previewMode = false,
@@ -30,6 +33,7 @@ class WebsiteCtaBlockContent extends StatelessWidget {
   });
 
   final Map<String, dynamic> data;
+  final WebsiteBlockSurfaceStyle surfaceStyle;
   final Color primaryColor;
   final Color accentColor;
   final bool previewMode;
@@ -53,8 +57,6 @@ class WebsiteCtaBlockContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isMobile = screenWidth < 600;
     final title = _firstString(data, const <String>['title']);
     final subtitle = _firstString(
       data,
@@ -72,10 +74,7 @@ class WebsiteCtaBlockContent extends StatelessWidget {
       const <String>['backgroundImage', 'imageUrl'],
     ).trim();
     final hasBackgroundImage = backgroundImage.isNotEmpty;
-    final focalAlignment = _resolveFocalAlignment(
-      data,
-      useMobile: isMobile,
-    );
+    final focalAlignment = _resolveFocalAlignment(data);
     final blockHeight = _positiveFiniteDouble(data['blockHeight']);
     final titleFormatting = _resolveFormatting(data['titleFormatting']);
     final subtitleFormatting = _resolveFormatting(
@@ -226,12 +225,15 @@ class WebsiteCtaBlockContent extends StatelessWidget {
 
     final backgroundFallback = DecoratedBox(
       key: backgroundKey,
-      decoration: _resolveBackgroundDecoration(
-        data: data,
-        defaultColor: primaryColor,
-        imageUrl: hasBackgroundImage ? backgroundImage : null,
+      decoration: surfaceStyle.contentBackgroundDecoration(
+        fallbackColor: primaryColor,
+        imageProvider: hasBackgroundImage
+            ? imageProviderBuilder?.call(backgroundImage) ??
+                NetworkImage(backgroundImage)
+            : null,
         imageAlignment: focalAlignment,
-        imageProviderBuilder: imageProviderBuilder,
+        preserveLegacyFallbackGradient: !hasBackgroundImage,
+        onImageError: _ignoreBackgroundImageError,
       ),
     );
     final mediaPresenter = presenters?.media;
@@ -278,9 +280,12 @@ class WebsiteCtaBlockContent extends StatelessWidget {
             ),
           Padding(
             key: paddingKey,
-            padding: EdgeInsets.symmetric(
-              horizontal: isMobile ? 16 : 24,
-              vertical: blockHeight == null ? 56 : 0,
+            padding: surfaceStyle.paddingWithFallback(
+              WebsiteBlockSurfaceDefaults.paddingFor(
+                blockType: WebsiteBlockType.cta,
+                viewport: surfaceStyle.viewport,
+                data: data,
+              ),
             ),
             child: Center(
               child: ConstrainedBox(
@@ -349,107 +354,9 @@ class WebsiteCtaBlockContent extends StatelessWidget {
     return isNavigationEligible(href) ? action : null;
   }
 
-  static BoxDecoration _resolveBackgroundDecoration({
-    required Map<String, dynamic> data,
-    required Color defaultColor,
-    required String? imageUrl,
-    required Alignment imageAlignment,
-    required WebsiteCtaImageProviderBuilder? imageProviderBuilder,
-  }) {
-    final style = _stringMap(data['style']);
-    final backgroundColor = _parseColor(
-          style['backgroundColor'] ?? data['backgroundColor'],
-        ) ??
-        defaultColor;
-    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
-    final imageProvider = hasImage
-        ? imageProviderBuilder?.call(imageUrl) ?? NetworkImage(imageUrl)
-        : null;
-    final borderWidth = _positiveFiniteDouble(style['borderWidth']) ?? 0;
-    final borderColor =
-        _parseColor(style['borderColor']) ?? Colors.grey.shade500;
-    final borderRadius = _positiveFiniteDouble(style['borderRadius']) ?? 0;
-    final shadowEnabled = style['shadowEnabled'] == true;
-    final shadowColor = _parseRgbaColor(style['shadowColor']) ?? Colors.black26;
-    final shadowOffsetX = _finiteDouble(style['shadowOffsetX']) ?? 0;
-    final shadowOffsetY = _finiteDouble(style['shadowOffsetY']) ?? 4;
-    final shadowBlur = _positiveFiniteDouble(style['shadowBlur']) ?? 12;
-    final shadowSpread = _finiteDouble(style['shadowSpread']) ?? 0;
-    final backgroundType =
-        style['backgroundType']?.toString().trim().toLowerCase();
-    final useGradient = backgroundType == 'gradient' && !hasImage;
-    final hasStyle = data['style'] is Map;
-
-    return BoxDecoration(
-      color: backgroundColor,
-      image: imageProvider == null
-          ? null
-          : DecorationImage(
-              image: imageProvider,
-              fit: BoxFit.cover,
-              alignment: imageAlignment,
-              onError: _ignoreBackgroundImageError,
-            ),
-      gradient: useGradient
-          ? LinearGradient(
-              begin: _gradientBegin(
-                style['gradientDirection']?.toString(),
-              ),
-              end: _gradientEnd(
-                style['gradientDirection']?.toString(),
-              ),
-              colors: <Color>[
-                _parseColor(style['gradientColor1']) ?? Colors.white,
-                _parseColor(style['gradientColor2']) ?? Colors.grey.shade100,
-              ],
-            )
-          : !hasImage && !hasStyle
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[
-                    backgroundColor,
-                    Color.lerp(backgroundColor, Colors.black, 0.2)!,
-                  ],
-                )
-              : null,
-      border: borderWidth > 0
-          ? Border.all(
-              color: borderColor,
-              width: borderWidth,
-              style: style['borderStyle'] == 'dotted' ||
-                      style['borderStyle'] == 'dashed'
-                  ? BorderStyle.none
-                  : BorderStyle.solid,
-            )
-          : null,
-      borderRadius:
-          borderRadius > 0 ? BorderRadius.circular(borderRadius) : null,
-      boxShadow: shadowEnabled
-          ? <BoxShadow>[
-              BoxShadow(
-                offset: Offset(shadowOffsetX, shadowOffsetY),
-                blurRadius: shadowBlur,
-                spreadRadius: shadowSpread,
-                color: shadowColor,
-              ),
-            ]
-          : null,
-    );
-  }
-
-  static Alignment _resolveFocalAlignment(
-    Map<String, dynamic> data, {
-    required bool useMobile,
-  }) {
-    final desktopX = _finiteDouble(data['focalPointX']) ?? 0.5;
-    final desktopY = _finiteDouble(data['focalPointY']) ?? 0.5;
-    final x = useMobile
-        ? _finiteDouble(data['mobileFocalPointX']) ?? desktopX
-        : desktopX;
-    final y = useMobile
-        ? _finiteDouble(data['mobileFocalPointY']) ?? desktopY
-        : desktopY;
+  static Alignment _resolveFocalAlignment(Map<String, dynamic> data) {
+    final x = _finiteDouble(data['focalPointX']) ?? 0.5;
+    final y = _finiteDouble(data['focalPointY']) ?? 0.5;
     return Alignment(
       (x.clamp(0.0, 1.0) * 2) - 1,
       (y.clamp(0.0, 1.0) * 2) - 1,
@@ -492,13 +399,6 @@ class WebsiteCtaBlockContent extends StatelessWidget {
     return (present: false, value: '');
   }
 
-  static Map<String, dynamic> _stringMap(Object? raw) {
-    if (raw is! Map) return <String, dynamic>{};
-    return raw.map<String, dynamic>(
-      (key, value) => MapEntry<String, dynamic>(key.toString(), value),
-    );
-  }
-
   static double? _finiteDouble(Object? raw) {
     final value = switch (raw) {
       num number => number.toDouble(),
@@ -526,58 +426,10 @@ class WebsiteCtaBlockContent extends StatelessWidget {
     }
   }
 
-  static Color? _parseRgbaColor(Object? raw) {
-    final value = raw?.toString().trim();
-    if (value == null || value.isEmpty) return null;
-    if (value.startsWith('#')) return _parseColor(value);
-    final match = RegExp(
-      r'rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)',
-    ).firstMatch(value);
-    if (match == null) return null;
-    try {
-      return Color.fromRGBO(
-        int.parse(match.group(1)!),
-        int.parse(match.group(2)!),
-        int.parse(match.group(3)!),
-        double.tryParse(match.group(4) ?? '') ?? 1,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
   static void _ignoreBackgroundImageError(
     Object exception,
     StackTrace? stackTrace,
   ) {
     // The configured color remains the visible, deterministic fallback.
-  }
-
-  static Alignment _gradientBegin(String? direction) {
-    return switch (direction?.trim().toLowerCase()) {
-      'to-top' => Alignment.bottomCenter,
-      'to-top-right' => Alignment.bottomLeft,
-      'to-right' => Alignment.centerLeft,
-      'to-bottom-right' => Alignment.topLeft,
-      'to-bottom' => Alignment.topCenter,
-      'to-bottom-left' => Alignment.topRight,
-      'to-left' => Alignment.centerRight,
-      'to-top-left' => Alignment.bottomRight,
-      _ => Alignment.topCenter,
-    };
-  }
-
-  static Alignment _gradientEnd(String? direction) {
-    return switch (direction?.trim().toLowerCase()) {
-      'to-top' => Alignment.topCenter,
-      'to-top-right' => Alignment.topRight,
-      'to-right' => Alignment.centerRight,
-      'to-bottom-right' => Alignment.bottomRight,
-      'to-bottom' => Alignment.bottomCenter,
-      'to-bottom-left' => Alignment.bottomLeft,
-      'to-left' => Alignment.centerLeft,
-      'to-top-left' => Alignment.topLeft,
-      _ => Alignment.bottomCenter,
-    };
   }
 }

@@ -124,13 +124,15 @@ No escribas el relato de la sesión, ni lo que ya se ve en el código o en git.
   suspension. Work sequentially in one session until the owner lifts it.
   Browser, Computer Use, DesignSync and the native debug tooling remain
   available.
-  **Commit, push, PR, deploy, publicación y escrituras en producción requieren
-  autorización explícita del dueño, por acción** (2026-08-01, corrige la
-  redacción del 31/07 que decía «commit y push pasan al agente»). El guard
-  mecánico dejó de denegar los tres primeros, pero eso mide **capacidad, no
-  permiso**: manda `CODEX_CLAUDE_COLLABORATION.md` §Safety boundary — «commits,
-  and pushes require the owner's explicit authorization». Una autorización
-  puntual **no** se convierte en permiso permanente. Cuando la haya, antes de
-  mover `origin` se comprueba que Codex no esté publicando desde este mismo
-  checkout —árbol limpio, sin procesos de gate y `HEAD == origin`—: el 31/07 un
-  push a destiempo le habría roto el suyo.
+  **Corrección del dueño, 2026-08-09:** una tarea de implementar, arreglar,
+  terminar, ship o deploy incluye el rollout productivo normal, no destructivo
+  y ya revisado. Claude entrega migraciones, funciones y despliegues in-scope a
+  Codex para ejecución guardada, read-back y smoke; no devuelve al dueño una
+  confirmación rutinaria ni conserva un `no production writes` de un subtask
+  anterior después de una instrucción posterior de terminar. Análisis,
+  diagnóstico, draft y `local-only` siguen read-only mientras sean la
+  instrucción vigente. Reparaciones destructivas, rotación de credenciales,
+  targets ambiguos, publicación más amplia y cambios ajenos al alcance sí
+  requieren una decisión explícita. Antes de mover `origin` se comprueba que
+  Codex no esté publicando desde este mismo checkout —árbol limpio, sin procesos
+  de gate y `HEAD == origin`—.

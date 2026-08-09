@@ -3581,6 +3581,7 @@ class _AccessDetails extends StatelessWidget {
     'delete_invoices': 'Eliminar facturas',
     'access_accounting': 'Acceder a contabilidad',
     'manage_users': 'Gestionar usuarios',
+    'can_manage_supplier_credentials': 'Gestionar credenciales de proveedores',
     'edit_settings': 'Editar configuración',
   };
 
@@ -3679,6 +3680,7 @@ class _AccessDetails extends StatelessWidget {
         'edit_prices' ||
         'delete_invoices' ||
         'manage_users' ||
+        'can_manage_supplier_credentials' ||
         'edit_settings' =>
           'Administración',
         _ => 'Otros',

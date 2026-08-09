@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/widgets/vb_sub_tabs.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
+import '../models/website_responsive_authoring.dart';
 import '../providers/website_edit_mode_provider.dart';
 import 'deferred_website_editor_panel.dart';
 import 'website_block_edit_section.dart';
+import 'website_canvas_layer_actions.dart';
+import 'website_editor_chrome_geometry.dart';
 import 'website_editor_contextual_dock.dart';
+import 'website_editor_host_theme.dart';
+import 'website_editor_contextual_operation_scope.dart';
 
 /// `O-05 VbBottomSheet` geometry, read from Design and not chosen here.
 ///
@@ -41,6 +47,17 @@ abstract final class WebsiteBlockEditSheetGeometry {
       availableHeight * maxHeightFraction;
 }
 
+/// The task a single O-05 route is presenting.
+///
+/// The route/chrome owner stays shared, while the body is intentionally one
+/// task at a time. This prevents the Canvas actions scroll from wrapping the
+/// desktop inspector's bounded Expanded and keeps the two dock controls
+/// honest about what they open.
+enum WebsiteBlockEditSheetTask {
+  inspector,
+  canvasLayerActions,
+}
+
 /// Opens the selected block's controls as a contextual sheet.
 ///
 /// Contract, from t10 §"Qué sobrevive" and the master plan §9.2 layer 3:
@@ -54,15 +71,38 @@ abstract final class WebsiteBlockEditSheetGeometry {
 Future<void> showWebsiteBlockEditSheet({
   required BuildContext context,
   required WebsiteEditModeProvider provider,
+  WebsiteBlockEditSheetTask task = WebsiteBlockEditSheetTask.inspector,
+  WebsiteViewport? effectiveViewport,
 }) {
+  // Resolve before opening the route: [context] still sits inside the editor
+  // boundary and can recover the ERP preset even when the canvas below it is
+  // wearing the tenant's authored theme. Brightness is intentionally fixed by
+  // the inspector owner.
+  final inspectorTheme = WebsiteEditorInspectorTheme.resolveFrom(context);
+  final requestedViewport = provider.previewViewport;
+  final selectedBlockId = provider.selectedBlockId;
+  final selectedBlockViewport = selectedBlockId == null
+      ? null
+      : provider.renderedBlockViewportFor(selectedBlockId);
+  final renderedViewport = effectiveViewport ??
+      selectedBlockViewport ??
+      WebsiteEditorChromeScope.maybeOf(context)?.canvasViewport ??
+      requestedViewport;
   return showWebsiteContextualSheet<void>(
     context: context,
     builder: (sheetContext) {
       // `.value`: the sheet is a route outside the editor subtree, so it is
       // handed the SAME provider instance instead of creating a second one.
-      return ChangeNotifierProvider<WebsiteEditModeProvider>.value(
-        value: provider,
-        child: const WebsiteBlockEditSheet(),
+      return Theme(
+        data: inspectorTheme,
+        child: WebsiteEditorAuthoringViewportScope(
+          requestedViewport: requestedViewport,
+          effectiveViewport: renderedViewport,
+          child: ChangeNotifierProvider<WebsiteEditModeProvider>.value(
+            value: provider,
+            child: WebsiteBlockEditSheet(task: task),
+          ),
+        ),
       );
     },
   );
@@ -89,26 +129,38 @@ Future<T?> showWebsiteContextualSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool useRootNavigator = false,
-}) {
-  return showModalBottomSheet<T>(
-    context: context,
-    useRootNavigator: useRootNavigator,
-    // The canvas must stay visible above the sheet: t10 10f edits the block
-    // while its image is still on screen. A scrim would defeat that.
-    barrierColor: Colors.transparent,
-    backgroundColor: Colors.transparent,
-    elevation: 0,
-    // The sheet owns its own height cap and its own SafeArea/viewInsets
-    // handling; the route must not letterbox it first.
-    isScrollControlled: true,
-    useSafeArea: false,
-    builder: builder,
-  );
+}) async {
+  final lease = WebsiteEditorContextualOperationScope.maybeControllerOf(
+    context,
+  )?.acquire();
+  try {
+    return await showModalBottomSheet<T>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      // The canvas must stay visible above the sheet: t10 10f edits the block
+      // while its image is still on screen. A scrim would defeat that.
+      barrierColor: Colors.transparent,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      // The sheet owns its own height cap and its own SafeArea/viewInsets
+      // handling; the route must not letterbox it first.
+      isScrollControlled: true,
+      useSafeArea: false,
+      builder: builder,
+    );
+  } finally {
+    lease?.release();
+  }
 }
 
 /// The sheet body. Public so a widget test can mount it without a route.
 class WebsiteBlockEditSheet extends StatefulWidget {
-  const WebsiteBlockEditSheet({super.key});
+  const WebsiteBlockEditSheet({
+    this.task = WebsiteBlockEditSheetTask.inspector,
+    super.key,
+  });
+
+  final WebsiteBlockEditSheetTask task;
 
   @visibleForTesting
   static const Key sheetKey = Key('website-editor-block-sheet');
@@ -136,36 +188,81 @@ class _WebsiteBlockEditSheetState extends State<WebsiteBlockEditSheet> {
 
     final selectedId = provider.selectedBlockId;
     final block = selectedId == null ? null : provider.getBlock(selectedId);
-    final title = block == null
-        ? 'Bloque'
-        : WebsiteEditorContextualDock.identityLabelFor(block);
-    final scope = WebsiteEditorContextualDock.scopeLabelFor(
-      viewport: provider.previewViewport,
-      scope: provider.writeScope,
-    );
+    final chrome = provider.selectedChromeTarget;
+    // Chrome names itself. The sheet BODY already knew how to render the
+    // header — `_EditBlockTab` branches on the reserved id before it looks the
+    // selection up — so the only thing wrong here was the title falling
+    // through to the generic word for a surface that has a real name.
+    final title = chrome != null || block != null
+        ? WebsiteEditorContextualDock.identityLabelForSelection(
+            chrome: chrome,
+            block: block ?? const <String, dynamic>{},
+          )
+        : 'Bloque';
+    final isCanvasLayerTask =
+        widget.task == WebsiteBlockEditSheetTask.canvasLayerActions;
+    // A block inspector is mixed too: titles/actions can be common-only while
+    // height, spacing, media framing and presentation fields may target this
+    // viewport. One sheet-level sentence would lie for at least one control.
+    // Chrome is the exception because header/footer settings are site-wide by
+    // contract and therefore always common.
+    final scope = chrome == null ? null : 'Escribe en: común';
+    final hasCanvasLayerTarget = provider.selectedCanvasLayerTarget != null;
 
     return WebsiteContextualSheetScaffold(
       surfaceKey: WebsiteBlockEditSheet.sheetKey,
       title: title,
       scope: scope,
-      headerExtras: [
-        Divider(height: 1, color: theme.dividerColor),
-        _SheetSectionTabs(
-          key: WebsiteBlockEditSheet.sectionTabsKey,
-          section: _section,
-          onChanged: (value) => setState(() => _section = value),
-        ),
-        Divider(height: 1, color: theme.dividerColor),
-      ],
+      // `T-04` navigates between sets. Chrome has no sets: `_EditBlockTab`
+      // returns the header and footer controls *before* it consults the
+      // section, so mounting three tabs there would offer navigation that
+      // changes nothing — a control that lies about being a control. A
+      // surface with one group shows no tabs.
+      headerExtras: chrome != null || isCanvasLayerTask
+          ? [Divider(height: 1, color: theme.dividerColor)]
+          : [
+              Divider(height: 1, color: theme.dividerColor),
+              VbSubTabs<WebsiteBlockEditSection>(
+                key: WebsiteBlockEditSheet.sectionTabsKey,
+                tabs: [
+                  for (final value in WebsiteBlockEditSection.values)
+                    VbSubTab<WebsiteBlockEditSection>(
+                      value: value,
+                      label: value.label,
+                    ),
+                ],
+                value: _section,
+                onChanged: (value) => setState(() => _section = value),
+                // `F-06` · below 900 the density is touch, and `T-04`
+                // publishes 40 as its comfortable height.
+                density: VbSubTabsDensity.comfortable,
+                overflowTooltip: 'Más secciones del bloque',
+              ),
+              Divider(height: 1, color: theme.dividerColor),
+            ],
       footer: _SheetDoneCta(
         onPressed: () => Navigator.of(context).maybePop(),
       ),
-      child: selectedId == null
-          ? const _NoSelection()
-          : DeferredWebsiteBlockEditSurface(
-              editProvider: provider,
-              section: _section,
-            ),
+      child: isCanvasLayerTask
+          ? hasCanvasLayerTarget
+              ? SingleChildScrollView(
+                  // Canvas layer actions are a complete, typed O-05 intent.
+                  // Nesting the desktop inspector here duplicated operations
+                  // and put its Expanded under an unbounded scroll owner.
+                  // The block inspector remains the sibling intent reached by
+                  // selecting the owning block instead of its nested layer.
+                  child: WebsiteCanvasLayerActions(provider: provider),
+                )
+              : const _NoSelection(
+                  message:
+                      'Selecciona una capa del lienzo para ver sus acciones.',
+                )
+          : selectedId == null
+              ? const _NoSelection()
+              : DeferredWebsiteBlockEditSurface(
+                  editProvider: provider,
+                  section: _section,
+                ),
     );
   }
 }
@@ -313,71 +410,6 @@ class _SheetTitleRow extends StatelessWidget {
   }
 }
 
-/// `T-04 VbSubTabs` · 32 tall, 2 px accent underline, 12/600, no capsule and
-/// no icons. Below 900 the density is touch, so the hit area grows to 48 while
-/// the underline keeps its published geometry.
-class _SheetSectionTabs extends StatelessWidget {
-  const _SheetSectionTabs({
-    super.key,
-    required this.section,
-    required this.onChanged,
-  });
-
-  final WebsiteBlockEditSection section;
-  final ValueChanged<WebsiteBlockEditSection> onChanged;
-
-  /// `T-04` · the underline weight.
-  static const double underline = 2;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final roles = VinabikeThemeRoles.maybeOf(context);
-    final accent = roles?.info.accent ?? theme.colorScheme.primary;
-
-    return Row(
-      children: [
-        for (final value in WebsiteBlockEditSection.values)
-          Expanded(
-            child: Semantics(
-              button: true,
-              selected: value == section,
-              label: 'Sección ${value.label}',
-              child: InkWell(
-                key: Key('website-editor-sheet-section-${value.name}'),
-                onTap: () => onChanged(value),
-                child: Container(
-                  height: WebsiteEditorContextualDock.touchTarget,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: value == section ? accent : Colors.transparent,
-                        width: underline,
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    value.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: value == section
-                          ? theme.colorScheme.onSurface
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 class _SheetDoneCta extends StatelessWidget {
   const _SheetDoneCta({required this.onPressed});
 
@@ -403,7 +435,11 @@ class _SheetDoneCta extends StatelessWidget {
 }
 
 class _NoSelection extends StatelessWidget {
-  const _NoSelection();
+  const _NoSelection({
+    this.message = 'Toca un bloque de la página para editarlo.',
+  });
+
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -411,7 +447,7 @@ class _NoSelection extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          'Toca un bloque de la página para editarlo.',
+          message,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium,
         ),

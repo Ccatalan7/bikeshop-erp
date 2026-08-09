@@ -50,6 +50,7 @@ import 'modules/accounting/services/expense_service.dart';
 import 'modules/tax_reports/services/f29_service.dart';
 import 'modules/pos/services/pos_service.dart';
 import 'modules/purchases/services/purchase_service.dart';
+import 'modules/purchases/services/supplier_relationship_service.dart';
 import 'modules/purchases/services/smart_purchase_list_service.dart';
 import 'modules/sales/services/sales_service.dart';
 import 'modules/settings/services/appearance_service.dart';
@@ -87,6 +88,7 @@ import 'modules/spreadsheets/services/spreadsheet_service.dart';
 import 'modules/ai_assistant/services/ai_assistant_context_service.dart';
 import 'modules/ai_assistant/services/ai_assistant_session_service.dart';
 import 'shared/services/window_zoom_service.dart';
+import 'shared/services/window_chrome_layout_region_service.dart';
 import 'shared/services/right_toolbar_service.dart';
 import 'shared/utils/responsive_viewport.dart';
 import 'shared/services/ocr_file_handoff_service.dart';
@@ -434,6 +436,11 @@ class VinabikeApp extends StatelessWidget {
           },
         ),
         ChangeNotifierProvider(create: (_) => WindowZoomService()),
+        ChangeNotifierProvider(create: (_) {
+          final service = WindowChromeLayoutRegionService();
+          unawaited(service.start());
+          return service;
+        }),
         ChangeNotifierProvider(create: (_) => RightToolbarService()),
         ChangeNotifierProvider(create: (_) => AIAssistantContextService()),
         // The assistant session binds to one coherent authority. Auth alone is
@@ -546,12 +553,19 @@ class VinabikeApp extends StatelessWidget {
                       context.read<FinancialProjectionRefreshCoordinator>(),
                 )),
         ChangeNotifierProvider(create: (_) => F29Service()),
+        Provider(
+          create: (context) => SupplierRelationshipService(
+            tenantService: context.read<TenantService>(),
+          ),
+        ),
         ChangeNotifierProvider(
             create: (context) => PurchaseService(
                   Provider.of<DatabaseService>(context, listen: false),
                   Provider.of<TenantService>(context, listen: false),
                   financialProjectionRefresh:
                       context.read<FinancialProjectionRefreshCoordinator>(),
+                  supplierRelationshipService:
+                      context.read<SupplierRelationshipService>(),
                 )),
         ChangeNotifierProvider.value(
             value:

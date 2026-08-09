@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -11,8 +12,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/inventory/models/category_models.dart';
 import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
+import 'package:vinabike_erp/modules/website/models/website_page_composition.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
+import 'package:vinabike_erp/modules/website/widgets/deferred_editable_block_renderer.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_renderer.dart';
 import 'package:vinabike_erp/public_store/models/public_checkout_capabilities.dart';
 import 'package:vinabike_erp/public_store/providers/cart_provider.dart';
@@ -21,6 +25,7 @@ import 'package:vinabike_erp/public_store/services/public_category_publication.d
 import 'package:vinabike_erp/public_store/services/customer_account_service.dart';
 import 'package:vinabike_erp/public_store/services/public_inventory_service.dart';
 import 'package:vinabike_erp/public_store/services/public_store_scroll_state.dart';
+import 'package:vinabike_erp/public_store/widgets/page_composition.dart';
 import 'package:vinabike_erp/public_store/widgets/public_store_layout.dart';
 import 'package:vinabike_erp/shared/models/tenant.dart';
 import 'package:vinabike_erp/shared/services/tenant_detection_service.dart';
@@ -113,6 +118,7 @@ void main() {
                   child: WebsiteBlockRenderer.build(
                     context: context,
                     blockType: 'categoryGrid',
+                    effectiveViewport: WebsiteViewport.desktop,
                     data: {
                       'title': 'Explora',
                       'categories': [
@@ -154,6 +160,157 @@ void main() {
       expect(find.text('BUSCA CADENAS'), findsOneWidget);
       expect(find.text('BUSCA NEUMÁTICOS'), findsOneWidget);
       expect(find.text('TRANSMISIÓN'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'category grid title formatting survives Edit save-reload Preview and Public',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final website = _ProjectionWebsiteService(
+        authoritativeTenantId: _tenantId,
+      );
+      final inventory = _ProjectionInventoryService({
+        _tenantId: [
+          _category(
+            id: _drivetrainId,
+            name: 'Transmisión',
+            fullPath: 'Componentes / Transmisión',
+          ),
+        ],
+      });
+      final tenant = PublicStoreTenantProvider(TenantDetectionService())
+        ..setTenant(_tenant());
+      final editProvider = WebsiteEditModeProvider()
+        ..enterEditMode(
+          <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'category-grid-formatting',
+              'block_type': 'categoryGrid',
+              'block_data': <String, dynamic>{
+                'title': 'Explora con estilo',
+                'categories': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'title': 'Busca cadenas',
+                    'imageUrl': _imageUrl,
+                    'ctaText': 'Buscar',
+                    'ctaLink': '/productos?search=cadenas',
+                    'size': 'large',
+                  },
+                ],
+              },
+              'is_visible': true,
+              'sort_order': 0,
+            },
+          ],
+          const <String, dynamic>{},
+          pageId: 'category-grid-page',
+          pageSlug: 'category-grid',
+        );
+      addTearDown(website.dispose);
+      addTearDown(inventory.dispose);
+      addTearDown(tenant.dispose);
+      addTearDown(editProvider.dispose);
+
+      const authoredColor = Color(0xFF4A237A);
+      final authoredFormatting = <String, dynamic>{
+        'italic': true,
+        'underline': true,
+        'fontSize': 31.0,
+        'textAlign': 'right',
+        'textColor': authoredColor.toARGB32(),
+      };
+      editProvider.updateBlockData(
+        'category-grid-formatting',
+        'titleFormatting',
+        authoredFormatting,
+      );
+
+      await _pumpCategoryGridComposition(
+        tester,
+        rows: editProvider.blocks,
+        mode: WebsitePageCompositionMode.edit,
+        website: website,
+        inventory: inventory,
+        tenant: tenant,
+        editProvider: editProvider,
+        originKey: 'edit-draft',
+      );
+      _expectCategoryGridTitlePresentation(
+        tester,
+        color: authoredColor,
+      );
+
+      // Simulated persistence boundary: JSON destroys every list/map identity,
+      // matching a save plus fresh origin read without performing any write.
+      final persistedRows =
+          (jsonDecode(jsonEncode(editProvider.blocks)) as List)
+              .map((row) => Map<String, dynamic>.from(row as Map))
+              .toList(growable: false);
+      expect(identical(persistedRows, editProvider.blocks), isFalse);
+      expect(
+        identical(
+          persistedRows.single['block_data'],
+          editProvider.blocks.single['block_data'],
+        ),
+        isFalse,
+      );
+
+      final reloadedProvider = WebsiteEditModeProvider()
+        ..enterEditMode(
+          persistedRows,
+          const <String, dynamic>{},
+          pageId: 'category-grid-page',
+          pageSlug: 'category-grid',
+        );
+      addTearDown(reloadedProvider.dispose);
+      final reloadedData = Map<String, dynamic>.from(
+        reloadedProvider.blocks.single['block_data'] as Map,
+      );
+      expect(reloadedData['titleFormatting'], authoredFormatting);
+
+      await _pumpCategoryGridComposition(
+        tester,
+        rows: reloadedProvider.blocks,
+        mode: WebsitePageCompositionMode.preview,
+        website: website,
+        inventory: inventory,
+        tenant: tenant,
+        originKey: 'preview-reload',
+      );
+      _expectCategoryGridTitlePresentation(
+        tester,
+        color: authoredColor,
+      );
+
+      final publicRows = (jsonDecode(jsonEncode(persistedRows)) as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList(growable: false);
+      expect(
+        identical(
+          publicRows.single['block_data'],
+          persistedRows.single['block_data'],
+        ),
+        isFalse,
+        reason: 'Public must consume a fresh origin projection.',
+      );
+      await _pumpCategoryGridComposition(
+        tester,
+        rows: publicRows,
+        mode: WebsitePageCompositionMode.public,
+        website: website,
+        inventory: inventory,
+        tenant: tenant,
+        originKey: 'public-origin',
+      );
+      _expectCategoryGridTitlePresentation(
+        tester,
+        color: authoredColor,
+      );
+
       expect(tester.takeException(), isNull);
     },
   );
@@ -329,6 +486,95 @@ void main() {
       expect(find.text('Privacidad'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
+  );
+}
+
+Future<void> _pumpCategoryGridComposition(
+  WidgetTester tester, {
+  required List<Map<String, dynamic>> rows,
+  required WebsitePageCompositionMode mode,
+  required WebsiteService website,
+  required PublicInventoryService inventory,
+  required PublicStoreTenantProvider tenant,
+  required String originKey,
+  WebsiteEditModeProvider? editProvider,
+}) async {
+  if (mode == WebsitePageCompositionMode.edit) {
+    await tester.runAsync(DeferredEditableBlockRenderer.preload);
+  }
+
+  Widget mountedStore = MultiProvider(
+    providers: [
+      ChangeNotifierProvider<WebsiteService>.value(value: website),
+      ChangeNotifierProvider<PublicInventoryService>.value(value: inventory),
+      ChangeNotifierProvider<PublicStoreTenantProvider>.value(value: tenant),
+    ],
+    child: SingleChildScrollView(
+      child: KeyedSubtree(
+        key: ValueKey<String>('category-grid-origin-$originKey'),
+        child: PageComposition(
+          composition: WebsitePageComposition.project(
+            blocks: rows,
+            mode: mode,
+            breakpoint: 'desktop',
+          ),
+          primaryColor: Colors.blue,
+          accentColor: Colors.green,
+          textColor: Colors.black,
+          containerPadding: 24,
+          onNavigate: (_) {},
+          isNavigationEligible: (_) => true,
+        ),
+      ),
+    ),
+  );
+  if (editProvider != null) {
+    mountedStore = ChangeNotifierProvider<WebsiteEditModeProvider>.value(
+      value: editProvider,
+      child: mountedStore,
+    );
+  }
+
+  await tester.pumpWidget(
+    MaterialApp(home: Scaffold(body: mountedStore)),
+  );
+  await _pumpUntilFound(
+    tester,
+    find.descendant(
+      of: find.byWidgetPredicate(
+        (widget) => widget.runtimeType.toString() == '_AutoCategoryGrid',
+      ),
+      matching: find.text('Explora con estilo'),
+    ),
+  );
+}
+
+void _expectCategoryGridTitlePresentation(
+  WidgetTester tester, {
+  required Color color,
+}) {
+  final autoCategoryGrid = find.byWidgetPredicate(
+    (widget) => widget.runtimeType.toString() == '_AutoCategoryGrid',
+  );
+  expect(autoCategoryGrid, findsOneWidget);
+
+  final titleFinder = find.descendant(
+    of: autoCategoryGrid,
+    matching: find.text('Explora con estilo'),
+  );
+  expect(titleFinder, findsOneWidget);
+  final title = tester.widget<Text>(titleFinder);
+  expect(title.style?.fontSize, 31);
+  expect(title.style?.fontStyle, FontStyle.italic);
+  expect(title.style?.decoration, TextDecoration.underline);
+  expect(title.style?.color, color);
+  expect(title.textAlign, TextAlign.right);
+
+  final paragraph = tester.renderObject<RenderParagraph>(titleFinder);
+  expect(
+    paragraph.textAlign,
+    TextAlign.right,
+    reason: 'The mounted consumer, not only the persisted map, must align it.',
   );
 }
 

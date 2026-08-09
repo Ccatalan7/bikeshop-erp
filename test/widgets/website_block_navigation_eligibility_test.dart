@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/inventory/models/category_models.dart';
 import 'package:vinabike_erp/modules/website/models/website_action.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/modules/website/widgets/premium_product_card.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_action_button.dart';
@@ -42,6 +43,11 @@ Widget _rendererHost({
           context: context,
           blockType: blockType,
           data: data,
+          effectiveViewport:
+              WebsiteResponsiveDataCodec.viewportForDocumentWidth(
+            data,
+            MediaQuery.sizeOf(context).width,
+          ),
           primaryColor: Colors.blue,
           accentColor: Colors.green,
           onNavigate: onNavigate ?? (_) {},
@@ -387,6 +393,11 @@ void main() {
                     context: context,
                     blockType: blockType,
                     data: data,
+                    effectiveViewport:
+                        WebsiteResponsiveDataCodec.viewportForDocumentWidth(
+                      data,
+                      size.width,
+                    ),
                     primaryColor: Colors.blue,
                     accentColor: Colors.green,
                     previewMode: previewMode,
@@ -621,6 +632,7 @@ void main() {
       );
       await settleWithNetworkImages(tester);
       expect(find.byType(PremiumProductCard), findsOneWidget);
+      await tester.ensureVisible(find.byType(PremiumProductCard));
       await tester.tap(find.byType(PremiumProductCard));
       expect(routes, [publicProductPath(product)],
           reason: 'the mobile card navigates publicly');

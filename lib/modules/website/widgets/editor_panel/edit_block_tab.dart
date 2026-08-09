@@ -538,16 +538,25 @@ class _EditBlockTabState extends State<_EditBlockTab> {
             ),
             if (canvasSelection == null) ...[
               _QuickActionButton(
+                targetKey: const ValueKey<String>(
+                  'website-block-quick-visibility',
+                ),
                 icon: isVisible ? Icons.visibility : Icons.visibility_off,
                 tooltip: isVisible ? 'Ocultar' : 'Mostrar',
                 onPressed: () => editProvider.toggleBlockVisibility(blockId),
               ),
               _QuickActionButton(
+                targetKey: const ValueKey<String>(
+                  'website-block-quick-duplicate',
+                ),
                 icon: Icons.content_copy,
                 tooltip: 'Duplicar',
                 onPressed: () => editProvider.duplicateBlock(blockId),
               ),
               _QuickActionButton(
+                targetKey: const ValueKey<String>(
+                  'website-block-quick-delete',
+                ),
                 icon: Icons.delete_outline,
                 tooltip: 'Eliminar',
                 onPressed: () => editProvider.deleteBlock(blockId),
@@ -630,6 +639,96 @@ class _BlockResponsiveVisibilityControl extends StatelessWidget {
   final String blockId;
   final WebsiteEditModeProvider provider;
 
+  @visibleForTesting
+  static const Key migrationDialogKey =
+      Key('website-visibility-migration-dialog');
+
+  Future<void> _toggle(
+    BuildContext context, {
+    required String breakpoint,
+    required bool nextValue,
+  }) async {
+    final viewport = provider.renderedBlockViewportFor(blockId);
+    if (viewport == null) return;
+    final target = WebsiteInlineManipulationTarget(
+      blockId: blockId,
+      owner: const WebsiteInlineBlockOwner(),
+      viewport: viewport,
+      properties: <WebsiteInlineManipulationProperty>[
+        WebsiteInlineManipulationProperty(
+          canonicalKey: 'visibility',
+          policy: WebsiteResponsivePropertyPolicy.sharedOnly,
+        ),
+      ],
+      requiresSelection: true,
+    );
+    final lease = provider.captureInlineMutationLease(target);
+    if (lease == null) return;
+    final sourceData = _blockDataOf(lease.sourceBlock);
+    final rawVisibility = sourceData['visibility'];
+    final generation = websiteVisibilityGeneration(rawVisibility);
+    final needsConfirmation =
+        generation == WebsiteVisibilityBreakpointGeneration.legacy &&
+            !canMigrateWebsiteVisibilityWithoutBehaviorChange(rawVisibility);
+
+    WebsiteInlineMutationResult commit(
+      WebsiteEditModeProvider owner, {
+      required bool confirmLegacyMigration,
+    }) {
+      return owner.commitInlineMutation(
+        lease,
+        <String, Object?>{
+          'visibility': updatedWebsiteBlockVisibility(
+            rawVisibility,
+            breakpoint: breakpoint,
+            isVisible: nextValue,
+            useCanonicalBreakpoints:
+                generation == WebsiteVisibilityBreakpointGeneration.canonical ||
+                    !needsConfirmation ||
+                    confirmLegacyMigration,
+          ),
+        },
+      );
+    }
+
+    if (!needsConfirmation) {
+      commit(provider, confirmLegacyMigration: false);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: migrationDialogKey,
+        title: const Text('Actualizar puntos de quiebre'),
+        content: const Text(
+          'Este bloque usa los tamaños anteriores (640 y 1024 px). '
+          'Al editar su visibilidad se actualizará al sistema actual '
+          '(600 y 900 px), por lo que también puede cambiar lo que se ve '
+          'entre 600–639 px y 900–1023 px.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Actualizar y continuar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    WebsiteEditModeProvider liveProvider;
+    try {
+      liveProvider = context.read<WebsiteEditModeProvider>();
+    } catch (_) {
+      return;
+    }
+    commit(liveProvider, confirmLegacyMigration: true);
+  }
+
   Map<String, bool> get _visibility {
     final result = <String, bool>{
       'desktop': true,
@@ -698,15 +797,11 @@ class _BlockResponsiveVisibilityControl extends StatelessWidget {
                       label:
                           '${option.$2}: ${visibility[option.$1]! ? 'visible' : 'oculto'}',
                       child: InkWell(
-                        onTap: () {
-                          final updated = Map<String, bool>.from(visibility);
-                          updated[option.$1] = !updated[option.$1]!;
-                          provider.updateBlockData(
-                            blockId,
-                            'visibility',
-                            updated,
-                          );
-                        },
+                        onTap: () => _toggle(
+                          context,
+                          breakpoint: option.$1,
+                          nextValue: !visibility[option.$1]!,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -777,6 +872,9 @@ class _BlockHeightControl extends StatefulWidget {
 
 class _BlockHeightControlState extends State<_BlockHeightControl> {
   late TextEditingController _customHeightController;
+  late final FocusNode _customHeightFocusNode = FocusNode(
+    debugLabel: 'website-block-custom-height',
+  );
   bool _showCustomInput = false;
 
   @override
@@ -800,14 +898,31 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
   @override
   void dispose() {
     _customHeightController.dispose();
+    _customHeightFocusNode.dispose();
     super.dispose();
   }
 
-  double? get _currentHeight =>
-      (widget.data['blockHeight'] as num?)?.toDouble();
+  WebsiteResponsiveScalarBinding<num> _binding(BuildContext context) {
+    return WebsiteResponsiveScalarBinding<num>.forField(
+      provider: widget.provider,
+      blockId: widget.blockId,
+      field: WebsiteBlockMetaFields.blockHeight,
+      owner: const WebsiteResponsiveRootField(),
+      decode: WebsiteResponsiveScalarBinding.decodeNumber,
+      hostClass: WebsiteEditorChromeScope.maybeOf(context)?.hostClass ??
+          WebsiteAuthoringHostClass.desktop,
+      viewport: WebsiteEditorAuthoringViewportScope.effectiveOf(
+        context,
+        fallback: widget.provider.previewViewport,
+      ),
+    );
+  }
 
-  void _setHeight(double? height) {
-    widget.provider.updateBlockData(widget.blockId, 'blockHeight', height);
+  void _setHeight(
+    WebsiteResponsiveScalarBinding<num> binding,
+    double? height,
+  ) {
+    binding.write(height);
     if (height != null) {
       _customHeightController.text = height.toStringAsFixed(0);
     } else {
@@ -817,143 +932,169 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              widget.heightBehavior.inspectorLabel!,
-              style: const TextStyle(
-                  color: Colors.white54,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600),
-            ),
-            const Spacer(),
-            if (_currentHeight != null)
-              Text(
-                '${_currentHeight!.toStringAsFixed(0)}px',
+    final binding = _binding(context);
+    final currentHeight = binding.value?.toDouble();
+    return ResponsiveFieldShell<num>(
+      state: binding.state,
+      onCustomize: binding.customize,
+      onReset: binding.reset,
+      helpText: widget.heightBehavior.inspectorLabel,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (currentHeight != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '${currentHeight.toStringAsFixed(0)}px',
                 style: const TextStyle(
                     color: Color(0xFF00A09D),
                     fontSize: 11,
                     fontWeight: FontWeight.w500),
               ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        BlockHeightPresetSelector(
-          blockType: widget.blockType,
-          currentHeight: _currentHeight,
-          onHeightChanged: _setHeight,
-        ),
-        const SizedBox(height: 8),
-        // Custom height input toggle
-        Row(
-          children: [
-            GestureDetector(
-              onTap: () => setState(() => _showCustomInput = !_showCustomInput),
-              child: Row(
-                children: [
-                  Icon(
-                    _showCustomInput
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    color: Colors.white38,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Altura personalizada',
-                    style: TextStyle(
-                      color: _showCustomInput ? Colors.white70 : Colors.white38,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
             ),
-            const Spacer(),
-            if (_currentHeight != null)
-              GestureDetector(
-                onTap: () => _setHeight(null),
-                child: const Text(
-                  'Restablecer',
-                  style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 10,
-                      decoration: TextDecoration.underline),
-                ),
-              ),
-          ],
-        ),
-        if (_showCustomInput) ...[
           const SizedBox(height: 8),
+          BlockHeightPresetSelector(
+            blockType: widget.blockType,
+            currentHeight: currentHeight,
+            onHeightChanged: (height) => _setHeight(binding, height),
+          ),
+          const SizedBox(height: 8),
+          // Custom height input toggle
           Row(
             children: [
-              Expanded(
-                child: Container(
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2D2D2D),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: TextField(
-                    controller: _customHeightController,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: 'ej: 450',
-                      hintStyle: TextStyle(color: Colors.white24, fontSize: 12),
-                      border: InputBorder.none,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      isDense: true,
-                    ),
-                    onSubmitted: (value) {
-                      final parsed = double.tryParse(value);
-                      if (parsed != null && parsed >= 100) {
-                        _setHeight(parsed);
-                      }
-                    },
-                  ),
+              WebsiteEditorControlTarget(
+                targetKey: const ValueKey<String>(
+                  'website-height-custom-toggle',
                 ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () {
-                  final parsed = double.tryParse(_customHeightController.text);
-                  if (parsed != null && parsed >= 100) {
-                    _setHeight(parsed);
-                  }
-                },
-                child: Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00A09D),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Aplicar',
+                semanticLabel: 'Altura personalizada',
+                onTap: () =>
+                    setState(() => _showCustomInput = !_showCustomInput),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _showCustomInput
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: Colors.white38,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Altura personalizada',
                       style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500),
+                        color:
+                            _showCustomInput ? Colors.white70 : Colors.white38,
+                        fontSize: 10,
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
+              const Spacer(),
+              if (currentHeight != null)
+                WebsiteEditorControlTarget(
+                  targetKey: const ValueKey<String>('website-height-reset'),
+                  semanticLabel: 'Restablecer altura automática',
+                  onTap: () => _setHeight(binding, null),
+                  child: const Text(
+                    'Restablecer',
+                    style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 10,
+                        decoration: TextDecoration.underline),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            widget.heightBehavior.inspectorResizeHint!,
-            style: const TextStyle(color: Colors.white24, fontSize: 9),
-          ),
+          if (_showCustomInput) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: WebsiteEditorControlTarget(
+                    targetKey: const ValueKey<String>(
+                      'website-height-custom-input',
+                    ),
+                    semanticLabel: 'Altura personalizada en píxeles',
+                    semanticsButton: false,
+                    onTap: _customHeightFocusNode.requestFocus,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Container(
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2D2D2D),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: TextField(
+                          focusNode: _customHeightFocusNode,
+                          controller: _customHeightController,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 12),
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            hintText: 'ej: 450',
+                            hintStyle:
+                                TextStyle(color: Colors.white24, fontSize: 12),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 8),
+                            isDense: true,
+                          ),
+                          onSubmitted: (value) {
+                            final parsed = double.tryParse(value);
+                            if (parsed != null && parsed >= 100) {
+                              _setHeight(binding, parsed);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                WebsiteEditorControlTarget(
+                  targetKey: const ValueKey<String>('website-height-apply'),
+                  semanticLabel: 'Aplicar altura personalizada',
+                  minimumWidth: true,
+                  onTap: () {
+                    final parsed =
+                        double.tryParse(_customHeightController.text);
+                    if (parsed != null && parsed >= 100) {
+                      _setHeight(binding, parsed);
+                    }
+                  },
+                  child: Container(
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00A09D),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Aplicar',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              widget.heightBehavior.inspectorResizeHint!,
+              style: const TextStyle(color: Colors.white24, fontSize: 9),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -975,108 +1116,143 @@ class _BlockSpacingControl extends StatefulWidget {
 }
 
 class _BlockSpacingControlState extends State<_BlockSpacingControl> {
-  double get _currentSpacing {
+  double get _sectionSpacing {
     final sectionSpacing = WebsitePageComposition.resolveSectionSpacing(
       widget.provider.getEffectiveThemeSetting(
         'theme_section_spacing',
         WebsitePageComposition.defaultSectionSpacing.toString(),
       ),
     );
-    return WebsitePageComposition.resolveSpacingAfter(
-      widget.data['spacingAfter'],
-      sectionSpacing: sectionSpacing,
+    return sectionSpacing;
+  }
+
+  WebsiteResponsiveScalarBinding<num> _binding(BuildContext context) {
+    return WebsiteResponsiveScalarBinding<num>.forField(
+      provider: widget.provider,
+      blockId: widget.blockId,
+      field: WebsiteBlockMetaFields.spacingAfter,
+      owner: const WebsiteResponsiveRootField(),
+      decode: WebsiteResponsiveScalarBinding.decodeNumber,
+      fallback: _sectionSpacing,
+      hostClass: WebsiteEditorChromeScope.maybeOf(context)?.hostClass ??
+          WebsiteAuthoringHostClass.desktop,
+      viewport: WebsiteEditorAuthoringViewportScope.effectiveOf(
+        context,
+        fallback: widget.provider.previewViewport,
+      ),
     );
   }
 
-  void _setSpacing(double spacing) {
-    widget.provider.updateBlockData(widget.blockId, 'spacingAfter', spacing);
+  void _setSpacing(
+    WebsiteResponsiveScalarBinding<num> binding,
+    double spacing,
+  ) {
+    binding.write(spacing);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.height, color: Colors.white38, size: 14),
-            const SizedBox(width: 6),
-            const Text(
-              'Espaciado inferior',
-              style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600),
-            ),
-            const Spacer(),
-            Text(
-              _currentSpacing == 0 ? '0' : '${_currentSpacing.toInt()}px',
-              style: const TextStyle(
-                  color: Color(0xFF00A09D),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // Preset buttons
-        Row(
-          children: [
-            _SpacingPresetButton(
-              label: '0',
-              isSelected: _currentSpacing == 0,
-              onTap: () => _setSpacing(0),
-            ),
-            const SizedBox(width: 6),
-            _SpacingPresetButton(
-              label: 'S',
-              isSelected: _currentSpacing > 0 && _currentSpacing <= 16,
-              onTap: () => _setSpacing(16),
-            ),
-            const SizedBox(width: 6),
-            _SpacingPresetButton(
-              label: 'M',
-              isSelected: _currentSpacing > 16 && _currentSpacing <= 32,
-              onTap: () => _setSpacing(32),
-            ),
-            const SizedBox(width: 6),
-            _SpacingPresetButton(
-              label: 'L',
-              isSelected: _currentSpacing > 32 && _currentSpacing <= 64,
-              onTap: () => _setSpacing(64),
-            ),
-            const SizedBox(width: 6),
-            _SpacingPresetButton(
-              label: 'XL',
-              isSelected: _currentSpacing > 64,
-              onTap: () => _setSpacing(96),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        // Slider
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: const Color(0xFF00A09D),
-            inactiveTrackColor: Colors.white12,
-            thumbColor: const Color(0xFF00A09D),
-            overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-            trackHeight: 3,
+    final binding = _binding(context);
+    final asyncBinding = WebsiteAsyncFieldBinding.pageBlock(
+      provider: widget.provider,
+      target: WebsiteAsyncFieldTarget.block(
+        blockId: widget.blockId,
+        scopeKey: 'root.${WebsiteBlockMetaFields.spacingAfter.key}',
+      ),
+    );
+    final currentSpacing = WebsitePageComposition.resolveSpacingAfter(
+      binding.value,
+      sectionSpacing: _sectionSpacing,
+    );
+    return ResponsiveFieldShell<num>(
+      state: binding.state,
+      onCustomize: binding.customize,
+      onReset: binding.reset,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.height, color: Colors.white38, size: 14),
+              const Spacer(),
+              Text(
+                currentSpacing == 0 ? '0' : '${currentSpacing.toInt()}px',
+                style: const TextStyle(
+                    color: Color(0xFF00A09D),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500),
+              ),
+            ],
           ),
-          child: Slider(
-            value: _currentSpacing.clamp(0, 200),
+          const SizedBox(height: 8),
+          // Preset buttons
+          Row(
+            children: [
+              _SpacingPresetButton(
+                label: '0',
+                isSelected: currentSpacing == 0,
+                onTap: () => _setSpacing(binding, 0),
+              ),
+              const SizedBox(width: 6),
+              _SpacingPresetButton(
+                label: 'S',
+                isSelected: currentSpacing > 0 && currentSpacing <= 16,
+                onTap: () => _setSpacing(binding, 16),
+              ),
+              const SizedBox(width: 6),
+              _SpacingPresetButton(
+                label: 'M',
+                isSelected: currentSpacing > 16 && currentSpacing <= 32,
+                onTap: () => _setSpacing(binding, 32),
+              ),
+              const SizedBox(width: 6),
+              _SpacingPresetButton(
+                label: 'L',
+                isSelected: currentSpacing > 32 && currentSpacing <= 64,
+                onTap: () => _setSpacing(binding, 64),
+              ),
+              const SizedBox(width: 6),
+              _SpacingPresetButton(
+                label: 'XL',
+                isSelected: currentSpacing > 64,
+                onTap: () => _setSpacing(binding, 96),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          WebsiteTransactionalSlider(
+            key: const ValueKey<String>('website-block-spacing-slider'),
+            value: currentSpacing.clamp(0, 200).toDouble(),
             min: 0,
             max: 200,
             divisions: 50,
-            onChanged: (value) => _setSpacing(value.roundToDouble()),
+            transactionIdentity: (
+              asyncBinding.identity,
+              binding.state.context.hostClass,
+              binding.state.context.previewViewport,
+              binding.state.effectiveWriteScope,
+              binding.state.status,
+            ),
+            asyncBinding: asyncBinding,
+            onCommit: (value) => _setSpacing(binding, value.roundToDouble()),
+            builder: (context, _, slider) => SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: const Color(0xFF00A09D),
+                inactiveTrackColor: Colors.white12,
+                thumbColor: const Color(0xFF00A09D),
+                overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                trackHeight: 3,
+              ),
+              child: slider,
+            ),
           ),
-        ),
-        const Text(
-          'También puedes arrastrar la línea entre bloques',
-          style: TextStyle(color: Colors.white24, fontSize: 9),
-        ),
-      ],
+          const Text(
+            'También puedes arrastrar la línea entre bloques',
+            style: TextStyle(color: Colors.white24, fontSize: 9),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1095,26 +1271,31 @@ class _SpacingPresetButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
+      child: WebsiteEditorControlTarget(
+        targetKey: ValueKey<String>('website-spacing-preset-$label'),
+        semanticLabel: 'Espaciado $label',
         onTap: onTap,
-        child: Container(
-          height: 28,
-          decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFF00A09D)
-                : Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+        child: SizedBox(
+          width: double.infinity,
+          child: Container(
+            height: 28,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? const Color(0xFF00A09D)
+                  : Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+              ),
             ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.white54,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ),
@@ -1124,12 +1305,14 @@ class _SpacingPresetButton extends StatelessWidget {
 }
 
 class _QuickActionButton extends StatelessWidget {
+  final Key targetKey;
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
   final bool isDestructive;
 
   const _QuickActionButton({
+    required this.targetKey,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
@@ -1140,10 +1323,12 @@ class _QuickActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: InkWell(
+      child: WebsiteEditorControlTarget(
+        targetKey: targetKey,
+        semanticLabel: tooltip,
+        minimumWidth: true,
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(6),
           child: Icon(
             icon,

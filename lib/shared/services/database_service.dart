@@ -351,7 +351,7 @@ class DatabaseService extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> insert(String table, Map<String, dynamic> data,
-      {bool applyTimestamps = true}) async {
+      {bool applyTimestamps = true, String? selectColumns}) async {
     try {
       final payload = Map<String, dynamic>.from(data);
 
@@ -361,8 +361,10 @@ class DatabaseService extends ChangeNotifier {
       if (applyTimestamps) {
         _applyTimestamps(payload, isInsert: true);
       }
-      final result =
-          await _client.from(table).insert(payload).select().single();
+      final mutation = _client.from(table).insert(payload);
+      final result = selectColumns == null
+          ? await mutation.select().single()
+          : await mutation.select(selectColumns).single();
       notifyListeners();
       return Map<String, dynamic>.from(result as Map);
     } catch (e) {
@@ -375,18 +377,16 @@ class DatabaseService extends ChangeNotifier {
 
   Future<Map<String, dynamic>> update(
       String table, String id, Map<String, dynamic> data,
-      {bool applyTimestamps = true}) async {
+      {bool applyTimestamps = true, String? selectColumns}) async {
     try {
       final payload = Map<String, dynamic>.from(data);
       if (applyTimestamps) {
         _applyTimestamps(payload, isInsert: false);
       }
-      final result = await _client
-          .from(table)
-          .update(payload)
-          .eq('id', id)
-          .select()
-          .single();
+      final mutation = _client.from(table).update(payload).eq('id', id);
+      final result = selectColumns == null
+          ? await mutation.select().single()
+          : await mutation.select(selectColumns).single();
       notifyListeners();
       return Map<String, dynamic>.from(result as Map);
     } catch (e) {

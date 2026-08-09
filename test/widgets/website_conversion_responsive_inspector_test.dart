@@ -139,6 +139,13 @@ void main() {
                   data: Map<String, dynamic>.from(
                     watched.blocks.single['block_data'] as Map,
                   ),
+                  effectiveViewport:
+                      WebsiteResponsiveDataCodec.viewportForDocumentWidth(
+                    Map<String, dynamic>.from(
+                      watched.blocks.single['block_data'] as Map,
+                    ),
+                    width,
+                  ),
                   primaryColor: Colors.teal,
                   accentColor: Colors.tealAccent,
                   onNavigate: (_) {},
@@ -403,6 +410,7 @@ void main() {
                     footerData(),
                     viewport,
                   ),
+                  effectiveViewport: viewport,
                   primaryColor: Colors.teal,
                   accentColor: Colors.tealAccent,
                   previewMode: previewMode,

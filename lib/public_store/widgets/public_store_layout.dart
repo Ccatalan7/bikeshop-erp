@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
@@ -43,11 +44,15 @@ import '../../shared/themes/vinabike_theme_roles.dart';
 import '../../modules/website/widgets/website_link_value_editor.dart';
 import '../../modules/website/widgets/website_editor_block_sheet.dart';
 import '../../modules/website/widgets/website_editor_chrome_geometry.dart';
+import '../../modules/website/widgets/website_editor_host_theme.dart';
+import 'website_header_overlay_boundary.dart';
 import '../../modules/website/widgets/website_editor_command_scope.dart';
 import '../../modules/website/widgets/website_editor_navigation_guard.dart';
 import '../../modules/website/widgets/website_workspace_scope.dart';
 import '../../shared/widgets/vb_segmented.dart';
 import '../../shared/widgets/vb_status_badge.dart';
+import '../../shared/widgets/window_chrome_layout_region_scope.dart';
+import '../../shared/widgets/workspace_shell_scope.dart';
 import '../../modules/website/theme/website_resolved_theme.dart';
 import '../../modules/website/theme/website_theme_builder.dart';
 import '../../modules/website/models/website_page_models.dart';
@@ -70,7 +75,6 @@ import '../../shared/routes/erp_routes_barrel.dart' deferred as erp
         WebsiteDestinationManagementPage,
         WebsiteManagementPage,
         WebsiteSettingsPage;
-import '../../shared/services/tenant_service.dart';
 import '../../shared/services/tenant_detection_service.dart';
 import '../../shared/utils/file_download_web.dart'
     if (dart.library.io) '../../shared/utils/file_download_stub.dart';
@@ -558,7 +562,32 @@ enum WebsiteEditorOAuthRestoreOutcome {
   alreadyInEdit,
 }
 
+class _DomainDialogResult {
+  const _DomainDialogResult(this.customDomain);
+
+  final String customDomain;
+}
+
 class _PublicStoreLayoutState extends State<PublicStoreLayout> {
+  // Async remote-write authority is bound to the mounted provider/service
+  // identities, not merely to equal tenant fields. The revision makes a host
+  // swap A -> B -> A observable even when A itself kept identical counters.
+  WebsiteEditModeProvider? _remoteWriteProviderIdentity;
+  WebsiteService? _remoteWriteServiceIdentity;
+  int _remoteWriteHostRevision = 0;
+  final WebsiteEditorRemoteWriteSerialQueue _sitePublicationQueue =
+      WebsiteEditorRemoteWriteSerialQueue();
+
+  /// The measured bottom edge of the published header while it overlays.
+  ///
+  /// Owned here because this State is the one ancestor of BOTH compositors and
+  /// of the canvas that consumes it. It is chrome information only: nothing is
+  /// laid out against it, so Edit, Preview and Public keep identical geometry.
+  final ValueNotifier<WebsiteHeaderOverlayGeometry> _headerOverlayBoundary =
+      ValueNotifier<WebsiteHeaderOverlayGeometry>(
+    const WebsiteHeaderOverlayGeometry(),
+  );
+
   // --- Server-confirmed payment claims -------------------------------------
   //
   // Guarded by tenant id plus a monotonic generation, exactly like the
@@ -892,10 +921,33 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WebsiteEditModeProvider? provider;
+    WebsiteService? service;
+    try {
+      provider = context.read<WebsiteEditModeProvider>();
+      service = context.read<WebsiteService>();
+    } catch (_) {
+      // A host without editor dependencies cannot issue these writes.
+    }
+
+    final previousProvider = _remoteWriteProviderIdentity;
+    final previousService = _remoteWriteServiceIdentity;
+    if ((previousProvider != null && !identical(previousProvider, provider)) ||
+        (previousService != null && !identical(previousService, service))) {
+      _remoteWriteHostRevision++;
+    }
+    _remoteWriteProviderIdentity = provider;
+    _remoteWriteServiceIdentity = service;
+  }
+
+  @override
   void dispose() {
     _paymentCapabilitiesRetryTimer?.cancel();
     _inlineFooterNavLabelController.dispose();
     _inlineFooterNavLabelFocusNode.dispose();
+    _headerOverlayBoundary.dispose();
     super.dispose();
   }
 
@@ -983,7 +1035,17 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     WebsiteEditModeProvider editProvider,
     WebsiteNavigation nav,
   ) async {
+    final intent = editProvider.captureSitewideAsyncIntent(
+      bucket: WebsiteSitewideDraftBucket.footer,
+      sourceKeys: const <String>[
+        WebsiteSitewideAsyncSourceKey.footerNavigation,
+      ],
+    );
+    if (intent == null) return;
     final effective = editProvider.getEffectiveFooterNavItem(nav);
+    final openingSnapshot = jsonEncode(
+      _footerNavigationIntentSnapshot(effective),
+    );
 
     final initialHref = (effective.linkValue ?? '').trim();
 
@@ -1039,13 +1101,86 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       openInNewTab = false;
     }
 
-    editProvider.updateFooterNavDestination(
-      nav.id,
-      linkType: inferredType,
-      linkValue: href,
-      openInNewTab: openInNewTab,
-    );
+    if (!mounted) return;
+    WebsiteEditModeProvider liveProvider;
+    WebsiteService liveWebsiteService;
+    try {
+      liveProvider = this.context.read<WebsiteEditModeProvider>();
+      liveWebsiteService = this.context.read<WebsiteService>();
+    } catch (_) {
+      return;
+    }
+    final result = liveProvider.commitSitewideAsyncIntent(intent, () {
+      final liveBase = _findFooterNavigationById(
+        liveWebsiteService.footerNavigation,
+        nav.id,
+      );
+      if (liveBase == null) return WebsiteInlineMutationResult.rejected;
+      final live = liveProvider.getEffectiveFooterNavItem(liveBase);
+      if (jsonEncode(_footerNavigationIntentSnapshot(live)) !=
+          openingSnapshot) {
+        return WebsiteInlineMutationResult.rejected;
+      }
+      if (live.linkType == inferredType &&
+          live.linkValue == href &&
+          live.openInNewTab == openInNewTab) {
+        return WebsiteInlineMutationResult.unchanged;
+      }
+      liveProvider.updateFooterNavDestination(
+        nav.id,
+        linkType: inferredType,
+        linkValue: href,
+        openInNewTab: openInNewTab,
+      );
+      return WebsiteInlineMutationResult.committed;
+    });
+    if (result == WebsiteInlineMutationResult.rejected && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El pie de página cambió mientras editabas el enlace. '
+            'Vuelve a intentarlo.',
+          ),
+        ),
+      );
+    }
   }
+
+  WebsiteNavigation? _findFooterNavigationById(
+    Iterable<WebsiteNavigation> items,
+    String id,
+  ) {
+    for (final item in items) {
+      if (item.id == id) return item;
+      final nested = _findFooterNavigationById(item.children, id);
+      if (nested != null) return nested;
+    }
+    return null;
+  }
+
+  Map<String, Object?> _footerNavigationIntentSnapshot(
+    WebsiteNavigation navigation,
+  ) =>
+      <String, Object?>{
+        'id': navigation.id,
+        'tenantId': navigation.tenantId,
+        'menuLocation': navigation.menuLocation.name,
+        'label': navigation.label,
+        'icon': navigation.icon,
+        'linkType': navigation.linkType.value,
+        'linkValue': navigation.linkValue,
+        'openInNewTab': navigation.openInNewTab,
+        'parentId': navigation.parentId,
+        'orderIndex': navigation.orderIndex,
+        'isVisible': navigation.isVisible,
+        'showOnDesktop': navigation.showOnDesktop,
+        'showOnMobile': navigation.showOnMobile,
+        'cssClass': navigation.cssClass,
+        'highlight': navigation.highlight,
+        'children': navigation.children
+            .map(_footerNavigationIntentSnapshot)
+            .toList(growable: false),
+      };
 
   /// Check localStorage for Google OAuth return flag and restore edit mode.
   ///
@@ -1504,8 +1639,23 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       websiteService.getSetting('logo_url', ''),
       editProvider,
     );
-    final topBannerText = websiteService
-        .getSetting('top_banner_text', 'Envíos a Chile continental')
+    // The banner's TEXT reads the staged draft exactly like its visibility and
+    // its style already did. Reading the saved value here was a split brain in
+    // one control: toggling `header_show_top_banner` previewed instantly while
+    // typing the copy previewed nothing until save, so the canvas showed a
+    // banner the operator had already renamed.
+    final topBannerText = (isInEditorContext
+            ? editProvider.getEffectiveHeaderSetting(
+                'top_banner_text',
+                websiteService.getSetting(
+                  'top_banner_text',
+                  'Envíos a Chile continental',
+                ),
+              )
+            : websiteService.getSetting(
+                'top_banner_text',
+                'Envíos a Chile continental',
+              ))
         .trim();
 
     // Footer info - use provider for live preview when in editor context
@@ -1713,6 +1863,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Build header widget builder for special layouts
     Widget buildHeaderWidget(
         {bool isOverlay = false,
+        // Whether this COMPOSITION floats the header over the document. It is
+        // not `isOverlay`: that one flips with scroll and describes paint.
+        bool overlaysDocument = false,
         Color? overrideBgColor,
         String? overrideColorMode,
         bool? overrideShowBanner,
@@ -1728,6 +1881,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         primaryColor: primaryColor,
         accentColor: accentColor,
         isEditMode: isEditMode,
+        overlaysDocument: overlaysDocument,
         headerStyle: headerStyle,
         headerColorMode: overrideColorMode ?? headerColorMode,
         showTopBanner: overrideShowBanner ?? showTopBanner,
@@ -1795,6 +1949,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   right: 0,
                   child: buildHeaderWidget(
                     isOverlay: true,
+                    overlaysDocument: true,
                     overrideBgColor: Colors.transparent,
                     overrideColorMode:
                         headerColorMode, // Use configured color mode (dark = white text)
@@ -2118,15 +2273,22 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // constraints only) and routed State — scroll, forms, filters, carts —
     // survives. Chrome (top bar, config hub, chat, FABs) are SIBLINGS,
     // never new parents of the content subtree.
-    final contentAnchor = KeyedSubtree(
-      key: const ValueKey('storefront_content_anchor'),
-      child: _buildStorefrontContentViewport(
-        context,
-        pageContent,
-        framed:
-            isInEditorContext && devicePreviewMode != DevicePreviewMode.desktop,
-        isEditMode: isEditMode,
-        devicePreviewMode: devicePreviewMode,
+    // One boundary owner above BOTH compositors and above the canvas that
+    // reads it. Transparent-home and sticky report through the same measured
+    // header; neither carries a rule of its own, and nothing here is laid out
+    // against the value.
+    final contentAnchor = WebsiteHeaderOverlayBoundary(
+      boundary: _headerOverlayBoundary,
+      child: KeyedSubtree(
+        key: const ValueKey('storefront_content_anchor'),
+        child: _buildStorefrontContentViewport(
+          context,
+          pageContent,
+          framed: isInEditorContext &&
+              devicePreviewMode != DevicePreviewMode.desktop,
+          isEditMode: isEditMode,
+          devicePreviewMode: devicePreviewMode,
+        ),
       ),
     );
     Widget shellBody;
@@ -2143,15 +2305,29 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       // The editor panel has one owner: PersistentEditorShell. Keeping an
       // inline fallback here previously reintroduced a second save
       // orchestrator and could switch to Preview even after a failed save.
+      // ONE runtime height for the whole top band, published by the shell and
+      // only consumed here. Three independent `48` literals agreed only while
+      // the top inset was zero; with a real status bar the bar was squeezed
+      // into 48 with the inset painted inside it and the canvas began 44 px
+      // too high, underneath it. Re-deriving the value here would put a second
+      // owner on the same number — and, under the ERP workspace bar, a
+      // different answer. The fallback covers the standalone storefront build,
+      // which mounts no shell.
+      final editorTopBand =
+          WebsiteEditorChromeScope.maybeOf(context)?.topBandHeight ??
+              WebsiteEditorChromeGeometry.topBandHeightFor(
+                MediaQuery.paddingOf(context).top,
+              );
       shellBody = Stack(
         children: [
-          Positioned.fill(top: 48, child: contentAnchor),
-          if (_isConfigHubOpen) Positioned.fill(top: 48, child: overlayLayer),
+          Positioned.fill(top: editorTopBand, child: contentAnchor),
+          if (_isConfigHubOpen)
+            Positioned.fill(top: editorTopBand, child: overlayLayer),
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: 48,
+            height: editorTopBand,
             child: _buildPreviewTopBar(
                 context, editProvider, websiteService, storeName),
           ),
@@ -2313,328 +2489,339 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       editorWidth: editorWidth,
       showsCanvasAuthorities: editProvider.isPageEditorWorkspace,
     );
-    return Container(
+    return WorkspaceSystemUiCanvas(
       key: const ValueKey('editor-dense-bar'),
-      height: 48,
       color: const Color(0xFF1E1E1E),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          if (!inlineNavigation)
-            // `O-01` · every destination in one drawer. It is the same menu
-            // builder the inline strip uses for its own groups, so nothing is
-            // reachable here that is not reachable there.
-            _buildPreviewNavMenu(
-              context: context,
-              editProvider: editProvider,
-              websiteService: websiteService,
-              label: 'Sitio web',
-              isActive: false,
-              menuKey: const ValueKey('editor-dense-nav-menu'),
-              actions: const [
-                _PreviewNavAction(
-                  id: _actionPageEditorWorkspace,
+      // Same rule as the compact bar: the surface paints through the system
+      // inset, the row keeps its published 48 underneath it. On a host that
+      // already consumed the inset this is exactly the previous 48.
+      child: WindowChromeSafeArea(
+        bottom: false,
+        minimumPadding: const EdgeInsets.symmetric(horizontal: 16),
+        child: SizedBox(
+          height: WebsiteEditorChromeGeometry.topBarHeight,
+          child: Row(
+            children: [
+              if (!inlineNavigation)
+                // `O-01` · every destination in one drawer. It is the same menu
+                // builder the inline strip uses for its own groups, so nothing is
+                // reachable here that is not reachable there.
+                _buildPreviewNavMenu(
+                  context: context,
+                  editProvider: editProvider,
+                  websiteService: websiteService,
+                  label: 'Sitio web',
+                  isActive: false,
+                  menuKey: const ValueKey('editor-dense-nav-menu'),
+                  actions: const [
+                    _PreviewNavAction(
+                      id: _actionPageEditorWorkspace,
+                      label: 'Editar página',
+                      icon: Icons.edit_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionEcomCatalog,
+                      label: 'Catálogo web',
+                      icon: Icons.storefront_outlined,
+                    ),
+                    _PreviewNavAction.divider(),
+                    _PreviewNavAction(
+                      id: _actionSitePages,
+                      label: 'Páginas',
+                      icon: Icons.description_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionSiteNavigation,
+                      label: 'Navegación y menús',
+                      icon: Icons.menu,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionSiteDestinations,
+                      label: 'Destinos y enlaces',
+                      icon: Icons.account_tree_outlined,
+                    ),
+                    _PreviewNavAction.divider(),
+                    _PreviewNavAction(
+                      id: _actionSiteSettings,
+                      label: 'Sitio, tema y contacto',
+                      icon: Icons.tune,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionSiteOpenWebsiteHub,
+                      label: 'Centro del Sitio Web',
+                      icon: Icons.dashboard_outlined,
+                    ),
+                  ],
+                ),
+              if (inlineNavigation) ...[
+                // Logo/brand
+                Row(
+                  children: [
+                    Icon(Icons.language,
+                        color: Colors.white.withValues(alpha: 0.8), size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Sitio web',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 24),
+                // Task-oriented workspace navigation. Management screens replace
+                // the canvas instead of competing with the block inspector.
+                _buildPreviewWorkspaceButton(
+                  context: context,
+                  editProvider: editProvider,
+                  websiteService: websiteService,
                   label: 'Editar página',
                   icon: Icons.edit_outlined,
+                  actionId: _actionPageEditorWorkspace,
+                  isActive: editProvider.workspaceMode ==
+                      WebsiteWorkspaceMode.pageEditor,
                 ),
-                _PreviewNavAction(
-                  id: _actionEcomCatalog,
+                _buildPreviewWorkspaceButton(
+                  context: context,
+                  editProvider: editProvider,
+                  websiteService: websiteService,
                   label: 'Catálogo web',
                   icon: Icons.storefront_outlined,
+                  actionId: _actionEcomCatalog,
+                  isActive: editProvider.workspaceMode ==
+                      WebsiteWorkspaceMode.catalog,
                 ),
-                _PreviewNavAction.divider(),
-                _PreviewNavAction(
-                  id: _actionSitePages,
-                  label: 'Páginas',
-                  icon: Icons.description_outlined,
+                _buildPreviewNavMenu(
+                  context: context,
+                  editProvider: editProvider,
+                  websiteService: websiteService,
+                  label: 'Estructura',
+                  isActive: editProvider.workspaceMode ==
+                      WebsiteWorkspaceMode.structure,
+                  actions: const [
+                    _PreviewNavAction(
+                      id: _actionSitePages,
+                      label: 'Páginas',
+                      icon: Icons.description_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionSiteNavigation,
+                      label: 'Navegación y menús',
+                      icon: Icons.menu,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionSiteDestinations,
+                      label: 'Destinos y enlaces',
+                      icon: Icons.account_tree_outlined,
+                    ),
+                  ],
                 ),
-                _PreviewNavAction(
-                  id: _actionSiteNavigation,
-                  label: 'Navegación y menús',
-                  icon: Icons.menu,
+                _buildPreviewNavMenu(
+                  context: context,
+                  editProvider: editProvider,
+                  websiteService: websiteService,
+                  label: 'Ajustes',
+                  isActive: editProvider.workspaceMode ==
+                      WebsiteWorkspaceMode.settings,
+                  actions: const [
+                    _PreviewNavAction(
+                      id: _actionSiteSettings,
+                      label: 'Sitio, tema y contacto',
+                      icon: Icons.tune,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionConfigWebsiteSettings,
+                      label: 'SEO',
+                      icon: Icons.manage_search_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionConfigIntegrations,
+                      label: 'Integraciones',
+                      icon: Icons.extension_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionConfigDomain,
+                      label: 'Dominio y URL',
+                      icon: Icons.link_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionConfigPaymentMethods,
+                      label: 'Métodos de pago',
+                      icon: Icons.payments_outlined,
+                    ),
+                  ],
                 ),
-                _PreviewNavAction(
-                  id: _actionSiteDestinations,
-                  label: 'Destinos y enlaces',
-                  icon: Icons.account_tree_outlined,
+                _buildPreviewNavMenu(
+                  context: context,
+                  editProvider: editProvider,
+                  websiteService: websiteService,
+                  label: 'Más',
+                  isActive: editProvider.workspaceMode ==
+                      WebsiteWorkspaceMode.operations,
+                  actions: const [
+                    _PreviewNavAction(
+                      id: _actionEcomOrders,
+                      label: 'Pedidos online',
+                      icon: Icons.shopping_bag_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionReportsAnalytics,
+                      label: 'Analytics',
+                      icon: Icons.analytics_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionSiteOpenWebsiteHub,
+                      label: 'Centro del Sitio Web',
+                      icon: Icons.dashboard_outlined,
+                    ),
+                    _PreviewNavAction.divider(),
+                    _PreviewNavAction(
+                      id: _actionGoogleOpenMerchantFeed,
+                      label: 'Abrir feed de productos',
+                      icon: Icons.feed_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionGoogleCopyMerchantFeed,
+                      label: 'Copiar feed de productos',
+                      icon: Icons.copy,
+                    ),
+                  ],
                 ),
-                _PreviewNavAction.divider(),
-                _PreviewNavAction(
-                  id: _actionSiteSettings,
-                  label: 'Sitio, tema y contacto',
-                  icon: Icons.tune,
-                ),
-                _PreviewNavAction(
-                  id: _actionSiteOpenWebsiteHub,
-                  label: 'Centro del Sitio Web',
-                  icon: Icons.dashboard_outlined,
+
+                // Current page actions (copy link, open)
+                _buildCurrentPageMenu(
+                  context: context,
+                  editProvider: editProvider,
+                  websiteService: websiteService,
                 ),
               ],
-            ),
-          if (inlineNavigation) ...[
-            // Logo/brand
-            Row(
-              children: [
-                Icon(Icons.language,
-                    color: Colors.white.withValues(alpha: 0.8), size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Sitio web',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
+
+              const Spacer(),
+
+              if (inlineExtras) ...[
+                // Store name dropdown
+                _buildStoreMenu(
+                  context: context,
+                  editProvider: editProvider,
+                  websiteService: websiteService,
+                  storeName: storeName,
+                ),
+                const SizedBox(width: 16),
+
+                // Published toggle
+                Row(
+                  children: [
+                    Text(
+                      'Publicado',
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: 13),
+                    ),
+                    const SizedBox(width: 8),
+                    Switch(
+                      value: sitePublished,
+                      onChanged: (value) => _setSitePublished(
+                        context,
+                        websiteService,
+                        value,
+                      ),
+                      activeThumbColor: Colors.green,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 16),
+              ] else ...[
+                // The action drawer the compact composition already owns: page
+                // navigation, store actions, publication, undo/redo, Guardar and
+                // Descartar. Nothing is removed from the product at this width —
+                // it is the same sheet, opened from the bar that has no room to
+                // spread those controls out.
+                _CompactBarIconButton(
+                  buttonKey: const ValueKey('editor-dense-more'),
+                  icon: Icons.more_horiz,
+                  label: 'Más acciones del editor',
+                  color: Colors.white70,
+                  onPressed: () => _showCompactEditorActionsSheet(
+                    context: context,
+                    editProvider: editProvider,
+                    websiteService: websiteService,
+                    storeName: storeName,
                   ),
                 ),
+                const SizedBox(width: 8),
               ],
-            ),
-            const SizedBox(width: 24),
-            // Task-oriented workspace navigation. Management screens replace
-            // the canvas instead of competing with the block inspector.
-            _buildPreviewWorkspaceButton(
-              context: context,
-              editProvider: editProvider,
-              websiteService: websiteService,
-              label: 'Editar página',
-              icon: Icons.edit_outlined,
-              actionId: _actionPageEditorWorkspace,
-              isActive:
-                  editProvider.workspaceMode == WebsiteWorkspaceMode.pageEditor,
-            ),
-            _buildPreviewWorkspaceButton(
-              context: context,
-              editProvider: editProvider,
-              websiteService: websiteService,
-              label: 'Catálogo web',
-              icon: Icons.storefront_outlined,
-              actionId: _actionEcomCatalog,
-              isActive:
-                  editProvider.workspaceMode == WebsiteWorkspaceMode.catalog,
-            ),
-            _buildPreviewNavMenu(
-              context: context,
-              editProvider: editProvider,
-              websiteService: websiteService,
-              label: 'Estructura',
-              isActive:
-                  editProvider.workspaceMode == WebsiteWorkspaceMode.structure,
-              actions: const [
-                _PreviewNavAction(
-                  id: _actionSitePages,
-                  label: 'Páginas',
-                  icon: Icons.description_outlined,
-                ),
-                _PreviewNavAction(
-                  id: _actionSiteNavigation,
-                  label: 'Navegación y menús',
-                  icon: Icons.menu,
-                ),
-                _PreviewNavAction(
-                  id: _actionSiteDestinations,
-                  label: 'Destinos y enlaces',
-                  icon: Icons.account_tree_outlined,
-                ),
-              ],
-            ),
-            _buildPreviewNavMenu(
-              context: context,
-              editProvider: editProvider,
-              websiteService: websiteService,
-              label: 'Ajustes',
-              isActive:
-                  editProvider.workspaceMode == WebsiteWorkspaceMode.settings,
-              actions: const [
-                _PreviewNavAction(
-                  id: _actionSiteSettings,
-                  label: 'Sitio, tema y contacto',
-                  icon: Icons.tune,
-                ),
-                _PreviewNavAction(
-                  id: _actionConfigWebsiteSettings,
-                  label: 'SEO',
-                  icon: Icons.manage_search_outlined,
-                ),
-                _PreviewNavAction(
-                  id: _actionConfigIntegrations,
-                  label: 'Integraciones',
-                  icon: Icons.extension_outlined,
-                ),
-                _PreviewNavAction(
-                  id: _actionConfigDomain,
-                  label: 'Dominio y URL',
-                  icon: Icons.link_outlined,
-                ),
-                _PreviewNavAction(
-                  id: _actionConfigPaymentMethods,
-                  label: 'Métodos de pago',
-                  icon: Icons.payments_outlined,
-                ),
-              ],
-            ),
-            _buildPreviewNavMenu(
-              context: context,
-              editProvider: editProvider,
-              websiteService: websiteService,
-              label: 'Más',
-              isActive:
-                  editProvider.workspaceMode == WebsiteWorkspaceMode.operations,
-              actions: const [
-                _PreviewNavAction(
-                  id: _actionEcomOrders,
-                  label: 'Pedidos online',
-                  icon: Icons.shopping_bag_outlined,
-                ),
-                _PreviewNavAction(
-                  id: _actionReportsAnalytics,
-                  label: 'Analytics',
-                  icon: Icons.analytics_outlined,
-                ),
-                _PreviewNavAction(
-                  id: _actionSiteOpenWebsiteHub,
-                  label: 'Centro del Sitio Web',
-                  icon: Icons.dashboard_outlined,
-                ),
-                _PreviewNavAction.divider(),
-                _PreviewNavAction(
-                  id: _actionGoogleOpenMerchantFeed,
-                  label: 'Abrir feed de productos',
-                  icon: Icons.feed_outlined,
-                ),
-                _PreviewNavAction(
-                  id: _actionGoogleCopyMerchantFeed,
-                  label: 'Copiar feed de productos',
-                  icon: Icons.copy,
-                ),
-              ],
-            ),
 
-            // Current page actions (copy link, open)
-            _buildCurrentPageMenu(
-              context: context,
-              editProvider: editProvider,
-              websiteService: websiteService,
-            ),
-          ],
+              if (editProvider.isPageEditorWorkspace) ...[
+                // `S-04 VbSegmented`, t10 frame 10a: selection visible without
+                // opening anything, three one-word labels, stable set. It replaces
+                // an unlabelled icon that only a hover tooltip explained.
+                _buildViewportSelector(context, editProvider),
+                const SizedBox(width: 8),
+                // `writeScope` is a SEPARATE authority from `previewViewport`.
+                // Desktop is the base, so it can only write Común.
+                _buildWriteScopeSelector(context, editProvider),
+                const SizedBox(width: 8),
 
-          const Spacer(),
+                if (inlineExtras) ...[
+                  // Screenshot button
+                  IconButton(
+                    onPressed: _isCapturingScreenshot
+                        ? null
+                        : () =>
+                            _captureFullPageScreenshot(context, editProvider),
+                    icon: _isCapturingScreenshot
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white70,
+                            ),
+                          )
+                        : const Icon(Icons.camera_alt_outlined,
+                            color: Colors.white70, size: 20),
+                    tooltip: 'Capturar página',
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 36, minHeight: 36),
+                  ),
+                  const SizedBox(width: 8),
 
-          if (inlineExtras) ...[
-            // Store name dropdown
-            _buildStoreMenu(
-              context: context,
-              editProvider: editProvider,
-              websiteService: websiteService,
-              storeName: storeName,
-            ),
-            const SizedBox(width: 16),
+                  // New page button
+                  TextButton(
+                    onPressed: () => _showQuickCreatePageDialog(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                    ),
+                    child: const Text('Nuevo', style: TextStyle(fontSize: 13)),
+                  ),
+                  const SizedBox(width: 8),
+                ],
 
-            // Published toggle
-            Row(
-              children: [
-                Text(
-                  'Publicado',
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8), fontSize: 13),
+                // Main mode button (Preview -> Edit, Edit -> Preview)
+                _CmsModeButton(
+                  label: isEditMode ? 'Vista previa' : 'Editar',
+                  onPressed: () => _toggleEditorMode(context, editProvider),
                 ),
                 const SizedBox(width: 8),
-                Switch(
-                  value: sitePublished,
-                  onChanged: (value) => _setSitePublished(
-                    context,
-                    websiteService,
-                    value,
-                  ),
-                  activeThumbColor: Colors.green,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
               ],
-            ),
-            const SizedBox(width: 16),
-          ] else ...[
-            // The action drawer the compact composition already owns: page
-            // navigation, store actions, publication, undo/redo, Guardar and
-            // Descartar. Nothing is removed from the product at this width —
-            // it is the same sheet, opened from the bar that has no room to
-            // spread those controls out.
-            _CompactBarIconButton(
-              buttonKey: const ValueKey('editor-dense-more'),
-              icon: Icons.more_horiz,
-              label: 'Más acciones del editor',
-              color: Colors.white70,
-              onPressed: () => _showCompactEditorActionsSheet(
-                context: context,
-                editProvider: editProvider,
-                websiteService: websiteService,
-                storeName: storeName,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
 
-          if (editProvider.isPageEditorWorkspace) ...[
-            // `S-04 VbSegmented`, t10 frame 10a: selection visible without
-            // opening anything, three one-word labels, stable set. It replaces
-            // an unlabelled icon that only a hover tooltip explained.
-            _buildViewportSelector(context, editProvider),
-            const SizedBox(width: 8),
-            // `writeScope` is a SEPARATE authority from `previewViewport`.
-            // Desktop is the base, so it can only write Común.
-            _buildWriteScopeSelector(context, editProvider),
-            const SizedBox(width: 8),
-
-            if (inlineExtras) ...[
-              // Screenshot button
+              // Close/exit button - go back to Website Management
               IconButton(
-                onPressed: _isCapturingScreenshot
-                    ? null
-                    : () => _captureFullPageScreenshot(context, editProvider),
-                icon: _isCapturingScreenshot
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white70,
-                        ),
-                      )
-                    : const Icon(Icons.camera_alt_outlined,
-                        color: Colors.white70, size: 20),
-                tooltip: 'Capturar página',
+                onPressed: () => _closeEditorFromTopBar(context, editProvider),
+                icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                tooltip: 'Volver a Gestión de Sitio Web',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
-              const SizedBox(width: 8),
-
-              // New page button
-              TextButton(
-                onPressed: () => _showQuickCreatePageDialog(context),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                child: const Text('Nuevo', style: TextStyle(fontSize: 13)),
-              ),
-              const SizedBox(width: 8),
             ],
-
-            // Main mode button (Preview -> Edit, Edit -> Preview)
-            _CmsModeButton(
-              label: isEditMode ? 'Vista previa' : 'Editar',
-              onPressed: () => _toggleEditorMode(context, editProvider),
-            ),
-            const SizedBox(width: 8),
-          ],
-
-          // Close/exit button - go back to Website Management
-          IconButton(
-            onPressed: () => _closeEditorFromTopBar(context, editProvider),
-            icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-            tooltip: 'Volver a Gestión de Sitio Web',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -2651,16 +2838,89 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     WebsiteService websiteService,
     bool published,
   ) async {
-    await websiteService.saveSetting(
-      'site_published',
-      published ? 'true' : 'false',
+    WebsiteEditModeProvider provider;
+    try {
+      provider = this.context.read<WebsiteEditModeProvider>();
+    } catch (_) {
+      return;
+    }
+    final intent = provider.captureSitewideAsyncIntent(
+      bucket: WebsiteSitewideDraftBucket.siteSettings,
+      sourceKeys: const <String>['site_published'],
     );
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(published ? 'Sitio publicado' : 'Sitio despublicado'),
-      ),
+    final tenantId = provider.sessionOwnerTenantId?.trim() ?? '';
+    final fingerprint = provider.sessionOwnerLeaseFingerprint;
+    if (intent == null || tenantId.isEmpty || fingerprint == null) return;
+
+    final hostRevision = _remoteWriteHostRevision;
+    final entryLeaseGeneration = provider.editorEntryLeaseGeneration;
+    final entryLeaseIdentityRevision =
+        provider.editorEntryLeaseIdentityRevision;
+    bool isCurrent() {
+      if (!mounted || _remoteWriteHostRevision != hostRevision) return false;
+      try {
+        final liveProvider = this.context.read<WebsiteEditModeProvider>();
+        final liveService = this.context.read<WebsiteService>();
+        return identical(liveProvider, provider) &&
+            identical(liveService, websiteService) &&
+            liveProvider.editorEntryLeaseGeneration == entryLeaseGeneration &&
+            liveProvider.editorEntryLeaseIdentityRevision ==
+                entryLeaseIdentityRevision &&
+            liveProvider.sessionOwnerTenantId == tenantId &&
+            liveProvider.sessionOwnerLeaseFingerprint == fingerprint;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final authority = WebsiteEditorRemoteWriteAuthority(
+      tenantId: tenantId,
+      operation: published ? 'publicar el sitio' : 'despublicar el sitio',
+      isCurrent: isCurrent,
+      claimOwner: () =>
+          provider.commitSitewideAsyncIntent(
+            intent,
+            () => WebsiteInlineMutationResult.unchanged,
+          ) !=
+          WebsiteInlineMutationResult.rejected,
     );
+
+    // Serialize the complete guarded statements. Fast true -> false taps may
+    // both be meaningful, but their completions can never overtake each other.
+    try {
+      await _sitePublicationQueue.schedule(() async {
+        authority.ensureCurrent();
+        final writeGuard = authority.claimForWrite();
+        await websiteService.saveSettingsForTenant(
+          authority.tenantId,
+          <String, String>{
+            'site_published': published ? 'true' : 'false',
+          },
+          writeGuard: writeGuard,
+        );
+        authority.ensureCurrent();
+      });
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(published ? 'Sitio publicado' : 'Sitio despublicado'),
+        ),
+      );
+    } on WebsiteEditorWriteSupersededException {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La sesión del editor cambió. No se modificó la publicación.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo actualizar la publicación: $error')),
+      );
+    }
   }
 
   /// Preview ⇄ Edit, with the exact history semantics both bars must share.
@@ -2751,116 +3011,148 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       WebsiteViewport.tablet => 'tablet',
       WebsiteViewport.desktop => 'escritorio',
     };
-    final canvasWidth = chrome?.canvasWidth.round();
-    final viewportLine =
-        canvasWidth == null ? viewportWord : '$viewportWord · $canvasWidth';
-
-    return Container(
-      height: WebsiteEditorChromeGeometry.topBarHeight,
+    return WorkspaceSystemUiCanvas(
+      // The bar paints `--shell` behind the status bar and then keeps its full
+      // published height below it. t10 10e and t11 11a draw exactly this: a
+      // `safearea_top` band and a `topbar: 48` band, both `--shell`. Painting
+      // the inset is what makes the two read as one surface; *reserving* it is
+      // what stops the clock from landing on the page identity.
       color: barColor,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Row(
-        children: [
-          _CompactBarIconButton(
-            buttonKey: const ValueKey('editor-compact-close'),
-            icon: Icons.close,
-            label: 'Volver a Gestión de Sitio Web',
-            color: onBarMuted,
-            onPressed: () => _closeEditorFromTopBar(context, editProvider),
+      child: WindowChromeSafeArea(
+        bottom: false,
+        minimumPadding: const EdgeInsets.symmetric(horizontal: 4),
+        child: SizedBox(
+          height: WebsiteEditorChromeGeometry.topBarHeight,
+          child: _compactBarRow(
+            context,
+            editProvider,
+            websiteService,
+            storeName,
+            viewportWord: viewportWord,
+            onBar: onBar,
+            onBarMuted: onBarMuted,
+            barAccent: barAccent,
+            onBarAccent: onBarAccent,
+            commands: commands,
+            isSaving: isSaving,
+            hasUnsavedChanges: hasUnsavedChanges,
           ),
-          // Identity: the page being edited, and under it the composition
-          // being shown. `Expanded` is what makes the row incapable of
-          // overflowing — the flexible child is the text, never a control.
-          Expanded(
-            child: Semantics(
-              container: true,
-              label: 'Editando ${_currentPageTitle(context, editProvider)}, '
-                  'vista $viewportWord',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _currentPageTitle(context, editProvider),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: onBar,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Text(
-                    viewportLine,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: barAccent,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          _CompactBarIconButton(
-            buttonKey: const ValueKey('editor-compact-undo'),
-            icon: Icons.undo,
-            label: 'Deshacer',
-            disabledReason: 'No hay cambios que deshacer.',
-            color: onBarMuted,
-            onPressed: editProvider.canUndo ? editProvider.undo : null,
-          ),
-          if (commands != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: FilledButton(
-                key: const ValueKey('editor-compact-save'),
-                onPressed: hasUnsavedChanges && !isSaving
-                    ? () => commands.onSave()
-                    : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: barAccent,
-                  foregroundColor: onBarAccent,
-                  // t10 10e · painted 36 inside the 48 bar. The hit area is
-                  // still 48 because `padded` expands it around the visual
-                  // bounds — `A-02`'s invisible touch area, applied to a
-                  // button.
-                  minimumSize: const Size(0, 36),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  tapTargetSize: MaterialTapTargetSize.padded,
-                  textStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                child: isSaving
-                    ? SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: onBarAccent,
-                        ),
-                      )
-                    : const Text('Guardar'),
-              ),
-            ),
-          _CompactBarIconButton(
-            buttonKey: const ValueKey('editor-compact-more'),
-            icon: Icons.more_horiz,
-            label: 'Más acciones del editor',
-            color: onBarMuted,
-            onPressed: () => _showCompactEditorActionsSheet(
-              context: context,
-              editProvider: editProvider,
-              websiteService: websiteService,
-              storeName: storeName,
-            ),
-          ),
-        ],
+        ),
       ),
+    );
+  }
+
+  /// The bar's own row, so the surface above owns the inset and this owns the
+  /// controls. One responsibility each.
+  ///
+  /// Identity is **one line**: t10 10e and t11 11a both put a single label
+  /// there. The second accent line this bar used to print — the viewport and
+  /// the canvas width — put a third competing weight between the page name and
+  /// the actions at the width where there is least room for it. The viewport
+  /// is still stated, in the two places that own it: the `Vista` group of the
+  /// actions sheet shows which of the three is selected, and the dock states
+  /// what a write will attribute to.
+  Widget _compactBarRow(
+    BuildContext context,
+    WebsiteEditModeProvider editProvider,
+    WebsiteService websiteService,
+    String storeName, {
+    required String viewportWord,
+    required Color onBar,
+    required Color onBarMuted,
+    required Color barAccent,
+    required Color onBarAccent,
+    required WebsiteEditorCommandScope? commands,
+    required bool isSaving,
+    required bool hasUnsavedChanges,
+  }) {
+    return Row(
+      children: [
+        _CompactBarIconButton(
+          buttonKey: const ValueKey('editor-compact-close'),
+          icon: Icons.close,
+          label: 'Volver a Gestión de Sitio Web',
+          color: onBarMuted,
+          onPressed: () => _closeEditorFromTopBar(context, editProvider),
+        ),
+        // Identity: one line, the page being edited. `Expanded` is what makes
+        // the row incapable of overflowing — the flexible child is the text,
+        // never a control. The viewport stays in the semantic label so a
+        // screen reader still hears the whole context in one announcement.
+        Expanded(
+          child: Semantics(
+            key: const ValueKey('editor-compact-bar-identity'),
+            container: true,
+            label: 'Editando ${_currentPageTitle(context, editProvider)}, '
+                'vista $viewportWord',
+            child: Text(
+              _currentPageTitle(context, editProvider),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: onBar,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+        _CompactBarIconButton(
+          buttonKey: const ValueKey('editor-compact-undo'),
+          icon: Icons.undo,
+          label: 'Deshacer',
+          disabledReason: 'No hay cambios que deshacer.',
+          color: onBarMuted,
+          onPressed: editProvider.canUndo ? editProvider.undo : null,
+        ),
+        if (commands != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: FilledButton(
+              key: const ValueKey('editor-compact-save'),
+              onPressed: hasUnsavedChanges && !isSaving
+                  ? () => commands.onSave()
+                  : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: barAccent,
+                foregroundColor: onBarAccent,
+                // t10 10e · painted 36 inside the 48 bar. The hit area is
+                // still 48 because `padded` expands it around the visual
+                // bounds — `A-02`'s invisible touch area, applied to a
+                // button.
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                tapTargetSize: MaterialTapTargetSize.padded,
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              child: isSaving
+                  ? SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: onBarAccent,
+                      ),
+                    )
+                  : const Text('Guardar'),
+            ),
+          ),
+        _CompactBarIconButton(
+          buttonKey: const ValueKey('editor-compact-more'),
+          icon: Icons.more_horiz,
+          label: 'Más acciones del editor',
+          color: onBarMuted,
+          onPressed: () => _showCompactEditorActionsSheet(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+            storeName: storeName,
+          ),
+        ),
+      ],
     );
   }
 
@@ -4233,31 +4525,79 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }
 
   Future<void> _showDomainAndUrlDialog(BuildContext context) async {
-    final tenantId = await _resolveTenantIdForSave(context);
-
-    if (tenantId == null) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo identificar el tenant')),
-        );
-      }
+    WebsiteEditModeProvider provider;
+    WebsiteService websiteService;
+    try {
+      provider = this.context.read<WebsiteEditModeProvider>();
+      websiteService = this.context.read<WebsiteService>();
+    } catch (_) {
       return;
     }
+    final intent = provider.captureSitewideAsyncIntent(
+      bucket: WebsiteSitewideDraftBucket.siteSettings,
+      sourceKeys: const <String>['custom_domain'],
+    );
+    final tenantId = provider.sessionOwnerTenantId?.trim() ?? '';
+    final fingerprint = provider.sessionOwnerLeaseFingerprint;
+    if (intent == null || tenantId.isEmpty || fingerprint == null) return;
 
+    final hostRevision = _remoteWriteHostRevision;
+    final entryLeaseGeneration = provider.editorEntryLeaseGeneration;
+    final entryLeaseIdentityRevision =
+        provider.editorEntryLeaseIdentityRevision;
+    final serviceIdentityEpoch = websiteService.identityEpoch;
+    bool isCurrent() {
+      if (!mounted || _remoteWriteHostRevision != hostRevision) return false;
+      try {
+        final liveProvider = this.context.read<WebsiteEditModeProvider>();
+        final liveService = this.context.read<WebsiteService>();
+        return identical(liveProvider, provider) &&
+            identical(liveService, websiteService) &&
+            liveService.identityEpoch == serviceIdentityEpoch &&
+            liveProvider.editorEntryLeaseGeneration == entryLeaseGeneration &&
+            liveProvider.editorEntryLeaseIdentityRevision ==
+                entryLeaseIdentityRevision &&
+            liveProvider.sessionOwnerTenantId == tenantId &&
+            liveProvider.sessionOwnerLeaseFingerprint == fingerprint;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final authority = WebsiteEditorRemoteWriteAuthority(
+      tenantId: tenantId,
+      operation: 'actualizar el dominio público',
+      isCurrent: isCurrent,
+      claimOwner: () =>
+          provider.commitSitewideAsyncIntent(
+            intent,
+            () => WebsiteInlineMutationResult.unchanged,
+          ) !=
+          WebsiteInlineMutationResult.rejected,
+    );
     final supabase = Supabase.instance.client;
-    final tenant = await supabase
-        .from('tenants')
-        .select('subdomain, custom_domain')
-        .eq('id', tenantId)
-        .maybeSingle();
-
+    Map<String, dynamic>? tenant;
+    try {
+      authority.ensureCurrent();
+      tenant = await supabase
+          .from('tenants')
+          .select('subdomain, custom_domain')
+          .eq('id', authority.tenantId)
+          .maybeSingle();
+      authority.ensureCurrent();
+    } on WebsiteEditorWriteSupersededException {
+      return;
+    }
     if (!context.mounted) return;
 
     final subdomain = (tenant?['subdomain'] as String?)?.trim() ?? '';
-    final currentCustomDomain = (tenant?['custom_domain'] as String?)?.trim();
+    final rawCurrentDomain =
+        (tenant?['custom_domain'] as String?)?.trim() ?? '';
+    final currentCustomDomain =
+        rawCurrentDomain.isEmpty ? null : rawCurrentDomain;
 
     final controller = TextEditingController(text: currentCustomDomain ?? '');
-    final saved = await showDialog<bool>(
+    final result = await showDialog<_DomainDialogResult>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Dominio y URL'),
@@ -4290,27 +4630,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
           ),
           FilledButton.icon(
-            onPressed: () async {
-              final next = controller.text.trim();
-              try {
-                await supabase.from('tenants').update({
-                  'custom_domain': next.isEmpty ? null : next,
-                }).eq('id', tenantId);
-                if (dialogContext.mounted) {
-                  Navigator.pop(dialogContext, true);
-                }
-              } catch (e) {
-                if (dialogContext.mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(content: Text('Error actualizando dominio: $e')),
-                  );
-                }
-              }
-            },
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              _DomainDialogResult(controller.text.trim()),
+            ),
             icon: const Icon(Icons.language_outlined),
             label: const Text('Aplicar dominio'),
           ),
@@ -4320,9 +4647,68 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     controller.dispose();
 
-    if (saved == true && context.mounted) {
+    if (result == null) {
+      provider.commitSitewideAsyncIntent(
+        intent,
+        () => WebsiteInlineMutationResult.unchanged,
+      );
+      return;
+    }
+
+    try {
+      authority.ensureCurrent();
+      final writeGuard = authority.claimForWrite();
+      final liveTenant = await supabase
+          .from('tenants')
+          .select('subdomain, custom_domain')
+          .eq('id', authority.tenantId)
+          .maybeSingle();
+      writeGuard();
+      final liveSubdomain = (liveTenant?['subdomain'] as String?)?.trim() ?? '';
+      final rawLiveDomain =
+          (liveTenant?['custom_domain'] as String?)?.trim() ?? '';
+      final liveCustomDomain = rawLiveDomain.isEmpty ? null : rawLiveDomain;
+      if (liveSubdomain != subdomain ||
+          liveCustomDomain != currentCustomDomain) {
+        throw const WebsiteEditorWriteSupersededException(
+          'El dominio cambió mientras el diálogo estaba abierto.',
+        );
+      }
+
+      writeGuard();
+      final update = supabase.from('tenants').update(<String, dynamic>{
+        'custom_domain':
+            result.customDomain.isEmpty ? null : result.customDomain,
+      }).eq('id', authority.tenantId);
+      final guardedUpdate = currentCustomDomain == null
+          ? update.isFilter('custom_domain', null)
+          : update.eq('custom_domain', currentCustomDomain);
+      final updated = await guardedUpdate.select('id');
+      writeGuard();
+      authority.ensureCurrent();
+      if ((updated as List).isEmpty) {
+        throw const WebsiteEditorWriteSupersededException(
+          'El dominio cambió antes de aplicar la actualización.',
+        );
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dominio actualizado')),
+        );
+      }
+    } on WebsiteEditorWriteSupersededException {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dominio actualizado')),
+        const SnackBar(
+          content: Text(
+            'La sesión o el dominio cambió. No se aplicó la actualización.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error actualizando dominio: $error')),
       );
     }
   }
@@ -4464,7 +4850,51 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       context,
       intent: WebsiteEditorNavigationIntent.switchPage,
     );
-    if (!editorDecision.isAllowed || !context.mounted) return;
+    if (!editorDecision.isAllowed || !context.mounted || !mounted) return;
+
+    WebsiteEditModeProvider provider;
+    WebsiteService websiteService;
+    try {
+      provider = this.context.read<WebsiteEditModeProvider>();
+      websiteService = this.context.read<WebsiteService>();
+    } catch (_) {
+      return;
+    }
+    final tenantId = provider.sessionOwnerTenantId?.trim() ?? '';
+    final fingerprint = provider.sessionOwnerLeaseFingerprint;
+    if (tenantId.isEmpty || fingerprint == null) return;
+    final hostRevision = _remoteWriteHostRevision;
+    final entryLeaseGeneration = provider.editorEntryLeaseGeneration;
+    final entryLeaseIdentityRevision =
+        provider.editorEntryLeaseIdentityRevision;
+    bool quickCreateScopeIsCurrent() {
+      if (!mounted || _remoteWriteHostRevision != hostRevision) return false;
+      try {
+        final liveProvider = this.context.read<WebsiteEditModeProvider>();
+        final liveService = this.context.read<WebsiteService>();
+        return identical(liveProvider, provider) &&
+            identical(liveService, websiteService) &&
+            editorDecision.isCurrent &&
+            liveProvider.editorEntryLeaseGeneration == entryLeaseGeneration &&
+            liveProvider.editorEntryLeaseIdentityRevision ==
+                entryLeaseIdentityRevision &&
+            liveProvider.sessionOwnerTenantId == tenantId &&
+            liveProvider.sessionOwnerLeaseFingerprint == fingerprint;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    // A failed ordinary request may be retried while the dialog and the exact
+    // captured owner remain current. Every attempt still receives its own
+    // one-shot authority; an A -> B -> A host swap invalidates the scope.
+    WebsiteEditorRemoteWriteAuthority createAuthority() =>
+        WebsiteEditorRemoteWriteAuthority(
+          tenantId: tenantId,
+          operation: 'crear la página',
+          isCurrent: quickCreateScopeIsCurrent,
+          claimOwner: editorDecision.claim,
+        );
 
     final titleController = TextEditingController();
     final slugController = TextEditingController();
@@ -4561,23 +4991,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   final title = titleController.text.trim();
                   final slug = slugController.text.trim();
                   if (title.isEmpty || slug.isEmpty) return;
-                  if (!editorDecision.isCurrent) {
-                    ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'El borrador cambió. Cierra y vuelve a crear la '
-                          'página para no perderlo.',
-                        ),
-                      ),
-                    );
-                    return;
-                  }
 
                   try {
-                    final websiteService = context.read<WebsiteService>();
+                    final authority = createAuthority();
+                    final writeGuard = authority.claimForWrite();
                     final page = WebsitePage(
                       id: '',
-                      tenantId: '',
+                      tenantId: authority.tenantId,
                       slug: slug,
                       title: title,
                       template: template,
@@ -4585,14 +5005,28 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       createdAt: DateTime.now(),
                       updatedAt: DateTime.now(),
                     );
-                    final created = await websiteService.createPage(page);
+                    final created = await websiteService.createPage(
+                      page,
+                      tenantId: authority.tenantId,
+                      writeGuard: writeGuard,
+                    );
                     if (dialogContext.mounted) {
                       Navigator.pop(dialogContext, created);
                     }
                   } catch (e) {
+                    if (e is! WebsiteEditorWriteSupersededException) {
+                      editorDecision.releaseClaim();
+                    }
                     if (dialogContext.mounted) {
                       ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        SnackBar(content: Text('Error creando página: $e')),
+                        SnackBar(
+                          content: Text(
+                            e is WebsiteEditorWriteSupersededException
+                                ? 'La sesión del editor cambió. Cierra y '
+                                    'vuelve a abrir “Nueva página”.'
+                                : 'Error creando página: $e',
+                          ),
+                        ),
                       );
                     }
                   }
@@ -4796,38 +5230,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         isErpMounted: _isErpMountedStore(),
       );
 
-  Future<String?> _resolveTenantIdForSave(BuildContext context) async {
-    // 1) Public store host (anonymous tenant detection) via provider
-    try {
-      final tenantProvider = context.read<PublicStoreTenantProvider>();
-      final tenantId = tenantProvider.tenantId;
-      if (tenantId != null && tenantId.isNotEmpty) {
-        return tenantId;
-      }
-    } catch (_) {
-      // Provider not available in this tree (ERP host) - fall back below.
-    }
-
-    // 2) Authenticated ERP host via TenantService
-    try {
-      final tenantService = context.read<TenantService>();
-      final tenantId = await tenantService.getTenantId();
-      if (tenantId != null && tenantId.isNotEmpty) {
-        return tenantId;
-      }
-    } catch (_) {
-      // TenantService not provided - fall back to direct instantiation
-    }
-
-    final fallbackService = TenantService();
-    final tenantId = await fallbackService.getTenantId();
-    if (tenantId != null && tenantId.isNotEmpty) {
-      return tenantId;
-    }
-
-    return null;
-  }
-
   Widget _buildHeader({
     required BuildContext context,
     required String storeName,
@@ -4850,538 +5252,532 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     List<WebsiteNavigation> navItems = const [],
     required PublicCategoryNavigationProjection categoryNavigationProjection,
     bool isOverlay = false, // For transparent mode when scrolled up
+    bool overlaysDocument = false,
   }) {
     final cart = context.watch<CartProvider>();
     final catalogPresentationRegistry =
         context.read<WebsiteService>().catalogPresentationRegistry;
     // The header identity is stable across Edit/Preview/Public: the FSM
     // rebuilds it in place (edit chrome is overlay state, not a new tree).
-    return MediaQueryLayoutBuilder(
-        key: ValueKey('header_layout_${isOverlay ? 'overlay' : 'solid'}'),
-        builder: (context, constraints) {
-          return AnimatedBuilder(
-            animation: MegaMenuController.instance,
-            builder: (context, child) {
-              final isMenuOpen = MegaMenuController.instance.isAnyMenuOpen;
+    //
+    // Every composition — transparent home, sticky, inline, solid — builds the
+    // header through this one function, so measuring it here is what makes the
+    // overlay boundary a single authority instead of a rule each compositor
+    // carries separately. It reports height only; nothing about the published
+    // layout changes.
+    return WebsiteMeasuredOverlayHeader(
+      // The composition decides whether the header covers the document; the
+      // scroll state decides only how it is painted. Keeping them apart is
+      // what stops chrome from jumping into the header at scroll > 50.
+      overlaysDocument: overlaysDocument,
+      visualOverlay: isOverlay,
+      child: MediaQueryLayoutBuilder(
+          key: ValueKey('header_layout_${isOverlay ? 'overlay' : 'solid'}'),
+          builder: (context, constraints) {
+            return AnimatedBuilder(
+              animation: MegaMenuController.instance,
+              builder: (context, child) {
+                final isMenuOpen = MegaMenuController.instance.isAnyMenuOpen;
 
-              final contrastMode =
-                  PublicHeaderContrastModeX.parse(headerColorMode);
-              final configuredMenuSurface = menuSurfaceColor ?? headerBgColor;
-              final resolvedMenuSurface = configuredMenuSurface.a <= 0.01
-                  ? Theme.of(context).colorScheme.surface
-                  : configuredMenuSurface.withValues(alpha: 1);
-              final resolvedMenuRail =
-                  (menuRailColor ?? PublicStoreTheme.secondaryGray)
-                      .withValues(alpha: 1);
-              // Opening the menu swaps only the active navigation surface.
-              // The closed header keeps its normal configured appearance.
-              final effectiveBgColor = isMenuOpen
-                  ? resolvedMenuSurface
-                  : (isOverlay ? Colors.transparent : headerBgColor);
-              final effectiveHeaderContrastMode = isMenuOpen
-                  ? PublicHeaderContrastMode.automatic
-                  : contrastMode;
-              final usesLightForeground =
-                  effectiveHeaderContrastMode.usesLightForeground(
-                isOverlay: isMenuOpen ? false : isOverlay,
-                backgroundColor: effectiveBgColor,
-              );
-              final menuPanelUsesLightForeground =
-                  PublicHeaderContrastMode.automatic.usesLightForeground(
-                isOverlay: false,
-                backgroundColor: resolvedMenuSurface,
-              );
-              final menuPanelForegroundColor = menuPanelUsesLightForeground
-                  ? Colors.white
-                  : Theme.of(context).colorScheme.onSurface;
-              final menuRailUsesLightForeground =
-                  PublicHeaderContrastMode.automatic.usesLightForeground(
-                isOverlay: false,
-                backgroundColor: resolvedMenuRail,
-              );
-              final menuRailForegroundColor = menuRailUsesLightForeground
-                  ? Colors.white
-                  : Theme.of(context).colorScheme.onSurface;
+                final contrastMode =
+                    PublicHeaderContrastModeX.parse(headerColorMode);
+                final configuredMenuSurface = menuSurfaceColor ?? headerBgColor;
+                final resolvedMenuSurface = configuredMenuSurface.a <= 0.01
+                    ? Theme.of(context).colorScheme.surface
+                    : configuredMenuSurface.withValues(alpha: 1);
+                final resolvedMenuRail =
+                    (menuRailColor ?? PublicStoreTheme.secondaryGray)
+                        .withValues(alpha: 1);
+                // Opening the menu swaps only the active navigation surface.
+                // The closed header keeps its normal configured appearance.
+                final effectiveBgColor = isMenuOpen
+                    ? resolvedMenuSurface
+                    : (isOverlay ? Colors.transparent : headerBgColor);
+                final effectiveHeaderContrastMode = isMenuOpen
+                    ? PublicHeaderContrastMode.automatic
+                    : contrastMode;
+                final usesLightForeground =
+                    effectiveHeaderContrastMode.usesLightForeground(
+                  isOverlay: isMenuOpen ? false : isOverlay,
+                  backgroundColor: effectiveBgColor,
+                );
+                final menuPanelUsesLightForeground =
+                    PublicHeaderContrastMode.automatic.usesLightForeground(
+                  isOverlay: false,
+                  backgroundColor: resolvedMenuSurface,
+                );
+                final menuPanelForegroundColor = menuPanelUsesLightForeground
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.onSurface;
+                final menuRailUsesLightForeground =
+                    PublicHeaderContrastMode.automatic.usesLightForeground(
+                  isOverlay: false,
+                  backgroundColor: resolvedMenuRail,
+                );
+                final menuRailForegroundColor = menuRailUsesLightForeground
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.onSurface;
 
-              final textColor =
-                  usesLightForeground ? Colors.white : Colors.black87;
-              final iconColor = usesLightForeground
-                  ? Colors.white
-                  : PublicStoreTheme.logoBlue;
+                final textColor =
+                    usesLightForeground ? Colors.white : Colors.black87;
+                final iconColor = usesLightForeground
+                    ? Colors.white
+                    : PublicStoreTheme.logoBlue;
 
-              // Remove shadow when menu is open to prevent "seam" line
-              final effectiveElevation =
-                  (isMenuOpen || isOverlay) ? 0.0 : (headerShadow ? 2.0 : 0.0);
+                // Remove shadow when menu is open to prevent "seam" line
+                final effectiveElevation = (isMenuOpen || isOverlay)
+                    ? 0.0
+                    : (headerShadow ? 2.0 : 0.0);
 
-              final screenWidth = constraints.maxWidth;
-              // The desktop header needs enough room for the complete saved
-              // navigation and account actions. Below this width the compact
-              // navigation is clearer than squeezing the same content.
-              final headerGeometry =
-                  PublicStoreHeaderGeometry.resolve(screenWidth);
-              final isDesktopHeader = headerGeometry.isDesktop;
-              final projectedNavItems = isDesktopHeader
-                  ? categoryNavigationProjection.forDesktop(navItems)
-                  : categoryNavigationProjection.forMobile(navItems);
-              final useAdaptiveOverlayScrim = isOverlay &&
-                  contrastMode == PublicHeaderContrastMode.automatic;
+                final screenWidth = constraints.maxWidth;
+                // The desktop header needs enough room for the complete saved
+                // navigation and account actions. Below this width the compact
+                // navigation is clearer than squeezing the same content.
+                final headerGeometry =
+                    PublicStoreHeaderGeometry.resolve(screenWidth);
+                final isDesktopHeader = headerGeometry.isDesktop;
+                final projectedNavItems = isDesktopHeader
+                    ? categoryNavigationProjection.forDesktop(navItems)
+                    : categoryNavigationProjection.forMobile(navItems);
+                final useAdaptiveOverlayScrim = isOverlay &&
+                    contrastMode == PublicHeaderContrastMode.automatic;
 
-              // Transform creates a web stacking context so the configured
-              // header and its menu remain above carousel/hero layers.
-              final headerContent = Transform.translate(
-                offset: Offset.zero,
-                child: MegaMenuHeaderWrapper(
-                  openBackgroundColor: resolvedMenuSurface,
-                  child: AnimatedPhysicalModel(
-                    duration: const Duration(
-                        milliseconds:
-                            300), // Slightly slower to match menu fade/rendering
-                    curve: Curves.easeInOut,
-                    shape: BoxShape.rectangle,
-                    elevation: effectiveElevation,
-                    color: effectiveBgColor,
-                    shadowColor: Colors.black,
-                    child: Container(
-                      decoration: useAdaptiveOverlayScrim
-                          ? BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: 0.52),
-                                  Colors.black.withValues(alpha: 0.24),
-                                ],
-                              ),
-                            )
-                          : null,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (showTopBanner && topBannerText.isNotEmpty)
-                            Container(
-                              width: double.infinity,
-                              color: usesLightForeground
-                                  ? Colors.black.withValues(alpha: 0.3)
-                                  : primaryColor,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 6),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.local_shipping_outlined,
-                                      color: Colors.white, size: 16),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      topBannerText,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (isDesktopHeader) ...[
-                                    if (contactPhone.isNotEmpty)
-                                      Padding(
-                                        padding:
-                                            const EdgeInsets.only(left: 16),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.phone_outlined,
-                                                color: Colors.white, size: 16),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              contactPhone,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    if (contactEmail.isNotEmpty)
-                                      Padding(
-                                        padding:
-                                            const EdgeInsets.only(left: 16),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.mail_outline,
-                                                color: Colors.white, size: 16),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              contactEmail,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                // Transform creates a web stacking context so the configured
+                // header and its menu remain above carousel/hero layers.
+                final headerContent = Transform.translate(
+                  offset: Offset.zero,
+                  child: MegaMenuHeaderWrapper(
+                    openBackgroundColor: resolvedMenuSurface,
+                    child: AnimatedPhysicalModel(
+                      duration: const Duration(
+                          milliseconds:
+                              300), // Slightly slower to match menu fade/rendering
+                      curve: Curves.easeInOut,
+                      shape: BoxShape.rectangle,
+                      elevation: effectiveElevation,
+                      color: effectiveBgColor,
+                      shadowColor: Colors.black,
+                      child: Container(
+                        decoration: useAdaptiveOverlayScrim
+                            ? BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.52),
+                                    Colors.black.withValues(alpha: 0.24),
                                   ],
-                                ],
-                              ),
-                            ),
-
-                          // Main header with logo
-                          Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.symmetric(
-                                horizontal: headerGeometry.horizontalPadding,
-                                vertical: headerGeometry.verticalPadding),
-                            child: Row(
-                              children: [
-                                // Logo - uses URL if set, otherwise falls back to asset, then text
-                                // Logo - Force use of local asset for consistency and to fix "white block" issue
-                                // (Database logo_url might be opaque, causing white tint to fill the box)
-                                InkWell(
-                                  key: const ValueKey(
-                                    'public-store-header-home',
-                                  ),
-                                  onTap: isEditMode
-                                      ? null
-                                      : () {
-                                          final path =
-                                              _routeForPublicStore('/tienda');
-                                          _navigateToHref(
-                                            context,
-                                            path,
-                                            forceHomeRefresh: true,
-                                          );
-                                        },
-                                  child: SizedBox(
-                                    height: headerGeometry.logoHitBox,
-                                    child: Center(
-                                      child: _buildLogo(
-                                        context: context,
-                                        logoUrl: logoUrl,
-                                        storeName: storeName,
-                                        textColor: textColor,
-                                        isDarkMode: usesLightForeground,
-                                        height: headerGeometry.logoHeight,
-                                        maxWidth: headerGeometry.logoMaxWidth,
-                                      ),
-                                    ),
-                                  ),
                                 ),
-                                SizedBox(width: headerGeometry.logoGap),
-                                // Only show nav links on desktop, use Spacer on mobile
-                                if (isDesktopHeader)
-                                  Expanded(
-                                    child: Row(
-                                      children: [
-                                        if (projectedNavItems.isEmpty &&
-                                            isEditMode)
-                                          TextButton.icon(
-                                            onPressed: () =>
-                                                _openWorkspacePanel(
-                                              WebsiteWorkspacePanel.navigation,
-                                            ),
-                                            icon: const Icon(
-                                              Icons.add_link_rounded,
-                                              size: 17,
-                                            ),
-                                            label: const Text(
-                                              'Configurar navegación',
-                                            ),
-                                            style: TextButton.styleFrom(
-                                              foregroundColor: textColor,
-                                            ),
-                                          )
-                                        else
-                                          ...projectedNavItems.map((nav) {
-                                            final children = nav.children
-                                                .where((c) => c.isVisible)
-                                                .where((c) => c.showOnDesktop)
-                                                .toList()
-                                              ..sort((a, b) => a.orderIndex
-                                                  .compareTo(b.orderIndex));
-                                            if (children.isNotEmpty &&
-                                                nav.cssClass
-                                                        ?.split(RegExp(r'\s+'))
-                                                        .contains('megamenu') ==
-                                                    true) {
-                                              return Padding(
-                                                padding: const EdgeInsets.only(
-                                                    right: 24),
-                                                child: MegaMenuButton(
-                                                  key: ValueKey(
-                                                      'mega_${nav.id}_${nav.label}'),
-                                                  parent: nav,
-                                                  children: children,
-                                                  isEditMode: isEditMode,
-                                                  uppercaseLabel:
-                                                      navigationUppercase,
-                                                  textColor: textColor,
-                                                  panelBackgroundColor:
-                                                      resolvedMenuSurface,
-                                                  panelForegroundColor:
-                                                      menuPanelForegroundColor,
-                                                  panelRailBackgroundColor:
-                                                      resolvedMenuRail,
-                                                  panelRailForegroundColor:
-                                                      menuRailForegroundColor,
-                                                  branchPresentations:
-                                                      _projectMegaMenuBranchPresentations(
-                                                    branches: children,
-                                                    registry:
-                                                        catalogPresentationRegistry,
-                                                  ),
-                                                  canNavigate:
-                                                      categoryNavigationProjection
-                                                          .canNavigate,
-                                                  onNavigate: (href, newTab) =>
-                                                      _navigateToHref(
-                                                          context, href,
-                                                          openInNewTab: newTab),
-                                                ),
-                                              );
-                                            }
-
-                                            if (children.isNotEmpty) {
-                                              return Padding(
-                                                padding: const EdgeInsets.only(
-                                                    right: 24),
-                                                child: NavigationDropdownButton(
-                                                  key: ValueKey(
-                                                      'dropdown_${nav.id}_${nav.label}'),
-                                                  parent: nav,
-                                                  children: children,
-                                                  isEditMode: isEditMode,
-                                                  uppercaseLabel:
-                                                      navigationUppercase,
-                                                  textColor: textColor,
-                                                  panelBackgroundColor:
-                                                      resolvedMenuSurface,
-                                                  panelForegroundColor:
-                                                      menuPanelForegroundColor,
-                                                  canNavigate:
-                                                      categoryNavigationProjection
-                                                          .canNavigate,
-                                                  onNavigate: (href, newTab) =>
-                                                      _navigateToHref(
-                                                    context,
-                                                    href,
-                                                    openInNewTab: newTab,
-                                                  ),
-                                                ),
-                                              );
-                                            }
-
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                  right: 24),
-                                              child: _buildNavItemLink(
-                                                context,
-                                                nav,
-                                                textColor,
-                                                isEditMode: isEditMode,
-                                                uppercaseLabel:
-                                                    navigationUppercase,
-                                              ),
-                                            );
-                                          }),
-                                      ],
-                                    ),
-                                  )
-                                else
-                                  const Spacer(),
-                                Row(
+                              )
+                            : null,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (showTopBanner && topBannerText.isNotEmpty)
+                              Container(
+                                width: double.infinity,
+                                color: usesLightForeground
+                                    ? Colors.black.withValues(alpha: 0.3)
+                                    : primaryColor,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 24, vertical: 6),
+                                child: Row(
                                   children: [
-                                    IconButton(
-                                      key: const ValueKey(
-                                        'public-store-header-search',
-                                      ),
-                                      icon: Icon(Icons.search,
-                                          size: headerGeometry.iconSize),
-                                      color: iconColor,
-                                      onPressed: () =>
-                                          SearchOverlay.show(context),
-                                      tooltip: 'Buscar',
-                                      constraints: BoxConstraints.tightFor(
-                                        width: headerGeometry.iconBox,
-                                        height: headerGeometry.iconBox,
-                                      ),
-                                      padding: EdgeInsets.zero,
-                                    ),
-                                    SizedBox(width: headerGeometry.actionGap),
-                                    Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        IconButton(
-                                          key: const ValueKey(
-                                            'public-store-header-cart',
-                                          ),
-                                          icon: Icon(
-                                            Icons.shopping_cart_outlined,
-                                            size: headerGeometry.iconSize,
-                                          ),
-                                          color: iconColor,
-                                          onPressed: () => _navigateToHref(
-                                            context,
-                                            _routeForPublicStore(
-                                                '/tienda/carrito'),
-                                          ),
-                                          tooltip: 'Carrito',
-                                          constraints: BoxConstraints.tightFor(
-                                            width: headerGeometry.iconBox,
-                                            height: headerGeometry.iconBox,
-                                          ),
-                                          padding: EdgeInsets.zero,
-                                        ),
-                                        if (cart.itemCount > 0)
-                                          Positioned(
-                                            right: 0,
-                                            top: 0,
-                                            child: IgnorePointer(
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.all(4),
-                                                decoration: BoxDecoration(
-                                                  color: accentColor,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                constraints:
-                                                    const BoxConstraints(
-                                                  minWidth: 18,
-                                                  minHeight: 18,
-                                                ),
-                                                child: Text(
-                                                  '${cart.itemCount}',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                  textAlign: TextAlign.center,
-                                                ),
-                                              ),
+                                    const Icon(Icons.local_shipping_outlined,
+                                        color: Colors.white, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        topBannerText,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w500,
                                             ),
-                                          ),
-                                      ],
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                     if (isDesktopHeader) ...[
-                                      const SizedBox(width: 10),
-                                      MouseRegion(
-                                        onEnter: (_) =>
-                                            _warmDeferredRouteForPath(
-                                          '/cuenta',
+                                      if (contactPhone.isNotEmpty)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(left: 16),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.phone_outlined,
+                                                  color: Colors.white,
+                                                  size: 16),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                contactPhone,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                        child: CustomerAccountMenu(
+                                      if (contactEmail.isNotEmpty)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(left: 16),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.mail_outline,
+                                                  color: Colors.white,
+                                                  size: 16),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                contactEmail,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+
+                            // Main header with logo
+                            Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: headerGeometry.horizontalPadding,
+                                  vertical: headerGeometry.verticalPadding),
+                              child: Row(
+                                children: [
+                                  // Logo - uses URL if set, otherwise falls back to asset, then text
+                                  // Logo - Force use of local asset for consistency and to fix "white block" issue
+                                  // (Database logo_url might be opaque, causing white tint to fill the box)
+                                  InkWell(
+                                    key: const ValueKey(
+                                      'public-store-header-home',
+                                    ),
+                                    onTap: isEditMode
+                                        ? null
+                                        : () {
+                                            final path =
+                                                _routeForPublicStore('/tienda');
+                                            _navigateToHref(
+                                              context,
+                                              path,
+                                              forceHomeRefresh: true,
+                                            );
+                                          },
+                                    child: SizedBox(
+                                      height: headerGeometry.logoHitBox,
+                                      child: Center(
+                                        child: _buildLogo(
+                                          context: context,
+                                          logoUrl: logoUrl,
+                                          storeName: storeName,
                                           textColor: textColor,
+                                          isDarkMode: usesLightForeground,
+                                          height: headerGeometry.logoHeight,
+                                          maxWidth: headerGeometry.logoMaxWidth,
                                         ),
                                       ),
-                                    ] else ...[
-                                      const SizedBox(width: 4),
+                                    ),
+                                  ),
+                                  SizedBox(width: headerGeometry.logoGap),
+                                  // Only show nav links on desktop, use Spacer on mobile
+                                  if (isDesktopHeader)
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          if (projectedNavItems.isEmpty &&
+                                              isEditMode)
+                                            TextButton.icon(
+                                              onPressed: () =>
+                                                  _openWorkspacePanel(
+                                                WebsiteWorkspacePanel
+                                                    .navigation,
+                                              ),
+                                              icon: const Icon(
+                                                Icons.add_link_rounded,
+                                                size: 17,
+                                              ),
+                                              label: const Text(
+                                                'Configurar navegación',
+                                              ),
+                                              style: TextButton.styleFrom(
+                                                foregroundColor: textColor,
+                                              ),
+                                            )
+                                          else
+                                            ...projectedNavItems.map((nav) {
+                                              final children = nav.children
+                                                  .where((c) => c.isVisible)
+                                                  .where((c) => c.showOnDesktop)
+                                                  .toList()
+                                                ..sort((a, b) => a.orderIndex
+                                                    .compareTo(b.orderIndex));
+                                              if (children.isNotEmpty &&
+                                                  nav.cssClass
+                                                          ?.split(
+                                                              RegExp(r'\s+'))
+                                                          .contains(
+                                                              'megamenu') ==
+                                                      true) {
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          right: 24),
+                                                  child: MegaMenuButton(
+                                                    key: ValueKey(
+                                                        'mega_${nav.id}_${nav.label}'),
+                                                    parent: nav,
+                                                    children: children,
+                                                    isEditMode: isEditMode,
+                                                    uppercaseLabel:
+                                                        navigationUppercase,
+                                                    textColor: textColor,
+                                                    panelBackgroundColor:
+                                                        resolvedMenuSurface,
+                                                    panelForegroundColor:
+                                                        menuPanelForegroundColor,
+                                                    panelRailBackgroundColor:
+                                                        resolvedMenuRail,
+                                                    panelRailForegroundColor:
+                                                        menuRailForegroundColor,
+                                                    branchPresentations:
+                                                        _projectMegaMenuBranchPresentations(
+                                                      branches: children,
+                                                      registry:
+                                                          catalogPresentationRegistry,
+                                                    ),
+                                                    canNavigate:
+                                                        categoryNavigationProjection
+                                                            .canNavigate,
+                                                    onNavigate:
+                                                        (href, newTab) =>
+                                                            _navigateToHref(
+                                                                context, href,
+                                                                openInNewTab:
+                                                                    newTab),
+                                                  ),
+                                                );
+                                              }
+
+                                              if (children.isNotEmpty) {
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          right: 24),
+                                                  child:
+                                                      NavigationDropdownButton(
+                                                    key: ValueKey(
+                                                        'dropdown_${nav.id}_${nav.label}'),
+                                                    parent: nav,
+                                                    children: children,
+                                                    isEditMode: isEditMode,
+                                                    uppercaseLabel:
+                                                        navigationUppercase,
+                                                    textColor: textColor,
+                                                    panelBackgroundColor:
+                                                        resolvedMenuSurface,
+                                                    panelForegroundColor:
+                                                        menuPanelForegroundColor,
+                                                    canNavigate:
+                                                        categoryNavigationProjection
+                                                            .canNavigate,
+                                                    onNavigate:
+                                                        (href, newTab) =>
+                                                            _navigateToHref(
+                                                      context,
+                                                      href,
+                                                      openInNewTab: newTab,
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 24),
+                                                child: _buildNavItemLink(
+                                                  context,
+                                                  nav,
+                                                  textColor,
+                                                  isEditMode: isEditMode,
+                                                  uppercaseLabel:
+                                                      navigationUppercase,
+                                                ),
+                                              );
+                                            }),
+                                        ],
+                                      ),
+                                    )
+                                  else
+                                    const Spacer(),
+                                  Row(
+                                    children: [
                                       IconButton(
                                         key: const ValueKey(
-                                          'public-store-header-menu',
+                                          'public-store-header-search',
                                         ),
-                                        icon: Icon(Icons.menu,
+                                        icon: Icon(Icons.search,
                                             size: headerGeometry.iconSize),
                                         color: iconColor,
-                                        onPressed: () => _showMobileMenu(
-                                          context,
-                                          projectedNavItems,
-                                          isEditMode: isEditMode,
-                                          canNavigate:
-                                              categoryNavigationProjection
-                                                  .canNavigate,
-                                        ),
-                                        tooltip: 'Menú',
+                                        onPressed: () =>
+                                            SearchOverlay.show(context),
+                                        tooltip: 'Buscar',
                                         constraints: BoxConstraints.tightFor(
                                           width: headerGeometry.iconBox,
                                           height: headerGeometry.iconBox,
                                         ),
                                         padding: EdgeInsets.zero,
                                       ),
-                                    ]
-                                  ],
-                                ),
-                              ],
+                                      SizedBox(width: headerGeometry.actionGap),
+                                      Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          IconButton(
+                                            key: const ValueKey(
+                                              'public-store-header-cart',
+                                            ),
+                                            icon: Icon(
+                                              Icons.shopping_cart_outlined,
+                                              size: headerGeometry.iconSize,
+                                            ),
+                                            color: iconColor,
+                                            onPressed: () => _navigateToHref(
+                                              context,
+                                              _routeForPublicStore(
+                                                  '/tienda/carrito'),
+                                            ),
+                                            tooltip: 'Carrito',
+                                            constraints:
+                                                BoxConstraints.tightFor(
+                                              width: headerGeometry.iconBox,
+                                              height: headerGeometry.iconBox,
+                                            ),
+                                            padding: EdgeInsets.zero,
+                                          ),
+                                          if (cart.itemCount > 0)
+                                            Positioned(
+                                              right: 0,
+                                              top: 0,
+                                              child: IgnorePointer(
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.all(4),
+                                                  decoration: BoxDecoration(
+                                                    color: accentColor,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  constraints:
+                                                      const BoxConstraints(
+                                                    minWidth: 18,
+                                                    minHeight: 18,
+                                                  ),
+                                                  child: Text(
+                                                    '${cart.itemCount}',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      if (isDesktopHeader) ...[
+                                        const SizedBox(width: 10),
+                                        MouseRegion(
+                                          onEnter: (_) =>
+                                              _warmDeferredRouteForPath(
+                                            '/cuenta',
+                                          ),
+                                          child: CustomerAccountMenu(
+                                            textColor: textColor,
+                                          ),
+                                        ),
+                                      ] else ...[
+                                        const SizedBox(width: 4),
+                                        IconButton(
+                                          key: const ValueKey(
+                                            'public-store-header-menu',
+                                          ),
+                                          icon: Icon(Icons.menu,
+                                              size: headerGeometry.iconSize),
+                                          color: iconColor,
+                                          onPressed: () => _showMobileMenu(
+                                            context,
+                                            projectedNavItems,
+                                            isEditMode: isEditMode,
+                                            canNavigate:
+                                                categoryNavigationProjection
+                                                    .canNavigate,
+                                          ),
+                                          tooltip: 'Menú',
+                                          constraints: BoxConstraints.tightFor(
+                                            width: headerGeometry.iconBox,
+                                            height: headerGeometry.iconBox,
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                      ]
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-
-              // Wrap with edit mode indicator if in edit mode
-              if (isEditMode) {
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    // Select header for editing in the "Editar" tab
-                    final editProvider =
-                        context.read<WebsiteEditModeProvider>();
-                    editProvider.selectBlock('header');
-                  },
-                  child: Stack(
-                    children: [
-                      headerContent,
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: Colors.blue.withValues(alpha: 0.5),
-                                width: 2,
-                              ),
-                            ),
-                            child: Align(
-                              alignment: Alignment.topLeft,
-                              child: Container(
-                                margin: const EdgeInsets.all(4),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.edit,
-                                        color: Colors.white, size: 14),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Header',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 );
-              }
 
-              return headerContent;
-            },
-          );
-        });
+                // Editor chrome for the published header.
+                //
+                // Two things were wrong here and both are hierarchy problems.
+                // The outline and the badge were painted for EVERY block in
+                // Edit, so a permanent 2 px ring and a filled chip sat on the
+                // header at the same weight as a real selection — the operator
+                // could not tell the header apart from the block they had just
+                // selected. And both colours were literal `Colors.blue`, which
+                // t11 forbids outright (`ningún widget del Website Builder
+                // declara un hex`) and which cannot answer to a palette or to
+                // dark mode.
+                //
+                // Now: unselected is a hairline, selected is the published
+                // selection ring, and the chip names the object in words so the
+                // state never depends on colour alone.
+                if (isEditMode) {
+                  return _EditableChromeSurface(
+                    target: WebsiteEditorChromeTarget.header,
+                    child: headerContent,
+                  );
+                }
+
+                return headerContent;
+              },
+            );
+          }),
+    );
   }
 
   /// Builds a layout where the header stays fixed at the top while scrolling
@@ -5743,9 +6139,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     String currentValue,
   ) async {
     final editProvider = context.read<WebsiteEditModeProvider>();
+    final intent = editProvider.captureSitewideAsyncIntent(
+      bucket: WebsiteSitewideDraftBucket.footer,
+      sourceKeys: <String>[settingKey],
+    );
+    if (intent == null) return;
     final controller = TextEditingController(text: currentValue);
 
-    final saved = await showDialog<bool>(
+    final value = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Editar $label'),
@@ -5782,16 +6183,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
           ),
           FilledButton.icon(
             onPressed: () {
-              final value = controller.text.trim();
-              editProvider.updateFooterSetting(settingKey, value);
-              if (dialogContext.mounted) {
-                Navigator.pop(dialogContext, true);
-              }
+              Navigator.pop(dialogContext, controller.text.trim());
             },
             icon: const Icon(Icons.check),
             label: const Text('Aplicar'),
@@ -5802,9 +6199,19 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     controller.dispose();
 
-    if (saved == true && mounted) {
-      setState(() {});
+    if (value == null || !mounted) return;
+    WebsiteEditModeProvider liveProvider;
+    try {
+      liveProvider = this.context.read<WebsiteEditModeProvider>();
+    } catch (_) {
+      return;
     }
+    final result = liveProvider.commitSitewideAsyncIntent(intent, () {
+      if (value == currentValue) return WebsiteInlineMutationResult.unchanged;
+      liveProvider.updateFooterSetting(settingKey, value);
+      return WebsiteInlineMutationResult.committed;
+    });
+    if (result.accepted && mounted) setState(() {});
   }
 
   String _getHintForFooterContactSetting(String key) {
@@ -5899,9 +6306,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     String? currentValue,
   ) async {
     final editProvider = context.read<WebsiteEditModeProvider>();
+    final intent = editProvider.captureSitewideAsyncIntent(
+      bucket: WebsiteSitewideDraftBucket.footer,
+      sourceKeys: <String>[settingKey],
+    );
+    if (intent == null) return;
     final controller = TextEditingController(text: currentValue ?? '');
 
-    final saved = await showDialog<bool>(
+    final value = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Editar $label'),
@@ -5929,16 +6341,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
           ),
           FilledButton.icon(
             onPressed: () {
-              final value = controller.text.trim();
-              editProvider.updateFooterSetting(settingKey, value);
-              if (dialogContext.mounted) {
-                Navigator.pop(dialogContext, true);
-              }
+              Navigator.pop(dialogContext, controller.text.trim());
             },
             icon: const Icon(Icons.check),
             label: const Text('Aplicar'),
@@ -5949,9 +6357,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
     controller.dispose();
 
-    if (saved == true && mounted) {
-      setState(() {}); // Refresh to show updated value
+    if (value == null || !mounted) return;
+    WebsiteEditModeProvider liveProvider;
+    try {
+      liveProvider = this.context.read<WebsiteEditModeProvider>();
+    } catch (_) {
+      return;
     }
+    final result = liveProvider.commitSitewideAsyncIntent(intent, () {
+      if (value == (currentValue ?? '')) {
+        return WebsiteInlineMutationResult.unchanged;
+      }
+      liveProvider.updateFooterSetting(settingKey, value);
+      return WebsiteInlineMutationResult.committed;
+    });
+    if (result.accepted && mounted) setState(() {});
   }
 
   String _getHintForSetting(String key) {
@@ -6299,57 +6719,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
           // Wrap with edit mode indicator if in edit mode
           if (isEditMode) {
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                // Select footer for editing in the "Editar" tab
-                final editProvider = context.read<WebsiteEditModeProvider>();
-                editProvider.selectBlock('footer');
-              },
-              child: Stack(
-                children: [
-                  footerContent,
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Colors.green.withValues(alpha: 0.5),
-                            width: 2,
-                          ),
-                        ),
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: Container(
-                            margin: const EdgeInsets.all(4),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.edit, color: Colors.white, size: 14),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Footer',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            // The SAME owner as the header. It used to be a second copy with a
+            // literal green palette and its own badge.
+            return _EditableChromeSurface(
+              target: WebsiteEditorChromeTarget.footer,
+              child: footerContent,
             );
           }
 

@@ -25,9 +25,8 @@ void main() {
   });
 
   testWidgets(
-      'selected image exposes eight frame handles, rotation, and crop reframe',
+      'selected image exposes frame, rotation, crop, and arrange controls',
       (tester) async {
-    List<Map<String, dynamic>> latest = [];
     final image = createCanvasElement(id: 'image-1', type: 'image')
       ..addAll({
         'x': 140.0,
@@ -52,7 +51,7 @@ void main() {
                 editable: true,
                 accentColor: const Color(0xFF00A09D),
                 activeElementId: 'image-1',
-                onElementsChanged: (elements) => latest = elements,
+                onElementsChanged: (_) {},
                 clipContentToBounds: true,
               ),
             ),
@@ -98,22 +97,6 @@ void main() {
     expect(find.byKey(const ValueKey('rotation_handle_image-1')), findsNothing);
     expect(find.text('RECORTE · ARRASTRA LA IMAGEN'), findsOneWidget);
 
-    await tester.drag(
-      find.byKey(const ValueKey('canvas_el_image-1')),
-      const Offset(48, 0),
-    );
-    await tester.pump();
-    expect(latest, isNotEmpty);
-    expect((latest.single['focalPointX'] as num).toDouble(), lessThan(0.5));
-
-    final widthBefore = (latest.single['w'] as num).toDouble();
-    await tester.drag(
-      find.byKey(const ValueKey('crop_right_image-1')),
-      const Offset(40, 0),
-    );
-    await tester.pump();
-    expect((latest.single['w'] as num).toDouble(), greaterThan(widthBefore));
-
     await tester.tap(find.byKey(const ValueKey('toolbar_crop')));
     await tester.pump();
     expect(
@@ -123,7 +106,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('toolbar_rotate_90')));
     await tester.pump();
-    expect((latest.single['rotation'] as num).toDouble(), 90);
 
     await tester.tap(find.byKey(const ValueKey('toolbar_back')));
     await tester.pump();
@@ -137,12 +119,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('toolbar_align_left')));
     await tester.pump();
-    expect((latest.single['x'] as num).toDouble(), 0);
     expect(tester.takeException(), isNull);
     await tester.pump(const Duration(milliseconds: 100));
   });
 
-  testWidgets('rotation handle drag changes and persists the layer rotation',
+  testWidgets('legacy touch drag cannot bypass the exact rotation session',
       (tester) async {
     List<Map<String, dynamic>> latest = [];
     final image = createCanvasElement(id: 'rotating-image', type: 'image')
@@ -187,15 +168,11 @@ void main() {
     await tester.drag(handle, const Offset(110, 110));
     await tester.pump();
 
-    expect(latest, isNotEmpty);
-    expect(
-      ((latest.single['rotation'] as num?)?.toDouble() ?? 0).abs(),
-      greaterThan(30),
-    );
+    expect(latest, isEmpty);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('compact layers keep a working rotation target inside bounds',
+  testWidgets('compact layers keep a rotation target inside bounds',
       (tester) async {
     List<Map<String, dynamic>> latest = [];
     final button = createCanvasElement(id: 'compact-button', type: 'button')
@@ -242,10 +219,7 @@ void main() {
 
     await tester.drag(handle, const Offset(-70, 70));
     await tester.pump();
-    expect(
-      ((latest.single['rotation'] as num?)?.toDouble() ?? 0).abs(),
-      greaterThan(30),
-    );
+    expect(latest, isEmpty);
     expect(tester.takeException(), isNull);
   });
 

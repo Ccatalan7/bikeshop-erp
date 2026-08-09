@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_action.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_surface_style.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_type.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_projection.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_action_button.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_content_presenters.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_cta_block_content.dart';
@@ -14,17 +18,23 @@ Widget _host({
 }) {
   return MaterialApp(
     theme: ThemeData(useMaterial3: true),
-    home: Scaffold(
-      body: WebsiteCtaBlockContent(
-        data: data,
-        primaryColor: const Color(0xFF123456),
-        accentColor: const Color(0xFF00A09D),
-        previewMode: previewMode,
-        headingFont: 'Inter',
-        bodyFont: 'Inter',
-        onNavigate: onNavigate,
-        isNavigationEligible: isNavigationEligible,
-        presenters: presenters,
+    home: Builder(
+      builder: (context) => Scaffold(
+        body: WebsiteCtaBlockContent(
+          data: data,
+          surfaceStyle: WebsiteBlockSurfaceStyle.forLogicalWidth(
+            data: data,
+            logicalWidth: MediaQuery.sizeOf(context).width,
+          ),
+          primaryColor: const Color(0xFF123456),
+          accentColor: const Color(0xFF00A09D),
+          previewMode: previewMode,
+          headingFont: 'Inter',
+          bodyFont: 'Inter',
+          onNavigate: onNavigate,
+          isNavigationEligible: isNavigationEligible,
+          presenters: presenters,
+        ),
       ),
     ),
   );
@@ -172,14 +182,22 @@ void main() {
             return const ColoredBox(color: Color(0xFF445566));
           },
         );
-        const data = <String, dynamic>{
+        const source = <String, dynamic>{
           'title': 'Campaña',
           'backgroundImage': 'https://example.invalid/campaign.jpg',
           'backgroundImageAltText': 'Ciclista en la montaña',
           'focalPointX': 0.2,
           'focalPointY': 0.3,
-          'mobileFocalPointX': 0.8,
-          'mobileFocalPointY': 0.9,
+          'mobileFocalPointX': 0.1,
+          'mobileFocalPointY': 0.1,
+          'mobileBgAlignment': 'left',
+          'responsive': <String, dynamic>{
+            'version': 2,
+            'mobile': <String, dynamic>{
+              'focalPointX': 0.8,
+              'focalPointY': 0.9,
+            },
+          },
           'overlayColor': '#112233',
           'overlayOpacity': 0.4,
           'style': <String, dynamic>{'backgroundColor': '#ABCDEF'},
@@ -189,9 +207,16 @@ void main() {
 
         await _setViewport(tester, width: 834);
         await tester.pumpWidget(
-          _host(data: data, presenters: presenters),
+          _host(
+            data: WebsiteResponsiveBlockProjection.project(
+              type: WebsiteBlockType.cta,
+              data: source,
+              viewport: WebsiteViewport.tablet,
+            ),
+            presenters: presenters,
+          ),
         );
-        expect(mediaSlot?.url, data['backgroundImage']);
+        expect(mediaSlot?.url, source['backgroundImage']);
         expect(mediaSlot?.fit, BoxFit.cover);
         expect(mediaSlot?.alignment, const Alignment(-0.6, -0.4));
         expect(mediaSlot?.semanticLabel, 'Ciclista en la montaña');
@@ -206,7 +231,14 @@ void main() {
 
         await _setViewport(tester, width: 390);
         await tester.pumpWidget(
-          _host(data: data, presenters: presenters),
+          _host(
+            data: WebsiteResponsiveBlockProjection.project(
+              type: WebsiteBlockType.cta,
+              data: source,
+              viewport: WebsiteViewport.mobile,
+            ),
+            presenters: presenters,
+          ),
         );
         expect(mediaSlot?.alignment.x, closeTo(0.6, 0.000001));
         expect(mediaSlot?.alignment.y, closeTo(0.8, 0.000001));
@@ -225,7 +257,11 @@ void main() {
           find.byKey(WebsiteCtaBlockContent.backgroundKey),
         );
         final decoration = background.decoration as BoxDecoration;
-        expect(decoration.color, const Color(0xFFABCDEF));
+        expect(
+          decoration.color,
+          Colors.transparent,
+          reason: 'the shared WebsiteBlockSurface paints authored color once',
+        );
         expect(decoration.image, isNull);
         expect(find.byKey(WebsiteCtaBlockContent.overlayKey), findsNothing);
       },

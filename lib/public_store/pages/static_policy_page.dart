@@ -6,10 +6,10 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../modules/website/models/website_block_public_visibility.dart';
 import '../../modules/website/models/website_editor_capability.dart';
 import '../../modules/website/models/website_page_composition.dart';
 import '../../modules/website/models/website_page_models.dart';
+import '../../modules/website/models/website_responsive_authoring.dart';
 import '../../modules/website/models/website_seo_settings_aliases.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
@@ -1744,8 +1744,8 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       return const Center(child: CircularProgressIndicator());
     }
 
-    final breakpoint =
-        websitePublicBreakpointForWidth(MediaQuery.sizeOf(context).width);
+    final logicalWidth = MediaQuery.sizeOf(context).width;
+    final breakpoint = WebsiteViewport.fromLogicalWidth(logicalWidth).wireName;
     final compositionMode = isEditMode
         ? WebsitePageCompositionMode.edit
         : editProvider.isPreviewMode
@@ -1755,6 +1755,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
       blocks: blocksToRender,
       mode: compositionMode,
       breakpoint: breakpoint,
+      logicalWidth: logicalWidth,
       sectionSpacing: sectionSpacing,
     );
     final composedRows = composition.blocks
@@ -1769,6 +1770,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
             blocks: blocksToRender,
             mode: WebsitePageCompositionMode.preview,
             breakpoint: breakpoint,
+            logicalWidth: logicalWidth,
             sectionSpacing: sectionSpacing,
           ).blocks.map((block) => block.sourceBlock).toList(growable: false)
         : composedRows;

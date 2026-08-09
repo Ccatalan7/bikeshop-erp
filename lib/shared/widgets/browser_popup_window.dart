@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,176 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 enum BrowserPopupDispositionSupport {
   androidTransportOnly,
   reliableHints,
+}
+
+const browserPopupOpenCaptureMaxUrlLength = 8192;
+const browserPopupOpenCaptureMaxQueueLength = 8;
+const browserPopupOpenCaptureMaxAgeMilliseconds = 30000;
+const browserPopupExplicitLoadFallbackDelay = Duration(milliseconds: 750);
+const browserPopupExplicitLoadFallbackProbeAttempts = 2;
+
+const browserPopupRuntimeIsBlankJavaScriptSource =
+    "location.href === '' || location.href === 'about:blank'";
+
+enum BrowserPopupExplicitLoadFallbackOutcome {
+  loaded,
+  notNeeded,
+  inactive,
+  probeFailed,
+}
+
+/// Ejecuta como máximo una carga de rescate y deja las esperas/sondas
+/// inyectables para probar la carrera sin construir un WebView nativo.
+Future<BrowserPopupExplicitLoadFallbackOutcome>
+    runBrowserPopupExplicitLoadFallback({
+  required Future<void> Function(Duration delay) wait,
+  required bool Function() isActive,
+  required Future<Object?> Function() probeRuntimeIsBlank,
+  required Future<void> Function() load,
+  Duration delay = browserPopupExplicitLoadFallbackDelay,
+  int probeAttempts = browserPopupExplicitLoadFallbackProbeAttempts,
+}) async {
+  for (var attempt = 0; attempt < probeAttempts; attempt++) {
+    await wait(delay);
+    if (!isActive()) return BrowserPopupExplicitLoadFallbackOutcome.inactive;
+
+    Object? runtimeIsBlank;
+    try {
+      runtimeIsBlank = await probeRuntimeIsBlank();
+    } catch (_) {
+      continue;
+    }
+    if (!isActive()) return BrowserPopupExplicitLoadFallbackOutcome.inactive;
+    if (runtimeIsBlank == false) {
+      return BrowserPopupExplicitLoadFallbackOutcome.notNeeded;
+    }
+    if (runtimeIsBlank != true) continue;
+
+    await load();
+    return BrowserPopupExplicitLoadFallbackOutcome.loaded;
+  }
+  return BrowserPopupExplicitLoadFallbackOutcome.probeFailed;
+}
+
+/// Script mínimo que conserva la semántica de `window.open` y recuerda sólo
+/// su destino HTTP(S) real.
+///
+/// Android construye [CreateWindowAction.request] desde el hit-test bajo el
+/// dedo, no desde el primer argumento de `window.open`; por eso puede entregar
+/// una imagen de la página en lugar del login. La cola vive únicamente dentro
+/// del documento, está acotada y nunca cruza un JavaScript handler: el plugin
+/// imprime los argumentos de esos handlers en builds debug y podría filtrar
+/// query params OAuth. El callback nativo consume la cola mediante una
+/// expresión constante antes de hospedar la ventana hija.
+String get browserPopupOpenCaptureUserScriptSource => '''
+(() => {
+  const takeName = '__vinabikeTakeBrowserPopupOpenUrl';
+  if (typeof window[takeName] === 'function') return;
+
+  const nativeOpen = window.open;
+  if (typeof nativeOpen !== 'function') return;
+
+  const queue = [];
+  const maxUrlLength = $browserPopupOpenCaptureMaxUrlLength;
+  const maxQueueLength = $browserPopupOpenCaptureMaxQueueLength;
+  const maxAgeMilliseconds = $browserPopupOpenCaptureMaxAgeMilliseconds;
+
+  Object.defineProperty(window, takeName, {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: () => {
+      const now = Date.now();
+      const entry = queue.shift();
+      if (!entry ||
+          !Number.isFinite(entry.capturedAt) ||
+          now - entry.capturedAt > maxAgeMilliseconds) return null;
+      return typeof entry.url === 'string' ? entry.url : null;
+    },
+  });
+
+  window.open = function(...args) {
+    const rawUrl = args[0];
+    const entry = {url: null, capturedAt: Date.now()};
+    if (typeof rawUrl === 'string' &&
+        rawUrl.trim().length > 0 &&
+        rawUrl.length <= maxUrlLength) {
+      try {
+        const resolved = new URL(rawUrl, document.baseURI);
+        if ((resolved.protocol === 'http:' || resolved.protocol === 'https:') &&
+            resolved.host &&
+            resolved.href.length <= maxUrlLength) {
+          entry.url = resolved.href;
+        }
+      } catch (_) {}
+    }
+    if (queue.length >= maxQueueLength) queue.shift();
+    queue.push(entry);
+
+    const removePendingEntry = () => {
+      const index = queue.indexOf(entry);
+      if (index >= 0) queue.splice(index, 1);
+    };
+    try {
+      const openedWindow = Reflect.apply(nativeOpen, this, args);
+      if (openedWindow === null) removePendingEntry();
+      return openedWindow;
+    } catch (error) {
+      removePendingEntry();
+      throw error;
+    }
+  };
+})();
+''';
+
+String get browserPopupOpenDequeueJavaScriptSource => '''
+(() => {
+  const take = window.__vinabikeTakeBrowserPopupOpenUrl;
+  return typeof take === 'function' ? take() : null;
+})()
+''';
+
+UserScript browserPopupOpenCaptureUserScript() => UserScript(
+      groupName: 'VinabikeBrowserPopupOpenCapture',
+      source: browserPopupOpenCaptureUserScriptSource,
+      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+      forMainFrameOnly: true,
+    );
+
+WebUri? browserPopupOpenUrlFromEvaluation(Object? value) {
+  if (value is! String ||
+      value.isEmpty ||
+      value.length > browserPopupOpenCaptureMaxUrlLength) {
+    return null;
+  }
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.host.isEmpty ||
+      (uri.scheme != 'http' && uri.scheme != 'https')) {
+    return null;
+  }
+  return WebUri(uri.toString());
+}
+
+Future<WebUri?> takeCapturedBrowserPopupOpenUrl(
+  InAppWebViewController controller,
+) async {
+  try {
+    final value = await controller.evaluateJavascript(
+      source: browserPopupOpenDequeueJavaScriptSource,
+    );
+    return browserPopupOpenUrlFromEvaluation(value);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// El plugin imprime URLs y payloads de handlers por defecto en debug. El
+/// navegador embebido registra sus propios eventos seguros, así que su logger
+/// interno se apaga antes de crear cualquier WebView que pueda manejar OAuth o
+/// credenciales.
+void disableBrowserWebViewPluginDebugLogging() {
+  PlatformInAppWebViewController.debugLoggingSettings.enabled = false;
 }
 
 BrowserPopupDispositionSupport get currentBrowserPopupDispositionSupport =>
@@ -93,6 +264,7 @@ bool hostBrowserPopupWindow({
   required CreateWindowAction action,
   required InAppWebViewSettings settings,
   BrowserPopupDispositionSupport? dispositionSupport,
+  WebUri? explicitInitialUrl,
 }) {
   final support = dispositionSupport ?? currentBrowserPopupDispositionSupport;
   final navigator = Navigator.of(context, rootNavigator: true);
@@ -103,6 +275,7 @@ bool hostBrowserPopupWindow({
         builder: (_) => BrowserPopupWindow(
           windowId: action.windowId,
           settings: settings,
+          explicitInitialUrl: explicitInitialUrl,
           initialHost: browserPopupInitialHost(
             requestUrl: action.request.url?.toString(),
             dispositionSupport: support,
@@ -114,36 +287,118 @@ bool hostBrowserPopupWindow({
   return true;
 }
 
+/// Retira la ruta que posee el WebView que solicitó el cierre.
+///
+/// Un popup padre puede recibir `onCloseWindow` mientras una hija anidada está
+/// arriba. Hacer un `pop` ciego cerraría la hija equivocada y dejaría vivo al
+/// padre que el sitio ya cerró.
+void closeBrowserPopupRoute(BuildContext context) {
+  final route = ModalRoute.of(context);
+  if (route == null) return;
+  final navigator = Navigator.of(context);
+  if (route.isCurrent) {
+    navigator.pop();
+  } else {
+    navigator.removeRoute(route);
+  }
+}
+
 class BrowserPopupWindow extends StatefulWidget {
   const BrowserPopupWindow({
     super.key,
     required this.windowId,
     required this.settings,
     this.initialHost,
+    this.explicitInitialUrl,
   });
 
   final int windowId;
   final InAppWebViewSettings settings;
   final String? initialHost;
+  final WebUri? explicitInitialUrl;
 
   @override
   State<BrowserPopupWindow> createState() => _BrowserPopupWindowState();
 }
 
 class _BrowserPopupWindowState extends State<BrowserPopupWindow> {
+  static final _popupInitialUserScripts = UnmodifiableListView<UserScript>([
+    browserPopupOpenCaptureUserScript(),
+  ]);
+
   late String _host = widget.initialHost ?? '';
   bool _isLoading = true;
 
   void _close() {
     if (!mounted) return;
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) navigator.pop();
+    closeBrowserPopupRoute(context);
   }
 
   void _adoptUrl(WebUri? url) {
     final host = url?.host ?? '';
     if (host.isEmpty || host == _host || !mounted) return;
     setState(() => _host = host);
+  }
+
+  void _handleWebViewCreated(InAppWebViewController controller) {
+    final explicitInitialUrl = widget.explicitInitialUrl;
+    if (explicitInitialUrl == null) return;
+    unawaited(
+      _loadExplicitInitialUrlIfStillBlank(controller, explicitInitialUrl),
+    );
+  }
+
+  Future<void> _loadExplicitInitialUrlIfStillBlank(
+    InAppWebViewController controller,
+    WebUri explicitInitialUrl,
+  ) async {
+    // Chromium ya trae una navegación pendiente dentro del windowId. Hay que
+    // darle tiempo para reanudarla: cargar de inmediato repite el handshake
+    // OAuth y puede invalidar su state. Sólo se usa la URL capturada como
+    // rescate si el documento hijo sigue siendo realmente about:blank.
+    try {
+      final outcome = await runBrowserPopupExplicitLoadFallback(
+        wait: (delay) => Future<void>.delayed(delay),
+        isActive: () => mounted,
+        probeRuntimeIsBlank: () => controller.evaluateJavascript(
+          source: browserPopupRuntimeIsBlankJavaScriptSource,
+        ),
+        load: () async {
+          // FlutterWebView.makeInitialLoad adjunta el WebView hijo al
+          // WebViewTransport antes de onWebViewCreated. Este fallback conserva
+          // ese browsing context y, por tanto, window.opener.
+          await controller.loadUrl(
+            urlRequest: URLRequest(url: explicitInitialUrl),
+          );
+        },
+      );
+      if (outcome == BrowserPopupExplicitLoadFallbackOutcome.probeFailed &&
+          mounted &&
+          _isLoading) {
+        setState(() => _isLoading = false);
+      }
+    } catch (_) {
+      if (mounted && _isLoading) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<bool> _handleCreateWindow(
+    InAppWebViewController controller,
+    CreateWindowAction action,
+  ) async {
+    final support = currentBrowserPopupDispositionSupport;
+    final explicitInitialUrl =
+        support == BrowserPopupDispositionSupport.androidTransportOnly
+            ? await takeCapturedBrowserPopupOpenUrl(controller)
+            : null;
+    if (!mounted) return false;
+    return hostBrowserPopupWindow(
+      context: context,
+      action: action,
+      settings: widget.settings,
+      dispositionSupport: support,
+      explicitInitialUrl: explicitInitialUrl,
+    );
   }
 
   @override
@@ -172,14 +427,15 @@ class _BrowserPopupWindowState extends State<BrowserPopupWindow> {
       body: InAppWebView(
         windowId: widget.windowId,
         initialSettings: widget.settings,
+        initialUserScripts:
+            !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+                ? _popupInitialUserScripts
+                : null,
+        onWebViewCreated: _handleWebViewCreated,
         // Un proveedor de identidad puede encadenar más de una ventana. Cada
         // hija conserva el opener de la anterior en vez de convertirse en una
         // pestaña independiente del ERP.
-        onCreateWindow: (_, action) async => hostBrowserPopupWindow(
-          context: context,
-          action: action,
-          settings: widget.settings,
-        ),
+        onCreateWindow: _handleCreateWindow,
         onLoadStart: (_, url) {
           _adoptUrl(url);
           if (mounted && !_isLoading) setState(() => _isLoading = true);

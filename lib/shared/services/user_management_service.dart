@@ -794,6 +794,7 @@ class UserManagementService {
           'delete_invoices': true,
           'access_accounting': true,
           'manage_users': true,
+          'can_manage_supplier_credentials': true,
           'edit_settings': true,
         };
       case 'cashier':
@@ -804,6 +805,7 @@ class UserManagementService {
           'delete_invoices': false,
           'access_accounting': false,
           'manage_users': false,
+          'can_manage_supplier_credentials': false,
           'edit_settings': false,
         };
       case 'mechanic':
@@ -814,6 +816,7 @@ class UserManagementService {
           'delete_invoices': false,
           'access_accounting': false,
           'manage_users': false,
+          'can_manage_supplier_credentials': false,
           'edit_settings': false,
         };
       case 'accountant':
@@ -824,6 +827,7 @@ class UserManagementService {
           'delete_invoices': false,
           'access_accounting': true,
           'manage_users': false,
+          'can_manage_supplier_credentials': false,
           'edit_settings': false,
         };
       default:

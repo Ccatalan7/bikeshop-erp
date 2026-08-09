@@ -354,6 +354,9 @@ String getRouteTitle(String path) {
   if (RegExp(r'^/purchases/invoices/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Compra';
   }
+  if (RegExp(r'^/purchases/suppliers/[^/]+$').hasMatch(cleanPath)) {
+    return 'Proveedor';
+  }
   if (RegExp(r'^/inventory/products/[^/]+$').hasMatch(cleanPath)) {
     return 'Detalle Producto';
   }

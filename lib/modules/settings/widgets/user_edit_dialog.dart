@@ -43,6 +43,7 @@ class _UserEditDialogState extends State<UserEditDialog> {
           'delete_invoices': true,
           'access_accounting': true,
           'manage_users': true,
+          'can_manage_supplier_credentials': true,
           'edit_settings': true,
         };
       case 'cashier':
@@ -53,6 +54,7 @@ class _UserEditDialogState extends State<UserEditDialog> {
           'delete_invoices': false,
           'access_accounting': false,
           'manage_users': false,
+          'can_manage_supplier_credentials': false,
           'edit_settings': false,
         };
       case 'mechanic':
@@ -63,6 +65,7 @@ class _UserEditDialogState extends State<UserEditDialog> {
           'delete_invoices': false,
           'access_accounting': false,
           'manage_users': false,
+          'can_manage_supplier_credentials': false,
           'edit_settings': false,
         };
       case 'accountant':
@@ -73,6 +76,7 @@ class _UserEditDialogState extends State<UserEditDialog> {
           'delete_invoices': false,
           'access_accounting': true,
           'manage_users': false,
+          'can_manage_supplier_credentials': false,
           'edit_settings': false,
         };
       default:
@@ -235,6 +239,11 @@ class _UserEditDialogState extends State<UserEditDialog> {
                     'manage_users',
                     'Gestionar Usuarios',
                     Icons.people,
+                  ),
+                  _buildPermissionCheckbox(
+                    'can_manage_supplier_credentials',
+                    'Gestionar Credenciales de Proveedores',
+                    Icons.key_outlined,
                   ),
                   _buildPermissionCheckbox(
                     'edit_settings',

@@ -3,59 +3,277 @@ part of '../website_editor_panel.dart';
 /// Dialog for managing website backups
 class _BackupsDialog extends StatefulWidget {
   final Future<void> Function()? onRestoreComplete;
+  final WebsiteBackupService backupService;
+  final bool ownsBackupService;
+  final ValueListenable<int> hostProviderRevision;
+  final WebsiteEditModeProvider? Function() liveProvider;
 
-  const _BackupsDialog({this.onRestoreComplete});
+  const _BackupsDialog({
+    required this.backupService,
+    required this.ownsBackupService,
+    required this.hostProviderRevision,
+    required this.liveProvider,
+    this.onRestoreComplete,
+  });
 
   @override
   State<_BackupsDialog> createState() => _BackupsDialogState();
 }
 
+class _BackupReadStamp {
+  const _BackupReadStamp({
+    required this.provider,
+    required this.backupService,
+    required this.hostRevision,
+    required this.entryLeaseGeneration,
+    required this.entryLeaseIdentityRevision,
+    required this.tenantId,
+    required this.fingerprint,
+  });
+
+  final WebsiteEditModeProvider provider;
+  final WebsiteBackupService backupService;
+  final int hostRevision;
+  final int entryLeaseGeneration;
+  final int entryLeaseIdentityRevision;
+  final String tenantId;
+  final String fingerprint;
+}
+
+class _BackupRemoteScope {
+  const _BackupRemoteScope({
+    required this.authority,
+    required this.provider,
+    required this.backupService,
+  });
+
+  final WebsiteEditorRemoteWriteAuthority authority;
+  final WebsiteEditModeProvider provider;
+  final WebsiteBackupService backupService;
+}
+
 class _BackupsDialogState extends State<_BackupsDialog> {
-  final WebsiteBackupService _backupService = WebsiteBackupService();
   List<WebsiteBackup> _backups = [];
   bool _isLoading = true;
   bool _isCreating = false;
   bool _isRestoring = false;
+  bool _isDeleting = false;
   String? _error;
+  int _loadGeneration = 0;
+  bool _reloadScheduled = false;
+  _BackupReadStamp? _loadedStamp;
+  WebsiteEditModeProvider? _listenedProvider;
 
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
 
+  WebsiteBackupService get _backupService => widget.backupService;
+
   @override
   void initState() {
     super.initState();
-    _loadBackups();
+    widget.hostProviderRevision.addListener(_handleOwnerChanged);
+    _bindProviderListener();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadBackups();
+    });
   }
 
   @override
   void dispose() {
+    widget.hostProviderRevision.removeListener(_handleOwnerChanged);
+    _listenedProvider?.removeListener(_handleOwnerChanged);
     _nameController.dispose();
     _descriptionController.dispose();
+    if (widget.ownsBackupService) _backupService.dispose();
     super.dispose();
   }
 
+  void _bindProviderListener() {
+    final provider = widget.liveProvider();
+    if (identical(_listenedProvider, provider)) return;
+    _listenedProvider?.removeListener(_handleOwnerChanged);
+    _listenedProvider = provider;
+    provider?.addListener(_handleOwnerChanged);
+  }
+
+  void _handleOwnerChanged() {
+    if (!mounted) return;
+    _bindProviderListener();
+    final loaded = _loadedStamp;
+    if (loaded != null && _isReadStampCurrent(loaded)) return;
+    _loadedStamp = null;
+    _nameController.clear();
+    _descriptionController.clear();
+    _scheduleReload();
+  }
+
+  void _scheduleReload() {
+    if (!mounted || _reloadScheduled) return;
+    _reloadScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reloadScheduled = false;
+      if (mounted) _loadBackups();
+    });
+  }
+
+  _BackupReadStamp? _captureReadStamp() {
+    final provider = widget.liveProvider();
+    final tenantId = provider?.sessionOwnerTenantId?.trim() ?? '';
+    final fingerprint = provider?.sessionOwnerLeaseFingerprint;
+    if (provider == null || tenantId.isEmpty || fingerprint == null) {
+      return null;
+    }
+    return _BackupReadStamp(
+      provider: provider,
+      backupService: _backupService,
+      hostRevision: widget.hostProviderRevision.value,
+      entryLeaseGeneration: provider.editorEntryLeaseGeneration,
+      entryLeaseIdentityRevision: provider.editorEntryLeaseIdentityRevision,
+      tenantId: tenantId,
+      fingerprint: fingerprint,
+    );
+  }
+
+  bool _isReadStampCurrent(_BackupReadStamp stamp) {
+    final provider = widget.liveProvider();
+    return mounted &&
+        identical(provider, stamp.provider) &&
+        identical(_backupService, stamp.backupService) &&
+        widget.hostProviderRevision.value == stamp.hostRevision &&
+        provider?.editorEntryLeaseGeneration == stamp.entryLeaseGeneration &&
+        provider?.editorEntryLeaseIdentityRevision ==
+            stamp.entryLeaseIdentityRevision &&
+        provider?.sessionOwnerTenantId == stamp.tenantId &&
+        provider?.sessionOwnerLeaseFingerprint == stamp.fingerprint;
+  }
+
+  void _guardReadStamp(_BackupReadStamp stamp) {
+    if (!_isReadStampCurrent(stamp)) {
+      throw WebsiteEditorWriteSupersededException(
+        'La sesión del editor cambió mientras se cargaban las copias.',
+      );
+    }
+  }
+
   Future<void> _loadBackups() async {
+    final stamp = _captureReadStamp();
+    if (stamp == null) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _backups = const <WebsiteBackup>[];
+        _loadedStamp = null;
+        _error = 'La sesión del editor cambió. Vuelve a abrir las copias.';
+      });
+      return;
+    }
+    final generation = ++_loadGeneration;
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      final backups = await _backupService.loadBackups();
-      if (mounted) {
+      final backups = await _backupService.loadBackups(
+        tenantId: stamp.tenantId,
+        readGuard: () => _guardReadStamp(stamp),
+      );
+      if (mounted &&
+          generation == _loadGeneration &&
+          _isReadStampCurrent(stamp)) {
         setState(() {
           _backups = backups;
+          _loadedStamp = stamp;
           _isLoading = false;
         });
       }
+    } on WebsiteEditorWriteSupersededException {
+      if (mounted && generation == _loadGeneration) _scheduleReload();
     } catch (e) {
-      if (mounted) {
+      if (mounted &&
+          generation == _loadGeneration &&
+          _isReadStampCurrent(stamp)) {
         setState(() {
           _error = e.toString();
+          _loadedStamp = stamp;
           _isLoading = false;
         });
       }
     }
+  }
+
+  _BackupRemoteScope? _captureRemoteWrite({
+    required String operation,
+    required bool requireCleanDraft,
+  }) {
+    final loaded = _loadedStamp;
+    final provider = widget.liveProvider();
+    if (loaded == null ||
+        provider == null ||
+        !_isReadStampCurrent(loaded) ||
+        (requireCleanDraft && provider.hasUnsavedChanges)) {
+      return null;
+    }
+    final intent = provider.captureAsyncIntent(requiresSelection: false);
+    if (intent == null) return null;
+
+    final hostRevision = widget.hostProviderRevision.value;
+    final pageId = provider.currentPageId;
+    final pageSlug = provider.currentPageSlug;
+    final documentSessionRevision = provider.documentSessionRevision;
+    final documentEpoch = provider.pageDocumentEpoch;
+    final entryLeaseGeneration = provider.editorEntryLeaseGeneration;
+    final entryLeaseIdentityRevision =
+        provider.editorEntryLeaseIdentityRevision;
+    final tenantId = loaded.tenantId;
+    final fingerprint = loaded.fingerprint;
+
+    bool isCurrent() {
+      final live = widget.liveProvider();
+      return mounted &&
+          identical(live, provider) &&
+          widget.hostProviderRevision.value == hostRevision &&
+          live?.currentPageId == pageId &&
+          live?.currentPageSlug == pageSlug &&
+          live?.documentSessionRevision == documentSessionRevision &&
+          live?.pageDocumentEpoch == documentEpoch &&
+          live?.editorEntryLeaseGeneration == entryLeaseGeneration &&
+          live?.editorEntryLeaseIdentityRevision ==
+              entryLeaseIdentityRevision &&
+          live?.sessionOwnerTenantId == tenantId &&
+          live?.sessionOwnerLeaseFingerprint == fingerprint &&
+          (!requireCleanDraft || live?.hasUnsavedChanges == false);
+    }
+
+    return _BackupRemoteScope(
+      authority: WebsiteEditorRemoteWriteAuthority(
+        tenantId: tenantId,
+        operation: operation,
+        isCurrent: isCurrent,
+        claimOwner: () =>
+            provider.commitAsyncIntent(
+              intent,
+              () => WebsiteInlineMutationResult.unchanged,
+            ) !=
+            WebsiteInlineMutationResult.rejected,
+      ),
+      provider: provider,
+      backupService: _backupService,
+    );
+  }
+
+  void _showOwnerChangedMessage({bool dirty = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          dirty
+              ? 'Guarda o descarta los cambios antes de administrar copias de seguridad.'
+              : 'La sesión del editor cambió. Vuelve a intentar.',
+        ),
+      ),
+    );
   }
 
   Future<void> _createBackup() async {
@@ -67,15 +285,30 @@ class _BackupsDialogState extends State<_BackupsDialog> {
       return;
     }
 
+    final scope = _captureRemoteWrite(
+      operation: 'crear la copia de seguridad',
+      requireCleanDraft: true,
+    );
+    if (scope == null) {
+      _showOwnerChangedMessage(
+        dirty: widget.liveProvider()?.hasUnsavedChanges == true,
+      );
+      return;
+    }
+
     setState(() => _isCreating = true);
 
     try {
-      await _backupService.createBackup(
+      final writeGuard = scope.authority.claimForWrite();
+      await scope.backupService.createBackup(
         name: name,
+        tenantId: scope.authority.tenantId,
+        writeGuard: writeGuard,
         description: _descriptionController.text.trim().isEmpty
             ? null
             : _descriptionController.text.trim(),
       );
+      scope.authority.ensureCurrent();
 
       _nameController.clear();
       _descriptionController.clear();
@@ -89,6 +322,8 @@ class _BackupsDialogState extends State<_BackupsDialog> {
         );
         await _loadBackups();
       }
+    } on WebsiteEditorWriteSupersededException {
+      _showOwnerChangedMessage();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -106,6 +341,17 @@ class _BackupsDialogState extends State<_BackupsDialog> {
   }
 
   Future<void> _restoreBackup(WebsiteBackup backup) async {
+    final scope = _captureRemoteWrite(
+      operation: 'restaurar la copia de seguridad',
+      requireCleanDraft: true,
+    );
+    if (scope == null) {
+      _showOwnerChangedMessage(
+        dirty: widget.liveProvider()?.hasUnsavedChanges == true,
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -140,13 +386,19 @@ class _BackupsDialogState extends State<_BackupsDialog> {
 
     if (confirmed != true) return;
 
-    setState(() => _isRestoring = true);
-
     try {
-      final restored = await _backupService.restoreBackup(backup.id);
+      scope.authority.ensureCurrent();
+      setState(() => _isRestoring = true);
+      final writeGuard = scope.authority.claimForWrite();
+      final restored = await scope.backupService.restoreBackup(
+        backup.id,
+        tenantId: scope.authority.tenantId,
+        writeGuard: writeGuard,
+      );
       if (!restored) {
         throw Exception('La copia de seguridad no pudo restaurarse');
       }
+      scope.authority.ensureCurrent();
 
       if (mounted) {
         await widget.onRestoreComplete?.call();
@@ -159,6 +411,9 @@ class _BackupsDialogState extends State<_BackupsDialog> {
         );
         Navigator.pop(context);
       }
+    } on WebsiteEditorWriteSupersededException {
+      _showOwnerChangedMessage();
+      if (mounted) setState(() => _isRestoring = false);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -173,6 +428,15 @@ class _BackupsDialogState extends State<_BackupsDialog> {
   }
 
   Future<void> _deleteBackup(WebsiteBackup backup) async {
+    final scope = _captureRemoteWrite(
+      operation: 'eliminar la copia de seguridad',
+      requireCleanDraft: false,
+    );
+    if (scope == null) {
+      _showOwnerChangedMessage();
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -196,8 +460,19 @@ class _BackupsDialogState extends State<_BackupsDialog> {
 
     if (confirmed != true) return;
 
+    setState(() => _isDeleting = true);
     try {
-      await _backupService.deleteBackup(backup.id);
+      scope.authority.ensureCurrent();
+      final writeGuard = scope.authority.claimForWrite();
+      final deleted = await scope.backupService.deleteBackup(
+        backup.id,
+        tenantId: scope.authority.tenantId,
+        writeGuard: writeGuard,
+      );
+      if (!deleted) {
+        throw Exception('La copia de seguridad no pudo eliminarse');
+      }
+      scope.authority.ensureCurrent();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -208,6 +483,8 @@ class _BackupsDialogState extends State<_BackupsDialog> {
         );
         await _loadBackups();
       }
+    } on WebsiteEditorWriteSupersededException {
+      _showOwnerChangedMessage();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -217,6 +494,8 @@ class _BackupsDialogState extends State<_BackupsDialog> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
     }
   }
 
@@ -253,7 +532,9 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white54),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _isCreating || _isRestoring || _isDeleting
+                        ? null
+                        : () => Navigator.pop(context),
                   ),
                 ],
               ),
@@ -313,7 +594,9 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: _isCreating ? null : _createBackup,
+                      onPressed: _isCreating || _isRestoring || _isDeleting
+                          ? null
+                          : _createBackup,
                       icon: _isCreating
                           ? const SizedBox(
                               width: 16,
@@ -390,6 +673,9 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                                     onRestore: () => _restoreBackup(backup),
                                     onDelete: () => _deleteBackup(backup),
                                     isRestoring: _isRestoring,
+                                    isBusy: _isRestoring ||
+                                        _isCreating ||
+                                        _isDeleting,
                                   );
                                 },
                               ),
@@ -407,12 +693,14 @@ class _BackupListItem extends StatelessWidget {
   final VoidCallback onRestore;
   final VoidCallback onDelete;
   final bool isRestoring;
+  final bool isBusy;
 
   const _BackupListItem({
     required this.backup,
     required this.onRestore,
     required this.onDelete,
     required this.isRestoring,
+    required this.isBusy,
   });
 
   @override
@@ -500,13 +788,13 @@ class _BackupListItem extends StatelessWidget {
                   : const Icon(Icons.restore, size: 20),
               color: const Color(0xFF00A09D),
               tooltip: 'Restaurar',
-              onPressed: isRestoring ? null : onRestore,
+              onPressed: isBusy ? null : onRestore,
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline, size: 20),
               color: Colors.red.shade300,
               tooltip: 'Eliminar',
-              onPressed: isRestoring ? null : onDelete,
+              onPressed: isBusy ? null : onDelete,
             ),
           ],
         ),

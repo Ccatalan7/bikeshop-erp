@@ -1,10 +1,14 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:vinabike_erp/modules/website/models/website_page_composition.dart';
+import 'package:vinabike_erp/modules/website/models/website_block_catalog.dart';
+import 'package:vinabike_erp/modules/website/models/website_editor_drag_payload.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/widgets/deferred_editable_block_renderer.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_block_catalog_sheet.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_block_sheet.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_chrome_geometry.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_editor_contextual_dock.dart';
@@ -445,6 +449,55 @@ void main() {
       expect(provider.canUndo, isFalse);
     });
 
+    testWidgets(
+        'una hoja vieja no redirige su acción a otra página con el mismo id',
+        (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(
+          tallPage(),
+          const <String, dynamic>{},
+          pageId: 'page-a',
+          pageSlug: '/page-a',
+        )
+        ..selectBlock('hero-1');
+      addTearDown(provider.dispose);
+
+      await pumpHost(tester, host(provider));
+      await openCtaEditor(tester);
+      await tester.enterText(sheetLabelField(), 'Borrador de A');
+      await tester.pump();
+
+      final pageB = tallPage();
+      pageB.first['block_data'] = <String, dynamic>{
+        'title': 'Página B',
+        'blockHeight': 620,
+        'buttonText': 'Acción de B',
+        'buttonLink': '/pagina-b',
+      };
+      provider
+        ..enterEditMode(
+          pageB,
+          const <String, dynamic>{},
+          pageId: 'page-b',
+          pageSlug: '/page-b',
+        )
+        ..selectBlock('hero-1');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+
+      await tester.tap(find.byKey(WebsiteInlineActionEditor.sheetApplyKey));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(provider.getBlockData('hero-1')['title'], 'Página B');
+      expect(provider.getBlockData('hero-1')['buttonText'], 'Acción de B');
+      expect(provider.getBlockData('hero-1')['buttonLink'], '/pagina-b');
+      expect(provider.hasUnsavedChanges, isFalse);
+      expect(provider.canUndo, isFalse);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('Cancelar descarta el borrador de la hoja', (tester) async {
       useViewport(tester);
       final provider = WebsiteEditModeProvider()
@@ -486,6 +539,368 @@ void main() {
       // `O-05` nunca aparece en desktop pointer (t10 surface_component_map).
       expect(find.byKey(WebsiteInlineActionEditor.sheetKey), findsNothing);
       expect(find.text('Editar acción'), findsOneWidget);
+    });
+  });
+
+  // ---------------------- reordenar bloques con el dedo, sin robar el scroll
+
+  group('reordenar bloques desde el handle contextual', () {
+    List<String> orderOf(WebsiteEditModeProvider provider) => provider.blocks
+        .map((block) => block['id'].toString())
+        .toList(growable: false);
+
+    Finder handleFor(String blockId) =>
+        find.byKey(websiteBlockReorderHandleKey(blockId));
+
+    /// Long press on the block's handle and drop it on a seam addressed BY
+    /// KEY — never by a guessed offset.
+    Future<void> dragHandleToSeam(
+      WidgetTester tester, {
+      required String blockId,
+      required int insertIndex,
+    }) async {
+      final gesture = await tester.startGesture(
+        tester.getCenter(handleFor(blockId)),
+        kind: PointerDeviceKind.touch,
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 40));
+      // The report is a setState: the seams appear on the NEXT frame.
+      await tester.pump(const Duration(milliseconds: 40));
+      final seam = find.byKey(websiteReorderSeamKey(insertIndex));
+      expect(seam, findsOneWidget, reason: 'seam $insertIndex');
+      await gesture.moveTo(tester.getCenter(seam));
+      await tester.pump(const Duration(milliseconds: 40));
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 120));
+    }
+
+    /// The canonical page scroller: the one the shell's body owns.
+    ScrollableState scroller(WidgetTester tester) =>
+        tester.state<ScrollableState>(
+          find.descendant(
+            of: find.byType(SingleChildScrollView),
+            matching: find.byType(Scrollable),
+          ),
+        );
+
+    /// A page that really overflows 896: three exact-height blocks that the
+    /// composition cannot shrink. Anything intrinsic renders one line tall and
+    /// the page fits, which would make a scroll assertion vacuous.
+    List<Map<String, dynamic>> overflowingPage() => <Map<String, dynamic>>[
+          for (final id in const <String>['hero-1', 'hero-2', 'hero-3'])
+            block(
+              id: id,
+              type: 'hero',
+              order: const <String>['hero-1', 'hero-2', 'hero-3'].indexOf(id),
+              data: <String, dynamic>{
+                'title': 'Bloque $id',
+                'blockHeight': 620,
+              },
+            ),
+        ];
+
+    /// Blocks short enough that the handle AND the destination gap fit on one
+    /// 430×896 screen. Dragging past the fold needs edge autoscroll, which is
+    /// not part of this contract and is not simulated here.
+    List<Map<String, dynamic>> shortPage() => <Map<String, dynamic>>[
+          block(
+            id: 'hero-1',
+            type: 'hero',
+            order: 0,
+            data: const <String, dynamic>{
+              'title': 'Taller de bicicletas',
+              'blockHeight': 200,
+            },
+          ),
+          block(
+            id: 'text-1',
+            type: 'text',
+            order: 1,
+            data: const <String, dynamic>{
+              'content': 'Productos destacados',
+              'blockHeight': 200,
+            },
+          ),
+          block(
+            id: 'text-2',
+            type: 'text',
+            order: 2,
+            data: const <String, dynamic>{
+              'content': 'Servicios',
+              'blockHeight': 200,
+            },
+          ),
+        ];
+
+    testWidgets('el handle es sólo del bloque seleccionado y cumple 48',
+        (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(tallPage(), const <String, dynamic>{})
+        ..selectBlock('hero-1');
+      await pumpHost(tester, host(provider));
+
+      expect(handleFor('hero-1'), findsOneWidget);
+      expect(handleFor('text-1'), findsNothing);
+      expect(handleFor('text-2'), findsNothing);
+      final size = tester.getSize(handleFor('hero-1'));
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+      expect(
+        tester.getSemantics(handleFor('hero-1')).label.contains('Reordenar'),
+        isTrue,
+      );
+
+      // Y cambiar la selección mueve el handle, no lo duplica.
+      provider.selectBlock('text-1');
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(handleFor('hero-1'), findsNothing);
+      expect(handleFor('text-1'), findsOneWidget);
+    });
+
+    testWidgets('un swipe desde el handle desplaza la página y NO reordena',
+        (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(overflowingPage(), const <String, dynamic>{})
+        ..selectBlock('hero-1');
+      await pumpHost(tester, host(provider));
+      final before = orderOf(provider);
+
+      final handle = tester.getRect(handleFor('hero-1'));
+      expect(handle.height, greaterThanOrEqualTo(48));
+      expect(scroller(tester).position.maxScrollExtent, greaterThan(300),
+          reason: 'la página desborda de verdad');
+      expect(scroller(tester).position.pixels, 0);
+
+      // El dedo empieza EXACTAMENTE en el centro del handle y arrastra sin
+      // esperar. Antes del long press el gesto es de la página: si el handle
+      // no estuviera bajo el `Scrollable`, este offset no se movería.
+      final gesture = await tester.startGesture(
+        handle.center,
+        kind: PointerDeviceKind.touch,
+      );
+      for (var step = 0; step < 10; step++) {
+        await gesture.moveBy(const Offset(0, -30));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 40));
+
+      expect(scroller(tester).position.pixels, greaterThan(200),
+          reason: 'el swipe sobre el handle sigue siendo scroll');
+      expect(orderOf(provider), before, reason: 'y no reordena');
+      expect(
+        find.byKey(websiteReorderSeamKey(0)),
+        findsNothing,
+        reason: 'sin long press la capa de costuras no existe',
+      );
+      expect(provider.canUndo, isFalse);
+      expect(provider.hasUnsavedChanges, isFalse);
+    });
+
+    testWidgets('los marcadores de inserción siguen tocables fuera del cutout',
+        (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(shortPage(), const <String, dynamic>{})
+        ..selectBlock('hero-1');
+      await pumpHost(tester, host(provider));
+
+      final handle = tester.getRect(handleFor('hero-1'));
+      final marker = find.byType(WebsiteInsertBlockAffordance).first;
+      final band = tester.getRect(marker);
+
+      // El cutout es exactamente el ancho que el handle necesita, no la banda
+      // entera: el resto sigue siendo un objetivo de inserción real.
+      expect(band.left, greaterThanOrEqualTo(handle.right));
+      expect(band.width, greaterThan(200));
+      await tester.tap(marker);
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(find.byType(WebsiteBlockCatalogSheet), findsOneWidget);
+    });
+
+    testWidgets('long press en el handle + arrastre táctil reordena exacto',
+        (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(shortPage(), const <String, dynamic>{})
+        ..selectBlock('hero-1');
+      await pumpHost(tester, host(provider));
+      final before = orderOf(provider);
+      expect(before, <String>['hero-1', 'text-1', 'text-2']);
+
+      // Antes del long press no existe ningún seam: el layer no puede tomar
+      // un toque ni un swipe.
+      expect(find.byKey(websiteReorderSeamKey(0)), findsNothing);
+
+      await dragHandleToSeam(tester, blockId: 'hero-1', insertIndex: 2);
+
+      expect(
+        orderOf(provider),
+        <String>['text-1', 'hero-1', 'text-2'],
+        reason: 'el dedo movió el bloque un lugar hacia abajo',
+      );
+      // La selección la conserva el owner; el handle viaja con el bloque.
+      expect(provider.selectedBlockId, 'hero-1');
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(handleFor('hero-1'), findsOneWidget);
+      // Y el reveal lo publica `reorderBlocks`, no este gesto.
+      expect(provider.blockRevealRequest?.blockId, 'hero-1');
+
+      // Un gesto, un undo.
+      provider.undo();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(orderOf(provider), before);
+
+      // Terminado el arrastre, el layer vuelve a no existir.
+      expect(find.byKey(websiteReorderSeamKey(0)), findsNothing);
+    });
+
+    testWidgets('el último bloque puede volver al principio', (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(shortPage(), const <String, dynamic>{})
+        ..selectBlock('text-2');
+      await pumpHost(tester, host(provider));
+
+      await dragHandleToSeam(tester, blockId: 'text-2', insertIndex: 0);
+
+      expect(
+        orderOf(provider),
+        <String>['text-2', 'hero-1', 'text-1'],
+      );
+      expect(provider.selectedBlockId, 'text-2');
+      provider.undo();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(orderOf(provider), <String>['hero-1', 'text-1', 'text-2']);
+    });
+
+    testWidgets('soltar sobre su propio borde no escribe nada', (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(shortPage(), const <String, dynamic>{})
+        ..selectBlock('hero-1');
+      await pumpHost(tester, host(provider));
+      final before = orderOf(provider);
+
+      // Sus dos propios bordes: el seam 0 (antes de él) y el 1 (después).
+      for (final ownSeam in <int>[0, 1]) {
+        final gesture = await tester.startGesture(
+          tester.getCenter(handleFor('hero-1')),
+          kind: PointerDeviceKind.touch,
+        );
+        await tester.pump(kLongPressTimeout + const Duration(milliseconds: 40));
+        final seam = find.byKey(websiteReorderSeamKey(ownSeam));
+        expect(seam, findsOneWidget);
+        await gesture.moveTo(tester.getCenter(seam));
+        await tester.pump(const Duration(milliseconds: 40));
+        await gesture.up();
+        await tester.pump(const Duration(milliseconds: 120));
+
+        expect(orderOf(provider), before, reason: 'seam propio $ownSeam');
+        expect(
+          provider.hasUnsavedChanges,
+          isFalse,
+          reason: 'un no-movimiento no puede ensuciar el borrador',
+        );
+      }
+    });
+
+    testWidgets(
+        'un drag viejo no escribe tras cambiar de página y volver al mismo id',
+        (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(
+          shortPage(),
+          const <String, dynamic>{},
+          pageId: 'page-a',
+          pageSlug: 'inicio',
+        )
+        ..selectBlock('hero-1');
+      addTearDown(provider.dispose);
+      await pumpHost(tester, host(provider));
+
+      final context = tester.element(find.byType(PageComposition));
+      final sourceDocument = provider.document;
+      final payload = ExistingWebsiteBlockDragPayload(
+        blockId: 'hero-1',
+        sessionRevision: sourceDocument.sessionRevision,
+        pageId: sourceDocument.pageId,
+        pageSlug: sourceDocument.pageSlug,
+      );
+      final destination = websiteReorderIntent(
+        context,
+        anchorBlockId: 'text-1',
+        side: WebsiteBlockInsertSide.after,
+      );
+
+      // ABA: el mismo pageId, slug y contenido reaparecen, pero pertenecen a
+      // una sesión nueva. El pointer antiguo no puede adquirir esa sesión.
+      provider.enterEditMode(
+        shortPage(),
+        const <String, dynamic>{},
+        pageId: 'page-b',
+        pageSlug: 'otra',
+      );
+      provider.enterEditMode(
+        shortPage(),
+        const <String, dynamic>{},
+        pageId: 'page-a',
+        pageSlug: 'inicio',
+      );
+
+      expect(provider.documentSessionRevision,
+          isNot(sourceDocument.sessionRevision));
+      expect(
+        websiteReorderSeamMove(context, payload, destination),
+        isFalse,
+      );
+      expect(orderOf(provider), <String>['hero-1', 'text-1', 'text-2']);
+      expect(provider.hasUnsavedChanges, isFalse);
+      expect(provider.canUndo, isFalse);
+    });
+
+    testWidgets('el destino se re-resuelve por identidad al soltar',
+        (tester) async {
+      useViewport(tester);
+      final provider = WebsiteEditModeProvider()
+        ..enterEditMode(
+          shortPage(),
+          const <String, dynamic>{},
+          pageId: 'page-a',
+          pageSlug: 'inicio',
+        )
+        ..selectBlock('hero-1');
+      addTearDown(provider.dispose);
+      await pumpHost(tester, host(provider));
+
+      final context = tester.element(find.byType(PageComposition));
+      final document = provider.document;
+      final payload = ExistingWebsiteBlockDragPayload(
+        blockId: 'hero-1',
+        sessionRevision: document.sessionRevision,
+        pageId: document.pageId,
+        pageSlug: document.pageSlug,
+      );
+      final destination = websiteReorderIntent(
+        context,
+        anchorBlockId: 'text-2',
+        side: WebsiteBlockInsertSide.after,
+      );
+
+      // Mueve el anchor mientras el feedback está vivo. El commit debe buscar
+      // `text-2` otra vez, no usar el seam entero que existía al comenzar.
+      provider.reorderBlocks(1, 3);
+      expect(orderOf(provider), <String>['hero-1', 'text-2', 'text-1']);
+
+      expect(websiteReorderSeamMove(context, payload, destination), isTrue);
+      expect(orderOf(provider), <String>['text-2', 'hero-1', 'text-1']);
+      expect(provider.selectedBlockId, 'hero-1');
+
+      provider.undo();
+      expect(orderOf(provider), <String>['hero-1', 'text-2', 'text-1']);
     });
   });
 }

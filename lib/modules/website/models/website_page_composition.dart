@@ -3,6 +3,8 @@ import 'website_block_geometry.dart';
 import 'website_block_public_visibility.dart';
 import 'website_block_registry.dart';
 import 'website_block_type.dart';
+import 'website_responsive_authoring.dart';
+import 'website_responsive_projection.dart';
 
 /// Explicit presentation mode for one website page composition.
 ///
@@ -130,6 +132,7 @@ class WebsitePageComposition {
   WebsitePageComposition._({
     required this.mode,
     required this.breakpoint,
+    required this.logicalWidth,
     required this.blocks,
   });
 
@@ -153,6 +156,7 @@ class WebsitePageComposition {
 
   final WebsitePageCompositionMode mode;
   final String breakpoint;
+  final double? logicalWidth;
   final List<WebsitePageCompositionBlock> blocks;
 
   /// Projects blocks that are reachable on at least one public breakpoint.
@@ -181,6 +185,7 @@ class WebsitePageComposition {
     required Iterable<Map<String, dynamic>> blocks,
     required WebsitePageCompositionMode mode,
     required String breakpoint,
+    double? logicalWidth,
     double sectionSpacing = defaultSectionSpacing,
   }) {
     final normalizedBreakpoint = breakpoint.trim().toLowerCase();
@@ -189,6 +194,13 @@ class WebsitePageComposition {
         breakpoint,
         'breakpoint',
         'Expected one of ${websitePublicBreakpoints.join(', ')}.',
+      );
+    }
+    if (logicalWidth != null && (!logicalWidth.isFinite || logicalWidth <= 0)) {
+      throw ArgumentError.value(
+        logicalWidth,
+        'logicalWidth',
+        'Expected a finite positive storefront-canvas width.',
       );
     }
 
@@ -204,17 +216,31 @@ class WebsitePageComposition {
           : const <String, dynamic>{};
 
       final shouldInclude = mode == WebsitePageCompositionMode.edit ||
-          isWebsiteBlockVisibleAtPublicBreakpoint(
-            copiedBlock,
-            normalizedBreakpoint,
-          );
+          (logicalWidth != null
+              ? isWebsiteBlockVisibleAtLogicalWidth(
+                  copiedBlock,
+                  logicalWidth,
+                )
+              : isWebsiteBlockVisibleAtPublicBreakpoint(
+                  copiedBlock,
+                  normalizedBreakpoint,
+                ));
 
       if (shouldInclude) {
         final rawType = (copiedBlock['block_type'] ?? '').toString().trim();
         final type = _tryParseWebsiteBlockType(rawType);
         final profile = WebsitePageBlockGeometryProfile.forType(type);
-        final explicitFullBleed = _parseBoolean(copiedData['fullBleed']);
-        final rawBlockHeight = _finiteDouble(copiedData['blockHeight']);
+        final layoutData = logicalWidth == null
+            ? copiedData
+            : WebsiteResponsiveBlockProjection.projectMeta(
+                data: copiedData,
+                viewport: WebsiteResponsiveDataCodec.viewportForDocumentWidth(
+                  copiedData,
+                  logicalWidth,
+                ),
+              );
+        final explicitFullBleed = _parseBoolean(layoutData['fullBleed']);
+        final rawBlockHeight = _finiteDouble(layoutData['blockHeight']);
         final normalizedBlockHeight =
             profile.heightBehavior == WebsitePageBlockHeightBehavior.intrinsic
                 ? null
@@ -237,7 +263,7 @@ class WebsitePageComposition {
             ),
             geometry: WebsitePageBlockGeometry(
               spacingAfter: resolveSpacingAfter(
-                copiedData['spacingAfter'],
+                layoutData['spacingAfter'],
                 sectionSpacing: normalizedSectionSpacing,
               ),
               fullBleed: explicitFullBleed ?? profile.defaultFullBleed,
@@ -260,6 +286,7 @@ class WebsitePageComposition {
     return WebsitePageComposition._(
       mode: mode,
       breakpoint: normalizedBreakpoint,
+      logicalWidth: logicalWidth,
       blocks: List<WebsitePageCompositionBlock>.unmodifiable(projected),
     );
   }

@@ -1190,8 +1190,18 @@ void main() {
     final editableRenderer =
         File('lib/modules/website/widgets/editable_block_renderer.dart')
             .readAsStringSync();
-    expect(editableRenderer,
-        contains('onPointerDown: (_) => editProvider.selectBlock'));
+    expect(
+      editableRenderer,
+      contains('if (editProvider.selectedBlockId != widget.blockId)'),
+      reason: 'contact inside an already-selected Canvas must preserve the '
+          'exact manipulation session',
+    );
+    expect(
+        editableRenderer, contains('editProvider.selectBlock(widget.blockId)'));
+    expect(
+      editableRenderer,
+      isNot(contains('onPointerDown: (_) => editProvider.selectBlock')),
+    );
     // Complements (never replaces) the behavioural end-to-end guard in
     // carousel_hero_background_edit_affordance_test.dart: the productive
     // media presenter must forward the slot's affordance policy.

@@ -65,6 +65,16 @@ extrae a un documento propio **con su puntero desde acá**.
   que hace que el siguiente lo lea.
 - **Apuntando de vuelta acá** cuando toca el proceso general.
 
+### Flutter widget tests: verify clipboard writes at the platform channel
+
+**2026-08-08 — one full test round was lost to this trap.** In a Flutter
+widget test, calling `Clipboard.getData` to verify a preceding copy action can
+wait indefinitely because the test binding does not provide a deterministic
+system clipboard read-back. Intercept `SystemChannels.platform` with
+`TestDefaultBinaryMessengerBinding`, capture the `Clipboard.setData` method
+call and assert its payload instead. This verifies the actual app boundary
+without depending on host clipboard state or adding an unbounded pump/wait.
+
 # Agent Autonomy And End-To-End Ownership (CRITICAL)
 
 Agents own the complete technical outcome of an implementation. A finished task
@@ -120,6 +130,19 @@ Do not interrupt that flow for a second confirmation already inherent in the
 request. Analysis-only, diagnosis-only, local-only, ambiguous-target, data
 deletion/repair, credential rotation, publication, and materially costly work
 remain outside that implied authorization unless separately included.
+
+> **Corrección del dueño, 2026-08-09 — una restricción temporal no se convierte
+> en política permanente.** Un handoff o subtask marcado `local-only`, `draft`
+> o `no production writes` limita sólo ese alcance mientras siga siendo la
+> instrucción vigente. Si después el dueño pide implementar, arreglar, terminar
+> o publicar el resultado, esa instrucción posterior vuelve a autorizar el
+> rollout normal, no destructivo y ya revisado. No se hereda el bloqueo antiguo
+> para pedir una confirmación redundante. El costo observado fue concreto: el
+> Hub nuevo de Proveedores quedó corriendo contra el esquema productivo viejo,
+> mostró 91 registros cargados pero cero en cada categoría, y se informó
+> erróneamente como «listo». Una superficie dependiente de backend no se declara
+> terminada ni se deja activa contra una etapa incompatible: se completa el
+> rollout o se mantiene un fallback funcional y explícito.
 
 ## Definition Of Done For Implementations
 
@@ -581,6 +604,14 @@ The current ERP browser workspace uses `flutter_inappwebview`, which maps to nat
 Do not promise that an embedded browser can reuse the user's real Chrome profile, Chrome extensions, saved Chrome passwords, or Google Chrome Sync. Those belong to the Chrome app/profile and are not safely or normally embeddable inside the ERP. Browser-like memory must be implemented through the embedded engine's own profile/cache/cookies plus app-owned history, bookmarks, downloads, and file storage.
 
 CEF/Chromium is a valid future desktop-browser engine experiment, but treat it as a separate prototype before replacing the current browser. It increases bundle size, native setup complexity, release risk, and maintenance ownership. Before making CEF the default, verify at least: app zoom hit testing at 80% and 100%, keyboard/input behavior, Google login persistence, cookies/cache across restarts, downloads, popups/new windows, internal workspace routing, memory use, macOS and Windows packaging, and fallback behavior for sites that block embedded browsers.
+
+Android popup/OAuth contract (validated on a physical Samsung, 2026-08-08):
+
+- Preserve the `CreateWindowAction.windowId` and host the corresponding child `InAppWebView`; never recreate an Android popup as an `InAppBrowser`, tab, or independent URL load. Android derives `CreateWindowAction.request.url` from the hit test under the pointer, so it can be an image and is not a trustworthy popup destination.
+- If a provider leaves the attached child at `about:blank`, capture `window.open` at document start in a bounded, in-memory FIFO. Keep the full destination out of JavaScript handlers, storage, console, and diagnostics. Attach the native child first, allow Chromium's pending navigation to resume, then use the capture exactly once only after a bounded runtime probe still reports a real `about:blank`. An unconditional `loadUrl` races the pending navigation and can replay or invalidate OAuth state.
+- Apply the same capture and `onCloseWindow` ownership to nested children. Closure is complete only when the provider returns to the opener, the Flutter popup route closes, and the parent observes the authenticated state.
+- Debug logging is part of the security boundary. Keep the plugin's Dart debug logger disabled for browser WebViews, never log callback URLs/errors verbatim, and retain the pinned Android bridge patch under `packages/flutter_inappwebview_android`: `onConsoleMessage` must return `true` so Chromium does not mirror console source URLs (which can contain OAuth query data) into logcat.
+- The minimum release gate is a focused source/test check plus a real physical-device flow: non-blank provider UI, successful return/close, authenticated parent after reload, and zero raw OAuth query markers in app/plugin/Chromium diagnostics.
 
 ---
 
@@ -3159,6 +3190,15 @@ Implemented and deployed on 2026-06-14:
 - clean sitemap/static SEO snapshots plus legacy UUID redirect snapshots;
 - automatic storefront CI generation/verification of snapshots, sitemap, and
   Firebase product redirects before deployment;
+- SEO owner reads that paginate must end in a tenant-unique total-order key.
+  **2026-08-08 correction:** production held 4,984 `product_url_aliases`, of
+  which 4,923 shared one `created_at`; offset pages ordered only by that
+  timestamp duplicated and omitted rows, so two quiescent reads produced
+  different revisions and the consistency guard falsely reported source
+  changes. Keep aliases ordered by `created_at.asc,alias_path.asc`, retain a
+  regression above 1,000 timestamp-tied rows, and never bypass the double-read
+  guard. Its abort leaves partial outputs, so rerun the complete deploy after
+  repairing the owner read instead of invoking Firebase on existing builds.
 - re-sync and URL read-back verification of every enabled WhatsApp product;
 - persistent Meta URL verification fields on `products` so a successful upload
   cannot be confused with a verified stored link;

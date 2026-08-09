@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/website/models/website_page_composition.dart';
+import '../../modules/website/models/website_responsive_authoring.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../modules/website/models/website_editor_capability.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
@@ -530,17 +531,6 @@ class _PublicHomePageState extends State<PublicHomePage>
     });
   }
 
-  String _currentBreakpoint(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    if (width < 640) {
-      return 'mobile';
-    }
-    if (width < 1024) {
-      return 'tablet';
-    }
-    return 'desktop';
-  }
-
   @override
   void dispose() {
     _observedFreshnessService?.cmsPageFreshnessSignal
@@ -658,7 +648,9 @@ class _PublicHomePageState extends State<PublicHomePage>
       );
     }
 
-    final currentBreakpoint = _currentBreakpoint(context);
+    final logicalWidth = MediaQuery.sizeOf(context).width;
+    final currentBreakpoint =
+        WebsiteViewport.fromLogicalWidth(logicalWidth).wireName;
     final mode = switch (editProvider.mode) {
       WebsiteEditorMode.edit => WebsitePageCompositionMode.edit,
       WebsiteEditorMode.preview => WebsitePageCompositionMode.preview,
@@ -679,6 +671,7 @@ class _PublicHomePageState extends State<PublicHomePage>
       blocks: sourceBlocks,
       mode: mode,
       breakpoint: currentBreakpoint,
+      logicalWidth: logicalWidth,
       sectionSpacing: sectionSpacing,
     );
     final effectiveTenantId = tenantProvider.tenantId ?? _resolvedTenantId;

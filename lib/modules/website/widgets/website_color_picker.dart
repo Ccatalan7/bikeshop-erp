@@ -3,6 +3,205 @@ import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
+import '../providers/website_edit_mode_provider.dart';
+import 'website_media_picker.dart';
+
+typedef WebsiteTransactionalSliderBuilder = Widget Function(
+  BuildContext context,
+  double draftValue,
+  Widget slider,
+);
+
+/// One transactional owner for Website sliders.
+///
+/// Pointer ticks update only the local draft. The persisted callback runs once
+/// on a successful end and never on pointer-cancel. Inspector number controls
+/// and the color opacity shortcut both reuse this owner, which prevents a
+/// drag from creating one provider write/history entry per pixel.
+class WebsiteTransactionalSlider extends StatefulWidget {
+  const WebsiteTransactionalSlider({
+    super.key,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onCommit,
+    required this.transactionIdentity,
+    this.asyncBinding,
+    this.divisions,
+    this.onStart,
+    this.onCancel,
+    this.builder,
+  });
+
+  final double value;
+  final double min;
+  final double max;
+  final int? divisions;
+  final ValueChanged<double> onCommit;
+  final WebsiteAsyncFieldBinding? asyncBinding;
+  final VoidCallback? onStart;
+  final VoidCallback? onCancel;
+
+  /// Exact provider/block/owner/property identity of this transaction.
+  ///
+  /// This is required even when value/range stay equal: a retained State must
+  /// cancel A's draft when rebuilt for B and must never send it to B's commit.
+  final Object transactionIdentity;
+  final WebsiteTransactionalSliderBuilder? builder;
+
+  @override
+  State<WebsiteTransactionalSlider> createState() =>
+      _WebsiteTransactionalSliderState();
+}
+
+class _WebsiteTransactionalSliderState
+    extends State<WebsiteTransactionalSlider> {
+  double? _draft;
+  bool _active = false;
+  WebsiteAsyncFieldArm? _arm;
+  WebsiteAsyncFieldBinding? _openingBinding;
+
+  double get _visibleValue => (_draft ?? widget.value).clamp(
+        widget.min,
+        widget.max,
+      );
+
+  @override
+  void didUpdateWidget(covariant WebsiteTransactionalSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_active) return;
+    final ownerChanged =
+        oldWidget.transactionIdentity != widget.transactionIdentity ||
+            oldWidget.min != widget.min ||
+            oldWidget.max != widget.max ||
+            oldWidget.divisions != widget.divisions ||
+            oldWidget.value != widget.value;
+    if (ownerChanged) {
+      _active = false;
+      _draft = null;
+      _rejectArm(liveBinding: widget.asyncBinding);
+      oldWidget.onCancel?.call();
+    }
+  }
+
+  void _start(double value) {
+    final binding = widget.asyncBinding;
+    final arm = binding?.capture();
+    if (binding != null && arm == null) {
+      widget.onCancel?.call();
+      return;
+    }
+    _active = true;
+    _draft = value;
+    _arm = arm;
+    _openingBinding = binding;
+    widget.onStart?.call();
+    setState(() {});
+  }
+
+  void _update(double value) {
+    if (!_active) {
+      _start(value);
+      if (!_active) return;
+    }
+    setState(() => _draft = value);
+  }
+
+  void _end(double value) {
+    if (!_active) return;
+    final committed = (_draft ?? value).clamp(widget.min, widget.max);
+    final arm = _arm;
+    final openingBinding = _openingBinding;
+    _active = false;
+    _draft = null;
+    _arm = null;
+    _openingBinding = null;
+    setState(() {});
+    if (committed == widget.value) {
+      _consumeWithoutWrite(
+        arm: arm,
+        openingBinding: openingBinding,
+        liveBinding: widget.asyncBinding,
+      );
+      widget.onCancel?.call();
+      return;
+    }
+    if (arm != null) {
+      final liveBinding = widget.asyncBinding;
+      if (liveBinding == null) {
+        openingBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.rejected,
+        );
+        widget.onCancel?.call();
+        return;
+      }
+      final result = liveBinding.commit(arm, () {
+        widget.onCommit(committed);
+        return WebsiteInlineMutationResult.committed;
+      });
+      if (!result.accepted) widget.onCancel?.call();
+      return;
+    }
+    if (widget.asyncBinding != null) {
+      widget.onCancel?.call();
+      return;
+    }
+    widget.onCommit(committed);
+  }
+
+  void _cancel() {
+    if (!_active) return;
+    _active = false;
+    _draft = null;
+    _rejectArm(liveBinding: widget.asyncBinding);
+    setState(() {});
+    widget.onCancel?.call();
+  }
+
+  void _consumeWithoutWrite({
+    required WebsiteAsyncFieldArm? arm,
+    required WebsiteAsyncFieldBinding? openingBinding,
+    required WebsiteAsyncFieldBinding? liveBinding,
+  }) {
+    if (arm == null) return;
+    (liveBinding ?? openingBinding)?.commit(
+      arm,
+      () => WebsiteInlineMutationResult.unchanged,
+    );
+  }
+
+  void _rejectArm({required WebsiteAsyncFieldBinding? liveBinding}) {
+    final arm = _arm;
+    final openingBinding = _openingBinding;
+    _arm = null;
+    _openingBinding = null;
+    if (arm == null) return;
+    (liveBinding ?? openingBinding)?.commit(
+      arm,
+      () => WebsiteInlineMutationResult.rejected,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _visibleValue;
+    final slider = Listener(
+      onPointerCancel: (_) => _cancel(),
+      child: Slider(
+        value: value,
+        min: widget.min,
+        max: widget.max,
+        divisions: widget.divisions,
+        onChangeStart: _start,
+        onChanged: _update,
+        onChangeEnd: _end,
+      ),
+    );
+    return widget.builder?.call(context, value, slider) ?? slider;
+  }
+}
+
 /// Canonical visual color control for the Website Builder.
 ///
 /// The normal workflow is visual: preview, named color, palette, and opacity.
@@ -14,19 +213,54 @@ class WebsiteColorPickerField extends StatefulWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.onEditStart,
+    this.onEditCancel,
     this.allowAlpha = true,
     this.allowTransparent = false,
+    this.showInlineOpacity = true,
     this.helperText,
     this.palette = websiteEditorColorPalette,
-  });
+    this.asyncBinding,
+    this.transactionIdentity,
+  }) : assert(
+          !showInlineOpacity ||
+              asyncBinding != null ||
+              transactionIdentity != null,
+          'Inline opacity needs an exact transactionIdentity.',
+        );
 
   final String label;
   final String value;
   final ValueChanged<String> onChanged;
+
+  /// Captures the exact document/selection lease before the dialog awaits.
+  /// Returning false keeps the picker closed instead of letting a stale
+  /// callback redirect its Apply action to a newer editor document.
+  final bool Function()? onEditStart;
+
+  /// Releases any interaction state when the dialog closes without Apply.
+  final VoidCallback? onEditCancel;
   final bool allowAlpha;
   final bool allowTransparent;
+
+  /// Keeps the compact opacity shortcut available to existing consumers.
+  ///
+  /// Transactional inspectors can hide it and retain the dialog's draft +
+  /// Apply flow, so a drag never emits one persisted mutation per tick.
+  final bool showInlineOpacity;
   final String? helperText;
   final List<String> palette;
+
+  /// Exact authority captured before the dialog and consumed by the binding
+  /// that is live when Apply/Cancel returns.
+  final WebsiteAsyncFieldBinding? asyncBinding;
+
+  /// Exact identity for an unbound inline-opacity consumer.
+  ///
+  /// Page-block and sitewide consumers get this from [asyncBinding]. Legacy
+  /// lease-owned consumers that deliberately omit the inline shortcut do not
+  /// need one.
+  final Object? transactionIdentity;
 
   @override
   State<WebsiteColorPickerField> createState() =>
@@ -54,6 +288,8 @@ const List<String> websiteEditorColorPalette = [
 
 class _WebsiteColorPickerFieldState extends State<WebsiteColorPickerField> {
   static final LinkedHashSet<String> _recentColors = LinkedHashSet<String>();
+  WebsiteAsyncFieldArm? _opacityArm;
+  bool _opacityAdmitted = true;
 
   Color get _currentColor => parseWebsiteEditorColor(widget.value);
 
@@ -69,272 +305,396 @@ class _WebsiteColorPickerFieldState extends State<WebsiteColorPickerField> {
     }
   }
 
-  void _changeOpacity(double opacity) {
+  void _startOpacity() {
+    final binding = widget.asyncBinding;
+    _opacityArm = binding?.capture();
+    _opacityAdmitted = binding == null || _opacityArm != null;
+  }
+
+  void _cancelOpacity() {
+    final arm = _opacityArm;
+    _opacityArm = null;
+    _opacityAdmitted = true;
+    if (arm != null) {
+      widget.asyncBinding?.commit(
+        arm,
+        () => WebsiteInlineMutationResult.unchanged,
+      );
+    }
+  }
+
+  void _commitOpacity(double opacity) {
+    if (!_opacityAdmitted) {
+      _cancelOpacity();
+      return;
+    }
     final next = _currentColor.withValues(alpha: opacity.clamp(0.0, 1.0));
-    _remember(next);
-    widget.onChanged(
-      serializeWebsiteEditorColor(next, includeAlpha: widget.allowAlpha),
+    final serialized = serializeWebsiteEditorColor(
+      next,
+      includeAlpha: widget.allowAlpha,
     );
+    final arm = _opacityArm;
+    _opacityArm = null;
+    _opacityAdmitted = true;
+    if (arm != null) {
+      final liveBinding = widget.asyncBinding;
+      if (liveBinding == null) return;
+      liveBinding.commit(arm, () {
+        if (serialized == widget.value) {
+          return WebsiteInlineMutationResult.unchanged;
+        }
+        _remember(next);
+        widget.onChanged(serialized);
+        return WebsiteInlineMutationResult.committed;
+      });
+      return;
+    }
+    if (widget.asyncBinding != null || serialized == widget.value) return;
+    _remember(next);
+    widget.onChanged(serialized);
   }
 
   Future<void> _openPicker() async {
-    var draft = _currentColor;
-    if (!widget.allowAlpha) draft = draft.withValues(alpha: 1);
+    final initialValue = widget.value;
+    final label = widget.label;
+    final allowAlpha = widget.allowAlpha;
+    final allowTransparent = widget.allowTransparent;
+    final palette = widget.palette;
+    final openingOnChanged = widget.onChanged;
+    final openingOnEditCancel = widget.onEditCancel;
+    final openingBinding = widget.asyncBinding;
+    final arm = openingBinding?.capture();
+    if (openingBinding != null && arm == null) return;
+    if (widget.onEditStart?.call() == false) {
+      if (arm != null) {
+        openingBinding!.commit(
+          arm,
+          () => WebsiteInlineMutationResult.unchanged,
+        );
+      }
+      return;
+    }
+    var draft = parseWebsiteEditorColor(initialValue);
+    if (!allowAlpha) draft = draft.withValues(alpha: 1);
     final codeController = TextEditingController(
       text: serializeWebsiteEditorColor(
         draft,
-        includeAlpha: widget.allowAlpha,
+        includeAlpha: allowAlpha,
       ),
     );
 
-    final selected = await showDialog<Color>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          void setDraft(Color color) {
-            setDialogState(() {
-              draft = widget.allowAlpha ? color : color.withValues(alpha: 1);
-              codeController.text = serializeWebsiteEditorColor(
-                draft,
-                includeAlpha: widget.allowAlpha,
-              );
-            });
-          }
+    Color? selected;
+    try {
+      selected = await showDialog<Color>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            void setDraft(Color color) {
+              setDialogState(() {
+                draft = allowAlpha ? color : color.withValues(alpha: 1);
+                codeController.text = serializeWebsiteEditorColor(
+                  draft,
+                  includeAlpha: allowAlpha,
+                );
+              });
+            }
 
-          final recent = _recentColors.toList().reversed.toList();
-          final opacity = websiteEditorColorOpacity(draft);
+            final recent = _recentColors.toList().reversed.toList();
+            final opacity = websiteEditorColorOpacity(draft);
 
-          return Dialog(
-            backgroundColor: const Color(0xFF202221),
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: const BorderSide(color: Colors.white12),
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460, maxHeight: 720),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 10, 12),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.palette_outlined,
-                          color: Color(0xFF20C5C1),
-                          size: 20,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.label,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const Text(
-                                'Selecciona visualmente el color y su intensidad.',
-                                style: TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Cerrar',
-                          onPressed: () => Navigator.of(dialogContext).pop(),
-                          icon: const Icon(Icons.close, color: Colors.white60),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1, color: Colors.white12),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+            return Dialog(
+              backgroundColor: const Color(0xFF202221),
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(color: Colors.white12),
+              ),
+              child: ConstrainedBox(
+                constraints:
+                    const BoxConstraints(maxWidth: 460, maxHeight: 720),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 16, 10, 12),
+                      child: Row(
                         children: [
-                          _ColorPreviewRow(color: draft),
-                          const SizedBox(height: 16),
-                          const _PickerSectionLabel('Paleta del sitio'),
-                          const SizedBox(height: 8),
-                          _ColorSwatchGrid(
-                            colors: widget.palette,
-                            selected: draft,
-                            onSelected: setDraft,
+                          const Icon(
+                            Icons.palette_outlined,
+                            color: Color(0xFF20C5C1),
+                            size: 20,
                           ),
-                          if (recent.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            const _PickerSectionLabel('Usados recientemente'),
-                            const SizedBox(height: 8),
-                            _ColorSwatchGrid(
-                              colors: recent,
-                              selected: draft,
-                              onSelected: setDraft,
-                            ),
-                          ],
-                          const SizedBox(height: 18),
-                          ColorPicker(
-                            pickerColor: draft,
-                            onColorChanged: (color) => setDraft(
-                              color.withValues(
-                                alpha: opacity == 0 ? 1 : opacity,
-                              ),
-                            ),
-                            enableAlpha: false,
-                            displayThumbColor: true,
-                            paletteType: PaletteType.hsvWithHue,
-                            pickerAreaHeightPercent: 0.68,
-                            labelTypes: const [],
-                            hexInputBar: false,
-                            portraitOnly: true,
-                          ),
-                          if (widget.allowAlpha) ...[
-                            const SizedBox(height: 8),
-                            Row(
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Expanded(
-                                  child: Text(
-                                    'Opacidad',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
                                 Text(
-                                  '${(opacity * 100).round()}%',
+                                  label,
                                   style: const TextStyle(
-                                    color: Color(0xFF20C5C1),
-                                    fontSize: 12,
+                                    color: Colors.white,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                              ],
-                            ),
-                            Slider(
-                              key: const ValueKey(
-                                'website_color_picker_dialog_opacity',
-                              ),
-                              value: opacity,
-                              onChanged: (value) => setDraft(
-                                draft.withValues(alpha: value),
-                              ),
-                            ),
-                          ],
-                          if (widget.allowTransparent) ...[
-                            const SizedBox(height: 6),
-                            OutlinedButton.icon(
-                              onPressed: () =>
-                                  setDraft(draft.withValues(alpha: 0)),
-                              icon: const Icon(Icons.block, size: 16),
-                              label: const Text('Sin color'),
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          Theme(
-                            data: Theme.of(context).copyWith(
-                              dividerColor: Colors.transparent,
-                            ),
-                            child: ExpansionTile(
-                              key: const ValueKey(
-                                'website_color_picker_advanced',
-                              ),
-                              tilePadding: EdgeInsets.zero,
-                              childrenPadding: const EdgeInsets.only(bottom: 8),
-                              title: const Text(
-                                'Código avanzado',
-                                style: TextStyle(
-                                  color: Colors.white60,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              children: [
-                                TextField(
-                                  controller: codeController,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontFamily: 'monospace',
-                                    fontSize: 12,
+                                const Text(
+                                  'Selecciona visualmente el color y su intensidad.',
+                                  style: TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 11,
                                   ),
-                                  decoration: InputDecoration(
-                                    labelText: widget.allowAlpha
-                                        ? '#AARRGGBB o #RRGGBB'
-                                        : '#RRGGBB',
-                                    helperText:
-                                        'Sólo para copiar o introducir un código exacto.',
-                                    filled: true,
-                                    fillColor: Colors.black26,
-                                    border: const OutlineInputBorder(),
-                                  ),
-                                  onChanged: (value) {
-                                    final parsed = tryParseWebsiteEditorColor(
-                                      value,
-                                    );
-                                    if (parsed != null) {
-                                      setDialogState(() {
-                                        draft = widget.allowAlpha
-                                            ? parsed
-                                            : parsed.withValues(alpha: 1);
-                                      });
-                                    }
-                                  },
                                 ),
                               ],
                             ),
+                          ),
+                          IconButton(
+                            tooltip: 'Cerrar',
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            icon:
+                                const Icon(Icons.close, color: Colors.white60),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const Divider(height: 1, color: Colors.white12),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(dialogContext).pop(),
-                          child: const Text('Cancelar'),
+                    const Divider(height: 1, color: Colors.white12),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _ColorPreviewRow(color: draft),
+                            const SizedBox(height: 16),
+                            const _PickerSectionLabel('Paleta del sitio'),
+                            const SizedBox(height: 8),
+                            _ColorSwatchGrid(
+                              colors: palette,
+                              selected: draft,
+                              onSelected: setDraft,
+                            ),
+                            if (recent.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              const _PickerSectionLabel('Usados recientemente'),
+                              const SizedBox(height: 8),
+                              _ColorSwatchGrid(
+                                colors: recent,
+                                selected: draft,
+                                onSelected: setDraft,
+                              ),
+                            ],
+                            const SizedBox(height: 18),
+                            ColorPicker(
+                              pickerColor: draft,
+                              onColorChanged: (color) => setDraft(
+                                color.withValues(
+                                  alpha: opacity == 0 ? 1 : opacity,
+                                ),
+                              ),
+                              enableAlpha: false,
+                              displayThumbColor: true,
+                              paletteType: PaletteType.hsvWithHue,
+                              pickerAreaHeightPercent: 0.68,
+                              labelTypes: const [],
+                              hexInputBar: false,
+                              portraitOnly: true,
+                            ),
+                            if (allowAlpha) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'Opacidad',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${(opacity * 100).round()}%',
+                                    style: const TextStyle(
+                                      color: Color(0xFF20C5C1),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Slider(
+                                key: const ValueKey(
+                                  'website_color_picker_dialog_opacity',
+                                ),
+                                value: opacity,
+                                onChanged: (value) => setDraft(
+                                  draft.withValues(alpha: value),
+                                ),
+                              ),
+                            ],
+                            if (allowTransparent) ...[
+                              const SizedBox(height: 6),
+                              OutlinedButton.icon(
+                                onPressed: () =>
+                                    setDraft(draft.withValues(alpha: 0)),
+                                icon: const Icon(Icons.block, size: 16),
+                                label: const Text('Sin color'),
+                              ),
+                            ],
+                            const SizedBox(height: 8),
+                            Theme(
+                              data: Theme.of(context).copyWith(
+                                dividerColor: Colors.transparent,
+                              ),
+                              child: ExpansionTile(
+                                key: const ValueKey(
+                                  'website_color_picker_advanced',
+                                ),
+                                tilePadding: EdgeInsets.zero,
+                                childrenPadding:
+                                    const EdgeInsets.only(bottom: 8),
+                                title: const Text(
+                                  'Código avanzado',
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                children: [
+                                  TextField(
+                                    controller: codeController,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: 'monospace',
+                                      fontSize: 12,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: allowAlpha
+                                          ? '#AARRGGBB o #RRGGBB'
+                                          : '#RRGGBB',
+                                      helperText:
+                                          'Sólo para copiar o introducir un código exacto.',
+                                      filled: true,
+                                      fillColor: Colors.black26,
+                                      border: const OutlineInputBorder(),
+                                    ),
+                                    onChanged: (value) {
+                                      final parsed = tryParseWebsiteEditorColor(
+                                        value,
+                                      );
+                                      if (parsed != null) {
+                                        setDialogState(() {
+                                          draft = allowAlpha
+                                              ? parsed
+                                              : parsed.withValues(alpha: 1);
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          key: const ValueKey('website_color_picker_apply'),
-                          onPressed: () =>
-                              Navigator.of(dialogContext).pop(draft),
-                          child: const Text('Aplicar'),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                    const Divider(height: 1, color: Colors.white12),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            child: const Text('Cancelar'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            key: const ValueKey('website_color_picker_apply'),
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop(draft),
+                            child: const Text('Aplicar'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
-      ),
-    );
+            );
+          },
+        ),
+      );
+    } catch (_) {
+      if (mounted && arm != null) {
+        widget.asyncBinding?.commit(arm, () {
+          widget.onEditCancel?.call();
+          return WebsiteInlineMutationResult.unchanged;
+        });
+      } else if (mounted &&
+          identical(widget.onChanged, openingOnChanged) &&
+          identical(widget.onEditCancel, openingOnEditCancel)) {
+        widget.onEditCancel?.call();
+      }
+      rethrow;
+    } finally {
+      codeController.dispose();
+    }
+    if (!mounted) return;
 
-    codeController.dispose();
-    if (selected == null || !mounted) return;
-    _remember(selected);
-    widget.onChanged(
-      serializeWebsiteEditorColor(
-        selected,
-        includeAlpha: widget.allowAlpha,
-      ),
+    final configIsCurrent = widget.value == initialValue &&
+        widget.allowAlpha == allowAlpha &&
+        widget.allowTransparent == allowTransparent &&
+        widget.palette == palette;
+    if (!configIsCurrent) {
+      if (arm != null) {
+        widget.asyncBinding?.commit(
+          arm,
+          () => WebsiteInlineMutationResult.rejected,
+        );
+      }
+      return;
+    }
+
+    if (selected == null) {
+      if (arm != null) {
+        widget.asyncBinding?.commit(arm, () {
+          widget.onEditCancel?.call();
+          return WebsiteInlineMutationResult.unchanged;
+        });
+      } else if (identical(widget.onChanged, openingOnChanged) &&
+          identical(widget.onEditCancel, openingOnEditCancel)) {
+        widget.onEditCancel?.call();
+      }
+      return;
+    }
+
+    final serialized = serializeWebsiteEditorColor(
+      selected,
+      includeAlpha: allowAlpha,
     );
+    if (arm != null) {
+      final liveBinding = widget.asyncBinding;
+      if (liveBinding == null) return;
+      liveBinding.commit(arm, () {
+        if (serialized == initialValue) {
+          widget.onEditCancel?.call();
+          return WebsiteInlineMutationResult.unchanged;
+        }
+        _remember(selected!);
+        widget.onChanged(serialized);
+        return WebsiteInlineMutationResult.committed;
+      });
+      return;
+    }
+
+    if (!identical(widget.onChanged, openingOnChanged) ||
+        !identical(widget.onEditCancel, openingOnEditCancel)) {
+      return;
+    }
+    _remember(selected);
+    widget.onChanged(serialized);
   }
 
   @override
@@ -410,7 +770,7 @@ class _WebsiteColorPickerFieldState extends State<WebsiteColorPickerField> {
             ),
           ),
         ),
-        if (widget.allowAlpha) ...[
+        if (widget.allowAlpha && widget.showInlineOpacity) ...[
           const SizedBox(height: 7),
           Row(
             children: [
@@ -422,12 +782,18 @@ class _WebsiteColorPickerFieldState extends State<WebsiteColorPickerField> {
                 ),
               ),
               Expanded(
-                child: Slider(
+                child: WebsiteTransactionalSlider(
                   key: ValueKey(
                     'website_color_opacity_${widget.label}',
                   ),
                   value: opacity,
-                  onChanged: _changeOpacity,
+                  min: 0,
+                  max: 1,
+                  transactionIdentity: widget.asyncBinding?.identity ??
+                      widget.transactionIdentity!,
+                  onStart: _startOpacity,
+                  onCancel: _cancelOpacity,
+                  onCommit: _commitOpacity,
                 ),
               ),
               SizedBox(

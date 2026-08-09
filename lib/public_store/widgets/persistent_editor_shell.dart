@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/widgets/website_editor_chrome_geometry.dart';
+import '../../modules/website/widgets/website_editor_host_theme.dart';
 import '../../modules/website/widgets/deferred_website_editor_panel.dart';
 import '../../modules/website/models/website_editor_capability.dart';
 import '../../modules/website/services/website_save_coordinator.dart';
@@ -12,6 +13,7 @@ import '../../modules/website/services/website_service.dart';
 import '../../shared/services/tenant_service.dart';
 import '../../shared/widgets/workspace_shell_scope.dart';
 import '../../modules/website/widgets/website_editor_contextual_dock.dart';
+import '../../modules/website/widgets/website_editor_contextual_operation_scope.dart';
 import '../../modules/website/widgets/website_editor_draft_recovery_host.dart';
 import '../../modules/website/widgets/website_editor_command_scope.dart';
 
@@ -137,9 +139,11 @@ class PersistentEditorShell extends StatefulWidget {
   /// three other files, each deciding independently — had no Design source;
   /// `O-04 VbSideSheet` puts the pane at 420–540 and caps it at 40% of the
   /// width. See [WebsiteEditorChromeGeometry].
-  static const double _editorTopBarHeight =
-      WebsiteEditorChromeGeometry.topBarHeight;
-
+  ///
+  /// The bar's own height is no longer referenced from here: siblings position
+  /// against the runtime band this shell publishes
+  /// (`WebsiteEditorChromeScope.topBandHeight`), which is the bar plus the
+  /// system inset it actually reserved.
   const PersistentEditorShell({
     super.key,
     required this.child,
@@ -156,6 +160,8 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
   bool _isSaving = false;
   WebsiteService? _saveCoordinatorOwner;
   WebsiteSaveCoordinator? _saveCoordinator;
+  final WebsiteEditorContextualOperationController _contextualOperations =
+      WebsiteEditorContextualOperationController();
 
   /// Real height of the mounted contextual dock, published through
   /// [WebsiteEditorChromeScope] so the canvas can reserve exactly that band.
@@ -187,6 +193,12 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
   }
 
   @override
+  void dispose() {
+    _contextualOperations.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Watch edit mode to show/hide the editor panel
     final editProvider = context.watch<WebsiteEditModeProvider>();
@@ -207,102 +219,140 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
     // Use Transform.translate to force a new stacking context on the entire
     // editor shell. This helps isolate the editor UI from the page content's
     // z-index fighting, ensuring the editor (bottom of Stack) always wins.
-    return WebsiteEditorCommandScope(
-      isSaving: _isSaving,
-      onSave: _handleSave,
-      onDiscard: _handleDiscard,
-      onRestoreComplete: _handleRestoreComplete,
-      child: Padding(
-        padding: EdgeInsets.only(top: workspaceTopInset),
-        child: Transform.translate(
-          key: const ValueKey('persistent-editor-workspace-content'),
-          offset: Offset.zero,
-          // Measured and published UNCONDITIONALLY, in every mode and viewport.
-          // A conditional wrapper here is exactly what the editor contract warns
-          // about: it can change the internal composition and remount a plain
-          // GoRoute even when the content anchor keeps its key. Only the values
-          // this scope carries change.
-          child: LayoutBuilder(
-            key: const ValueKey('persistent-editor-chrome-measure'),
-            builder: (context, constraints) {
-              final editorWidth = constraints.maxWidth.isFinite
-                  ? constraints.maxWidth
-                  : MediaQuery.sizeOf(context).width;
-              final paneWidth =
-                  WebsiteEditorChromeGeometry.paneWidthFor(editorWidth);
-              // A pane only exists when the editor can afford one. Below the
-              // derived threshold the composition is contextual and the canvas
-              // keeps the whole width: never a compressed side panel.
-              final mountsPane = showEditorPanel && paneWidth != null;
-              final mountsDock = showEditorPanel && paneWidth == null;
-              _scheduleContextualDockMeasurement(isMounted: mountsDock);
+    return WebsiteEditorContextualOperationScope(
+      controller: _contextualOperations,
+      child: WebsiteEditorCommandScope(
+        isSaving: _isSaving,
+        onSave: _handleSave,
+        onDiscard: _handleDiscard,
+        onRestoreComplete: _handleRestoreComplete,
+        // The ERP appearance is captured HERE, above the storefront's own theme,
+        // and restored by every operator surface that renders underneath it.
+        child: WebsiteEditorHostTheme.capture(
+          context: context,
+          child: Padding(
+            padding: EdgeInsets.only(top: workspaceTopInset),
+            // The editor has ONE inset owner, and it is this shell.
+            //
+            // When the ERP workspace bar sits above the editor it has already
+            // covered the status area, and the `Padding` above pushed the whole
+            // editor below it. Leaving `MediaQuery.padding.top` intact for the
+            // subtree would let the bar's own `SafeArea`, the canvas and the
+            // stacked siblings each reserve that inset a second time, stacking a
+            // 44 px gap under a bar that is already clear of the status bar.
+            //
+            // Removing it here means every descendant — including the two bars —
+            // reads 0 and the band collapses to the published 48, while a
+            // standalone storefront with no workspace chrome keeps the real inset
+            // and reserves it exactly once.
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: workspaceTopInset > 0,
+              child: Transform.translate(
+                key: const ValueKey('persistent-editor-workspace-content'),
+                offset: Offset.zero,
+                // Measured and published UNCONDITIONALLY, in every mode and viewport.
+                // A conditional wrapper here is exactly what the editor contract warns
+                // about: it can change the internal composition and remount a plain
+                // GoRoute even when the content anchor keeps its key. Only the values
+                // this scope carries change.
+                child: LayoutBuilder(
+                  key: const ValueKey('persistent-editor-chrome-measure'),
+                  builder: (context, constraints) {
+                    final editorWidth = constraints.maxWidth.isFinite
+                        ? constraints.maxWidth
+                        : MediaQuery.sizeOf(context).width;
+                    final paneWidth =
+                        WebsiteEditorChromeGeometry.paneWidthFor(editorWidth);
+                    // A pane only exists when the editor can afford one. Below the
+                    // derived threshold the composition is contextual and the canvas
+                    // keeps the whole width: never a compressed side panel.
+                    final mountsPane = showEditorPanel && paneWidth != null;
+                    final mountsDock = showEditorPanel && paneWidth == null;
+                    _scheduleContextualDockMeasurement(isMounted: mountsDock);
+                    // Read once, here, AFTER the removal above. Every sibling in the
+                    // Stack below and the storefront's own bar slot position against
+                    // this single value.
+                    final editorTopBand =
+                        WebsiteEditorChromeGeometry.topBandHeightFor(
+                      MediaQuery.paddingOf(context).top,
+                    );
 
-              return WebsiteEditorChromeScope(
-                editorWidth: editorWidth,
-                canvasWidth: mountsPane ? editorWidth - paneWidth : editorWidth,
-                contextualDockHeight: mountsDock ? _contextualDockHeight : 0,
-                child: Stack(
-                  children: [
-                    // Keep router child full-width so the top command bar uses
-                    // all space. The whole editor starts below global workspace
-                    // chrome; otherwise the two command systems overlap by
-                    // exactly the workspace-bar height.
-                    Positioned.fill(
-                      child: widget.child,
-                    ),
-                    // Persistent editor pane. The Stack structure is always
-                    // present; only this optional sibling comes and goes.
-                    if (mountsPane)
-                      Positioned(
-                        top: PersistentEditorShell._editorTopBarHeight,
-                        right: 0,
-                        bottom: 0,
-                        width: paneWidth,
-                        child: _PersistentEditorPanel(
-                          editProvider: editProvider,
-                          onSave: _handleSave,
-                          onRestoreComplete: _handleRestoreComplete,
-                          onDiscard: _handleDiscard,
-                        ),
-                      ),
-                    // Contextual host. Below the derived pane threshold the
-                    // editor has no inspector column, so editing starts at the
-                    // selected block: a dock accompanies the selection and
-                    // `Editar` opens the `O-05` sheet over a canvas that stays
-                    // mounted. Same slot as the anchor it replaces, so the
-                    // canvas geometry does not move.
-                    if (mountsDock)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        // The measurement key wraps the anchor instead of
-                        // replacing it: the dock keeps the identity the
-                        // contextual host contract gives it, and the shell
-                        // reads the band it actually paints.
-                        child: KeyedSubtree(
-                          key: _contextualDockKey,
-                          child: const WebsiteEditorContextualDock(
-                            key: ValueKey(
-                              'persistent-editor-contextual-anchor',
-                            ),
+                    return WebsiteEditorChromeScope(
+                      editorWidth: editorWidth,
+                      canvasWidth:
+                          mountsPane ? editorWidth - paneWidth : editorWidth,
+                      contextualDockHeight:
+                          mountsDock ? _contextualDockHeight : 0,
+                      topBandHeight: editorTopBand,
+                      child: Stack(
+                        children: [
+                          // Keep router child full-width so the top command bar uses
+                          // all space. The whole editor starts below global workspace
+                          // chrome; otherwise the two command systems overlap by
+                          // exactly the workspace-bar height.
+                          Positioned.fill(
+                            child: widget.child,
                           ),
-                        ),
+                          // Persistent editor pane. The Stack structure is always
+                          // present; only this optional sibling comes and goes.
+                          if (mountsPane)
+                            Positioned(
+                              // The pane starts below the WHOLE band, inset
+                              // included. At 48 it began under the status bar on any
+                              // device with one.
+                              top: editorTopBand,
+                              right: 0,
+                              bottom: 0,
+                              width: paneWidth,
+                              child: _PersistentEditorPanel(
+                                editProvider: editProvider,
+                                onSave: _handleSave,
+                                onRestoreComplete: _handleRestoreComplete,
+                                onDiscard: _handleDiscard,
+                              ),
+                            ),
+                          // Contextual host. Below the derived pane threshold the
+                          // editor has no inspector column, so editing starts at the
+                          // selected block: a dock accompanies the selection and
+                          // `Editar` opens the `O-05` sheet over a canvas that stays
+                          // mounted. Same slot as the anchor it replaces, so the
+                          // canvas geometry does not move.
+                          if (mountsDock)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              // The measurement key wraps the anchor instead of
+                              // replacing it: the dock keeps the identity the
+                              // contextual host contract gives it, and the shell
+                              // reads the band it actually paints.
+                              child: KeyedSubtree(
+                                key: _contextualDockKey,
+                                child: const WebsiteEditorContextualDock(
+                                  key: ValueKey(
+                                    'persistent-editor-contextual-anchor',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (editProvider.isInEditorContext)
+                            Positioned(
+                              top: editorTopBand + 8,
+                              left: 12,
+                              right: mountsPane ? paneWidth + 12 : 12,
+                              child: WebsiteEditorDraftRecoveryHost(
+                                provider: editProvider,
+                                store: widget.draftStore,
+                              ),
+                            ),
+                        ],
                       ),
-                    if (editProvider.isInEditorContext)
-                      Positioned(
-                        top: PersistentEditorShell._editorTopBarHeight + 8,
-                        left: 12,
-                        right: mountsPane ? paneWidth + 12 : 12,
-                        child: WebsiteEditorDraftRecoveryHost(
-                          provider: editProvider,
-                          store: widget.draftStore,
-                        ),
-                      ),
-                  ],
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+            ),
           ),
         ),
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_responsive_authoring.dart';
 import '../models/website_responsive_field_state.dart';
+import '../models/website_responsive_projection.dart';
 import '../providers/website_edit_mode_provider.dart';
 import 'website_responsive_scalar_binding.dart';
 
@@ -131,7 +132,9 @@ class WebsiteResponsiveMediaBinding {
     required String blockId,
     required WebsiteBlockFieldSchema field,
     WebsiteAuthoringHostClass hostClass = WebsiteAuthoringHostClass.desktop,
+    WebsiteViewport? viewport,
   }) {
+    final targetViewport = viewport ?? provider.previewViewport;
     // The asset half IS a scalar property, so it uses the scalar owner rather
     // than a second implementation of the same rules. That is what gives media
     // the companion contract it was missing: a shared write also updates the
@@ -144,6 +147,7 @@ class WebsiteResponsiveMediaBinding {
       owner: const WebsiteResponsiveRootField(),
       decode: decodeUrl,
       hostClass: hostClass,
+      viewport: targetViewport,
     );
     final urlState = urlBinding.state;
 
@@ -162,37 +166,76 @@ class WebsiteResponsiveMediaBinding {
 
     final xKey = field.focalPointXKey;
     final yKey = field.focalPointYKey;
-    final legacyX = <String>[field.mobileFocalPointXKey];
-    final legacyY = <String>[field.mobileFocalPointYKey];
+    final legacyX = WebsiteResponsiveFocalProjection.legacyPropertyKeys(
+      field: field,
+      axis: WebsiteFocalAxis.horizontal,
+    );
+    final legacyY = WebsiteResponsiveFocalProjection.legacyPropertyKeys(
+      field: field,
+      axis: WebsiteFocalAxis.vertical,
+    );
     final focalPolicies = <String, WebsiteResponsivePropertyPolicy>{
       xKey: WebsiteResponsivePropertyPolicy.perViewportGeometry,
       yKey: WebsiteResponsivePropertyPolicy.perViewportGeometry,
     };
 
-    WebsiteResponsiveFieldState<double> axis(String key, List<String> legacy) {
+    WebsiteResponsiveFieldState<double> axis(
+      String key,
+      WebsiteFocalAxis focalAxis,
+    ) {
       return provider.responsiveFieldState<double>(
         blockId: blockId,
         schema: _axisSchema(key),
         decode: decodeAxis,
         hostClass: hostClass,
+        viewport: targetViewport,
         fallback: 0.5,
-        readLegacyOverride: legacyMobileReader<double>(legacy, decodeAxis),
+        readLegacyOverride: WebsiteResponsiveFocalProjection.legacyReader(
+          field: field,
+          axis: focalAxis,
+        ),
       );
     }
+
+    final focalTarget = WebsiteInlineManipulationTarget(
+      blockId: blockId,
+      owner: const WebsiteInlineBlockOwner(),
+      viewport: targetViewport,
+      properties: <WebsiteInlineManipulationProperty>[
+        WebsiteInlineManipulationProperty(
+          canonicalKey: xKey,
+          policy: WebsiteResponsivePropertyPolicy.perViewportGeometry,
+        ),
+        WebsiteInlineManipulationProperty(
+          canonicalKey: yKey,
+          policy: WebsiteResponsivePropertyPolicy.perViewportGeometry,
+        ),
+      ],
+    );
+    var focalLease = provider.captureInlineMutationLease(focalTarget);
 
     return WebsiteResponsiveMediaBinding(
       urlState: urlState,
       focalState: composeFocalState(
-        x: axis(xKey, legacyX),
-        y: axis(yKey, legacyY),
+        x: axis(xKey, WebsiteFocalAxis.horizontal),
+        y: axis(yKey, WebsiteFocalAxis.vertical),
       ),
       writeUrl: urlBinding.write,
       // ONE history entry for the pair: X and Y are one framing decision.
-      writeFocal: (x, y) => provider.setBlockResponsiveProperties(
-        blockId,
-        <String, Object?>{xKey: x, yKey: y},
-        policies: focalPolicies,
-      ),
+      // The callback retains the exact page/source/scope/viewport lease that
+      // built the visible picker. It never resolves a stale callback against
+      // whatever page happens to be live when the finger lifts.
+      writeFocal: (x, y) {
+        final lease = focalLease;
+        if (lease == null) return;
+        final result = provider.commitInlineMutation(
+          lease,
+          <String, Object?>{xKey: x, yKey: y},
+        );
+        focalLease = result.accepted
+            ? provider.captureInlineMutationLease(focalTarget)
+            : null;
+      },
       customizeUrl: urlBinding.customize,
       resetUrl: urlBinding.reset,
       customizeFocal: () {
@@ -202,6 +245,7 @@ class WebsiteResponsiveMediaBinding {
             propertyKey: key,
             policy: WebsiteResponsivePropertyPolicy.perViewportGeometry,
             scope: WebsiteWriteScope.viewport,
+            viewport: targetViewport,
           );
         }
       },
@@ -209,6 +253,7 @@ class WebsiteResponsiveMediaBinding {
         blockId,
         <String>[xKey, yKey],
         policies: focalPolicies,
+        viewport: targetViewport,
         legacyPropertyKeys: <String, Iterable<String>>{
           xKey: legacyX,
           yKey: legacyY,
@@ -227,7 +272,9 @@ class WebsiteResponsiveMediaBinding {
     String? identityKey,
     Object? identityValue,
     WebsiteAuthoringHostClass hostClass = WebsiteAuthoringHostClass.desktop,
+    WebsiteViewport? viewport,
   }) {
+    final targetViewport = viewport ?? provider.previewViewport;
     // Same rule as the root owner, on the item's own node: one scalar owner
     // decides scope, canonical authority and shared companions.
     final urlBinding = WebsiteResponsiveScalarBinding<String>.forField(
@@ -242,6 +289,7 @@ class WebsiteResponsiveMediaBinding {
       ),
       decode: decodeUrl,
       hostClass: hostClass,
+      viewport: targetViewport,
     );
     final urlState = urlBinding.state;
 
@@ -260,14 +308,23 @@ class WebsiteResponsiveMediaBinding {
 
     final xKey = field.focalPointXKey;
     final yKey = field.focalPointYKey;
-    final legacyX = <String>[field.mobileFocalPointXKey];
-    final legacyY = <String>[field.mobileFocalPointYKey];
+    final legacyX = WebsiteResponsiveFocalProjection.legacyPropertyKeys(
+      field: field,
+      axis: WebsiteFocalAxis.horizontal,
+    );
+    final legacyY = WebsiteResponsiveFocalProjection.legacyPropertyKeys(
+      field: field,
+      axis: WebsiteFocalAxis.vertical,
+    );
     final focalPolicies = <String, WebsiteResponsivePropertyPolicy>{
       xKey: WebsiteResponsivePropertyPolicy.perViewportGeometry,
       yKey: WebsiteResponsivePropertyPolicy.perViewportGeometry,
     };
 
-    WebsiteResponsiveFieldState<double> axis(String key, List<String> legacy) {
+    WebsiteResponsiveFieldState<double> axis(
+      String key,
+      WebsiteFocalAxis focalAxis,
+    ) {
       return provider.responsiveRepeaterFieldState<double>(
         blockId: blockId,
         collectionKeys: collectionKeys,
@@ -277,27 +334,55 @@ class WebsiteResponsiveMediaBinding {
         schema: _axisSchema(key),
         decode: decodeAxis,
         hostClass: hostClass,
+        viewport: targetViewport,
         fallback: 0.5,
-        readLegacyOverride: legacyMobileReader<double>(legacy, decodeAxis),
+        readLegacyOverride: WebsiteResponsiveFocalProjection.legacyReader(
+          field: field,
+          axis: focalAxis,
+        ),
       );
     }
+
+    final focalTarget = WebsiteInlineManipulationTarget(
+      blockId: blockId,
+      owner: WebsiteInlineRepeaterOwner(
+        collectionKeys: collectionKeys,
+        itemIndex: itemIndex,
+        identityKey: identityKey,
+        identityValue: identityValue,
+      ),
+      viewport: targetViewport,
+      properties: <WebsiteInlineManipulationProperty>[
+        WebsiteInlineManipulationProperty(
+          canonicalKey: xKey,
+          policy: WebsiteResponsivePropertyPolicy.perViewportGeometry,
+        ),
+        WebsiteInlineManipulationProperty(
+          canonicalKey: yKey,
+          policy: WebsiteResponsivePropertyPolicy.perViewportGeometry,
+        ),
+      ],
+    );
+    var focalLease = provider.captureInlineMutationLease(focalTarget);
 
     return WebsiteResponsiveMediaBinding(
       urlState: urlState,
       focalState: composeFocalState(
-        x: axis(xKey, legacyX),
-        y: axis(yKey, legacyY),
+        x: axis(xKey, WebsiteFocalAxis.horizontal),
+        y: axis(yKey, WebsiteFocalAxis.vertical),
       ),
       writeUrl: urlBinding.write,
-      writeFocal: (x, y) => provider.setBlockRepeaterItemResponsiveProperties(
-        blockId,
-        collectionKeys: collectionKeys,
-        itemIndex: itemIndex,
-        values: <String, Object?>{xKey: x, yKey: y},
-        policies: focalPolicies,
-        identityKey: identityKey,
-        identityValue: identityValue,
-      ),
+      writeFocal: (x, y) {
+        final lease = focalLease;
+        if (lease == null) return;
+        final result = provider.commitInlineMutation(
+          lease,
+          <String, Object?>{xKey: x, yKey: y},
+        );
+        focalLease = result.accepted
+            ? provider.captureInlineMutationLease(focalTarget)
+            : null;
+      },
       customizeUrl: urlBinding.customize,
       resetUrl: urlBinding.reset,
       customizeFocal: () {
@@ -309,6 +394,7 @@ class WebsiteResponsiveMediaBinding {
             propertyKey: key,
             policy: WebsiteResponsivePropertyPolicy.perViewportGeometry,
             scope: WebsiteWriteScope.viewport,
+            viewport: targetViewport,
             identityKey: identityKey,
             identityValue: identityValue,
           );
@@ -320,6 +406,7 @@ class WebsiteResponsiveMediaBinding {
         itemIndex: itemIndex,
         propertyKeys: <String>[xKey, yKey],
         policies: focalPolicies,
+        viewport: targetViewport,
         legacyPropertyKeys: <String, Iterable<String>>{
           xKey: legacyX,
           yKey: legacyY,

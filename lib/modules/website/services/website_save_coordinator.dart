@@ -490,6 +490,7 @@ class WebsiteSaveCoordinator {
     required String tenantId,
     required WebsiteEditModeProvider document,
   }) {
+    document.finalizeActiveContinuousFieldEdit();
     final command = WebsiteEditorSaveCommand.capture(
       tenantId: tenantId,
       document: document,

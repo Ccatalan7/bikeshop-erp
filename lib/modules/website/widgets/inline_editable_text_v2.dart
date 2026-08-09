@@ -1,8 +1,34 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import '../../../shared/widgets/vb_segmented.dart';
 import 'text_formatting_toolbar.dart';
 import 'website_text_block_content.dart';
+
+/// The complete local draft produced by one inline text session.
+///
+/// Text, formatting and width commit together so a single interaction can
+/// never create three undo steps or leave companions half-applied.
+@immutable
+class InlineEditableTextCommit {
+  const InlineEditableTextCommit({
+    required this.text,
+    required this.formatting,
+    required this.maxWidth,
+  });
+
+  final String text;
+  final TextFormatting formatting;
+  final double? maxWidth;
+}
+
+typedef InlineEditableTextSessionStart = Object? Function();
+typedef InlineEditableTextSessionCommit = bool Function(
+  Object session,
+  InlineEditableTextCommit value,
+);
+typedef InlineEditableTextSessionCancel = void Function(Object session);
 
 /// Enhanced inline editable text widget with formatting toolbar.
 /// When in edit mode, clicking on text shows a formatting toolbar
@@ -24,6 +50,9 @@ class InlineEditableTextV2 extends StatefulWidget {
   final bool allowWidthResize;
   final EdgeInsetsGeometry editorPadding;
   final String Function(String value)? displayTransform;
+  final InlineEditableTextSessionStart? onSessionStart;
+  final InlineEditableTextSessionCommit? onSessionCommit;
+  final InlineEditableTextSessionCancel? onSessionCancel;
 
   const InlineEditableTextV2({
     super.key,
@@ -43,7 +72,18 @@ class InlineEditableTextV2 extends StatefulWidget {
     this.allowWidthResize = true,
     this.editorPadding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     this.displayTransform,
-  });
+    this.onSessionStart,
+    this.onSessionCommit,
+    this.onSessionCancel,
+  }) : assert(
+          (onSessionStart == null &&
+                  onSessionCommit == null &&
+                  onSessionCancel == null) ||
+              (onSessionStart != null &&
+                  onSessionCommit != null &&
+                  onSessionCancel != null),
+          'Inline text transaction callbacks must be supplied together.',
+        );
 
   @override
   State<InlineEditableTextV2> createState() => _InlineEditableTextV2State();
@@ -64,6 +104,11 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   double _toolbarDx = 0;
   late TextFormatting _currentFormatting;
   final Object _editingGroupId = Object(); // Unique group ID for this editor
+  Object? _editSession;
+  late String _initialText;
+  late TextFormatting _initialFormatting;
+  double? _initialWidth;
+  double? _resizeStartWidth;
 
   void _requestToolbarRebuild() {
     // OverlayEntry is not part of this widget's build tree.
@@ -96,6 +141,9 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     _focusNode.addListener(_onFocusChange);
     _currentFormatting = widget.formatting ?? const TextFormatting();
     _currentWidth = widget.maxWidth;
+    _initialText = widget.text;
+    _initialFormatting = _currentFormatting;
+    _initialWidth = _currentWidth;
   }
 
   @override
@@ -104,10 +152,16 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     // If we leave edit mode while the toolbar is open (or the field is focused),
     // tear down the overlay immediately. Otherwise the OverlayEntry can outlive
     // the anchor during route transitions, which can trigger framework asserts.
-    if (oldWidget.isEditMode && !widget.isEditMode) {
-      _isEditing = false;
-      _hideToolbar();
-      _focusNode.unfocus();
+    final sourceChangedWhileEditing = _isEditing &&
+        (oldWidget.text != widget.text ||
+            !_formattingEquals(
+              oldWidget.formatting ?? const TextFormatting(),
+              widget.formatting ?? const TextFormatting(),
+            ) ||
+            oldWidget.maxWidth != widget.maxWidth);
+    if ((oldWidget.isEditMode && !widget.isEditMode) ||
+        sourceChangedWhileEditing) {
+      _cancelEditing(updateState: false);
     }
     if (oldWidget.text != widget.text && !_isEditing) {
       _controller.text = widget.text;
@@ -130,12 +184,15 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   void deactivate() {
     // Defensive: during AnimatedSwitcher/route transitions this widget can be
     // temporarily deactivated while still mounted. Ensure the overlay is gone.
-    _hideToolbar();
+    _cancelEditing(updateState: false);
     super.deactivate();
   }
 
   @override
   void dispose() {
+    final session = _editSession;
+    _editSession = null;
+    if (session != null) widget.onSessionCancel?.call(session);
     _hideToolbar();
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
@@ -149,6 +206,15 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
 
   void _startEditing() {
     if (!widget.isEditMode) return;
+    final session = widget.onSessionStart?.call();
+    if (widget.onSessionStart != null && session == null) return;
+    _editSession = session;
+    _initialText = widget.text;
+    _initialFormatting = widget.formatting ?? const TextFormatting();
+    _initialWidth = widget.maxWidth;
+    _controller.text = widget.text;
+    _currentFormatting = _initialFormatting;
+    _currentWidth = _initialWidth;
     debugPrint('📝 [InlineText] Starting edit mode');
     setState(() => _isEditing = true);
 
@@ -172,22 +238,65 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   void _finishEditing() {
     debugPrint('📝 [InlineText] Finishing edit');
     _hideToolbar();
+    _focusNode.unfocus();
 
     if (!mounted) return;
 
+    final session = _editSession;
+    _editSession = null;
+    final commit = InlineEditableTextCommit(
+      text: _controller.text,
+      formatting: _currentFormatting,
+      maxWidth: _currentWidth,
+    );
     setState(() => _isEditing = false);
 
-    if (_controller.text != widget.text) {
-      widget.onTextChanged?.call(_controller.text);
+    if (session != null) {
+      final accepted = widget.onSessionCommit?.call(session, commit) ?? false;
+      if (!accepted) _restoreLiveValues();
+      return;
+    }
+
+    // Compatibility path for standalone consumers not yet backed by a
+    // provider transaction. Each value still writes only when editing ends.
+    if (commit.text != _initialText) {
+      widget.onTextChanged?.call(commit.text);
+    }
+    if (!_formattingEquals(commit.formatting, _initialFormatting)) {
+      widget.onFormattingChanged?.call(commit.formatting);
+    }
+    if (commit.maxWidth != _initialWidth && commit.maxWidth != null) {
+      widget.onWidthChanged?.call(commit.maxWidth!);
     }
   }
+
+  void _cancelEditing({bool updateState = true}) {
+    final session = _editSession;
+    _editSession = null;
+    if (session != null) widget.onSessionCancel?.call(session);
+    _hideToolbar();
+    _focusNode.unfocus();
+    _restoreLiveValues();
+    if (updateState && mounted) setState(() => _isEditing = false);
+    if (!updateState) _isEditing = false;
+  }
+
+  void _restoreLiveValues() {
+    _controller.text = widget.text;
+    _currentFormatting = widget.formatting ?? const TextFormatting();
+    _currentWidth = widget.maxWidth;
+    _isResizing = false;
+    _resizeStartWidth = null;
+  }
+
+  bool _formattingEquals(TextFormatting left, TextFormatting right) =>
+      mapEquals(left.toJson(), right.toJson());
 
   void _handleFormattingChanged(TextFormatting formatting) {
     debugPrint(
         '📝 [InlineText] Formatting changed: bold=${formatting.isBold}, size=${formatting.fontSize}');
 
     setState(() => _currentFormatting = formatting);
-    widget.onFormattingChanged?.call(formatting);
 
     // Force overlay repaint so controls reflect changes immediately.
     _requestToolbarRebuild();
@@ -239,6 +348,11 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
                           currentFormatting: _currentFormatting,
                           baseStyle: widget.baseStyle,
                           preset: widget.toolbarPreset,
+                          transactionIdentity: (
+                            _editingGroupId,
+                            _editSession,
+                            widget.fieldKey,
+                          ),
                           onFormattingChanged: _handleFormattingChanged,
                           onClose: _finishEditing,
                         ),
@@ -386,29 +500,41 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
 
     // If we have a width constraint or are editing, wrap with resize capability
     if (widget.allowWidthResize && (_currentWidth != null || _isEditing)) {
+      final isTouch = VbDensity.resolve(context).isTouch;
+      final handleExtent = isTouch ? 48.0 : 14.0;
       Widget content = WebsiteTextWidthFrame(
         maxWidth: _currentWidth,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            textContainer,
-            // Left resize handle
-            if (_isEditing)
-              Positioned(
-                left: -6,
-                top: 0,
-                bottom: 0,
-                child: _buildResizeHandle(isLeft: true),
-              ),
-            // Right resize handle
-            if (_isEditing)
-              Positioned(
-                right: -6,
-                top: 0,
-                bottom: 0,
-                child: _buildResizeHandle(isLeft: false),
-              ),
-          ],
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: isTouch ? 48 : 0),
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              textContainer,
+              // Left resize handle
+              if (_isEditing)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: _buildResizeHandle(
+                    isLeft: true,
+                    targetExtent: handleExtent,
+                  ),
+                ),
+              // Right resize handle
+              if (_isEditing)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: _buildResizeHandle(
+                    isLeft: false,
+                    targetExtent: handleExtent,
+                  ),
+                ),
+            ],
+          ),
         ),
       );
 
@@ -474,61 +600,61 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
     return textContainer;
   }
 
-  Widget _buildResizeHandle({required bool isLeft}) {
-    return GestureDetector(
-      // Use behavior to capture all pointer events
-      behavior: HitTestBehavior.opaque,
-      onPanStart: (_) {
-        setState(() => _isResizing = true);
-      },
-      onPanUpdate: (details) {
-        setState(() {
-          final delta = isLeft ? -details.delta.dx : details.delta.dx;
-          // Symmetric resize - adjust both sides equally
-          final newWidth = (_currentWidth ?? 600) + (delta * 2);
-          _currentWidth = newWidth.clamp(200.0, 1200.0);
-        });
-      },
-      onPanEnd: (_) {
-        _handleResizeEnd();
-      },
-      onPanCancel: () {
-        _handleResizeEnd();
-      },
+  Widget _buildResizeHandle({
+    required bool isLeft,
+    required double targetExtent,
+  }) {
+    return Semantics(
+      label: isLeft
+          ? 'Ajustar ancho desde el borde izquierdo'
+          : 'Ajustar ancho desde el borde derecho',
       child: MouseRegion(
         cursor: SystemMouseCursors.resizeColumn,
-        child: Listener(
-          onPointerDown: (_) {
+        child: GestureDetector(
+          key: ValueKey<String>(
+            'website-text-width-handle-${isLeft ? 'left' : 'right'}',
+          ),
+          behavior: HitTestBehavior.opaque,
+          onPanStart: (_) {
+            _resizeStartWidth = _currentWidth;
             setState(() => _isResizing = true);
           },
-          onPointerUp: (_) {
-            // Reset resizing flag after a short delay to allow pan gestures to complete
-            Future.delayed(const Duration(milliseconds: 100), () {
-              if (mounted && _isResizing) {
-                _handleResizeEnd();
-              }
+          onPanUpdate: (details) {
+            setState(() {
+              final delta = isLeft ? -details.delta.dx : details.delta.dx;
+              // Symmetric resize - adjust both sides equally.
+              final newWidth = (_currentWidth ?? 600) + (delta * 2);
+              _currentWidth = newWidth.clamp(200.0, 1200.0);
             });
           },
-          child: Container(
-            width: 14,
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00A09D),
-              borderRadius: BorderRadius.circular(3),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
+          onPanEnd: (_) => _handleResizeEnd(),
+          onPanCancel: _cancelResize,
+          child: SizedBox(
+            width: targetExtent,
+            child: Align(
+              alignment: isLeft ? Alignment.centerLeft : Alignment.centerRight,
+              child: Container(
+                width: 14,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00A09D),
+                  borderRadius: BorderRadius.circular(3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.drag_indicator, size: 12, color: Colors.white),
-                ],
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.drag_indicator, size: 12, color: Colors.white),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -539,9 +665,19 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
 
   void _handleResizeEnd() {
     setState(() => _isResizing = false);
-    if (_currentWidth != null) {
+    _resizeStartWidth = null;
+    if (_editSession == null && _currentWidth != null) {
       widget.onWidthChanged?.call(_currentWidth!);
     }
+  }
+
+  void _cancelResize() {
+    final startWidth = _resizeStartWidth;
+    _resizeStartWidth = null;
+    setState(() {
+      _isResizing = false;
+      _currentWidth = startWidth;
+    });
   }
 
   Widget _buildEditField() {
@@ -571,8 +707,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
 
           // Escape to cancel
           if (event.logicalKey == LogicalKeyboardKey.escape) {
-            _controller.text = widget.text; // Revert
-            _finishEditing();
+            _cancelEditing();
           }
         }
       },
@@ -633,30 +768,23 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
   }
 
   void _toggleBold() {
-    setState(() {
-      _currentFormatting = _currentFormatting.copyWith(
-        isBold: !_currentFormatting.isBold,
-      );
-    });
-    widget.onFormattingChanged?.call(_currentFormatting);
+    _handleFormattingChanged(
+      _currentFormatting.copyWith(isBold: !_currentFormatting.isBold),
+    );
   }
 
   void _toggleItalic() {
-    setState(() {
-      _currentFormatting = _currentFormatting.copyWith(
-        isItalic: !_currentFormatting.isItalic,
-      );
-    });
-    widget.onFormattingChanged?.call(_currentFormatting);
+    _handleFormattingChanged(
+      _currentFormatting.copyWith(isItalic: !_currentFormatting.isItalic),
+    );
   }
 
   void _toggleUnderline() {
-    setState(() {
-      _currentFormatting = _currentFormatting.copyWith(
+    _handleFormattingChanged(
+      _currentFormatting.copyWith(
         isUnderline: !_currentFormatting.isUnderline,
-      );
-    });
-    widget.onFormattingChanged?.call(_currentFormatting);
+      ),
+    );
   }
 }
 

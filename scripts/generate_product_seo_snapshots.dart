@@ -2836,35 +2836,52 @@ Future<Map<String, int>> _fetchPublicProductAvailability({
   return quantities;
 }
 
-Future<List<Map<String, dynamic>>> _fetchProductUrlAliases({
+typedef SeoSnapshotProductAliasPageLoader = Future<List<Map<String, dynamic>>>
+    Function(Uri uri);
+
+Future<List<Map<String, dynamic>>> fetchSeoSnapshotProductUrlAliases({
   required String supabaseUrl,
   required String tenantId,
   required String serviceRoleKey,
+  int pageSize = 1000,
+  SeoSnapshotProductAliasPageLoader? pageLoader,
 }) async {
-  const pageSize = 1000;
+  if (pageSize <= 0) {
+    throw ArgumentError.value(pageSize, 'pageSize', 'Debe ser mayor que cero.');
+  }
   final aliases = <Map<String, dynamic>>[];
+  final loadPage = pageLoader ??
+      (Uri uri) async {
+        final response = await _httpGet(
+          uri,
+          headers: {
+            'apikey': serviceRoleKey,
+          },
+        );
+        return (jsonDecode(response) as List<dynamic>)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false);
+      };
 
   for (var offset = 0;; offset += pageSize) {
-    final url = Uri.parse(
-      '$supabaseUrl/rest/v1/product_url_aliases'
-      '?tenant_id=eq.$tenantId'
-      '&select=product_id,alias_path,source,created_at'
-      '&order=created_at.asc'
-      '&limit=$pageSize'
-      '&offset=$offset',
-    );
-    final response = await _httpGet(
-      url,
-      headers: {
-        'apikey': serviceRoleKey,
+    final uri = Uri.parse('$supabaseUrl/rest/v1/product_url_aliases').replace(
+      queryParameters: {
+        'tenant_id': 'eq.$tenantId',
+        'select': 'product_id,alias_path,source,created_at',
+        // `created_at` is not unique: historical imports can give thousands of
+        // aliases the same timestamp. The tenant-unique path is the required
+        // tie-breaker so offset pages cannot omit/duplicate tied rows.
+        'order': 'created_at.asc,alias_path.asc',
+        'limit': pageSize.toString(),
+        'offset': offset.toString(),
       },
     );
-    final decoded = jsonDecode(response) as List<dynamic>;
-    aliases.addAll(decoded.map((e) => (e as Map<String, dynamic>)));
-    if (decoded.length < pageSize) break;
+    final page = await loadPage(uri);
+    aliases.addAll(page);
+    if (page.length < pageSize) break;
   }
 
-  return aliases;
+  return List.unmodifiable(aliases);
 }
 
 typedef SeoSnapshotWebsitePageLoader = Future<List<Map<String, dynamic>>>
@@ -3259,7 +3276,7 @@ Future<SeoOwnerSourceSnapshot> _readSeoOwnerSourceSnapshot({
     tenantId: tenantId,
     serviceRoleKey: serviceRoleKey,
   );
-  final productUrlAliases = await _fetchProductUrlAliases(
+  final productUrlAliases = await fetchSeoSnapshotProductUrlAliases(
     supabaseUrl: supabaseUrl,
     tenantId: tenantId,
     serviceRoleKey: serviceRoleKey,
