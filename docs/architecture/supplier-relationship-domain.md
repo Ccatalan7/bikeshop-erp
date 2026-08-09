@@ -217,7 +217,7 @@ categories require a currently effective non-observed assignment and attention
 copy comes from the server projection.
 
 The profile is read-only by default. Its frozen section contract is `Resumen`,
-`Identidad`, `Clasificación`, `Relaciones`, `Criterios contables`, optional
+`Identidad`, `Para qué lo usamos`, `Relaciones`, `Criterios contables`, optional
 `Accesos`, and optional `Movimientos`. Desktop uses one section index; compact
 hosts use the canonical short select and bottom sheet. There is one `Editar`
 action owned by the record header, never a duplicate module action. A profile
