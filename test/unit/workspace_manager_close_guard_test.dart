@@ -214,9 +214,17 @@ void main() {
         File('lib/shared/widgets/main_layout.dart').readAsStringSync();
 
     expect(desktopSource, contains('.requestCloseWorkspaceById('));
+    final compactProtectedCalls = RegExp(
+      r'\.requestCloseWorkspaceById\s*\(\s*workspace\.id\s*\)',
+    ).allMatches(compactSource);
+    expect(
+      compactProtectedCalls.length,
+      greaterThanOrEqualTo(2),
+      reason: 'both compact close controls must use the guarded request API',
+    );
     expect(
       compactSource,
-      contains('await manager.requestCloseWorkspaceById(workspace.id)'),
+      isNot(contains('manager.closeWorkspaceById(workspace.id)')),
     );
   });
 }
