@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../modules/purchases/services/purchase_service.dart';
+import '../../modules/purchases/services/supplier_credential_service.dart';
 import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
 import '../services/auth_service.dart';
@@ -29,6 +30,7 @@ import '../services/browser_profile_service.dart';
 import '../services/browser_site_memory_service.dart';
 import '../services/browser_supplier_credential_resolver.dart';
 import '../services/browser_supplier_portal_catalog.dart';
+import '../services/current_user_profile_service.dart';
 import '../services/document_relay_service.dart';
 import '../services/ocr_file_handoff_service.dart';
 import '../services/smart_screenshot_service.dart';
@@ -148,7 +150,6 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   final Set<String> _automaticCredentialSubmitAttempts = {};
   final Set<String> _credentialAutofillInFlight = {};
   final Set<String> _credentialSavedFeedbackOrigins = {};
-  final Set<String> _insecureCredentialFeedbackOrigins = {};
   String? _registeredScreenshotWorkspaceId;
   late final String _browserProfileIdentity;
   Completer<void>? _aliExpressNavigationCompleter;
@@ -3501,19 +3502,35 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
 
     try {
-      final supplierCredential = await _supplierCredentialForOrigin(origin);
-      if (supplierCredential != null &&
-          supplierCredential.username == username.trim() &&
-          supplierCredential.password == password) {
+      final localCredential = await _localCredentialForOrigin(origin);
+      final supplierLookup = await _supplierCredentialLookupForOrigin(origin);
+      if (supplierLookup.status ==
+          BrowserSupplierCredentialLookupStatus.unavailable) {
+        return false;
+      }
+      final supplierCredential = supplierLookup.credential;
+      if (supplierLookup.isMatched) {
+        // A managed origin never gets a second local writer. This also removes
+        // any older duplicate before a permission change can revive it.
         await _deleteLocalCredential(origin);
+        return supplierCredential!.username == username.trim() &&
+            supplierCredential.password == password;
+      }
+
+      if (localCredential != null &&
+          localCredential.username == username.trim() &&
+          localCredential.password == password) {
         return true;
       }
 
+      // Local persistence is authorized only by an affirmative, protected
+      // no-match result. Errors, ambiguity and authority changes fail closed.
       await _credentialVault.save(
         userId: _browserProfileIdentity,
         origin: origin,
         username: username,
         password: password,
+        supplierNoMatchConfirmed: true,
       );
       if (mounted && _credentialSavedFeedbackOrigins.add(origin)) {
         final host = Uri.parse(origin).host;
@@ -3524,7 +3541,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       return true;
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('🌐 Browser credential save skipped: $error');
+        debugPrint(
+          '🌐 Browser credential save skipped: ${error.runtimeType}',
+        );
       }
       return false;
     }
@@ -3554,20 +3573,52 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           loginFormResult?.toString().toLowerCase() == 'true';
       if (!hasLoginForm) return;
 
-      final supplierCredential = await _supplierCredentialForOrigin(origin);
       final secureOrigin = BrowserCredentialVault.normalizeOrigin(origin);
-      if (supplierCredential == null && secureOrigin == null) return;
-      // The supplier record is the primary source and must keep working even
-      // when a native secure-storage plugin is temporarily unavailable after
-      // hot reload/restart. The local vault is an optional fallback only.
-      final vaultCredential = secureOrigin == null
-          ? null
-          : await _localCredentialForOrigin(secureOrigin);
-      final useVault = vaultCredential != null &&
-          (supplierCredential == null ||
-              vaultCredential.updatedAt.isAfter(
-                supplierCredential.updatedAt,
-              ));
+      if (secureOrigin == null) return;
+
+      if (!mounted) return;
+      final profileService = context.read<CurrentUserProfileService>();
+      final credentialService = SupplierCredentialService(
+        profileService: profileService,
+      );
+      final authority = BrowserCredentialAuthorityLease.capture(
+        profile: profileService.profile,
+        authUserId: credentialService.currentAuthUserId,
+        browserProfileIdentity: _browserProfileIdentity,
+      );
+      if (authority == null || !authority.canManageSupplierCredentials) return;
+
+      // A local credential is eligible only after a fresh protected no-match.
+      // Losing the supplier-credential permission is unavailable, never an
+      // inferred no-match that could revive an older local duplicate.
+      final supplierLookup = await _supplierCredentialLookupForOrigin(
+        origin,
+        credentialService: credentialService,
+        authority: authority,
+      );
+      if (supplierLookup.status ==
+          BrowserSupplierCredentialLookupStatus.unavailable) {
+        return;
+      }
+      if (!authority.isCurrent(
+        profile: profileService.profile,
+        authUserId: credentialService.currentAuthUserId,
+        browserProfileIdentity: _browserProfileIdentity,
+        requireSupplierCredentialPermission: true,
+      )) {
+        return;
+      }
+      final supplierCredential = supplierLookup.credential;
+      // A protected supplier binding always owns its exact origin. A local
+      // credential is only a fallback after a confirmed protected no-match.
+      BrowserSavedCredential? vaultCredential;
+      if (supplierCredential != null) {
+        await _deleteLocalCredential(secureOrigin);
+      } else if (supplierLookup.status ==
+          BrowserSupplierCredentialLookupStatus.noMatch) {
+        vaultCredential = await _localCredentialForOrigin(secureOrigin);
+      }
+      final useVault = supplierCredential == null && vaultCredential != null;
       final username =
           useVault ? vaultCredential.username : supplierCredential?.username;
       final password =
@@ -3581,55 +3632,124 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
       final mayAutoSubmit =
           !_automaticCredentialSubmitAttempts.contains(origin);
-      final result = await controller.evaluateJavascript(
-        source: browserCredentialFillScript(
-          expectedOrigin: origin,
-          username: username,
-          password: password,
-          autoSubmit: mayAutoSubmit,
-          allowInsecureSupplierOrigin:
-              secureOrigin == null && supplierCredential != null,
-        ),
+      final fillSource = browserCredentialFillScript(
+        expectedOrigin: origin,
+        username: username,
+        password: password,
+        autoSubmit: mayAutoSubmit,
+        allowInsecureSupplierOrigin: false,
       );
-      if (result?.toString().contains('filled-insecure') == true &&
-          mounted &&
-          _insecureCredentialFeedbackOrigins.add(origin)) {
-        _showBrowserSnack(
-          'Credenciales completadas. Este portal envía el acceso por HTTP; '
-          'confirma el ingreso manualmente.',
-        );
+      if (!authority.isCurrent(
+        profile: profileService.profile,
+        authUserId: credentialService.currentAuthUserId,
+        browserProfileIdentity: _browserProfileIdentity,
+        requireSupplierCredentialPermission: true,
+      )) {
+        return;
       }
+      final result = await controller.evaluateJavascript(
+        source: fillSource,
+      );
       if (mayAutoSubmit &&
           result?.toString().contains('filled-and-submitted') == true) {
         _automaticCredentialSubmitAttempts.add(origin);
       }
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('🌐 Browser credential autofill skipped: $error');
+        debugPrint(
+          '🌐 Browser credential autofill skipped: ${error.runtimeType}',
+        );
       }
     } finally {
       _credentialAutofillInFlight.remove(origin);
     }
   }
 
-  Future<BrowserSupplierCredential?> _supplierCredentialForOrigin(
-    String origin,
-  ) async {
-    if (!mounted) return null;
+  Future<BrowserSupplierCredentialLookupResult>
+      _supplierCredentialLookupForOrigin(
+    String origin, {
+    SupplierCredentialService? credentialService,
+    BrowserCredentialAuthorityLease? authority,
+  }) async {
+    if (!mounted) {
+      return const BrowserSupplierCredentialLookupResult.unavailable();
+    }
     try {
-      final suppliers = await context.read<PurchaseService>().getSuppliers(
-            activeOnly: true,
+      final profileService = context.read<CurrentUserProfileService>();
+      final service = credentialService ??
+          SupplierCredentialService(
+            profileService: profileService,
           );
-      return resolveSupplierCredentialForOrigin(
-        suppliers: suppliers,
+      final lease = authority ??
+          BrowserCredentialAuthorityLease.capture(
+            profile: profileService.profile,
+            authUserId: service.currentAuthUserId,
+            browserProfileIdentity: _browserProfileIdentity,
+          );
+      if (lease == null || !lease.canManageSupplierCredentials) {
+        return const BrowserSupplierCredentialLookupResult.unavailable();
+      }
+      if (!lease.isCurrent(
+        profile: profileService.profile,
+        authUserId: service.currentAuthUserId,
+        browserProfileIdentity: _browserProfileIdentity,
+        requireSupplierCredentialPermission: true,
+      )) {
+        return const BrowserSupplierCredentialLookupResult.unavailable();
+      }
+      return await resolveBrowserSupplierCredentialLookup(
         origin: origin,
+        findCredential: (canonicalOrigin) => service.findForOrigin(
+          origin: canonicalOrigin,
+          kind: SupplierCredentialKind.portalPassword,
+        ),
+        revealCredential: (canonicalOrigin) =>
+            service.revealPortalCredentialForOrigin(
+          origin: canonicalOrigin,
+        ),
       );
     } on ProviderNotFoundException {
-      return null;
+      return const BrowserSupplierCredentialLookupResult.unavailable();
     } catch (error) {
       if (kDebugMode) {
         debugPrint(
           '🌐 Supplier credential lookup skipped: ${error.runtimeType}',
+        );
+      }
+      return const BrowserSupplierCredentialLookupResult.unavailable();
+    }
+  }
+
+  Future<SupplierCredentialOriginLookup?> _supplierCredentialReferenceForOrigin(
+      String origin) async {
+    if (!mounted) return null;
+    try {
+      final profileService = context.read<CurrentUserProfileService>();
+      final service = SupplierCredentialService(
+        profileService: profileService,
+      );
+      final lease = BrowserCredentialAuthorityLease.capture(
+        profile: profileService.profile,
+        authUserId: service.currentAuthUserId,
+        browserProfileIdentity: _browserProfileIdentity,
+      );
+      if (lease == null || !lease.canManageSupplierCredentials) return null;
+      return await resolveSupplierCredentialReferenceForOrigin(
+        origin: origin,
+        findCredential: (canonicalOrigin) => service.findForOrigin(
+          origin: canonicalOrigin,
+          kind: SupplierCredentialKind.portalPassword,
+        ),
+      );
+    } on ProviderNotFoundException {
+      return null;
+    } on SupplierCredentialAccessDenied {
+      rethrow;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '🌐 Supplier credential metadata lookup skipped: '
+          '${error.runtimeType}',
         );
       }
       return null;
@@ -3640,10 +3760,19 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     String origin,
   ) async {
     try {
-      return await _credentialVault.load(
+      final credential = await _credentialVault.load(
         userId: _browserProfileIdentity,
         origin: origin,
       );
+      // v1 entries predate the protected supplier-origin boundary and cannot
+      // prove they were authored after a server-confirmed no-match. Delete
+      // them once rather than allowing an old supplier secret to survive a
+      // later permission revocation in the local vault.
+      if (credential != null && !credential.supplierNoMatchConfirmed) {
+        await _deleteLocalCredential(origin);
+        return null;
+      }
+      return credential;
     } catch (error) {
       if (kDebugMode) {
         debugPrint(
@@ -3677,15 +3806,27 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       _showBrowserSnack('Este sitio no admite credenciales guardadas.');
       return;
     }
-    final supplierCredential = await _supplierCredentialForOrigin(origin);
-    if (supplierCredential != null) {
+    final localCredential = await _localCredentialForOrigin(origin);
+    SupplierCredentialOriginLookup? supplierCredentialReference;
+    try {
+      supplierCredentialReference =
+          await _supplierCredentialReferenceForOrigin(origin);
+    } on SupplierCredentialAccessDenied {
+      return;
+    }
+    if (supplierCredentialReference != null) {
       if (!mounted) return;
+      final host = Uri.parse(origin).host;
+      final credentialLabel = supplierCredentialReference.match?.label?.trim();
+      final descriptor = credentialLabel == null || credentialLabel.isEmpty
+          ? host
+          : credentialLabel;
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Credenciales del proveedor'),
           content: Text(
-            'El acceso para ${supplierCredential.supplierName} proviene de '
+            'El acceso de proveedor para $descriptor proviene de '
             'su ficha de proveedor. Para detener el ingreso automático, '
             'elimina allí el usuario o la contraseña del portal.',
           ),
@@ -3699,8 +3840,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       );
       return;
     }
-    final credential = await _localCredentialForOrigin(origin);
-    if (credential == null) {
+    if (localCredential == null) {
       _showBrowserSnack('No hay credenciales guardadas para este sitio.');
       return;
     }

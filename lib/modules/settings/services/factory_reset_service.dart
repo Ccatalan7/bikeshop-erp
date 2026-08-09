@@ -54,6 +54,30 @@ class FactoryResetService {
     }
   }
 
+  /// Fails closed unless the supplier foundation explicitly confirms that a
+  /// selective supplier reset is safe. Once a tenant has durable supplier
+  /// identities, documents, accounting evidence, or credential audit history,
+  /// deleting only `suppliers` is not a valid domain operation.
+  static void validateSupplierResetPreflight(Object? rawResponse) {
+    if (rawResponse is! Map) {
+      throw StateError(
+        'No se pudo validar de forma segura el borrado de proveedores.',
+      );
+    }
+
+    final response = Map<String, dynamic>.from(rawResponse);
+    if (response['supported'] == true) return;
+
+    final reason = response['display_reason']?.toString().trim();
+    throw StateError(
+      reason == null || reason.isEmpty
+          ? 'El borrado selectivo de proveedores no está disponible. '
+              'Use una operación administrativa de dominio, respaldada y '
+              'auditada.'
+          : reason,
+    );
+  }
+
   /// Get all saved reset configurations for current tenant
   Future<List<ResetConfiguration>> getConfigurations() async {
     final tenantId = await _tenantService.getTenantId();
@@ -354,7 +378,11 @@ class FactoryResetService {
         try {
           final response = await _supabase
               .from(table)
-              .select()
+              // Counts only need the common primary key. An unqualified
+              // projection would also request protected columns (for example
+              // supplier credential cutover fields) and could turn a real
+              // non-zero count into the fallback zero below.
+              .select('id')
               .eq('tenant_id', tenantId)
               .count();
           stats[table] = response.count;
@@ -405,6 +433,18 @@ class FactoryResetService {
       }
 
       print('🔒 Selective reset for tenant: $tenantId');
+
+      // This must run before any selected deletion. A supplier relationship is
+      // now an anchor for durable identities, tax documents, accounting
+      // evidence, engagements and credential audit events. The server owns the
+      // decision about whether the legacy one-table purge is safe.
+      if (deleteSuppliers) {
+        final preflight = await _databaseService.rpc(
+          'get_supplier_foundation_reset_preflight',
+          params: {'p_tenant_id': tenantId},
+        );
+        validateSupplierResetPreflight(preflight);
+      }
 
       // Helper function to safely delete from table WITH TENANT FILTER
       Future<void> safeDelete(String table) async {
@@ -461,8 +501,11 @@ class FactoryResetService {
 
       // Delete suppliers
       if (deleteSuppliers) {
-        await safeDelete('suppliers');
-        print('✅ Suppliers deleted');
+        // The preflight above only returns `supported: true` when there are no
+        // supplier relationships. Therefore this is intentionally a no-op;
+        // deleting the durable aggregate requires a separate audited domain
+        // operation that does not exist in the client.
+        print('ℹ️ No hay relaciones de proveedores que eliminar');
       }
 
       // Delete accounting data

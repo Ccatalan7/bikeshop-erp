@@ -50,6 +50,7 @@ import 'modules/accounting/services/expense_service.dart';
 import 'modules/tax_reports/services/f29_service.dart';
 import 'modules/pos/services/pos_service.dart';
 import 'modules/purchases/services/purchase_service.dart';
+import 'modules/purchases/services/supplier_relationship_service.dart';
 import 'modules/purchases/services/smart_purchase_list_service.dart';
 import 'modules/sales/services/sales_service.dart';
 import 'modules/settings/services/appearance_service.dart';
@@ -546,12 +547,19 @@ class VinabikeApp extends StatelessWidget {
                       context.read<FinancialProjectionRefreshCoordinator>(),
                 )),
         ChangeNotifierProvider(create: (_) => F29Service()),
+        Provider(
+          create: (context) => SupplierRelationshipService(
+            tenantService: context.read<TenantService>(),
+          ),
+        ),
         ChangeNotifierProvider(
             create: (context) => PurchaseService(
                   Provider.of<DatabaseService>(context, listen: false),
                   Provider.of<TenantService>(context, listen: false),
                   financialProjectionRefresh:
                       context.read<FinancialProjectionRefreshCoordinator>(),
+                  supplierRelationshipService:
+                      context.read<SupplierRelationshipService>(),
                 )),
         ChangeNotifierProvider.value(
             value:

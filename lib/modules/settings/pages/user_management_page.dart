@@ -77,6 +77,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
         'access_accounting', 'Acceso contable', Icons.account_balance),
     _PermissionOption(
         'manage_users', 'Gestionar usuarios', Icons.manage_accounts),
+    _PermissionOption(
+      'can_manage_supplier_credentials',
+      'Credenciales de proveedores',
+      Icons.key_outlined,
+    ),
     _PermissionOption('edit_settings', 'Editar configuración', Icons.tune),
   ];
 
@@ -3365,6 +3370,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           'delete_invoices': true,
           'access_accounting': true,
           'manage_users': true,
+          'can_manage_supplier_credentials': true,
           'edit_settings': true,
         };
       case 'cashier':
@@ -3375,6 +3381,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           'delete_invoices': false,
           'access_accounting': false,
           'manage_users': false,
+          'can_manage_supplier_credentials': false,
           'edit_settings': false,
         };
       case 'accountant':
@@ -3385,6 +3392,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           'delete_invoices': false,
           'access_accounting': true,
           'manage_users': false,
+          'can_manage_supplier_credentials': false,
           'edit_settings': false,
         };
       case 'mechanic':
@@ -3396,6 +3404,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           'delete_invoices': false,
           'access_accounting': false,
           'manage_users': false,
+          'can_manage_supplier_credentials': false,
           'edit_settings': false,
         };
     }

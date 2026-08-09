@@ -68,7 +68,11 @@ void main() {
       ).readAsStringSync();
 
       expect(source, contains("route: '/purchases/\${purchase.id"));
-      expect(source, contains("'/purchases/suppliers/\${supplier.id}/edit'"));
+      expect(source, contains("'/purchases/suppliers/\${supplier.id}'"));
+      expect(
+        source,
+        isNot(contains("'/purchases/suppliers/\${supplier.id}/edit'")),
+      );
       expect(source, contains('PurchaseInvoice purchase'));
       expect(source, contains('shared_supplier.Supplier supplier'));
     });

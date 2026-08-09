@@ -57,6 +57,7 @@ export '../../modules/sales/pages/reports/sales_by_product_page.dart';
 export '../../modules/sales/pages/reports/sales_by_product_detail_page.dart';
 export '../../modules/sales/pages/reports/sales_by_customer_page.dart';
 export '../../modules/purchases/pages/supplier_list_page.dart';
+export '../../modules/purchases/pages/supplier_detail_page.dart';
 export '../../modules/purchases/pages/supplier_form_page.dart';
 export '../../modules/purchases/pages/purchase_invoice_list_page.dart';
 export '../../modules/purchases/pages/purchase_invoice_form_page.dart';

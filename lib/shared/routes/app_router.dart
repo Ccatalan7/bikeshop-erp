@@ -119,6 +119,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         SpreadsheetEditorPage,
         StockMovementsPage,
         SupplierFormPage,
+        SupplierDetailPage,
         SupplierListPage,
         UserManagementPage,
         WebsiteManagementPage,
@@ -2237,6 +2238,17 @@ class AppRouter {
             state,
             () => erp.SupplierFormPage(),
           ),
+        ),
+        GoRoute(
+          path: '/purchases/suppliers/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return _buildDeferredPageWithNoTransition(
+              context,
+              state,
+              () => erp.SupplierDetailPage(supplierId: id),
+            );
+          },
         ),
         GoRoute(
           path: '/purchases/suppliers/:id/edit',

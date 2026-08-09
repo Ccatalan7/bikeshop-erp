@@ -65,6 +65,16 @@ extrae a un documento propio **con su puntero desde acá**.
   que hace que el siguiente lo lea.
 - **Apuntando de vuelta acá** cuando toca el proceso general.
 
+### Flutter widget tests: verify clipboard writes at the platform channel
+
+**2026-08-08 — one full test round was lost to this trap.** In a Flutter
+widget test, calling `Clipboard.getData` to verify a preceding copy action can
+wait indefinitely because the test binding does not provide a deterministic
+system clipboard read-back. Intercept `SystemChannels.platform` with
+`TestDefaultBinaryMessengerBinding`, capture the `Clipboard.setData` method
+call and assert its payload instead. This verifies the actual app boundary
+without depending on host clipboard state or adding an unbounded pump/wait.
+
 # Agent Autonomy And End-To-End Ownership (CRITICAL)
 
 Agents own the complete technical outcome of an implementation. A finished task
@@ -120,6 +130,19 @@ Do not interrupt that flow for a second confirmation already inherent in the
 request. Analysis-only, diagnosis-only, local-only, ambiguous-target, data
 deletion/repair, credential rotation, publication, and materially costly work
 remain outside that implied authorization unless separately included.
+
+> **Corrección del dueño, 2026-08-09 — una restricción temporal no se convierte
+> en política permanente.** Un handoff o subtask marcado `local-only`, `draft`
+> o `no production writes` limita sólo ese alcance mientras siga siendo la
+> instrucción vigente. Si después el dueño pide implementar, arreglar, terminar
+> o publicar el resultado, esa instrucción posterior vuelve a autorizar el
+> rollout normal, no destructivo y ya revisado. No se hereda el bloqueo antiguo
+> para pedir una confirmación redundante. El costo observado fue concreto: el
+> Hub nuevo de Proveedores quedó corriendo contra el esquema productivo viejo,
+> mostró 91 registros cargados pero cero en cada categoría, y se informó
+> erróneamente como «listo». Una superficie dependiente de backend no se declara
+> terminada ni se deja activa contra una etapa incompatible: se completa el
+> rollout o se mantiene un fallback funcional y explícito.
 
 ## Definition Of Done For Implementations
 

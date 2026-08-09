@@ -116,6 +116,7 @@ const rolePermissions: Record<StaffRole, Record<string, boolean>> = {
     delete_invoices: true,
     access_accounting: true,
     manage_users: true,
+    can_manage_supplier_credentials: true,
     edit_settings: true,
   },
   manager: {
@@ -125,6 +126,7 @@ const rolePermissions: Record<StaffRole, Record<string, boolean>> = {
     delete_invoices: true,
     access_accounting: true,
     manage_users: true,
+    can_manage_supplier_credentials: true,
     edit_settings: true,
   },
   cashier: {
@@ -134,6 +136,7 @@ const rolePermissions: Record<StaffRole, Record<string, boolean>> = {
     delete_invoices: false,
     access_accounting: false,
     manage_users: false,
+    can_manage_supplier_credentials: false,
     edit_settings: false,
   },
   mechanic: {
@@ -143,6 +146,7 @@ const rolePermissions: Record<StaffRole, Record<string, boolean>> = {
     delete_invoices: false,
     access_accounting: false,
     manage_users: false,
+    can_manage_supplier_credentials: false,
     edit_settings: false,
   },
   accountant: {
@@ -152,6 +156,7 @@ const rolePermissions: Record<StaffRole, Record<string, boolean>> = {
     delete_invoices: false,
     access_accounting: true,
     manage_users: false,
+    can_manage_supplier_credentials: false,
     edit_settings: false,
   },
 };
@@ -163,6 +168,7 @@ const canonicalPermissionKeys = [
   "delete_invoices",
   "access_accounting",
   "manage_users",
+  "can_manage_supplier_credentials",
   "edit_settings",
 ] as const;
 

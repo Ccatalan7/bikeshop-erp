@@ -11,10 +11,16 @@ import '../../../shared/models/product_tax_treatment.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 
+typedef MissingProductSupplierCreator = Future<String> Function(String name);
+
 class ProductImportService {
-  ProductImportService(this._db);
+  ProductImportService(
+    this._db, {
+    required MissingProductSupplierCreator createMissingSupplier,
+  }) : _createMissingSupplier = createMissingSupplier;
 
   final DatabaseService _db;
+  final MissingProductSupplierCreator _createMissingSupplier;
 
   static final List<ProductImportFieldDefinition> _fieldDefinitions = [
     // 1. SKU (Referencia interna in Odoo)
@@ -659,6 +665,7 @@ class ProductImportService {
 
     final existing = await _db.select(
       'suppliers',
+      selectColumns: 'id,name',
       where: 'name=${supplierName.trim()}',
     );
     if (existing.isNotEmpty) {
@@ -671,11 +678,10 @@ class ProductImportService {
       return null;
     }
 
-    final created = await _db.insert('suppliers', {
-      'name': supplierName.trim(),
-      'is_active': true,
-    });
-    final id = created['id'].toString();
+    final id = await _createMissingSupplier(supplierName.trim());
+    if (id.trim().isEmpty) {
+      throw StateError('Supplier command returned an empty durable id');
+    }
     cache[normalized] = id;
     return id;
   }
@@ -1232,6 +1238,7 @@ class ProductImportService {
     try {
       final rows = await _db.select(
         'suppliers',
+        selectColumns: 'id,name',
         where: 'id',
         whereIn: ids.toList(),
       );

@@ -522,7 +522,7 @@ class _ChatWindowState extends State<ChatWindow> {
       'invoice' => '/sales/invoices/$contextId',
       'order' || 'online_order' => '/website/orders',
       'purchase_invoice' => '/purchases/$contextId',
-      'supplier' => '/purchases/suppliers/$contextId/edit',
+      'supplier' => '/purchases/suppliers/$contextId',
       _ => null,
     };
   }
@@ -4347,7 +4347,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 OutlinedButton.icon(
                   onPressed: () =>
                       context.read<WorkspaceManager>().openRouteInWorkspace(
-                            '/purchases/suppliers/${hint.supplierId!}/edit',
+                            '/purchases/suppliers/${hint.supplierId!}',
                           ),
                   icon: const Icon(Icons.storefront_outlined, size: 16),
                   label: const Text('Abrir proveedor'),

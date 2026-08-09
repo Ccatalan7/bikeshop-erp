@@ -125,6 +125,7 @@ flutter:
   
   assets:
     - assets/images/
+    - assets/images/supplier_categories/
     - assets/images/campaigns/products/10ten-butyl-26-cutout.png
     - assets/images/campaigns/products/maxxis-welter-weight-29-cutout.png
     - assets/images/campaigns/products/ridexc-butyl-29-cutout.png

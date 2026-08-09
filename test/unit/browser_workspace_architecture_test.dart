@@ -65,6 +65,20 @@ void main() {
     final macosSandboxEnabled = RegExp(
       r'<key>com\.apple\.security\.app-sandbox</key>\s*<true\s*/>',
     );
+    final forgetCredentialBlock = browser.substring(
+      browser.indexOf('Future<void> _confirmForgetCurrentSiteCredentials()'),
+      browser.indexOf('void _setCurrentUrl(WebUri? url)'),
+    );
+    final submittedCredentialBlock = browser.substring(
+      browser.indexOf('Future<bool> _saveSubmittedBrowserCredential('),
+      browser.indexOf('Future<void> _autofillSavedBrowserCredential('),
+    );
+    final autofillCredentialBlock = browser.substring(
+      browser.indexOf('Future<void> _autofillSavedBrowserCredential('),
+      browser.indexOf(
+        'Future<BrowserSupplierCredentialLookupResult>',
+      ),
+    );
 
     expect(profile, contains('userDataFolder: userDataDirectory'));
     expect(profile, contains('_windowsEnvironments.putIfAbsent'));
@@ -96,11 +110,11 @@ void main() {
     expect(credentialAutofill, contains("'current-password'"));
     expect(browser, contains('browserCredentialCaptureHandlerName'));
     expect(browser, contains('_autofillSavedBrowserCredential'));
-    expect(browser, contains('_supplierCredentialForOrigin'));
+    expect(browser, contains('_supplierCredentialLookupForOrigin'));
     expect(browser, contains('_localCredentialForOrigin'));
     expect(
       browser,
-      contains('The local vault is an optional fallback only.'),
+      contains('credential is only a fallback after a confirmed protected'),
     );
     expect(browser, contains('context.read<PurchaseService>()'));
     expect(browser, contains('Olvidar credenciales del sitio'));
@@ -115,7 +129,78 @@ void main() {
       supplierCredentialResolver,
       contains('normalizeSupplierBrowserOrigin'),
     );
-    expect(supplierCredentialResolver, contains("startsWith('www.')"));
+    expect(supplierCredentialResolver, isNot(contains("startsWith('www.')")));
+    expect(
+      browser,
+      contains('revealPortalCredentialForOrigin'),
+    );
+    expect(
+      submittedCredentialBlock,
+      contains('BrowserSupplierCredentialLookupStatus.unavailable'),
+    );
+    expect(submittedCredentialBlock, contains('supplierLookup.isMatched'));
+    expect(
+        submittedCredentialBlock, contains('_deleteLocalCredential(origin)'));
+    expect(
+      submittedCredentialBlock.indexOf(
+        '_supplierCredentialLookupForOrigin(origin)',
+      ),
+      lessThan(submittedCredentialBlock.indexOf('localCredential.username')),
+    );
+    expect(
+      submittedCredentialBlock.indexOf(
+        'BrowserSupplierCredentialLookupStatus.unavailable',
+      ),
+      lessThan(submittedCredentialBlock.indexOf('_credentialVault.save(')),
+    );
+    expect(
+      autofillCredentialBlock,
+      contains('supplierCredential == null && vaultCredential != null'),
+    );
+    expect(
+      autofillCredentialBlock,
+      contains('!authority.canManageSupplierCredentials'),
+    );
+    expect(
+      autofillCredentialBlock,
+      isNot(
+        contains('const BrowserSupplierCredentialLookupResult.noMatch()'),
+      ),
+    );
+    expect(
+      autofillCredentialBlock.indexOf(
+        '_supplierCredentialLookupForOrigin(',
+      ),
+      lessThan(
+        autofillCredentialBlock.indexOf(
+          '_localCredentialForOrigin(secureOrigin)',
+        ),
+      ),
+    );
+    expect(
+      RegExp(r'requireSupplierCredentialPermission:\s*true')
+          .allMatches(autofillCredentialBlock),
+      hasLength(2),
+    );
+    expect(autofillCredentialBlock, isNot(contains('updatedAt.isAfter')));
+    expect(browser, contains('credential.supplierNoMatchConfirmed'));
+    expect(browser, contains('supplierNoMatchConfirmed: true'));
+    expect(
+      supplierCredentialResolver,
+      isNot(contains("import '../models/supplier.dart'")),
+    );
+    expect(
+      forgetCredentialBlock,
+      contains('_supplierCredentialReferenceForOrigin(origin)'),
+    );
+    expect(
+      forgetCredentialBlock,
+      isNot(contains('_supplierCredentialLookupForOrigin(origin)')),
+    );
+    expect(
+      forgetCredentialBlock,
+      isNot(contains('revealPortalCredentialForOrigin')),
+    );
     expect(pubspec, contains('flutter_secure_storage: ^10.3.1'));
     expect(androidManifest, contains('android:allowBackup="false"'));
     expect(androidManifest, isNot(contains('android:allowBackup="true"')));
@@ -163,14 +248,24 @@ void main() {
     expect(registry, contains('catálogo corporativo'));
     expect(registry, contains('cualquier equipo'));
     expect(registry, contains('última ruta útil'));
-    expect(registry, contains("operating system's secure store"));
-    expect(registry, contains('portal_username'));
+    expect(
+      registry,
+      matches(RegExp(r"operating system's\s+secure store")),
+    );
+    expect(registry, contains('SupplierCredentialService'));
+    expect(registry, contains('stable key'));
+    expect(registry, contains('canonical HTTPS origin'));
+    expect(registry, contains('dedicated supplier-credential permission'));
+    expect(registry, isNot(contains('portal_username')));
     expect(registry, contains('ambiguous'));
-    expect(registry, contains('duplicate supplier domains do not autofill'));
+    expect(registry, contains('exact origin'));
     expect(registry, contains('failed repeated login'));
-    expect(browser, contains('filled-insecure'));
-    expect(supplierForm, contains('obscureText: !_showPortalPassword'));
-    expect(supplierForm, contains('AutofillHints.username'));
-    expect(supplierForm, contains('AutofillHints.password'));
+    expect(browser, contains('allowInsecureSupplierOrigin: false'));
+    expect(browser, isNot(contains('filled-insecure')));
+    expect(supplierForm, contains('canonicalSupplierCredentialOrigin'));
+    expect(supplierForm, contains('obscureText: true'));
+    expect(supplierForm, contains('enableSuggestions: false'));
+    expect(supplierForm, isNot(contains('PurchaseService')));
+    expect(supplierForm, isNot(contains('_showPortalPassword')));
   });
 }

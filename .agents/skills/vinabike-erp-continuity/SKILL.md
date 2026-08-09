@@ -30,7 +30,14 @@ Recover the live technical state first, then continue the product work. This ski
 - Use Browser or Chrome for browser-only verification; use Computer Use for Claude Desktop, Design windows, and native macOS UI.
 - Claude owns visual and interaction direction. Every literal visual value comes from Claude's DesignSync output; screenshots are for comparison and evidence, never for estimating values.
 - Test the real running application with real production-backed data in read-only paths. Capture exact rendered frames, not placeholder mockups.
-- Keep production mutations, final OCR application, publication, deployment, commits, and pushes outside scope unless the user explicitly authorizes them.
+- An implementation, fix, ship, deploy, or "get it done" request includes the
+  reviewed, non-destructive production changes required to make that result
+  active. Complete the guarded rollout, exact read-back, migration-history
+  registration, and real smoke without asking for a second routine
+  confirmation. Analysis-only, diagnosis-only, draft, and local-only requests
+  remain read-only. Destructive data repair, credential rotation, unrelated
+  pending changes, ambiguous targets, and materially broader publication still
+  require an explicit owner decision.
 
 ## Reuse the canonical native session
 

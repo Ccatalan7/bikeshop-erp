@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/settings/services/factory_reset_service.dart';
 
@@ -59,6 +61,58 @@ void main() {
       expect(
         () => FactoryResetService.validateModuleResetSelection('hr'),
         throwsStateError,
+      );
+    });
+
+    test('rejects supplier reset when the foundation owns durable history', () {
+      expect(
+        () => FactoryResetService.validateSupplierResetPreflight({
+          'supported': false,
+          'error_code': 'supplier_foundation_reset_requires_domain_operation',
+          'display_reason': 'Hay evidencia durable que debe conservarse.',
+        }),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'Hay evidencia durable que debe conservarse.',
+          ),
+        ),
+      );
+    });
+
+    test('fails closed when supplier reset preflight is malformed', () {
+      expect(
+        () => FactoryResetService.validateSupplierResetPreflight(null),
+        throwsStateError,
+      );
+    });
+
+    test('allows supplier reset only after an affirmative server preflight',
+        () {
+      expect(
+        () => FactoryResetService.validateSupplierResetPreflight({
+          'supported': true,
+        }),
+        returnsNormally,
+      );
+    });
+
+    test('supplier preflight runs before any selective delete helper', () {
+      final source = File(
+        'lib/modules/settings/services/factory_reset_service.dart',
+      ).readAsStringSync();
+      final selective = source.substring(
+        source.indexOf('Future<void> performSelectiveReset'),
+      );
+      expect(
+        selective.indexOf('get_supplier_foundation_reset_preflight'),
+        lessThan(selective.indexOf('Future<void> safeDelete')),
+      );
+      expect(
+        selective,
+        isNot(contains("await safeDelete('suppliers');\n"
+            "        print('✅ Suppliers deleted');")),
       );
     });
   });

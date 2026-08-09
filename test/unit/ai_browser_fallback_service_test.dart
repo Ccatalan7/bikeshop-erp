@@ -32,19 +32,18 @@ void main() {
       expect(proposal.proposalId, isNot(contains('supplier-a')));
     });
 
-    test('releases only the sanitized catalog destination and only once',
+    test('catalog receives no credential fields and sanitizes the destination',
         () async {
+      final supplier = _supplier(
+        id: 'supplier-a',
+        name: 'Proveedor A',
+        website: 'https://buyer:secret@portal.example/login?token=private#cart',
+      );
+      expect(supplier.toJson().keys, isNot(contains('portal_username')));
+      expect(supplier.toJson().keys, isNot(contains('portal_password')));
+
       final service = _service(
-        suppliers: [
-          _supplier(
-            id: 'supplier-a',
-            name: 'Proveedor A',
-            website:
-                'https://buyer:secret@portal.example/login?token=private#cart',
-            portalUsername: 'account-secret',
-            portalPassword: 'password-secret',
-          ),
-        ],
+        suppliers: [supplier],
       );
 
       final creation = await service.createProposal(
@@ -686,8 +685,6 @@ Supplier _supplier({
   required String name,
   required String website,
   bool isActive = true,
-  String? portalUsername,
-  String? portalPassword,
   String tenantId = 'tenant-a',
 }) {
   final timestamp = DateTime.utc(2026, 8, 4);
@@ -696,8 +693,6 @@ Supplier _supplier({
     tenantId: tenantId,
     name: name,
     website: website,
-    portalUsername: portalUsername,
-    portalPassword: portalPassword,
     isActive: isActive,
     createdAt: timestamp,
     updatedAt: timestamp,

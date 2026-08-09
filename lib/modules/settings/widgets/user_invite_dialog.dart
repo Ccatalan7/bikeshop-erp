@@ -14,10 +14,10 @@ class UserInviteDialog extends StatefulWidget {
 class _UserInviteDialogState extends State<UserInviteDialog> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  
+
   String _selectedRole = 'cashier';
   bool _isLoading = false;
-  
+
   final Map<String, bool> _permissions = {
     'access_pos': true,
     'create_invoices': true,
@@ -25,6 +25,7 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
     'delete_invoices': false,
     'access_accounting': false,
     'manage_users': false,
+    'can_manage_supplier_credentials': false,
     'edit_settings': false,
   };
 
@@ -50,6 +51,7 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
           _permissions['delete_invoices'] = true;
           _permissions['access_accounting'] = true;
           _permissions['manage_users'] = true;
+          _permissions['can_manage_supplier_credentials'] = true;
           _permissions['edit_settings'] = true;
           break;
         case 'cashier':
@@ -59,6 +61,7 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
           _permissions['delete_invoices'] = false;
           _permissions['access_accounting'] = false;
           _permissions['manage_users'] = false;
+          _permissions['can_manage_supplier_credentials'] = false;
           _permissions['edit_settings'] = false;
           break;
         case 'mechanic':
@@ -68,6 +71,7 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
           _permissions['delete_invoices'] = false;
           _permissions['access_accounting'] = false;
           _permissions['manage_users'] = false;
+          _permissions['can_manage_supplier_credentials'] = false;
           _permissions['edit_settings'] = false;
           break;
         case 'accountant':
@@ -77,6 +81,7 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
           _permissions['delete_invoices'] = false;
           _permissions['access_accounting'] = true;
           _permissions['manage_users'] = false;
+          _permissions['can_manage_supplier_credentials'] = false;
           _permissions['edit_settings'] = false;
           break;
       }
@@ -90,7 +95,7 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
 
     try {
       final userService = context.read<UserManagementService>();
-      
+
       await userService.inviteUser(
         email: _emailController.text.trim(),
         role: _selectedRole,
@@ -154,9 +159,9 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
                     return null;
                   },
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Role selector
                 DropdownButtonFormField<String>(
                   initialValue: _selectedRole,
@@ -179,14 +184,14 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
                     }
                   },
                 ),
-                
+
                 const SizedBox(height: 24),
                 const Text(
                   'Permisos',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const Divider(),
-                
+
                 // Permissions checkboxes
                 _buildPermissionCheckbox(
                   'access_pos',
@@ -219,11 +224,16 @@ class _UserInviteDialogState extends State<UserInviteDialog> {
                   Icons.people,
                 ),
                 _buildPermissionCheckbox(
+                  'can_manage_supplier_credentials',
+                  'Gestionar Credenciales de Proveedores',
+                  Icons.key_outlined,
+                ),
+                _buildPermissionCheckbox(
                   'edit_settings',
                   'Editar Configuración',
                   Icons.settings,
                 ),
-                
+
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),

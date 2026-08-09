@@ -11,6 +11,7 @@ import '../../../shared/services/database_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/main_layout.dart';
+import '../../purchases/services/purchase_service.dart';
 import '../services/product_import_service.dart';
 
 class ProductImportPage extends StatefulWidget {
@@ -44,7 +45,12 @@ class _ProductImportPageState extends State<ProductImportPage> {
     super.didChangeDependencies();
     if (_initialized) return;
     final db = Provider.of<DatabaseService>(context, listen: false);
-    _importService = ProductImportService(db);
+    final purchaseService = context.read<PurchaseService>();
+    _importService = ProductImportService(
+      db,
+      createMissingSupplier: (name) async =>
+          (await purchaseService.createSupplier(name)).id,
+    );
     _recommendedColumns = _importService.recommendedColumnLabels;
     _initialized = true;
   }

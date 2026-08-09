@@ -637,6 +637,13 @@ Forms should reflect the operator's mental model, not the storage schema.
   disposition to make the form appear complete.
 - Keep save/cancel behavior and dirty-state handling consistent across inline,
   pane, sheet, and routed hosts.
+- When a dynamic Flutter form row changes the semantic kind of a
+  `TextFormField` or `DropdownButtonFormField`, key the dependent field by both
+  the stable row identity and that semantic kind. `initialValue` does not reset
+  an existing `FormFieldState`; reusing only the row key can leave the old
+  visible value while the command serializes the new kind. The minimum
+  regression changes the kind and verifies that the rendered value, available
+  operators, validation, and submitted command remain identical.
 
 Compact forms must also follow the mobile guide's keyboard, focus, SafeArea,
 scroll-to-error, and persistent-action rules.
