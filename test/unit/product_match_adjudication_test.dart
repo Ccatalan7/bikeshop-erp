@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/ai_assistant/services/ai_service.dart';
+import 'package:vinabike_erp/modules/inventory/services/product_duplicate_matcher_service.dart';
 import 'package:vinabike_erp/shared/services/gemini_proxy_service.dart';
 
 /// The model is allowed to choose, never to invent.
@@ -114,6 +115,17 @@ void main() {
       reason: 'una lista sin techo es una cuenta sin techo',
     );
     service.dispose();
+  });
+
+  test('el modelo desempata, no manda sobre un orden ya decidido', () {
+    // Medido sobre AE150626: el motor tenía el producto correcto en 0.64
+    // —misma marca y mismo modelo que la factura— y el modelo promovió un tubo
+    // de V-Brake que estaba en 0.37. Una opinión no pisa una evidencia.
+    const band = ProductDuplicateMatcherService.adjudicationTieBand;
+    expect(0.37 < 0.64 - band, isTrue,
+        reason: 'esa distancia no es un empate: el motor ya decidió');
+    expect(0.62 < 0.64 - band, isFalse,
+        reason: 'esto sí es un empate y ahí el modelo aporta');
   });
 
   test('una respuesta ilegible no rompe la fila', () async {

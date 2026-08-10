@@ -503,6 +503,12 @@ class BikePartTaxonomy {
       // word a tool catalogue uses for pliers. It counts only next to
       // something that makes it a brake.
       ambiguousHeads: ['pinza', 'pinzas'],
+      negativeHeads: [
+        // `Pinzas de doble pivote` es un freno de aro: en esta tienda se llama
+        // herradura de tiro lateral, no caliper.
+        'doble pivote',
+        'tiro lateral',
+      ],
       contextWords: [
         'freno',
         'frenos',
@@ -536,6 +542,12 @@ class BikePartTaxonomy {
         'brazo de freno',
         'brazos de freno',
         'cantilever',
+        // Un freno de tiro lateral o de doble pivote es, en el catálogo de
+        // esta tienda, una «Herradura»: `Herradura de Tiro Lateral ZTTO ASA
+        // 2.5D`. El catálogo manda sobre la taxonomía — mandarlo a `Calipers`
+        // hizo que la compuerta rechazara justo el producto correcto.
+        'doble pivote',
+        'frenos c',
       ],
       negativeHeads: [
         'goma v brake',

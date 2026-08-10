@@ -337,13 +337,20 @@ void main() {
     ProductIdentityProfile of(String name) =>
         ProductIdentityExtractor.extract(ProductIdentityInput(name: name));
 
-    test('con contexto de freno, una pinza es un caliper', () {
+    test('con contexto de freno de disco, una pinza es un caliper', () {
       expect(
           of('Pinza freno disco mecanico Bucklos').familyId, 'brake_caliper');
+    });
+
+    test('pero una pinza de doble pivote es una herradura, no un caliper', () {
+      // El catálogo manda sobre la taxonomía: esta tienda vende
+      // `Herradura de Tiro Lateral ZTTO ASA 2.5D`, y mandar el freno de aro a
+      // `Calipers` hizo que la compuerta rechazara justo el producto correcto
+      // —medido el 2026-08-10 sobre la factura AE150626—.
       expect(
         of('Pinzas de doble pivote para bicicleta de carretera ZTTO, frenos C')
             .familyId,
-        'brake_caliper',
+        'rim_brake_arm',
       );
     });
 
@@ -365,9 +372,10 @@ void main() {
 
   group('el título del proveedor manda sobre el renombre de la IA', () {
     test('un renombre equivocado ya no decide qué objeto es', () {
-      const supplier =
-          'Pinzas de doble pivote para bicicleta de carretera ZTTO, frenos C';
-      const renamed = 'Freno de Herradura ZTTO ASA-2.5D';
+      // El limpiador de títulos existe para escribir un nombre legible, no
+      // para decidir qué objeto es. Cuando renombra mal, la fuente manda.
+      const supplier = 'PATINES DE FRENOS V-BRAKE para bicicleta';
+      const renamed = 'Herradura V-Brake aluminio';
       expect(
         ProductIdentityExtractor.extract(
           const ProductIdentityInput(name: renamed, description: supplier),
@@ -383,7 +391,7 @@ void main() {
             sourceTitle: supplier,
           ),
         ).familyId,
-        'brake_caliper',
+        'brake_pad',
       );
     });
   });

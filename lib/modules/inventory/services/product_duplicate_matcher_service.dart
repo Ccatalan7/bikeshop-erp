@@ -178,6 +178,13 @@ class ProductDuplicateMatcherService {
     );
   }
 
+  /// How far below the engine's leader a model pick may still be accepted.
+  ///
+  /// Inside this band the engine has no real preference and the model's
+  /// reading decides; outside it, the ordering was already decided by
+  /// evidence.
+  static const double adjudicationTieBand = 0.10;
+
   /// Adjudication calls spent so far, for the cost gate.
   int _adjudications = 0;
   int get adjudicationCalls => _adjudications;
@@ -237,6 +244,19 @@ class ProductDuplicateMatcherService {
     // The choice reorders and explains; it never promotes a row a gate ruled
     // out, and it never invents one.
     if (chosen.isRuledOut) return candidates;
+
+    // The model breaks ties. It does not overrule a ranking that is already
+    // clear.
+    //
+    // Measured on AE150626: the engine had the right product at 0.64 —
+    // `Herradura de Tiro Lateral ZTTO ASA 2.5D`, same brand and same model as
+    // the invoice — and the model promoted a V-brake noodle sitting at 0.37.
+    // Letting an opinion outrank a decided ordering makes the answer worse,
+    // which is the opposite of why the step exists. Where the engine is
+    // undecided the candidates sit close together, and there the model's
+    // reading is exactly what is missing.
+    final leader = candidates.first.confidence;
+    if (chosen.confidence < leader - adjudicationTieBand) return candidates;
     final reason = decision.reason;
     final promoted = ProductDuplicateCandidate(
       product: chosen.product,
