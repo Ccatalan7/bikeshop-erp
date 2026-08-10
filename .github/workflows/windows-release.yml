@@ -140,7 +140,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up Node for the spreadsheet engine
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24.18.0"
           cache: npm
@@ -335,7 +335,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Node for release notes
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24.18.0"
 
