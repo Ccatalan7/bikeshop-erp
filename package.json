@@ -28,7 +28,7 @@
     "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.1",
     "esbuild": "0.28.1",
     "firebase-tools": "15.23.0",
     "prettier": "3.9.5",
