@@ -436,6 +436,22 @@ class _BrowserPopupWindowState extends State<BrowserPopupWindow> {
         // hija conserva el opener de la anterior en vez de convertirse en una
         // pestaña independiente del ERP.
         onCreateWindow: _handleCreateWindow,
+        // Android drives a transported child window only when the navigation
+        // callback is declared.
+        //
+        // The parent WebView has always had `shouldOverrideUrlLoading`; the
+        // popup it hosts never did, and that asymmetry is what broke the
+        // AliExpress sign-in. Declaring the callback flips
+        // `useShouldOverrideUrlLoading` on in the native layer, and with it the
+        // pending OAuth navigation inherited through the `windowId` is actually
+        // performed. Without it the child stayed on its blank document forever
+        // — the white popup with nothing in it (2026-08-10).
+        //
+        // Measured on a release build of this exact commit: without this line
+        // the popup is blank; with it, Google's sign-in page renders. It is not
+        // a debug-only difference — a debug build hid the bug because it never
+        // reached this state.
+        shouldOverrideUrlLoading: (_, __) async => NavigationActionPolicy.ALLOW,
         onLoadStart: (_, url) {
           _adoptUrl(url);
           if (mounted && !_isLoading) setState(() => _isLoading = true);

@@ -218,6 +218,11 @@ void main() {
     expect(popup, contains('onCreateWindow: _handleCreateWindow'));
     expect(popup, contains('takeCapturedBrowserPopupOpenUrl(controller)'));
     expect(popup, contains('onCloseWindow: (_) => _close()'));
+    // Sin este callback Android no conduce la navegación heredada por el
+    // `windowId`: la ventana hija se queda en su documento en blanco y el
+    // inicio de sesión de AliExpress no llega nunca a Google. Medido sobre un
+    // build release el 2026-08-10; un build debug escondía el defecto.
+    expect(popup, contains('shouldOverrideUrlLoading:'));
     expect(popup, isNot(contains('browserPopupDebugLog')));
 
     final handlerStart = browser.indexOf('Future<bool> _handleCreateWindow(');
