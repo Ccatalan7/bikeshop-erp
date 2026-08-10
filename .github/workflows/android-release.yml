@@ -374,7 +374,7 @@ jobs:
             --ci-exact-sha "$GITHUB_SHA"
 
       - name: Retain exact Android publication evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vinabike-erp-android-release-evidence
           path: ${{ runner.temp }}/android-release-manifest.json
