@@ -165,7 +165,15 @@ class _Harness {
       pageId: 'page-a',
       pageSlug: 'inicio',
     );
-    store = WebsiteEditorDraftStore(storage: this.storage);
+    // The store keeps a draft for seven days and this harness saves one dated
+    // 2026-08-03. Left on the wall clock the file passed until 2026-08-10 and
+    // then began reporting the draft as expired — a red suite nobody caused,
+    // on a day nobody touched the editor. A test about recovery must own its
+    // clock, so what it asserts is behaviour and not the date it runs on.
+    store = WebsiteEditorDraftStore(
+      storage: this.storage,
+      clock: () => DateTime.utc(2026, 8, 4),
+    );
   }
 
   final WebsiteEditModeProvider provider = WebsiteEditModeProvider();
