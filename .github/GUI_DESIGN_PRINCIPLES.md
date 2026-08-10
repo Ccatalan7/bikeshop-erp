@@ -18,11 +18,23 @@ tool, which returns literal values. Two consequences, both binding:
   `GUÍA GENERAL Viñabike - Componentes` under component ids (`S-05`, `O-02`,
   `I-01`…), each with its limits and anti-patterns. Look the control up before
   writing one, and bind its values to theme roles — that guide bans literal hex
-  in widgets. A module's own screens get their own Design canvas.
+  in widgets. A module-specific canvas is optional reference material, not a
+  prerequisite for product design.
 
 The mechanics, including how to grep a 260 KB canvas without loading it into
 context, are in
 [`../docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`](../docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md).
+
+### Visual grammar and product composition are different owners
+
+The component guide answers **how a control looks and behaves**. Codex answers
+**what the operator needs now, what comes next, why the action belongs here,
+and how much space that decision deserves**. Start module design from the
+operator's task and preserve any proven legacy workflow; replace its container
+or visual treatment without replacing a useful mental model merely to make the
+screen look newer. A module-specific Design or Claude proposal is optional and
+must not introduce a wizard, inspector, modal, rail, card wall or disclosure
+unless the task itself justifies that interaction.
 
 ## Las palabras son parte del diseño
 

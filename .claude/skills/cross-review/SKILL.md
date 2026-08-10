@@ -1,12 +1,13 @@
 ---
 name: cross-review
-description: Coordinate independent Codex-Claude review before non-trivial shared work is declared complete. Use after another agent's handoff, mixed UI-logic work, or any change with data, accounting, inventory, auth, concurrency, or responsive UI risk.
+description: Coordinate independent Codex-Claude review only when the owner explicitly requested Claude collaboration.
 disable-model-invocation: false
 ---
 
 # Cross-review gate
 
-Use this gate before presenting shared work as finished.
+Use this gate only after the owner explicitly requested Claude collaboration.
+Ordinary cross-review uses an independent Codex subagent instead.
 
 1. Capture the current branch, HEAD, and relevant dirty paths. Existing changes
    are evidence and ownership boundaries, never cleanup targets.

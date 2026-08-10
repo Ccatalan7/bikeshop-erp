@@ -123,11 +123,15 @@ void main() {
     expect(attendances, contains('canAccessPayroll: canAccessPayroll'));
     expect(attendances, contains('PayrollGenerationSurface('));
     expect(attendances, contains('onGeneratePayroll: _openPayrollGeneration'));
-    expect(attendances, contains('prepareDraftFromAttendance('));
     expect(
       attendances,
-      isNot(contains('service.saveDraft(')),
-      reason: 'Attendance must use the server-derived idempotent writer.',
+      contains('service.saveDraft('),
+      reason: 'Attendance must persist the reviewed editable snapshot.',
+    );
+    expect(
+      attendances,
+      contains('applyPayrollGenerationPreviewToVoucher('),
+      reason: 'The full voucher must retain payment/account metadata.',
     );
     expect(
       attendances,

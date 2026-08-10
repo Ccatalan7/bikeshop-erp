@@ -66,8 +66,8 @@
   project `ERP Bikeshop UI Mockups`. Look the control up before writing one,
   implement it under its id (`S-05`, `O-02`, `I-01`…), and bind its values to
   theme roles — the guide's own first rule bans literal hex in widgets. A
-  module's screens get their own Design canvas; the guide is not edited to suit
-  one module.
+  module composes that vocabulary from its real workflow; a module-specific
+  Design canvas is optional input, not a prerequisite or layout authority.
 - **Un frame de Design es una propuesta sobre el aspecto, no una orden sobre
   el producto.** Antes de implementarlo se evalúa contra seis dimensiones —si
   existe en este negocio, si la palabra es la correcta, si el backend lo
@@ -75,10 +75,14 @@
   y si no reinventa un control canónico— y se registra qué se copia, qué se
   descarta y qué se agrega, con su razón. Ver
   `docs/development/AGENT_VISUAL_WORKFLOW.md` §5.b.
-- Claude leads every visual and interaction redesign, reconciling that direction
-  with the real app, domain truth and the canonical GUI guides. The handoff must
-  name the Design page, turn and component ids used; Codex must not
-  independently invent a competing visual direction.
+- **Codex owns module product design by default:** information architecture,
+  workflow, navigation, hierarchy, layout and responsive composition are
+  derived from the operator's next decision, real domain behavior and the
+  canonical GUI guides. `GUÍA GENERAL` owns the visual language and component
+  anatomy, not a module's screen arrangement. Claude/Design collaboration is
+  used only when the owner explicitly asks for it; a Design frame never
+  overrides product reasoning or becomes required before Codex can redesign a
+  module.
 - **Cada ronda que descubre algo, lo escribe antes de cerrar.** Una trampa de
   una herramienta, una preferencia del dueño, un documento que resultó falso, o
   una regla de dominio que sólo aparece con datos reales: se documenta en la
@@ -92,16 +96,22 @@
   validated conditions and minimum regression in the owning GUI guide. A
   successful pattern remains contextual; never turn it into a universal
   module-to-widget recipe.
+- For duplicate detection, catalog matching or anything that answers «¿este
+  producto ya existe?», read
+  `docs/architecture/product-identity-matching-contract.md` first. It owns the
+  eliminate-then-rank order, the identity/fitment split, and why a measurement
+  is never a model.
 - For bike workshop architecture work, read `BIKE_WORKSHOP_MASTER_SCHEMA.md` first and update it in the same task when behavior/schema/data-flow changes.
 - For Supabase/database work, follow `docs/development/AGENT_DATABASE_CONTRACT.md`.
   It is the single entry point for every agent and points to the two
   authoritative documents. Do not restate database policy or command paths in
   this file.
 - For non-trivial Codex/Claude collaboration, read
-  `docs/development/CODEX_CLAUDE_COLLABORATION.md`. Claude leads visual and
-  interaction redesign; Codex leads contracts, data integrity, concurrency,
-  security, and final integration. Both remain independent reviewers, and
-  neither may edit the same files concurrently with the other.
+  `docs/development/CODEX_CLAUDE_COLLABORATION.md`. Collaboration is opt-in;
+  Codex remains the product/layout owner and leads contracts, data integrity,
+  concurrency, security and final integration. When Claude is explicitly
+  requested, it supplies an independent proposal/review and never edits the
+  same files concurrently.
 - Every Claude collaboration session must visibly use **Code** mode for this
   repository and **Fable 5** (preferred) or **Opus 5**. Use
   **Effort: Ultracode** only while dynamic workflows/subagents are enabled.

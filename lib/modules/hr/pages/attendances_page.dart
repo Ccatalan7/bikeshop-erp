@@ -13,6 +13,8 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/current_user_profile_service.dart';
 import '../models/hr_models.dart';
+import '../models/payroll_voucher.dart';
+import '../payroll/payroll_draft_editor_adapter.dart';
 import '../payroll/surfaces/payroll_generation_surface.dart';
 import '../services/hr_service.dart';
 import '../services/payroll_voucher_service.dart';
@@ -441,20 +443,10 @@ class _AttendancesPageState extends State<AttendancesPage> {
     _loadData();
   }
 
-  String _payrollInitials(String name) {
-    final parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .toList(growable: false);
-    if (parts.isEmpty) return '·';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return '${parts.first[0]}${parts[1][0]}'.toUpperCase();
-  }
-
   Future<void> _openPayrollGeneration() async {
     final service = context.read<PayrollVoucherService>();
     final initialWeek = PayrollGenerationWeek.containing(_selectedDate);
+    PayrollVoucher? generatedVoucher;
 
     final createdVoucherId = await showGeneralDialog<String>(
       context: context,
@@ -480,34 +472,31 @@ class _AttendancesPageState extends State<AttendancesPage> {
             week.end,
             periodLabel: '${week.title} · ${week.rangeLabel}',
           );
-          return PayrollGenerationPreview(
-            week: week,
-            totalAmount: voucher.totalAmount.round(),
+          generatedVoucher = voucher.copyWith(
+            lines: <PayrollVoucherLine>[
+              for (final line in voucher.lines)
+                line.copyWith(isIncluded: line.totalHours > 0),
+            ],
+          );
+          return payrollGenerationPreviewFromVoucher(
+            voucher: generatedVoucher!,
             sourceSnapshotLabel:
                 'Asistencias consultadas · ${DateFormat('dd/MM HH:mm').format(DateTime.now())}',
-            workers: <PayrollGenerationWorkerLine>[
-              for (final line in voucher.lines)
-                PayrollGenerationWorkerLine(
-                  workerId: line.employeeId,
-                  name: line.employeeName,
-                  initials: _payrollInitials(line.employeeName),
-                  hours: line.workedHours,
-                  overtimeHours: line.overtimeHours,
-                  rateAmount: line.hourlyRate.round(),
-                  overtimeRateAmount: line.overtimeRate.round(),
-                  totalAmount: line.totalAmount.round(),
-                ),
-            ],
           );
         },
         createOperationKey: () =>
             'payroll_draft_from_attendance_${const Uuid().v4()}',
         onSaveDraft: (request) async {
-          final week = request.preview.week;
-          final voucherId = await service.prepareDraftFromAttendance(
-            week.start,
-            week.end,
-            periodLabel: '${week.title} · ${week.rangeLabel}',
+          final source = generatedVoucher;
+          if (source == null) {
+            throw StateError('No hay un preview de nómina para guardar.');
+          }
+          final editedVoucher = applyPayrollGenerationPreviewToVoucher(
+            voucher: source,
+            preview: request.preview,
+          );
+          final voucherId = await service.saveDraft(
+            editedVoucher,
             operationKey: request.operationKey,
           );
           return PayrollGenerationSaveResult(draftId: voucherId);

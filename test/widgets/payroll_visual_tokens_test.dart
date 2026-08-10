@@ -70,12 +70,24 @@ void main() {
           expect(tokens.dangerSoft, roles.danger.container);
           expect(tokens.dangerFg, roles.danger.onContainer);
           expect(tokens.dangerBorder, roles.danger.border);
+          expect(tokens.avatarCyan, roles.avatarA);
+          expect(tokens.avatarCyanInk, roles.onAvatarA);
+          expect(tokens.avatarSky, roles.avatarB);
+          expect(tokens.avatarSkyInk, roles.onAvatarB);
+          expect(tokens.groupLabor, roles.avatarC);
+          expect(tokens.groupLaborInk, roles.onAvatarC);
+          expect(tokens.avatarAmber, roles.avatarD);
+          expect(tokens.avatarAmberInk, roles.onAvatarD);
 
           _expectContrast(tokens.ink, tokens.surface);
           _expectContrast(tokens.successFg, tokens.successSoft);
           _expectContrast(tokens.warningFg, tokens.warningSoft);
           _expectContrast(tokens.dangerFg, tokens.dangerSoft);
           _expectContrast(tokens.neutralFg, tokens.neutralSoft);
+          _expectContrast(tokens.avatarCyanInk, tokens.avatarCyan);
+          _expectContrast(tokens.avatarSkyInk, tokens.avatarSky);
+          _expectContrast(tokens.groupLaborInk, tokens.groupLabor);
+          _expectContrast(tokens.avatarAmberInk, tokens.avatarAmber);
 
           if (brightness == Brightness.dark) {
             expect(tokens.canvas, isNot(Colors.black));

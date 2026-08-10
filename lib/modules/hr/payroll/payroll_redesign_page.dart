@@ -18,13 +18,16 @@ import '../services/payroll_employee_payment_method_command.dart';
 import '../services/payroll_advance_registration_service.dart';
 import '../services/payroll_voucher_service.dart';
 import '../widgets/payroll_advance_entry.dart' show showPayrollAdvanceEntry;
+import 'payroll_draft_editor_adapter.dart';
 import 'surfaces/payroll_accent_action.dart';
 import 'surfaces/payroll_advances_and_cash_surfaces.dart';
 import 'surfaces/payroll_history_surface.dart';
+import 'surfaces/payroll_generation_surface.dart';
 import 'surfaces/payroll_method_sheet.dart';
 import 'surfaces/payroll_payment_composer.dart';
 import 'surfaces/payroll_payment_evidence_surface.dart';
 import 'surfaces/payroll_queue_surface.dart';
+import 'surfaces/payroll_person_avatar.dart';
 import 'theme/payroll_tokens.dart';
 
 /// Host real del rediseño de Nóminas (handoff frames 2a–2e / 3a–3c).
@@ -218,6 +221,7 @@ class PayrollRedesignActions {
     this.loadAdvanceLedgerPage,
     this.tenantCivilDateOf,
     this.reverseSettlement,
+    this.updateDraft,
   });
 
   /// Saca una línea del borrador (`is_included = false`). No es una capacidad
@@ -247,6 +251,10 @@ class PayrollRedesignActions {
   /// device timezone. Absent in injected test actions => device-local.
   final Future<DateTime> Function(DateTime instant)? tenantCivilDateOf;
   final Future<void> Function(String voucherId) commitWeek;
+  final Future<void> Function({
+    required PayrollVoucher voucher,
+    required String operationKey,
+  })? updateDraft;
   final Future<void> Function({
     required String voucherId,
     required String lineId,
@@ -500,14 +508,8 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   /// harmlessly.
   PayrollVisualTokens get visual => PayrollVisualTokens.of(context);
 
-  List<Color> get _avatarPalette => [
-        visual.avatarSky,
-        visual.avatarCyan,
-        visual.avatarAmber,
-      ];
-
   Color _avatarFor(String employeeId) =>
-      _avatarPalette[employeeId.hashCode.abs() % _avatarPalette.length];
+      payrollPersonAvatarColor(visual, employeeId);
 
   // ── Datos ────────────────────────────────────────────────────────────────
 
@@ -599,6 +601,8 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         cursor: cursor,
       ),
       commitWeek: service.commitVoucher,
+      updateDraft: ({required voucher, required operationKey}) =>
+          service.updateVoucher(voucher, operationKey: operationKey),
       payLine: ({
         required voucherId,
         required lineId,
@@ -1292,7 +1296,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     ));
   }
 
-  Future<bool> _run(Future<void> Function() command) async {
+  Future<bool> _run(
+    Future<void> Function() command, {
+    bool commandConfirmationIsEnough = false,
+  }) async {
     if (_busy) return false;
     if (!_versionedMutationsAvailable) {
       _showVersionedUpdateRequired();
@@ -1304,6 +1311,14 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             'aceptar otro movimiento. Usa Reintentar y verifica el saldo.'),
       ));
       return false;
+    }
+    // The editor is hosted on the root navigator, so it can remain visible
+    // while its originating workspace page is rebuilt (for example during a
+    // theme/app hot reload). The visible editor still owns a valid, idempotent
+    // command; do not touch the disposed page State before sending it.
+    if (!mounted) {
+      await command();
+      return true;
     }
     setState(() => _busy = true);
     try {
@@ -1319,7 +1334,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
               'el saldo.'),
         ));
       }
-      return refreshed;
+      return refreshed || commandConfirmationIsEnough;
     } on PayrollVoucherPreflightException catch (error) {
       // The service guarantees that these failures happened before its RPC.
       // There is no movement to disambiguate, so fencing the next attempt or
@@ -1359,6 +1374,71 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     await context.push('/hr/attendances');
     if (!mounted) return;
     await _load();
+  }
+
+  Future<void> _editDraft(PayrollVoucher voucher) async {
+    final updateDraft = _resolveActions().updateDraft;
+    final voucherId = voucher.id?.trim();
+    if (_busy ||
+        voucher.status != PayrollVoucherStatus.draft ||
+        voucherId == null ||
+        voucherId.isEmpty ||
+        updateDraft == null) {
+      return;
+    }
+
+    final initialPreview = payrollGenerationPreviewFromVoucher(
+      voucher: voucher,
+      sourceSnapshotLabel:
+          'Borrador guardado · versión ${voucher.reconciliationVersion}',
+    );
+    var saved = false;
+    await showGeneralDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      barrierLabel: 'Cerrar edición del borrador de nómina',
+      barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.46),
+      transitionDuration: const Duration(milliseconds: 180),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        ),
+        child: child,
+      ),
+      pageBuilder: (dialogContext, _, __) => PayrollGenerationSurface(
+        initialWeek: initialPreview.week,
+        initialPreview: initialPreview,
+        existingDraftId: voucherId,
+        onGeneratePreview: (_) async => initialPreview,
+        createOperationKey: () => 'payroll_draft_edit_${const Uuid().v4()}',
+        onSaveDraft: (request) async {
+          final editedVoucher = applyPayrollGenerationPreviewToVoucher(
+            voucher: voucher,
+            preview: request.preview,
+          );
+          final commandConfirmed = await _run(
+            () => updateDraft(
+              voucher: editedVoucher,
+              operationKey: request.operationKey,
+            ),
+            commandConfirmationIsEnough: true,
+          );
+          if (!commandConfirmed) {
+            throw StateError('No pudimos verificar el borrador actualizado.');
+          }
+          saved = true;
+          return PayrollGenerationSaveResult(draftId: voucherId);
+        },
+        onClose: () => Navigator.of(
+          dialogContext,
+          rootNavigator: true,
+        ).pop(saved),
+      ),
+    );
   }
 
   Future<void> _openEmployees() async {
@@ -1627,9 +1707,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                       const VbNotice(
                         tone: VbNoticeTone.warning,
                         title: 'Revisa las horas y tarifas antes de confirmar',
-                        body: 'Vienen de Asistencias, y Nóminas no las edita. '
-                            'Una semana con pagos registrados ya no puede '
-                            'volver a editarse.',
+                        body: 'El borrador partió de Asistencias y todavía '
+                            'puede ajustarse en Nóminas. Una semana con pagos '
+                            'registrados ya no puede volver a editarse.',
                       ),
                       const SizedBox(height: 18),
                       Builder(
@@ -2280,8 +2360,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                             'sí se pueden registrar.',
                       PayrollRowStatus.nothingToPay =>
                         'Asistencias todavía no cierra las horas de esta persona, '
-                            'así que la semana no le calcula monto. Se corrige en '
-                            'Asistencias, no acá.',
+                            'así que la semana no le calcula monto. Puedes '
+                            'ajustarlas en «Editar borrador» o corregir la fuente '
+                            'en Asistencias.',
                       PayrollRowStatus.weekNotConfirmed =>
                         'La semana está en borrador: hasta confirmarla las horas '
                             'no quedan fijas y no se le puede pagar a nadie. '
@@ -2294,9 +2375,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                         '',
                     };
       rows.add(PayrollPersonRowVM(
+        personId: line.employeeId,
         name: line.employeeName,
         initials: _initialsOf(line.employeeName),
-        avatarColor: _avatarFor(line.employeeId),
         method: _methodLabel(line),
         methodIsCash: status == PayrollRowStatus.pendingCash,
         earned: _clp(line.totalAmount),
@@ -4386,6 +4467,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                 onOpenAttendance: _openAttendances,
                 onConfirmWeek: () => _commitWeek(week),
                 onNextAction: () => _runNextWeekAction(week),
+                onEditDraft: _versionedMutationsAvailable &&
+                        _resolveActions().updateDraft != null
+                    ? () => _editDraft(week)
+                    : null,
               ),
             ),
           ] else ...[
@@ -4409,6 +4494,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                   totals: _totals(week),
                   onConfirmWeek: () => _commitWeek(week),
                   onNextAction: () => _runNextWeekAction(week),
+                  onEditDraft: _versionedMutationsAvailable &&
+                          _resolveActions().updateDraft != null
+                      ? () => _editDraft(week)
+                      : null,
                 ),
             ],
           ],
@@ -4560,6 +4649,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
                   onOpenAttendance: _openAttendances,
                   onConfirmWeek: () => _commitWeek(week),
                   onNextAction: () => _runNextWeekAction(week),
+                  onEditDraft: _versionedMutationsAvailable &&
+                          _resolveActions().updateDraft != null
+                      ? () => _editDraft(week)
+                      : null,
                 );
               },
             ),
@@ -5413,18 +5506,11 @@ class _MobilePersonCard extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: vm.avatarColor,
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          vm.initials,
-                          style: visual.avatarInitials(12),
-                        ),
+                      PayrollPersonAvatar(
+                        personId: vm.personId,
+                        initials: vm.initials,
+                        size: 34,
+                        fontSize: 12,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -5683,11 +5769,13 @@ class _MobileMoneyBar extends StatelessWidget {
     required this.totals,
     required this.onConfirmWeek,
     required this.onNextAction,
+    this.onEditDraft,
   });
 
   final PayrollWeekTotalsVM totals;
   final VoidCallback onConfirmWeek;
   final VoidCallback onNextAction;
+  final VoidCallback? onEditDraft;
 
   @override
   Widget build(BuildContext context) {
@@ -5742,6 +5830,19 @@ class _MobileMoneyBar extends StatelessWidget {
             ),
             if (showAction) ...[
               const SizedBox(height: 10),
+              if (totals.showCommitAction && onEditDraft != null) ...[
+                OutlinedButton(
+                  key: const ValueKey('payroll-mobile-edit-draft'),
+                  onPressed: onEditDraft,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, PayrollTokens.touchMobile),
+                    foregroundColor: visual.inkMuted,
+                    side: BorderSide(color: visual.borderStrong),
+                  ),
+                  child: const Text('Editar borrador'),
+                ),
+                const SizedBox(height: 8),
+              ],
               PayrollAccentAction(
                 actionKey: const ValueKey('payroll-mobile-primary-action'),
                 label: actionLabel,

@@ -1,4 +1,4 @@
-# Cómo un agente prueba la app y la compara con Claude Design
+# Cómo un agente prueba la UI real y, cuando se pidió, la compara con Design
 
 Este documento es **el procedimiento**, no una lista de herramientas. Si algo
 acá contradice a otro documento, gana éste para el ciclo de trabajo, y
@@ -7,6 +7,12 @@ acá contradice a otro documento, gana éste para el ciclo de trabajo, y
 Existe porque el mismo trabajo se improvisó cinco veces con cinco resultados
 distintos, y porque cada improvisación costó una ronda: clics que caían donde
 no debían, un frame que nadie bajó, un compilador trabado leído como otra cosa.
+
+Hay dos tracks. **Toda UI** usa la app real, sus seis celdas responsive y la
+`GUÍA GENERAL Viñabike - Componentes`; Codex posee flujo, jerarquía, layout y
+responsive. La comparación con un frame o canvas de módulo se agrega sólo si el
+owner pidió explícitamente una propuesta/revisión Claude/Design. No tener ese
+canvas opcional nunca bloquea el primer track.
 
 ---
 
@@ -661,9 +667,10 @@ borrarlo. Dejarlo es lo que hace creer que un frame ya está implementado.
    sólo en claro-escritorio **no está entregada**.
 10. Escribir en el ledger del plan **al cerrar el frame**, no al final.
 
-Si falta el frame oscuro o el compacto de una superficie: **se pide a Design**
-—pidiéndole que modifique el canvas que ya existe, no uno nuevo— y se dice que
-falta. Deducirlo es inventar con otro nombre.
+Si una ronda Claude/Design fue solicitada y su handoff prometía oscuro o
+compacto, se reporta el artefacto faltante. Sin esa ronda opcional, Codex deriva
+la composición responsive desde la guía móvil, los roles canónicos y la app
+real; no inventa valores visuales.
 
 ---
 
@@ -674,12 +681,12 @@ los servicios, ni cómo navega el resto del ERP, ni cómo se habla en Chile. Un
 frame es una **propuesta muy buena sobre el aspecto**, y una hipótesis sobre
 todo lo demás.
 
-> **De Design:** paleta, tipografía, superficies, bordes, radios, sombras,
-> elevación, chips, botones, tablas, inputs, jerarquía visual y estados.
+> **De la guía canónica:** paleta, tipografía, superficies, bordes, radios,
+> sombras, elevación y anatomía de chips, botones, tablas e inputs.
 >
-> **Del agente:** que funcione, que se entienda, que se pueda navegar, que las
-> palabras sean las correctas, y que no rompa la armonía del ERP — en
-> escritorio **y** en móvil.
+> **De Codex:** flujo, jerarquía, estados de producto, layout, que funcione,
+> que se entienda, que se pueda navegar y que las palabras sean correctas — en
+> escritorio, tablet y móvil.
 
 Implementar sin evaluar produce dos daños que ya ocurrieron: una pantalla
 preciosa que afirma algo falso, y un ERP donde cada módulo navega distinto.
@@ -719,14 +726,17 @@ preciosa que afirma algo falso, y un ERP donde cada módulo navega distinto.
 
 ### Qué hacer con cada resultado
 
-- **Calza** → se implementa tal cual. El *look* manda.
+- **Calza** → se adopta la gramática visual; la composición se adopta sólo si
+  también supera las seis dimensiones.
 - **No aplica acá** → se descarta, y **se dice por qué**. Ejemplos ya
   resueltos: un rail vertical de iniciales cuando la app ya tiene su menú; un
   control de orden para cinco filas, que es adorno —ése debe ser el orden por
   defecto—; un `Ordenar: pendientes primero` que nadie va a tocar.
 - **Falta algo que acá sí se usa** → se agrega, y se dice que se agregó.
-  Design no sabía que Nóminas no puede editar horas, así que no dibujó la
-  salida a Asistencias. Se agregó.
+  Design no distinguía entre el registro fuente de Asistencias y el snapshot
+  editable de Nóminas. Se conservaron la salida a Asistencias para corregir el
+  origen y los campos del editor canónico para ajustar horas/tarifa sólo en el
+  preview o borrador, hasta confirmar.
 - **Dice algo falso** → se corrige, siempre. Un `$0` que se muestra como
   «Pagado» es una pantalla mintiendo sobre dinero. Que el frame lo dibuje así
   no lo hace correcto.
@@ -754,12 +764,14 @@ el mismo problema *mejor* — y entonces se dice que se cambió y por qué.
 ### El caso que justifica toda esta sección
 
 5a dibuja `Quitar de la semana` para alguien sin horas cerradas. La ronda
-anterior lo implementó tal cual. Evaluado contra el dominio: Nóminas **no** es
-dueña de las horas, así que el arreglo real vive en Asistencias, y ese botón
-—en una app que corre contra producción— es justo el que el 30/07 se disparó
-por accidente y escribió de verdad. Se descartó, la fila quedó diciendo `Horas
-sin cerrar` y sale del cálculo. **Se conservó el hecho que el frame quería
-comunicar; se cambió el mecanismo.** Eso es evaluar, no desobedecer.
+anterior lo implementó tal cual. Evaluado contra el dominio: Asistencias es
+dueña del registro fuente, mientras Nóminas sólo puede ajustar su snapshot
+`draft` sin writeback. Ese botón mezclaba ambas autoridades y —en una app que
+corre contra producción— es justo el que el 30/07 se disparó por accidente y
+escribió de verdad. Se descartó: la fila sin horas queda explícita y fuera del
+cálculo hasta que el operador ajuste el borrador o corrija el origen en
+Asistencias. **Se conservó el hecho que el frame quería comunicar; se cambió el
+mecanismo.** Eso es evaluar, no desobedecer.
 
 ---
 

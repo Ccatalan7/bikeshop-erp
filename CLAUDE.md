@@ -21,11 +21,12 @@ before the first command of a task, not to restate it.
 | Running, clicking and screenshotting the app; reading the Design window | `docs/development/AGENT_MACOS_APP_CONTROL.md` |
 | Palettes, light/dark, semantic roles | `docs/architecture/appearance-palette-contract.md` |
 | **Any visual value, or any shared component** | `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` — read it through `DesignSync`, never off a screenshot |
+| Duplicados, matching de catálogo, «¿ya existe este producto?» | `docs/architecture/product-identity-matching-contract.md` |
 | Bike workshop architecture | `BIKE_WORKSHOP_MASTER_SCHEMA.md`, updated in the same task when behavior/schema/data-flow changes |
 
-**Un frame de Design no se acepta a ciegas.** Design manda el *look*; que
-funcione, que se entienda, que se navegue, las palabras y la armonía con el
-resto del ERP los aporta el agente — en escritorio y en móvil. La compuerta de
+**Un frame de Design no se acepta a ciegas.** La guía manda la gramática
+visual; Codex posee flujo, jerarquía, layout, responsive, funcionamiento,
+navegación y palabras. La compuerta de
 seis dimensiones y cómo se registra están en
 `docs/development/AGENT_VISUAL_WORKFLOW.md` §5.b, y es obligatoria por frame.
 
@@ -33,9 +34,10 @@ Historical prompts, screenshots, feature plans, existing widgets, and aesthetic
 snapshot tests do not override the two canonical GUI guides. Do not treat their
 literal colors, dimensions, containers, or modal/layout choices as precedent.
 
-For every visual or interaction redesign, Claude is the design lead and reads
-the visual truth from Design project `ERP Bikeshop UI Mockups`
-(`a0fa3196-6315-4b96-bde7-7cc801e7a74e`) **through the `DesignSync` tool**.
+For every visual or interaction redesign, Codex is the product-design lead.
+Shared visual truth comes from `GUÍA GENERAL Viñabike - Componentes` in Design
+project `ERP Bikeshop UI Mockups` through `DesignSync`. Claude participates
+only when the owner explicitly requests an independent proposal or review.
 
 - **Every visual value comes from a Design file, read with `DesignSync`.**
   Colour, radius, shadow, border, spacing, font, height. Reading them off a
@@ -46,11 +48,11 @@ the visual truth from Design project `ERP Bikeshop UI Mockups`
   up the control before writing one, implement it under its id (`S-05`, `O-02`,
   `I-01`…), and bind its values to theme roles — the guide bans literal hex in
   widgets.
-- **A module's own screens get their own Design canvas**, not an edit to the
-  guide. The guide holds the shared vocabulary; a module page composes it.
-- Reconcile that direction with the real domain and the canonical GUI guides,
-  and name the page, the turn and the component ids in the handoff. Do not
-  invent a competing visual direction in Code or literal-copy stale mock data.
+- **A module canvas is optional.** The guide holds the shared vocabulary;
+  Codex composes it from the operator workflow and the real application.
+- Reconcile any optional proposal with the real domain and canonical GUI
+  guides. Name a page/turn only when that optional source was actually used;
+  always name the shared component ids.
 
 The Design **window** is for two things only: reading what falls past the
 256 KiB file cap, and confirming the built result. Not for reading values.
@@ -104,11 +106,11 @@ No escribas el relato de la sesión, ni lo que ya se ve en el código o en git.
   is a defect, not a style issue.
 - Run the affected tests yourself and report real output. A local pass is not a
   production deployment.
-- For non-trivial changes shared with Codex, follow
-  `docs/development/CODEX_CLAUDE_COLLABORATION.md`. Claude is the creative lead
-  for visual and interaction redesign, while remaining an independent peer
-  reviewer of logic. Do not silently agree with Codex: test its assumptions and
-  report evidence. Never edit the same files concurrently with another agent.
+- When the owner explicitly requests collaboration with Codex, follow
+  `docs/development/CODEX_CLAUDE_COLLABORATION.md`. Claude remains an
+  independent reviewer; Codex retains product/layout ownership. Do not silently
+  agree with Codex: test its assumptions and report evidence. Never edit the
+  same files concurrently with another agent.
 - The dual-diagnosis gate is for P0/P1 findings and seams involving financial
   integrity, security, tenant isolation, concurrency, navigation ownership or
   another broad invariant. Local visual/mechanical defects are corrected by

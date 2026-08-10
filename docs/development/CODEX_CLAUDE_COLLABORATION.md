@@ -1,15 +1,17 @@
 # Codex + Claude collaboration
 
-This repository uses the two agents as independent peers with different
-leadership domains. The goal is not consensus; it is to expose different
-failure modes before they reach the application.
+This document applies when the owner explicitly asks Codex to collaborate with
+Claude. Normal product work does not require a Claude session. When that
+optional collaboration is active, the two agents remain independent reviewers
+whose goal is to expose different failure modes before they reach the
+application.
 
 ## Ownership
 
 | Work | Lead | Required cross-review |
 |---|---|---|
-| Visual hierarchy, interaction redesign, responsive composition | Claude | Codex checks contracts, state truth, navigation, data and integration; Claude performs the final visual pass |
-| Domain logic, database, accounting, inventory, auth, concurrency | Codex | Claude independently challenges assumptions and missing cases |
+| Product workflow, information architecture, visual hierarchy, layout and responsive composition | Codex | Claude may provide an independent proposal or visual review only when explicitly requested |
+| Domain logic, database, accounting, inventory, auth, concurrency | Codex | Claude may independently challenge assumptions when explicitly requested |
 | Mixed feature | Split by layer and explicit files | Both reviewers; never concurrent edits to the same file |
 | Verification infrastructure and release safety | Codex | Claude tries the real workflow and reports usability/friction |
 
@@ -60,7 +62,7 @@ zero-subagent suspension is active. When the suspension is lifted, Claude
 subagents use `model: inherit` and start only from a parent session that already
 passed the Ultracode preflight.
 
-## Claude Design authority
+## Product-design authority and optional Claude review
 
 The Claude desktop app exposes two separate windows in the macOS Dock:
 **Claude** and **Design**. `Home` and `Code` are surfaces inside the Claude
@@ -68,19 +70,26 @@ window; they are not the Design window. Select the intended Dock window and
 confirm its visible title before typing. Never begin a prompt in one window and
 continue it in the other.
 
-Claude leads every visual or interaction redesign. Before proposing or
-implementing one, Claude reads the latest relevant concept from the Claude
-Design project **ERP Bikeshop UI Mockups**
-(`a0fa3196-6315-4b96-bde7-7cc801e7a74e`) **with the `DesignSync` tool**, then
-inspects the real application and its canonical data/workflow. The handoff
-names the Design page, turn and component ids used so the implementation and
-final review share the same visual reference.
+**Correction 2026-08-09.** Codex leads module product design: information
+architecture, workflow, hierarchy, layout, responsive composition and final
+integration. It begins from the operator's next useful decision and preserves
+proven workflow behavior even when the legacy container or styling is
+discarded. Claude collaboration is opt-in and starts only when the owner asks
+for it; it supplies an independent proposal or visual review, not mandatory
+layout authority.
+
+The Claude Design project **ERP Bikeshop UI Mockups**
+(`a0fa3196-6315-4b96-bde7-7cc801e7a74e`) remains a source of optional module
+concepts. The shared `GUÍA GENERAL Viñabike - Componentes` remains the standing
+source of visual grammar and component anatomy through `DesignSync`. Using the
+grammar does not require asking Claude to design the module or creating a new
+module canvas.
 
 **Binding on both agents.** Visual values are read from Design files, never
 reproduced from a capture of the Design window and never estimated. Shared
 controls come from **`GUÍA GENERAL Viñabike - Componentes`** under their
-component id, with values bound to theme roles. A module's screens are designed
-on their own Design canvas rather than by editing the shared guide. The full
+component id, with values bound to theme roles. A dedicated module canvas is
+optional reference material, never a prerequisite or layout authority. The full
 rule, including how to grep a 260 KB canvas cheaply, is in
 [`DESIGN_HANDOFF_SYNC_CONTRACT.md`](DESIGN_HANDOFF_SYNC_CONTRACT.md).
 
@@ -88,14 +97,15 @@ A reviewer who cannot trace a visual value to a Design file rejects it as
 unsourced — that is a defect of the same class as a missing `tenant_id` filter,
 not a matter of taste.
 
-Claude Design has explicit freedom to recompose a module from first principles.
-The real application and repository are inspected for operator workflow,
+Codex has explicit freedom to recompose a module from first principles. The
+real application and repository are inspected for operator workflow,
 domain states, canonical actions, permissions, navigation and return behavior,
 real data extremes, platform capabilities, responsive hosts, and global-shell
 ownership. They are not a demand to preserve, restyle, or build on top of the
 legacy visual composition.
 
-Before visual exploration, Codex supplies a bounded design-input packet that
+When optional Claude visual review is requested, Codex supplies a bounded
+design-input packet that
 separates:
 
 1. mandatory domain and UX invariants;
@@ -108,8 +118,8 @@ navigation, tools, notifications, and persistent chrome. This protects the
 workflow without making existing widgets a visual cage or duplicating shell UI
 inside a module.
 
-The Design project is the living source for Vinabike's visual direction and
-interaction language. Its current validated grammar is:
+The component guide is the living source for Vinabike's visual direction and
+shared control language. Its current validated grammar is:
 
 - navy communicates record or product identity; a restrained light stage band
   communicates process or navigation state; the body concentrates on the
@@ -141,27 +151,24 @@ also do not become precedent, including duplicated branding, a light control
 island inside dark global chrome, or fixed proportions that compress status
 and action.
 
-For a shared component or foundation, Claude Design must provide the complete
+For a shared component or foundation, the canonical Design source must provide the complete
 visual cascade from foundation values to semantic roles to component roles.
 Roles are named by purpose and host relationship, never by the current hue or
 feature (`actionPrimaryOnShell`, not `cyanButton` or `payrollBlue`). The
-handoff includes a component-to-role map and demonstrates that changing one
+source includes a component-to-role map and demonstrates that changing one
 semantic role updates every intended consumer without recoloring unrelated
 success, warning, information, selection, or focus states. Codex then owns the
 central Flutter theme/API boundary and the guard against feature-local visual
-overrides; Claude performs the catalog and running-app visual review.
+overrides. Claude may review the catalog and running app when the owner asks.
 
-Design supplies direction, not business facts. Mock data, labels, statuses,
+Optional Design proposals supply reference material, not business facts. Mock data, labels, statuses,
 literal colors or dimensions in an old concept are not automatically
-canonical. Claude must reconcile the concept with the current domain model,
+canonical. Codex reconciles the concept with the current domain model,
 tenant configuration, accessibility, responsive behavior and the repository
-GUI guides. If they conflict, Claude refines the Design concept first or
-records the deliberate divergence. Codex may adapt implementation within the
-agreed visual direction when required by shell ownership, canonical navigation
-or actions, real data, accessibility, responsive behavior, or a validated
-behavioral primitive. Removing duplicate global chrome or replacing a fixed
-mockup proportion with an adaptive sizing contract is integration work, not a
-competing visual direction. Claude performs the final visual review. Once a
+GUI guides. If they conflict, Codex rejects or adapts the proposal and records
+the reason. Removing duplicate global chrome or replacing a fixed mockup
+proportion with an adaptive sizing contract is product design, not a competing
+visual direction. Optional Claude review never changes that ownership. Once a
 pattern is validated in the running app, record its reusable contract in the
 owning repository GUI guide so future agents can apply it without relying on
 an inaccessible screenshot.
@@ -170,8 +177,9 @@ an inaccessible screenshot.
 
 P0/P1 findings and seams involving financial integrity, security, tenant
 isolation, concurrency, navigation ownership or another broad invariant receive
-an independent diagnosis and solution proposal from **both Codex and Claude
-before implementation**. The first agent shares only a neutral evidence packet
+an independent diagnosis from a Codex subagent by default. If the owner has
+explicitly requested Claude collaboration, Claude may be the independent
+reviewer. The first agent shares only a neutral evidence packet
 (symptom, reproduction, affected boundary and relevant files), not its
 conclusion, so the second agent does not merely ratify it. Each response must
 state:
@@ -185,11 +193,10 @@ state:
 Codex then reconciles the two proposals against repository contracts, tests and
 the running app. Agreement is useful but not required: the final decision must
 record why one option or a synthesized option won and preserve any material
-dissent as an explicit risk. Neither agent may skip the other's diagnostic
-because it is the domain lead.
+dissent as an explicit risk. No Claude session is implied by this gate.
 
 Batch related findings into one bounded evidence packet and review them at a
-coherent feature/block boundary. Do not start one Claude session per defect.
+coherent feature/block boundary. Do not start one review session per defect.
 Local layout, copy, formatting, syntax and other mechanical defects are repaired
 by the active lead and included in the next checkpoint; they do not stop the
 feature for a separate dual-diagnosis round. If a local repair reveals one of
@@ -199,25 +206,25 @@ the broad invariants above, promote it to this gate.
 
 1. **Baseline:** record branch, HEAD, relevant dirty paths, active processes,
    and the user's actual outcome. Never clean a shared checkout.
-2. **Independent diagnosis:** give both agents the same neutral evidence. Each
-   reconstructs the contract and proposes a correction before seeing the
-   other's conclusion.
-3. **Reconcile design/contract:** Codex compares both diagnoses and proposals,
+2. **Independent diagnosis:** give the lead and chosen independent reviewer the
+   same neutral evidence. Each reconstructs the contract and proposes a
+   correction before seeing the other's conclusion.
+3. **Reconcile design/contract:** Codex compares available diagnoses and proposals,
    names the mandatory invariants, proven behavioral primitives, optional
    suggestions, discardable legacy composition, and global-shell owners, then
-   records any material disagreement. For UI, Claude owns from-scratch design
-   exploration and the final visual reading of the real app.
+   records any material disagreement. For UI, Codex owns from-scratch product
+   composition and the final reading of the real app; Claude participates only
+   when the owner explicitly requested that collaboration.
 4. **Partition:** assign exact files. Do not run simultaneous writers on the
    same file or migration.
 5. **Implement:** the lead makes the smallest coherent change that fully
    realizes the approved direction and records what it deliberately left
    untouched. “Smallest” limits unrelated scope; it does not force an
    incremental restyle when a from-scratch composition is the coherent change.
-6. **Cross-review:** give Claude enough tools and context to inspect every
-   relevant high-risk seam and have Codex audit the complementary seams. Start
-   with one coherent reviewer/session, then add a specialized pass when new
-   evidence exposes a genuinely different domain. Findings require evidence,
-   not taste, deference, or an arbitrary call-count cutoff.
+6. **Cross-review:** use an independent Codex subagent by default. If the owner
+   explicitly requested Claude, give it enough context to inspect the agreed
+   seam. Findings require evidence, not taste, deference, or an arbitrary
+   call-count cutoff.
 7. **Reconcile:** reproduce disagreements, fix confirmed issues, and have the
    non-author recheck the seam.
 8. **Verify:** format, focused analyzer/tests, relevant broader gates, and the
@@ -312,7 +319,8 @@ Every agent-to-agent handoff contains:
 - branch/HEAD and relevant dirty files;
 - exact files owned and files that must not be touched;
 - canonical documents already read;
-- for UI work, the Design page/concept, global-shell owners, workflow,
+- for UI work, the shared component ids and visual roles used; when optional
+  Claude/Design input was requested, also the Design page/concept; global-shell owners, workflow,
   navigation and state truths, proven behavioral primitives, discardable
   legacy composition, and the Payroll visual traits that transfer without its
   layout;
@@ -335,13 +343,14 @@ Use this prompt for a new Claude session in this checkout:
 > lee `CLAUDE.md`, `AGENTS.md` y
 > `docs/development/CODEX_CLAUDE_COLLABORATION.md`; registra branch, HEAD y
 > archivos sucios sin limpiar nada. Si el trabajo incluye rediseño visual,
-> asume liderazgo creativo: abre la ventana separada Design, inspecciona el
-> concepto relevante más reciente de `ERP Bikeshop UI Mockups`, nombra la
-> página/concepto usado y valida desktop, tablet y teléfono. Inspecciona la app,
+> actúa como revisor independiente de la composición que Codex posee; usa la
+> `GUÍA GENERAL Viñabike - Componentes` como lenguaje visual y abre un concepto
+> específico de Design sólo si el owner lo pidió. Inspecciona la app,
 > el repo y los datos reales para conocer flujo, acciones, estados, navegación,
 > extremos de datos y ownership del shell, no para conservar o maquillar la
-> composición visual heredada. Recompón from scratch cuando sea la mejor
-> solución. Usa Nóminas como lenguaje visual y estándar de calidad, nunca como
+> composición visual heredada. Propón una alternativa from scratch cuando
+> encuentres un problema, sin asumir autoridad sobre el layout final. Usa
+> Nóminas como lenguaje visual y estándar de calidad, nunca como
 > plantilla obligatoria de layout. Trata los componentes existentes que Codex
 > entregue como evidencia de comportamiento salvo que la guía los haya
 > promovido explícitamente al sistema visual compartido. Si el concepto está

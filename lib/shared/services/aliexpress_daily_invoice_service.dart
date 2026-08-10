@@ -18,6 +18,12 @@ class AliExpressDailyInvoiceService {
     'aliexpress.cl',
   };
 
+  /// Exact allowlist shared with the embedded browser's document-start
+  /// extractor. Returning an immutable copy prevents the security boundary
+  /// from drifting through a second host list in a widget.
+  static List<String> get trustedRegistrableDomains =>
+      List<String>.unmodifiable(_trustedRegistrableDomains);
+
   static bool isTrustedUri(Uri? uri) {
     if (uri == null || uri.scheme != 'https') return false;
     final host = uri.host.toLowerCase();

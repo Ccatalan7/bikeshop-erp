@@ -1,5 +1,10 @@
 # 📸 OCR Quick Reference - For Developers
 
+> **Historical snippet warning.** Do not copy the bottom-sheet/`Navigator.pop`
+> host shown below. Purchase OCR now fills the existing invoice `MainLayout`,
+> owns hierarchical Back, and awaits `onComplete` before closing. The current
+> workflow contract lives in `docs/architecture/canonical-ui-surfaces.md`.
+
 ## 🚀 Quick Start
 
 ### 1. Add OCR to Any Form

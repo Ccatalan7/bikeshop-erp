@@ -16,8 +16,11 @@ roles, never pasted as hex — the guide's own first rule is
 screenshot is prohibited; see
 [`../development/DESIGN_HANDOFF_SYNC_CONTRACT.md`](../development/DESIGN_HANDOFF_SYNC_CONTRACT.md).
 
-A module that needs a screen composed from those parts gets its **own Design
-canvas**; the shared guide is not edited to fit one module.
+A module composes those parts from the operator's next decision, real domain
+behavior and the canonical GUI guides. A dedicated module Design canvas is
+optional input only when the owner explicitly requests it; it is never a
+prerequisite or the authority for screen arrangement. The shared guide is not
+edited to fit one module.
 
 This document defines how Viñabike gets one coherent visual system without
 turning one successful module into a universal layout template. The canonical
@@ -176,9 +179,11 @@ sits on a black rectangle fail the canary.
 ## 4. Global shell family
 
 `MainLayout`, workspace navigation, global tools, and the active module command
-surface form one coordinated shell family. The Claude Design Payroll concepts
-3a and 3b are the visual target for this family, but the repository's real
-navigation and workspace contracts remain authoritative.
+surface form one coordinated shell family. The implemented Payroll shell is a
+current visual canary for this family. Its recorded concepts 3a and 3b may
+explain accepted visual decisions, but they are optional reference material:
+the shared component guide supplies the visual grammar, while the repository's
+real navigation, operator workflow and workspace contracts own composition.
 
 The desktop compositions are:
 
@@ -240,6 +245,17 @@ The first stable kit is intentionally bounded. It should finish approximately
 - inline and persistent notices;
 - anchored popover infrastructure;
 - short select and searchable selector;
+  - `S-05 VbShortSelect` — up to ~7 known options, menu does not scroll;
+  - `S-06 VbSearchableSelect` — everything above that ceiling. Landed
+    2026-08-10 for the OCR review, whose category tree has 133 nodes and whose
+    brand table has 146 rows; it replaces the feature-local dropdown that put a
+    four-level slash path inside a 150 px closed field. Its closed field shows
+    the **short name**; the branch appears inside search results, and as helper
+    text plus accessible value once a duplicated leaf name is chosen. Its field,
+    popover and option geometry are S-05's, reused from the values already read
+    with `DesignSync` and recorded in `vb_short_select.dart` — not re-estimated,
+    and no literal hex enters the file. Below 900 px the list is an `O-05`
+    bottom sheet with its own search;
 - adaptive date/date-range picker;
 - adaptive column specification;
 - accessible split-pane resize and collapse behavior;
@@ -369,7 +385,8 @@ El tema se pone al escribir la prueba, no cuando se rompe.
 
 ## 9. Adoption
 
-1. Approve the Claude Design foundation kit and component-to-role map.
+1. Maintain and approve the shared DesignSync foundation kit and
+   component-to-role map in `GUÍA GENERAL Viñabike - Componentes`.
 2. Introduce the shared semantic theme and component ownership boundary.
 3. Connect `AppearanceService` presets at the root `MaterialApp`.
 4. Build an internal interactive catalog with state, width, density, content,
@@ -421,11 +438,28 @@ variant of any of these is the defect this document exists to prevent.
 | Id | Owner | Archivo |
 |---|---|---|
 | `S-05` Select corto | `VbShortSelect<T>` | `lib/shared/widgets/vb_short_select.dart` |
+| `D-01` Selector de fecha adaptativo | `showVbMarkedDatePicker` · `VbMarkedDateMarker` | `lib/shared/widgets/vb_marked_date_picker.dart` |
 | `O-02` Popover | `showVbAnchoredPopover` · `VbPopoverSurface` | `lib/shared/widgets/vb_anchored_popover.dart` |
 | `O-05` Bottom sheet | (dentro de `VbShortSelect`, presentación táctil) | ídem `S-05` |
 | `E-04` Notice | `VbNotice` | `lib/shared/widgets/vb_notice.dart` |
 | `F-03` Dinero | `VbMoneyText` | `lib/shared/widgets/vb_money_text.dart` |
 | `X-01` Estado de superficie | `VbSurfaceState` · esqueletos | `lib/shared/widgets/vb_skeleton.dart` |
+
+**`D-01` puede marcar el día sin convertir la marca en el control.** El owner
+normaliza cada `DateTime` a fecha civil, mantiene seleccionables los días sin
+marca y pinta el estado directamente dentro de la celda antes de que el
+operador la elija. `pending` consume el tono semántico `warning` e `invoiced`
+consume `success`; ambos exigen texto humano y se repiten en una leyenda
+`E-01`, mientras la semántica de cada celda anuncia fecha + estado. Por eso el
+color nunca es el único canal y «sin marca» significa sólo «no consta».
+
+La extensión no crea una apariencia paralela: superficie, tipografía, estados
+de día, forma, borde de hoy, sombra y brillo vienen del `DatePickerThemeData`
+global; el punto usa la geometría publicada por `Badge`, la leyenda usa
+`VbStatusBadge` y cada celda conserva el objetivo Material
+`kMinInteractiveDimension`. Teléfono (`<600`) recompone el mismo owner como
+tarea de pantalla completa; tablet y escritorio mantienen el diálogo. Mes y
+año se navegan dentro de la misma instancia, sin perder selección ni marcas.
 
 **`S-05` trae su propio techo, y es el que decide si el componente aplica.** La
 guía lo publica así: *«Hasta ~7 opciones, conjunto estable y conocido, etiquetas

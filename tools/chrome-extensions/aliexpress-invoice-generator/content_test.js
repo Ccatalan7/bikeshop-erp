@@ -4,23 +4,76 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-function loadTestingBridge() {
+function loadBridge({ chromeExtension = false } = {}) {
+  function FakeXMLHttpRequest() {}
+  FakeXMLHttpRequest.prototype.open = function open() {};
+  FakeXMLHttpRequest.prototype.send = function send() {};
   const sandbox = {
     URL,
     console,
+    fetch: async () => ({ ok: true }),
+    XMLHttpRequest: FakeXMLHttpRequest,
     location: {
       href: 'https://www.aliexpress.com/p/order/index.html',
       pathname: '/p/order/index.html',
     },
   };
+  if (chromeExtension) {
+    sandbox.chrome = {
+      runtime: {
+        onMessage: {
+          addListener() {},
+          removeListener() {},
+        },
+      },
+    };
+  }
   sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
   vm.createContext(sandbox);
   const source = fs.readFileSync(path.join(__dirname, 'content.js'), 'utf8');
   vm.runInContext(source, sandbox, { filename: 'content.js' });
-  return sandbox.__ALIEXPRESS_INVOICE_BRIDGE__._testing;
+  return { bridge: sandbox.__ALIEXPRESS_INVOICE_BRIDGE__, sandbox };
+}
+
+function loadTestingBridge() {
+  return loadBridge().bridge._testing;
+}
+
+async function installOrdersApiFixture(pages) {
+  const { bridge, sandbox } = loadBridge();
+  await Promise.resolve();
+  await sandbox.fetch('https://mtop.aliexpress.com/order/list', {
+    method: 'POST',
+    body: `data=${encodeURIComponent(JSON.stringify({
+      params: JSON.stringify({ pageIndex: 1 }),
+    }))}`,
+  });
+  sandbox.lib = {
+    mtop: {
+      request: async ({ data }) => {
+        const pageIndex = JSON.parse(data.params).pageIndex;
+        return { data: { data: pages[pageIndex] || {} } };
+      },
+    },
+  };
+  return bridge;
 }
 
 const parser = loadTestingBridge();
+
+test('ERP WebView instala la sonda al cargar y Chrome conserva el opt-in', async () => {
+  const erpBridge = loadBridge().bridge;
+  await Promise.resolve();
+  const erp = erpBridge.ordersApiProbeInstall();
+  assert.equal(erp.installed, true);
+  assert.equal(erp.alreadyInstalled, true);
+
+  const chrome = loadBridge({ chromeExtension: true })
+    .bridge.ordersApiProbeInstall();
+  assert.equal(chrome.installed, true);
+  assert.equal(chrome.alreadyInstalled, false);
+});
 
 test('recognizes current order number labels', () => {
   assert.equal(parser.extractOrderListNumber('Order # 8193027456112345'), '8193027456112345');
@@ -135,6 +188,33 @@ test('collapses duplicate DOM observations of one purchased row', () => {
 
   assert.equal(items.length, 1);
   assert.match(items[0].imageUrl, /pads\.jpg/);
+  assert.ok(items[0].variantKey, 'every supplier item exposes a durable variant key');
+});
+
+test('keeps same listing and title as distinct rows when explicit variants differ', () => {
+  const base = {
+    sku: 'AE-337769267',
+    itemId: '1005009937769267',
+    description: 'Tee WAKE 31.8mm',
+    quantity: 1,
+    unitPrice: 7172,
+    total: 7172,
+    productUrl: 'https://www.aliexpress.com/item/1005009937769267.html',
+  };
+  const items = parser.dedupeExtractedItems([
+    { ...base, variant: 'Black', variantKey: 'black' },
+    { ...base, variant: 'Purple', variantKey: 'purple' },
+  ]);
+
+  assert.equal(items.length, 2);
+  assert.deepEqual(
+    Array.from(items, (item) => item.variantKey),
+    ['black', 'purple'],
+  );
+  assert.deepEqual(
+    Array.from(items, (item) => item.variant),
+    ['Black', 'Purple'],
+  );
 });
 
 test('list extraction collapses image and text observations of one product', () => {
@@ -220,6 +300,8 @@ test('un pedido de la API se mapea con sus líneas, imágenes y total', () => {
   assert.equal(order.items[0].unitPrice, 3990);
   assert.equal(order.items[0].total, 7980);
   assert.match(order.items[0].description, /Q01/);
+  assert.equal(order.items[0].variant, 'Q01');
+  assert.equal(order.items[0].variantKey, 'q01');
   assert.match(order.items[0].imageUrl, /^https:\/\/ae01\.alicdn\.com/);
   assert.match(order.items[0].productUrl, /^https:\/\/www\.aliexpress\.com/);
 });
@@ -301,4 +383,110 @@ test('el corte exige dos páginas seguidas anteriores al día', () => {
   assert.equal(cut(['2026-04-06']), false, 'reaparece el día: el contador se reinicia');
   assert.equal(cut(['2026-04-03']), false);
   assert.equal(cut(['2026-04-02']), true, 'dos seguidas confirman el fin');
+});
+
+test('datesOnly devuelve el índice completo sin materializar pedidos', async () => {
+  const dateOnlyFields = (orderId, orderDateText) => {
+    const fields = { orderId, orderDateText };
+    Object.defineProperties(fields, {
+      orderLines: {
+        get() { throw new Error('datesOnly no debe leer líneas'); },
+      },
+      totalPriceText: {
+        get() { throw new Error('datesOnly no debe leer montos'); },
+      },
+    });
+    return fields;
+  };
+  const bridge = await installOrdersApiFixture({
+    1: {
+      pc_om_list_order_1: {
+        fields: dateOnlyFields('8211744661738042', 'Jun 15, 2026'),
+      },
+      pc_om_list_order_2: {
+        fields: dateOnlyFields('8209933206078042', 'Apr 6, 2026'),
+      },
+    },
+    2: {},
+  });
+
+  const result = await bridge.ordersApiCollect({ datesOnly: true, maxPages: 30 });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(Array.from(result.orders), []);
+  assert.deepEqual(
+    Array.from(result.datesWithOrders),
+    ['2026-04-06', '2026-06-15'],
+  );
+  assert.equal(result.coverage.mode, 'dates-only');
+  assert.equal(result.coverage.complete, true);
+  assert.equal(result.coverage.partial, false);
+  assert.equal(result.coverageComplete, true);
+  assert.equal(result.coveragePartial, false);
+  assert.equal(result.coverage.observedFromDate, '2026-04-06');
+  assert.equal(result.coverage.observedToDate, '2026-06-15');
+  assert.equal(result.coverage.stopReason, 'sin más pedidos');
+});
+
+test('datesOnly declara cobertura parcial cuando alcanza el límite', async () => {
+  const bridge = await installOrdersApiFixture({
+    1: {
+      pc_om_list_order_1: {
+        fields: {
+          orderId: '8211744661738042',
+          orderDateText: 'Jun 15, 2026',
+        },
+      },
+    },
+  });
+
+  const result = await bridge.ordersApiCollect({ datesOnly: true, maxPages: 1 });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.coverage.mode, 'dates-only');
+  assert.equal(result.coverage.complete, false);
+  assert.equal(result.coverage.partial, true);
+  assert.equal(result.coverageComplete, false);
+  assert.equal(result.coveragePartial, true);
+  assert.equal(result.coverage.pageLimit, 1);
+  assert.equal(result.coverage.pagesRead, 1);
+  assert.equal(result.coverage.stopReason, 'max-pages');
+});
+
+test('la recolección normal sigue devolviendo sólo los pedidos del día', async () => {
+  const fields = (orderId, orderDateText) => ({
+    orderId,
+    orderDateText,
+    totalPriceText: 'CLP 10,790',
+    currencyCode: 'CLP',
+    orderLines: [],
+  });
+  const bridge = await installOrdersApiFixture({
+    1: {
+      pc_om_list_order_1: {
+        fields: fields('8211744661738042', 'Jun 15, 2026'),
+      },
+      pc_om_list_order_2: {
+        fields: fields('8209933206078042', 'Apr 6, 2026'),
+      },
+    },
+    2: {},
+  });
+
+  const result = await bridge.ordersApiCollect({
+    exactDate: '2026-06-15',
+    maxPages: 30,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    Array.from(result.orders, (order) => order.orderNumber),
+    ['8211744661738042'],
+  );
+  assert.deepEqual(
+    Array.from(result.datesWithOrders),
+    ['2026-04-06', '2026-06-15'],
+  );
+  assert.equal(result.coverage.mode, 'exact-date');
+  assert.equal(result.coverage.targetDateComplete, true);
 });

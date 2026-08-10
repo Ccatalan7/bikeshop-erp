@@ -568,13 +568,13 @@
       'Reglas:',
       '- Maximo 60 caracteres.',
       '- Empieza por el componente en singular y en espanol chileno de taller (postiza, polea, plato, piola, pastilla, camara, cassette, cadena, manilla, eslabon, etc.).',
-      '- Si la marca es clara, agregala (ZTTO, Shimano, KMC, SRAM, RISK, ENLEE, ODI, etc.). Si no, deja el campo brand vacio.',
+      '- Si la marca FABRICANTE es clara, agregala (ZTTO, IXF, Shimano, KMC, SRAM, RISK, ENLEE, ODI, etc.). "Compatible con", "para" o "works with" describen compatibilidad y JAMAS prueban la marca. Si el titulo dice IXF compatible con Shimano, brand es IXF. Si no hay fabricante claro, deja brand vacio.',
       '- Si el modelo es claro, agregalo (ej. "001", "M-310", "HG-200", "9v").',
       '- IMPORTANTE: NO incluyas cantidad de empaque ni multiplicadores en el nombre. Quita expresiones como "Set 5", "5 pares", "100 unidades", "(50 unidades)", "pack 10", "x4", "4pcs", "kit 3". El nombre describe UNA unidad del producto.',
       '- Si el producto es naturalmente plural (ej. "Pastillas de freno", "Pernos"), conserva esa forma sin numeros.',
       '- NO copies marketing como "for MTB Bike Bicycle Universal Steel Aluminum 2024 New".',
       '- NO inventes datos que no estan en titulo o imagen.',
-      '- category_name debe ser una categoria humana, simple, en plural, en espanol chileno de taller. Usa preferentemente alguna de estas: "Pastillas", "Cadenas", "Missinglink", "Postiza", "Pedales", "Puños", "Pernos", "Cassette", "Rotores", "Cámaras", "Herramientas", "Asientos", "Válvula Tubeless", "Tubeless", "Porta Caramagiola", "Manillas", "Frenos", "Rodamientos", "Rayos", "Llantas", "Mazas", "Horquillas", "Cambios", "Shifters", "Manubrios", "Tija", "Dirección", "Luces", "Candados", "Cascos", "Guantes", "Cubre Cámara", "Líquido Frenos", "Líquido Tubeless", "Lubricantes", "Grasa", "Parches", "Espaciadores". Cuando el producto sea claramente uno de estos, usa exactamente ese nombre. Casos especiales: para eslabones rapidos / quick links / cierres de cadena usa SIEMPRE "Missinglink"; para sillines usa "Asientos"; para portacaramagiola/portabotella/portabidon usa "Porta Caramagiola"; para valvulas tubeless usa "Válvula Tubeless" no "Tubeless". Si no calza nada, inventa una categoria corta en plural.',
+      '- category_name debe ser una categoria humana, simple, en espanol chileno de taller. Usa preferentemente alguna de estas: "Pastillas", "Cadenas", "Missinglink", "Postiza", "Pedales", "Puños", "Pernos", "Cassette", "Rotores", "Cámaras", "Herramientas", "Asientos", "Válvula Tubeless", "Adaptadores", "Tee", "Tubeless", "Porta Caramagiola", "Manillas", "Frenos", "Rodamientos", "Rayos", "Llantas", "Mazas", "Horquillas", "Cambios", "Shifters", "Manubrios", "Tija", "Dirección", "Luces", "Candados", "Cascos", "Guantes", "Cubre Cámara", "Líquido Frenos", "Líquido Tubeless", "Lubricantes", "Grasa", "Parches", "Espaciadores". Casos especiales: potencia/tee/stem son el mismo componente: usa cleaned_name empezando por "Tee", component_type "tee" y category_name "Tee"; un adaptador Presta/FV/VF a Schrader/AV/VA usa "Adaptadores", nunca "Válvula Tubeless"; para eslabones rapidos / quick links / cierres de cadena usa SIEMPRE "Missinglink"; para sillines usa "Asientos"; para portacaramagiola/portabotella/portabidon usa "Porta Caramagiola"; para valvulas tubeless usa "Válvula Tubeless" solo con evidencia explicita tubeless. Si no calza nada, inventa una categoria corta.',
       '- Devuelve SOLO un objeto JSON valido con esta forma EXACTA, sin texto adicional:',
       '  {"cleaned_name": "Postiza ZTTO 001", "component_type": "postiza", "brand": "ZTTO", "model": "001", "category_name": "Postizas", "confidence": 0.0-1.0}',
       '',
@@ -1197,16 +1197,22 @@
     const aiTokens = tokenize(aiDescription);
     const aiQty = toNumber(aiItem && aiItem.quantity) || 0;
     const aiPrice = toNumber(aiItem && aiItem.unitPrice) || 0;
+    const aiVariantKey = explicitSupplierVariantIdentity(aiItem);
 
     let bestIdx = -1;
     let bestScore = 0;
     for (let i = 0; i < domItems.length; i++) {
       if (usedSet.has(i)) continue;
       const dom = domItems[i] || {};
+      const domVariantKey = explicitSupplierVariantIdentity(dom);
+      if (aiVariantKey && domVariantKey && aiVariantKey !== domVariantKey) {
+        continue;
+      }
       const domTokens = tokenize([dom.description, dom.originalDescription].filter(Boolean).join(' '));
       const overlap = jaccard(aiTokens, domTokens);
       let score = overlap; // 0..1
 
+      if (aiVariantKey && domVariantKey === aiVariantKey) score += 0.5;
       // Boost when quantity matches and unit price is close.
       if (aiQty && Number(dom.quantity) === aiQty) score += 0.15;
       if (aiPrice && dom.unitPrice) {
@@ -1276,6 +1282,15 @@
         || toNumber(domItem.total)
         || roundMoney(quantity * unitPrice);
       const description = aiDescription || domItem.description || mediaItem.title || `AliExpress item ${index + 1}`;
+      const variant = String(rawDomItem.variant || item.variant || '').trim();
+      const rawDomVariantKey = String(rawDomItem.variantKey || '').trim();
+      const aiVariantKey = String(item.variantKey || '').trim();
+      const providedVariantKey = [rawDomVariantKey, aiVariantKey]
+        .find((value) => value && (value !== 'default' || !variant)) || '';
+      const variantKey = providedVariantKey
+        || variantIdentityKeyFromText(variant)
+        || normalizeSupplierVariantKey(variant)
+        || ((rawDomVariantKey === 'default' || aiVariantKey === 'default') ? 'default' : '');
 
       return normalizeItem({
         sku: domItem.sku || mediaItem.sku || `AE-${String(index + 1).padStart(3, '0')}`,
@@ -1286,6 +1301,8 @@
         productUrl: domItem.productUrl || mediaItem.productUrl || '',
         itemId: domItem.itemId || mediaItem.itemId || '',
         imageUrl: domItem.imageUrl || mediaItem.imageUrl || '',
+        variant,
+        variantKey,
       });
     });
 
@@ -1325,6 +1342,7 @@
     el.total.value = numberForInput(total);
 
     renderItems();
+    return items;
   }
 
   function applyOrder(order) {
@@ -2460,10 +2478,14 @@
   function normalizeItem(item) {
     const rawDescription = String(item.originalDescription || item.description || '').trim();
     const variant = String(item.variant || extractTrailingVariant(rawDescription) || '').trim();
+    const providedVariantKey = String(item.variantKey || '').trim();
     const variantKey = String(
-      item.variantKey
+      (providedVariantKey && (providedVariantKey !== 'default' || !variant)
+        ? providedVariantKey
+        : '')
       || variantIdentityKeyFromText(variant)
-      || variant.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+      || normalizeSupplierVariantKey(variant)
+      || (providedVariantKey === 'default' ? 'default' : '')
       || '',
     ).trim();
     const quantityInfo = normalizeInventoryQuantity(item, rawDescription);
@@ -2631,6 +2653,7 @@
 
   function sameOrderItemObservation(first, second) {
     if (orderItemIdentity(first) === orderItemIdentity(second)) return true;
+    if (supplierVariantIdentity(first) !== supplierVariantIdentity(second)) return false;
     const firstId = extractAliExpressItemId(first.productUrl || '') || String(first.itemId || '').trim();
     const secondId = extractAliExpressItemId(second.productUrl || '') || String(second.itemId || '').trim();
     if (firstId && secondId && firstId !== secondId) return false;
@@ -2744,10 +2767,36 @@
 
   function supplierItemIdentity(item) {
     const itemId = String(item.itemId || '').trim();
-    if (itemId) return `id:${itemId}`;
+    const variantKey = supplierVariantIdentity(item);
+    if (itemId) return `id:${itemId}|variant:${variantKey}`;
     const urlId = extractAliExpressItemId(item.productUrl || '');
-    if (urlId) return `id:${urlId}`;
-    return `sku:${String(item.sku || '').trim()}`;
+    if (urlId) return `id:${urlId}|variant:${variantKey}`;
+    return `sku:${String(item.sku || '').trim()}|variant:${variantKey}`;
+  }
+
+  function explicitSupplierVariantIdentity(item) {
+    if (!item) return '';
+    const variant = String(item.variant || '').trim();
+    const providedVariantKey = String(item.variantKey || '').trim();
+    if (providedVariantKey && providedVariantKey !== 'default') {
+      return normalizeSupplierVariantKey(providedVariantKey);
+    }
+    return variantIdentityKeyFromText(variant)
+      || normalizeSupplierVariantKey(variant);
+  }
+
+  function supplierVariantIdentity(item) {
+    return explicitSupplierVariantIdentity(item) || 'default';
+  }
+
+  function normalizeSupplierVariantKey(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 120);
   }
 
   function normalizedItemDescription(item) {
@@ -4226,6 +4275,7 @@
   }
 
   globalThis.__ALIEXPRESS_INVOICE_POPUP_TESTING__ = {
+    applyAiOrder,
     normalizeItem,
     dedupeOrderItems,
     dedupeBulkOrdersByOrderNumber,

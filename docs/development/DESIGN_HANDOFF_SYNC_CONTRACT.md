@@ -142,18 +142,25 @@ short select at "~7 opciones" and states the menu is not scrollable, so a
 sixteen-option list is an `S-06` searchable select, not a taller `S-05`. Read
 the limit before choosing.
 
-## A new module gets its own canvas, not an edit to the guide
+## A module composes the guide; a dedicated canvas is optional
 
-The guide holds the **shared vocabulary**. How a given module composes that
-vocabulary into screens belongs in a **new Design page for that module** (as
-`Nóminas - Rediseño` and `Arquitectura de Paletas` already do).
+The guide holds the **shared vocabulary**. Codex composes that vocabulary from
+the operator's workflow, domain truth, navigation and responsive hosts. A
+dedicated module page can be useful reference material, but it is not required
+before implementation and does not own the workflow or layout.
 
-- Designing a module → ask Design for a new canvas for it, and implement from
-  the `handoff-t<N>/` it publishes.
+- Designing a module → use the canonical guide and running app; ask for a
+  module canvas only when the owner explicitly requests Claude/Design input.
 - Discovering that a *shared* control is missing or wrong → that is a change to
   the guide, and it applies everywhere. Do not fork a module-local variant.
 
-## Un turno no está entregado hasta que trae oscuro y compacto
+The next handoff requirements apply **only when the owner explicitly requested
+a module-specific Claude/Design proposal**. Without that request, Codex does not
+stop for a missing module canvas or `handoff-t<N>`: it composes the canonical
+guide, responsive guides and running application directly, and still verifies
+light/dark plus desktop/tablet/phone.
+
+## A requested Design turn includes dark and compact
 
 **Claro-escritorio no es una entrega: es un tercio de una.** Un diseño que sólo
 existe en claro a 1440 obliga a inventar las otras dos vistas, que es
@@ -170,10 +177,11 @@ Para CADA superficie que un turno toca, Design entrega:
 Y en al menos **dos presets materialmente distintos** cuando el turno toca
 color, para que se vea qué cambia con la paleta y qué no.
 
-**La base visual del oscuro y del compacto también la entrega Design.** La
-división no cambia por cambiar de brightness o de ancho: Design sigue mandando
-el *look* —superficies, bordes, sombras, tinte, jerarquía, estados— y el agente
-sigue aportando criterio, lógica, UX y palabras **al implementarla**. Lo que
+**La base visual del oscuro y del compacto también la entrega Design cuando
+existe ese handoff solicitado.** La división no cambia por cambiar de
+brightness o de ancho: la guía sigue mandando superficies, bordes, sombras,
+tinte y anatomía de controles; Codex sigue poseyendo jerarquía, composición,
+criterio, lógica, UX y palabras. Lo que
 está prohibido es lo mismo de siempre: derivar el oscuro invirtiendo el claro,
 o inventar la composición móvil comprimiendo la de escritorio. Si el frame no
 existe, se pide; no se deduce.
@@ -196,7 +204,7 @@ Cómo resuelven paleta y brightness:
 Reglas de composición compacta:
 [`../../.github/GUI_MOBILE_DESIGN_PRINCIPLES.md`](../../.github/GUI_MOBILE_DESIGN_PRINCIPLES.md).
 
-## What Design publishes (per turn, small files only)
+## What Design publishes (per explicitly requested turn, small files only)
 
 For every turn that changes UI, Design writes a folder `handoff-t<N>/` in the
 project. Every file must stay **under 200 KiB**:
@@ -216,7 +224,7 @@ Rules that keep this readable:
 - Keep frame ids stable across turns (`5a` stays `5a`), so a diff is meaningful.
 - A turn is considered published only once `spec.json` and its `frames/` exist.
 
-## What Code does (every round, before editing UI)
+## What Code does when consuming an explicitly requested Design turn
 
 0. If the round touches a shared control, read it from
    `GUÍA GENERAL Viñabike - Componentes` **first**, with `get_file`, and note
@@ -232,8 +240,9 @@ Rules that keep this readable:
    from the guide, plus the hash of the spec used. A round that cannot name
    them is not verified.
 
-If the newest turn has no `handoff-t<N>/`, Code says so explicitly and stops
-guessing: the visual source is missing, not "probably the same as last time".
+If an explicitly requested turn has no `handoff-t<N>/`, Code reports that the
+optional proposal cannot be verified and continues from the canonical guide
+unless the owner asked to block on that proposal.
 
 ### The one thing that is never acceptable
 
@@ -244,10 +253,10 @@ such in the code, at the line, so the next reader can replace it.
 
 ## Division of judgement (unchanged by this contract)
 
-Design owns the **looking**: palette, type, surfaces, borders, radii, shadows,
-chips, buttons, tables, inputs, popovers, hierarchy and states — replicated
-faithfully. Code owns **layout adaptation, information architecture, wording,
-UX and logic**: it may reorganise blocks, pick a better control for the data,
+The canonical guide owns the **visual grammar**: palette, type, surfaces,
+borders, radii, shadows and shared component anatomy. Codex owns **workflow,
+hierarchy, states, layout adaptation, information architecture, wording, UX
+and logic**: it may reorganise blocks, pick a better control for the data,
 and must correct copy that does not fit the domain (for example the module
 never says "imputar" or "ganado" where they are wrong), reporting each
 deliberate deviation in the handoff.

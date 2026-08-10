@@ -345,6 +345,24 @@ void _apiSourceOfTruthTests() {
 
 void _trustedDomainTests() {
   group('dominios de AliExpress reconocidos', () {
+    test('publica la misma allowlist que consume el UserScript temprano', () {
+      final domains = AliExpressDailyInvoiceService.trustedRegistrableDomains;
+
+      expect(domains, containsAll(<String>['aliexpress.com', 'aliexpress.us']));
+      for (final domain in domains) {
+        expect(
+          AliExpressDailyInvoiceService.isTrustedUri(
+            Uri.parse('https://www.$domain/p/order/index.html'),
+          ),
+          isTrue,
+        );
+      }
+      expect(
+        () => domains.add('attacker.example'),
+        throwsUnsupportedError,
+      );
+    });
+
     test('acepta los sitios regionales donde compra el taller', () {
       // La cuenta navega el sitio estadounidense: con sólo `.com` en la lista,
       // «Compras del día» no aparecía ahí (2026-08-06).

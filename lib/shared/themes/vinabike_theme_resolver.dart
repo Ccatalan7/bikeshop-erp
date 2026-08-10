@@ -800,6 +800,11 @@ abstract final class VinabikeThemeResolver {
     final shell = preset.shell;
     final isDark = brightness == Brightness.dark;
     final scheme = palette.colorScheme;
+    final avatarA = isDark ? const Color(0xFF7DD3FC) : const Color(0xFF087DA5);
+    final avatarB = isDark ? const Color(0xFFF0ABFC) : const Color(0xFF7B3C8F);
+    final avatarC = isDark ? const Color(0xFF69D39C) : const Color(0xFF18764B);
+    final avatarD = isDark ? const Color(0xFFF5B545) : const Color(0xFF8A5700);
+    final onAvatar = isDark ? scheme.surfaceContainerLowest : scheme.surface;
 
     return VinabikeThemeRoles(
       presetCode: preset.code,
@@ -893,10 +898,14 @@ abstract final class VinabikeThemeResolver {
           scheme.onSurfaceVariant.withValues(alpha: isDark ? 0.5 : 0.56),
       scrim: scheme.scrim.withValues(alpha: isDark ? 0.68 : 0.46),
       shadow: scheme.shadow.withValues(alpha: isDark ? 0.48 : 0.2),
-      avatarA: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF087DA5),
-      avatarB: isDark ? const Color(0xFFF0ABFC) : const Color(0xFF7B3C8F),
-      avatarC: isDark ? const Color(0xFF69D39C) : const Color(0xFF18764B),
-      avatarD: isDark ? const Color(0xFFF5B545) : const Color(0xFF8A5700),
+      avatarA: avatarA,
+      onAvatarA: onAvatar,
+      avatarB: avatarB,
+      onAvatarB: onAvatar,
+      avatarC: avatarC,
+      onAvatarC: onAvatar,
+      avatarD: avatarD,
+      onAvatarD: onAvatar,
     );
   }
 

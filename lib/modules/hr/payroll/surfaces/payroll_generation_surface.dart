@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/payroll_tokens.dart';
 import 'payroll_accent_action.dart';
+import 'payroll_person_avatar.dart';
 
 /// Estado visible del lector de Asistencias.
 ///
@@ -99,11 +101,8 @@ class PayrollGenerationWeek {
       ][month - 1];
 }
 
-/// Línea autoritativa proyectada por Asistencias.
-///
-/// Payroll presenta estos valores, pero no los edita ni los recalcula. El total
-/// se recibe por separado porque el dueño puede aplicar reglas de redondeo que
-/// no equivalen a multiplicar horas por tarifa en el cliente.
+/// Línea del snapshot de Asistencias que se puede ajustar mientras la nómina
+/// siga en borrador. La confirmación vuelve inmutable el resultado persistido.
 @immutable
 class PayrollGenerationWorkerLine {
   const PayrollGenerationWorkerLine({
@@ -115,6 +114,7 @@ class PayrollGenerationWorkerLine {
     required this.totalAmount,
     this.overtimeHours = 0,
     this.overtimeRateAmount,
+    this.isIncluded = true,
   })  : assert(hours >= 0),
         assert(overtimeHours >= 0),
         assert(rateAmount >= 0),
@@ -129,14 +129,52 @@ class PayrollGenerationWorkerLine {
   final int rateAmount;
   final int? overtimeRateAmount;
   final int totalAmount;
+  final bool isIncluded;
 
   double get totalHours => hours + overtimeHours;
   int get resolvedOvertimeRateAmount =>
       overtimeRateAmount ?? (rateAmount * 1.5).round();
   bool get hasClosedHours => totalHours > 0;
+
+  PayrollGenerationWorkerLine copyWith({
+    double? hours,
+    int? rateAmount,
+    int? overtimeRateAmount,
+    int? totalAmount,
+    bool? isIncluded,
+  }) {
+    return PayrollGenerationWorkerLine(
+      workerId: workerId,
+      name: name,
+      initials: initials,
+      hours: hours ?? this.hours,
+      overtimeHours: overtimeHours,
+      rateAmount: rateAmount ?? this.rateAmount,
+      overtimeRateAmount: overtimeRateAmount ?? this.overtimeRateAmount,
+      totalAmount: totalAmount ?? this.totalAmount,
+      isIncluded: isIncluded ?? this.isIncluded,
+    );
+  }
+
+  PayrollGenerationWorkerLine withDraftValues({
+    required double hours,
+    required int rateAmount,
+    bool updateOvertimeRate = false,
+  }) {
+    final overtimeRate = overtimeHours <= 0 || !updateOvertimeRate
+        ? resolvedOvertimeRateAmount
+        : (rateAmount * 1.5).round();
+    final amount = (hours * rateAmount + overtimeHours * overtimeRate).round();
+    return copyWith(
+      hours: hours,
+      rateAmount: rateAmount,
+      overtimeRateAmount: overtimeRate,
+      totalAmount: amount,
+    );
+  }
 }
 
-/// Preview inmutable devuelto por el adaptador canónico de Asistencias.
+/// Snapshot editable hasta que el borrador sea confirmado.
 @immutable
 class PayrollGenerationPreview {
   PayrollGenerationPreview({
@@ -155,8 +193,22 @@ class PayrollGenerationPreview {
   /// `Asistencias cerradas · actualización 29/07 10:42`.
   final String sourceSnapshotLabel;
 
-  int get payableWorkerCount =>
-      workers.where((worker) => worker.totalAmount > 0).length;
+  int get payableWorkerCount => workers
+      .where((worker) => worker.isIncluded && worker.totalAmount > 0)
+      .length;
+
+  PayrollGenerationPreview copyWithWorkers(
+    List<PayrollGenerationWorkerLine> nextWorkers,
+  ) {
+    return PayrollGenerationPreview(
+      week: week,
+      workers: nextWorkers,
+      totalAmount: nextWorkers
+          .where((worker) => worker.isIncluded)
+          .fold<int>(0, (sum, worker) => sum + worker.totalAmount),
+      sourceSnapshotLabel: sourceSnapshotLabel,
+    );
+  }
 }
 
 /// Intento de guardado. [operationKey] se crea una sola vez por preview y se
@@ -190,13 +242,14 @@ typedef PayrollGenerationPreviewLoader = Future<PayrollGenerationPreview>
 typedef PayrollGenerationDraftSaver = Future<PayrollGenerationSaveResult>
     Function(PayrollGenerationSaveRequest request);
 
-/// Superficie canónica, aislada y responsive para generar un borrador semanal.
+/// Superficie canónica, aislada y responsive para generar o editar un borrador
+/// semanal.
 ///
 /// Dirección visual: proyecto Claude Design `ERP Bikeshop UI Mockups`, página
 /// `Nóminas - Rediseño`, conceptos 2a/3a (semana, lectura tabular y resumen) y
 /// 2e (jerarquía compacta de una decisión). Se reutiliza su gramática mediante
-/// [PayrollTokens], sin copiar el editor legacy ni crear un segundo dueño de
-/// horas o tarifas.
+/// [PayrollTokens]. Asistencias entrega el snapshot inicial; el borrador de
+/// Nóminas conserva ajustes propios hasta que la semana se confirma.
 ///
 /// El host decide si abre esta pieza como diálogo o side sheet, entrega todos
 /// los callbacks y cierra el contenedor en [onClose]. La superficie no navega,
@@ -216,6 +269,8 @@ class PayrollGenerationSurface extends StatefulWidget {
     this.now,
     this.describePreviewError,
     this.describeSaveError,
+    this.initialPreview,
+    this.existingDraftId,
     this.desktopPresentation = PayrollGenerationDesktopPresentation.sideSheet,
   });
 
@@ -231,6 +286,8 @@ class PayrollGenerationSurface extends StatefulWidget {
   final DateTime Function()? now;
   final String Function(Object error)? describePreviewError;
   final String Function(Object error)? describeSaveError;
+  final PayrollGenerationPreview? initialPreview;
+  final String? existingDraftId;
   final PayrollGenerationDesktopPresentation desktopPresentation;
 
   @override
@@ -247,16 +304,39 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
   String? _previewError;
   String? _saveError;
   bool _saving = false;
+  bool _dirty = false;
   int _generationEpoch = 0;
+  final Map<String, TextEditingController> _hoursControllers =
+      <String, TextEditingController>{};
+  final Map<String, TextEditingController> _rateControllers =
+      <String, TextEditingController>{};
+  final Map<String, String> _inputErrors = <String, String>{};
 
   bool get _busy => _saving || _loadState == PayrollGenerationLoadState.loading;
 
-  bool get _hasUnsavedPreview => _preview != null && _saveResult == null;
+  bool get _editingExisting =>
+      widget.existingDraftId?.trim().isNotEmpty == true;
+
+  bool get _hasUnsavedPreview => _editingExisting
+      ? _dirty && _saveResult == null
+      : _preview != null && _saveResult == null;
+
+  bool get _hasInputErrors => _inputErrors.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     _week = widget.initialWeek;
+    final initialPreview = widget.initialPreview;
+    if (initialPreview != null) {
+      assert(
+        initialPreview.week == widget.initialWeek,
+        'El borrador inicial debe corresponder a initialWeek.',
+      );
+      _loadState = PayrollGenerationLoadState.success;
+      _preview = initialPreview;
+      _installControllers(initialPreview);
+    }
   }
 
   @override
@@ -274,7 +354,32 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
   @override
   void dispose() {
     _generationEpoch += 1;
+    _disposeControllers();
     super.dispose();
+  }
+
+  void _disposeControllers() {
+    for (final controller in <TextEditingController>[
+      ..._hoursControllers.values,
+      ..._rateControllers.values,
+    ]) {
+      controller.dispose();
+    }
+    _hoursControllers.clear();
+    _rateControllers.clear();
+    _inputErrors.clear();
+  }
+
+  void _installControllers(PayrollGenerationPreview preview) {
+    _disposeControllers();
+    for (final worker in preview.workers) {
+      _hoursControllers[worker.workerId] = TextEditingController(
+        text: _editableHours(worker.hours),
+      );
+      _rateControllers[worker.workerId] = TextEditingController(
+        text: worker.rateAmount.toString(),
+      );
+    }
   }
 
   void _clearPreviewState() {
@@ -284,6 +389,8 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
     _saveResult = null;
     _previewError = null;
     _saveError = null;
+    _dirty = false;
+    _disposeControllers();
   }
 
   Future<void> _selectWeek(PayrollGenerationWeek next) async {
@@ -332,6 +439,7 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
         } else {
           _loadState = PayrollGenerationLoadState.success;
           _preview = preview;
+          _installControllers(preview);
         }
       });
     } catch (error) {
@@ -347,7 +455,9 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
 
   Future<void> _saveDraft() async {
     final preview = _preview;
-    if (preview == null || _busy || _saveResult != null) return;
+    if (preview == null || _busy || _saveResult != null || _hasInputErrors) {
+      return;
+    }
 
     setState(() {
       _saving = true;
@@ -373,9 +483,11 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
       setState(() {
         _saveResult = result;
         _saveError = null;
+        _dirty = false;
       });
       widget.onSaved?.call(result);
     } catch (error) {
+      debugPrint('❌ [PayrollGeneration] guardar borrador: $error');
       if (!mounted) return;
       setState(() {
         _saveError = widget.describeSaveError?.call(error) ??
@@ -393,14 +505,75 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
     if (_busy) return;
     if (_hasUnsavedPreview) {
       final discard = await _confirmDiscard(
-        title: '¿Descartar este preview?',
-        message: 'Todavía no se ha guardado ningún borrador. Puedes seguir '
-            'revisándolo o salir sin crear la nómina.',
-        confirmLabel: 'Descartar preview',
+        title: _editingExisting
+            ? '¿Descartar los cambios?'
+            : '¿Descartar este preview?',
+        message: _editingExisting
+            ? 'Este borrador tiene cambios sin guardar.'
+            : 'Todavía no se ha guardado ningún borrador. Puedes seguir '
+                'revisándolo o salir sin crear la nómina.',
+        confirmLabel:
+            _editingExisting ? 'Descartar cambios' : 'Descartar preview',
       );
       if (!discard || !mounted) return;
     }
     await widget.onClose();
+  }
+
+  TextEditingController _hoursControllerFor(String workerId) =>
+      _hoursControllers[workerId]!;
+
+  TextEditingController _rateControllerFor(String workerId) =>
+      _rateControllers[workerId]!;
+
+  String? _inputErrorFor(String workerId, _DraftField field) =>
+      _inputErrors['$workerId:${field.name}'];
+
+  void _editWorker(String workerId, _DraftField field, String rawValue) {
+    final preview = _preview;
+    if (preview == null || _busy || _saveResult != null) return;
+    final normalized = field == _DraftField.hours
+        ? rawValue.trim().replaceAll(',', '.')
+        : rawValue.trim();
+    final value = double.tryParse(normalized);
+    final key = '$workerId:${field.name}';
+    final valid = value != null &&
+        value >= 0 &&
+        (field == _DraftField.hours || value == value.roundToDouble());
+
+    setState(() {
+      _saveRequest = null;
+      _saveError = null;
+      _dirty = true;
+      if (!valid) {
+        _inputErrors[key] = field == _DraftField.hours
+            ? 'Ingresa horas válidas'
+            : 'Ingresa una tarifa válida';
+        return;
+      }
+      _inputErrors.remove(key);
+      final nextWorkers = <PayrollGenerationWorkerLine>[
+        for (final worker in preview.workers)
+          if (worker.workerId != workerId)
+            worker
+          else
+            worker
+                .withDraftValues(
+                  hours: field == _DraftField.hours ? value : worker.hours,
+                  rateAmount: field == _DraftField.rate
+                      ? value.round()
+                      : worker.rateAmount,
+                  updateOvertimeRate: field == _DraftField.rate,
+                )
+                .copyWith(
+                  isIncluded:
+                      (field == _DraftField.hours ? value : worker.hours) +
+                              worker.overtimeHours >
+                          0,
+                ),
+      ];
+      _preview = preview.copyWithWorkers(nextWorkers);
+    });
   }
 
   Future<bool> _confirmDiscard({
@@ -450,6 +623,13 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final desktop = constraints.maxWidth >= PayrollTokens.bpDesktop;
+          final editing = _GenerationEditingBindings(
+            hoursControllerFor: _hoursControllerFor,
+            rateControllerFor: _rateControllerFor,
+            errorFor: _inputErrorFor,
+            onChanged: _editWorker,
+            enabled: !_busy && _saveResult == null,
+          );
           final panel = _GenerationPanel(
             compact: !desktop,
             floatingDialog: desktop &&
@@ -466,6 +646,9 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
             saveResult: _saveResult,
             saving: _saving,
             busy: _busy,
+            editingExisting: _editingExisting,
+            canSave: !_hasInputErrors,
+            editing: editing,
             onPreviousWeek: () => _selectWeek(_week.shifted(-1)),
             onNextWeek: () => _selectWeek(_week.shifted(1)),
             onCurrentWeek: () => _selectWeek(
@@ -516,6 +699,25 @@ class _PayrollGenerationSurfaceState extends State<PayrollGenerationSurface> {
   }
 }
 
+enum _DraftField { hours, rate }
+
+class _GenerationEditingBindings {
+  const _GenerationEditingBindings({
+    required this.hoursControllerFor,
+    required this.rateControllerFor,
+    required this.errorFor,
+    required this.onChanged,
+    required this.enabled,
+  });
+
+  final TextEditingController Function(String workerId) hoursControllerFor;
+  final TextEditingController Function(String workerId) rateControllerFor;
+  final String? Function(String workerId, _DraftField field) errorFor;
+  final void Function(String workerId, _DraftField field, String value)
+      onChanged;
+  final bool enabled;
+}
+
 class _GenerationPanel extends StatelessWidget {
   const _GenerationPanel({
     required this.compact,
@@ -529,6 +731,9 @@ class _GenerationPanel extends StatelessWidget {
     required this.saveResult,
     required this.saving,
     required this.busy,
+    required this.editingExisting,
+    required this.canSave,
+    required this.editing,
     required this.onPreviousWeek,
     required this.onNextWeek,
     required this.onCurrentWeek,
@@ -550,6 +755,9 @@ class _GenerationPanel extends StatelessWidget {
   final PayrollGenerationSaveResult? saveResult;
   final bool saving;
   final bool busy;
+  final bool editingExisting;
+  final bool canSave;
+  final _GenerationEditingBindings editing;
   final VoidCallback onPreviousWeek;
   final VoidCallback onNextWeek;
   final VoidCallback onCurrentWeek;
@@ -570,78 +778,86 @@ class _GenerationPanel extends StatelessWidget {
                 topLeft: Radius.circular(PayrollTokens.rSheet),
                 bottomLeft: Radius.circular(PayrollTokens.rSheet),
               );
-    return DecoratedBox(
+    return Material(
       key: const ValueKey('payroll-generation-panel'),
-      decoration: BoxDecoration(
-        color: visual.surface,
-        borderRadius: radius,
-        border: compact
-            ? null
-            : floatingDialog
-                ? Border.all(color: visual.borderStrong)
-                : Border(
-                    left: BorderSide(color: visual.borderStrong),
-                  ),
-        boxShadow: compact ? null : visual.overlay,
-      ),
-      child: ClipRRect(
-        borderRadius: radius,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              _GenerationHeader(
-                busy: busy,
-                onClose: onClose,
-              ),
-              _WeekSelector(
-                compact: compact,
-                week: week,
-                currentWeek: currentWeek,
-                enabled: !busy && saveResult == null,
-                onPrevious: onPreviousWeek,
-                onNext: onNextWeek,
-                onCurrent: onCurrentWeek,
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  key: const ValueKey('payroll-generation-scroll'),
-                  padding: EdgeInsets.fromLTRB(
-                    compact ? 16 : 20,
-                    16,
-                    compact ? 16 : 20,
-                    24,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      _AttendanceSourceNotice(
-                        onOpenAttendance: onOpenAttendance,
-                      ),
-                      const SizedBox(height: 16),
-                      _GenerationBody(
-                        loadState: loadState,
-                        preview: preview,
-                        errorMessage: previewError,
-                        onRetry: onGeneratePreview,
-                        onOpenAttendance: onOpenAttendance,
-                      ),
-                    ],
+      type: MaterialType.transparency,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: visual.surface,
+          borderRadius: radius,
+          border: compact
+              ? null
+              : floatingDialog
+                  ? Border.all(color: visual.borderStrong)
+                  : Border(
+                      left: BorderSide(color: visual.borderStrong),
+                    ),
+          boxShadow: compact ? null : visual.overlay,
+        ),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _GenerationHeader(
+                  busy: busy,
+                  editingExisting: editingExisting,
+                  onClose: onClose,
+                ),
+                _WeekSelector(
+                  compact: compact,
+                  week: week,
+                  currentWeek: currentWeek,
+                  enabled: !editingExisting && !busy && saveResult == null,
+                  onPrevious: onPreviousWeek,
+                  onNext: onNextWeek,
+                  onCurrent: onCurrentWeek,
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    key: const ValueKey('payroll-generation-scroll'),
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 16 : 20,
+                      16,
+                      compact ? 16 : 20,
+                      24,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        _AttendanceSourceNotice(
+                          onOpenAttendance: onOpenAttendance,
+                          editingExisting: editingExisting,
+                        ),
+                        const SizedBox(height: 16),
+                        _GenerationBody(
+                          loadState: loadState,
+                          preview: preview,
+                          errorMessage: previewError,
+                          onRetry: onGeneratePreview,
+                          onOpenAttendance: onOpenAttendance,
+                          editing: editing,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              _GenerationFooter(
-                loadState: loadState,
-                hasPreview: preview != null,
-                saveError: saveError,
-                saveResult: saveResult,
-                saving: saving,
-                onGeneratePreview: onGeneratePreview,
-                onSaveDraft: onSaveDraft,
-                onClose: onClose,
-                onOpenSavedDraft: onOpenSavedDraft,
-              ),
-            ],
+                _GenerationFooter(
+                  loadState: loadState,
+                  hasPreview: preview != null,
+                  saveError: saveError,
+                  saveResult: saveResult,
+                  saving: saving,
+                  editingExisting: editingExisting,
+                  canSave: canSave,
+                  onGeneratePreview: onGeneratePreview,
+                  onSaveDraft: onSaveDraft,
+                  onClose: onClose,
+                  onOpenSavedDraft: onOpenSavedDraft,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -652,10 +868,12 @@ class _GenerationPanel extends StatelessWidget {
 class _GenerationHeader extends StatelessWidget {
   const _GenerationHeader({
     required this.busy,
+    required this.editingExisting,
     required this.onClose,
   });
 
   final bool busy;
+  final bool editingExisting;
   final VoidCallback onClose;
 
   @override
@@ -678,13 +896,17 @@ class _GenerationHeader extends StatelessWidget {
                 Semantics(
                   header: true,
                   child: Text(
-                    'Generar borrador de nómina',
+                    editingExisting
+                        ? 'Editar borrador de nómina'
+                        : 'Generar borrador de nómina',
                     style: visual.sectionTitle.copyWith(fontSize: 16),
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Revisa el cierre semanal antes de crear los sueldos por pagar.',
+                  editingExisting
+                      ? 'Ajusta horas y tarifa antes de confirmar la semana.'
+                      : 'Revisa y ajusta el cierre antes de guardar el borrador.',
                   style: visual.bodyS,
                 ),
               ],
@@ -876,9 +1098,13 @@ class _WeekArrowButton extends StatelessWidget {
 }
 
 class _AttendanceSourceNotice extends StatelessWidget {
-  const _AttendanceSourceNotice({required this.onOpenAttendance});
+  const _AttendanceSourceNotice({
+    required this.onOpenAttendance,
+    required this.editingExisting,
+  });
 
   final VoidCallback? onOpenAttendance;
+  final bool editingExisting;
 
   @override
   Widget build(BuildContext context) {
@@ -909,14 +1135,17 @@ class _AttendanceSourceNotice extends StatelessWidget {
                 style: visual.bodyS.copyWith(
                   color: visual.inkMuted,
                 ),
-                children: const <InlineSpan>[
-                  TextSpan(
+                children: <InlineSpan>[
+                  const TextSpan(
                     text: 'Asistencias es la fuente. ',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   TextSpan(
-                    text: 'Horas, tarifas y totales son de solo lectura. '
-                        'Cualquier corrección se hace antes, en Asistencias.',
+                    text: editingExisting
+                        ? 'Este borrador se puede ajustar aquí hasta confirmar '
+                            'la semana; no cambia la asistencia original.'
+                        : 'Puedes ajustar horas y tarifa en este borrador antes '
+                            'de guardarlo; no cambia la asistencia original.',
                   ),
                 ],
               ),
@@ -947,6 +1176,7 @@ class _GenerationBody extends StatelessWidget {
     required this.errorMessage,
     required this.onRetry,
     required this.onOpenAttendance,
+    required this.editing,
   });
 
   final PayrollGenerationLoadState loadState;
@@ -954,6 +1184,7 @@ class _GenerationBody extends StatelessWidget {
   final String? errorMessage;
   final VoidCallback onRetry;
   final VoidCallback? onOpenAttendance;
+  final _GenerationEditingBindings editing;
 
   @override
   Widget build(BuildContext context) {
@@ -987,6 +1218,7 @@ class _GenerationBody extends StatelessWidget {
         ),
       PayrollGenerationLoadState.success => _PreviewContent(
           preview: preview!,
+          editing: editing,
         ),
     };
   }
@@ -1106,9 +1338,10 @@ class _GenerationLoading extends StatelessWidget {
 }
 
 class _PreviewContent extends StatelessWidget {
-  const _PreviewContent({required this.preview});
+  const _PreviewContent({required this.preview, required this.editing});
 
   final PayrollGenerationPreview preview;
+  final _GenerationEditingBindings editing;
 
   @override
   Widget build(BuildContext context) {
@@ -1121,9 +1354,15 @@ class _PreviewContent extends StatelessWidget {
         LayoutBuilder(
           builder: (context, constraints) {
             if (constraints.maxWidth >= 650) {
-              return _DesktopWorkerPreview(workers: preview.workers);
+              return _DesktopWorkerPreview(
+                workers: preview.workers,
+                editing: editing,
+              );
             }
-            return _CompactWorkerPreview(workers: preview.workers);
+            return _CompactWorkerPreview(
+              workers: preview.workers,
+              editing: editing,
+            );
           },
         ),
       ],
@@ -1210,9 +1449,13 @@ class _PreviewSummary extends StatelessWidget {
 }
 
 class _DesktopWorkerPreview extends StatelessWidget {
-  const _DesktopWorkerPreview({required this.workers});
+  const _DesktopWorkerPreview({
+    required this.workers,
+    required this.editing,
+  });
 
   final List<PayrollGenerationWorkerLine> workers;
+  final _GenerationEditingBindings editing;
 
   @override
   Widget build(BuildContext context) {
@@ -1239,7 +1482,7 @@ class _DesktopWorkerPreview extends StatelessWidget {
             ),
           ),
           for (int index = 0; index < workers.length; index++) ...<Widget>[
-            _DesktopWorkerRow(worker: workers[index]),
+            _DesktopWorkerRow(worker: workers[index], editing: editing),
             if (index != workers.length - 1)
               Divider(height: 1, color: visual.border),
           ],
@@ -1250,9 +1493,10 @@ class _DesktopWorkerPreview extends StatelessWidget {
 }
 
 class _DesktopWorkerRow extends StatelessWidget {
-  const _DesktopWorkerRow({required this.worker});
+  const _DesktopWorkerRow({required this.worker, required this.editing});
 
   final PayrollGenerationWorkerLine worker;
+  final _GenerationEditingBindings editing;
 
   @override
   Widget build(BuildContext context) {
@@ -1265,7 +1509,10 @@ class _DesktopWorkerRow extends StatelessWidget {
         child: _DesktopWorkerGrid(
           identity: Row(
             children: <Widget>[
-              _WorkerAvatar(initials: worker.initials),
+              PayrollPersonAvatar(
+                personId: worker.workerId,
+                initials: worker.initials,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1291,8 +1538,34 @@ class _DesktopWorkerRow extends StatelessWidget {
               ),
             ],
           ),
-          hours: _RightValue(_formatWorkerHours(worker)),
-          rate: _RightValue(_formatWorkerRates(worker)),
+          hours: _WorkerNumberField(
+            fieldKey: ValueKey('payroll-generation-hours-${worker.workerId}'),
+            semanticsLabel: 'Horas de ${worker.name}',
+            controller: editing.hoursControllerFor(worker.workerId),
+            unitSuffix: 'h',
+            detail: worker.overtimeHours > 0
+                ? '+ ${_formatHours(worker.overtimeHours)} HE'
+                : null,
+            errorText: editing.errorFor(worker.workerId, _DraftField.hours),
+            enabled: editing.enabled,
+            decimal: true,
+            onChanged: (value) =>
+                editing.onChanged(worker.workerId, _DraftField.hours, value),
+          ),
+          rate: _WorkerNumberField(
+            fieldKey: ValueKey('payroll-generation-rate-${worker.workerId}'),
+            semanticsLabel: 'Tarifa por hora de ${worker.name}',
+            controller: editing.rateControllerFor(worker.workerId),
+            unitSuffix: '/h',
+            detail: worker.overtimeHours > 0
+                ? '${_formatClp(worker.resolvedOvertimeRateAmount)}/HE'
+                : null,
+            errorText: editing.errorFor(worker.workerId, _DraftField.rate),
+            enabled: editing.enabled,
+            decimal: false,
+            onChanged: (value) =>
+                editing.onChanged(worker.workerId, _DraftField.rate, value),
+          ),
           total: _RightValue(
             _formatClp(worker.totalAmount),
             strong: true,
@@ -1377,10 +1650,94 @@ class _RightValue extends StatelessWidget {
   }
 }
 
+class _WorkerNumberField extends StatelessWidget {
+  const _WorkerNumberField({
+    required this.fieldKey,
+    required this.semanticsLabel,
+    required this.controller,
+    required this.errorText,
+    required this.enabled,
+    required this.decimal,
+    required this.onChanged,
+    required this.unitSuffix,
+    this.label,
+    this.detail,
+  });
+
+  final Key fieldKey;
+  final String semanticsLabel;
+  final TextEditingController controller;
+  final String? label;
+  final String unitSuffix;
+  final String? detail;
+  final String? errorText;
+  final bool enabled;
+  final bool decimal;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    final pattern =
+        decimal ? RegExp(r'^\d*(?:[\.,]\d{0,2})?$') : RegExp(r'^\d*$');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Semantics(
+          textField: true,
+          label: semanticsLabel,
+          child: TextField(
+            key: fieldKey,
+            controller: controller,
+            enabled: enabled,
+            textAlign: TextAlign.right,
+            keyboardType: TextInputType.numberWithOptions(decimal: decimal),
+            inputFormatters: <TextInputFormatter>[
+              TextInputFormatter.withFunction((oldValue, newValue) =>
+                  pattern.hasMatch(newValue.text) ? newValue : oldValue),
+            ],
+            onChanged: onChanged,
+            style: visual.monoM.copyWith(color: visual.ink),
+            decoration: InputDecoration(
+              isDense: true,
+              labelText: label,
+              prefixText: decimal ? null : r'$ ',
+              suffixText: ' $unitSuffix',
+              suffixStyle: visual.monoS.copyWith(color: visual.inkMuted),
+              errorText: errorText,
+              errorMaxLines: 2,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(PayrollTokens.rField),
+              ),
+            ),
+          ),
+        ),
+        if (detail != null) ...<Widget>[
+          const SizedBox(height: 3),
+          Text(
+            detail!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: visual.monoS.copyWith(color: visual.inkMuted),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _CompactWorkerPreview extends StatelessWidget {
-  const _CompactWorkerPreview({required this.workers});
+  const _CompactWorkerPreview({
+    required this.workers,
+    required this.editing,
+  });
 
   final List<PayrollGenerationWorkerLine> workers;
+  final _GenerationEditingBindings editing;
 
   @override
   Widget build(BuildContext context) {
@@ -1396,7 +1753,7 @@ class _CompactWorkerPreview extends StatelessWidget {
       child: Column(
         children: <Widget>[
           for (int index = 0; index < workers.length; index++) ...<Widget>[
-            _CompactWorkerRow(worker: workers[index]),
+            _CompactWorkerRow(worker: workers[index], editing: editing),
             if (index != workers.length - 1)
               Divider(height: 1, color: visual.border),
           ],
@@ -1407,9 +1764,10 @@ class _CompactWorkerPreview extends StatelessWidget {
 }
 
 class _CompactWorkerRow extends StatelessWidget {
-  const _CompactWorkerRow({required this.worker});
+  const _CompactWorkerRow({required this.worker, required this.editing});
 
   final PayrollGenerationWorkerLine worker;
+  final _GenerationEditingBindings editing;
 
   @override
   Widget build(BuildContext context) {
@@ -1422,19 +1780,98 @@ class _CompactWorkerRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _WorkerAvatar(initials: worker.initials),
+            PayrollPersonAvatar(
+              personId: worker.workerId,
+              initials: worker.initials,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    worker.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: visual.cardTitle,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          worker.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: visual.cardTitle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatClp(worker.totalAmount),
+                        textAlign: TextAlign.right,
+                        style: visual.numRow.copyWith(
+                          color: worker.hasClosedHours
+                              ? visual.ink
+                              : visual.inkFaint,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: _WorkerNumberField(
+                          fieldKey: ValueKey(
+                            'payroll-generation-hours-${worker.workerId}',
+                          ),
+                          semanticsLabel: 'Horas de ${worker.name}',
+                          controller:
+                              editing.hoursControllerFor(worker.workerId),
+                          label: 'Horas',
+                          unitSuffix: 'h',
+                          detail: worker.overtimeHours > 0
+                              ? '+ ${_formatHours(worker.overtimeHours)} HE'
+                              : null,
+                          errorText: editing.errorFor(
+                            worker.workerId,
+                            _DraftField.hours,
+                          ),
+                          enabled: editing.enabled,
+                          decimal: true,
+                          onChanged: (value) => editing.onChanged(
+                            worker.workerId,
+                            _DraftField.hours,
+                            value,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _WorkerNumberField(
+                          fieldKey: ValueKey(
+                            'payroll-generation-rate-${worker.workerId}',
+                          ),
+                          semanticsLabel: 'Tarifa por hora de ${worker.name}',
+                          controller:
+                              editing.rateControllerFor(worker.workerId),
+                          label: 'Tarifa',
+                          unitSuffix: '/h',
+                          detail: worker.overtimeHours > 0
+                              ? '${_formatClp(worker.resolvedOvertimeRateAmount)}/HE'
+                              : null,
+                          errorText: editing.errorFor(
+                            worker.workerId,
+                            _DraftField.rate,
+                          ),
+                          enabled: editing.enabled,
+                          decimal: false,
+                          onChanged: (value) => editing.onChanged(
+                            worker.workerId,
+                            _DraftField.rate,
+                            value,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
                   Text(
                     _formatWorkerEquation(worker),
                     style: visual.monoS.copyWith(
@@ -1454,41 +1891,8 @@ class _CompactWorkerRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-            Text(
-              _formatClp(worker.totalAmount),
-              textAlign: TextAlign.right,
-              style: visual.numRow.copyWith(
-                color: worker.hasClosedHours ? visual.ink : visual.inkFaint,
-              ),
-            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _WorkerAvatar extends StatelessWidget {
-  const _WorkerAvatar({required this.initials});
-
-  final String initials;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = PayrollVisualTokens.of(context);
-    return Container(
-      width: 32,
-      height: 32,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: visual.avatarSky,
-        shape: BoxShape.circle,
-      ),
-      child: Text(
-        initials,
-        maxLines: 1,
-        style: visual.avatarInitials(10.5),
       ),
     );
   }
@@ -1501,6 +1905,8 @@ class _GenerationFooter extends StatelessWidget {
     required this.saveError,
     required this.saveResult,
     required this.saving,
+    required this.editingExisting,
+    required this.canSave,
     required this.onGeneratePreview,
     required this.onSaveDraft,
     required this.onClose,
@@ -1512,6 +1918,8 @@ class _GenerationFooter extends StatelessWidget {
   final String? saveError;
   final PayrollGenerationSaveResult? saveResult;
   final bool saving;
+  final bool editingExisting;
+  final bool canSave;
   final VoidCallback onGeneratePreview;
   final VoidCallback onSaveDraft;
   final VoidCallback onClose;
@@ -1528,7 +1936,9 @@ class _GenerationFooter extends StatelessWidget {
         : saving
             ? 'Guardando borrador…'
             : hasPreview
-                ? 'Guardar borrador'
+                ? editingExisting
+                    ? 'Guardar cambios'
+                    : 'Guardar borrador'
                 : loadState == PayrollGenerationLoadState.loading
                     ? 'Generando preview…'
                     : loadState == PayrollGenerationLoadState.idle
@@ -1540,9 +1950,11 @@ class _GenerationFooter extends StatelessWidget {
             : () => onOpenSavedDraft!(saveResult!)
         : saving || loadState == PayrollGenerationLoadState.loading
             ? null
-            : hasPreview
+            : hasPreview && canSave
                 ? onSaveDraft
-                : onGeneratePreview;
+                : hasPreview
+                    ? null
+                    : onGeneratePreview;
 
     return Container(
       key: const ValueKey('payroll-generation-footer'),
@@ -1568,7 +1980,7 @@ class _GenerationFooter extends StatelessWidget {
             horizontalPadding: 24,
             disabledStyle: PayrollAccentDisabledStyle.neutral,
           );
-          final regenerate = hasPreview && !saving && !saved
+          final regenerate = hasPreview && !editingExisting && !saving && !saved
               ? OutlinedButton(
                   key: const ValueKey('payroll-generation-regenerate'),
                   onPressed: onGeneratePreview,
@@ -1669,18 +2081,12 @@ String _formatHours(double hours) {
   return '${hours.toStringAsFixed(1).replaceAll('.', ',')} h';
 }
 
-String _formatWorkerHours(PayrollGenerationWorkerLine worker) {
-  if (worker.overtimeHours <= 0) return _formatHours(worker.hours);
-  return '${_formatHours(worker.hours)} + '
-      '${_formatHours(worker.overtimeHours)} HE';
-}
-
-String _formatWorkerRates(PayrollGenerationWorkerLine worker) {
-  if (worker.overtimeHours <= 0) {
-    return '${_formatClp(worker.rateAmount)}/h';
-  }
-  return '${_formatClp(worker.rateAmount)}/h + '
-      '${_formatClp(worker.resolvedOvertimeRateAmount)}/HE';
+String _editableHours(double hours) {
+  if (hours == hours.roundToDouble()) return hours.toInt().toString();
+  return hours.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceAll(
+        '.',
+        ',',
+      );
 }
 
 String _formatWorkerEquation(PayrollGenerationWorkerLine worker) {

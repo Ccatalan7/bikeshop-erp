@@ -1,6 +1,6 @@
 interface:
   display_name: "Vinabike ERP Continuity"
-  short_description: "Resume Vinabike work with live debug and Claude context intact"
-  default_prompt: "Resume this Vinabike ERP task from repository state, memory, the canonical debug session, and current Claude collaboration without redundant retraining."
+  short_description: "Resume Vinabike work with repository and live debug context intact"
+  default_prompt: "Resume this Vinabike ERP task from repository state, memory, the canonical debug session, and any explicitly requested collaboration without redundant retraining."
 policy:
   allow_implicit_invocation: true

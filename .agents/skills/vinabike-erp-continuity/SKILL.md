@@ -28,7 +28,7 @@ Recover the live technical state first, then continue the product work. This ski
 
 - Use shell and repository wrappers for code, tests, Git state, logs, and deterministic app control.
 - Use Browser or Chrome for browser-only verification; use Computer Use for Claude Desktop, Design windows, and native macOS UI.
-- Claude owns visual and interaction direction. Every literal visual value comes from Claude's DesignSync output; screenshots are for comparison and evidence, never for estimating values.
+- Codex owns product workflow, information architecture, layout and responsive composition. Shared visual values and component anatomy come from the canonical DesignSync source; screenshots are for comparison and evidence, never for estimating values. Claude is used only when the owner explicitly requests an independent proposal or review.
 - Test the real running application with real production-backed data in read-only paths. Capture exact rendered frames, not placeholder mockups.
 - An implementation, fix, ship, deploy, or "get it done" request includes the
   reviewed, non-destructive production changes required to make that result
@@ -69,9 +69,14 @@ screen -x payroll
 
 Inside screen, `r` hot reloads, `R` hot restarts, and `Ctrl-A` then `D` detaches without stopping Flutter. Prefer the wrapper commands when terminal attachment is unnecessary.
 
-## Continue Claude without retraining
+## If the owner requested Claude, continue it without retraining
 
-Reuse the current Claude chat and allow compaction while it remains operational. Before every first prompt in a newly opened chat, visibly verify the repository's required Code mode, accepted model, Effort: Ultracode, intended title or URL, and that workflows/subagents remain disabled when the current task requires that suspension.
+Do not open or continue Claude for ordinary module work. When the owner has
+explicitly requested that collaboration, reuse the current Claude chat and
+allow compaction while it remains operational. Before every first prompt in a
+newly opened chat, visibly verify the repository's required Code mode, accepted
+model, Effort: Ultracode, intended title or URL, and that workflows/subagents
+remain disabled when the current task requires that suspension.
 
 A new chat is exceptional: use one only after an actual context/tool failure or a clean task boundary. Before switching, update the owning repository documents and leave a compact handoff containing:
 

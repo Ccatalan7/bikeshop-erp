@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../../shared/widgets/vb_notice.dart';
 import '../theme/payroll_tokens.dart';
 import 'payroll_accent_action.dart';
+import 'payroll_person_avatar.dart';
 
 /// 2a / 3a — Cola de nóminas: banda de semanas + tabla de decisión +
 /// franja de Asistencias + barra monetaria. Construida desde cero.
@@ -88,9 +89,9 @@ class PayrollWeekCardVM {
 
 class PayrollPersonRowVM {
   const PayrollPersonRowVM({
+    required this.personId,
     required this.name,
     required this.initials,
-    required this.avatarColor,
     required this.method,
     required this.methodIsCash,
     required this.earned,
@@ -113,9 +114,9 @@ class PayrollPersonRowVM {
     this.destination,
     this.shortcuts = const <PayrollRowShortcutVM>[],
   });
+  final String personId;
   final String name;
   final String initials;
-  final Color avatarColor;
   final String method; // "Transferencia" | "Efectivo"
   final bool methodIsCash;
   final String earned; // "$172.875"
@@ -262,6 +263,7 @@ class PayrollQueueSurface extends StatelessWidget {
     required this.onOpenAttendance,
     required this.onConfirmWeek,
     required this.onNextAction,
+    this.onEditDraft,
     this.dense = false,
     this.excludedNote,
     this.blockedNote,
@@ -273,6 +275,7 @@ class PayrollQueueSurface extends StatelessWidget {
   final VoidCallback onOpenAttendance;
   final VoidCallback onConfirmWeek;
   final VoidCallback onNextAction;
+  final VoidCallback? onEditDraft;
 
   /// Quién quedó fuera del cálculo y por qué. Nulo cuando no hay nadie: una
   /// franja de advertencia vacía enseña a ignorar las advertencias.
@@ -371,50 +374,9 @@ class PayrollQueueSurface extends StatelessWidget {
           dense: dense,
           onConfirmWeek: onConfirmWeek,
           onNextAction: onNextAction,
+          onEditDraft: onEditDraft,
         ),
       ],
-    );
-  }
-}
-
-/// Ficha de persona con contraste GARANTIZADO.
-///
-/// Antes el color salía de una paleta fija por hash y las iniciales iban con un
-/// color fijo encima: en los tonos oscuros de esa paleta (café, morado) las
-/// letras quedaban ilegibles. Eso no era una decisión de tema — nadie había
-/// comprobado el par.
-///
-/// El color de la persona sigue siendo estable (la misma persona, el mismo
-/// tono, que es para lo que sirve), pero se usa como TINTE de un fondo suave y
-/// las iniciales se pintan con ese mismo tono saturado. Así el par nace del
-/// mismo color y no puede quedar sin contraste, en claro o en oscuro.
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.color, required this.initials});
-  final Color color;
-  final String initials;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = PayrollVisualTokens.of(context);
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final hsl = HSLColor.fromColor(color);
-    final fill = hsl
-        .withSaturation(hsl.saturation.clamp(0.18, 0.55))
-        .withLightness(dark ? 0.24 : 0.91)
-        .toColor();
-    final ink = hsl
-        .withSaturation(hsl.saturation.clamp(0.35, 0.85))
-        .withLightness(dark ? 0.78 : 0.32)
-        .toColor();
-    return Container(
-      width: 26,
-      height: 26,
-      decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: visual.avatarInitials(10).copyWith(color: ink),
-      ),
     );
   }
 }
@@ -1255,7 +1217,12 @@ class _PersonRowState extends State<_PersonRow> {
               ),
               Row(
                 children: <Widget>[
-                  _Avatar(color: vm.avatarColor, initials: vm.initials),
+                  PayrollPersonAvatar(
+                    personId: vm.personId,
+                    initials: vm.initials,
+                    size: 26,
+                    fontSize: 10,
+                  ),
                   const SizedBox(width: 9),
                   Expanded(
                     child: !layout.showMethod
@@ -2460,12 +2427,17 @@ class _AttendanceStrip extends StatelessWidget {
               TextSpan(
                 style: visual.bodyS.copyWith(fontSize: 11.5),
                 children: const <InlineSpan>[
-                  TextSpan(text: 'Las horas se editan en '),
                   TextSpan(
-                      text: 'Asistencias',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                    text: 'El borrador parte de ',
+                  ),
                   TextSpan(
-                      text: '. Nóminas solo liquida lo que Asistencias cerró.'),
+                    text: 'Asistencias',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(
+                    text: '. Puedes ajustar horas y tarifa aquí antes de '
+                        'confirmar; la asistencia original no cambia.',
+                  ),
                 ],
               ),
             ),
@@ -2516,11 +2488,13 @@ class _MoneyBar extends StatelessWidget {
     required this.dense,
     required this.onConfirmWeek,
     required this.onNextAction,
+    this.onEditDraft,
   });
   final PayrollWeekTotalsVM totals;
   final bool dense;
   final VoidCallback onConfirmWeek;
   final VoidCallback onNextAction;
+  final VoidCallback? onEditDraft;
 
   @override
   Widget build(BuildContext context) {
@@ -2588,6 +2562,17 @@ class _MoneyBar extends StatelessWidget {
                     fontSize: 11.5,
                   ),
           ];
+          final showEditDraft = totals.showCommitAction && onEditDraft != null;
+          Widget editDraftAction({required double height}) => OutlinedButton(
+                key: const ValueKey<String>('payroll-edit-draft'),
+                onPressed: onEditDraft,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: Size(0, height),
+                  foregroundColor: visual.inkMuted,
+                  side: BorderSide(color: visual.borderStrong),
+                ),
+                child: const Text('Editar borrador'),
+              );
           final stack = constraints.maxWidth < PayrollTokens.bpDesktop &&
               visibleActions.length == 1;
           if (stack) {
@@ -2623,6 +2608,10 @@ class _MoneyBar extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  if (showEditDraft) ...<Widget>[
+                    editDraftAction(height: PayrollTokens.touchMobile),
+                    const SizedBox(height: 8),
+                  ],
                   visibleActions.single(),
                 ],
               ),
@@ -2668,6 +2657,10 @@ class _MoneyBar extends StatelessWidget {
                   SizedBox(width: dense ? 8 : 12),
                 ],
                 // Deshabilitado que explica: inerte + razón visible al lado.
+                if (showEditDraft) ...<Widget>[
+                  editDraftAction(height: dense ? 30 : 32),
+                  const SizedBox(width: 8),
+                ],
                 if (totals.showCommitAction)
                   PayrollAccentAction(
                     actionKey: const ValueKey<String>('payroll-confirm-week'),

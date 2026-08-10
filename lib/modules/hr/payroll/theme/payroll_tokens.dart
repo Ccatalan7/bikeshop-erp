@@ -390,12 +390,16 @@ class PayrollVisualTokens {
   // consumidores no-Payroll y regresión de 2 presets × 2 modos, y Payroll la
   // consume sin cambiar una línea.
   Color get avatarCyan => roles?.avatarA ?? scheme.primary;
+  Color get avatarCyanInk => roles?.onAvatarA ?? scheme.onPrimary;
   Color get avatarSky => roles?.avatarB ?? scheme.secondary;
+  Color get avatarSkyInk => roles?.onAvatarB ?? scheme.onSecondary;
   Color get avatarAmber => roles?.avatarD ?? scheme.tertiary;
+  Color get avatarAmberInk => roles?.onAvatarD ?? scheme.onTertiary;
 
   bool get _isDark => scheme.brightness == Brightness.dark;
 
   Color get groupLabor => roles?.avatarC ?? scheme.secondary;
+  Color get groupLaborInk => roles?.onAvatarC ?? scheme.onSecondary;
   Color get railAttentionDot => roles?.shell.attention ?? scheme.error;
   Color get dirtyTabDot => roles?.shell.dirty ?? scheme.tertiary;
   Color get tabCloseIcon => onShellMuted;

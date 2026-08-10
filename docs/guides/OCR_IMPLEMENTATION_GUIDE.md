@@ -1,5 +1,12 @@
 # 📸 OCR Implementation Guide - Purchase Invoices & Receipts
 
+> **Historical API guide — do not copy its modal integration.** The canonical
+> purchase-invoice OCR surface is now the full-page, in-place workflow
+> registered in `docs/architecture/canonical-ui-surfaces.md`: invoice preview →
+> one batch product review → awaited application. It does not use
+> `showModalBottomSheet`, a nested shell, split pane, accordion or wizard. The
+> examples below remain useful only for parser/provider APIs.
+
 **Status:** ✅ Implemented (Nov 9, 2025)  
 **Technology:** Google ML Kit Text Recognition v2  
 **Platforms:** Android, iOS, Web

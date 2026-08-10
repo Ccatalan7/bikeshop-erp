@@ -50,6 +50,20 @@ código o en git, o una conclusión que todavía no se verificó.
 | Refinamiento integral de un módulo, incluyendo correcciones/reversas | `docs/architecture/APP_REFINEMENT_MASTER_PLAN.md` |
 | Cargas asíncronas, caché, realtime y carreras de read models | `docs/architecture/async-data-loading-contract.md` |
 | Colaboración entre agentes | `docs/development/CODEX_CLAUDE_COLLABORATION.md` |
+| Identidad de producto, duplicados, matching de catálogo | `docs/architecture/product-identity-matching-contract.md` |
+
+### Lenguaje visual no significa layout impuesto (corrección 2026-08-09)
+
+`GUÍA GENERAL Viñabike - Componentes` es la fuente del **lenguaje visual**:
+roles, tipografía, densidad, geometría y anatomía de controles. No decide la
+arquitectura de información, el orden de trabajo ni la composición de un
+módulo. Codex diseña esas partes desde la siguiente decisión real del operador,
+el dominio, la navegación canónica y las seis celdas responsive. Un canvas de
+módulo, un screenshot o una propuesta de Claude es entrada opcional y se usa
+sólo cuando el dueño lo pide explícitamente; nunca es un gate para empezar ni
+una orden de conservar su layout. Este límite evita repetir el fallo de OCR:
+una superficie visualmente moderna sustituyó un batch comprensible por un
+panel/accordion que ocultaba la visión conjunta y empeoraba la tarea.
 
 Si el aprendizaje no calza en ninguno, va acá — y si acá crece demasiado, se
 extrae a un documento propio **con su puntero desde acá**.
@@ -219,8 +233,9 @@ other integrations:
 
 The fast verification loop is the **native macOS debug session**, not the
 browser. An agent owns it end to end — start it, hot reload in 2-5 s, click and
-type in the running app, screenshot the exact rendered frame, and read the
-Claude **Design** window — with versioned tooling:
+type in the running app, and screenshot the exact rendered frame — with
+versioned tooling. When the owner explicitly requests Design input, the same
+workflow may also inspect the separate Claude **Design** window:
 
 - `scripts/dev/native_session.sh` — session lifecycle (`start`, `reload`,
   `restart`, `status`, `errors`, `stop`). One session at a time; it refuses to
@@ -248,11 +263,15 @@ Accessibility entries (`Claude` and the lowercase `claude` helper that actually
 runs the agent shell). Phone layouts are verified in the iOS Simulator through
 the same runbook.
 
-Design is the authority for the looking; Code owns layout adaptation,
-information architecture, wording, UX and logic, and reports every deliberate
-deviation. How to obtain the authoritative mockups and detect a new Design turn
-is specified in `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`; palette and
-light/dark resolution is specified in
+`GUÍA GENERAL Viñabike - Componentes` is the authority for shared visual
+grammar and component anatomy. Codex owns module workflow, information
+architecture, hierarchy, wording, layout, responsive composition and UX from
+the operator's next decision and the real domain. Module mockups and Design
+turns are optional input used only when the owner explicitly requests them;
+they never become a prerequisite or screen-layout authority. How to read the
+shared guide—and any explicitly requested module reference—without estimating
+values is specified in `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`;
+palette and light/dark resolution is specified in
 `docs/architecture/appearance-palette-contract.md`.
 
 The browser contract below still applies when the browser itself is the thing
@@ -512,11 +531,14 @@ reuse the same business rules, commands, permissions, and persistent effects.
 The two GUI guides own the detailed visual, touch, breakpoint, navigation,
 accessibility, and verification recipes; do not duplicate them here.
 
-The authoritative visual source for a redesign is the Claude Design project,
-read through `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`; every palette,
-brightness and semantic role resolves through the cascade in
-`docs/architecture/appearance-palette-contract.md`. Neither may be replaced by
-local literals or a feature-private theme.
+The authoritative source for shared visual grammar is `GUÍA GENERAL Viñabike -
+Componentes`, read through
+`docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`; every palette, brightness
+and semantic role resolves through the cascade in
+`docs/architecture/appearance-palette-contract.md`. Codex owns the module's
+workflow, information architecture, hierarchy, layout and responsive
+composition. A module-specific Claude/Design proposal is optional and is used
+only when the owner explicitly requests it.
 
 **How that source is read is not optional.** Every visual value — colour,
 radius, shadow, border, spacing, font, height — is obtained from a Design file
@@ -529,8 +551,8 @@ code.
 Shared controls come from the page **`GUÍA GENERAL Viñabike - Componentes`**,
 implemented under their component id (`S-05`, `O-02`, `I-01`…) with values bound
 to theme roles — that guide's own first rule is that a widget may not contain a
-literal hex. A module's screens are designed on their own Design canvas rather
-than by editing the shared guide.
+literal hex. A dedicated module canvas is optional reference material, not a
+prerequisite and not the owner of the module layout.
 
 ## UI-led refinement is full product refinement
 
@@ -6069,8 +6091,14 @@ The Payroll system automates:
 - `partial` and `paid`: server-derived settlement states. They are refreshed by
   payments and advances; the UI must not add a second `Confirmar semana`
   command after commitment.
-- Attendance owns hours and canonical labor rates. Payroll generation reviews
-  their projection; it must not expose a second client-side editor.
+- Attendance owns the source attendance records and the canonical default labor
+  rate. Its weekly close seeds Payroll, but it does not make the payroll draft
+  immutable: while the voucher is `draft`, the same canonical editor adjusts
+  hours and rate in both the generated preview and the saved draft without
+  writing either adjustment back to Attendance or the employee master rate.
+  Create and update both persist through the idempotent, version-checked
+  `save_payroll_voucher_draft` writer. Confirmation removes that edit boundary;
+  `confirmed`, `partial` and `paid` are not editable payroll snapshots.
 - When reconciliation touches a draft, it must list that draft explicitly,
   require commitment intent and return the committed voucher IDs in the
   immutable receipt before representing any money as applied.

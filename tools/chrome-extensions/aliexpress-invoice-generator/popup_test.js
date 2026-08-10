@@ -83,6 +83,45 @@ test('preserves a stable listing variant identity for ERP aliases', () => {
   assert.equal(item.variantKey, '160mm-2pcs');
 });
 
+test('AI OCR preserves and matches explicit DOM variants before same-title rows', () => {
+  const base = {
+    sku: 'AE-337769267',
+    itemId: '1005009937769267',
+    description: 'Tee WAKE 31.8mm',
+    quantity: 1,
+    unitPrice: 7172,
+    total: 7172,
+    productUrl: 'https://www.aliexpress.com/item/1005009937769267.html',
+  };
+  const items = invoice.applyAiOrder(
+    {
+      items: [
+        { description: base.description, variant: 'Purple', quantity: 1, unitPrice: 7172, total: 7172 },
+        { description: base.description, variant: 'Black', quantity: 1, unitPrice: 7172, total: 7172 },
+      ],
+    },
+    {
+      items: [
+        { ...base, variant: 'Black', variantKey: 'black', imageUrl: 'https://ae01.alicdn.com/black.jpg' },
+        { ...base, variant: 'Purple', variantKey: 'purple', imageUrl: 'https://ae01.alicdn.com/purple.jpg' },
+      ],
+    },
+  );
+
+  assert.equal(items.length, 2);
+  assert.deepEqual(
+    Array.from(items, (item) => item.variantKey),
+    ['purple', 'black'],
+  );
+  assert.deepEqual(
+    Array.from(items, (item) => item.variant),
+    ['Purple', 'Black'],
+  );
+  assert.match(items[0].imageUrl, /purple\.jpg/);
+  assert.match(items[1].imageUrl, /black\.jpg/);
+  assert.equal(invoice.dedupeOrderItems(items).length, 2);
+});
+
 test('deduplicates before allocating the real cost components', () => {
   const raw = {
     sku: 'AE-14758950',

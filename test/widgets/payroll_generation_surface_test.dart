@@ -59,6 +59,8 @@ void main() {
     FutureOr<void> Function()? onClose,
     ValueChanged<PayrollGenerationWeek>? onWeekChanged,
     ValueChanged<PayrollGenerationSaveResult>? onOpenSavedDraft,
+    PayrollGenerationPreview? initialPreview,
+    String? existingDraftId,
     PayrollGenerationDesktopPresentation desktopPresentation =
         PayrollGenerationDesktopPresentation.sideSheet,
     TextScaler textScaler = TextScaler.noScaling,
@@ -92,6 +94,8 @@ void main() {
             onClose: onClose ?? () {},
             onWeekChanged: onWeekChanged,
             onOpenSavedDraft: onOpenSavedDraft,
+            initialPreview: initialPreview,
+            existingDraftId: existingDraftId,
           ),
         ),
       ),
@@ -100,7 +104,7 @@ void main() {
   }
 
   testWidgets(
-      'desktop genera una lectura de Asistencias con cero horas, total y personas',
+      'desktop genera un preview editable con cero horas, total y personas',
       (tester) async {
     PayrollGenerationWeek? requestedWeek;
     await pumpSurface(
@@ -130,14 +134,226 @@ void main() {
     );
     expect(find.text('3 trabajadores · 2 con monto'), findsOneWidget);
     expect(find.text(r'$266.000'), findsOneWidget);
-    expect(find.text('36,5 h + 2 h HE'), findsOneWidget);
-    expect(find.text(r'$3.500/h + $5.250/HE'), findsOneWidget);
     expect(find.text('Rodrigo Guillermo Nieto'), findsOneWidget);
     expect(find.text('Sin horas cerradas'), findsOneWidget);
-    expect(find.text('0 h'), findsOneWidget);
-    expect(find.text(r'$4.000/h'), findsOneWidget);
     expect(find.text(r'$0'), findsOneWidget);
-    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(TextField), findsNWidgets(6));
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('payroll-generation-hours-lucas')),
+          )
+          .decoration
+          ?.suffixText,
+      ' h',
+    );
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey('payroll-generation-rate-lucas')),
+          )
+          .decoration
+          ?.suffixText,
+      ' /h',
+    );
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(
+              const ValueKey('payroll-generation-hours-lucas'),
+            ),
+          )
+          .controller
+          ?.text,
+      '36,5',
+    );
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(
+              const ValueKey('payroll-generation-rate-guillermo'),
+            ),
+          )
+          .controller
+          ?.text,
+      '4000',
+    );
+    expect(find.textContaining(r'$5.250/HE'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'editar horas y tarifa recalcula total, HE y snapshot de guardado',
+      (tester) async {
+    PayrollGenerationSaveRequest? savedRequest;
+    await pumpSurface(
+      tester,
+      onSaveDraft: (request) async {
+        savedRequest = request;
+        return const PayrollGenerationSaveResult(draftId: 'draft-edited');
+      },
+    );
+
+    final primary = find.byKey(
+      const ValueKey('payroll-generation-primary-action'),
+    );
+    await tester.tap(primary);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('payroll-generation-hours-lucas')),
+      '40,5',
+    );
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('payroll-generation-rate-lucas')),
+      '4000',
+    );
+    await tester.pump();
+
+    expect(find.text(r'$174.000'), findsOneWidget);
+    expect(find.text(r'$301.750'), findsOneWidget);
+    expect(find.textContaining(r'$6.000/HE'), findsOneWidget);
+
+    await tester.tap(primary);
+    await tester.pumpAndSettle();
+
+    final request = savedRequest;
+    expect(request, isNotNull);
+    expect(request!.operationKey, 'op-payroll-1');
+    expect(request.preview.totalAmount, 301750);
+    final lucas = request.preview.workers.singleWhere(
+      (worker) => worker.workerId == 'lucas',
+    );
+    expect(lucas.hours, 40.5);
+    expect(lucas.rateAmount, 4000);
+    expect(lucas.resolvedOvertimeRateAmount, 6000);
+    expect(lucas.totalAmount, 174000);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('horas positivas reincorporan una línea que partió en cero',
+      (tester) async {
+    PayrollGenerationSaveRequest? savedRequest;
+    await pumpSurface(
+      tester,
+      onGeneratePreview: (week) async {
+        final source = previewFor(week);
+        return source.copyWithWorkers(<PayrollGenerationWorkerLine>[
+          for (final worker in source.workers)
+            worker.workerId == 'guillermo'
+                ? worker.copyWith(isIncluded: false)
+                : worker,
+        ]);
+      },
+      onSaveDraft: (request) async {
+        savedRequest = request;
+        return const PayrollGenerationSaveResult(draftId: 'draft-included');
+      },
+    );
+
+    final primary = find.byKey(
+      const ValueKey('payroll-generation-primary-action'),
+    );
+    await tester.tap(primary);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('payroll-generation-hours-guillermo')),
+      '2',
+    );
+    await tester.pump();
+
+    expect(find.text(r'$8.000'), findsOneWidget);
+    await tester.tap(primary);
+    await tester.pumpAndSettle();
+
+    final guillermo = savedRequest!.preview.workers.singleWhere(
+      (worker) => worker.workerId == 'guillermo',
+    );
+    expect(guillermo.isIncluded, isTrue);
+    expect(guillermo.totalAmount, 8000);
+  });
+
+  testWidgets(
+      'borrador existente abre editable, muestra Guardar cambios y persiste',
+      (tester) async {
+    var generations = 0;
+    PayrollGenerationSaveRequest? savedRequest;
+    await pumpSurface(
+      tester,
+      initialPreview: previewFor(initialWeek),
+      existingDraftId: 'draft-existing',
+      onGeneratePreview: (week) async {
+        generations += 1;
+        return previewFor(week);
+      },
+      onSaveDraft: (request) async {
+        savedRequest = request;
+        return const PayrollGenerationSaveResult(
+          draftId: 'draft-existing',
+        );
+      },
+    );
+
+    expect(
+      find.byKey(const ValueKey('payroll-generation-success')),
+      findsOneWidget,
+    );
+    expect(find.text('Guardar cambios'), findsOneWidget);
+    expect(find.byType(TextField), findsNWidgets(6));
+    expect(generations, 0);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('payroll-generation-rate-vicente')),
+      '3600',
+    );
+    await tester.pump();
+    expect(find.text(r'$269.650'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('payroll-generation-primary-action')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(generations, 0);
+    final request = savedRequest;
+    expect(request, isNotNull);
+    final vicente = request!.preview.workers.singleWhere(
+      (worker) => worker.workerId == 'vicente',
+    );
+    expect(vicente.rateAmount, 3600);
+    expect(vicente.totalAmount, 131400);
+    expect(request.preview.totalAmount, 269650);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('un valor inválido explica el error y deshabilita el guardado',
+      (tester) async {
+    var saves = 0;
+    await pumpSurface(
+      tester,
+      onSaveDraft: (request) async {
+        saves += 1;
+        return const PayrollGenerationSaveResult(draftId: 'draft-invalid');
+      },
+    );
+
+    final primary = find.byKey(
+      const ValueKey('payroll-generation-primary-action'),
+    );
+    await tester.tap(primary);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('payroll-generation-hours-lucas')),
+      '',
+    );
+    await tester.pump();
+
+    expect(find.text('Ingresa horas válidas'), findsOneWidget);
+    expect(tester.widget<InkWell>(primary).onTap, isNull);
+    await tester.tap(primary, warnIfMissed: false);
+    await tester.pump();
+    expect(saves, 0);
     expect(tester.takeException(), isNull);
   });
 
@@ -209,7 +425,7 @@ void main() {
       find.text('Sin horas cerradas · se incluye como \$0'),
       findsOneWidget,
     );
-    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(TextField), findsNWidgets(6));
     expect(tester.takeException(), isNull);
   });
 
@@ -266,7 +482,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('reintento de guardado conserva una sola clave idempotente',
+  testWidgets('retry conserva clave; editar tras fallo crea una nueva',
       (tester) async {
     var keyCreations = 0;
     final requests = <PayrollGenerationSaveRequest>[];
@@ -276,12 +492,17 @@ void main() {
       tester,
       createOperationKey: () {
         keyCreations += 1;
-        return 'operation-stable';
+        return 'operation-$keyCreations';
       },
       onSaveDraft: (request) {
         requests.add(request);
         saves += 1;
         if (saves == 1) return firstSave.future;
+        if (saves == 2) {
+          return Future<PayrollGenerationSaveResult>.error(
+            StateError('segundo fallo transitorio'),
+          );
+        }
         return Future<PayrollGenerationSaveResult>.value(
           const PayrollGenerationSaveResult(
             draftId: 'draft-1',
@@ -311,9 +532,27 @@ void main() {
 
     expect(saves, 2);
     expect(keyCreations, 1);
+    expect(requests.map((request) => request.operationKey), <String>[
+      'operation-1',
+      'operation-1',
+    ]);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('payroll-generation-hours-lucas')),
+      '37',
+    );
+    await tester.pump();
+    await tester.tap(primary);
+    await tester.pumpAndSettle();
+
+    expect(saves, 3);
+    expect(keyCreations, 2);
+    expect(requests.last.operationKey, 'operation-2');
     expect(
-      requests.map((request) => request.operationKey),
-      everyElement('operation-stable'),
+      requests.last.preview.workers
+          .singleWhere((worker) => worker.workerId == 'lucas')
+          .hours,
+      37,
     );
     expect(find.textContaining('sin duplicarlo'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -421,6 +660,7 @@ void main() {
         findsOneWidget,
         reason: 'El preview debe seguir visible a ${width}px.',
       );
+      expect(find.byType(TextField), findsNWidgets(6));
       expect(
         find.byKey(const ValueKey('payroll-generation-side-sheet-host')),
         width >= 900 ? findsOneWidget : findsNothing,

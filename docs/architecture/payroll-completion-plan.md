@@ -67,9 +67,13 @@ el orden de la sección 8.
 
 - El trabajo cotidiano es pagar y cerrar semanas. OCR es una utilidad
   secundaria para resolver acumulación; no es el CTA dominante permanente.
-- Asistencias es dueño de horas y tarifas. Nóminas consume su resultado cerrado
-  y no crea un segundo editor.
-- `Comprometer semana` congela el snapshot y reconoce las obligaciones. No
+- Asistencias es dueña de los registros fuente y origina el snapshot semanal.
+  Mientras siga en `draft`, el editor canónico de Nóminas permite ajustar horas
+  y tarifa tanto en el preview como al reabrir el borrador, sin escribir esos
+  ajustes en Asistencias ni en la tarifa maestra del trabajador. Create y update
+  usan el mismo writer idempotente y versionado.
+- `Confirmar semana` bloquea la edición del snapshot y reconoce las
+  obligaciones. No
   existe una segunda confirmación manual: `partial` y `paid` se derivan de los
   movimientos y el último saldo en `$0` mueve la semana a Historial.
 - Cada fila tiene una sola superficie de decisión:
@@ -406,10 +410,13 @@ Puntero vigente: **ledger/paginación real de Anticipos e Historial, en paralelo
 con la migración semántica de tema**.
 El aprendizaje de aliases, captura, cartola real, pago bancario parcial,
 recuperación tipada y allow-list explícito de compromiso OCR ya están cerrados
-localmente. Asistencias ya prepara el borrador mediante el comando server-owned;
-`draft → confirmed` se expone como `Comprometer semana` y `partial/paid`
-permanecen estados automáticos. La ronda activa agrega los read models paginados
-sin convertir la lista abierta actual en historial ficticio.
+localmente. Asistencias ya origina el preview semanal; el mismo editor canónico
+crea o actualiza el snapshot de Nóminas mediante
+`save_payroll_voucher_draft`, con operación idempotente y versión esperada al
+actualizar. `draft → confirmed` se expone como `Confirmar semana`, bloquea ese
+editor y `partial/paid` permanecen estados automáticos. La ronda activa agrega
+los read models paginados sin convertir la lista abierta actual en historial
+ficticio.
 El shell compacto ya fue corregido y certificado como frontera temática, pero
 las superficies internas de Nóminas siguen oficialmente en migración
 light/dark. La raíz debe resolver una sola vez `preset × brightness` hacia

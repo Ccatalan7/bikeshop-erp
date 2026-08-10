@@ -2,7 +2,7 @@
   'use strict';
 
   const SOURCE = 'AliExpress';
-  const CONTENT_VERSION = '0.9.3';
+  const CONTENT_VERSION = '0.9.5';
   const DEBUG_PREFIX = `[AE-DEBUG][content][v${CONTENT_VERSION}]`;
 
   function aeDebug(event, details = {}, level = 'log') {
@@ -284,8 +284,15 @@
     };
   } else {
     // The ERP's embedded WebView reuses this extractor without Chrome's
-    // extension messaging API. The public bridge above is the integration
-    // boundary in that host.
+    // extension messaging API. It is installed at document start, so begin
+    // observing immediately: waiting until the user chooses a date misses the
+    // page's first real request and leaves the calendar without an API
+    // template to preload its date index. Chrome keeps its explicit probe
+    // lifecycle unchanged.
+    // La sonda depende de estado declarado más abajo en este mismo bundle.
+    // La microtarea corre apenas termina la instalación síncrona del script,
+    // todavía antes de que la página despache su siguiente tarea de red.
+    Promise.resolve().then(() => ordersApiProbeInstall());
     globalThis.__ALIEXPRESS_INVOICE_CONTENT_CLEANUP__ = () => {};
   }
 
@@ -785,6 +792,8 @@
         sku: line.productId ? `AE-${String(line.productId).slice(-8)}` : '',
         itemId: line.productId ? String(line.productId) : '',
         description: variant ? `${title} (${variant})` : title,
+        variant,
+        variantKey: supplierVariantKey(variant) || 'default',
         quantity,
         unitPrice,
         total: unitPrice === null ? null : roundMoney(unitPrice * quantity),
@@ -841,19 +850,85 @@
     return '';
   }
 
+  function ordersApiCoverage({
+    datesOnly,
+    exactDate,
+    maxPages,
+    pagesRead,
+    reason,
+    oldestObservedDate = '',
+    newestObservedDate = '',
+  }) {
+    // Sólo llegar al final natural prueba que el índice cubre todo el
+    // historial disponible. `día superado` cierra una fecha exacta, pero no
+    // autoriza a presentar como vacíos los meses más antiguos que no leímos.
+    const historyComplete = reason === 'sin más pedidos';
+    return {
+      mode: datesOnly ? 'dates-only' : (exactDate ? 'exact-date' : 'all-orders'),
+      complete: historyComplete,
+      partial: !historyComplete,
+      targetDateComplete: exactDate
+        ? historyComplete || reason === 'día superado'
+        : null,
+      pageLimit: maxPages,
+      pagesRead,
+      observedFromDate: oldestObservedDate,
+      observedToDate: newestObservedDate,
+      stopReason: reason,
+    };
+  }
+
   /// Recolecta pedidos página por página desde la API.
   ///
   /// Devuelve además el índice de días con pedidos: la misma pasada que busca
   /// un día sabe qué otros días tienen compras, y eso alimenta la marca del
-  /// calendario sin una segunda consulta.
+  /// calendario sin una segunda consulta. `datesOnly: true` es un booleano
+  /// estricto: recorre el índice sin construir los pedidos completos ni
+  /// devolver sus líneas, montos o imágenes.
+  /// @param {{exactDate?: string, maxPages?: number, datesOnly?: boolean}} options
   async function ordersApiCollect(options = {}) {
     const exactDate = String(options.exactDate || '').trim();
+    const datesOnly = options.datesOnly === true;
     const maxPages = Math.min(60, Math.max(1, Number(options.maxPages) || 30));
     if (!captureOrdersApiTemplate()) {
-      return { ok: false, reason: 'sin plantilla de petición capturada' };
+      const reason = 'sin plantilla de petición capturada';
+      const coverage = ordersApiCoverage({
+        datesOnly,
+        exactDate,
+        maxPages,
+        pagesRead: 0,
+        reason,
+      });
+      return {
+        ok: false,
+        orders: [],
+        datesWithOrders: [],
+        pagesRead: 0,
+        reason,
+        coverageComplete: coverage.complete,
+        coveragePartial: coverage.partial,
+        coverage,
+      };
     }
     if (!ordersApiAvailable()) {
-      return { ok: false, reason: 'cliente de API no disponible en la página' };
+      const reason = 'cliente de API no disponible en la página';
+      const coverage = ordersApiCoverage({
+        datesOnly,
+        exactDate,
+        maxPages,
+        pagesRead: 0,
+        reason,
+      });
+      return {
+        ok: false,
+        orders: [],
+        datesWithOrders: [],
+        pagesRead: 0,
+        reason,
+        coverageComplete: coverage.complete,
+        coveragePartial: coverage.partial,
+        coverage,
+      };
     }
 
     const collected = new Map();
@@ -861,6 +936,8 @@
     let pagesRead = 0;
     let pagesPastTargetDate = 0;
     let reason = 'max-pages';
+    let oldestObservedDate = '';
+    let newestObservedDate = '';
 
     for (let page = 1; page <= maxPages; page += 1) {
       let response;
@@ -881,15 +958,28 @@
 
       let newestOnPage = '';
       for (const key of orderKeys) {
-        const order = mapApiOrder(modules[key].fields);
-        if (!order) continue;
-        if (order.orderDate) {
-          datesWithOrders.add(order.orderDate);
-          if (!newestOnPage || order.orderDate > newestOnPage) {
-            newestOnPage = order.orderDate;
+        const fields = modules[key] && modules[key].fields;
+        if (!fields || !fields.orderId) continue;
+        // El modo de índice lee sólo identidad + fecha. En particular no
+        // materializa líneas, importes, URLs ni imágenes de cada pedido.
+        const order = datesOnly ? null : mapApiOrder(fields);
+        const orderDate = datesOnly
+          ? parseApiOrderDate(fields.orderDateText)
+          : (order && order.orderDate) || '';
+        if (!datesOnly && !order) continue;
+        if (orderDate) {
+          datesWithOrders.add(orderDate);
+          if (!newestOnPage || orderDate > newestOnPage) {
+            newestOnPage = orderDate;
+          }
+          if (!oldestObservedDate || orderDate < oldestObservedDate) {
+            oldestObservedDate = orderDate;
+          }
+          if (!newestObservedDate || orderDate > newestObservedDate) {
+            newestObservedDate = orderDate;
           }
         }
-        if (!exactDate || order.orderDate === exactDate) {
+        if (!datesOnly && (!exactDate || orderDate === exactDate)) {
           collected.set(order.orderNumber, order);
         }
       }
@@ -912,12 +1002,26 @@
       }
     }
 
+    const coverage = ordersApiCoverage({
+      datesOnly,
+      exactDate,
+      maxPages,
+      pagesRead,
+      reason,
+      oldestObservedDate,
+      newestObservedDate,
+    });
     return {
       ok: true,
       orders: Array.from(collected.values()),
       datesWithOrders: Array.from(datesWithOrders).sort(),
       pagesRead,
       reason,
+      // Alias planos para hosts que sólo necesitan decidir si una ausencia
+      // es concluyente; `coverage` conserva la evidencia detallada.
+      coverageComplete: coverage.complete,
+      coveragePartial: coverage.partial,
+      coverage,
     };
   }
 
@@ -3642,13 +3746,15 @@
     const result = [];
     const seen = new Set();
 
-    items.forEach((item) => {
+    items.forEach((rawItem) => {
+      const explicitVariantKey = explicitVariantIdentityKeyFromItem(rawItem) || 'default';
+      const item = withSupplierVariantIdentity(rawItem);
       const imageKey = item.imageUrl ? normalizeImageUrl(item.imageUrl).replace(/[?#].*$/, '') : '';
       const titleKey = dedupeTextKey(item.description);
       const rowKey = item._visualRowY ? Math.round(item._visualRowY / 18) : result.length;
       const key = item.itemId
-        ? `id:${item.itemId}:${item.unitPrice}:${item.quantity}:${titleKey}:${imageKey || rowKey}`
-        : `${titleKey}|${item.unitPrice}|${item.quantity}|${imageKey || rowKey}`;
+        ? `id:${item.itemId}:${explicitVariantKey}:${item.unitPrice}:${item.quantity}:${titleKey}:${imageKey || rowKey}`
+        : `${titleKey}|${explicitVariantKey}|${item.unitPrice}|${item.quantity}|${imageKey || rowKey}`;
       if (seen.has(key)) return;
       seen.add(key);
       result.push(item);
@@ -4199,9 +4305,18 @@
   function dedupeExtractedItems(items) {
     const result = [];
     const duplicates = [];
+    const explicitVariantKeys = new WeakMap();
 
-    items.forEach((item) => {
-      const duplicateIndex = result.findIndex((existing) => areLikelyDuplicateItems(existing, item));
+    items.forEach((rawItem) => {
+      const explicitVariantKey = explicitVariantIdentityKeyFromItem(rawItem);
+      const item = withSupplierVariantIdentity(rawItem);
+      explicitVariantKeys.set(item, explicitVariantKey);
+      const duplicateIndex = result.findIndex((existing) => areLikelyDuplicateItems(
+        existing,
+        item,
+        explicitVariantKeys.get(existing),
+        explicitVariantKey,
+      ));
       if (duplicateIndex < 0) {
         result.push(item);
         return;
@@ -4234,7 +4349,7 @@
     return result;
   }
 
-  function areLikelyDuplicateItems(first, second) {
+  function areLikelyDuplicateItems(first, second, firstExplicitVariantKey = '', secondExplicitVariantKey = '') {
     if (!first || !second) return false;
     const samePriceAndQuantity = roundMoney(first.unitPrice) === roundMoney(second.unitPrice)
       && roundMoney(first.total) === roundMoney(second.total)
@@ -4247,11 +4362,13 @@
         && normalizeProductUrl(first.productUrl) === normalizeProductUrl(second.productUrl))
       || (first.sku && second.sku && first.sku === second.sku),
     );
-    if (sameSupplierItem && samePriceAndQuantity && firstTitle === secondTitle) return true;
+    if (firstExplicitVariantKey && secondExplicitVariantKey
+      && firstExplicitVariantKey !== secondExplicitVariantKey) return false;
 
     const firstVariantKey = variantIdentityKeyFromItem(first);
     const secondVariantKey = variantIdentityKeyFromItem(second);
     if (firstVariantKey && secondVariantKey && firstVariantKey !== secondVariantKey) return false;
+    if (sameSupplierItem && samePriceAndQuantity && firstTitle === secondTitle) return true;
 
     const firstImageKey = imageIdentityKey(first.imageUrl);
     const secondImageKey = imageIdentityKey(second.imageUrl);
@@ -4290,6 +4407,8 @@
   }
 
   function variantIdentityKeyFromItem(item) {
+    const explicitVariant = supplierVariantKey(item && item.variant);
+    if (explicitVariant) return explicitVariant;
     const text = [
       item && item.description,
       item && item.sku,
@@ -4298,6 +4417,50 @@
       extractVariantCodesFromText(text).join('|'),
       variantLabelKeyFromText(text),
     ].filter(Boolean).join('|');
+  }
+
+  function explicitVariantIdentityKeyFromItem(item) {
+    const suppliedVariantKey = supplierVariantKey(item && item.variantKey);
+    if (suppliedVariantKey && suppliedVariantKey !== 'default') {
+      return suppliedVariantKey;
+    }
+    return supplierVariantKey(item && item.variant);
+  }
+
+  // A supplier listing plus its variant is the durable identity used by the
+  // ERP alias table. Older extraction paths only embedded the variant in the
+  // human description, leaving variantKey empty and forcing every re-import
+  // through the expensive duplicate matcher again.
+  function withSupplierVariantIdentity(item) {
+    if (!item) return item;
+    const explicit = cleanTitle(item.variant || '');
+    const parenthetical = cleanTitle(item.description || '')
+      .match(/\(([^()]{1,120})\)\s*$/);
+    const variant = explicit || (parenthetical ? parenthetical[1] : '');
+    const suppliedVariantKey = String(item.variantKey || '').trim();
+    const variantKey = (suppliedVariantKey && (suppliedVariantKey !== 'default' || !variant)
+      ? suppliedVariantKey
+      : '')
+      || supplierVariantKey(variant)
+      || variantLabelKeyFromText(item.description)
+      || supplierVariantKey(imageIdentityKey(item.imageUrl))
+      || (suppliedVariantKey === 'default' ? 'default' : '')
+      || 'default';
+    return {
+      ...item,
+      variant,
+      variantKey,
+    };
+  }
+
+  function supplierVariantKey(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 120);
   }
 
   function extractVariantCodesFromText(value) {

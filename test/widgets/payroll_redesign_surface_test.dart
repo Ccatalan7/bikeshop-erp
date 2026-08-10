@@ -134,6 +134,8 @@ void main() {
     })? loadAdvanceLedgerPage,
     Future<DateTime> Function(DateTime instant)? tenantCivilDateOf,
     Future<void> Function()? beforePayLine,
+    Future<void> Function(PayrollVoucher voucher, String operationKey)?
+        onUpdateDraft,
   }) {
     final paid = <Map<String, dynamic>>[];
     final corrected = <Map<String, dynamic>>[];
@@ -167,6 +169,10 @@ void main() {
           return hydrate == null ? voucher : await hydrate(voucher);
         },
         commitWeek: (id) async => confirmed.add(id),
+        updateDraft: onUpdateDraft == null
+            ? null
+            : ({required voucher, required operationKey}) =>
+                onUpdateDraft(voucher, operationKey),
         payLine: ({
           required voucherId,
           required lineId,
@@ -335,10 +341,197 @@ void main() {
     expect(find.text('FALTA PAGAR'), findsOneWidget);
     expect(
         find.textContaining('pasa a Pagada automáticamente'), findsOneWidget);
-    // Franja de asistencia: payroll no edita horas.
-    expect(find.textContaining('Las horas se editan en'), findsOneWidget);
+    // Asistencias entrega la fuente; el borrador sigue siendo editable.
+    expect(
+        find.textContaining('Puedes ajustar horas y tarifa'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('borrador guardado vuelve a abrir el editor y persiste cambios',
+      (tester) async {
+    PayrollVoucher? updated;
+    String? operationKey;
+    final draft = voucher(
+      status: PayrollVoucherStatus.draft,
+      lines: <PayrollVoucherLine>[
+        line(id: 'line-edit', name: 'Lucas Pacheco', settled: 0),
+      ],
+    );
+    final h = harness(
+      vouchers: <PayrollVoucher>[draft],
+      onUpdateDraft: (voucher, key) async {
+        updated = voucher;
+        operationKey = key;
+      },
+    );
+
+    await pump(tester, h.actions, size: const Size(1440, 900));
+    await tester.tap(find.byKey(const ValueKey('payroll-edit-draft')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Editar borrador de nómina'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('payroll-generation-hours-employee-line-edit')),
+      '40',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('payroll-generation-rate-employee-line-edit')),
+      '5000',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('payroll-generation-primary-action')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(updated?.lines.single.workedHours, 40);
+    expect(updated?.lines.single.hourlyRate, 5000);
+    expect(updated?.lines.single.totalAmount, 200000);
+    expect(operationKey, isNotEmpty);
+    expect(find.text('Cerrar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'editor visible guarda aunque la página de origen haya sido reemplazada',
+      (tester) async {
+    PayrollVoucher? updated;
+    final draft = voucher(
+      status: PayrollVoucherStatus.draft,
+      lines: <PayrollVoucherLine>[
+        line(id: 'line-detached-editor', name: 'Lucas Pacheco', settled: 0),
+      ],
+    );
+    final h = harness(
+      vouchers: <PayrollVoucher>[draft],
+      onUpdateDraft: (voucher, _) async => updated = voucher,
+    );
+    late StateSetter rebuildHost;
+    var showPayrollPage = true;
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.all.first,
+          brightness: Brightness.light,
+        ),
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            rebuildHost = setState;
+            return Scaffold(
+              body: showPayrollPage
+                  ? PayrollRedesignPage(actions: h.actions)
+                  : const SizedBox.expand(),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('payroll-edit-draft')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(
+        const ValueKey(
+          'payroll-generation-hours-employee-line-detached-editor',
+        ),
+      ),
+      '40',
+    );
+
+    rebuildHost(() => showPayrollPage = false);
+    await tester.pumpAndSettle();
+    expect(find.text('Editar borrador de nómina'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('payroll-generation-primary-action')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(updated?.lines.single.workedHours, 40);
+    expect(find.text('Cerrar'), findsOneWidget);
+    expect(find.textContaining('No pudimos guardar el borrador'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('update confirmado no se presenta como fallo si el reload falla',
+      (tester) async {
+    late PayrollRedesignData initialData;
+    var updates = 0;
+    final draft = voucher(
+      status: PayrollVoucherStatus.draft,
+      lines: <PayrollVoucherLine>[
+        line(id: 'line-refresh-failure', name: 'Lucas Pacheco', settled: 0),
+      ],
+    );
+    final h = harness(
+      onLoad: (call) async {
+        if (call > 1) throw StateError('refresh unavailable');
+        return initialData;
+      },
+      onUpdateDraft: (_, __) async => updates += 1,
+    );
+    initialData = PayrollRedesignData(
+      vouchers: <PayrollVoucher>[draft],
+      paymentMethods: paymentMethods,
+      versionedMutationsAvailable: true,
+    );
+
+    await pump(tester, h.actions, size: const Size(1440, 900));
+    await tester.tap(find.byKey(const ValueKey('payroll-edit-draft')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('payroll-generation-primary-action')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(updates, 1);
+    expect(find.text('Cerrar'), findsOneWidget);
+    expect(find.textContaining('No pudimos guardar el borrador'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('payroll-stale-projection-banner')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final surface in const <(String, Size, String)>[
+    ('tablet 834', Size(834, 900), 'payroll-edit-draft'),
+    ('teléfono 390', Size(390, 844), 'payroll-mobile-edit-draft'),
+  ]) {
+    testWidgets('borrador abre el editor desde ${surface.$1}', (tester) async {
+      final draft = voucher(
+        status: PayrollVoucherStatus.draft,
+        lines: <PayrollVoucherLine>[
+          line(id: 'line-${surface.$1}', name: 'Lucas Pacheco', settled: 0),
+        ],
+      );
+      final h = harness(
+        vouchers: <PayrollVoucher>[draft],
+        onUpdateDraft: (_, __) async {},
+      );
+
+      await pump(tester, h.actions, size: surface.$2);
+      final edit = find.byKey(ValueKey<String>(surface.$3));
+      expect(edit, findsOneWidget);
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Editar borrador de nómina'), findsOneWidget);
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'payroll-generation-hours-employee-line-${surface.$1}',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('2b: Pagar abre el composer y registra el pago con splits',
       (tester) async {

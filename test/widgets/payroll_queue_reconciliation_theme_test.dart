@@ -157,9 +157,9 @@ Future<void> _pumpQueue(WidgetTester tester, ThemeData theme) async {
           ],
           rows: <PayrollPersonRowVM>[
             PayrollPersonRowVM(
+              personId: 'employee-theme',
               name: 'Persona temática',
               initials: 'PT',
-              avatarColor: theme.colorScheme.secondary,
               method: 'Transferencia',
               methodIsCash: false,
               earned: r'$172.875',
@@ -179,9 +179,9 @@ Future<void> _pumpQueue(WidgetTester tester, ThemeData theme) async {
               onAction: () {},
             ),
             PayrollPersonRowVM(
+              personId: 'employee-paid',
               name: 'Persona pagada',
               initials: 'PP',
-              avatarColor: theme.colorScheme.tertiary,
               method: 'Transferencia',
               methodIsCash: false,
               earned: r'$90.000',

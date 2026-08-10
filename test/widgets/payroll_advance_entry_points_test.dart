@@ -59,9 +59,9 @@ void main() {
       required bool expanded,
     }) =>
         PayrollPersonRowVM(
+          personId: name,
           name: name,
           initials: name.substring(0, 2).toUpperCase(),
-          avatarColor: PayrollTokens.avatarSky,
           method: 'Transferencia bancaria',
           methodIsCash: false,
           earned: r'$172.875',

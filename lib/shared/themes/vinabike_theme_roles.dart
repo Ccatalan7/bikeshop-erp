@@ -97,9 +97,13 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
     required this.scrim,
     required this.shadow,
     required this.avatarA,
+    required this.onAvatarA,
     required this.avatarB,
+    required this.onAvatarB,
     required this.avatarC,
+    required this.onAvatarC,
     required this.avatarD,
+    required this.onAvatarD,
   });
 
   final String presetCode;
@@ -123,9 +127,13 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
   final Color scrim;
   final Color shadow;
   final Color avatarA;
+  final Color onAvatarA;
   final Color avatarB;
+  final Color onAvatarB;
   final Color avatarC;
+  final Color onAvatarC;
   final Color avatarD;
+  final Color onAvatarD;
 
   static VinabikeThemeRoles of(BuildContext context) {
     final roles = maybeOf(context);
@@ -157,9 +165,13 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
     Color? scrim,
     Color? shadow,
     Color? avatarA,
+    Color? onAvatarA,
     Color? avatarB,
+    Color? onAvatarB,
     Color? avatarC,
+    Color? onAvatarC,
     Color? avatarD,
+    Color? onAvatarD,
   }) {
     return VinabikeThemeRoles(
       presetCode: presetCode ?? this.presetCode,
@@ -177,9 +189,13 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
       scrim: scrim ?? this.scrim,
       shadow: shadow ?? this.shadow,
       avatarA: avatarA ?? this.avatarA,
+      onAvatarA: onAvatarA ?? this.onAvatarA,
       avatarB: avatarB ?? this.avatarB,
+      onAvatarB: onAvatarB ?? this.onAvatarB,
       avatarC: avatarC ?? this.avatarC,
+      onAvatarC: onAvatarC ?? this.onAvatarC,
       avatarD: avatarD ?? this.avatarD,
+      onAvatarD: onAvatarD ?? this.onAvatarD,
     );
   }
 
@@ -207,9 +223,13 @@ class VinabikeThemeRoles extends ThemeExtension<VinabikeThemeRoles> {
       scrim: Color.lerp(scrim, other.scrim, t)!,
       shadow: Color.lerp(shadow, other.shadow, t)!,
       avatarA: Color.lerp(avatarA, other.avatarA, t)!,
+      onAvatarA: Color.lerp(onAvatarA, other.onAvatarA, t)!,
       avatarB: Color.lerp(avatarB, other.avatarB, t)!,
+      onAvatarB: Color.lerp(onAvatarB, other.onAvatarB, t)!,
       avatarC: Color.lerp(avatarC, other.avatarC, t)!,
+      onAvatarC: Color.lerp(onAvatarC, other.onAvatarC, t)!,
       avatarD: Color.lerp(avatarD, other.avatarD, t)!,
+      onAvatarD: Color.lerp(onAvatarD, other.onAvatarD, t)!,
     );
   }
 }

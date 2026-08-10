@@ -94,9 +94,12 @@ class _ProductDraft {
       int.tryParse(minStockController.text.replaceAll(',', '.')) ?? 1;
 
   bool get hasPotentialDuplicates => duplicateCandidates.isNotEmpty;
-  double? get topDuplicateScore => duplicateCandidates.isEmpty
-      ? null
-      : duplicateCandidates.first.overallScore;
+
+  /// The strength of the best candidate, as a tier rather than a number: the
+  /// matcher no longer publishes a score for display, because a percentage
+  /// next to a product name is a measurement the system never made.
+  ProductDuplicateMatchTier? get topDuplicateTier =>
+      duplicateCandidates.isEmpty ? null : duplicateCandidates.first.matchTier;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1091,7 +1094,9 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            color: _resultIsError ? Theme.of(context).colorScheme.errorContainer : VinabikeThemeRoles.of(context).success.container,
+            color: _resultIsError
+                ? Theme.of(context).colorScheme.errorContainer
+                : VinabikeThemeRoles.of(context).success.container,
             child: Row(
               children: [
                 Icon(
@@ -1243,12 +1248,18 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
                 ? VinabikeThemeRoles.of(context).warning.container
                 : draft.hasCheckedDuplicates &&
                         draft.duplicateCheckError == null
-                    ? VinabikeThemeRoles.of(context).success.container.withValues(alpha: 0.45)
+                    ? VinabikeThemeRoles.of(context)
+                        .success
+                        .container
+                        .withValues(alpha: 0.45)
                     : draft.isSelected
                         ? (isEven
                             ? theme.colorScheme.surface
                             : theme.colorScheme.surfaceContainerLowest)
-                        : Theme.of(context).colorScheme.surfaceContainerLow.withValues(alpha: 0.5);
+                        : Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerLow
+                            .withValues(alpha: 0.5);
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: _hPad, vertical: 4),
@@ -1764,7 +1775,8 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
               : null,
           errorText: errorText,
           errorStyle: const TextStyle(fontSize: 9, height: 0.8),
-          hintStyle: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 11),
+          hintStyle: TextStyle(
+              color: Theme.of(context).colorScheme.outline, fontSize: 11),
         ),
         style: TextStyle(
           fontSize: 12,
@@ -1796,11 +1808,13 @@ class _BulkProductCreateDialogState extends State<BulkProductCreateDialog> {
               const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(5),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            borderSide:
+                BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(5),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            borderSide:
+                BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
         ),
         enabled: enabled,

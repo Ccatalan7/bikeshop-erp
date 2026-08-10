@@ -96,6 +96,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         ProductImportPage,
         ProductListPage,
         ServiceListPage,
+        PurchaseInvoiceExitGuard,
         PurchaseInvoiceFormPage,
         PurchaseInvoiceListPage,
         PurchasePaymentDetailPage,
@@ -345,6 +346,19 @@ class AppRouter {
 
     debugPrint(
         '🧭 [Router] Creating router with initialLocation: $effectiveInitialLocation, forcePublicStoreHost: $forcePublicStoreHost, kIsWeb: $kIsWeb');
+
+    final purchaseInvoiceExitScope = Object();
+    Object purchaseInvoiceExitKey(GoRouterState state) =>
+        (purchaseInvoiceExitScope, state.pageKey);
+    Future<bool> guardPurchaseInvoiceExit(
+      BuildContext _,
+      GoRouterState state,
+    ) async {
+      await erp.loadLibrary();
+      return erp.PurchaseInvoiceExitGuard.canExit(
+        purchaseInvoiceExitKey(state),
+      );
+    }
 
     final router = GoRouter(
       initialLocation: effectiveInitialLocation,
@@ -2272,6 +2286,7 @@ class AppRouter {
         // Specific routes MUST come before dynamic :id route
         GoRoute(
           path: '/purchases/new',
+          onExit: guardPurchaseInvoiceExit,
           pageBuilder: (context, state) {
             final prepaymentParam = state.uri.queryParameters['prepayment'];
             final isPrepayment = prepaymentParam == 'true';
@@ -2280,7 +2295,10 @@ class AppRouter {
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              () => erp.PurchaseInvoiceFormPage(isPrepayment: isPrepayment),
+              () => erp.PurchaseInvoiceFormPage(
+                isPrepayment: isPrepayment,
+                exitGuardScope: purchaseInvoiceExitKey(state),
+              ),
             );
           },
         ),
@@ -2343,6 +2361,7 @@ class AppRouter {
         // Dynamic route for viewing/editing invoices
         GoRoute(
           path: '/purchases/:id',
+          onExit: guardPurchaseInvoiceExit,
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
             final referrer = state.uri.queryParameters['referrer'];
@@ -2353,31 +2372,40 @@ class AppRouter {
               () => erp.PurchaseInvoiceFormPage(
                 invoiceId: id,
                 referrer: referrer,
+                exitGuardScope: purchaseInvoiceExitKey(state),
               ),
             );
           },
         ),
         GoRoute(
           path: '/purchases/:id/detail',
+          onExit: guardPurchaseInvoiceExit,
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
             // DEPRECATED: Detail page is no longer used, redirects to form page
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              () => erp.PurchaseInvoiceFormPage(invoiceId: id),
+              () => erp.PurchaseInvoiceFormPage(
+                invoiceId: id,
+                exitGuardScope: purchaseInvoiceExitKey(state),
+              ),
             );
           },
         ),
         GoRoute(
           path: '/purchases/:id/edit',
+          onExit: guardPurchaseInvoiceExit,
           pageBuilder: (context, state) {
             final id = state.pathParameters['id']!;
             // DEPRECATED: Edit route is no longer used, redirects to form page
             return _buildDeferredPageWithNoTransition(
               context,
               state,
-              () => erp.PurchaseInvoiceFormPage(invoiceId: id),
+              () => erp.PurchaseInvoiceFormPage(
+                invoiceId: id,
+                exitGuardScope: purchaseInvoiceExitKey(state),
+              ),
             );
           },
         ),

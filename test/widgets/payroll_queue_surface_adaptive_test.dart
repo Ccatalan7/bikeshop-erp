@@ -40,9 +40,9 @@ void main() {
     List<PayrollRowShortcutVM> shortcuts = const <PayrollRowShortcutVM>[],
   }) =>
       PayrollPersonRowVM(
+        personId: 'employee-$index',
         name: 'Persona de prueba $index',
         initials: 'P$index',
-        avatarColor: PayrollTokens.avatarSky,
         method: status == PayrollRowStatus.pendingCash
             ? 'Efectivo'
             : 'Transferencia bancaria',
@@ -88,6 +88,7 @@ void main() {
     String? excludedNote,
     String? blockedNote,
     VoidCallback? onOpenAttendance,
+    VoidCallback? onEditDraft,
   }) async {
     tester.view.physicalSize = Size(width, height);
     tester.view.devicePixelRatio = 1;
@@ -113,6 +114,7 @@ void main() {
             onOpenAttendance: onOpenAttendance ?? () {},
             onConfirmWeek: () {},
             onNextAction: () {},
+            onEditDraft: onEditDraft,
           ),
         ),
       ),
@@ -1164,6 +1166,60 @@ void main() {
     blockedReason: '',
     nextActionLabel: 'Pagar a Lucas',
   );
+
+  testWidgets(
+      'Editar borrador aparece e invoca sólo con callback y semana borrador',
+      (tester) async {
+    var edits = 0;
+    const editKey = ValueKey<String>('payroll-edit-draft');
+
+    await pumpQueue(
+      tester,
+      width: 1360,
+      height: 900,
+      dense: false,
+      rows: <PayrollPersonRowVM>[row(0)],
+      value: soloConfirmar,
+      onEditDraft: () => edits += 1,
+    );
+
+    expect(find.byKey(editKey), findsOneWidget);
+    expect(find.text('Editar borrador'), findsOneWidget);
+    await tester.tap(find.byKey(editKey));
+    await tester.pump();
+    expect(edits, 1);
+
+    await pumpQueue(
+      tester,
+      width: 1360,
+      height: 900,
+      dense: false,
+      rows: <PayrollPersonRowVM>[row(0)],
+      value: soloSiguiente,
+      onEditDraft: () => edits += 1,
+    );
+    expect(
+      find.byKey(editKey),
+      findsNothing,
+      reason: 'Un callback no convierte una semana confirmada en borrador.',
+    );
+
+    await pumpQueue(
+      tester,
+      width: 1360,
+      height: 900,
+      dense: false,
+      rows: <PayrollPersonRowVM>[row(0)],
+      value: soloConfirmar,
+    );
+    expect(
+      find.byKey(editKey),
+      findsNothing,
+      reason: 'La acción no debe prometer edición sin callback.',
+    );
+    expect(edits, 1);
+    expect(tester.takeException(), isNull);
+  });
 
   for (final (nombre, totals, key) in <(String, PayrollWeekTotalsVM, String)>[
     ('borrador · sólo Confirmar', soloConfirmar, 'payroll-confirm-week'),

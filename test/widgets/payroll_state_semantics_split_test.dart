@@ -71,9 +71,9 @@ void main() {
           ],
           rows: <PayrollPersonRowVM>[
             PayrollPersonRowVM(
+              personId: 'employee-expanded',
               name: 'Persona Expandida',
               initials: 'PE',
-              avatarColor: theme.colorScheme.secondary,
               method: 'Transferencia',
               methodIsCash: false,
               earned: r'$172.875',

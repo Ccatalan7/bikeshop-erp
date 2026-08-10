@@ -64,6 +64,18 @@ void main() {
             roles.neutral,
             '${preset.code}/${brightness.name} neutral',
           );
+          for (final pair in <(Color, Color, String)>[
+            (roles.avatarA, roles.onAvatarA, 'A'),
+            (roles.avatarB, roles.onAvatarB, 'B'),
+            (roles.avatarC, roles.onAvatarC, 'C'),
+            (roles.avatarD, roles.onAvatarD, 'D'),
+          ]) {
+            _expectContrast(
+              pair.$2,
+              pair.$1,
+              '${preset.code}/${brightness.name} avatar ${pair.$3}',
+            );
+          }
 
           final chrome = WorkspaceChromeTheme.resolveFromTheme(theme);
           expect(chrome.canvas, preset.shell.canvas);

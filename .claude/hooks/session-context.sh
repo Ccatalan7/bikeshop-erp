@@ -20,6 +20,6 @@ printf '%s\n' \
   "Shared checkout context: branch=${branch:-detached}, HEAD=${head:-unknown}, pre-existing changed paths=$changed_count." \
   "Preserve every unrelated change; never reset or clean the shared tree." \
   "Claude preflight: Code mode + bikeshop-erp + Fable 5 preferred (Opus 5 allowed) + Effort: Ultracode. Verify the visible labels and intended chat immediately before Send; Extra is not accepted." \
-  "UI redesign: Claude leads; inspect the relevant concept in the separate Design window, project ERP Bikeshop UI Mockups, and name that page/concept in the handoff." \
+  "UI redesign: Codex and the operator own product workflow, information architecture and layout by default; GUÍA GENERAL supplies visual grammar. Only when the owner explicitly requests Claude/Design input, contribute an independent proposal or review, inspect the relevant concept in ERP Bikeshop UI Mockups and name it in the handoff; never treat a module canvas as required or authoritative." \
   "Use .fvm/flutter_sdk/bin/dart and .fvm/flutter_sdk/bin/flutter for Dart/Flutter commands." \
   "Before shared work closes, follow docs/development/CODEX_CLAUDE_COLLABORATION.md and run the cross-review skill."

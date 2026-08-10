@@ -17,6 +17,7 @@ import '../../../shared/services/number_generation_service.dart';
 import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/remote_scanner_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/invoice_parser_service.dart';
 import '../../../shared/services/ocr_file_handoff_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -27,7 +28,6 @@ import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../../shared/widgets/ocr_upload_widget.dart';
-import '../../../shared/widgets/ocr_cleanup_page.dart';
 import '../../inventory/pages/product_form_page.dart';
 import '../../bikeshop/widgets/task_form_dialog.dart';
 import '../models/purchase_invoice.dart';
@@ -59,6 +59,58 @@ class _OcrPurchaseLineResolution {
   final Product? product;
 }
 
+/// Route-level authority used by [GoRoute.onExit] while a purchase operation
+/// is between its remote commit and local invoice reconciliation.
+///
+/// The key is scoped to one router and one route page, so an operation in one
+/// workspace cannot block navigation in another workspace or overwrite a
+/// stacked invoice page's handler.
+class PurchaseInvoiceExitGuard {
+  const PurchaseInvoiceExitGuard._();
+
+  static final Map<Object, _PurchaseInvoiceExitRegistration> _handlers =
+      <Object, _PurchaseInvoiceExitRegistration>{};
+
+  static void register(
+    Object scope,
+    Object owner,
+    Future<bool> Function() handler,
+  ) {
+    _handlers[scope] = _PurchaseInvoiceExitRegistration(
+      owner: owner,
+      handler: handler,
+    );
+  }
+
+  static void unregister(Object scope, Object owner) {
+    final registration = _handlers[scope];
+    if (registration == null || !identical(registration.owner, owner)) return;
+    _handlers.remove(scope);
+  }
+
+  static Future<bool> canExit(Object scope) async {
+    final handler = _handlers[scope]?.handler;
+    if (handler == null) return true;
+    try {
+      return await handler();
+    } catch (error, stackTrace) {
+      debugPrint('Purchase invoice exit guard failed closed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return false;
+    }
+  }
+}
+
+class _PurchaseInvoiceExitRegistration {
+  const _PurchaseInvoiceExitRegistration({
+    required this.owner,
+    required this.handler,
+  });
+
+  final Object owner;
+  final Future<bool> Function() handler;
+}
+
 class PurchaseInvoiceFormPage extends StatefulWidget {
   final String? invoiceId;
   final bool isPrepayment;
@@ -74,9 +126,11 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
     this.initialLineItems,
     this.readOnly = false,
     this.referrer,
+    this.exitGuardScope,
   });
 
   final String? referrer;
+  final Object? exitGuardScope;
 
   @override
   State<PurchaseInvoiceFormPage> createState() =>
@@ -119,6 +173,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   bool _isEditing = false; // Edit mode toggle (like sales invoice)
   bool _professionalReceivingEnabled = false;
   bool _showingReceiptWorkspace = false;
+  bool _showingOcrWorkspace = false;
+  bool _isApplyingOcrResult = false;
+  final GlobalKey<OCRUploadWidgetState> _ocrWorkspaceKey =
+      GlobalKey<OCRUploadWidgetState>();
+  final Object _workspaceCloseGuardOwner = Object();
+  WorkspaceManager? _workspaceManager;
+  String? _workspaceId;
+  FocusNode? _focusBeforeOcr;
+  OcrFileHandoffPayload? _ocrInitialFile;
   PurchaseReceiptFulfillment _receiptFulfillment =
       PurchaseReceiptFulfillment.none;
   bool _purchaseCreditNotesEnabled = false;
@@ -151,6 +214,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   @override
   void initState() {
     super.initState();
+    final exitGuardScope = widget.exitGuardScope;
+    if (exitGuardScope != null) {
+      PurchaseInvoiceExitGuard.register(
+        exitGuardScope,
+        this,
+        _confirmCanLeave,
+      );
+    }
     _dueDate = _issueDate.add(const Duration(days: 30));
 
     // Initialize payment model:
@@ -172,7 +243,84 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   @override
+  void didUpdateWidget(covariant PurchaseInvoiceFormPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.exitGuardScope == widget.exitGuardScope) return;
+    final oldScope = oldWidget.exitGuardScope;
+    if (oldScope != null) {
+      PurchaseInvoiceExitGuard.unregister(oldScope, this);
+    }
+    final newScope = widget.exitGuardScope;
+    if (newScope != null) {
+      PurchaseInvoiceExitGuard.register(newScope, this, _confirmCanLeave);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bindWorkspaceCloseGuard();
+  }
+
+  void _bindWorkspaceCloseGuard() {
+    WorkspaceManager? manager;
+    Workspace? workspace;
+    try {
+      manager = context.read<WorkspaceManager>();
+      workspace = context.read<Workspace>();
+    } on ProviderNotFoundException {
+      _unbindWorkspaceCloseGuard();
+      return;
+    }
+    if (identical(_workspaceManager, manager) && _workspaceId == workspace.id) {
+      return;
+    }
+    _unbindWorkspaceCloseGuard();
+    if (manager.registerWorkspaceCloseGuard(
+      workspaceId: workspace.id,
+      owner: _workspaceCloseGuardOwner,
+      guard: _confirmCanLeave,
+    )) {
+      _workspaceManager = manager;
+      _workspaceId = workspace.id;
+    }
+  }
+
+  void _unbindWorkspaceCloseGuard() {
+    final manager = _workspaceManager;
+    final workspaceId = _workspaceId;
+    _workspaceManager = null;
+    _workspaceId = null;
+    if (manager == null || workspaceId == null) return;
+    manager.unregisterWorkspaceCloseGuard(
+      workspaceId: workspaceId,
+      owner: _workspaceCloseGuardOwner,
+    );
+  }
+
+  Future<bool> _confirmCanLeave() async {
+    final childBlocksExit =
+        _ocrWorkspaceKey.currentState?.blocksOwnerExit ?? false;
+    if (!_isApplyingOcrResult && !childBlocksExit) return true;
+    if (mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Espera a que termine la creación y se vinculen los productos a la factura.',
+          ),
+        ),
+      );
+    }
+    return false;
+  }
+
+  @override
   void dispose() {
+    final exitGuardScope = widget.exitGuardScope;
+    if (exitGuardScope != null) {
+      PurchaseInvoiceExitGuard.unregister(exitGuardScope, this);
+    }
+    _unbindWorkspaceCloseGuard();
     _invoiceNumberController.dispose();
     _referenceController.dispose();
     _notesController.dispose();
@@ -717,7 +865,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         HardwareKeyboard.instance.addHandler(_hardwareKeyHandler);
         _scanSubscription?.cancel();
         _scanSubscription = barcodeService.barcodeStream.listen((barcode) {
-          if (mounted && _scannerEnabled && _canEditFields) {
+          if (mounted &&
+              _scannerEnabled &&
+              _canEditFields &&
+              !_showingOcrWorkspace) {
             _handleBarcodeScan(barcode);
           }
         });
@@ -746,7 +897,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   /// Hardware keyboard handler for USB/Bluetooth barcode scanners.
   /// Returns false so key events still reach focused widgets (text fields).
   bool _hardwareKeyHandler(KeyEvent event) {
-    if (!_scannerEnabled || !mounted || !_canEditFields) return false;
+    if (!_scannerEnabled ||
+        !mounted ||
+        !_canEditFields ||
+        _showingOcrWorkspace) {
+      return false;
+    }
     if (event is! KeyDownEvent) return false;
 
     final now = DateTime.now();
@@ -779,7 +935,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       _hwScanTimer = Timer(_scanKeyTimeout, () {
         final barcode = _scanBuffer.toString().trim();
         _scanBuffer.clear();
-        if (barcode.length >= _minBarcodeLen && mounted && _canEditFields) {
+        if (barcode.length >= _minBarcodeLen &&
+            mounted &&
+            _canEditFields &&
+            !_showingOcrWorkspace) {
           _handleBarcodeScan(barcode);
         }
       });
@@ -789,11 +948,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   }
 
   Future<void> _handleBarcodeScan(String barcode) async {
-    if (!_scannerEnabled || !mounted || !_canEditFields) {
+    if (!_scannerEnabled ||
+        !mounted ||
+        !_canEditFields ||
+        _showingOcrWorkspace) {
       return;
     }
 
     final product = await _findProductByExactCode(barcode);
+    if (!mounted || _showingOcrWorkspace) return;
 
     if (product != null) {
       // Check if product is already in the invoice
@@ -871,76 +1034,133 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       return;
     }
 
-    // Show OCR upload widget in bottom sheet
-    // Show OCR upload widget in centered dialog
-    await showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        final view = WidgetsBinding.instance.platformDispatcher.views.first;
-        final windowSize = Size(
-          view.physicalSize.width / view.devicePixelRatio,
-          view.physicalSize.height / view.devicePixelRatio,
-        );
-        final dialogWidth = windowSize.width - 32;
-        final dialogHeight = windowSize.height - 40;
+    _focusBeforeOcr = FocusManager.instance.primaryFocus;
+    _focusBeforeOcr?.unfocus();
+    setState(() {
+      _ocrInitialFile = initialFile;
+      _showingReceiptWorkspace = false;
+      _showingOcrWorkspace = true;
+    });
+  }
 
-        return Dialog(
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: SizedBox(
-            width: dialogWidth,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: dialogHeight),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 8, 8, 0),
-                      child: IconButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        icon: const Icon(Icons.close),
-                        tooltip: 'Cerrar',
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.grey.shade100,
-                          foregroundColor: Colors.grey.shade700,
+  void _closeOcrWorkspace() {
+    if (!mounted) return;
+    final focusToRestore = _focusBeforeOcr;
+    setState(() {
+      _showingOcrWorkspace = false;
+      _ocrInitialFile = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _showingOcrWorkspace) return;
+      if (focusToRestore?.context != null && focusToRestore!.canRequestFocus) {
+        focusToRestore.requestFocus();
+      }
+      if (identical(_focusBeforeOcr, focusToRestore)) {
+        _focusBeforeOcr = null;
+      }
+    });
+  }
+
+  void _handleOcrWorkspaceBack() {
+    if (_isApplyingOcrResult) return;
+    final consumed = _ocrWorkspaceKey.currentState?.handleBack() ?? false;
+    if (!consumed) _closeOcrWorkspace();
+  }
+
+  Widget _buildOcrWorkspace() {
+    final theme = Theme.of(context);
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleOcrWorkspaceBack();
+      },
+      child: Material(
+        color: theme.colorScheme.surface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Material(
+              color: theme.colorScheme.surface,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: kMinInteractiveDimension,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        key: const Key('purchase-ocr-workspace-back'),
+                        onPressed: _isApplyingOcrResult
+                            ? null
+                            : _handleOcrWorkspaceBack,
+                        icon: const Icon(Icons.arrow_back),
+                        tooltip: 'Volver a la factura',
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'OCR de factura de compra',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              'Lee el documento, resuelve sus productos y vuelve al borrador.',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                  Flexible(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                      child: OCRUploadWidget(
-                        documentType: OCRDocumentType.invoice,
-                        showPreview: true,
-                        initialFile: initialFile,
-                        supplierId: _selectedSupplier?.id,
-                        supplierName: _selectedSupplier?.name,
-                        onComplete: (parsedInvoice) async {
-                          await _loadProducts();
-                          final applied = await _applyOCRData(parsedInvoice);
-                          if (applied && dialogContext.mounted) {
-                            Navigator.of(dialogContext).pop();
-                          }
-                        },
-                        onError: (error) {
-                          debugPrint('OCR Error: $error');
-                        },
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-        );
-      },
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: theme.colorScheme.outlineVariant,
+            ),
+            Expanded(
+              child: OCRUploadWidget(
+                key: _ocrWorkspaceKey,
+                documentType: OCRDocumentType.invoice,
+                showPreview: true,
+                initialFile: _ocrInitialFile,
+                supplierId: _selectedSupplier?.id,
+                supplierName: _selectedSupplier?.name,
+                onComplete: (parsedInvoice) async {
+                  if (_isApplyingOcrResult) return;
+                  setState(() => _isApplyingOcrResult = true);
+                  try {
+                    await _loadProducts();
+                    final applied = await _applyOCRData(parsedInvoice);
+                    if (applied && mounted && _showingOcrWorkspace) {
+                      _closeOcrWorkspace();
+                    }
+                  } finally {
+                    if (mounted) {
+                      setState(() => _isApplyingOcrResult = false);
+                    }
+                  }
+                },
+                onError: (error) {
+                  debugPrint('OCR Error: $error');
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1070,7 +1290,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        icon: Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
+        icon: Icon(Icons.error_outline,
+            color: Theme.of(context).colorScheme.error),
         title: Text(title),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
@@ -2357,6 +2578,19 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Widget build(BuildContext context) {
     debugPrint(
         '🎨 PurchaseInvoiceFormPage.build() called, _isLoading = $_isLoading');
+    final invoiceForm = Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          _buildHeader(Theme.of(context)),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: BrandedLoading())
+                : _buildForm(),
+          ),
+        ],
+      ),
+    );
     return MainLayout(
       child: _showingReceiptWorkspace && _loadedInvoice != null
           ? PurchaseReceivingWorkspace(
@@ -2367,18 +2601,19 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               ),
               onCompleted: _handleReceiptCompleted,
             )
-          : Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  _buildHeader(Theme.of(context)),
-                  Expanded(
-                    child: _isLoading
-                        ? const Center(child: BrandedLoading())
-                        : _buildForm(),
+          : Stack(
+              fit: StackFit.expand,
+              children: [
+                Offstage(
+                  offstage: _showingOcrWorkspace,
+                  child: TickerMode(
+                    enabled: !_showingOcrWorkspace,
+                    child: invoiceForm,
                   ),
-                ],
-              ),
+                ),
+                if (_showingOcrWorkspace)
+                  Positioned.fill(child: _buildOcrWorkspace()),
+              ],
             ),
     );
   }
@@ -2390,14 +2625,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   /// deep links that have no history to return to.
   void _returnToOrigin() {
     if (ReturnNavigation.canReturn(context)) {
-      ReturnNavigation.close(context, fallbackRoute: '/purchases/invoices');
+      ReturnNavigation.close(context, fallbackRoute: '/purchases');
       return;
     }
     if (widget.referrer == 'movements') {
       context.go('/inventory/movements');
       return;
     }
-    context.go('/purchases/invoices');
+    context.go('/purchases');
   }
 
   Widget _buildHeader(ThemeData theme) {
@@ -2411,24 +2646,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       return [
         // OCR Scanner Button
         IconButton(
+          key: const Key('purchase-invoice-open-ocr'),
           onPressed: _openOCRScanner,
           icon: const Icon(Icons.document_scanner_outlined),
           tooltip: 'Escanear Factura (OCR)',
           style: IconButton.styleFrom(
             backgroundColor: theme.colorScheme.surfaceContainerHighest,
-          ),
-        ),
-        const SizedBox(width: 8),
-        // OCR Cleanup Tool (Temporary)
-        IconButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const OCRCleanupPage()),
-          ),
-          icon: const Icon(Icons.build_circle_outlined, color: Colors.orange),
-          tooltip: 'Reparar Datos OCR',
-          style: IconButton.styleFrom(
-            backgroundColor: Colors.orange.withValues(alpha: 0.1),
           ),
         ),
         const SizedBox(width: 8),
@@ -2573,9 +2796,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           actionButtons.add(
             OutlinedButton.icon(
               onPressed: _deleteInvoice,
-              icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-              label:
-                  Text('Eliminar', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              icon: Icon(Icons.delete_outline,
+                  color: Theme.of(context).colorScheme.error),
+              label: Text('Eliminar',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
           );
           actionButtons.add(const SizedBox(width: 8));
@@ -2705,7 +2929,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           actionButtons.add(
             OutlinedButton.icon(
               onPressed: _undoLastPayment,
-              icon: Icon(Icons.undo_outlined, color: Theme.of(context).colorScheme.error),
+              icon: Icon(Icons.undo_outlined,
+                  color: Theme.of(context).colorScheme.error),
               label: Text('Deshacer pago',
                   style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),

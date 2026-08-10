@@ -11,6 +11,34 @@ Verified working on 2026-07-30 (macOS 25.5, Flutter 3.38.5 via FVM).
 > es la referencia de cada herramienta y de las trampas que encierra.
 > Si vienes a probar la app o a compararla con un frame, empieza por allá.
 
+## Analiza antes de recargar, y recarga antes de reiniciar
+
+**2026-08-10, costo real: dos flujos completos de AliExpress rehechos.**
+
+`dart analyze` sobre los archivos que uno toca no basta. Agregar un valor a un
+`enum` compartido rompe todos los `switch` exhaustivos del repositorio —
+`ProductDuplicateMatchTier.ruledOut` rompió
+`lib/modules/inventory/widgets/product_duplicate_review_dialog.dart`, un archivo
+que el cambio no tocaba—. La app arranca igual y falla al compilar el hot
+reload, y desde afuera eso se ve idéntico a «el reload no confirmó». El orden es:
+
+1. `dart analyze lib test` completo cuando el cambio toca un tipo compartido
+   (enum, clase sellada, firma pública). Sobre los archivos propios sólo cuando
+   el cambio es local.
+2. `scripts/dev/native_session.sh reload`.
+3. `restart` **sólo** si el reload no basta.
+
+Un reinicio no es gratis: borra el estado de la sesión y obliga a rehacer el
+flujo entero —en el OCR de compras, volver a juntar los pedidos del día, releer
+la factura y volver a pagar el análisis de IA de cada línea—. El dueño lo dijo
+en esas palabras; cada reinicio innecesario le cuesta minutos y cuota.
+
+Lo que un reload **no** recalcula es el estado ya computado: los candidatos de
+una fila se resolvieron una vez y siguen ahí. Para volver a medirlos sin
+reiniciar, se vuelve a disparar el trabajo desde la propia pantalla —«Buscar
+pendientes», el reintento de una fila, o abrir el overlay de parecidos, que
+consulta de nuevo al matcher— en vez de rehacer el flujo desde el navegador.
+
 ## The three surfaces, and when to use each
 
 | Surface | Loop | Use it for |

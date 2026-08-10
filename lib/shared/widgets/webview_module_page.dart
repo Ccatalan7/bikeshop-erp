@@ -42,6 +42,7 @@ import '../utils/responsive_viewport.dart';
 import 'browser_popup_window.dart';
 import '../utils/browser_credential_autofill.dart';
 import '../utils/file_download.dart';
+import 'vb_marked_date_picker.dart';
 import 'vb_notice.dart';
 
 /// Persistent browser workspace - loads a website as a first-class workspace.
@@ -83,7 +84,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   static const _suggestionDelay = Duration(milliseconds: 180);
   static const _suggestionTimeout = Duration(milliseconds: 1200);
   static const _downloadTimeout = Duration(seconds: 45);
-  static final _browserInitialUserScripts = UnmodifiableListView<UserScript>([
+  final List<UserScript> _browserInitialUserScriptEntries = <UserScript>[
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
       browserPopupOpenCaptureUserScript(),
     UserScript(
@@ -92,7 +93,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_END,
       forMainFrameOnly: true,
     ),
-  ]);
+  ];
+
+  UnmodifiableListView<UserScript> get _browserInitialUserScripts =>
+      UnmodifiableListView<UserScript>(_browserInitialUserScriptEntries);
 
   InAppWebViewController? _controller;
   WebViewEnvironment? _webViewEnvironment;
@@ -488,6 +492,36 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         }
       }
 
+      // La sonda debe existir antes de que AliExpress dispare la primera
+      // petición del listado. Inyectarla sólo al pulsar «Compras del día»
+      // llegaba después de esa petición y obligaba a elegir una fecha a
+      // ciegas. El mismo extractor empaquetado se limita por host y sigue
+      // siendo la única fuente de lectura del listado.
+      _aliExpressBridgeSource ??= await rootBundle.loadString(
+        'assets/browser/aliexpress_invoice_content.js',
+      );
+      final aliExpressTrustedDomains = jsonEncode(
+        AliExpressDailyInvoiceService.trustedRegistrableDomains,
+      );
+      _browserInitialUserScriptEntries.add(
+        UserScript(
+          groupName: 'VinabikeAliExpressInvoiceBridge',
+          source: '''
+            (() => {
+              const host = String(globalThis.location?.hostname || '').toLowerCase();
+              const trustedDomains = $aliExpressTrustedDomains;
+              if (trustedDomains.some(
+                (domain) => host === domain || host.endsWith('.' + domain),
+              )) {
+                ${_aliExpressBridgeSource!}
+              }
+            })();
+          ''',
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+          forMainFrameOnly: true,
+        ),
+      );
+
       _finishInitialization(loading: !shouldLoadThroughRelay);
       if (shouldLoadThroughRelay) {
         unawaited(_startDocumentRelayForUrl(initialUri.toString()));
@@ -651,6 +685,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 
   /// Días de compra que ya tienen factura emitida en el ERP.
   final Set<String> _aliExpressInvoicedDates = <String>{};
+  int _aliExpressInvoiceDateRefreshGeneration = 0;
 
   void _rememberAliExpressOrderDates(Iterable<String> dates) {
     final added = _aliExpressOrderDates.addAll.call;
@@ -665,10 +700,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   /// la información accionable: «esta compra todavía no está registrada».
   Future<void> _refreshAliExpressInvoicedDates() async {
     if (!mounted || _aliExpressOrderDates.isEmpty) return;
+    final generation = ++_aliExpressInvoiceDateRefreshGeneration;
+    final orderDates = List<String>.unmodifiable(_aliExpressOrderDates);
     try {
       final purchaseService = context.read<PurchaseService>();
       final invoiced = <String>{};
-      for (final day in _aliExpressOrderDates) {
+      for (final day in orderDates) {
         final date = DateTime.tryParse(day);
         if (date == null) continue;
         final number = AliExpressPendingDaysService.invoiceNumberForDate(date);
@@ -676,7 +713,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           invoiced.add(day);
         }
       }
-      if (!mounted) return;
+      if (!mounted || generation != _aliExpressInvoiceDateRefreshGeneration) {
+        return;
+      }
       setState(() {
         _aliExpressInvoicedDates
           ..clear()
@@ -726,6 +765,88 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
 
+  Future<_AliExpressDateIndexRefresh> _refreshAliExpressOrderDateIndex() async {
+    final controller = _controller;
+    final openingUrl = _currentUrl;
+    if (controller == null ||
+        !AliExpressDailyInvoiceService.isTrustedUri(
+          Uri.tryParse(openingUrl),
+        )) {
+      return const _AliExpressDateIndexRefresh.unavailable(
+        'Abre primero el historial de pedidos de AliExpress.',
+      );
+    }
+
+    try {
+      await _installAliExpressBridge(controller);
+      await _runAliExpressBridge(
+        controller,
+        method: 'ordersApiProbeInstall',
+      );
+
+      Future<Map<String, dynamic>> collectDates() => _runAliExpressBridge(
+            controller,
+            method: 'ordersApiCollect',
+            arguments: const <String, dynamic>{
+              'filters': <String, dynamic>{
+                'datesOnly': true,
+                'maxPages': 30,
+              },
+            },
+          );
+
+      var result = await collectDates();
+      if (result['ok'] != true &&
+          result['reason']?.toString().contains('plantilla') == true) {
+        // Compatibilidad con la página que ya estaba abierta antes de que el
+        // UserScript temprano existiera: una carga adicional produce una
+        // petición real y, por tanto, la plantilla firmada de esta sesión.
+        final click = await _runAliExpressBridge(
+          controller,
+          method: 'ordersListClickLoadMore',
+        );
+        if (click['clicked'] == true) {
+          await Future<void>.delayed(const Duration(seconds: 6));
+          result = await collectDates();
+        }
+      }
+
+      if (!identical(controller, _controller) ||
+          openingUrl != _currentUrl ||
+          !mounted) {
+        return const _AliExpressDateIndexRefresh.unavailable(
+          'La página cambió mientras se consultaban los pedidos.',
+        );
+      }
+      if (result['ok'] != true) {
+        return _AliExpressDateIndexRefresh.unavailable(
+          result['reason']?.toString() ??
+              'AliExpress no entregó el índice de pedidos.',
+        );
+      }
+
+      final dates = <String>{
+        for (final value in (result['datesWithOrders'] as List? ?? const []))
+          if (DateTime.tryParse(value.toString()) != null) value.toString(),
+      };
+      if (dates.isNotEmpty) {
+        _rememberAliExpressOrderDates(dates);
+      }
+      await _refreshAliExpressInvoicedDates();
+      return _AliExpressDateIndexRefresh.ready(
+        datesFound: dates.length,
+        coverageComplete: result['coverageComplete'] == true,
+      );
+    } catch (error) {
+      _aliExpressDebug('orders.date-index.failed', <String, dynamic>{
+        'error': error.toString(),
+      });
+      return const _AliExpressDateIndexRefresh.unavailable(
+        'No se pudo actualizar el índice de pedidos.',
+      );
+    }
+  }
+
   /// Días ya anunciados, para no repetir el aviso en cada consulta.
   static final Set<String> _announcedAliExpressPendingDays = <String>{};
 
@@ -771,180 +892,209 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   Widget _buildAliExpressDayHint(
     BuildContext context, {
     required DateTime selectedDate,
-    required ValueChanged<DateTime> onPickDate,
   }) {
-    if (_aliExpressOrderDates.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
     final selectedKey = _dateKey(selectedDate);
     final hasOrders = _aliExpressOrderDates.contains(selectedKey);
     final alreadyInvoiced = _aliExpressInvoicedDates.contains(selectedKey);
-    // Lo accionable es el día comprado que aún no está registrado; los ya
-    // facturados sólo estorbarían la lista.
-    final pending = AliExpressPendingDaysService.pendingDays(
-      daysWithOrders: _aliExpressOrderDates,
-      invoiceNumbers: _aliExpressInvoicedDates.map(
-        (day) => AliExpressPendingDaysService.invoiceNumberForDate(
-          DateTime.parse(day),
-        ),
-      ),
-    );
-    final recent =
-        pending.where((date) => date != selectedKey).take(4).toList();
 
     return Padding(
       padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // E-04 `VbNotice` de la guía de componentes: el estado del día es un
-          // aviso de la superficie, no una fila de texto propia. Usar el
-          // componente canónico da el tono, el ícono y la región viva ya
-          // resueltos, en vez de una variante local del mismo aviso.
-          VbNotice(
-            key: const ValueKey('aliexpress-day-state-notice'),
-            tone: alreadyInvoiced
-                ? VbNoticeTone.success
-                : hasOrders
-                    ? VbNoticeTone.warning
-                    : VbNoticeTone.info,
-            title: alreadyInvoiced
-                ? 'Día ya facturado'
-                : hasOrders
-                    ? 'Compras sin factura'
-                    : 'Sin compras este día',
-            body: alreadyInvoiced
-                ? 'Ya existe una factura registrada para esta fecha.'
-                : hasOrders
-                    ? 'Las compras de este día aún no se registran en el ERP.'
-                    : null,
-          ),
-          if (recent.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Compras sin factura',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final date in recent)
-                  ActionChip(
-                    key: ValueKey('aliexpress-day-hint-$date'),
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    label: Text(
-                      '${date.substring(8)}/${date.substring(5, 7)}',
-                      style: theme.textTheme.labelSmall,
-                    ),
-                    onPressed: () => onPickDate(DateTime.parse(date)),
-                  ),
-              ],
-            ),
-          ],
-        ],
+      // E-04 `VbNotice` confirma la fecha elegida; el descubrimiento ocurre
+      // directamente en las celdas D-01, antes del toque.
+      child: VbNotice(
+        key: const ValueKey('aliexpress-day-state-notice'),
+        tone: alreadyInvoiced
+            ? VbNoticeTone.success
+            : hasOrders
+                ? VbNoticeTone.warning
+                : VbNoticeTone.info,
+        title: alreadyInvoiced
+            ? 'Día ya facturado'
+            : hasOrders
+                ? 'Compras sin factura'
+                : 'Fecha sin marca',
+        body: alreadyInvoiced
+            ? 'Ya existe una factura registrada para esta fecha.'
+            : hasOrders
+                ? 'Las compras de este día aún no se registran en el ERP.'
+                : 'No consta una compra para esta fecha en el índice disponible.',
       ),
     );
   }
 
+  Map<DateTime, VbMarkedDateMarker> _aliExpressDateMarkers() =>
+      <DateTime, VbMarkedDateMarker>{
+        for (final value in _aliExpressOrderDates)
+          if (DateTime.tryParse(value) case final date?)
+            DateUtils.dateOnly(date): VbMarkedDateMarker(
+              status: _aliExpressInvoicedDates.contains(value)
+                  ? VbMarkedDateStatus.invoiced
+                  : VbMarkedDateStatus.pending,
+              label: _aliExpressInvoicedDates.contains(value)
+                  ? 'Compra ya facturada'
+                  : 'Compra sin factura',
+            ),
+      };
+
   Future<_AliExpressImportRequest?> _pickAliExpressImportRequest() async {
     var selectedDate = DateTime.now();
-    return showDialog<_AliExpressImportRequest>(
-      context: context,
-      useRootNavigator: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.receipt_long_outlined, size: 22),
-              SizedBox(width: 10),
-              Text('Compras AliExpress'),
-            ],
-          ),
-          content: SizedBox(
-            width: 390,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'El ERP reunirá todos los pedidos del día, abrirá cada detalle '
-                  'y preparará una sola factura. Puedes revisar el PDF primero '
-                  'o abrir directamente la revisión OCR.',
-                ),
-                const SizedBox(height: 16),
-                InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: selectedDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                    );
-                    if (picked != null) {
-                      setDialogState(() => selectedDate = picked);
-                    }
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Día de compra',
-                      prefixIcon: Icon(Icons.calendar_today_outlined),
-                      border: OutlineInputBorder(),
+    var isRefreshingDateIndex = true;
+    _AliExpressDateIndexRefresh? dateIndexRefresh;
+    StateSetter? rebuildDialog;
+    var dialogIsOpen = true;
+    unawaited(
+      _refreshAliExpressOrderDateIndex().then((result) {
+        dateIndexRefresh = result;
+        isRefreshingDateIndex = false;
+        if (dialogIsOpen) rebuildDialog?.call(() {});
+      }),
+    );
+
+    try {
+      return await showDialog<_AliExpressImportRequest>(
+        context: context,
+        useRootNavigator: false,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            rebuildDialog = setDialogState;
+            final hasKnownDates = _aliExpressOrderDates.isNotEmpty;
+            final canPickDate = !isRefreshingDateIndex || hasKnownDates;
+            final refreshFailure = dateIndexRefresh?.message;
+
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.receipt_long_outlined, size: 22),
+                  SizedBox(width: 10),
+                  Text('Compras AliExpress'),
+                ],
+              ),
+              content: SizedBox(
+                width: 390,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'El ERP reunirá todos los pedidos del día, abrirá cada detalle '
+                      'y preparará una sola factura. Puedes revisar el PDF primero '
+                      'o abrir directamente la revisión OCR.',
                     ),
-                    child: Text(
-                      '${selectedDate.day.toString().padLeft(2, '0')}/'
-                      '${selectedDate.month.toString().padLeft(2, '0')}/'
-                      '${selectedDate.year}',
+                    const SizedBox(height: 16),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: canPickDate
+                          ? () async {
+                              final picked = await showVbMarkedDatePicker(
+                                context: context,
+                                initialDate: selectedDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime.now(),
+                                markers: _aliExpressDateMarkers(),
+                                helpText: 'Seleccionar fecha de compra',
+                                cancelText: 'Cancelar',
+                                confirmText: 'Aceptar',
+                                useRootNavigator: false,
+                              );
+                              if (picked != null && dialogIsOpen) {
+                                setDialogState(() => selectedDate = picked);
+                              }
+                            }
+                          : null,
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Día de compra',
+                          prefixIcon: const Icon(Icons.calendar_today_outlined),
+                          border: const OutlineInputBorder(),
+                          enabled: canPickDate,
+                        ),
+                        child: Text(
+                          '${selectedDate.day.toString().padLeft(2, '0')}/'
+                          '${selectedDate.month.toString().padLeft(2, '0')}/'
+                          '${selectedDate.year}',
+                        ),
+                      ),
                     ),
-                  ),
+                    if (isRefreshingDateIndex) ...[
+                      const SizedBox(height: 10),
+                      Semantics(
+                        liveRegion: true,
+                        label: 'Buscando días con compras en AliExpress',
+                        child: const Row(
+                          children: [
+                            SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 10),
+                            Expanded(child: Text('Buscando días con compras…')),
+                          ],
+                        ),
+                      ),
+                    ] else if (refreshFailure != null) ...[
+                      const SizedBox(height: 10),
+                      VbNotice(
+                        key: const ValueKey(
+                          'aliexpress-date-index-unavailable',
+                        ),
+                        tone: VbNoticeTone.warning,
+                        title: 'No se pudo actualizar el calendario',
+                        body: hasKnownDates
+                            ? 'Se muestran las marcas guardadas. $refreshFailure'
+                            : '$refreshFailure Puedes elegir la fecha manualmente.',
+                      ),
+                    ],
+                    if (!isRefreshingDateIndex || hasKnownDates)
+                      _buildAliExpressDayHint(
+                        context,
+                        selectedDate: selectedDate,
+                      ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'No se guardará la factura ni se crearán productos hasta tu confirmación.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
-                _buildAliExpressDayHint(
-                  context,
-                  selectedDate: selectedDate,
-                  onPickDate: (date) =>
-                      setDialogState(() => selectedDate = date),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  'No se guardará la factura ni se crearán productos hasta tu confirmación.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                OutlinedButton.icon(
+                  onPressed: canPickDate
+                      ? () => Navigator.of(dialogContext).pop(
+                            _AliExpressImportRequest(
+                              date: selectedDate,
+                              mode: _AliExpressImportMode.preview,
+                            ),
+                          )
+                      : null,
+                  icon: const Icon(Icons.visibility_outlined, size: 17),
+                  label: const Text('Generar preview'),
+                ),
+                FilledButton.icon(
+                  onPressed: canPickDate
+                      ? () => Navigator.of(dialogContext).pop(
+                            _AliExpressImportRequest(
+                              date: selectedDate,
+                              mode: _AliExpressImportMode.directToOcr,
+                            ),
+                          )
+                      : null,
+                  icon: const Icon(Icons.auto_awesome, size: 17),
+                  label: const Text('Preparar factura'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancelar'),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(dialogContext).pop(
-                _AliExpressImportRequest(
-                  date: selectedDate,
-                  mode: _AliExpressImportMode.preview,
-                ),
-              ),
-              icon: const Icon(Icons.visibility_outlined, size: 17),
-              label: const Text('Generar preview'),
-            ),
-            FilledButton.icon(
-              onPressed: () => Navigator.of(dialogContext).pop(
-                _AliExpressImportRequest(
-                  date: selectedDate,
-                  mode: _AliExpressImportMode.directToOcr,
-                ),
-              ),
-              icon: const Icon(Icons.auto_awesome, size: 17),
-              label: const Text('Preparar factura'),
-            ),
-          ],
+            );
+          },
         ),
-      ),
-    );
+      );
+    } finally {
+      dialogIsOpen = false;
+      rebuildDialog = null;
+    }
   }
 
   Future<void> _startAliExpressDailyImport() async {
@@ -1575,6 +1725,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       throw StateError(
           'La extracción solo puede ejecutarse dentro de AliExpress.');
     }
+    final alreadyInstalled = await controller.evaluateJavascript(
+      source: '''
+        Boolean(
+          globalThis.__ALIEXPRESS_INVOICE_BRIDGE__ &&
+          typeof globalThis.__ALIEXPRESS_INVOICE_BRIDGE__.ordersApiCollect === 'function'
+        )
+      ''',
+    );
+    if (_asBool(alreadyInstalled) || alreadyInstalled == 1) return;
     _aliExpressBridgeSource ??= await rootBundle.loadString(
       'assets/browser/aliexpress_invoice_content.js',
     );
@@ -5503,6 +5662,23 @@ class _WebViewModulePageState extends State<WebViewModulePage>
 }
 
 enum _AliExpressImportMode { preview, directToOcr }
+
+class _AliExpressDateIndexRefresh {
+  const _AliExpressDateIndexRefresh.ready({
+    required this.datesFound,
+    required this.coverageComplete,
+  }) : message = null;
+
+  const _AliExpressDateIndexRefresh.unavailable(this.message)
+      : datesFound = 0,
+        coverageComplete = false;
+
+  final int datesFound;
+  final bool coverageComplete;
+  final String? message;
+
+  bool get isAvailable => message == null;
+}
 
 class _AliExpressImportRequest {
   const _AliExpressImportRequest({

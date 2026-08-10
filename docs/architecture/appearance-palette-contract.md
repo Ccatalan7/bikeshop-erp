@@ -43,7 +43,7 @@ From `VinabikeThemeRoles` (authoritative list in
 | `focusRing` | Keyboard/focus affordance |
 | `disabledForeground` | Disabled content |
 | `scrim / shadow` | Overlays and elevation |
-| `avatarA…D` | Identity avatars |
+| `avatarA…D / onAvatarA…D` | Identity avatar fill/initial pairs; every pair keeps text contrast ≥ 4.5:1 |
 
 `ColorScheme` carries the content roles the resolver designed: `primary` is
 the preset's **action accent** (parameterizable per preset), `onPrimary` its
