@@ -359,7 +359,7 @@ jobs:
           node-version: "24.18.0"
 
       - name: Download verified macOS artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: vinabike-erp-macos
           path: dist

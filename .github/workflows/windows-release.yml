@@ -340,7 +340,7 @@ jobs:
           node-version: "24.18.0"
 
       - name: Download verified Windows artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: vinabike-erp-windows
           path: dist
