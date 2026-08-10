@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -7,8 +9,15 @@ import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
 import '../models/product_duplicate_candidate.dart';
 import 'inventory_service.dart' as inv_service;
+import 'product_identity/product_catalog_identity_index.dart';
+import 'product_identity/product_identity_extractor.dart';
+import 'product_identity/product_identity_matcher.dart';
+import 'product_identity/product_identity_profile.dart';
+import 'product_identity/product_image_identity.dart';
+import 'product_identity/product_visual_reading.dart';
 import 'product_image_fingerprint_service.dart';
 
+/// One invoice line asking the catalog «¿ya tengo esto?».
 class ProductDuplicateProbe {
   const ProductDuplicateProbe({
     required this.name,
@@ -25,6 +34,8 @@ class ProductDuplicateProbe {
     this.imageFileName,
     this.price,
     this.cost,
+    this.supplierListingId,
+    this.confirmedProductId,
   });
 
   final String name;
@@ -41,1790 +52,476 @@ class ProductDuplicateProbe {
   final String? imageFileName;
   final double? price;
   final double? cost;
+
+  /// Supplier listing identity (an AliExpress `itemId`), when known.
+  final String? supplierListingId;
+
+  /// A product the operator already confirmed for this exact listing variant.
+  final String? confirmedProductId;
 }
 
 typedef ProductDuplicateImageLoader = Future<Uint8List?> Function(String url);
 
-typedef ProductDuplicateVisualComparator = Future<AIProductVisualComparison?>
-    Function({
-  required Uint8List probeImageBytes,
-  required Uint8List candidateImageBytes,
-  String? probeName,
-  String? candidateName,
-  String? candidateBrand,
-  String? candidateCategory,
-});
-
-class _ResolvedProbeImage {
-  const _ResolvedProbeImage({
-    required this.fingerprint,
-    required this.bytes,
-    required this.hasReference,
-  });
-
-  final ProductImageFingerprint? fingerprint;
-  final Uint8List? bytes;
-  final bool hasReference;
-}
-
-class _ImageMatchEvidence {
-  const _ImageMatchEvidence({
-    required this.score,
-    required this.isAvailable,
-    this.isExactCanonicalUrl = false,
-    this.isExactContent = false,
-  });
-
-  const _ImageMatchEvidence.unavailable()
-      : score = 0,
-        isAvailable = false,
-        isExactCanonicalUrl = false,
-        isExactContent = false;
-
-  final double score;
-  final bool isAvailable;
-  final bool isExactCanonicalUrl;
-  final bool isExactContent;
-
-  bool get isExact => isExactCanonicalUrl || isExactContent;
-}
-
-class _BottomBracketSpec {
-  const _BottomBracketSpec({
-    required this.shellMm,
-    required this.axleMm,
-  });
-
-  final double shellMm;
-  final double axleMm;
-}
-
-class _ProductShapeProfile {
-  const _ProductShapeProfile({
-    required this.attributes,
-    required this.exclusiveValues,
-    required this.requiredAttributes,
-  });
-
-  final Set<String> attributes;
-  final Map<String, String> exclusiveValues;
-  final Set<String> requiredAttributes;
-
-  bool get isEmpty =>
-      attributes.isEmpty &&
-      exclusiveValues.isEmpty &&
-      requiredAttributes.isEmpty;
-}
-
-/// Per-candidate inputs needed to recompute `overallScore` after the
-/// detailed image second-pass replaces the cheap fingerprint score.
-/// Stored in a static cache keyed by the candidate identity so we don't
-/// have to widen the public `ProductDuplicateCandidate` API.
-class _DuplicateRescoreInputs {
-  _DuplicateRescoreInputs({
-    required this.product,
-    required this.keywordScore,
-    required this.semanticScore,
-    required this.identityScore,
-    required this.metadataScore,
-    required this.catalogSpecScore,
-    required this.shapeAttributeScore,
-    required this.hasImageProbe,
-    required this.imageComparisonAvailable,
-    required this.hasExactImageMatch,
-    required this.hasExactModelMatch,
-  });
-
-  final Product product;
-  final double keywordScore;
-  final double semanticScore;
-  final double identityScore;
-  final double metadataScore;
-  final double catalogSpecScore;
-  final double shapeAttributeScore;
-  final bool hasImageProbe;
-  final bool imageComparisonAvailable;
-  final bool hasExactImageMatch;
-  final bool hasExactModelMatch;
-
-  // Transient cache scoped to one `findCandidates` call; the public wrapper
-  // clears it in a `finally` so no entry survives the search that created it.
-  static final Map<ProductDuplicateCandidate, _DuplicateRescoreInputs> _cache =
-      <ProductDuplicateCandidate, _DuplicateRescoreInputs>{};
-}
-
+/// Resolves which catalog product an invoice line refers to.
+///
+/// Rebuilt on 2026-08-09 after measuring the previous implementation against
+/// the real 1555-product catalog: three of the seven lines of one AliExpress
+/// invoice returned nothing at all, a fourth returned six different hubs all
+/// labelled equally strong, and every line cost 550–700 ms of pure CPU on the
+/// UI isolate. The causes were structural, not tuning:
+///
+/// * the product family came from a bag of words over the whole title, so a
+///   crankset that ships with a bottom bracket was classified as one, and an
+///   adapter that mentions tyre valves was classified as a tyre;
+/// * there was no typed reading of measurements, so `32H` — a spoke count —
+///   passed the model-code filter and made every 32-spoke hub an exact model
+///   match;
+/// * the whole catalog was re-analysed for every line.
+///
+/// The work now happens in three separable, pure pieces: an extractor that
+/// turns prose into typed evidence, an index that remembers that evidence and
+/// returns a bounded shortlist, and a matcher that eliminates before it ranks.
+/// This class owns only the parts that need the network: the catalog, the
+/// image bytes, and one visual reading per line.
 class ProductDuplicateMatcherService {
+  static const int _maxConcurrentImageDownloads = 4;
+  static const int _defaultImageByteCacheMaxEntries = 48;
+  static const int _defaultImageByteCacheMaxBytes = 32 * 1024 * 1024;
+
   ProductDuplicateMatcherService({
     required inv_service.InventoryService inventoryService,
     AIAssistantService? aiAssistantService,
     ProductDuplicateImageLoader? imageLoader,
-    ProductDuplicateVisualComparator? visualComparator,
-    this.enableSemanticSearch = true,
+    ProductVisualReadingService? visualReadingService,
+    Iterable<String> knownBrands = const <String>[],
+    Map<String, List<String>> categoryAncestry = const {},
+    this.enableVisualReading = true,
     this.persistComputedImageFingerprints = true,
-  })  : _inventoryService = inventoryService,
-        _aiAssistantService = aiAssistantService ?? AIAssistantService(),
+    this.imageByteCacheMaxEntries = _defaultImageByteCacheMaxEntries,
+    this.imageByteCacheMaxBytes = _defaultImageByteCacheMaxBytes,
+  })  : assert(imageByteCacheMaxEntries >= 0),
+        assert(imageByteCacheMaxBytes >= 0),
+        _inventoryService = inventoryService,
         _imageLoader = imageLoader,
-        _visualComparator = visualComparator;
+        _visualReadingService = visualReadingService ??
+            ProductVisualReadingService(
+              aiAssistantService: aiAssistantService,
+            ),
+        _index = ProductCatalogIdentityIndex(
+          knownBrands: knownBrands,
+          categoryAncestry: categoryAncestry,
+        ),
+        _matcher = ProductIdentityMatcher(categoryAncestry: categoryAncestry),
+        _knownBrands = List<String>.unmodifiable(knownBrands);
 
   final inv_service.InventoryService _inventoryService;
-  final AIAssistantService _aiAssistantService;
   final ProductDuplicateImageLoader? _imageLoader;
-  final ProductDuplicateVisualComparator? _visualComparator;
-  final bool enableSemanticSearch;
+  final ProductVisualReadingService _visualReadingService;
+  final ProductCatalogIdentityIndex _index;
+  final ProductIdentityMatcher _matcher;
+  final List<String> _knownBrands;
+
+  /// Whether the invoice photo may be read once per line to recover a family
+  /// the text never states.
+  final bool enableVisualReading;
+
   final bool persistComputedImageFingerprints;
+  final int imageByteCacheMaxEntries;
+  final int imageByteCacheMaxBytes;
+
+  final LinkedHashMap<String, Uint8List> _imageByteCache =
+      LinkedHashMap<String, Uint8List>();
+  final Map<String, Future<Uint8List?>> _imageDownloadsInFlight =
+      <String, Future<Uint8List?>>{};
+  int _imageByteCacheSize = 0;
+  final Map<String, Future<void>> _fingerprintPersistenceCache =
+      <String, Future<void>>{};
+  final _AsyncPermitPool _imageDownloadPool =
+      _AsyncPermitPool(_maxConcurrentImageDownloads);
+
+  /// Model calls spent on visual readings so far, for the metrics gate.
+  int get visualReadingCalls => _visualReadingService.modelCalls;
+
+  /// Visual readings that came free with a call the OCR flow already made.
+  int get primedVisualReadings => _visualReadingService.primedReadings;
+
+  /// Hands over the photo reading that the title cleaner already obtained.
+  ///
+  /// One image, one model call, two answers. Without this the always-visual
+  /// rule would have doubled the AI cost of every row instead of moving it.
+  void primeVisualReading({
+    String? imageUrl,
+    Uint8List? imageBytes,
+    required AIProductImageAnalysis analysis,
+  }) {
+    final identity = canonicalImageIdentity(imageUrl);
+    final key = identity.isNotEmpty
+        ? identity
+        : (imageBytes == null || imageBytes.isEmpty)
+            ? ''
+            : ProductImageFingerprintService.contentDigest(imageBytes);
+    if (key.isEmpty) return;
+    _visualReadingService.prime(
+      cacheKey: key,
+      reading: ProductVisualReadingService.fromAnalysis(analysis),
+    );
+  }
 
   Future<List<ProductDuplicateCandidate>> findCandidates({
     required ProductDuplicateProbe probe,
     required List<Product> products,
     int limit = 6,
+    ProductDuplicateShortlistScope scope =
+        ProductDuplicateShortlistScope.recommendation,
   }) async {
-    try {
-      return await _findCandidatesInner(
-        probe: probe,
-        products: products,
-        limit: limit,
-      );
-    } finally {
-      // La caché de rescoring es transitoria por contrato: vive dentro de una
-      // búsqueda (la UI corre una a la vez). El drenaje selectivo del final no
-      // cubría reemplazos ni excepciones a medio camino y dejaba entradas
-      // huérfanas acumulándose entre corridas (2026-08-05).
-      _DuplicateRescoreInputs._cache.clear();
-    }
-  }
+    _index.sync(products);
 
-  Future<List<ProductDuplicateCandidate>> _findCandidatesInner({
-    required ProductDuplicateProbe probe,
-    required List<Product> products,
-    int limit = 6,
-  }) async {
-    final scopedProducts = _supplierScopedProducts(probe, products);
-    final probeText = _buildProbeText(probe);
-    final probeIntrinsicText = _buildProbeIntrinsicText(probe);
-    final probeFamilies = _inferProductFamilies(probeIntrinsicText);
-    final probeShapeProfile = _inferProductShapeProfile(
-      probeIntrinsicText,
-      probeFamilies,
-    );
-    final probeTokens = _extractSimilarityTokens(probeText);
-    final probeModelIdentifiers = _extractProbeModelIdentifiers(probe);
-    final resolvedProbeImage = await _resolveProbeImage(probe);
-    final hasImageProbe = resolvedProbeImage.hasReference;
-
-    final productsById = <String, Product>{
-      for (final product in products)
-        if (product.id != null) product.id!: product,
-    };
-    final candidatesById = <String, Product>{
-      for (final product in scopedProducts)
-        if (product.id != null) product.id!: product,
-    };
-    final semanticScores = <String, double>{};
-    final catalogSpecScores = <String, double>{};
-
-    if (probeFamilies.any(_narrowFamilies.contains)) {
-      for (final product in products) {
-        if (product.id == null || !product.isActive || product.isService) {
-          continue;
-        }
-        final productFamilies = _inferProductFamilies(
-          _buildProductSimilarityText(product),
+    // The photo is read for EVERY product that has one, not only when the text
+    // failed to name a family.
+    //
+    // Gating vision on `familyId == null` meant a wrong-but-non-null family
+    // skipped the image entirely — and a wrong family is the ordinary output
+    // of a relational word. `Herradura de freno` is a bracket whose title
+    // names the system it serves; the head-noun reader answered `freno`, the
+    // gate saw a non-null answer, and the only evidence that could have
+    // corrected it was never consulted.
+    //
+    // The cost stays bounded because the reading is keyed by canonical image
+    // identity: one model call per distinct image, cached across lines and
+    // across invoices, and never one per candidate.
+    var profile = _buildProbeProfile(probe);
+    if (enableVisualReading && _visualReadingService.isAvailable) {
+      final reading = await _readProbeImage(probe);
+      if (reading.isUseful) {
+        profile = profile.withVisualReading(
+          visualFamilyId: reading.familyId,
+          visualTerms: reading.terms,
+          visualConfidence: reading.confidence,
         );
-        if (probeFamilies.intersection(productFamilies).isNotEmpty) {
-          candidatesById[product.id!] = product;
-        }
       }
     }
 
-    for (final product in products) {
-      if (product.id == null || !product.isActive || product.isService) {
-        continue;
-      }
-      final catalogSpecScore = _computeCatalogSpecScore(probe, product);
-      if (catalogSpecScore >= 0.78) {
-        catalogSpecScores[product.id!] = catalogSpecScore;
-        candidatesById[product.id!] = product;
-      }
-    }
+    final probeListingIds = _extractSupplierListingIds(probe);
+    final probeImageIdentity = canonicalImageIdentity(probe.imageUrl);
+    final probeSku = _normalizeCode(probe.sku);
+    final probeFingerprint = await _probeFingerprint(probe);
 
-    if (enableSemanticSearch && probeText.trim().length >= 12) {
-      final vector = await _aiAssistantService.generateEmbedding(probeText);
-      if (vector != null) {
-        try {
-          final semanticMatches =
-              await _inventoryService.searchProductsSemantic(
-            vector,
-            threshold: 0.65,
-            limit: 12,
-          );
-          for (final result in semanticMatches) {
-            final id = result['id']?.toString();
-            if (id == null || id.isEmpty) continue;
-            final product = productsById[id];
-            if (product == null || !product.isActive || product.isService) {
-              continue;
-            }
-            final similarity =
-                (((result['similarity'] as num?)?.toDouble() ?? 0).clamp(0, 1))
-                    .toDouble();
-            semanticScores[id] = math.max(semanticScores[id] ?? 0, similarity);
-            candidatesById[id] = product;
-          }
-        } catch (e) {
-          debugPrint('Product duplicate semantic search failed: $e');
-        }
-      }
-    }
+    final shortlist = _index.retrieve(
+      profile,
+      identityCodes: <String>{
+        if (probe.sku != null) probe.sku!,
+        ...probeListingIds,
+      },
+      imageIdentity: probeImageIdentity,
+    );
+    if (shortlist.isEmpty) return const <ProductDuplicateCandidate>[];
 
-    final candidates = <ProductDuplicateCandidate>[];
-    for (final product in candidatesById.values) {
-      if (!product.isActive || product.isService) continue;
-      final productText = _buildProductSimilarityText(product);
-      final productFamilies = _inferProductFamilies(productText);
-      final productShapeProfile = _inferProductShapeProfile(
-        productText,
-        productFamilies,
-      );
-      final productTokens = _extractSimilarityTokens(productText);
-      final baseKeywordScore = _computeKeywordScore(probeTokens, productTokens);
-      final aliExpressScore = _computeAliExpressScore(
-        probe,
-        product,
-        probeTokens,
-        productTokens,
-      );
-      final catalogSpecScore = catalogSpecScores[product.id] ?? 0.0;
-      final keywordScore = math.max(
-        math.max(baseKeywordScore, aliExpressScore),
-        catalogSpecScore,
-      );
-      final identityScore = _computeIdentityScore(probe, product);
-      final hasExactModelMatch = probeModelIdentifiers
-          .intersection(_extractProductModelIdentifiers(product))
-          .isNotEmpty;
-      final exactCanonicalImage = _hasExactCanonicalImageMatch(
-        probe.imageUrl,
-        product,
-      );
-      final hasDeterministicIdentity =
-          identityScore >= 1 || exactCanonicalImage;
-      final familyConflict = _hasHardFamilyConflict(
-        probeFamilies,
-        productFamilies,
-      );
-      if (familyConflict && !hasDeterministicIdentity) {
-        continue;
-      }
-      if (_hasHardShapeProfileConflict(
-            probeShapeProfile,
-            productShapeProfile,
-          ) &&
-          !hasDeterministicIdentity) {
-        continue;
-      }
-      // Soft category gate: when the probe carries a confident category and
-      // the candidate's category is set but completely unrelated (no shared
-      // word, no substring), drop it unless image/identity is already strong.
-      // Avoids "buscar parecidos" surfacing pastillas when probe is cassette.
-      if (!hasDeterministicIdentity &&
-          !hasExactModelMatch &&
-          probe.categoryName != null &&
-          probe.categoryName!.trim().isNotEmpty &&
-          (product.categoryName ?? '').trim().isNotEmpty) {
-        final probeCat = _normalizeSimilarityText(probe.categoryName!);
-        final productCat = _normalizeSimilarityText(product.categoryName!);
-        if (probeCat.isNotEmpty &&
-            productCat.isNotEmpty &&
-            probeCat != productCat &&
-            !productCat.contains(probeCat) &&
-            !probeCat.contains(productCat)) {
-          final probeCatTokens =
-              probeCat.split(' ').where((t) => t.length >= 4).toSet();
-          final productCatTokens =
-              productCat.split(' ').where((t) => t.length >= 4).toSet();
-          if (probeCatTokens.isNotEmpty &&
-              productCatTokens.isNotEmpty &&
-              probeCatTokens.intersection(productCatTokens).isEmpty) {
-            // No category overlap at all. Require an image-based or catalog
-            // spec match to keep this candidate.
-            if (catalogSpecScore < 0.86) {
-              // Will be re-evaluated below; mark with a sentinel by skipping
-              // unless the image score (computed next) is strong enough.
-              // Compute image score now so we can decide.
-              final earlyImageEvidence = await _computeImageEvidence(
-                probe,
-                resolvedProbeImage,
-                product,
-                allowRemoteFingerprint: false,
-              );
-              if (earlyImageEvidence.isAvailable &&
-                  earlyImageEvidence.score < 0.7) {
-                continue;
-              }
-            }
-          }
-        }
-      }
-      final metadataScore = _computeMetadataScore(probe, product);
-      final semanticScore = semanticScores[product.id] ?? 0.0;
-      final shapeAttributeScore = _computeShapeAttributeScore(
-        probeShapeProfile,
-        productShapeProfile,
-      );
-      final sameAliExpressFamily =
-          _sameAliExpressSupplierFamily(probe, product);
-      final aliExpressTextMatch = aliExpressScore >= 0.48;
-      final allowRemoteImageFingerprint =
-          resolvedProbeImage.fingerprint != null &&
-              (identityScore > 0 ||
-                  hasExactModelMatch ||
-                  keywordScore >= 0.08 ||
-                  metadataScore >= 0.20 ||
-                  sameAliExpressFamily);
-      final imageEvidence = await _computeImageEvidence(
-        probe,
-        resolvedProbeImage,
-        product,
-        allowRemoteFingerprint: allowRemoteImageFingerprint,
-      );
-
-      final overallScore = _combineDuplicateScores(
-        keywordScore: keywordScore,
-        semanticScore: semanticScore,
-        imageScore: imageEvidence.score,
-        identityScore: identityScore,
-        metadataScore: metadataScore,
-        catalogSpecScore: catalogSpecScore,
-        shapeAttributeScore: shapeAttributeScore,
-        hasImageProbe: hasImageProbe,
-        imageComparisonAvailable: imageEvidence.isAvailable,
-        hasExactImageMatch: imageEvidence.isExact,
-        hasExactModelMatch: hasExactModelMatch,
-      );
-
-      if (!_shouldKeepDuplicateCandidate(
-        overallScore: overallScore,
-        keywordScore: keywordScore,
-        semanticScore: semanticScore,
-        imageScore: imageEvidence.score,
-        identityScore: identityScore,
-        metadataScore: metadataScore,
-        shapeAttributeScore: shapeAttributeScore,
-        sameAliExpressFamily: sameAliExpressFamily,
-        aliExpressTextMatch: aliExpressTextMatch,
-        hasExactImageMatch: imageEvidence.isExact,
-        hasExactModelMatch: hasExactModelMatch,
-      )) {
-        continue;
-      }
-
-      final matchTier = _determineMatchTier(
-        overallScore: overallScore,
-        identityScore: identityScore,
-        hasExactImageMatch: imageEvidence.isExact,
-        hasExactModelMatch: hasExactModelMatch,
-      );
-      candidates.add(ProductDuplicateCandidate(
-        product: product,
-        overallScore: overallScore,
-        keywordScore: keywordScore,
-        semanticScore: semanticScore,
-        imageScore: imageEvidence.score,
-        aiTypeScore: 0,
-        identityScore: identityScore,
-        metadataScore: metadataScore,
-        hasProductImage: _productImageUrls(product).isNotEmpty,
-        imageComparisonAvailable: imageEvidence.isAvailable,
-        hasExactImageMatch: imageEvidence.isExact,
-        hasExactModelMatch: hasExactModelMatch,
-        matchTier: matchTier,
-        signals: _buildDuplicateSignals(
+    final evaluated = <_EvaluatedCandidate>[];
+    final ruledOut = <_EvaluatedCandidate>[];
+    final probeFamily = profile.effectiveFamilyId;
+    for (final product in shortlist) {
+      final candidateProfile = _index.profileOfProduct(product);
+      final match = _matcher.evaluate(
+        probe: profile,
+        candidate: candidateProfile,
+        deterministic: _deterministicEvidenceFor(
           product,
-          keywordScore: keywordScore,
-          semanticScore: semanticScore,
-          imageScore: imageEvidence.score,
-          identityScore: identityScore,
-          metadataScore: metadataScore,
-          shapeAttributeScore: shapeAttributeScore,
-          catalogSpecScore: catalogSpecScore,
-          imageComparisonAvailable: imageEvidence.isAvailable,
-          hasExactImageMatch: imageEvidence.isExact,
-          hasExactModelMatch: hasExactModelMatch,
-        ),
-      ));
-      _DuplicateRescoreInputs._cache[candidates.last] = _DuplicateRescoreInputs(
-        product: product,
-        keywordScore: keywordScore,
-        semanticScore: semanticScore,
-        identityScore: identityScore,
-        metadataScore: metadataScore,
-        catalogSpecScore: catalogSpecScore,
-        shapeAttributeScore: shapeAttributeScore,
-        hasImageProbe: hasImageProbe,
-        imageComparisonAvailable: imageEvidence.isAvailable,
-        hasExactImageMatch: imageEvidence.isExact,
-        hasExactModelMatch: hasExactModelMatch,
-      );
-    }
-
-    candidates.sort(_compareCandidates);
-
-    // ============================================================
-    // SECOND PASS: detailed shape/color similarity on top candidates.
-    // The basic stored fingerprint is an 8x8 average/difference hash plus
-    // mean RGB. For two centered objects on a white background (typical
-    // product photos), it cannot tell apart different shapes or distinguish
-    // "black thing" vs "silver thing" — the dHash sees the same "darker
-    // center, brighter edges" gradient. The detailed scorer adds silhouette
-    // IoU + edge layout + color layout from raw bytes, which is what the
-    // user actually expects when they click "Buscar parecidos".
-    // ============================================================
-    if (hasImageProbe && candidates.isNotEmpty) {
-      final bestCandidateBytes = await _upgradeTopCandidatesWithDetailedImage(
-        resolvedProbeImage: resolvedProbeImage,
-        candidates: candidates,
-        topK: math.max(limit * 3, 18),
-      );
-      candidates.sort(_compareCandidates);
-      bestCandidateBytes.addAll(
-        await _upgradeTopCandidatesWithDetailedImage(
-          resolvedProbeImage: resolvedProbeImage,
-          candidates: candidates,
-          topK: limit,
-          onlyMissingDebug: true,
+          probeSku: probeSku,
+          probeListingIds: probeListingIds,
+          probeImageIdentity: probeImageIdentity,
+          probeFingerprint: probeFingerprint,
+          confirmedProductId: probe.confirmedProductId,
         ),
       );
-      candidates.sort(_compareCandidates);
-      await _upgradeTopAmbiguousCandidatesWithAi(
-        probe: probe,
-        resolvedProbeImage: resolvedProbeImage,
-        candidates: candidates,
-        bestCandidateBytes: bestCandidateBytes,
-        maxComparisons: 3,
-      );
-      candidates.sort(_compareCandidates);
-    }
-    return candidates.take(limit).toList();
-  }
-
-  Future<Map<String, Uint8List>> _upgradeTopCandidatesWithDetailedImage({
-    required _ResolvedProbeImage resolvedProbeImage,
-    required List<ProductDuplicateCandidate> candidates,
-    required int topK,
-    bool onlyMissingDebug = false,
-  }) async {
-    final probeBytes = resolvedProbeImage.bytes;
-    final bestCandidateBytes = <String, Uint8List>{};
-    if (probeBytes == null || probeBytes.isEmpty) {
-      _markImageDebugUnavailable(
-        candidates,
-        topK: topK,
-        reason: 'probe raw no disponible',
-        onlyMissingDebug: onlyMissingDebug,
-      );
-      return bestCandidateBytes;
-    }
-
-    for (final candidate in candidates.take(topK).toList()) {
-      if (onlyMissingDebug && candidate.imageDebugSignals.isNotEmpty) {
+      if (!match.isRejected) {
+        evaluated.add(_EvaluatedCandidate(product: product, match: match));
         continue;
       }
-      final urls = _uniqueProductImageUrls(candidate.product);
-      if (urls.isEmpty) {
-        _replaceCandidateAt(
-          candidates,
-          candidate,
-          _copyCandidateWithImageDebug(
-            candidate,
-            const ['dbg sin imagen catalogo'],
-          ),
-        );
-        continue;
+      // Ruled out, but the same kind of object. The operator may be looking at
+      // it because the specification this engine read is the thing that is
+      // wrong.
+      final sameFamily = probeFamily != null &&
+          candidateProfile.effectiveFamilyId == probeFamily;
+      if (sameFamily) {
+        ruledOut.add(_EvaluatedCandidate(product: product, match: match));
       }
-
-      ProductImageSimilarityDebug? bestDebug;
-      Uint8List? bestBytes;
-      var exactContent = false;
-      var downloadedAny = false;
-      for (final url in urls) {
-        final productBytes = await _downloadImageBytes(url);
-        if (productBytes == null || productBytes.isEmpty) continue;
-        downloadedAny = true;
-        if (ProductImageFingerprintService.hasExactContent(
-          probeBytes,
-          productBytes,
-        )) {
-          exactContent = true;
-          bestBytes = productBytes;
-          break;
-        }
-        final debug =
-            ProductImageFingerprintService.detailedSimilarityDebugFromBytes(
-          probeBytes,
-          productBytes,
-        );
-        if (debug != null &&
-            (bestDebug == null || debug.score > bestDebug.score)) {
-          bestDebug = debug;
-          bestBytes = productBytes;
-        }
-      }
-
-      if (!downloadedAny) {
-        _replaceCandidateAt(
-          candidates,
-          candidate,
-          _copyCandidateWithImageDebug(
-            candidate,
-            const ['dbg imagen catalogo no descargable'],
-          ),
-        );
-        continue;
-      }
-      if (bestBytes != null) {
-        bestCandidateBytes[_productStableKey(candidate.product)] = bestBytes;
-      }
-      final inputs = _DuplicateRescoreInputs._cache[candidate];
-      if (inputs == null) {
-        _replaceCandidateAt(
-          candidates,
-          candidate,
-          _copyCandidateWithImageDebug(
-            candidate,
-            const ['dbg scorer sin cache'],
-          ),
-        );
-        continue;
-      }
-
-      final hasExactImageMatch = candidate.hasExactImageMatch || exactContent;
-      final visualScore = hasExactImageMatch ? 1.0 : bestDebug?.score;
-      if (visualScore == null) {
-        _replaceCandidateAt(
-          candidates,
-          candidate,
-          _copyCandidateWithImageDebug(
-            candidate,
-            const ['dbg imagen no decodificable'],
-          ),
-        );
-        continue;
-      }
-      final suppressSemantic = !hasExactImageMatch &&
-          bestDebug!.shapeMismatchCapApplied &&
-          inputs.keywordScore <= 0.30 &&
-          inputs.identityScore < 1;
-      final effectiveSemanticScore = suppressSemantic
-          ? math.min(inputs.semanticScore, 0.15)
-          : inputs.semanticScore;
-      final newInputs = _DuplicateRescoreInputs(
-        product: inputs.product,
-        keywordScore: inputs.keywordScore,
-        semanticScore: effectiveSemanticScore,
-        identityScore: inputs.identityScore,
-        metadataScore: inputs.metadataScore,
-        catalogSpecScore: inputs.catalogSpecScore,
-        shapeAttributeScore: inputs.shapeAttributeScore,
-        hasImageProbe: inputs.hasImageProbe,
-        imageComparisonAvailable: true,
-        hasExactImageMatch: hasExactImageMatch,
-        hasExactModelMatch: inputs.hasExactModelMatch,
-      );
-      final upgraded = _rebuildCandidate(
-        candidate,
-        inputs: newInputs,
-        imageScore: visualScore,
-        semanticScore: effectiveSemanticScore,
-        imageDebugSignals: exactContent
-            ? const ['dbg contenido de imagen idéntico']
-            : _buildImageDebugSignals(
-                cheapScore: candidate.imageScore,
-                debug: bestDebug!,
-                aiComparison: null,
-                semanticSuppressed: suppressSemantic,
-              ),
-      );
-      _replaceCandidateAtWithInputs(
-        candidates,
-        candidate,
-        upgraded,
-        newInputs,
-      );
     }
-    return bestCandidateBytes;
-  }
 
-  Future<void> _upgradeTopAmbiguousCandidatesWithAi({
-    required ProductDuplicateProbe probe,
-    required _ResolvedProbeImage resolvedProbeImage,
-    required List<ProductDuplicateCandidate> candidates,
-    required Map<String, Uint8List> bestCandidateBytes,
-    required int maxComparisons,
-  }) async {
-    final probeBytes = resolvedProbeImage.bytes;
-    if (probeBytes == null || probeBytes.isEmpty || maxComparisons <= 0) return;
+    final shown = IdentityShortlistPolicy(limit: limit)
+        .apply(evaluated, (candidate) => candidate.match);
 
-    var comparisons = 0;
-    for (final candidate in candidates.toList()) {
-      if (comparisons >= maxComparisons) break;
-      if (candidate.isExactIdentity) continue;
-      final productBytes =
-          bestCandidateBytes[_productStableKey(candidate.product)];
-      if (productBytes == null || productBytes.isEmpty) continue;
-      comparisons++;
-      final aiComparison = _visualComparator == null
-          ? await _aiAssistantService.compareProductImagesForDuplicate(
-              probeImageBytes: probeBytes,
-              candidateImageBytes: productBytes,
-              probeName: probe.name,
-              candidateName: candidate.product.name,
-              candidateBrand: candidate.product.brand,
-              candidateCategory: candidate.product.categoryName,
-            )
-          : await _visualComparator(
-              probeImageBytes: probeBytes,
-              candidateImageBytes: productBytes,
-              probeName: probe.name,
-              candidateName: candidate.product.name,
-              candidateBrand: candidate.product.brand,
-              candidateCategory: candidate.product.categoryName,
-            );
-      if (aiComparison == null) continue;
-      final inputs = _DuplicateRescoreInputs._cache[candidate];
-      if (inputs == null) continue;
-      final visualScore =
-          (aiComparison.samePartScore * 0.72 + candidate.imageScore * 0.28)
-              .clamp(0, 1)
-              .toDouble();
-      final aiRejectsVisualMatch =
-          aiComparison.confidence >= 0.55 && aiComparison.samePartScore < 0.55;
-      final effectiveSemanticScore = aiRejectsVisualMatch &&
-              inputs.keywordScore <= 0.30 &&
-              inputs.identityScore < 1
-          ? math.min(inputs.semanticScore, 0.15)
-          : inputs.semanticScore;
-      final newInputs = _DuplicateRescoreInputs(
-        product: inputs.product,
-        keywordScore: inputs.keywordScore,
-        semanticScore: effectiveSemanticScore,
-        identityScore: inputs.identityScore,
-        metadataScore: inputs.metadataScore,
-        catalogSpecScore: inputs.catalogSpecScore,
-        shapeAttributeScore: inputs.shapeAttributeScore,
-        hasImageProbe: inputs.hasImageProbe,
-        imageComparisonAvailable: true,
-        hasExactImageMatch: inputs.hasExactImageMatch,
-        hasExactModelMatch: inputs.hasExactModelMatch,
-      );
-      final debug =
-          ProductImageFingerprintService.detailedSimilarityDebugFromBytes(
-              probeBytes, productBytes);
-      final upgraded = _rebuildCandidate(
-        candidate,
-        inputs: newInputs,
-        imageScore: visualScore,
-        semanticScore: effectiveSemanticScore,
-        aiTypeScore: aiComparison.samePartScore,
-        imageDebugSignals: debug == null
-            ? <String>[
-                ...candidate.imageDebugSignals,
-                'AI same ${(aiComparison.samePartScore * 100).round()}%',
-              ]
-            : _buildImageDebugSignals(
-                cheapScore: candidate.imageScore,
-                debug: debug,
-                aiComparison: aiComparison,
-                semanticSuppressed:
-                    effectiveSemanticScore != inputs.semanticScore,
-              ),
-      );
-      _replaceCandidateAtWithInputs(
-        candidates,
-        candidate,
-        upgraded,
-        newInputs,
-      );
-    }
-  }
+    final offered = <_EvaluatedCandidate>[
+      ...shown,
+      if (scope == ProductDuplicateShortlistScope.operatorChoice) ...[
+        // Everything else that survived retrieval and the family test, ranked.
+        // The row's floor is deliberately not applied here: the operator opened
+        // this list precisely because the row's single answer was not enough.
+        ...evaluated.where((candidate) => !shown.contains(candidate)),
+        ...(ruledOut
+          ..sort(
+              (left, right) => right.match.score.compareTo(left.match.score))),
+      ],
+    ];
 
-  void _markImageDebugUnavailable(
-    List<ProductDuplicateCandidate> candidates, {
-    required int topK,
-    required String reason,
-    required bool onlyMissingDebug,
-  }) {
-    for (final candidate in candidates.take(topK).toList()) {
-      if (onlyMissingDebug && candidate.imageDebugSignals.isNotEmpty) continue;
-      _replaceCandidateAt(
-        candidates,
-        candidate,
-        _copyCandidateWithImageDebug(candidate, ['dbg $reason']),
-      );
-    }
-  }
-
-  void _replaceCandidateAt(
-    List<ProductDuplicateCandidate> candidates,
-    ProductDuplicateCandidate previous,
-    ProductDuplicateCandidate replacement,
-  ) {
-    final idx = candidates.indexOf(previous);
-    if (idx < 0) return;
-    final inputs = _DuplicateRescoreInputs._cache[previous];
-    if (inputs != null) {
-      _DuplicateRescoreInputs._cache[replacement] = inputs;
-      _DuplicateRescoreInputs._cache.remove(previous);
-    }
-    candidates[idx] = replacement;
-  }
-
-  void _replaceCandidateAtWithInputs(
-    List<ProductDuplicateCandidate> candidates,
-    ProductDuplicateCandidate previous,
-    ProductDuplicateCandidate replacement,
-    _DuplicateRescoreInputs inputs,
-  ) {
-    final idx = candidates.indexOf(previous);
-    if (idx < 0) return;
-    _DuplicateRescoreInputs._cache.remove(previous);
-    _DuplicateRescoreInputs._cache[replacement] = inputs;
-    candidates[idx] = replacement;
-  }
-
-  ProductDuplicateCandidate _rebuildCandidate(
-    ProductDuplicateCandidate candidate, {
-    required _DuplicateRescoreInputs inputs,
-    required double imageScore,
-    required double semanticScore,
-    required List<String> imageDebugSignals,
-    double? aiTypeScore,
-  }) {
-    final overallScore = _combineDuplicateScores(
-      keywordScore: inputs.keywordScore,
-      semanticScore: semanticScore,
-      imageScore: imageScore,
-      identityScore: inputs.identityScore,
-      metadataScore: inputs.metadataScore,
-      catalogSpecScore: inputs.catalogSpecScore,
-      shapeAttributeScore: inputs.shapeAttributeScore,
-      hasImageProbe: inputs.hasImageProbe,
-      imageComparisonAvailable: inputs.imageComparisonAvailable,
-      hasExactImageMatch: inputs.hasExactImageMatch,
-      hasExactModelMatch: inputs.hasExactModelMatch,
-    );
-    final matchTier = _determineMatchTier(
-      overallScore: overallScore,
-      identityScore: inputs.identityScore,
-      hasExactImageMatch: inputs.hasExactImageMatch,
-      hasExactModelMatch: inputs.hasExactModelMatch,
-    );
-    return ProductDuplicateCandidate(
-      product: candidate.product,
-      overallScore: overallScore,
-      keywordScore: candidate.keywordScore,
-      semanticScore: semanticScore,
-      imageScore: imageScore,
-      aiTypeScore: aiTypeScore ?? candidate.aiTypeScore,
-      identityScore: candidate.identityScore,
-      metadataScore: candidate.metadataScore,
-      hasProductImage: candidate.hasProductImage,
-      imageComparisonAvailable: inputs.imageComparisonAvailable,
-      hasExactImageMatch: inputs.hasExactImageMatch,
-      hasExactModelMatch: inputs.hasExactModelMatch,
-      matchTier: matchTier,
-      signals: _buildDuplicateSignals(
-        candidate.product,
-        keywordScore: inputs.keywordScore,
-        semanticScore: semanticScore,
-        imageScore: imageScore,
-        identityScore: inputs.identityScore,
-        metadataScore: inputs.metadataScore,
-        shapeAttributeScore: inputs.shapeAttributeScore,
-        catalogSpecScore: inputs.catalogSpecScore,
-        imageComparisonAvailable: inputs.imageComparisonAvailable,
-        hasExactImageMatch: inputs.hasExactImageMatch,
-        hasExactModelMatch: inputs.hasExactModelMatch,
-      ),
-      imageDebugSignals: imageDebugSignals,
-    );
-  }
-
-  ProductDuplicateCandidate _copyCandidateWithImageDebug(
-    ProductDuplicateCandidate candidate,
-    List<String> imageDebugSignals,
-  ) {
-    return ProductDuplicateCandidate(
-      product: candidate.product,
-      overallScore: candidate.overallScore,
-      keywordScore: candidate.keywordScore,
-      semanticScore: candidate.semanticScore,
-      imageScore: candidate.imageScore,
-      aiTypeScore: candidate.aiTypeScore,
-      identityScore: candidate.identityScore,
-      metadataScore: candidate.metadataScore,
-      hasProductImage: candidate.hasProductImage,
-      imageComparisonAvailable: candidate.imageComparisonAvailable,
-      hasExactImageMatch: candidate.hasExactImageMatch,
-      hasExactModelMatch: candidate.hasExactModelMatch,
-      matchTier: candidate.matchTier,
-      signals: candidate.signals,
-      imageDebugSignals: imageDebugSignals,
-    );
-  }
-
-  List<String> _buildImageDebugSignals({
-    required double cheapScore,
-    required ProductImageSimilarityDebug debug,
-    required AIProductVisualComparison? aiComparison,
-    required bool semanticSuppressed,
-  }) {
-    String pct(double value) => '${(value * 100).round()}%';
-
-    return <String>[
-      'dbg cheap ${pct(cheapScore)}',
-      'final ${pct(debug.score)}',
-      'shape ${pct(debug.silhouetteScore)}',
-      'profile ${pct(debug.radialShapeScore)}',
-      'contour ${pct(debug.contourShapeScore)}',
-      'fg ${pct(debug.foregroundShapeScore)}',
-      'iou ${pct(debug.overlapShapeScore)}',
-      'edge ${pct(debug.edgeScore)}',
-      'fg color ${pct(debug.foregroundColorScore)}',
-      'color ${pct(debug.colorLayoutScore)}',
-      'center ${pct(debug.centerGridScore)}',
-      'full ${pct(debug.fullGridScore)}',
-      'aspect ${pct(debug.aspectScore)}',
-      if (aiComparison != null) 'AI same ${pct(aiComparison.samePartScore)}',
-      if (aiComparison != null) 'AI shape ${pct(aiComparison.shapeScore)}',
-      if (aiComparison != null) 'AI color ${pct(aiComparison.colorScore)}',
-      if (aiComparison != null) 'AI conf ${pct(aiComparison.confidence)}',
-      if (aiComparison != null)
-        aiComparison.componentTypeMatch ? 'AI tipo ok' : 'AI tipo no',
-      if (aiComparison?.reason != null && aiComparison!.reason!.isNotEmpty)
-        'AI: ${aiComparison.reason}',
-      if (debug.shapeBoostApplied) 'boost',
-      if (debug.shapeMismatchCapApplied) 'cap',
-      if (semanticSuppressed) 'sem cap',
+    return <ProductDuplicateCandidate>[
+      for (final candidate in offered.take(
+        scope == ProductDuplicateShortlistScope.operatorChoice
+            ? math.max(limit, 24)
+            : limit,
+      ))
+        ProductDuplicateCandidate(
+          product: candidate.product,
+          matchTier: candidate.match.isRejected
+              ? ProductDuplicateMatchTier.ruledOut
+              : _tierFor(candidate.match.verdict),
+          confidence: candidate.match.score,
+          reasons: candidate.match.reasons,
+          objections: candidate.match.objections,
+          gates: candidate.match.gates,
+          variantMismatch: candidate.match.variantMismatch,
+          hasProductImage: _productImageUrls(candidate.product).isNotEmpty,
+          matchedModelCodes: candidate.match.matchedModelCodes,
+        ),
     ];
   }
 
-  List<Product> _supplierScopedProducts(
-    ProductDuplicateProbe probe,
-    List<Product> products,
-  ) {
-    final supplierId = probe.supplierId?.trim();
-    final supplierName = probe.supplierName;
-    if ((supplierId == null || supplierId.isEmpty) &&
-        (supplierName == null || supplierName.trim().isEmpty)) {
-      return products;
-    }
-
-    final isAliExpress =
-        _inventoryService.isAliExpressSupplierName(supplierName);
-    final scoped = products.where((product) {
-      if (isAliExpress) {
-        return _inventoryService.isAliExpressSupplierName(product.supplierName);
-      }
-      if (supplierId != null && supplierId.isNotEmpty) {
-        return product.supplierId == supplierId;
-      }
-      return (product.supplierName ?? '').trim().toLowerCase() ==
-          supplierName!.trim().toLowerCase();
-    }).toList();
-
-    return scoped.length >= 5 ? scoped : products;
-  }
-
-  String _buildProbeText(ProductDuplicateProbe probe) {
-    return [
-      probe.name,
-      probe.sku,
-      probe.model,
-      probe.description,
-      probe.rawText,
-      probe.categoryName,
-      probe.brandName,
-      probe.supplierName,
-      _normalizeFileNameHint(probe.imageFileName),
-      _normalizeFileNameHint(probe.imageUrl),
-      if ((probe.price ?? 0) > 0) 'precio ${probe.price!.toStringAsFixed(0)}',
-      if ((probe.cost ?? 0) > 0) 'costo ${probe.cost!.toStringAsFixed(0)}',
-    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
-  }
-
-  String _buildProbeIntrinsicText(ProductDuplicateProbe probe) {
-    return [
-      probe.name,
-      probe.sku,
-      probe.model,
-      probe.description,
-      probe.rawText,
-      probe.supplierName,
-      _normalizeFileNameHint(probe.imageFileName),
-      _normalizeFileNameHint(probe.imageUrl),
-    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
-  }
-
-  String _buildProductSimilarityText(Product product) {
-    return [
-      product.name,
-      product.sku,
-      product.supplierCode,
-      product.description,
-      product.categoryName,
-      product.brand,
-      product.model,
-      product.manufacturer,
-      product.manufacturerSku,
-      product.supplierName,
-      ...product.tags,
-    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
-  }
-
-  String _normalizeFileNameHint(String? fileName) {
-    if (fileName == null || fileName.trim().isEmpty) return '';
-    return fileName
-        .replaceAll(RegExp(r'\.[^.]+$'), '')
-        .replaceAll(RegExp(r'[_\-]+'), ' ');
-  }
-
-  String _normalizeSimilarityText(String value) {
-    final lower = value.toLowerCase();
-    final withoutAccents = lower
-        .replaceAll(RegExp(r'[áàäâã]'), 'a')
-        .replaceAll(RegExp(r'[éèëê]'), 'e')
-        .replaceAll(RegExp(r'[íìïî]'), 'i')
-        .replaceAll(RegExp(r'[óòöôõ]'), 'o')
-        .replaceAll(RegExp(r'[úùüû]'), 'u')
-        .replaceAll('ñ', 'n');
-    return withoutAccents
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
-
-  Set<String> _extractProbeModelIdentifiers(ProductDuplicateProbe probe) {
-    return <String>{
-      ...extractModelIdentifiers(probe.model ?? '', explicit: true),
-      ...extractModelIdentifiers(probe.name),
-      ...extractModelIdentifiers(probe.description ?? ''),
-      ...extractModelIdentifiers(probe.rawText ?? ''),
-    };
-  }
-
-  Set<String> _extractProductModelIdentifiers(Product product) {
-    return <String>{
-      ...extractModelIdentifiers(product.model ?? '', explicit: true),
-      ...extractModelIdentifiers(product.manufacturerSku ?? '', explicit: true),
-      ...extractModelIdentifiers(product.name),
-      ...extractModelIdentifiers(product.description ?? ''),
-      for (final tag in product.tags) ...extractModelIdentifiers(tag),
-    };
-  }
-
-  /// Canonical model extraction used by both OCR probes and catalog products.
-  /// Punctuation and spacing are deliberately ignored, so RT56, RT-56 and
-  /// RT 56 all produce the same `rt56` identifier.
-  @visibleForTesting
-  static Set<String> extractModelIdentifiers(
-    String value, {
-    bool explicit = false,
-  }) {
-    final normalized = value
-        .toLowerCase()
-        .replaceAll(RegExp(r'[áàäâã]'), 'a')
-        .replaceAll(RegExp(r'[éèëê]'), 'e')
-        .replaceAll(RegExp(r'[íìïî]'), 'i')
-        .replaceAll(RegExp(r'[óòöôõ]'), 'o')
-        .replaceAll(RegExp(r'[úùüû]'), 'u')
-        .replaceAll('ñ', 'n');
-    final tokens = RegExp(r'[a-z0-9]+')
-        .allMatches(normalized)
-        .map((match) => match.group(0)!)
-        .toList(growable: false);
-    final identifiers = <String>{};
-
-    bool isCandidate(String token) {
-      if (token.length < 3 || token.length > 24) return false;
-      if (!RegExp('[a-z]').hasMatch(token) ||
-          !RegExp('[0-9]').hasMatch(token)) {
-        return false;
-      }
-      if (RegExp(r'^\d+(?:mm|cm|lm|mah|wh|pcs?|v|w|t)$').hasMatch(token)) {
-        return false;
-      }
-      return true;
-    }
-
-    void add(String token) {
-      final canonical = token.replaceAll(RegExp(r'[^a-z0-9]'), '');
-      if (isCandidate(canonical)) identifiers.add(canonical);
-    }
-
-    for (final token in tokens) {
-      add(token);
-    }
-    const genericPrefixes = {'mtb', 'bike', 'bici', 'led', 'usb'};
-    for (var index = 0; index + 1 < tokens.length; index++) {
-      final left = tokens[index];
-      final right = tokens[index + 1];
-      final leftIsShortLetters =
-          left.length <= 5 && RegExp(r'^[a-z]+$').hasMatch(left);
-      final rightContainsDigit = RegExp('[0-9]').hasMatch(right);
-      if (leftIsShortLetters &&
-          rightContainsDigit &&
-          !genericPrefixes.contains(left)) {
-        add('$left$right');
-      }
-    }
-    if (explicit && tokens.isNotEmpty) {
-      add(tokens.join());
-    }
-    return identifiers;
-  }
-
-  // Families that, when present on the probe, REQUIRE the candidate to share
-  // at least one family. Used by the hard-conflict gate to refuse falling back
-  // to "unknown product family => allow" behaviour for narrow component types
-  // that frequently get confused with adjacent components (e.g. derailleur
-  // hangers vs derailleurs, pulleys vs derailleurs, cable+housing vs brakes).
-  static const Set<String> _narrowFamilies = {
-    'derailleur_hanger',
-    'pulley',
-    'chainring',
-    'cable_housing',
-    'brake_pad',
-    'brake_rotor',
-    'brake_caliper',
-    'brake_lever',
-    'helmet',
-    'light',
-    'lock',
-    'bell',
-    'mirror',
-    'bottle_cage',
-    'bottle',
-    'phone_mount',
-    'bag',
-    'fender',
-    'kickstand',
-    'rack',
-    'tube',
-    'tire',
-    'spoke',
-    'grip',
-    'pedal',
-    'saddle',
-    'seatpost',
-    'stem',
-    'handlebar',
-    'headset',
-    'fork',
-    'shock',
-    'chain',
-    'cassette',
-    'hub',
-    'rim',
-  };
-
-  Set<String> _inferProductFamilies(String value) {
-    final normalized = ' ${_normalizeSimilarityText(value)} ';
-    final families = <String>{};
-
-    // Whole-token matcher: matches " foo " exactly, no plural / derivative.
-    void addIf(String family, List<String> phrases) {
-      for (final phrase in phrases) {
-        final p = _normalizeSimilarityText(phrase);
-        if (p.isEmpty) continue;
-        if (normalized.contains(' $p ')) {
-          families.add(family);
-          return;
-        }
-      }
-    }
-
-    // Stem matcher: matches the phrase at a word start, allowing plural /
-    // gender / derivative endings (so "desviador" hits "desviadores",
-    // "cambio" hits "cambiador" / "cambiadores", "pastilla" hits
-    // "pastillas", etc). Use this for short Spanish stems where exact
-    // whole-token matching misses real product names.
-    void addStem(String family, List<String> stems) {
-      for (final stem in stems) {
-        final s = _normalizeSimilarityText(stem);
-        if (s.isEmpty) continue;
-        if (normalized.contains(' $s')) {
-          families.add(family);
-          return;
-        }
-      }
-    }
-
-    addIf('bottom_bracket', const [
-      'bottom bracket',
-      'soporte inferior',
-      'movimiento central',
-      'movimento central',
-      'pedalier',
-      'caja de motor',
-      'eje de motor',
-      'ejes de motor',
-      'motor sellado',
-      'motor cuadrado',
-      'motor bsa',
-      'bsa 68',
-      'bb iso',
-      'bb jis',
-      'bb bsa',
-      'bb30',
-      'pf30',
-      'pressfit',
-      'hollowtech',
-      'cuadrado jis',
-      'jis cuadrado',
-      'square taper',
-    ]);
-    addIf('seatpost', const [
-      'tija',
-      'tubo sillin',
-      'tubo de sillin',
-      'seatpost',
-      'seat post',
-      'poste asiento',
-      'cano asiento',
-    ]);
-    addIf('saddle', const ['sillin', 'saddle', 'asiento']);
-    addIf('stem', const ['potencia', 'stem', 'tee']);
-    addIf('handlebar', const ['manubrio', 'manillar', 'handlebar']);
-    addIf('headset', const ['juego direccion', 'direccion', 'headset']);
-    addIf('crankset', const ['biela', 'bielas', 'crankset', 'crank arm']);
-    addIf('pedal', const ['pedal', 'pedales']);
-    addIf('chain', const ['cadena', 'chain']);
-    addStem('cassette',
-        const ['cassette', 'casete', 'piñon', 'pinon', 'freewheel']);
-    addStem('brake_rotor', const ['rotor', 'disco freno', 'disco de freno']);
-    addStem('brake_pad', const ['pastilla', 'brake pad', 'brake-pad']);
-    addStem('brake_caliper', const ['caliper', 'herradura']);
-    addStem('brake_lever', const ['manilla freno', 'brake lever']);
-    addStem('hub', const ['maza', 'hub']);
-    addStem('rim', const ['llanta', 'aro', 'rim']);
-    addStem('spoke', const ['rayo', 'spoke']);
-    addStem('tire', const ['neumatico', 'cubierta', 'tire', 'tyre']);
-    addStem('tube', const ['camara', 'tube']);
-    // Derailleur stems: "cambio", "cambiador(es)", "desviador(es)", "derailleur".
-    addStem('derailleur', const ['cambiador', 'desviador', 'derailleur']);
-    addStem('shifter', const ['manilla cambio', 'mando cambio', 'shifter']);
-    addStem('derailleur_hanger', const [
-      'percha',
-      'postiza',
-      'patilla cambio',
-      'patilla de cambio',
-      'gancho cambio',
-      'gancho de cambio',
-      'derailleur hanger',
-      'rear hanger',
-      'mech hanger',
-      'rd hanger',
-      'dropout hanger',
-      'hanger cambio',
-    ]);
-    // "hanger" alone is ambiguous in English — only treat as a hanger if no
-    // other stronger family is present yet.
-    if (families.isEmpty && normalized.contains(' hanger')) {
-      families.add('derailleur_hanger');
-    }
-    addStem('pulley', const [
-      'polea',
-      'pulley',
-      'jockey wheel',
-      'roldana',
-    ]);
-    addStem('chainring', const [
-      'plato',
-      'chainring',
-      'chain ring',
-      'narrow wide',
-    ]);
-    addIf('cable_housing', const [
-      'piola',
-      'piolas',
-      'funda',
-      'fundas',
-      'cable freno',
-      'cable cambio',
-      'cable de freno',
-      'cable de cambio',
-      'housing',
-      'inner wire',
-      'cable interior',
-    ]);
-    addIf('helmet', const ['casco', 'helmet']);
-    addIf('light', const ['luz', 'foco', 'lampara', 'light', 'headlight']);
-    addIf('lock', const ['candado', 'lock', 'cadena candado']);
-    addIf('bell', const ['timbre', 'bell']);
-    addIf('mirror', const ['espejo', 'mirror']);
-    addIf('bottle_cage', const [
-      'portabidon',
-      'porta bidon',
-      'porta botella',
-      'portabotella',
-      'portacaramagiola',
-      'porta caramagiola',
-      'soporte botella',
-      'soporte de botella',
-      'soporte para botella',
-      'soporte para botella de agua',
-      'soporte bidon',
-      'soporte de bidon',
-      'soporte para bidon',
-      'bottle cage',
-      'water bottle cage',
-    ]);
-    addIf('bottle', const ['bidon', 'botella', 'water bottle']);
-    addIf('phone_mount', const [
-      'soporte celular',
-      'soporte de celular',
-      'soporte telefono',
-      'soporte de telefono',
-      'porta celular',
-      'portacelular',
-      'phone mount',
-      'phone holder',
-    ]);
-    addIf('bag', const ['alforja', 'bolso', 'mochila', 'pannier', 'bag']);
-    addIf('fender', const ['barrofango', 'guardabarro', 'fender', 'mudguard']);
-    addIf('kickstand', const ['pata bicicleta', 'pie bicicleta', 'kickstand']);
-    addIf('rack', const ['parrilla', 'portaequipaje', 'rear rack', 'rack']);
-    addIf('fork', const ['horquilla', 'fork']);
-    addIf('shock', const ['amortiguador', 'shock']);
-    addIf('grip', const ['puño', 'punos', 'grip']);
-
-    if (families.contains('bottom_bracket')) families.remove('crankset');
-    if (families.contains('seatpost')) families.remove('saddle');
-    if (families.contains('brake_rotor')) families.remove('brake_caliper');
-    // A derailleur HANGER is a frame mount, not a derailleur. The text almost
-    // always contains "cambio" / "desviador" because it describes which
-    // derailleur it supports, so we must drop the noisy `derailleur` family
-    // (and `pulley`, since the same descriptors apply) when we are confident
-    // the item is actually a hanger.
-    if (families.contains('derailleur_hanger')) {
-      families.remove('derailleur');
-      families.remove('pulley');
-      families.remove('shifter');
-    }
-    // Pulleys ("poleas", "roldanas") are a wear part for derailleurs, not the
-    // derailleur itself. Same narrowing rule.
-    if (families.contains('pulley')) {
-      families.remove('derailleur');
-    }
-    // Cable / housing kits often mention "cambio" or "freno" — narrow them.
-    if (families.contains('cable_housing')) {
-      families.remove('derailleur');
-      families.remove('shifter');
-      families.remove('brake_caliper');
-      families.remove('brake_lever');
-    }
-    // Bottle cage vs bottle: keep the cage when both fire.
-    if (families.contains('bottle_cage')) families.remove('bottle');
-    if (families.contains('phone_mount')) families.remove('bottle_cage');
-    return families;
-  }
-
-  bool _hasHardFamilyConflict(
-    Set<String> probeFamilies,
-    Set<String> productFamilies,
-  ) {
-    if (probeFamilies.isEmpty) return false;
-    // If the probe expresses a narrow family (hanger, brake pad, rotor,
-    // saddle, etc.), require the candidate to share at least one family.
-    // Empty/unknown candidate family is treated as a conflict in that mode,
-    // because unknown broad fallback is what creates noisy suggestions.
-    final probeIsNarrow = probeFamilies.any(_narrowFamilies.contains);
-    if (probeIsNarrow) {
-      if (productFamilies.isEmpty) return true;
-      return probeFamilies.intersection(productFamilies).isEmpty;
-    }
-    if (productFamilies.isEmpty) return false;
-    return probeFamilies.intersection(productFamilies).isEmpty;
-  }
-
-  _ProductShapeProfile _inferProductShapeProfile(
-    String value,
-    Set<String> families,
-  ) {
-    final normalized = ' ${_normalizeSimilarityText(value)} ';
-    final attributes = <String>{};
-    final exclusiveValues = <String, String>{};
-    final requiredAttributes = <String>{};
-
-    bool hasAny(Iterable<String> phrases) {
-      for (final phrase in phrases) {
-        final p = _normalizeSimilarityText(phrase);
-        if (p.isNotEmpty && normalized.contains(' $p ')) return true;
-      }
-      return false;
-    }
-
-    void setExclusive(
-      String group,
-      String value, {
-      bool required = false,
-    }) {
-      final attribute = '$group:$value';
-      exclusiveValues[group] = value;
-      attributes.add(attribute);
-      if (required) requiredAttributes.add(attribute);
-    }
-
-    void addAttribute(String attribute) {
-      attributes.add(attribute);
-    }
-
-    final hasNarrowFamily = families.any(_narrowFamilies.contains);
-
-    if (hasNarrowFamily &&
-        hasAny(const [
-          'redonda',
-          'redondo',
-          'redondas',
-          'redondos',
-          'round',
-          'rounded',
-          'circular',
-          'circulares',
-        ])) {
-      setExclusive('form', 'round');
-    }
-
-    if (hasNarrowFamily &&
-        hasAny(const [
-          'rectangular',
-          'rectangulo',
-          'rectangle',
-          'square',
-          'cuadrada',
-          'cuadrado',
-        ])) {
-      setExclusive('form', 'rectangular');
-    }
-
-    if (hasNarrowFamily &&
-        hasAny(const [
-          'largo',
-          'larga',
-          'long',
-          'slim',
-          'estrecho',
-          'estrecha',
-        ])) {
-      setExclusive('form', 'long_narrow');
-    }
-
-    if (hasAny(const [
-      'extensor',
-      'extension',
-      'extender',
-      'prolongador',
-      'prolongacion',
-      'goatlink',
-      'goat link',
-      'roadlink',
-      'road link',
-      '50t',
-      '50 t',
-      '52t',
-      '52 t',
-      'oou',
-    ])) {
-      if (families.contains('derailleur_hanger')) {
-        setExclusive('hanger_kind', 'extender', required: true);
-      } else {
-        addAttribute('extension_shape');
-      }
-    }
-
-    if (families.contains('brake_pad')) {
-      if (hasAny(const [
-        'ms 11c',
-        'ms11c',
-        'redonda',
-        'redondo',
-        'redondas',
-        'redondos',
-        'round',
-        'rounded',
-        'circular',
-        'circulares',
-      ])) {
-        setExclusive('brake_pad_style', 'disc_round');
-        setExclusive('form', 'round');
-      }
-
-      if (hasAny(const [
-        'v brake',
-        'vbrake',
-        'vbrakes',
-        'rim brake',
-        'patin v brake',
-        'patines v brake',
-        'zapata v brake',
-        'zapatas v brake',
-        'cantilever',
-      ])) {
-        setExclusive('brake_pad_style', 'rim_block');
-        setExclusive('brake_pad_platform', 'rim');
-        setExclusive('form', 'long_narrow');
-      }
-
-      if (hasAny(const [
-        'patin electrico',
-        'scooter',
-        'electric scooter',
-        'e scooter',
-      ])) {
-        setExclusive('brake_pad_style', 'scooter');
-        setExclusive('brake_pad_platform', 'scooter');
-      }
-
-      if (hasAny(const [
-        'ds 02s',
-        'ds02s',
-        'ds 06s',
-        'ds06s',
-      ])) {
-        setExclusive('brake_pad_style', 'disc_rectangular');
-        setExclusive('form', 'rectangular');
-      }
-
-      if (hasAny(const [
-        '4 pistones',
-        'cuatro pistones',
-        '4 piston',
-        'four piston',
-        'ds 15s',
-        'ds15s',
-      ])) {
-        setExclusive('brake_pad_caliper_class', 'four_piston');
-      }
-    }
-
-    if (families.contains('brake_rotor')) {
-      final rotorDiameter = _firstFiniteToken(
-        normalized,
-        const ['140', '160', '180', '200', '203', '220'],
-        suffix: 'mm',
-      );
-      if (rotorDiameter != null) {
-        setExclusive('rotor_diameter_mm', rotorDiameter);
-      }
-      setExclusive('form', 'round');
-    }
-
-    if (families.intersection(const {'tire', 'tube', 'rim'}).isNotEmpty) {
-      final wheelSize = _firstFiniteToken(
-        normalized,
-        const ['12', '16', '20', '24', '26', '27 5', '275', '29', '700'],
-      );
-      if (wheelSize != null) {
-        setExclusive(
-          'wheel_size',
-          wheelSize == '27 5' || wheelSize == '275' ? '27.5' : wheelSize,
-        );
-      }
-      if (hasAny(const ['presta', 'francesa', 'fv'])) {
-        setExclusive('valve_type', 'presta');
-      }
-      if (hasAny(const ['schrader', 'americana', 'auto', 'av'])) {
-        setExclusive('valve_type', 'schrader');
-      }
-    }
-
-    if (families.contains('seatpost')) {
-      final diameter = _firstFiniteToken(
-        normalized,
-        const ['25 4', '27 2', '28 6', '30 9', '31 6', '34 9'],
-        suffix: 'mm',
-      );
-      if (diameter != null) {
-        setExclusive('seatpost_diameter_mm', diameter.replaceAll(' ', '.'));
-      }
-    }
-
-    return _ProductShapeProfile(
-      attributes: attributes,
-      exclusiveValues: exclusiveValues,
-      requiredAttributes: requiredAttributes,
-    );
-  }
-
-  String? _firstFiniteToken(
-    String normalized,
-    List<String> values, {
-    String? suffix,
-  }) {
-    for (final value in values) {
-      final escaped = RegExp.escape(value).replaceAll(r'\ ', r'\s*');
-      final suffixPattern =
-          suffix == null ? '' : r'\s*' + RegExp.escape(suffix);
-      final pattern = RegExp(r'\b' + escaped + suffixPattern + r'\b');
-      if (pattern.hasMatch(normalized)) return value;
-    }
-    return null;
-  }
-
-  bool _hasHardShapeProfileConflict(
-    _ProductShapeProfile probeProfile,
-    _ProductShapeProfile productProfile,
-  ) {
-    if (probeProfile.isEmpty) return false;
-    for (final requiredAttribute in probeProfile.requiredAttributes) {
-      if (!productProfile.attributes.contains(requiredAttribute)) return true;
-    }
-    for (final entry in probeProfile.exclusiveValues.entries) {
-      final productValue = productProfile.exclusiveValues[entry.key];
-      if (productValue != null && productValue != entry.value) return true;
-    }
-    return false;
-  }
-
-  double _computeShapeAttributeScore(
-    _ProductShapeProfile probeProfile,
-    _ProductShapeProfile productProfile,
-  ) {
-    if (probeProfile.isEmpty || productProfile.isEmpty) return 0;
-
-    final sharedAttributes =
-        probeProfile.attributes.intersection(productProfile.attributes);
-    final sharedExclusiveGroups = probeProfile.exclusiveValues.keys.where(
-      (group) =>
-          productProfile.exclusiveValues[group] ==
-          probeProfile.exclusiveValues[group],
-    );
-
-    if (sharedAttributes.isEmpty && sharedExclusiveGroups.isEmpty) return 0;
-
-    if (probeProfile.requiredAttributes
-        .intersection(productProfile.requiredAttributes)
-        .isNotEmpty) {
-      return 0.92;
-    }
-
-    final exclusiveContainment = sharedExclusiveGroups.length /
-        math.max(
-            1,
-            math.min(
-              probeProfile.exclusiveValues.length,
-              productProfile.exclusiveValues.length,
-            ));
-    final attributeContainment = sharedAttributes.length /
-        math.max(
-            1,
-            math.min(
-              probeProfile.attributes.length,
-              productProfile.attributes.length,
-            ));
-    final score = exclusiveContainment * 0.72 + attributeContainment * 0.28;
-    return score.clamp(0, 0.88).toDouble();
-  }
-
-  Set<String> _extractSimilarityTokens(String value) {
-    const stopWords = {
-      'de',
-      'del',
-      'la',
-      'el',
-      'los',
-      'las',
-      'un',
-      'una',
-      'para',
-      'por',
-      'con',
-      'and',
-      'the',
-      'for',
-      'bike',
-      'bicycle',
-      'mtb',
-      'road',
-      'color',
-      'size',
-      'sku',
-      'item',
-      'id',
-      'china',
-      'chile',
-      'clp',
-      'aliexpress',
-      'marketplace',
-      'unidades',
-    };
-    final tokens = _normalizeSimilarityText(value)
-        .split(' ')
-        .where((token) => token.length >= 2 && !stopWords.contains(token))
-        .toSet();
-
-    const colorSynonyms = {
-      'black': ['negro'],
-      'negro': ['black'],
-      'blue': ['azul'],
-      'azul': ['blue'],
-      'red': ['rojo'],
-      'rojo': ['red'],
-      'golden': ['dorado'],
-      'gold': ['dorado'],
-      'dorado': ['golden', 'gold'],
-      'purple': ['morado', 'purpura'],
-      'morado': ['purple', 'purpura'],
-      'purpura': ['purple', 'morado'],
-    };
-    for (final token in List<String>.from(tokens)) {
-      final synonyms = colorSynonyms[token];
-      if (synonyms != null) tokens.addAll(synonyms);
-    }
-    return tokens;
-  }
-
-  double _computeKeywordScore(Set<String> left, Set<String> right) {
-    if (left.isEmpty || right.isEmpty) return 0;
-    final intersection = left.intersection(right).length;
-    final union = left.union(right).length;
-    if (union == 0) return 0;
-    final jaccard = intersection / union;
-    final containment = intersection / math.min(left.length, right.length);
-    return (jaccard * 0.55 + containment * 0.45).clamp(0, 1).toDouble();
-  }
-
-  Future<_ResolvedProbeImage> _resolveProbeImage(
+  /// The invoice photo's fingerprint, computed once per line.
+  ///
+  /// Bytes already downloaded for the visual reading are reused; nothing extra
+  /// goes over the network for the sake of this comparison.
+  Future<ProductImageFingerprint?> _probeFingerprint(
     ProductDuplicateProbe probe,
   ) async {
-    final suppliedBytes = probe.imageBytes;
-    if (suppliedBytes != null && suppliedBytes.isNotEmpty) {
-      return _ResolvedProbeImage(
-        fingerprint: ProductImageFingerprintService.fromBytes(suppliedBytes),
-        bytes: suppliedBytes,
-        hasReference: true,
-      );
+    final bytes = probe.imageBytes ??
+        (probe.imageUrl == null
+            ? null
+            : await _downloadImageBytes(probe.imageUrl!));
+    if (bytes == null || bytes.isEmpty) return null;
+    try {
+      return ProductImageFingerprintService.fromBytes(bytes);
+    } catch (error) {
+      debugPrint('Probe image fingerprint failed: $error');
+      return null;
     }
+  }
 
-    final imageUrl = probe.imageUrl?.trim();
-    if (imageUrl == null || imageUrl.isEmpty) {
-      return const _ResolvedProbeImage(
-        fingerprint: null,
-        bytes: null,
-        hasReference: false,
-      );
-    }
-    final bytes = await _downloadImageBytes(imageUrl);
-    return _ResolvedProbeImage(
-      fingerprint: bytes == null
-          ? null
-          : ProductImageFingerprintService.fromBytes(bytes),
+  ProductIdentityProfile _buildProbeProfile(ProductDuplicateProbe probe) {
+    return ProductIdentityExtractor.extract(
+      ProductIdentityInput(
+        name: probe.name,
+        description: probe.description,
+        rawText: probe.rawText,
+        brandHint: probe.brandName,
+        modelHint: probe.model,
+        categoryPath: probe.categoryName,
+        knownBrands: _knownBrands,
+      ),
+    );
+  }
+
+  Future<ProductVisualReading> _readProbeImage(
+    ProductDuplicateProbe probe,
+  ) async {
+    final bytes = probe.imageBytes ??
+        (probe.imageUrl == null
+            ? null
+            : await _downloadImageBytes(probe.imageUrl!));
+    if (bytes == null || bytes.isEmpty) return ProductVisualReading.empty;
+    final identity = canonicalImageIdentity(probe.imageUrl);
+    final cacheKey = identity.isNotEmpty
+        ? identity
+        : ProductImageFingerprintService.contentDigest(bytes);
+    return _visualReadingService.read(
+      cacheKey: cacheKey,
       bytes: bytes,
-      hasReference: true,
+      fileName: probe.imageFileName,
+      typedName: probe.name,
     );
   }
 
-  Future<_ImageMatchEvidence> _computeImageEvidence(
-    ProductDuplicateProbe probe,
-    _ResolvedProbeImage resolvedProbeImage,
+  DeterministicIdentityEvidence _deterministicEvidenceFor(
     Product product, {
-    required bool allowRemoteFingerprint,
-  }) async {
-    if (_hasExactCanonicalImageMatch(probe.imageUrl, product)) {
-      return const _ImageMatchEvidence(
-        score: 1,
-        isAvailable: true,
-        isExactCanonicalUrl: true,
-      );
-    }
+    required String probeSku,
+    required Set<String> probeListingIds,
+    required String probeImageIdentity,
+    required ProductImageFingerprint? probeFingerprint,
+    required String? confirmedProductId,
+  }) {
+    final confirmed =
+        confirmedProductId != null && confirmedProductId == product.id;
 
-    final probeFingerprint = resolvedProbeImage.fingerprint;
-    if (probeFingerprint == null) {
-      return const _ImageMatchEvidence.unavailable();
-    }
+    // The internal catalog SKU is globally unique and deterministic. A supplier
+    // listing id is not: one AliExpress listing routinely holds several colours,
+    // so it establishes the listing family, never the exact variant.
+    final sameSku =
+        probeSku.isNotEmpty && _normalizeCode(product.sku) == probeSku;
 
-    final productFingerprint =
-        ProductImageFingerprint.fromStorageJson(product.imageFingerprint);
-    if (productFingerprint != null) {
-      return _ImageMatchEvidence(
-        score: ProductImageFingerprintService.similarity(
-          probeFingerprint,
-          productFingerprint,
-        ),
-        isAvailable: true,
-      );
-    }
+    final sameListing = probeListingIds.isNotEmpty &&
+        probeListingIds
+            .intersection(_extractSupplierListingIdsFromProduct(product))
+            .isNotEmpty;
 
-    if (!allowRemoteFingerprint) {
-      return const _ImageMatchEvidence.unavailable();
-    }
-    return _computeAndStoreProductImageEvidence(
-      resolvedProbeImage,
-      product,
+    // The same photograph is the same product, whatever URL it arrived by.
+    //
+    // Matching only the canonical URL meant a catalog row created from another
+    // listing of the same part — the ordinary case, since one part is sold by
+    // several sellers — shared no identity at all, and the comparison fell
+    // through to a `brand` column that says `Aliexpress`. The stored
+    // fingerprint is already on the row, so this costs nothing: no download,
+    // no model call.
+    final sameUrl = probeImageIdentity.isNotEmpty &&
+        _productImageUrls(product)
+            .map(canonicalImageIdentity)
+            .any((identity) => identity == probeImageIdentity);
+    final samePhoto = sameUrl ||
+        (probeFingerprint != null &&
+            _isSamePhotograph(probeFingerprint, product));
+    final sameImage = samePhoto;
+
+    return DeterministicIdentityEvidence(
+      sameCatalogSku: sameSku,
+      sameSupplierListing: sameListing,
+      sameImageIdentity: sameImage,
+      confirmedAlias: confirmed,
     );
   }
 
-  Future<_ImageMatchEvidence> _computeAndStoreProductImageEvidence(
-    _ResolvedProbeImage resolvedProbeImage,
-    Product product,
-  ) async {
-    final probeFingerprint = resolvedProbeImage.fingerprint;
-    if (probeFingerprint == null) {
-      return const _ImageMatchEvidence.unavailable();
-    }
-    final urls = _uniqueProductImageUrls(product);
-    if (urls.isEmpty) return const _ImageMatchEvidence.unavailable();
+  /// Whether the catalog row's stored fingerprint is the same photograph.
+  ///
+  /// The threshold is deliberately high: this is *identity* evidence and it
+  /// short-circuits every gate, so «parecida» is not enough. Two different
+  /// parts photographed on the same white background score well below it;
+  /// the same picture re-hosted scores at or above it.
+  static const double _samePhotographFloor = 0.94;
 
-    ProductImageFingerprint? firstFingerprint;
-    var bestScore = 0.0;
-    var compared = false;
-    for (final url in urls) {
-      final bytes = await _downloadImageBytes(url);
-      if (bytes == null || bytes.isEmpty) continue;
-      if (resolvedProbeImage.bytes != null &&
-          ProductImageFingerprintService.hasExactContent(
-            resolvedProbeImage.bytes!,
-            bytes,
-          )) {
-        return const _ImageMatchEvidence(
-          score: 1,
-          isAvailable: true,
-          isExactContent: true,
-        );
-      }
-      final fingerprint = ProductImageFingerprintService.fromBytes(bytes);
-      if (fingerprint == null) continue;
-      compared = true;
-      firstFingerprint ??= fingerprint;
-      bestScore = math.max(
-        bestScore,
-        ProductImageFingerprintService.similarity(
-          probeFingerprint,
-          fingerprint,
-        ),
-      );
-    }
-
-    final productId = product.id;
-    if (persistComputedImageFingerprints &&
-        productId != null &&
-        firstFingerprint != null) {
-      await _inventoryService.storeProductImageFingerprint(
-        productId: productId,
-        imageFingerprint: firstFingerprint.toStorageJson(),
-      );
-    }
-    if (!compared) return const _ImageMatchEvidence.unavailable();
-    return _ImageMatchEvidence(score: bestScore, isAvailable: true);
+  bool _isSamePhotograph(ProductImageFingerprint probe, Product product) {
+    final stored =
+        ProductImageFingerprint.fromStorageJson(product.imageFingerprint);
+    if (stored == null) return false;
+    return ProductImageFingerprintService.similarity(probe, stored) >=
+        _samePhotographFloor;
   }
 
-  Future<Uint8List?> _downloadImageBytes(String imageUrl) async {
+  ProductDuplicateMatchTier _tierFor(IdentityMatchVerdict verdict) {
+    return switch (verdict) {
+      IdentityMatchVerdict.exact => ProductDuplicateMatchTier.exact,
+      IdentityMatchVerdict.strong => ProductDuplicateMatchTier.strong,
+      IdentityMatchVerdict.possible => ProductDuplicateMatchTier.possible,
+      IdentityMatchVerdict.rejected => ProductDuplicateMatchTier.possible,
+    };
+  }
+
+  // ── Supplier listing identity ─────────────────────────────────────────
+
+  Set<String> _extractSupplierListingIds(ProductDuplicateProbe probe) {
+    final ids = <String>{};
+    final explicit = probe.supplierListingId?.trim();
+    if (explicit != null && explicit.isNotEmpty) ids.add(explicit);
+    ids.addAll(
+      supplierListingIdsIn(<String?>[
+        probe.rawText,
+        probe.sku,
+        probe.description,
+      ]),
+    );
+    return ids;
+  }
+
+  Set<String> _extractSupplierListingIdsFromProduct(Product product) {
+    return supplierListingIdsIn(<String?>[
+      product.supplierCode,
+      product.manufacturerSku,
+      product.description,
+    ]);
+  }
+
+  String _normalizeCode(String? value) =>
+      (value ?? '').trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+  // ── Images ────────────────────────────────────────────────────────────
+
+  Future<void> persistProductFingerprintIfNeeded(
+    Product product,
+    ProductImageFingerprint? fingerprint,
+  ) async {
+    final productId = product.id;
+    if (!persistComputedImageFingerprints ||
+        productId == null ||
+        fingerprint == null ||
+        product.imageFingerprint != null) {
+      return;
+    }
+    await _fingerprintPersistenceCache.putIfAbsent(
+      productId,
+      () => _inventoryService.storeProductImageFingerprint(
+        productId: productId,
+        imageFingerprint: fingerprint.toStorageJson(),
+      ),
+    );
+  }
+
+  Future<Uint8List?> _downloadImageBytes(String imageUrl) {
+    final normalizedUrl = imageUrl.trim();
+    if (normalizedUrl.isEmpty) return Future<Uint8List?>.value();
+
+    final cached = _imageByteCache.remove(normalizedUrl);
+    if (cached != null) {
+      // Removal + insertion promotes the entry to most recently used without
+      // changing the byte accounting.
+      _imageByteCache[normalizedUrl] = cached;
+      return Future<Uint8List?>.value(cached);
+    }
+
+    final inFlight = _imageDownloadsInFlight[normalizedUrl];
+    if (inFlight != null) return inFlight;
+
+    late final Future<Uint8List?> tracked;
+    tracked = _imageDownloadPool
+        .run(() => _downloadImageBytesUncached(normalizedUrl))
+        .then((bytes) {
+      if (bytes != null && bytes.isNotEmpty) {
+        _rememberImageBytes(normalizedUrl, bytes);
+      }
+      return bytes;
+    }).whenComplete(() {
+      if (identical(_imageDownloadsInFlight[normalizedUrl], tracked)) {
+        _imageDownloadsInFlight.remove(normalizedUrl);
+      }
+    });
+    _imageDownloadsInFlight[normalizedUrl] = tracked;
+    return tracked;
+  }
+
+  void _rememberImageBytes(String url, Uint8List bytes) {
+    final byteCount = bytes.lengthInBytes;
+    if (imageByteCacheMaxEntries == 0 ||
+        imageByteCacheMaxBytes == 0 ||
+        byteCount > imageByteCacheMaxBytes) {
+      return;
+    }
+
+    final previous = _imageByteCache.remove(url);
+    if (previous != null) {
+      _imageByteCacheSize -= previous.lengthInBytes;
+    }
+    while (_imageByteCache.isNotEmpty &&
+        (_imageByteCache.length >= imageByteCacheMaxEntries ||
+            _imageByteCacheSize + byteCount > imageByteCacheMaxBytes)) {
+      final oldestUrl = _imageByteCache.keys.first;
+      final oldest = _imageByteCache.remove(oldestUrl)!;
+      _imageByteCacheSize -= oldest.lengthInBytes;
+    }
+    _imageByteCache[url] = bytes;
+    _imageByteCacheSize += byteCount;
+  }
+
+  Future<Uint8List?> _downloadImageBytesUncached(String imageUrl) async {
     try {
       final injectedLoader = _imageLoader;
       if (injectedLoader != null) {
         return await injectedLoader(imageUrl);
       }
-      final uri = Uri.tryParse(imageUrl.trim());
+      final uri = Uri.tryParse(imageUrl);
       if (uri == null || !uri.hasScheme) return null;
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode < 200 || response.statusCode >= 300) return null;
@@ -1876,491 +573,54 @@ class ProductDuplicateMatcherService {
     }).toList(growable: false);
   }
 
-  List<String> _uniqueProductImageUrls(Product product) {
-    final seen = <String>{};
-    final result = <String>[];
-    for (final url in _productImageUrls(product)) {
-      final identity = canonicalImageIdentity(url);
-      final key = identity.isEmpty ? url.trim() : identity;
-      if (seen.add(key)) result.add(url);
-    }
-    return result;
-  }
-
-  bool _hasExactCanonicalImageMatch(String? probeImageUrl, Product product) {
-    final probeIdentity = canonicalImageIdentity(probeImageUrl);
-    if (probeIdentity.isEmpty) return false;
-    return _productImageUrls(product)
-        .map(canonicalImageIdentity)
-        .any((identity) => identity == probeIdentity);
-  }
-
+  /// Stable identity of an image regardless of the CDN transformation suffix
+  /// AliExpress appends (`.jpg_640x640q90.jpg_.webp`).
   @visibleForTesting
-  static String canonicalImageIdentity(String? imageUrl) {
-    if (imageUrl == null || imageUrl.trim().isEmpty) return '';
-    final uri = Uri.tryParse(imageUrl.trim());
-    if (uri == null) return imageUrl.trim().toLowerCase();
-    var host = uri.host.toLowerCase();
-    if (host.endsWith('.alicdn.com') ||
-        host == 'alicdn.com' ||
-        host.endsWith('.aliexpress-media.com') ||
-        host == 'aliexpress-media.com') {
-      host = 'aliexpress-image';
+  static String canonicalImageIdentity(String? imageUrl) =>
+      canonicalProductImageIdentity(imageUrl);
+}
+
+class _EvaluatedCandidate {
+  const _EvaluatedCandidate({required this.product, required this.match});
+
+  final Product product;
+  final ProductIdentityMatch match;
+}
+
+/// FIFO permit pool. A released permit is transferred directly to the oldest
+/// waiter, so a newly-arriving task cannot jump the bound while it wakes up.
+class _AsyncPermitPool {
+  _AsyncPermitPool(this.maxConcurrent)
+      : assert(maxConcurrent > 0, 'maxConcurrent must be positive.');
+
+  final int maxConcurrent;
+  final Queue<Completer<void>> _waiters = Queue<Completer<void>>();
+  int _active = 0;
+
+  Future<T> run<T>(Future<T> Function() operation) async {
+    await _acquire();
+    try {
+      return await operation();
+    } finally {
+      _release();
     }
-    var path = Uri.decodeComponent(uri.path).toLowerCase();
-    // AliExpress appends transformations after the original extension, e.g.
-    // `.jpg_640x640q90.jpg_.webp`. Keep the stable original asset path.
-    path = path.replaceFirstMapped(
-      RegExp(r'(\.(?:jpe?g|png|webp|gif))(?:_[^/]*)$'),
-      (match) => match.group(1)!,
-    );
-    path = path.replaceAll(RegExp(r'/+'), '/');
-    return '$host$path';
   }
 
-  String _productStableKey(Product product) =>
-      product.id ?? '${product.sku}\u0000${product.name}';
-
-  bool _sameAliExpressSupplierFamily(
-    ProductDuplicateProbe probe,
-    Product product,
-  ) {
-    final supplierName = probe.supplierName;
-    if (supplierName == null || supplierName.trim().isEmpty) return false;
-    return _inventoryService.isAliExpressSupplierName(supplierName) &&
-        _inventoryService.isAliExpressSupplierName(product.supplierName);
+  Future<void> _acquire() async {
+    if (_active < maxConcurrent) {
+      _active++;
+      return;
+    }
+    final waiter = Completer<void>();
+    _waiters.addLast(waiter);
+    await waiter.future;
   }
 
-  double _computeIdentityScore(ProductDuplicateProbe probe, Product product) {
-    final entrySku = _normalizeSimilarityText(probe.sku ?? '');
-    final productSku = _normalizeSimilarityText(product.sku);
-    final supplierCode = _normalizeSimilarityText(product.supplierCode ?? '');
-    final sameSupplierIdentityScope =
-        _hasCompatibleSupplierIdentityScope(probe, product);
-
-    final sharedAliExpressIds =
-        _extractAliExpressItemIds(_buildProbeText(probe)).intersection(
-            _extractAliExpressItemIds(_buildProductSimilarityText(product)));
-    if (sameSupplierIdentityScope && sharedAliExpressIds.isNotEmpty) return 1;
-
-    if (entrySku.isEmpty) return 0;
-    // The internal catalog SKU is globally unique. A supplier/listing code is
-    // only unique within its supplier (or the AliExpress supplier family).
-    if (productSku == entrySku) return 1;
-    if (sameSupplierIdentityScope && supplierCode == entrySku) return 1;
-    return 0;
-  }
-
-  bool _hasCompatibleSupplierIdentityScope(
-    ProductDuplicateProbe probe,
-    Product product,
-  ) {
-    final probeIsAliExpress =
-        _inventoryService.isAliExpressSupplierName(probe.supplierName) ||
-            _looksLikeAliExpressProbe(probe);
-    final productIsAliExpress =
-        _inventoryService.isAliExpressSupplierName(product.supplierName);
-    if (probeIsAliExpress || productIsAliExpress) {
-      return probeIsAliExpress && productIsAliExpress;
+  void _release() {
+    if (_waiters.isNotEmpty) {
+      _waiters.removeFirst().complete();
+      return;
     }
-
-    final probeSupplierId = probe.supplierId?.trim();
-    final productSupplierId = product.supplierId?.trim();
-    if (probeSupplierId != null &&
-        probeSupplierId.isNotEmpty &&
-        productSupplierId != null &&
-        productSupplierId.isNotEmpty) {
-      return probeSupplierId == productSupplierId;
-    }
-
-    final probeSupplier = _normalizeSimilarityText(probe.supplierName ?? '');
-    final productSupplier =
-        _normalizeSimilarityText(product.supplierName ?? '');
-    return probeSupplier.isNotEmpty && probeSupplier == productSupplier;
-  }
-
-  double _computeAliExpressScore(
-    ProductDuplicateProbe probe,
-    Product product,
-    Set<String> probeTokens,
-    Set<String> productTokens,
-  ) {
-    final sameFamily = _sameAliExpressSupplierFamily(probe, product);
-    final probeLooksAliExpress = _looksLikeAliExpressProbe(probe);
-    if (!sameFamily && !probeLooksAliExpress) return 0;
-
-    final sharedIds = _extractAliExpressItemIds(_buildProbeText(probe))
-        .intersection(
-            _extractAliExpressItemIds(_buildProductSimilarityText(product)));
-    if (sharedIds.isNotEmpty &&
-        _hasCompatibleSupplierIdentityScope(probe, product)) {
-      return 1;
-    }
-
-    if (probeTokens.isEmpty || productTokens.isEmpty) return 0;
-    final sharedCount = probeTokens.intersection(productTokens).length;
-    if (sharedCount < 3) return 0;
-
-    final productContainment = sharedCount / productTokens.length;
-    final probeContainment = sharedCount / probeTokens.length;
-    final score = productContainment * 0.72 + probeContainment * 0.28;
-    return score.clamp(0, 1).toDouble();
-  }
-
-  double _computeCatalogSpecScore(
-      ProductDuplicateProbe probe, Product product) {
-    final probeText = _buildProbeIntrinsicText(probe);
-    final productText = _buildProductSimilarityText(product);
-    final probeSpec = _extractBottomBracketSpec(probeText);
-    final productSpec = _extractBottomBracketSpec(productText);
-    if (probeSpec == null || productSpec == null) return 0;
-
-    final sameShell = (probeSpec.shellMm - productSpec.shellMm).abs() <= 0.6;
-    final sameAxle = (probeSpec.axleMm - productSpec.axleMm).abs() <= 0.6;
-    if (!sameShell || !sameAxle) return 0;
-
-    var score = 0.78;
-    if (_inferProductFamilies(probeText).contains('bottom_bracket') &&
-        _inferProductFamilies(productText).contains('bottom_bracket')) {
-      score += 0.08;
-    }
-    if (_hasCompatibleBrandAlias(probeText, productText)) {
-      score += 0.10;
-    }
-    if (_bottomBracketDescriptorOverlap(probeText, productText) >= 2) {
-      score += 0.04;
-    }
-    return score.clamp(0, 1).toDouble();
-  }
-
-  _BottomBracketSpec? _extractBottomBracketSpec(String value) {
-    final text = value
-        .toLowerCase()
-        .replaceAll(',', '.')
-        .replaceAll(RegExp(r'[^a-z0-9.×x]+'), ' ');
-    final match = RegExp(
-      r'\b(\d{2,3})\s*(?:x|×)\s*(\d{2,3}(?:\.\d+)?)\s*(?:mm)?\b',
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (match == null) return null;
-
-    final shell = double.tryParse(match.group(1) ?? '');
-    final axle = double.tryParse(match.group(2) ?? '');
-    if (shell == null || axle == null) return null;
-    return _BottomBracketSpec(shellMm: shell, axleMm: axle);
-  }
-
-  bool _hasCompatibleBrandAlias(String left, String right) {
-    final leftBrands = _brandAliases(left);
-    final rightBrands = _brandAliases(right);
-    if (leftBrands.isEmpty || rightBrands.isEmpty) return false;
-    return leftBrands.intersection(rightBrands).isNotEmpty;
-  }
-
-  Set<String> _brandAliases(String value) {
-    final text = ' ${_normalizeSimilarityText(value)} ';
-    final aliases = <String>{};
-    if (text.contains(' ztto ') || text.contains(' zitto ')) {
-      aliases.add('ztto');
-    }
-    for (final brand in const ['neco', 'shimano', 'vp', 'lebycle', 'ozono']) {
-      if (text.contains(' $brand ')) aliases.add(brand);
-    }
-    return aliases;
-  }
-
-  int _bottomBracketDescriptorOverlap(String left, String right) {
-    const descriptors = {
-      'motor',
-      'sellado',
-      'eje',
-      'bsa',
-      'iso',
-      'jis',
-      'cuadrado',
-      'square',
-      'taper',
-    };
-    final leftTokens = _extractSimilarityTokens(left).intersection(descriptors);
-    final rightTokens =
-        _extractSimilarityTokens(right).intersection(descriptors);
-    return leftTokens.intersection(rightTokens).length;
-  }
-
-  bool _looksLikeAliExpressProbe(ProductDuplicateProbe probe) {
-    final text = _normalizeSimilarityText(_buildProbeText(probe));
-    return text.contains('ae ') ||
-        text.contains('item id') ||
-        text.contains('aliexpress') ||
-        text.contains('ali express');
-  }
-
-  Set<String> _extractAliExpressItemIds(String value) {
-    final ids = <String>{};
-    final patterns = [
-      RegExp(r'item\s*id\s*:?\s*(\d{8,})', caseSensitive: false),
-      RegExp(r'itemId=(\d{8,})', caseSensitive: false),
-      RegExp(r'/item/(\d{8,})', caseSensitive: false),
-      RegExp(r'productId=(\d{8,})', caseSensitive: false),
-    ];
-    for (final pattern in patterns) {
-      for (final match in pattern.allMatches(value)) {
-        final id = match.group(1);
-        if (id != null && id.isNotEmpty) ids.add(id);
-      }
-    }
-    return ids;
-  }
-
-  double _computeMetadataScore(ProductDuplicateProbe probe, Product product) {
-    var score = 0.0;
-    var weight = 0.0;
-
-    final categoryName = probe.categoryName;
-    if (categoryName != null && categoryName.trim().isNotEmpty) {
-      weight += 0.35;
-      final probeCat = _normalizeSimilarityText(categoryName);
-      final productCat = _normalizeSimilarityText(product.categoryName ?? '');
-      if (probeCat.isNotEmpty && productCat.isNotEmpty) {
-        if (probeCat == productCat) {
-          score += 0.35;
-        } else if (productCat.contains(probeCat) ||
-            probeCat.contains(productCat)) {
-          // Fuzzy contains: AI says "pastillas" vs catalog "pastillas freno".
-          score += 0.25;
-        } else {
-          // Word overlap (>=1 meaningful token).
-          final probeTokens =
-              probeCat.split(' ').where((t) => t.length >= 4).toSet();
-          final productTokens =
-              productCat.split(' ').where((t) => t.length >= 4).toSet();
-          if (probeTokens.intersection(productTokens).isNotEmpty) {
-            score += 0.15;
-          }
-        }
-      }
-    }
-
-    final brandName = probe.brandName;
-    if (brandName != null && brandName.trim().isNotEmpty) {
-      weight += 0.30;
-      final probeBrand = _normalizeSimilarityText(brandName);
-      final productBrand = _normalizeSimilarityText(product.brand ?? '');
-      if (probeBrand.isNotEmpty && productBrand.isNotEmpty) {
-        if (probeBrand == productBrand) {
-          score += 0.30;
-        } else if (productBrand.contains(probeBrand) ||
-            probeBrand.contains(productBrand)) {
-          score += 0.20;
-        }
-      }
-    }
-
-    final supplierName = probe.supplierName;
-    if (supplierName != null && supplierName.trim().isNotEmpty) {
-      weight += 0.10;
-      final sameSupplier = _normalizeSimilarityText(supplierName) ==
-          _normalizeSimilarityText(product.supplierName ?? '');
-      final sameAliExpressFamily =
-          _inventoryService.isAliExpressSupplierName(supplierName) &&
-              _inventoryService.isAliExpressSupplierName(product.supplierName);
-      if (sameSupplier) {
-        score += 0.10;
-      } else if (sameAliExpressFamily) {
-        score += 0.025;
-      }
-    }
-
-    if ((probe.price ?? 0) > 0 && product.price > 0) {
-      weight += 0.15;
-      final ratio = math.min(probe.price!, product.price) /
-          math.max(probe.price!, product.price);
-      score += ratio.clamp(0, 1) * 0.15;
-    }
-
-    if ((probe.cost ?? 0) > 0 && product.cost > 0) {
-      weight += 0.10;
-      final ratio = math.min(probe.cost!, product.cost) /
-          math.max(probe.cost!, product.cost);
-      score += ratio.clamp(0, 1) * 0.10;
-    }
-
-    if (weight == 0) return 0;
-    return score / weight;
-  }
-
-  double _combineDuplicateScores({
-    required double keywordScore,
-    required double semanticScore,
-    required double imageScore,
-    required double identityScore,
-    required double metadataScore,
-    required double catalogSpecScore,
-    required double shapeAttributeScore,
-    required bool hasImageProbe,
-    required bool imageComparisonAvailable,
-    required bool hasExactImageMatch,
-    required bool hasExactModelMatch,
-  }) {
-    if (identityScore >= 1 || hasExactImageMatch) return 1;
-    if (hasExactModelMatch) return 0.94;
-    if (shapeAttributeScore >= 0.90 &&
-        math.max(keywordScore, metadataScore) >= 0.25) {
-      return 0.90;
-    }
-    if (catalogSpecScore >= 0.94) return 0.96;
-    if (catalogSpecScore >= 0.86) return 0.90;
-    final textScore = math.max(keywordScore, semanticScore);
-    // Missing/unreadable images are unknown, not a mismatch. Redistribute
-    // their weight across the available text and metadata evidence.
-    final canCompareImage = hasImageProbe && imageComparisonAvailable;
-    final imageWeight = canCompareImage ? 0.55 : 0.0;
-    final textWeight = canCompareImage ? 0.27 : 0.70;
-    final metadataWeight = canCompareImage ? 0.10 : 0.18;
-    final shapeAttributeWeight = canCompareImage ? 0.08 : 0.12;
-    var total = textScore * textWeight +
-        imageScore * imageWeight +
-        metadataScore * metadataWeight +
-        shapeAttributeScore * shapeAttributeWeight;
-    // Tiebreaker boost: when text similarity is strong (>=0.5) AND metadata
-    // (which folds in category/brand match) is also strong (>=0.4), nudge
-    // the score up. This rewards literal "same family + same name pattern"
-    // matches so they outrank visually-similar-but-textually-unrelated
-    // candidates in the same category. Capped at +0.06.
-    if (textScore >= 0.5 && metadataScore >= 0.4) {
-      final boost = math.min(0.06, (textScore - 0.5) * 0.20 + 0.02);
-      total += boost;
-    }
-    return total.clamp(0, 1).toDouble();
-  }
-
-  bool _shouldKeepDuplicateCandidate({
-    required double overallScore,
-    required double keywordScore,
-    required double semanticScore,
-    required double imageScore,
-    required double identityScore,
-    required double metadataScore,
-    required double shapeAttributeScore,
-    required bool sameAliExpressFamily,
-    required bool aliExpressTextMatch,
-    required bool hasExactImageMatch,
-    required bool hasExactModelMatch,
-  }) {
-    if (identityScore >= 1 || hasExactImageMatch || hasExactModelMatch) {
-      return true;
-    }
-    if (overallScore >= 0.58) return true;
-    if (keywordScore >= 0.62) return true;
-    if (semanticScore >= 0.72) return true;
-    if (shapeAttributeScore >= 0.90 && overallScore >= 0.42) return true;
-    if (sameAliExpressFamily && keywordScore >= 0.48) return true;
-    if (sameAliExpressFamily && semanticScore >= 0.62) return true;
-    if (sameAliExpressFamily && overallScore >= 0.46 && metadataScore >= 0.08) {
-      return true;
-    }
-    if (aliExpressTextMatch && overallScore >= 0.44) return true;
-    if (imageScore >= 0.90) return true;
-    if (imageScore >= 0.80 && math.max(keywordScore, semanticScore) >= 0.12) {
-      return true;
-    }
-    return false;
-  }
-
-  ProductDuplicateMatchTier _determineMatchTier({
-    required double overallScore,
-    required double identityScore,
-    required bool hasExactImageMatch,
-    required bool hasExactModelMatch,
-  }) {
-    if (identityScore >= 1 || hasExactImageMatch) {
-      return ProductDuplicateMatchTier.exact;
-    }
-    if (hasExactModelMatch || overallScore >= 0.82) {
-      return ProductDuplicateMatchTier.strong;
-    }
-    return ProductDuplicateMatchTier.possible;
-  }
-
-  int _compareCandidates(
-    ProductDuplicateCandidate left,
-    ProductDuplicateCandidate right,
-  ) {
-    int tierRank(ProductDuplicateMatchTier tier) => switch (tier) {
-          ProductDuplicateMatchTier.exact => 0,
-          ProductDuplicateMatchTier.strong => 1,
-          ProductDuplicateMatchTier.possible => 2,
-        };
-
-    var result = tierRank(left.matchTier).compareTo(tierRank(right.matchTier));
-    if (result != 0) return result;
-    result = _compareTrueFirst(
-      left.hasExactImageMatch,
-      right.hasExactImageMatch,
-    );
-    if (result != 0) return result;
-    result = _compareTrueFirst(
-      left.hasExactModelMatch,
-      right.hasExactModelMatch,
-    );
-    if (result != 0) return result;
-    result = right.overallScore.compareTo(left.overallScore);
-    if (result != 0) return result;
-    result = right.identityScore.compareTo(left.identityScore);
-    if (result != 0) return result;
-    result = right.imageScore.compareTo(left.imageScore);
-    if (result != 0) return result;
-    result = right.keywordScore.compareTo(left.keywordScore);
-    if (result != 0) return result;
-    result = right.semanticScore.compareTo(left.semanticScore);
-    if (result != 0) return result;
-    result = left.product.sku
-        .toLowerCase()
-        .compareTo(right.product.sku.toLowerCase());
-    if (result != 0) return result;
-    result = left.product.name
-        .toLowerCase()
-        .compareTo(right.product.name.toLowerCase());
-    if (result != 0) return result;
-    return (left.product.id ?? '').compareTo(right.product.id ?? '');
-  }
-
-  int _compareTrueFirst(bool left, bool right) {
-    if (left == right) return 0;
-    return left ? -1 : 1;
-  }
-
-  List<String> _buildDuplicateSignals(
-    Product product, {
-    required double keywordScore,
-    required double semanticScore,
-    required double imageScore,
-    required double identityScore,
-    required double metadataScore,
-    required double shapeAttributeScore,
-    required double catalogSpecScore,
-    required bool imageComparisonAvailable,
-    required bool hasExactImageMatch,
-    required bool hasExactModelMatch,
-  }) {
-    final signals = <String>[];
-    if (identityScore >= 1) signals.add('SKU/código proveedor coincide');
-    if (hasExactImageMatch) signals.add('Imagen idéntica');
-    if (hasExactModelMatch) signals.add('Modelo exacto');
-    if (catalogSpecScore >= 0.78) signals.add('Medida/familia coinciden');
-    if (keywordScore >= 0.62) signals.add('Nombre muy parecido');
-    if (semanticScore >= 0.72) signals.add('Descripción semántica parecida');
-    if (!imageComparisonAvailable) {
-      signals.add('Imagen no disponible para comparar');
-    } else if (!hasExactImageMatch && imageScore >= 0.90) {
-      signals.add('Imagen coincide');
-    } else if (!hasExactImageMatch && imageScore >= 0.78) {
-      signals.add('Imagen parecida');
-    }
-    if (metadataScore >= 0.8) signals.add('Categoría/marca coinciden');
-    if (shapeAttributeScore >= 0.8) signals.add('Forma/estándar coincide');
-    if (signals.isEmpty) signals.add('Coincidencia parcial');
-    if (product.inventoryQty > 0) signals.add('Stock: ${product.inventoryQty}');
-    return signals;
+    _active--;
   }
 }

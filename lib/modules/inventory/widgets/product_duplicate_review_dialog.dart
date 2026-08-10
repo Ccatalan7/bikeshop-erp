@@ -18,6 +18,15 @@ class ProductDuplicateSummaryButton extends StatelessWidget {
   final VoidCallback onPressed;
   final bool isEnabled;
 
+  /// Verbal strength of the best candidate. The matcher's ordering value is
+  /// deliberately not displayable.
+  static String _tierSummary(ProductDuplicateMatchTier tier) => switch (tier) {
+        ProductDuplicateMatchTier.exact => 'es el mismo',
+        ProductDuplicateMatchTier.strong => 'casi seguro el mismo',
+        ProductDuplicateMatchTier.possible => 'parecido',
+        ProductDuplicateMatchTier.ruledOut => 'descartado',
+      };
+
   @override
   Widget build(BuildContext context) {
     if (candidates.isEmpty) {
@@ -37,6 +46,7 @@ class ProductDuplicateSummaryButton extends StatelessWidget {
       ProductDuplicateMatchTier.exact => Colors.green,
       ProductDuplicateMatchTier.strong => Colors.orange,
       ProductDuplicateMatchTier.possible => Colors.blue,
+      ProductDuplicateMatchTier.ruledOut => Colors.grey,
     };
     return InkWell(
       onTap: isEnabled ? onPressed : null,
@@ -60,7 +70,7 @@ class ProductDuplicateSummaryButton extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                '${candidates.length} opción${candidates.length == 1 ? '' : 'es'} • ${(top.overallScore * 100).round()}%',
+                '${candidates.length} opción${candidates.length == 1 ? '' : 'es'} • ${_tierSummary(top.matchTier)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -353,18 +363,20 @@ class ProductDuplicateCandidateTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final product = candidate.product;
-    final scorePercent = (candidate.overallScore * 100).round();
+    // Deliberately no percentage. The guide forbids a number that pretends to
+    // be a measurement, and a `61%` next to a product name invited approving a
+    // suggestion by threshold instead of by reading why it was offered.
     final tierLabel = switch (candidate.matchTier) {
-      ProductDuplicateMatchTier.exact when candidate.identityScore >= 1 =>
-        'Identidad exacta',
-      ProductDuplicateMatchTier.exact => 'Misma imagen',
-      ProductDuplicateMatchTier.strong => 'Coincidencia alta',
-      ProductDuplicateMatchTier.possible => 'Posible coincidencia',
+      ProductDuplicateMatchTier.exact => 'Es el mismo producto',
+      ProductDuplicateMatchTier.strong => 'Casi seguro el mismo',
+      ProductDuplicateMatchTier.possible => 'Parecido, revísalo',
+      ProductDuplicateMatchTier.ruledOut => 'Descartado',
     };
     final tierColor = switch (candidate.matchTier) {
       ProductDuplicateMatchTier.exact => Colors.green,
       ProductDuplicateMatchTier.strong => Colors.orange,
       ProductDuplicateMatchTier.possible => Colors.blue,
+      ProductDuplicateMatchTier.ruledOut => Colors.grey,
     };
 
     final content = Container(
@@ -418,81 +430,24 @@ class ProductDuplicateCandidateTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '$scorePercent%',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: tierColor.shade700,
-                          ),
-                        ),
-                        Text(
-                          tierLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      tierLabel,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: tierColor.shade700,
+                      ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: candidate.overallScore,
-                  minHeight: 6,
-                  borderRadius: BorderRadius.circular(999),
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.4),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    if (candidate.keywordScore > 0)
-                      ProductDuplicateMetricChip(
-                        label:
-                            'Texto ${(candidate.keywordScore * 100).round()}%',
-                      ),
-                    if (candidate.semanticScore > 0)
-                      ProductDuplicateMetricChip(
-                        label: 'IA ${(candidate.semanticScore * 100).round()}%',
-                        tone: ProductDuplicateChipTone.primary,
-                      ),
-                    if (candidate.aiTypeScore > 0)
-                      ProductDuplicateMetricChip(
-                        label:
-                            'Vision ${(candidate.aiTypeScore * 100).round()}%',
-                        tone: candidate.aiTypeScore >= 0.75
-                            ? ProductDuplicateChipTone.warning
-                            : ProductDuplicateChipTone.primary,
-                      ),
-                    if (candidate.identityScore > 0)
-                      ProductDuplicateMetricChip(
-                        label: 'ID ${(candidate.identityScore * 100).round()}%',
-                        tone: candidate.identityScore >= 0.60
-                            ? ProductDuplicateChipTone.warning
-                            : ProductDuplicateChipTone.primary,
-                      ),
-                    if (candidate.imageScore > 0)
-                      ProductDuplicateMetricChip(
-                        label:
-                            'Imagen ${(candidate.imageScore * 100).round()}%',
-                        tone: candidate.imageScore >= 0.9
-                            ? ProductDuplicateChipTone.warning
-                            : ProductDuplicateChipTone.primary,
-                      ),
                     if (!candidate.hasProductImage)
                       const ProductDuplicateMetricChip(
                         label: 'Sin imagen',
                         tone: ProductDuplicateChipTone.neutral,
-                      ),
-                    if (candidate.metadataScore > 0)
-                      ProductDuplicateMetricChip(
-                        label:
-                            'Meta ${(candidate.metadataScore * 100).round()}%',
                       ),
                     if (product.price > 0)
                       ProductDuplicateMetricChip(
@@ -501,6 +456,19 @@ class ProductDuplicateCandidateTile extends StatelessWidget {
                       ),
                   ],
                 ),
+                if (candidate.objections.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: candidate.objections
+                        .map((objection) => ProductDuplicateMetricChip(
+                              label: objection,
+                              tone: ProductDuplicateChipTone.warning,
+                            ))
+                        .toList(growable: false),
+                  ),
+                ],
                 if (candidate.signals.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(

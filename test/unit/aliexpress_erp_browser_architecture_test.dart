@@ -80,8 +80,61 @@ void main() {
     final ocr =
         File('lib/shared/widgets/ocr_upload_widget.dart').readAsStringSync();
 
-    expect(ocr, contains("'AE\${(firstSequence + index)"));
+    expect(ocr, contains('reserveAliExpressSkus('));
+    // La reserva dejó de ser un flag de lote: cada fila guarda el código que le
+    // dio la base, y ese es el único que se puede crear.
+    expect(ocr, contains('String? reservedSku;'));
+    expect(
+      ocr,
+      contains('bool get hasReservedAliExpressSku =>'),
+    );
     expect(ocr, contains('entry.supplierCode.isEmpty ? entry.sku'));
     expect(ocr, contains('final String supplierCode;'));
+  });
+
+  test('AliExpress marks purchase days inside the calendar before selection',
+      () {
+    final browser =
+        File('lib/shared/widgets/webview_module_page.dart').readAsStringSync();
+    final extractor = File(
+      'tools/chrome-extensions/aliexpress-invoice-generator/content.js',
+    ).readAsStringSync();
+
+    final pickerStart = browser.indexOf(
+      'Future<_AliExpressImportRequest?> _pickAliExpressImportRequest()',
+    );
+    final pickerEnd = browser.indexOf(
+      'Future<void> _startAliExpressDailyImport()',
+      pickerStart,
+    );
+    expect(pickerStart, greaterThan(-1));
+    expect(pickerEnd, greaterThan(pickerStart));
+    final picker = browser.substring(pickerStart, pickerEnd);
+
+    expect(picker, contains('_refreshAliExpressOrderDateIndex()'));
+    expect(picker, contains('showVbMarkedDatePicker('));
+    expect(picker, contains('markers: _aliExpressDateMarkers()'));
+    expect(
+      picker.indexOf('_refreshAliExpressOrderDateIndex()'),
+      lessThan(picker.indexOf('showDialog<_AliExpressImportRequest>')),
+    );
+    expect(picker, isNot(contains('showDatePicker(')));
+    expect(browser, contains("'datesOnly': true"));
+    expect(browser, contains('UserScriptInjectionTime.AT_DOCUMENT_START'));
+    expect(
+      browser,
+      contains('AliExpressDailyInvoiceService.trustedRegistrableDomains'),
+    );
+    expect(browser, isNot(contains('Sin compras este día')));
+    expect(
+      browser,
+      contains(
+        'No consta una compra para esta fecha en el índice disponible.',
+      ),
+    );
+
+    expect(extractor, contains('const datesOnly = options.datesOnly === true'));
+    expect(extractor, contains("mode: datesOnly ? 'dates-only'"));
+    expect(extractor, contains('coverageComplete: coverage.complete'));
   });
 }

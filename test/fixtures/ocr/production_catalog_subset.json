@@ -1,0 +1,672 @@
+{
+  "source": "produccion xzdvtzdqjeyqxnkqprtf, lectura guardada 2026-08-09",
+  "note": "Subconjunto real del catálogo: los siete productos que la factura AE160326 debía encontrar, más los vecinos que el matcher anterior ofrecía en su lugar. No se editan nombres ni marcas: si un nombre es feo, así está en producción.",
+  "products": [
+    {
+      "sku": "17363",
+      "name": "BIELA IZQUIERDA ALUMINIO NEGRA 170mm LC02",
+      "brand": "Genérico",
+      "model": null,
+      "category_name": "Biela Izquierda",
+      "supplier_code": "17363",
+      "supplier_name": "RBX"
+    },
+    {
+      "sku": "1757",
+      "name": "MAZA TRASERA C/DISTANCIADOR T/PARALAX",
+      "brand": "Andes Industrial",
+      "model": null,
+      "category_name": "Maza",
+      "supplier_code": null,
+      "supplier_name": "Andes Industrial"
+    },
+    {
+      "sku": "19062M1",
+      "name": "CORTA CADENA HASTA 12 VEL",
+      "brand": "IceToolz",
+      "model": null,
+      "category_name": "Corta Cadena",
+      "supplier_code": "19062M1",
+      "supplier_name": null
+    },
+    {
+      "sku": "219",
+      "name": "EJE MAZA PERFORADO BLOQUEO TRASERO 137mm",
+      "brand": "Genérico",
+      "model": null,
+      "category_name": "Ejes",
+      "supplier_code": "219",
+      "supplier_name": "RBX"
+    },
+    {
+      "sku": "3181",
+      "name": "BIELA IZQUIERDA ALUMINIO 170mm LC02 ANCHA",
+      "brand": "Genérico",
+      "model": null,
+      "category_name": "Biela Izquierda",
+      "supplier_code": "3181",
+      "supplier_name": "RBX"
+    },
+    {
+      "sku": "370",
+      "name": "RODAMIENTO 7/32 MAZA TRASERA",
+      "brand": "Genérico",
+      "model": null,
+      "category_name": "Rodamientos",
+      "supplier_code": "370",
+      "supplier_name": "Andes Industrial"
+    },
+    {
+      "sku": "4214",
+      "name": "TEE ALUM MYB 31.8MM TIPO CNC",
+      "brand": "Eclipse",
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": "4214",
+      "supplier_name": "TeknoBike"
+    },
+    {
+      "sku": "6627",
+      "name": "BIELA IZQUIERDA NEGRA 170MM LC5",
+      "brand": "Hailin",
+      "model": null,
+      "category_name": "Biela Izquierda",
+      "supplier_code": "6627",
+      "supplier_name": "RBX"
+    },
+    {
+      "sku": "7673",
+      "name": "Volante MTB Aluminio 24/32/42T 170mm 8 Vel",
+      "brand": "Eclipse",
+      "model": null,
+      "category_name": "Volantes",
+      "supplier_code": "7673",
+      "supplier_name": "TeknoBike"
+    },
+    {
+      "sku": "997",
+      "name": "PEDIVELA IZQUIERDA 170MM REVESTIDA SILVER COMPATIBLE / GENERICO",
+      "brand": "Genérico",
+      "model": null,
+      "category_name": "Biela Izquierda",
+      "supplier_code": "997",
+      "supplier_name": "Andes Industrial"
+    },
+    {
+      "sku": "ACC-POS-37351",
+      "name": "Postiza Norco Mountaineer",
+      "brand": null,
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0001",
+      "name": "Adaptador Válvula Francesa/Auto",
+      "brand": null,
+      "model": null,
+      "category_name": "Adaptadores",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0008",
+      "name": "Disco freno SRAM 160MM Acero Inoxidable",
+      "brand": "SRAM",
+      "model": null,
+      "category_name": "Rotores",
+      "supplier_code": "AE0008",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0035",
+      "name": "Adaptador Rotor Freno Freewheel/Disco Enroscado 44mm",
+      "brand": null,
+      "model": null,
+      "category_name": "Adaptadores",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0038",
+      "name": "ROTOR SHIMANO AE 160MM",
+      "brand": "Shimano",
+      "model": null,
+      "category_name": "Rotores",
+      "supplier_code": null,
+      "supplier_name": null
+    },
+    {
+      "sku": "AE0046",
+      "name": "Válvula Tubeless Deemount F/V 1 Un. 60mm",
+      "brand": "Deemount",
+      "model": null,
+      "category_name": "Válvula Tubeless",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0055",
+      "name": "Adaptador Meroca Freno Disco F180/R160",
+      "brand": "Meroca",
+      "model": null,
+      "category_name": "Adaptadores",
+      "supplier_code": "AE0055",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0062",
+      "name": "Maza Trasera Novatec 32H 135x10mm HG D042SB",
+      "brand": "Novatec",
+      "model": null,
+      "category_name": "Maza",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0063",
+      "name": "Maza Delantera Novatec 32H 100x9mm HG D041SB",
+      "brand": "Novatec",
+      "model": null,
+      "category_name": "Maza",
+      "supplier_code": "AE0063",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0070",
+      "name": "Postiza AE 002",
+      "brand": "Aliexpress",
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0076",
+      "name": "Postiza AE 011",
+      "brand": "Aliexpress",
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0077",
+      "name": "Postiza Trek",
+      "brand": "Aliexpress",
+      "model": null,
+      "category_name": null,
+      "supplier_code": "AE0077",
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0081",
+      "name": "Risk Sticker protector para cadena de bicicleta",
+      "brand": "Risk",
+      "model": null,
+      "category_name": null,
+      "supplier_code": "AE0081",
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0093",
+      "name": "Volante IXF Integrado Black 170Mm + Motor BSA + Corona 34T",
+      "brand": "IXF",
+      "model": null,
+      "category_name": "Volante",
+      "supplier_code": "AE0093",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0097",
+      "name": "Missinglink RISK 9 V Par (2 piezas)",
+      "brand": "Risk",
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0098",
+      "name": "Missinglink RISK 10 V Par (2 piezas)",
+      "brand": "Risk",
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0100",
+      "name": "Missinglink RISK 12 V Par (2 piezas)",
+      "brand": "Risk",
+      "model": null,
+      "category_name": null,
+      "supplier_code": "AE0100",
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0101",
+      "name": "Puños ODI-1 Negros 135mm",
+      "brand": "ODI",
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0121",
+      "name": "Guía de Cadena RIDERACE ISCG 03/05 BB 1V 32-38T",
+      "brand": "RideRace",
+      "model": null,
+      "category_name": "Guias de cadena",
+      "supplier_code": "AE0121",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0122",
+      "name": "ROTOR FRENO DISCO SHIMANO SM-RT10 160MM AE",
+      "brand": "Shimano",
+      "model": null,
+      "category_name": "Rotores",
+      "supplier_code": "AE0122",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0128",
+      "name": "Postiza AE 001",
+      "brand": "Aliexpress",
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0136",
+      "name": "Tee Aluminio Wake MTB 31.8MM x 45MM Negro",
+      "brand": "Wake",
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0137",
+      "name": "Tee Aluminio Wake MTB 31.8MM x 45MM Rojo",
+      "brand": "Wake",
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0138",
+      "name": "Tee Aluminio Wake MTB 31.8MM x 45MM Morado",
+      "brand": "Wake",
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": "AE0138",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0139",
+      "name": "Tee Aluminio Wake MTB 31.8MM x 45MM Azul",
+      "brand": "Wake",
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0147",
+      "name": "Corta cadena RiderAce Negro",
+      "brand": "RideRace",
+      "model": null,
+      "category_name": "Corta Cadena",
+      "supplier_code": "AE0147",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0149",
+      "name": "Corta cadena AE Negro",
+      "brand": "Aliexpress",
+      "model": null,
+      "category_name": "Corta Cadena",
+      "supplier_code": "AE0149",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0152",
+      "name": "Válvula Tubeless MANA F/V 1 Un. 50mm",
+      "brand": "Mana",
+      "model": null,
+      "category_name": "Válvula Tubeless",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0155",
+      "name": "Disco freno Shimano Deore RT56 160MM",
+      "brand": "Shimano",
+      "model": null,
+      "category_name": "Rotores",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0160",
+      "name": "Disco freno Shimano Deore RT56 180MM",
+      "brand": "Shimano",
+      "model": null,
+      "category_name": "Rotores",
+      "supplier_code": "AE0160",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0167",
+      "name": "Adaptador Tee 22.2/28.6 Manillar 28.6 160mm AE",
+      "brand": "Genérico",
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": "AE0167",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0173",
+      "name": "Postiza GT Hanger # ATIDH0233/K33407 AE",
+      "brand": null,
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0174",
+      "name": "Adaptador Tee 25.4/28.6 Manillar 28.6 160mm AE",
+      "brand": "Genérico",
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": "AE0174",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0200",
+      "name": "Adaptador Disco de Freno ZTTO - pm/pm 160mm/180mm",
+      "brand": "ZTTO",
+      "model": null,
+      "category_name": null,
+      "supplier_code": "DS01",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0210",
+      "name": "Botella 710ml Riderace Black",
+      "brand": "RideRace",
+      "model": null,
+      "category_name": null,
+      "supplier_code": "Black",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0212",
+      "name": "Disco de Freno 160mm G3 TANKE",
+      "brand": "",
+      "model": null,
+      "category_name": "Rotores",
+      "supplier_code": "G3 160mm 2pcs",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0213",
+      "name": "Adaptador Disco de Freno Shimano - pm/pm 160mm/203mm",
+      "brand": "Shimano",
+      "model": null,
+      "category_name": "Adaptadores",
+      "supplier_code": "SM-MA-F203P P",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0214",
+      "name": "Adaptador Disco de Freno Shimano - pm/pm 160mm/180mm",
+      "brand": "Shimano",
+      "model": null,
+      "category_name": "Adaptadores",
+      "supplier_code": "SM-MA-F180P P2",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0216",
+      "name": "Disco de Freno Flotante 160mm Cyclami",
+      "brand": "Kactus Tech",
+      "model": null,
+      "category_name": "Rotores",
+      "supplier_code": "1pc 160mm",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0222",
+      "name": "Porta Caramagiola RiderAce Plástico Negro",
+      "brand": "RideRace",
+      "model": null,
+      "category_name": "Porta Caramagiola",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0229",
+      "name": "Cortacadenas Toopre Negro",
+      "brand": "Toopre",
+      "model": null,
+      "category_name": "Corta Cadena",
+      "supplier_code": "AE0229",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0230",
+      "name": "Maza Trasera ARC 32H 135x10mm HG MT001",
+      "brand": "ARC",
+      "model": null,
+      "category_name": "Maza",
+      "supplier_code": "AE0230",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0234",
+      "name": "Obús Válvula Deemount F/V 1Un",
+      "brand": "Deemount",
+      "model": null,
+      "category_name": "Válvula Tubeless",
+      "supplier_code": "AE0234",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0254",
+      "name": "Maza Trasera Novatec 32H 148x12mm Boost D442SB",
+      "brand": "Novatec",
+      "model": null,
+      "category_name": "Maza",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0257",
+      "name": "Puños ODI de Gel Ergonómico",
+      "brand": "ODI",
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0273",
+      "name": "Puños ODI-1 Morados 135mm",
+      "brand": "ODI",
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0281",
+      "name": "Adaptador de Eje M10 a M14x8mm",
+      "brand": "",
+      "model": null,
+      "category_name": "Adaptadores",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0287",
+      "name": "Válvula Tubeless Deemount F/V 1un. 40mm",
+      "brand": "Deemount",
+      "model": null,
+      "category_name": "Válvula Tubeless",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0301",
+      "name": "Tee Aluminio Wake MTB 31.8MM x 45MM Golden",
+      "brand": "Wake",
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0311",
+      "name": "Mazas Novatec 32H Microspline QR",
+      "brand": null,
+      "model": null,
+      "category_name": "Mazas",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0313",
+      "name": "Maza Novatec 32H trasera 10x135mm QR MicroSpline",
+      "brand": "Novatec",
+      "model": null,
+      "category_name": "Maza",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0349",
+      "name": "Pernos disco freno M5x12mm",
+      "brand": null,
+      "model": null,
+      "category_name": "Pernos/Tornillos/Otros",
+      "supplier_code": "AE0349",
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "AE0353",
+      "name": "Extensión para Postiza ZTTO",
+      "brand": "ZTTO",
+      "model": null,
+      "category_name": null,
+      "supplier_code": "AE0353",
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "AE0366",
+      "name": "Tee Lunje 31.8mm Aluminio 7075",
+      "brand": null,
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    },
+    {
+      "sku": "BPS005",
+      "name": "Wistio - Núcleo de Valvula F/V - Unidad",
+      "brand": "Wistio",
+      "model": null,
+      "category_name": "Válvula Tubeless",
+      "supplier_code": "BPS005",
+      "supplier_name": "Bike Point Store"
+    },
+    {
+      "sku": "ML001",
+      "name": "Postiza Giant",
+      "brand": "Giant",
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "NNV1",
+      "name": "Adaptador Válvula Scooter Eléctrico",
+      "brand": "",
+      "model": null,
+      "category_name": "Adaptadores",
+      "supplier_code": null,
+      "supplier_name": null
+    },
+    {
+      "sku": "NNV101",
+      "name": "Maza Trasera Freewheel Disco 32h Betta",
+      "brand": "",
+      "model": null,
+      "category_name": null,
+      "supplier_code": "NNV101",
+      "supplier_name": "Betta Bikes"
+    },
+    {
+      "sku": "NNV136",
+      "name": "Postiza Padro",
+      "brand": null,
+      "model": null,
+      "category_name": null,
+      "supplier_code": null,
+      "supplier_name": "Aliexpress"
+    },
+    {
+      "sku": "PB00001",
+      "name": "Disco freno Shimano RT26 160MM",
+      "brand": "",
+      "model": null,
+      "category_name": "Rotores",
+      "supplier_code": "PB00001",
+      "supplier_name": "Padro Bikes"
+    },
+    {
+      "sku": "S60082",
+      "name": "volante fc-ty301 ty for rear 6/7/8-vel. 170mm 48T",
+      "brand": "Shimano",
+      "model": null,
+      "category_name": "Volante",
+      "supplier_code": null,
+      "supplier_name": "Andes Industrial"
+    },
+    {
+      "sku": "S60501",
+      "name": "volante fc-ty301 6/7 /8 vel 170mm s/cubre cadena",
+      "brand": "Shimano",
+      "model": null,
+      "category_name": "Volante",
+      "supplier_code": "S60501",
+      "supplier_name": null
+    },
+    {
+      "sku": "S61927",
+      "name": "ROTOR FRENO DISCO SHIMANO SM-RT10 160MM (BOLSA) ESMRT10S2",
+      "brand": "Shimano",
+      "model": null,
+      "category_name": "Rotores",
+      "supplier_code": "S61927",
+      "supplier_name": "Andes Industrial"
+    },
+    {
+      "sku": "T14580",
+      "name": "Tee ajustable para manillar de montaña 31,8mm",
+      "brand": null,
+      "model": null,
+      "category_name": "Tee",
+      "supplier_code": null,
+      "supplier_name": "AliExpress"
+    }
+  ]
+}

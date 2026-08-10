@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
@@ -112,6 +114,7 @@ class AICleanedProductName {
     this.model,
     this.categoryName,
     this.confidence = 0.0,
+    this.visualAnalysis,
   });
 
   /// Short, store-ready product name. Chilean Spanish vocabulary.
@@ -135,6 +138,16 @@ class AICleanedProductName {
 
   /// 0-1 confidence in the cleaned result.
   final double confidence;
+
+  /// What the same call saw in the photo, stated independently of the title.
+  ///
+  /// The title reading and the object reading used to be two separate Gemini
+  /// calls on the same bytes — one to write the name, one to recognise the
+  /// object — so every row paid twice and the two answers could disagree with
+  /// nothing to reconcile them. They are one call now: the model is asked for
+  /// both, and this block is the half that the identity engine and the category
+  /// resolver are allowed to weigh against the words.
+  final AIProductImageAnalysis? visualAnalysis;
 }
 
 class _TireWidthRange {
@@ -175,6 +188,8 @@ class AIAssistantService extends ChangeNotifier
   static const Duration _maxModelCallDuration = Duration(seconds: 35);
   static const Duration _maxAgentTurnDuration = Duration(seconds: 90);
   static const Duration _maxAuditRecordDuration = Duration(milliseconds: 100);
+  static const Duration _defaultImageDownloadTimeout = Duration(seconds: 8);
+  static const int _maxDownloadedImageBytes = 8 * 1024 * 1024;
   static const int _maxToolCallsPerTurn = 12;
 
   /// One engine per authority, never a process-wide singleton.
@@ -188,20 +203,29 @@ class AIAssistantService extends ChangeNotifier
   AIAssistantService({
     AIAgentModelProvider? modelProvider,
     AIAgentAuditSink? auditSink,
+    GeminiProxyService? geminiProxy,
+    http.Client Function()? imageHttpClientFactory,
+    Duration imageDownloadTimeout = _defaultImageDownloadTimeout,
     String Function()? idFactory,
     DateTime Function()? now,
   })  : _modelProvider = modelProvider ?? GeminiAIAgentModelProvider(),
         _auditSink = FailSafeAIAgentAuditSink(
           auditSink ?? InMemoryAIAgentAuditSink(),
         ),
+        _imageHttpClientFactory =
+            imageHttpClientFactory ?? (() => http.Client()),
+        _imageDownloadTimeout = imageDownloadTimeout,
         _idFactory = idFactory ?? _newAIAgentId,
         _now = now ?? DateTime.now,
         _auditHmacKey = _newAIAuditHmacKey() {
+    _geminiProxyInstance = geminiProxy;
     _sessionId = _idFactory();
   }
 
   final AIAgentModelProvider _modelProvider;
   final AIAgentAuditSink _auditSink;
+  final http.Client Function() _imageHttpClientFactory;
+  final Duration _imageDownloadTimeout;
   final String Function() _idFactory;
   final DateTime Function() _now;
   final List<int> _auditHmacKey;
@@ -486,6 +510,7 @@ ${contextLines.isEmpty ? 'sin texto adicional' : contextLines.join('\n')}
   /// Cache for cleaned product names. Keyed by image hash + raw title so
   /// repeated rows in the same AliExpress invoice share one Gemini call.
   final Map<String, AICleanedProductName> _cleanedNameCache = {};
+  final Map<String, Future<AICleanedProductName?>> _cleanedNameLoads = {};
 
   /// Generate a clean, shop-friendly product name + category + brand from a
   /// noisy supplier title (e.g. AliExpress) and the actual product photo.
@@ -501,21 +526,52 @@ ${contextLines.isEmpty ? 'sin texto adicional' : contextLines.join('\n')}
   }) async {
     if (rawTitle.trim().isEmpty) return null;
 
-    // Build cache key. Prefer image hash (stable across URL changes) but fall
-    // back to URL when only the URL is known.
-    final cacheKey = StringBuffer();
-    if (imageBytes != null && imageBytes.isNotEmpty) {
-      cacheKey.write('b:${imageBytes.lengthInBytes}:'
-          '${imageBytes.take(64).fold<int>(0, (a, b) => (a * 31 + b) & 0x7fffffff)}');
-    } else if (imageUrl != null && imageUrl.isNotEmpty) {
-      cacheKey.write('u:$imageUrl');
-    } else {
-      cacheKey.write('t:');
-    }
-    cacheKey.write('|${rawTitle.trim().toLowerCase()}');
-    final cached = _cleanedNameCache[cacheKey.toString()];
+    // PNG/JPEG headers are commonly identical across different product photos.
+    // A prefix/length hash therefore leaked one row's classification into a
+    // different row. Use the complete content digest and dedupe the in-flight
+    // Future so parallel variants also share the same model call.
+    final imageIdentity = imageBytes != null && imageBytes.isNotEmpty
+        ? 'b:${crypto.sha256.convert(imageBytes)}'
+        : (imageUrl?.trim().isNotEmpty ?? false)
+            ? 'u:${imageUrl!.trim()}'
+            : 'no-image';
+    final cacheKey = [
+      imageIdentity,
+      rawTitle.trim().toLowerCase(),
+      supplierName?.trim().toLowerCase() ?? '',
+      visionModel,
+    ].join('|');
+    final cached = _cleanedNameCache[cacheKey];
     if (cached != null) return cached;
+    final pending = _cleanedNameLoads[cacheKey];
+    if (pending != null) return pending;
 
+    final load = _cleanProductTitleFromImageUncached(
+      rawTitle: rawTitle,
+      imageBytes: imageBytes,
+      imageUrl: imageUrl,
+      supplierName: supplierName,
+      visionModel: visionModel,
+    );
+    _cleanedNameLoads[cacheKey] = load;
+    try {
+      final result = await load;
+      if (result != null) _cleanedNameCache[cacheKey] = result;
+      return result;
+    } finally {
+      if (identical(_cleanedNameLoads[cacheKey], load)) {
+        _cleanedNameLoads.remove(cacheKey);
+      }
+    }
+  }
+
+  Future<AICleanedProductName?> _cleanProductTitleFromImageUncached({
+    required String rawTitle,
+    Uint8List? imageBytes,
+    String? imageUrl,
+    String? supplierName,
+    required String visionModel,
+  }) async {
     // Make sure we have bytes if a URL was provided.
     Uint8List? bytes = imageBytes;
     if ((bytes == null || bytes.isEmpty) &&
@@ -546,7 +602,13 @@ Devuelve SOLO JSON valido con esta forma exacta:
   "brand": "ZTTO",
   "model": "001",
   "category_name": "Postizas",
-  "confidence": 0.92
+  "confidence": 0.92,
+  "vision": {
+    "primary_type": "postiza",
+    "catalog_terms": ["postiza", "gancho de cambio", "ztto"],
+    "excluded_terms": ["cadena", "cassette"],
+    "confidence": 0.88
+  }
 }
 
 Reglas duras:
@@ -571,12 +633,33 @@ Reglas duras:
 - component_type debe ser un sustantivo singular en minusculas, util como
   filtro de categoria (ej: "postiza", "polea", "plato", "pastillas freno",
   "cassette", "cadena", "manilla", "desviador", "cambio trasero").
-- brand y model son opcionales; SOLO incluyelos si son claramente visibles
-  en la foto o explicitamente nombrados en el titulo. NO inventes marca.
+- En Chile, "potencia", "tee" y "stem" nombran el mismo componente. Usa
+  SIEMPRE component_type "tee", cleaned_name comenzando por "Tee" y
+  category_name "Tee" para cualquiera de esos sinonimos.
+- Un adaptador Presta/FV/VF a Schrader/AV/VA es un "adaptador de valvula" y
+  category_name "Adaptadores". NO es una valvula tubeless. Usa "Válvula
+  Tubeless" solamente cuando el titulo o la foto indiquen tubeless de forma
+  explicita.
+- brand y model son opcionales; SOLO incluyelos si el FABRICANTE es claramente
+  visible en la foto o explicitamente nombrado como marca en el titulo. Frases
+  como "compatible con Shimano/SRAM", "para Shimano" o "works with Shimano"
+  describen compatibilidad y JAMAS prueban la marca. Si el titulo dice IXF y
+  luego "compatible con Shimano", brand debe ser "IXF", nunca "Shimano".
+  NO inventes marca.
 - category_name debe ser una categoria humana en plural ("Postizas",
   "Poleas", "Pastillas de freno", "Cassettes", "Cadenas", "Cambios
   traseros"). Sirve para sugerir la categoria de catalogo.
 - confidence entre 0 y 1.
+- vision describe SOLO lo que se ve en la FOTO, ignorando el titulo. Es la
+  respuesta a "que objeto es esto", no a "de que habla el texto".
+  * vision.primary_type: el objeto fisico, sustantivo corto y concreto.
+  * vision.catalog_terms: 3 a 8 terminos cortos para buscarlo en un catalogo.
+  * vision.excluded_terms: familias claramente distintas que la foto descarta.
+  * vision.confidence entre 0 y 1; si NO hay foto o no se distingue el objeto,
+    usa 0 y deja primary_type vacio. No adivines desde el titulo.
+  * El titulo puede nombrar el SISTEMA al que sirve la pieza ("herradura de
+    freno", "maza para freno de disco"). vision.primary_type debe ser la PIEZA
+    que se ve, jamas el sistema nombrado en el texto.
 - NO escribas nada fuera del JSON.
 
 Contexto:
@@ -642,9 +725,12 @@ ${hintLines.join('\n')}
         model: model.isEmpty ? null : model,
         categoryName: categoryName.isEmpty ? null : categoryName,
         confidence: confidence,
+        visualAnalysis: _visualAnalysisFromCleanerBlock(
+          decoded['vision'],
+          hadImage: bytes != null && bytes.isNotEmpty,
+        ),
       );
 
-      _cleanedNameCache[cacheKey.toString()] = result;
       return result;
     } catch (_) {
       _debugAi('❌ [AI] Clean product title failed.');
@@ -652,18 +738,131 @@ ${hintLines.join('\n')}
     }
   }
 
+  /// The photo half of a cleaner answer, or `null` when there is nothing to
+  /// read. A block invented without an image is refused rather than trusted:
+  /// with no picture, the model can only be paraphrasing the title, and the
+  /// whole point of this evidence is that it is independent of it.
+  AIProductImageAnalysis? _visualAnalysisFromCleanerBlock(
+    Object? raw, {
+    required bool hadImage,
+  }) {
+    if (!hadImage || raw is! Map) return null;
+    final primaryType = _normalizeImageAnalysisTerm(
+      raw['primary_type']?.toString(),
+    );
+    final catalogTerms = _normalizeImageAnalysisTerms(raw['catalog_terms']);
+    if (primaryType.isEmpty && catalogTerms.isEmpty) return null;
+    final confidence = _coerceAnalysisConfidence(raw['confidence']);
+    if (confidence <= 0) return null;
+    return AIProductImageAnalysis(
+      primaryType: primaryType,
+      catalogTerms: <String>{
+        if (primaryType.isNotEmpty) primaryType,
+        ...catalogTerms,
+      }.toList(growable: false),
+      excludedTerms: _normalizeImageAnalysisTerms(raw['excluded_terms']),
+      confidence: confidence,
+      visualSummary: _normalizeImageAnalysisTerm(
+        raw['visual_summary']?.toString(),
+        maxWords: 12,
+      ),
+    );
+  }
+
   Future<Uint8List?> _downloadImageBytes(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
+      return null;
+    }
+
+    final client = _imageHttpClientFactory();
     try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
-        return response.bodyBytes;
-      }
-      _debugAi('⚠️ [AI] Image download failed (${response.statusCode}).');
+      return await _downloadImageBytesWithClient(client, uri)
+          .timeout(_imageDownloadTimeout);
+    } on TimeoutException {
+      _debugAi('⚠️ [AI] Image download timed out.');
       return null;
     } catch (_) {
       _debugAi('❌ [AI] Image download failed.');
       return null;
+    } finally {
+      client.close();
     }
+  }
+
+  Future<Uint8List?> _downloadImageBytesWithClient(
+    http.Client client,
+    Uri uri,
+  ) async {
+    final response = await client.send(http.Request('GET', uri));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _debugAi('⚠️ [AI] Image download failed (${response.statusCode}).');
+      return null;
+    }
+
+    final declaredLength =
+        int.tryParse(response.headers['content-length']?.trim() ?? '');
+    if (declaredLength != null && declaredLength > _maxDownloadedImageBytes) {
+      _debugAi('⚠️ [AI] Image download exceeded the size limit.');
+      return null;
+    }
+
+    final contentType = (response.headers['content-type'] ?? '')
+        .split(';')
+        .first
+        .trim()
+        .toLowerCase();
+    final hasPermittedContentType = contentType.isEmpty ||
+        contentType.startsWith('image/') ||
+        contentType == 'application/octet-stream';
+    if (!hasPermittedContentType) {
+      _debugAi('⚠️ [AI] Image download returned non-image content.');
+      return null;
+    }
+
+    final body = BytesBuilder(copy: false);
+    await for (final chunk in response.stream) {
+      if (body.length + chunk.length > _maxDownloadedImageBytes) {
+        _debugAi('⚠️ [AI] Image download exceeded the size limit.');
+        return null;
+      }
+      body.add(chunk);
+    }
+
+    final bytes = body.takeBytes();
+    if (bytes.isEmpty) {
+      _debugAi('⚠️ [AI] Image download was empty.');
+      return null;
+    }
+    if (!_looksLikeDownloadedImage(bytes)) {
+      _debugAi('⚠️ [AI] Image download returned non-image content.');
+      return null;
+    }
+    return bytes;
+  }
+
+  bool _looksLikeDownloadedImage(Uint8List bytes) {
+    if (bytes.lengthInBytes < 4) return false;
+    final isJpeg = bytes[0] == 0xFF && bytes[1] == 0xD8;
+    final isPng = bytes.lengthInBytes >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47;
+    final isGif = bytes.lengthInBytes >= 6 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46;
+    final isWebp = bytes.lengthInBytes >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50;
+    return isJpeg || isPng || isGif || isWebp;
   }
 
   String _imageBytesCacheKey(Uint8List bytes) {

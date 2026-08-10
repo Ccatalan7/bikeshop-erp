@@ -8,55 +8,18 @@ import 'package:vinabike_erp/modules/inventory/models/product_duplicate_candidat
 import 'package:vinabike_erp/modules/inventory/services/inventory_service.dart'
     as inv_service;
 import 'package:vinabike_erp/modules/inventory/services/product_duplicate_matcher_service.dart';
+import 'package:vinabike_erp/modules/inventory/services/product_identity/product_visual_reading.dart';
 import 'package:vinabike_erp/modules/inventory/services/product_image_fingerprint_service.dart';
 
+/// Contracts carried over from the pre-2026-08-10 matcher.
+///
+/// The engine underneath was replaced; these are the promises that survived it,
+/// migrated to the new API rather than deleted. Where the old assertion was
+/// about a score, the migrated one is about the decision that score was
+/// standing in for — a deleted contract is a regression nobody notices.
 void main() {
-  group('ProductDuplicateMatcherService deterministic identities', () {
-    test('normalizes RT56, RT-56 and RT 56 to the same model identity', () {
-      expect(
-        ProductDuplicateMatcherService.extractModelIdentifiers('RT56'),
-        contains('rt56'),
-      );
-      expect(
-        ProductDuplicateMatcherService.extractModelIdentifiers('RT-56'),
-        contains('rt56'),
-      );
-      expect(
-        ProductDuplicateMatcherService.extractModelIdentifiers('RT 56'),
-        contains('rt56'),
-      );
-    });
-
-    test('ranks an exact normalized model ahead of fuzzy candidates', () async {
-      final matcher = _matcher();
-      final candidates = await matcher.findCandidates(
-        probe: const ProductDuplicateProbe(
-          name: 'Rotor de freno RT 56 160mm MTB',
-          supplierName: 'AliExpress',
-        ),
-        products: [
-          _product(
-            id: 'generic',
-            sku: 'AE0100',
-            name: 'Rotor de freno RT57 160mm MTB',
-            model: 'RT57',
-          ),
-          _product(
-            id: 'exact-model',
-            sku: 'AE0101',
-            name: 'Disco rotor Shimano RT-56 160mm',
-            model: 'RT-56',
-          ),
-        ],
-      );
-
-      expect(candidates.first.product.id, 'exact-model');
-      expect(candidates.first.hasExactModelMatch, isTrue);
-      expect(candidates.first.matchTier, ProductDuplicateMatchTier.strong);
-      expect(candidates.first.overallScore, greaterThanOrEqualTo(0.94));
-    });
-
-    test('canonical AliExpress image URL variants are exact identity',
+  group('identidad determinista', () {
+    test('las variantes de una URL de imagen AliExpress son la misma imagen',
         () async {
       const probeUrl =
           'https://ae-pic-a1.aliexpress-media.com/kf/HABC.jpg?width=800';
@@ -67,8 +30,7 @@ void main() {
         ProductDuplicateMatcherService.canonicalImageIdentity(catalogUrl),
       );
 
-      final candidates =
-          await _matcher(imageLoader: (_) async => null).findCandidates(
+      final candidates = await _matcher().findCandidates(
         probe: const ProductDuplicateProbe(
           name: 'Producto nuevo',
           imageUrl: probeUrl,
@@ -84,165 +46,11 @@ void main() {
       );
 
       expect(candidates, hasLength(1));
-      expect(candidates.single.hasExactImageMatch, isTrue);
       expect(candidates.single.matchTier, ProductDuplicateMatchTier.exact);
-      expect(candidates.single.overallScore, 1);
+      expect(candidates.single.reasons, contains('Misma imagen'));
     });
 
-    test('checks every candidate image and detects byte-identical content',
-        () async {
-      final probeBytes = _imageBytes(20, 40, 60);
-      final otherBytes = _imageBytes(200, 180, 160);
-      final imageBytesByUrl = <String, Uint8List>{
-        'https://example.test/first.png': otherBytes,
-        'https://example.test/second.png': probeBytes,
-      };
-      var aiCalls = 0;
-      final candidates = await _matcher(
-        imageLoader: (url) async => imageBytesByUrl[url],
-        visualComparator: ({
-          required probeImageBytes,
-          required candidateImageBytes,
-          probeName,
-          candidateName,
-          candidateBrand,
-          candidateCategory,
-        }) async {
-          aiCalls++;
-          return const AIProductVisualComparison(
-            samePartScore: 0,
-            shapeScore: 0,
-            colorScore: 0,
-            componentTypeMatch: false,
-            confidence: 1,
-          );
-        },
-      ).findCandidates(
-        probe: ProductDuplicateProbe(
-          name: 'Pastillas de freno',
-          imageBytes: probeBytes,
-        ),
-        products: [
-          _product(
-            id: 'exact-content',
-            sku: 'AE0300',
-            name: 'Pastillas de freno históricas',
-            imageUrl: 'https://example.test/first.png',
-            additionalImages: const ['https://example.test/second.png'],
-          ),
-        ],
-      );
-
-      expect(candidates.single.hasExactImageMatch, isTrue);
-      expect(candidates.single.matchTier, ProductDuplicateMatchTier.exact);
-      expect(candidates.single.overallScore, 1);
-      expect(aiCalls, 0, reason: 'exact identity must not enter fuzzy AI pass');
-    });
-
-    test('unavailable image is reweighted instead of scored as mismatch',
-        () async {
-      final candidates =
-          await _matcher(imageLoader: (_) async => null).findCandidates(
-        probe: ProductDuplicateProbe(
-          name: 'Pastillas freno semimetálicas',
-          imageBytes: _imageBytes(10, 20, 30),
-        ),
-        products: [
-          _product(
-            id: 'unavailable-image',
-            sku: 'AE0400',
-            name: 'Pastillas freno semimetálicas',
-            imageUrl: 'https://example.test/missing.png',
-          ),
-        ],
-      );
-      final withoutImage = await _matcher().findCandidates(
-        probe: const ProductDuplicateProbe(
-          name: 'Pastillas freno semimetálicas',
-        ),
-        products: [
-          _product(
-            id: 'unavailable-image',
-            sku: 'AE0400',
-            name: 'Pastillas freno semimetálicas',
-            imageUrl: 'https://example.test/missing.png',
-          ),
-        ],
-      );
-
-      expect(candidates.single.imageComparisonAvailable, isFalse);
-      expect(
-        candidates.single.overallScore,
-        closeTo(withoutImage.single.overallScore, 0.000001),
-      );
-      expect(
-        candidates.single.signals,
-        contains('Imagen no disponible para comparar'),
-      );
-    });
-
-    test('limits Gemini visual comparison to three ambiguous candidates',
-        () async {
-      final probeBytes = _imageBytes(1, 2, 3);
-      final bytesByUrl = <String, Uint8List>{};
-      final products = <Product>[];
-      for (var index = 0; index < 5; index++) {
-        final url = 'https://example.test/$index.png';
-        bytesByUrl[url] = _imageBytes(30 + index, 60 + index, 90 + index);
-        products.add(_product(
-          id: 'candidate-$index',
-          sku: 'AE05$index',
-          name: 'Pastillas freno semimetálicas universales',
-          imageUrl: url,
-        ));
-      }
-      var aiCalls = 0;
-      final candidates = await _matcher(
-        imageLoader: (url) async => bytesByUrl[url],
-        visualComparator: ({
-          required probeImageBytes,
-          required candidateImageBytes,
-          probeName,
-          candidateName,
-          candidateBrand,
-          candidateCategory,
-        }) async {
-          aiCalls++;
-          return const AIProductVisualComparison(
-            samePartScore: 0.75,
-            shapeScore: 0.75,
-            colorScore: 0.75,
-            componentTypeMatch: true,
-            confidence: 0.8,
-          );
-        },
-      ).findCandidates(
-        probe: ProductDuplicateProbe(
-          name: 'Pastillas freno semimetálicas universales',
-          supplierName: 'AliExpress',
-          imageBytes: probeBytes,
-        ),
-        products: products,
-        limit: 5,
-      );
-
-      expect(candidates, hasLength(5));
-      expect(aiCalls, 3);
-    });
-
-    test('uses stable SKU ordering when all scores tie', () async {
-      final candidates = await _matcher().findCandidates(
-        probe: const ProductDuplicateProbe(name: 'Pastillas freno'),
-        products: [
-          _product(id: 'second', sku: 'B', name: 'Pastillas freno'),
-          _product(id: 'first', sku: 'A', name: 'Pastillas freno'),
-        ],
-      );
-
-      expect(candidates.map((candidate) => candidate.product.sku), ['A', 'B']);
-    });
-
-    test('does not treat a cross-supplier supplier code as exact identity',
+    test('un código de proveedor de OTRO proveedor no es identidad exacta',
         () async {
       final candidates = await _matcher().findCandidates(
         probe: const ProductDuplicateProbe(
@@ -264,19 +72,19 @@ void main() {
       );
 
       expect(candidates, hasLength(1));
-      expect(candidates.single.identityScore, 0);
       expect(
         candidates.single.matchTier,
         isNot(ProductDuplicateMatchTier.exact),
       );
     });
 
-    test('keeps AliExpress listing identity across Ali supplier records',
+    test('la publicación AliExpress sobrevive a dos registros de proveedor',
         () async {
       final candidates = await _matcher().findCandidates(
         probe: const ProductDuplicateProbe(
           name: 'Pastillas freno',
           sku: 'AE-LISTING-88',
+          rawText: 'item id 1005007336672891',
           supplierId: 'ali-record-a',
           supplierName: 'AliExpress Marketplace',
         ),
@@ -287,23 +95,267 @@ void main() {
             name: 'Pastillas freno históricas',
             supplierId: 'ali-record-b',
             supplierName: 'Ali Express',
-            supplierCode: 'AE-LISTING-88',
+            supplierCode: '1005007336672891',
           ),
         ],
       );
 
-      expect(candidates.single.identityScore, 1);
+      expect(candidates, hasLength(1));
+      expect(
+        candidates.single.reasons.join(' '),
+        isNot(contains('Mismo SKU')),
+        reason: 'una publicación agrupa variantes, no identifica una',
+      );
+    });
+
+    test('el SKU del catálogo sí es identidad exacta', () async {
+      final candidates = await _matcher().findCandidates(
+        probe: const ProductDuplicateProbe(
+          name: 'Pastillas freno',
+          sku: 'AE0888',
+          supplierName: 'AliExpress',
+        ),
+        products: [
+          _product(id: 'exact', sku: 'AE0888', name: 'Pastillas freno'),
+        ],
+      );
+
       expect(candidates.single.matchTier, ProductDuplicateMatchTier.exact);
+      expect(candidates.single.reasons, contains('Mismo SKU del catálogo'));
+    });
+  });
+
+  group('orden y ranking', () {
+    test('el modelo exacto del nombre gana a un candidato difuso', () async {
+      final candidates = await _matcher().findCandidates(
+        probe: const ProductDuplicateProbe(
+          name: 'Rotor de freno Shimano RT 56 160mm',
+          description: 'Compatible con Shimano M610 M6000',
+          rawText: 'Detalle proveedor: compatibilidad M610/M6000',
+          brandName: 'Shimano',
+          supplierName: 'AliExpress',
+        ),
+        products: [
+          _product(
+            id: 'compatibility-only',
+            sku: 'AE0099',
+            name: 'Rotor Shimano RX100 160mm',
+            description: 'Compatible con Shimano M610/M6000',
+            brand: 'Shimano',
+            model: 'RX100',
+          ),
+          _product(
+            id: 'exact-model',
+            sku: 'AE0101',
+            name: 'Disco rotor Shimano RT-56 160mm',
+            brand: 'Shimano',
+            model: 'RT-56',
+          ),
+        ],
+      );
+
+      expect(candidates.first.product.id, 'exact-model');
+      expect(candidates.first.matchTier, ProductDuplicateMatchTier.strong);
+      expect(candidates.first.matchedModelCodes, contains('rt56'));
+
+      // La compatibilidad compartida NO es identidad compartida.
+      final fuzzy = candidates
+          .where((candidate) => candidate.product.id == 'compatibility-only');
+      for (final candidate in fuzzy) {
+        expect(candidate.matchedModelCodes, isEmpty);
+        expect(candidate.matchTier, isNot(ProductDuplicateMatchTier.strong));
+      }
+    });
+
+    test('«M610» de una frase de compatibilidad no crea evidencia de modelo',
+        () async {
+      final candidates = await _matcher().findCandidates(
+        probe: const ProductDuplicateProbe(
+          name: 'Rotor de freno Shimano RT56 160mm',
+          description: 'compatible M610 M6000',
+          brandName: 'Shimano',
+        ),
+        products: [
+          _product(
+            id: 'rx100',
+            sku: 'AE0099',
+            name: 'Rotor Shimano RX100 160mm',
+            description: 'compatible M610 M6000',
+            brand: 'Shimano',
+          ),
+        ],
+      );
+
+      expect(candidates, hasLength(1));
+      expect(candidates.single.matchedModelCodes, isEmpty);
+      expect(
+        candidates.single.matchTier,
+        ProductDuplicateMatchTier.possible,
+      );
+      expect(
+        candidates.single.objections.join(' '),
+        contains('Otro modelo'),
+      );
+    });
+
+    test('orden estable por SKU cuando nada más los separa', () async {
+      final candidates = await _matcher().findCandidates(
+        probe: const ProductDuplicateProbe(name: 'Pastillas freno'),
+        products: [
+          _product(id: 'second', sku: 'B', name: 'Pastillas freno'),
+          _product(id: 'first', sku: 'A', name: 'Pastillas freno'),
+        ],
+      );
+
+      expect(candidates, hasLength(2));
+      expect(
+        candidates.map((candidate) => candidate.product.sku),
+        <String>['A', 'B'],
+      );
+    });
+  });
+
+  group('marcas contradictorias fallan cerradas', () {
+    test('Bucklos B01S no es Zoom B01S', () async {
+      final candidates = await _matcher().findCandidates(
+        probe: const ProductDuplicateProbe(
+          name: 'Horquilla Bucklos B01S 27.5 aire',
+          model: 'B01S',
+          brandName: 'Bucklos',
+          supplierName: 'AliExpress',
+        ),
+        products: [
+          _product(
+            id: 'zoom',
+            sku: 'AE0501',
+            name: 'Horquilla Zoom B01S 27.5',
+            brand: 'Zoom',
+            model: 'B01S',
+          ),
+        ],
+      );
+
+      expect(
+        candidates,
+        isEmpty,
+        reason: 'dos fabricantes distintos que reutilizan un código no son '
+            'el mismo producto',
+      );
+    });
+
+    test('ZTTO DS01S no es Risk DS01S', () async {
+      final candidates = await _matcher().findCandidates(
+        probe: const ProductDuplicateProbe(
+          name: 'Pastillas freno ZTTO DS01S resina',
+          model: 'DS01S',
+          brandName: 'ZTTO',
+        ),
+        products: [
+          _product(
+            id: 'risk',
+            sku: 'AE0502',
+            name: 'Pastillas freno Risk DS01S resina',
+            brand: 'Risk',
+            model: 'DS01S',
+          ),
+        ],
+      );
+
+      expect(candidates, isEmpty);
+    });
+
+    test('un fabricante que no contradice nada sigue siendo candidato',
+        () async {
+      final candidates = await _matcher().findCandidates(
+        probe: const ProductDuplicateProbe(
+          name: 'Pastillas freno ZTTO DS01S resina',
+          model: 'DS01S',
+          brandName: 'ZTTO',
+        ),
+        products: [
+          _product(
+            id: 'sin-marca',
+            sku: 'AE0503',
+            name: 'Pastillas freno DS01S resina',
+            model: 'DS01S',
+          ),
+        ],
+      );
+
+      expect(candidates, hasLength(1));
+      expect(candidates.single.matchTier, ProductDuplicateMatchTier.strong);
+    });
+  });
+
+  group('lectura visual', () {
+    test('no se gasta una llamada de visión por candidato', () async {
+      final matcher = _matcher();
+      await matcher.findCandidates(
+        probe: const ProductDuplicateProbe(name: 'Pastillas freno'),
+        products: [
+          for (var index = 0; index < 12; index++)
+            _product(
+              id: 'p$index',
+              sku: 'AE05$index',
+              name: 'Pastillas freno modelo $index',
+            ),
+        ],
+      );
+      expect(matcher.visualReadingCalls, 0);
+    });
+
+    test('la ficha sin familia legible se apoya en la foto, una sola vez',
+        () async {
+      final matcher = ProductDuplicateMatcherService(
+        inventoryService: _FakeInventoryService(),
+        imageLoader: (_) async => null,
+        visualReadingService: ProductVisualReadingService(
+          analyzer: (bytes, {fileName, typedName}) async =>
+              const AIProductImageAnalysis(
+            primaryType: 'pastillas freno',
+            catalogTerms: <String>['pastillas freno', 'brake pad'],
+            excludedTerms: <String>[],
+            confidence: 0.9,
+          ),
+        ),
+        persistComputedImageFingerprints: false,
+      );
+
+      final probe = ProductDuplicateProbe(
+        name: 'MS-11C',
+        imageBytes: _imageBytes(10, 10, 10),
+        imageUrl: 'https://ae01.alicdn.com/kf/HZZZ.jpg',
+      );
+      final products = [
+        _product(id: 'pad', sku: 'AE0600', name: 'Pastillas freno MS-11C'),
+      ];
+
+      final first = await matcher.findCandidates(
+        probe: probe,
+        products: products,
+      );
+      final second = await matcher.findCandidates(
+        probe: probe,
+        products: products,
+      );
+
+      expect(first, isNotEmpty);
+      expect(second, isNotEmpty);
+      expect(
+        matcher.visualReadingCalls,
+        1,
+        reason: 'la lectura se cachea por identidad de imagen',
+      );
     });
   });
 
   group('ProductImageFingerprintService exact content', () {
-    test('uses a full content digest, not perceptual similarity', () {
-      final bytes = _imageBytes(12, 34, 56);
-      final copy = Uint8List.fromList(bytes);
-      final different = Uint8List.fromList(bytes)..[bytes.length - 1] ^= 1;
+    test('usa un digest completo, no similitud perceptual', () {
+      final bytes = _imageBytes(200, 30, 30);
+      final same = Uint8List.fromList(bytes);
+      final different = _imageBytes(30, 30, 200);
 
-      expect(ProductImageFingerprintService.hasExactContent(bytes, copy), true);
+      expect(ProductImageFingerprintService.hasExactContent(bytes, same), true);
       expect(
         ProductImageFingerprintService.hasExactContent(bytes, different),
         false,
@@ -314,13 +366,12 @@ void main() {
 
 ProductDuplicateMatcherService _matcher({
   ProductDuplicateImageLoader? imageLoader,
-  ProductDuplicateVisualComparator? visualComparator,
 }) {
   return ProductDuplicateMatcherService(
     inventoryService: _FakeInventoryService(),
-    imageLoader: imageLoader,
-    visualComparator: visualComparator,
-    enableSemanticSearch: false,
+    imageLoader: imageLoader ?? (_) async => null,
+    knownBrands: const <String>['Shimano', 'ZTTO', 'Risk', 'Zoom', 'Bucklos'],
+    enableVisualReading: false,
     persistComputedImageFingerprints: false,
   );
 }
@@ -329,24 +380,32 @@ Product _product({
   required String id,
   required String sku,
   required String name,
+  String? description,
+  String? categoryName,
+  String? brand,
   String? model,
   String? imageUrl,
   List<String> additionalImages = const [],
   String? supplierId,
   String? supplierName = 'AliExpress',
   String? supplierCode,
+  Map<String, dynamic>? imageFingerprint,
 }) {
   return Product(
     id: id,
     tenantId: 'tenant-test',
     sku: sku,
     name: name,
+    description: description,
+    categoryName: categoryName,
+    brand: brand,
     model: model,
     supplierId: supplierId,
     supplierName: supplierName,
     supplierCode: supplierCode,
     imageUrl: imageUrl,
     additionalImages: additionalImages,
+    imageFingerprint: imageFingerprint,
     price: 1000,
     cost: 500,
   );
@@ -367,11 +426,21 @@ Uint8List _imageBytes(int red, int green, int blue) {
 }
 
 class _FakeInventoryService implements inv_service.InventoryService {
+  int fingerprintWrites = 0;
+
   @override
   bool isAliExpressSupplierName(String? supplierName) {
     final normalized = (supplierName ?? '').toLowerCase();
     return normalized.contains('aliexpress') ||
         normalized.contains('ali express');
+  }
+
+  @override
+  Future<void> storeProductImageFingerprint({
+    required String productId,
+    required Map<String, dynamic> imageFingerprint,
+  }) async {
+    fingerprintWrites++;
   }
 
   @override

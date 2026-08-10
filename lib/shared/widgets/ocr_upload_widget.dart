@@ -19,6 +19,7 @@ import '../services/pdf_parser_service.dart';
 import '../services/veryfi_proxy_service.dart';
 import '../services/veryfi_adapter.dart';
 import '../services/inventory_service.dart';
+import '../services/image_service.dart';
 import '../models/product.dart' show Product, PurchaseTreatment;
 import '../services/database_service.dart';
 import '../services/tenant_service.dart';
@@ -27,23 +28,31 @@ import '../../modules/inventory/models/category_models.dart' show Category;
 import '../../modules/inventory/services/inventory_service.dart' as inv_service;
 import '../../modules/inventory/models/inventory_models.dart' as inv_models;
 import '../../modules/inventory/models/product_duplicate_candidate.dart';
+import '../../modules/inventory/services/aliexpress_sku_reservation.dart';
 import '../../modules/inventory/services/brand_service.dart';
+import '../../modules/inventory/services/product_catalog_semantic_resolver.dart';
 import '../../modules/inventory/services/product_duplicate_matcher_service.dart';
+import '../../modules/inventory/services/product_identity/product_catalog_identity_index.dart';
+import '../../modules/inventory/services/product_identity/product_category_resolver.dart';
+import '../../modules/inventory/services/product_identity/product_identity_extractor.dart';
+import '../../modules/inventory/services/product_identity/product_visual_reading.dart';
 import '../../modules/inventory/services/product_image_fingerprint_service.dart';
-import '../../modules/inventory/widgets/product_duplicate_review_dialog.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import '../../modules/inventory/models/brand_models.dart' show ProductBrand;
 import '../../modules/ai_assistant/services/ai_service.dart';
 import '../models/supplier_ocr_template.dart';
-import '../services/image_service.dart';
 import '../themes/vinabike_theme_roles.dart';
 import '../utils/chilean_utils.dart';
+import 'ocr_candidate_picker.dart';
+import 'ocr_product_review_workspace.dart';
+import 'vb_notice.dart';
+import 'vb_status_badge.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../../shared/models/supplier.dart' as shared_supplier;
 import 'package:provider/provider.dart';
 
 /// Callback when OCR completes successfully
-typedef OnOCRComplete = void Function(ParsedInvoice parsedInvoice);
+typedef OnOCRComplete = FutureOr<void> Function(ParsedInvoice parsedInvoice);
 
 /// Callback when OCR fails
 typedef OnOCRError = void Function(String error);
@@ -59,6 +68,8 @@ enum OCRProvider {
   /// Auto-detect: Use Veryfi if configured, otherwise local
   auto,
 }
+
+enum _OcrReadSource { veryfi, local, structured }
 
 /// Reusable OCR Upload Widget
 /// Allows user to:
@@ -118,10 +129,10 @@ class OCRUploadWidget extends StatefulWidget {
   });
 
   @override
-  State<OCRUploadWidget> createState() => _OCRUploadWidgetState();
+  State<OCRUploadWidget> createState() => OCRUploadWidgetState();
 }
 
-class _OCRUploadWidgetState extends State<OCRUploadWidget> {
+class OCRUploadWidgetState extends State<OCRUploadWidget> {
   static const List<String> _invoiceFilePickerExtensions = [
     'pdf',
     'jpg',
@@ -173,6 +184,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   bool _useVeryfi = false;
   bool _veryfiAvailable = false;
   bool _initialized = false;
+  _OcrReadSource _lastReadSource = _OcrReadSource.local;
 
   // Bulk product creation state
   bool _showBulkCreate = false;
@@ -186,22 +198,29 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   List<ProductBrand> _brands = [];
   bool _creatingProducts = false;
   final Map<int, TextEditingController> _skuControllers = {};
-  final ScrollController _bulkCreateHorizontalScrollController =
-      ScrollController();
-  Timer? _debounceTimer;
-  bool _isDialogShowing = false;
   String? _supplierIdForNewProducts; // For potential future use
   String? _ocrSupplierName; // Supplier detected by OCR
   shared_supplier.Supplier? _ocrSupplier;
-  bool _showStock = false; // Toggle to show/hide stock column
   bool _isSavingSupplierTemplate = false;
-  bool _isCheckingSimilarProducts = false;
   bool _isOpeningBulkCreate = false;
-  String? _similarProductMessage;
-  String? _aliExpressSkuReservationOperationKey;
-  int _aliExpressSkuReservationGeneration = 0;
+  bool _isApplyingResult = false;
+  int _bulkReviewGeneration = 0;
+  int _parsedInvoiceEpoch = 0;
+  int? _productReviewDraftEpoch;
+
+  /// Owns every `AE0xxx` this review session hands out.
+  ///
+  /// Reservation authority belongs to one object, not to a map of keys spread
+  /// across the widget: the RPC is idempotent *by key*, so any key that is not
+  /// row-exact replays one row's answer onto another. The authority binds each
+  /// key to the exact row — document, row index, listing, variant — serialises
+  /// requests against the shared AE sequence, and refuses a number it has
+  /// already issued.
+  AliExpressSkuReservationAuthority? _skuReservationAuthority;
   String? _processedInitialFileId;
   final AIAssistantService _aiAssistantService = AIAssistantService();
+  final Map<String, Uint8List> _ocrProductImageBytesCache = {};
+  final Map<String, Future<Uint8List?>> _ocrProductImageLoads = {};
 
   @override
   void initState() {
@@ -314,961 +333,1068 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     return _buildUploadScreen();
   }
 
-  Widget _buildUploadScreen() {
-    final accentColor = _isDraggingInvoiceFile
-        ? Theme.of(context).colorScheme.primary
-        : Colors.transparent;
-
-    return DropTarget(
-      enable: !_isProcessing,
-      onDragEntered: (_) => setState(() => _isDraggingInvoiceFile = true),
-      onDragExited: (_) => setState(() => _isDraggingInvoiceFile = false),
-      onDragDone: (details) => _handleDroppedInvoiceFiles(details.files),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: _isDraggingInvoiceFile
-              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.04)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: accentColor, width: 2),
+  /// Consumes the next Back level owned by the OCR workflow.
+  ///
+  /// Product review returns to the parsed-invoice preview. The host owns the
+  /// final transition from the OCR root back to the purchase draft.
+  bool handleBack() {
+    if (blocksOwnerExit) {
+      // Consume Back while a guarded operation is in flight. Closing during
+      // create/read-back could leave committed products detached from the
+      // invoice draft; closing during a reservation strands an `AE0xxx` that
+      // the database has already advanced past.
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            _anyRowReservingSku && !_creatingProducts && !_isApplyingResult
+                ? 'Espera a que termine de reservarse el SKU.'
+                : 'Espera a que termine la creación y se vinculen los productos a la factura.',
+          ),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Title
-            Text(
-              widget.title ??
-                  (widget.documentType == OCRDocumentType.invoice
-                      ? 'Escanear Factura'
-                      : 'Escanear Boleta/Recibo'),
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Provider indicator
-            if (_initialized)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color:
-                      _useVeryfi ? Colors.purple.shade50 : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _useVeryfi
-                        ? Colors.purple.shade200
-                        : Colors.blue.shade200,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _useVeryfi ? Icons.cloud : Icons.phone_android,
-                      size: 16,
-                      color: VinabikeThemeRoles.of(context).info.accent,
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        _useVeryfi ? 'Veryfi Cloud OCR' : 'OCR Local (ML Kit)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _useVeryfi
-                              ? Colors.purple.shade700
-                              : Colors.blue.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            const SizedBox(height: 8),
-            Text(
-              _isDraggingInvoiceFile
-                  ? 'Suelta la factura aquí'
-                  : 'Toma una foto, selecciona una imagen o arrastra una imagen/PDF aquí',
-              style: TextStyle(
-                fontSize: 14,
-                color: _isDraggingInvoiceFile
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.grey[600],
-                fontWeight: _isDraggingInvoiceFile
-                    ? FontWeight.w600
-                    : FontWeight.normal,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-
-            // Upload buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // Camera button
-                _buildActionButton(
-                  icon: Icons.camera_alt,
-                  label: 'Cámara',
-                  onPressed: _isProcessing
-                      ? null
-                      : () => _pickImage(ImageSource.camera),
-                ),
-                // Gallery button
-                _buildActionButton(
-                  icon: Icons.photo_library,
-                  label: 'Galería',
-                  onPressed: _isProcessing
-                      ? null
-                      : () => _pickImage(ImageSource.gallery),
-                ),
-                // PDF button
-                _buildActionButton(
-                  icon: Icons.upload_file,
-                  label: 'Archivo',
-                  onPressed: _isProcessing ? null : _pickInvoiceFile,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Processing indicator
-            if (_isProcessing)
-              Column(
-                children: [
-                  const SizedBox(height: 16),
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 8),
-                  Text(_useVeryfi
-                      ? 'Procesando con Veryfi...'
-                      : 'Procesando imagen...'),
-                ],
-              ),
-
-            // Error message
-            if (_errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red[300]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, color: Colors.red[700]),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style: TextStyle(color: Colors.red[700]),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            // Cloud OCR warning (shown only if proxy availability is explicitly false)
-            if (widget.provider == OCRProvider.veryfi &&
-                !_veryfiAvailable &&
-                _initialized)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange[300]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.warning_amber, color: Colors.orange[700]),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'El OCR en la nube no está configurado en el servidor. Configura los secrets de Veryfi en Supabase Edge Functions.',
-                          style: TextStyle(color: Colors.orange[700]),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
+      );
+      return true;
+    }
+    if (_showBulkCreate) {
+      _closeBulkReview();
+      return true;
+    }
+    return false;
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onPressed,
+  /// Whether the host must reject route, workspace and chrome exits.
+  ///
+  /// Product creation can commit remotely before this widget reconciles the
+  /// new products into the invoice draft. Disposing the owner in that window
+  /// would leave valid products detached from the operation that created them.
+  bool get blocksOwnerExit =>
+      _creatingProducts || _isApplyingResult || _anyRowReservingSku;
+
+  void _discardProductReviewDraft({bool advanceDocumentEpoch = false}) {
+    _bulkReviewGeneration++;
+    for (final entry in _newProductEntries) {
+      entry.dispose();
+    }
+    _newProductEntries.clear();
+    _ocrProductImageBytesCache.clear();
+    _ocrProductImageLoads.clear();
+    _productReviewDraftEpoch = null;
+    _skuReservationAuthority = null;
+    _showBulkCreate = false;
+    _isOpeningBulkCreate = false;
+    if (advanceDocumentEpoch) _parsedInvoiceEpoch++;
+  }
+
+  void _adoptParsedInvoiceDocument({
+    required ParsedInvoice base,
+    required ParsedInvoice display,
+    required shared_supplier.Supplier? supplier,
   }) {
-    return Column(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: onPressed != null ? Colors.blue[50] : Colors.grey[200],
-            shape: BoxShape.circle,
-          ),
-          child: IconButton(
-            icon: Icon(icon, size: 32),
-            color: onPressed != null ? Colors.blue : Colors.grey,
-            onPressed: onPressed,
-            iconSize: 32,
-            padding: const EdgeInsets.all(20),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            color: onPressed != null ? Colors.black87 : Colors.grey,
-          ),
-        ),
-      ],
-    );
+    _discardProductReviewDraft(advanceDocumentEpoch: true);
+    _baseParsedData = base;
+    _parsedData = display;
+    _ocrSupplier = supplier;
+    _ocrSupplierName = supplier?.name;
+    _supplierIdForNewProducts = supplier?.id;
   }
 
-  Widget _buildPreviewScreen() {
-    final data = _parsedData!;
+  Widget _buildUploadScreen() {
     final theme = Theme.of(context);
-    final invoiceDiagnostics = _getInvoiceDiagnostics(data);
-    final aliExpressTemplateActive = _looksLikeAliExpressInvoice(data);
-    final supplierTemplateActive =
-        (_ocrSupplier?.ocrTemplate.enabled ?? false) ||
-            aliExpressTemplateActive;
-    final unresolvedProductCount = widget.showLineItemReview
-        ? data.lineItems
-            .where((item) =>
-                item.matchedProductId == null ||
-                item.matchedProductId!.trim().isEmpty)
-            .length
-        : 0;
-    final hasResolvedSupplier = _ocrSupplier != null;
-    final canUseParsedData = !widget.showLineItemReview ||
-        (hasResolvedSupplier &&
-            data.lineItems.isNotEmpty &&
-            unresolvedProductCount == 0);
-
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header with Status and Provider
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: VinabikeThemeRoles.of(context).success.container,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.check,
-                    color: VinabikeThemeRoles.of(context).success.accent),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Factura Procesada',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      _useVeryfi
-                          ? 'Procesado con Inteligencia Artificial (Veryfi)'
-                          : 'Procesado localmente',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Provider Badge
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: VinabikeThemeRoles.of(context).info.container,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: _useVeryfi
-                        ? VinabikeThemeRoles.of(context).info.border
-                        : VinabikeThemeRoles.of(context).info.border,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _useVeryfi ? Icons.auto_awesome : Icons.phone_android,
-                      size: 14,
-                      color: VinabikeThemeRoles.of(context).info.accent,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _useVeryfi ? 'Veryfi AI' : 'Local OCR',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: VinabikeThemeRoles.of(context).info.accent,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 600;
+        final horizontalPadding = compact ? 16.0 : 24.0;
+        final secondaryActions = <Widget>[
+          OutlinedButton.icon(
+            onPressed:
+                _isProcessing ? null : () => _pickImage(ImageSource.camera),
+            icon: const Icon(Icons.camera_alt_outlined),
+            label: const Text('Tomar foto'),
           ),
-          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed:
+                _isProcessing ? null : () => _pickImage(ImageSource.gallery),
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Elegir de galería'),
+          ),
+        ];
 
-          // Invoice Details Card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).dividerColor),
-              boxShadow: [
-                BoxShadow(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .shadow
-                      .withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        return DropTarget(
+          enable: !_isProcessing,
+          onDragEntered: (_) => setState(() => _isDraggingInvoiceFile = true),
+          onDragExited: (_) => setState(() => _isDraggingInvoiceFile = false),
+          onDragDone: (details) => _handleDroppedInvoiceFiles(details.files),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              compact ? 20 : 32,
+              horizontalPadding,
+              32,
             ),
-            child: Column(
-              children: [
-                InkWell(
-                  onTap: _showSupplierSelectionDialog,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildDetailRow(
-                          Icons.store,
-                          'Proveedor',
-                          _ocrSupplierName ??
-                              data.supplierName ??
-                              'No detectado (Toca para seleccionar)',
-                          isBold: true,
-                          valueColor:
-                              (_ocrSupplierName ?? data.supplierName) == null
-                                  ? Colors.orange
-                                  : null,
-                        ),
-                      ),
-                      Icon(Icons.edit,
-                          size: 16,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
+                    Text(
+                      widget.title ??
+                          (widget.documentType == OCRDocumentType.invoice
+                              ? 'Carga la factura'
+                              : 'Carga el comprobante'),
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Primero leeremos el documento. Después podrás corregir sus datos y decidir qué hacer con cada producto.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    AnimatedContainer(
+                      key: const Key('ocr-upload-drop-zone'),
+                      duration: const Duration(milliseconds: 140),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 20 : 40,
+                        vertical: compact ? 28 : 40,
+                      ),
                       decoration: BoxDecoration(
-                        color: supplierTemplateActive
-                            ? Colors.blue.shade50
-                            : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(20),
+                        color: _isDraggingInvoiceFile
+                            ? theme.colorScheme.primaryContainer
+                            : theme.colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: supplierTemplateActive
-                              ? Colors.blue.shade200
-                              : Colors.grey.shade300,
+                          color: _isDraggingInvoiceFile
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outlineVariant,
+                          width: _isDraggingInvoiceFile ? 2 : 1,
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            supplierTemplateActive
-                                ? Icons.auto_fix_high
-                                : Icons.rule,
-                            size: 14,
-                            color: supplierTemplateActive
-                                ? Colors.blue.shade700
-                                : Colors.grey.shade700,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            aliExpressTemplateActive
-                                ? 'Plantilla AliExpress activa'
-                                : supplierTemplateActive
-                                    ? 'Plantilla OCR activa'
-                                    : 'Sin plantilla OCR',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: supplierTemplateActive
-                                  ? Colors.blue.shade700
-                                  : Colors.grey.shade700,
+                      child: _isProcessing
+                          ? Column(
+                              children: [
+                                const CircularProgressIndicator(),
+                                const SizedBox(height: 16),
+                                Text(
+                                  _useVeryfi
+                                      ? 'Leyendo la factura…'
+                                      : 'Leyendo la imagen…',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Al terminar verás el documento antes de aplicar cualquier cambio.',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                Icon(
+                                  _isDraggingInvoiceFile
+                                      ? Icons.file_download_done_outlined
+                                      : Icons.upload_file_outlined,
+                                  size: 40,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  _isDraggingInvoiceFile
+                                      ? 'Suelta la factura para leerla'
+                                      : 'Arrastra una factura aquí',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'PDF, imagen, HTML o JSON de AliExpress',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                FilledButton.icon(
+                                  key: const Key('ocr-upload-select-file'),
+                                  onPressed: _pickInvoiceFile,
+                                  icon: const Icon(Icons.folder_open_outlined),
+                                  label: const Text('Seleccionar factura'),
+                                ),
+                              ],
                             ),
-                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (compact)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var index = 0;
+                              index < secondaryActions.length;
+                              index++) ...[
+                            secondaryActions[index],
+                            if (index != secondaryActions.length - 1)
+                              const SizedBox(height: 8),
+                          ],
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          for (var index = 0;
+                              index < secondaryActions.length;
+                              index++) ...[
+                            Expanded(child: secondaryActions[index]),
+                            if (index != secondaryActions.length - 1)
+                              const SizedBox(width: 12),
+                          ],
                         ],
                       ),
-                    ),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: _isSavingSupplierTemplate
-                          ? null
-                          : _showSaveSupplierTemplateDialog,
-                      icon: _isSavingSupplierTemplate
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.save_as, size: 16),
-                      label: const Text('Guardar plantilla OCR'),
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                  ],
-                ),
-                const Divider(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () =>
-                            _showEditInvoiceNumberDialog(data.invoiceNumber),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildDetailRow(
-                                Icons.receipt,
-                                'N° Factura',
-                                data.invoiceNumber ?? '---',
-                              ),
-                            ),
-                            Icon(Icons.edit,
-                                size: 16,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () => _showEditDateDialog(data.date),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildDetailRow(
-                                Icons.calendar_today,
-                                'Fecha',
-                                data.date != null
-                                    ? '${data.date!.day}/${data.date!.month}/${data.date!.year}'
-                                    : '---',
-                              ),
-                            ),
-                            Icon(Icons.edit,
-                                size: 16,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const Divider(height: 24),
-                _buildDetailRow(
-                  Icons.attach_money,
-                  'Total',
-                  _formatAmount(data.total),
-                  isBold: true,
-                  valueColor: theme.colorScheme.primary,
-                  valueSize: 18,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          if (widget.showLineItemReview) ...[
-            // Products Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Productos Detectados (${data.lineItems.length})',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (data.lineItems.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: _buildCompactDiagnosticsStatus(
-                              invoiceDiagnostics),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                TextButton.icon(
-                  onPressed: () => setState(() => _showStock = !_showStock),
-                  icon: Icon(
-                    _showStock ? Icons.visibility_off : Icons.visibility,
-                    size: 16,
-                  ),
-                  label: Text(_showStock ? 'Ocultar Stock' : 'Ver Stock'),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            if (data.lineItems.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: VinabikeThemeRoles.of(context).warning.container,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: VinabikeThemeRoles.of(context).warning.border),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.warning_amber,
-                        color: VinabikeThemeRoles.of(context).warning.accent),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'No se detectaron productos individuales. Se importará solo el total.',
-                        style: TextStyle(
-                            color: VinabikeThemeRoles.of(context)
-                                .warning
-                                .onContainer),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              // Altura acotada, no `Expanded`: esta sección vive dentro de un
-              // scroll vertical, donde «ocupa el resto» no tiene resto que
-              // ocupar. Con flex aquí el layout aborta y la revisión OCR se
-              // mostraba como un cuadro en blanco (2026-08-06).
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 420),
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                        color: Theme.of(context).colorScheme.outlineVariant),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Column(
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Header Row
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest
-                                .withValues(alpha: 0.5),
-                            borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(8)),
-                          ),
-                          child: Row(
-                            children: [
-                              const SizedBox(width: 32), // Status icon width
-                              const SizedBox(width: 12),
-                              Expanded(
-                                flex: 3,
-                                child: Text('SKU',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                        fontSize: 12)),
-                              ),
-                              Expanded(
-                                flex: _showStock
-                                    ? 8
-                                    : 10, // Give description most space
-                                child: Text('Descripción',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                        fontSize: 12)),
-                              ),
-                              if (_showStock)
-                                Expanded(
-                                  flex: 2,
-                                  child: Text('Stock',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                          fontSize: 12)),
-                                ),
-                              Expanded(
-                                flex: 2,
-                                child: Text('Cant.',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                        fontSize: 12)),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: Text('Precio',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                        fontSize: 12)),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text('Dscto',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                        fontSize: 12)),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: Text('Total',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                        fontSize: 12)),
-                              ),
-                            ],
-                          ),
+                        Icon(
+                          Icons.shield_outlined,
+                          size: 18,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
-                        // Scrollable Data Rows
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 320),
-                          child: SingleChildScrollView(
-                            child: Column(
-                              children: data.lineItems.map((item) {
-                                final rowDiagnostics = _getRowDiagnostics(item);
-                                // Determine verification status
-                                Widget statusIcon;
-                                String tooltip;
-
-                                if (item.sku == null || item.sku!.isEmpty) {
-                                  statusIcon = Icon(Icons.remove_circle_outline,
-                                      size: 18,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant);
-                                  tooltip = 'Sin código SKU';
-                                } else if (item.existsInDatabase == true) {
-                                  statusIcon = Icon(Icons.check_circle,
-                                      size: 18,
-                                      color: VinabikeThemeRoles.of(context)
-                                          .success
-                                          .accent);
-                                  tooltip =
-                                      'Producto encontrado: ${item.matchedProductName ?? item.sku}';
-                                } else {
-                                  statusIcon = Icon(Icons.warning_amber,
-                                      size: 18,
-                                      color: VinabikeThemeRoles.of(context)
-                                          .warning
-                                          .accent);
-                                  tooltip = 'Producto nuevo - debe crearse';
-                                }
-
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 12),
-                                  decoration: BoxDecoration(
-                                      border: Border(
-                                          bottom: BorderSide(
-                                              color: Theme.of(context)
-                                                  .dividerColor))),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 32,
-                                        child: Tooltip(
-                                            message: tooltip,
-                                            child: statusIcon),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        flex: 3,
-                                        child: TextField(
-                                          decoration: InputDecoration(
-                                            hintText: 'ASIGNAR SKU',
-                                            isDense: true,
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                    horizontal: 4, vertical: 4),
-                                            border: (item.sku == null ||
-                                                    item.sku!.isEmpty)
-                                                ? OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                        color: Colors
-                                                            .orange.shade300,
-                                                        width: 0.5),
-                                                  )
-                                                : InputBorder.none,
-                                            filled: (item.sku == null ||
-                                                item.sku!.isEmpty),
-                                            fillColor:
-                                                VinabikeThemeRoles.of(context)
-                                                    .warning
-                                                    .container,
-                                            hintStyle: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                                color: VinabikeThemeRoles.of(
-                                                        context)
-                                                    .warning
-                                                    .border),
-                                          ),
-                                          controller:
-                                              _skuControllers.putIfAbsent(
-                                                  _parsedData!.lineItems
-                                                      .indexOf(item),
-                                                  () => TextEditingController(
-                                                      text: item.sku)),
-                                          style: TextStyle(
-                                            fontFamily: 'monospace',
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                            color: item.existsInDatabase == true
-                                                ? VinabikeThemeRoles.of(context)
-                                                    .success
-                                                    .accent
-                                                : null,
-                                          ),
-                                          onChanged: (newSku) =>
-                                              _updateItemSku(item, newSku),
-                                        ),
-                                      ),
-                                      Expanded(
-                                        flex: _showStock ? 8 : 10,
-                                        child: Text(
-                                          item.description,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 13),
-                                        ),
-                                      ),
-                                      if (_showStock)
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                              item.currentStock?.toString() ??
-                                                  '-',
-                                              style: TextStyle(
-                                                  fontSize: 13,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant)),
-                                        ),
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                            item.quantity?.toStringAsFixed(0) ??
-                                                '1',
-                                            style:
-                                                const TextStyle(fontSize: 13)),
-                                      ),
-                                      Expanded(
-                                        flex: 3,
-                                        child: Text(
-                                            item.unitPrice != null
-                                                ? '\$${item.unitPrice!.toStringAsFixed(0)}'
-                                                : '-',
-                                            style:
-                                                const TextStyle(fontSize: 13)),
-                                      ),
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                            (item.discount != null &&
-                                                    item.discount! > 0)
-                                                ? '\$${item.discount!.toStringAsFixed(0)}'
-                                                : (item.discountRate != null &&
-                                                        item.discountRate! > 0)
-                                                    ? '${item.discountRate!.toStringAsFixed(0)}%'
-                                                    : '-',
-                                            style: TextStyle(
-                                                fontSize: 13,
-                                                color: VinabikeThemeRoles.of(
-                                                        context)
-                                                    .warning
-                                                    .onContainer)),
-                                      ),
-                                      Expanded(
-                                        flex: 3,
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.end,
-                                          children: [
-                                            if (!rowDiagnostics.isComplete ||
-                                                !rowDiagnostics.isConsistent ||
-                                                rowDiagnostics.wasAutoAdjusted)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    right: 6),
-                                                child: Tooltip(
-                                                  message:
-                                                      _buildRowDiagnosticsTooltip(
-                                                    item,
-                                                    rowDiagnostics,
-                                                  ),
-                                                  child: Icon(
-                                                    !rowDiagnostics
-                                                                .isComplete ||
-                                                            !rowDiagnostics
-                                                                .isConsistent
-                                                        ? Icons.error_outline
-                                                        : Icons.auto_fix_high,
-                                                    size: 16,
-                                                    color: !rowDiagnostics
-                                                                .isComplete ||
-                                                            !rowDiagnostics
-                                                                .isConsistent
-                                                        ? VinabikeThemeRoles.of(
-                                                                context)
-                                                            .warning
-                                                            .accent
-                                                        : VinabikeThemeRoles.of(
-                                                                context)
-                                                            .info
-                                                            .accent,
-                                                  ),
-                                                ),
-                                              ),
-                                            Text(
-                                              item.total != null
-                                                  ? '\$${item.total!.toStringAsFixed(0)}'
-                                                  : '-',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.bold,
-                                                color: !rowDiagnostics
-                                                            .isComplete ||
-                                                        !rowDiagnostics
-                                                            .isConsistent
-                                                    ? VinabikeThemeRoles.of(
-                                                            context)
-                                                        .warning
-                                                        .onContainer
-                                                    : null,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Nada se guarda ni cambia el stock hasta tu confirmación.',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
                       ],
                     ),
-                  ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 18),
+                      VbNotice(
+                        title: 'No se pudo leer la factura',
+                        body: _errorMessage,
+                        tone: VbNoticeTone.danger,
+                      ),
+                    ],
+                    if (widget.provider == OCRProvider.veryfi &&
+                        !_veryfiAvailable &&
+                        _initialized)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 18),
+                        child: VbNotice(
+                          title: 'OCR en la nube no disponible',
+                          body:
+                              'Veryfi no está configurado en el servidor. Usa el OCR local o configura sus credenciales en Supabase.',
+                          tone: VbNoticeTone.warning,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            const SizedBox(height: 24),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-            // Create New Products Button (if any unrecognized products)
-            if (data.lineItems.any((item) => item.existsInDatabase == false))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: OutlinedButton.icon(
-                  onPressed:
-                      _isOpeningBulkCreate ? null : _openBulkCreateScreen,
-                  icon: _isOpeningBulkCreate
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(Icons.add_circle_outline,
-                          color: VinabikeThemeRoles.of(context).warning.accent),
-                  label: Text(
-                    'Crear ${data.lineItems.where((item) => item.existsInDatabase == false).length} Productos Nuevos',
-                    style: TextStyle(
-                      color: VinabikeThemeRoles.of(context).warning.accent,
+  Widget _buildPreviewScreen() {
+    return LayoutBuilder(
+      builder: (context, constraints) => _buildPreviewContent(
+        constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width,
+      ),
+    );
+  }
+
+  Widget _buildPreviewContent(double width) {
+    final data = _parsedData!;
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final diagnostics = _getInvoiceDiagnostics(data);
+    final aliExpressTemplateActive = _looksLikeAliExpressInvoice(data);
+    final supplierTemplateActive =
+        (_ocrSupplier?.ocrTemplate.enabled ?? false) ||
+            aliExpressTemplateActive;
+    final hasResolvedSupplier = _ocrSupplier != null;
+    final unresolved = widget.showLineItemReview
+        ? data.lineItems
+            .where(
+              (item) =>
+                  item.matchedProductId == null ||
+                  item.matchedProductId!.trim().isEmpty,
+            )
+            .length
+        : 0;
+    final compact = width < 700;
+    final tableLayout = width >= 900;
+    final horizontalPadding = compact ? 16.0 : 24.0;
+    final sourceLabel = switch (_lastReadSource) {
+      _OcrReadSource.veryfi => 'Veryfi AI',
+      _OcrReadSource.local => 'OCR local',
+      _OcrReadSource.structured => 'Archivo estructurado',
+    };
+    final sourceDescription = switch (_lastReadSource) {
+      _OcrReadSource.veryfi =>
+        'Revisa los datos interpretados por Veryfi antes de usarlos.',
+      _OcrReadSource.local =>
+        'Revisa los datos leídos del documento antes de usarlos.',
+      _OcrReadSource.structured =>
+        'Revisa los datos importados del archivo antes de usarlos.',
+    };
+
+    Widget invoiceDatum({
+      required IconData icon,
+      required String label,
+      required String value,
+      VoidCallback? onTap,
+      bool emphasized = false,
+    }) {
+      final content = Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: (emphasized
+                          ? theme.textTheme.titleMedium
+                          : theme.textTheme.bodyMedium)
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+          if (onTap != null)
+            Icon(
+              Icons.edit_outlined,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+        ],
+      );
+      if (onTap == null) return content;
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: content,
+        ),
+      );
+    }
+
+    Widget productRow(ParsedLineItem item, int index) {
+      final resolved = item.matchedProductId?.trim().isNotEmpty == true;
+      final code = item.sku?.trim();
+      final imageUrl = item.imageUrl?.trim();
+      final rowDiagnostics = _getRowDiagnostics(item);
+      return Semantics(
+        container: true,
+        label:
+            'Línea ${index + 1}, ${item.description}, ${resolved ? 'vinculada' : 'por revisar'}',
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 12 : 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: compact ? 48 : 56,
+                    height: compact ? 48 : 56,
+                    child: imageUrl == null || imageUrl.isEmpty
+                        ? ColoredBox(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.inventory_2_outlined,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          )
+                        : Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => ColoredBox(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              child: Icon(
+                                Icons.inventory_2_outlined,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.description,
+                        maxLines: compact ? 3 : 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (code != null && code.isNotEmpty)
+                            Text(
+                              'Código proveedor  $code',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          Text(
+                            'Cant.  ${item.quantity ?? 1}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          if (item.unitPrice != null)
+                            Text(
+                              'Costo unit.  ${_formatAmount(item.unitPrice)}',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          if (rowDiagnostics.displayedTotal != null)
+                            Text(
+                              'Total línea  ${_formatAmount(rowDiagnostics.displayedTotal)}',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (resolved &&
+                          item.matchedProductName?.trim().isNotEmpty ==
+                              true) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          'Usará ${item.matchedProductName}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: roles.success.accent,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                VbStatusBadge(
+                  label: resolved ? 'Vinculado' : 'Por revisar',
+                  tone: resolved ? VbStatusTone.success : VbStatusTone.warning,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget desktopProductTable(List<DataRow> rows) {
+      return Semantics(
+        container: true,
+        label: 'Tabla de productos leídos de la factura',
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Fluid, not a fixed canvas. A hard `minWidth: 1280` made the
+                // invoice scroll sideways on every host narrower than that,
+                // which the owner rejected: the totals column — the whole point
+                // of reading the invoice — was permanently off screen. The
+                // table now fills whatever width it is given and only scrolls
+                // below the width where the columns stop being readable.
+                LayoutBuilder(
+                  builder: (context, tableConstraints) {
+                    final available = tableConstraints.maxWidth.isFinite
+                        ? tableConstraints.maxWidth
+                        : _previewTableFloor;
+                    final tableWidth = available >= _previewTableFloor
+                        ? available
+                        : _previewTableFloor;
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: available >= _previewTableFloor
+                          ? const NeverScrollableScrollPhysics()
+                          : null,
+                      child: SizedBox(
+                        width: tableWidth,
+                        child: DataTable(
+                          key: const Key('ocr-preview-products-table'),
+                          showCheckboxColumn: false,
+                          headingRowHeight: 42,
+                          dataRowMinHeight: 64,
+                          dataRowMaxHeight: 82,
+                          horizontalMargin: 12,
+                          columnSpacing: 16,
+                          dividerThickness: 1,
+                          headingRowColor: WidgetStatePropertyAll(
+                            theme.colorScheme.surfaceContainerLow,
+                          ),
+                          headingTextStyle:
+                              theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          columns: const [
+                            DataColumn(
+                              label: Text(
+                                '#',
+                                key: Key('ocr-preview-table-header'),
+                              ),
+                            ),
+                            DataColumn(label: Text('Producto leído')),
+                            DataColumn(label: Text('Código proveedor')),
+                            DataColumn(label: Text('Cant.'), numeric: true),
+                            DataColumn(
+                              label: Text('Costo unit. factura'),
+                              numeric: true,
+                            ),
+                            DataColumn(label: Text('Dscto.'), numeric: true),
+                            DataColumn(
+                                label: Text('Total línea'), numeric: true),
+                            DataColumn(label: Text('Producto ERP')),
+                            DataColumn(label: Text('Estado')),
+                          ],
+                          rows: rows,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: theme.colorScheme.outlineVariant,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 24,
+                    runSpacing: 6,
+                    children: [
+                      Text(
+                        'Suma líneas  ${_formatAmount(diagnostics.rowTotal)}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      Text(
+                        'Total factura  ${_formatAmount(diagnostics.headerTotal)}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      Text(
+                        'Diferencia  ${_formatAmount(diagnostics.delta.abs())}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: diagnostics.hasTotalMismatch
+                              ? roles.warning.accent
+                              : theme.colorScheme.onSurfaceVariant,
+                          fontWeight: diagnostics.hasTotalMismatch
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    DataRow previewDataRow(ParsedLineItem item, int index) {
+      final resolved = item.matchedProductId?.trim().isNotEmpty == true;
+      final code = item.sku?.trim();
+      final imageUrl = item.imageUrl?.trim();
+      final unitPrice = item.unitPrice;
+      final rowDiagnostics = _getRowDiagnostics(item);
+      final discount = rowDiagnostics.discountAmount;
+      final total = rowDiagnostics.displayedTotal;
+      return DataRow(
+        key: ValueKey<String>('ocr-preview-row-$index'),
+        cells: [
+          DataCell(
+            SizedBox(
+              width: 28,
+              child: Text(
+                '${index + 1}',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+          DataCell(
+            SizedBox(
+              key: Key('ocr-preview-cell-product-$index'),
+              width: 390,
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: imageUrl == null || imageUrl.isEmpty
+                          ? ColoredBox(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              child: Icon(
+                                Icons.inventory_2_outlined,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            )
+                          : Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => ColoredBox(
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                child: Icon(
+                                  Icons.inventory_2_outlined,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
                     ),
                   ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: BorderSide(
-                      color: VinabikeThemeRoles.of(context).warning.border,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          DataCell(
+            SizedBox(
+              key: Key('ocr-preview-cell-code-$index'),
+              width: 142,
+              child: Text(
+                code?.isNotEmpty == true ? code! : '—',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+          DataCell(
+            SizedBox(
+              key: Key('ocr-preview-cell-quantity-$index'),
+              width: 54,
+              child: Text(
+                '${item.quantity ?? 1}',
+                textAlign: TextAlign.end,
+                style: const TextStyle(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+          DataCell(
+            SizedBox(
+              key: Key('ocr-preview-cell-unit-price-$index'),
+              width: 92,
+              child: Text(
+                _formatAmount(unitPrice),
+                textAlign: TextAlign.end,
+                style: const TextStyle(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+          DataCell(
+            SizedBox(
+              key: Key('ocr-preview-cell-discount-$index'),
+              width: 76,
+              child: Text(
+                discount > 0 ? _formatAmount(discount) : '—',
+                textAlign: TextAlign.end,
+                style: const TextStyle(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+          DataCell(
+            SizedBox(
+              key: Key('ocr-preview-cell-total-$index'),
+              width: 92,
+              child: Text(
+                _formatAmount(total),
+                textAlign: TextAlign.end,
+                style: const TextStyle(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+          DataCell(
+            SizedBox(
+              key: Key('ocr-preview-cell-erp-product-$index'),
+              width: 156,
+              child: Text(
+                resolved && item.matchedProductName?.trim().isNotEmpty == true
+                    ? item.matchedProductName!.trim()
+                    : 'Sin vínculo',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: resolved
+                      ? roles.success.accent
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: resolved ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
+          DataCell(
+            SizedBox(
+              key: Key('ocr-preview-cell-status-$index'),
+              width: 104,
+              child: VbStatusBadge(
+                label: resolved ? 'Vinculado' : 'Por revisar',
+                tone: resolved ? VbStatusTone.success : VbStatusTone.warning,
+                dense: true,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final primaryLabel = _isApplyingResult
+        ? 'Aplicando factura…'
+        : !hasResolvedSupplier
+            ? 'Seleccionar proveedor'
+            : widget.showLineItemReview && unresolved > 0
+                ? 'Revisar $unresolved producto${unresolved == 1 ? '' : 's'}'
+                : 'Usar esta factura';
+    final primaryAction = _isApplyingResult
+        ? null
+        : !hasResolvedSupplier
+            ? _showSupplierSelectionDialog
+            : widget.showLineItemReview && unresolved > 0
+                ? _isOpeningBulkCreate
+                    ? null
+                    : _openBulkCreateScreen
+                : () => _handleUseParsedData(data);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              20,
+              horizontalPadding,
+              28,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.receipt_long_outlined,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Factura leída',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            sourceDescription,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    VbStatusBadge(
+                      label: sourceLabel,
+                      tone: VbStatusTone.info,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final supplier = invoiceDatum(
+                              icon: Icons.store_outlined,
+                              label: 'Proveedor',
+                              value: _ocrSupplierName ??
+                                  data.supplierName ??
+                                  'Seleccionar proveedor',
+                              onTap: _showSupplierSelectionDialog,
+                            );
+                            final invoiceNumber = invoiceDatum(
+                              icon: Icons.tag,
+                              label: 'N° de factura',
+                              value: data.invoiceNumber ?? 'Sin número',
+                              onTap: () => _showEditInvoiceNumberDialog(
+                                data.invoiceNumber,
+                              ),
+                            );
+                            final date = invoiceDatum(
+                              icon: Icons.calendar_today_outlined,
+                              label: 'Fecha',
+                              value: data.date == null
+                                  ? 'Sin fecha'
+                                  : '${data.date!.day}/${data.date!.month}/${data.date!.year}',
+                              onTap: () => _showEditDateDialog(data.date),
+                            );
+                            final total = invoiceDatum(
+                              icon: Icons.payments_outlined,
+                              label: 'Total leído',
+                              value: _formatAmount(data.total),
+                              emphasized: true,
+                            );
+                            if (constraints.maxWidth < 760) {
+                              return Column(
+                                children: [
+                                  supplier,
+                                  const SizedBox(height: 16),
+                                  invoiceNumber,
+                                  const SizedBox(height: 16),
+                                  date,
+                                  const SizedBox(height: 16),
+                                  total,
+                                ],
+                              );
+                            }
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(flex: 3, child: supplier),
+                                const SizedBox(width: 20),
+                                Expanded(flex: 2, child: invoiceNumber),
+                                const SizedBox(width: 20),
+                                Expanded(flex: 2, child: date),
+                                const SizedBox(width: 20),
+                                Expanded(flex: 2, child: total),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            VbStatusBadge(
+                              label: aliExpressTemplateActive
+                                  ? 'Plantilla AliExpress'
+                                  : supplierTemplateActive
+                                      ? 'Plantilla OCR'
+                                      : 'Sin plantilla',
+                              tone: supplierTemplateActive
+                                  ? VbStatusTone.info
+                                  : VbStatusTone.neutral,
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: _isSavingSupplierTemplate
+                                  ? null
+                                  : _showSaveSupplierTemplateDialog,
+                              icon: _isSavingSupplierTemplate
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.save_outlined),
+                              label: const Text('Guardar plantilla'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
+                if (widget.showLineItemReview) ...[
+                  const SizedBox(height: 24),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Productos de la factura',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              unresolved == 0
+                                  ? 'Todos los productos están vinculados.'
+                                  : '$unresolved de ${data.lineItems.length} necesitan una decisión.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (data.lineItems.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _buildCompactDiagnosticsStatus(diagnostics),
+                  ],
+                  const SizedBox(height: 12),
+                  if (data.lineItems.isEmpty)
+                    const VbNotice(
+                      title: 'No encontré productos en el documento',
+                      body:
+                          'Puedes volver a cargarlo o completar la factura manualmente.',
+                      tone: VbNoticeTone.warning,
+                    )
+                  else if (tableLayout)
+                    desktopProductTable([
+                      for (var index = 0;
+                          index < data.lineItems.length;
+                          index++)
+                        previewDataRow(data.lineItems[index], index),
+                    ])
+                  else
+                    for (var index = 0;
+                        index < data.lineItems.length;
+                        index++) ...[
+                      productRow(data.lineItems[index], index),
+                      if (index != data.lineItems.length - 1)
+                        const SizedBox(height: 10),
+                    ],
+                ],
+              ],
+            ),
+          ),
+        ),
+        Material(
+          color: theme.colorScheme.surface,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: 12,
+            ),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: theme.colorScheme.outlineVariant),
               ),
-          ],
-
-          // Action Buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final retry = OutlinedButton.icon(
                   onPressed: () {
                     setState(() {
+                      _discardProductReviewDraft(
+                        advanceDocumentEpoch: true,
+                      );
                       _parsedData = null;
                       _baseParsedData = null;
                       _errorMessage = null;
@@ -1278,37 +1404,42 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                     });
                   },
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Reintentar'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: canUseParsedData
-                      ? () => _handleUseParsedData(data)
-                      : null,
-                  icon: const Icon(Icons.check),
-                  label: Text(canUseParsedData
-                      ? 'Usar Datos'
-                      : !hasResolvedSupplier
-                          ? 'Seleccionar proveedor'
-                          : data.lineItems.isEmpty
-                              ? 'Sin productos detectados'
-                              : unresolvedProductCount == 1
-                                  ? 'Resolver 1 producto'
-                                  : 'Resolver $unresolvedProductCount productos'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-              ),
-            ],
+                  label: const Text('Volver a cargar'),
+                );
+                final primary = FilledButton.icon(
+                  key: const Key('ocr-preview-review-products'),
+                  onPressed: primaryAction,
+                  icon: _isOpeningBulkCreate
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.arrow_forward),
+                  label: Text(primaryLabel),
+                );
+                if (constraints.maxWidth < 560) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      primary,
+                      const SizedBox(height: 8),
+                      retry,
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    retry,
+                    const Spacer(),
+                    primary,
+                  ],
+                );
+              },
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1322,8 +1453,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       return const SizedBox.shrink();
     }
 
-    final color =
-        hasWarning ? Colors.orange.shade700 : Colors.blueGrey.shade700;
+    final roles = VinabikeThemeRoles.of(context);
+    final color = hasWarning ? roles.warning.accent : roles.info.accent;
     final icon = hasWarning ? Icons.warning_amber_rounded : Icons.info_outline;
 
     final parts = <String>[];
@@ -1372,188 +1503,11 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     );
   }
 
-  String _buildRowDiagnosticsTooltip(
-    ParsedLineItem item,
-    _OCRRowDiagnostics diagnostics,
-  ) {
-    final lines = <String>[];
-
-    if (diagnostics.adjustmentSummary != null &&
-        diagnostics.adjustmentSummary!.isNotEmpty) {
-      lines.add('Nota OCR: ${diagnostics.adjustmentSummary}');
-    }
-
-    if (diagnostics.grossAmount != null) {
-      lines.add('Bruto esperado: ${_formatAmount(diagnostics.grossAmount)}');
-    }
-
-    if (diagnostics.discountAmount > 0) {
-      lines.add(
-        'Descuento aplicado: ${_formatAmount(diagnostics.discountAmount)}',
-      );
-    }
-
-    if (diagnostics.displayedTotal != null) {
-      lines.add('Total OCR: ${_formatAmount(diagnostics.displayedTotal)}');
-    }
-
-    if (diagnostics.computedTotal != null) {
-      lines.add(
-        'Total calculado: ${_formatAmount(diagnostics.computedTotal)}',
-      );
-    }
-
-    if (diagnostics.delta != null && diagnostics.delta!.abs() > 0) {
-      lines.add('Diferencia: ${_formatAmount(diagnostics.delta!.abs())}');
-    }
-
-    if (!diagnostics.isComplete) {
-      lines.add('Fila incompleta: falta cantidad, precio o total.');
-    } else if (!diagnostics.isConsistent) {
-      lines.add('La fila no cuadra con los valores actuales.');
-    } else if (item.wasAutoAdjusted || item.discountInferred) {
-      lines.add('La fila fue completada por una regla OCR del proveedor.');
-    }
-
-    return lines.join('\n');
-  }
-
-  /// Update SKU for a line item and re-verify against database
-  void _updateItemSku(ParsedLineItem item, String newSku) {
-    if (_parsedData == null) return;
-
-    // Use debounce for real-time matching to avoid overlapping lookups and dialogs
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
-      final verifiedItem = await _verifySingleProduct(
-        item.copyWith(sku: newSku.trim()),
-        supplierId: _supplierIdForNewProducts ?? widget.supplierId,
-      );
-
-      // If we found a match, validate if names match
-      if (verifiedItem.existsInDatabase == true &&
-          verifiedItem.matchedProductId != null) {
-        await _validateSkuMatch(item, verifiedItem);
-      } else {
-        // No match or mismatch cleared, just update the item
-        _applyItemUpdate(item, verifiedItem);
-      }
-    });
-  }
-
-  void _applyItemUpdate(ParsedLineItem oldItem, ParsedLineItem newItem) {
-    if (_parsedData == null) return;
-    final updatedItems = _parsedData!.lineItems.map((i) {
-      if (i == oldItem) {
-        return newItem;
-      }
-      return i;
-    }).toList();
-
-    setState(() {
-      _parsedData = _parsedData!.copyWith(lineItems: updatedItems);
-    });
-  }
-
-  /// Validates if the matched product name corresponds to the invoice description.
-  /// If not, asks the user for confirmation.
-  Future<void> _validateSkuMatch(
-      ParsedLineItem originalItem, ParsedLineItem verifiedItem) async {
-    if (_isDialogShowing) return;
-
-    final invoiceName = originalItem.description.trim().toLowerCase();
-    final inventoryName = verifiedItem.matchedProductName!.trim().toLowerCase();
-
-    // SIMPLE SIMILARITY CHECK:
-    // If one contains the other or they are "similar enough" (basic check for now)
-    bool isMatch = inventoryName.contains(invoiceName) ||
-        invoiceName.contains(inventoryName) ||
-        inventoryName == invoiceName;
-
-    // Case-insensitive exact match or inclusion is considered "ok"
-    if (isMatch) {
-      _applyItemUpdate(originalItem, verifiedItem);
-      return;
-    }
-
-    // DISCREPANCY DETECTED: Show confirmation dialog
-    _isDialogShowing = true;
-    final result = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('Discrepancia de Nombre'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-                'El SKU ingresado corresponde a un producto diferente en el inventario:'),
-            const SizedBox(height: 16),
-            _buildDiffRow('En Factura:', originalItem.description),
-            _buildDiffRow('En Inventario:', verifiedItem.matchedProductName!),
-            const SizedBox(height: 16),
-            const Text('¿Cómo deseas proceder?'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, 'REJECT'),
-            child: Text('Ingresar otro SKU',
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, 'SYNC'),
-            child: const Text('Usar nombre de inventario'),
-          ),
-        ],
-      ),
-    );
-    _isDialogShowing = false;
-
-    if (result == 'SYNC') {
-      // Update the item but ALSO overwrite description with the one from DB
-      _applyItemUpdate(
-          originalItem,
-          verifiedItem.copyWith(
-            description: verifiedItem.matchedProductName!,
-          ));
-    } else {
-      // Reject match: clear SKU in the controller and revert item status
-      final index = _parsedData!.lineItems.indexOf(originalItem);
-      if (index != -1 && _skuControllers.containsKey(index)) {
-        _skuControllers[index]!.clear();
-      }
-      _applyItemUpdate(originalItem, originalItem.copyWith(sku: ''));
-    }
-  }
-
-  Widget _buildDiffRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style:
-                  const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-          Text(value,
-              style: const TextStyle(fontSize: 13, color: Colors.black87)),
-        ],
-      ),
-    );
-  }
-
   /// Verify a single product against the database
   Future<ParsedLineItem> _verifySingleProduct(
     ParsedLineItem item, {
     String? supplierId,
+    bool allowNameFallback = true,
   }) async {
     final inventoryService =
         Provider.of<InventoryService>(context, listen: false);
@@ -1591,7 +1545,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
     // PRIORITY 3: Fall back to searching by name (EXACT MATCH ONLY)
     final scopedSupplierId = supplierId?.trim();
-    if (matchedProduct == null &&
+    if (allowNameFallback &&
+        matchedProduct == null &&
         scopedSupplierId != null &&
         scopedSupplierId.isNotEmpty &&
         item.description.isNotEmpty) {
@@ -1646,35 +1601,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     );
   }
 
-  /// Open the bulk product creation screen
-  Future<void> _uploadImage(
-      _NewProductEntry entry, Uint8List bytes, String fileName) async {
-    if (!mounted || !_newProductEntries.contains(entry)) return;
-    setState(() => entry.isUploadingImage = true);
-    try {
-      final result = await ImageService.uploadProductImageWithOptimization(
-          bytes: bytes, fileName: fileName);
-      if (!mounted || !_newProductEntries.contains(entry)) return;
-      setState(() {
-        entry.imageUrl = result.optimizedUrl ?? result.originalUrl;
-        entry.imageUrlOptimized = result.optimizedUrl;
-        entry.imageBytes = bytes;
-        entry.imageFileName = fileName;
-        entry.invalidateDuplicateResolution();
-      });
-    } catch (e) {
-      debugPrint('Error uploading image: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al subir imagen: $e')),
-      );
-    } finally {
-      if (mounted && _newProductEntries.contains(entry)) {
-        setState(() => entry.isUploadingImage = false);
-      }
-    }
-  }
-
+  /// Open the bulk product creation screen.
   Future<void> _openBulkCreateScreen() async {
     if (kDebugMode) {
       debugPrint(
@@ -1684,9 +1611,25 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
     if (_parsedData == null || _isOpeningBulkCreate) return;
     final sourceData = _parsedData!;
+    final reviewGeneration = ++_bulkReviewGeneration;
     setState(() => _isOpeningBulkCreate = true);
 
     try {
+      final canResumeDraft = _productReviewDraftEpoch == _parsedInvoiceEpoch &&
+          _newProductEntries.isNotEmpty;
+      if (canResumeDraft) {
+        final isAliExpressInvoice = _looksLikeAliExpressInvoice(sourceData);
+        setState(() {
+          _showBulkCreate = true;
+          _isOpeningBulkCreate = false;
+        });
+        if (isAliExpressInvoice &&
+            _newProductEntries.any(_needsSimilaritySearch)) {
+          await _runAliExpressProductAnalysis(reviewGeneration);
+        }
+        return;
+      }
+
       // Get new products (all unrecognized items)
       final newProducts = sourceData.lineItems
           .where((item) => item.existsInDatabase == false)
@@ -1717,7 +1660,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         if (kDebugMode) {
           debugPrint('🧪 [BulkCreate] referencias cargadas');
         }
-        if (!mounted || !identical(_parsedData, sourceData)) return;
+        if (!_ownsOpeningBulkReview(reviewGeneration, sourceData)) return;
         _categories = results[0] as List<Category>;
         _brands = results[1] as List<ProductBrand>;
         if (_categories.isEmpty) {
@@ -1739,7 +1682,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         return;
       }
 
-      if (!mounted || !identical(_parsedData, sourceData)) return;
+      if (!_ownsOpeningBulkReview(reviewGeneration, sourceData)) return;
 
       // Auto-detect tax-inclusive cost source. AliExpress invoices allocate
       // IVA into each item's unitPrice, so the unit cost already contains IVA.
@@ -1749,6 +1692,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       final nextEntries = newProducts
           .map((item) => _NewProductEntry(
                 originalItem: item,
+                sourceRowIndex: sourceData.lineItems.indexOf(item),
                 isSelected: true,
                 initialSku: isAliExpressInvoice ? '' : null,
                 selectedCategory: null,
@@ -1759,155 +1703,183 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       for (final oldEntry in _newProductEntries) {
         oldEntry.dispose();
       }
+      _ocrProductImageBytesCache.clear();
+      _ocrProductImageLoads.clear();
       _newProductEntries = nextEntries;
+      _productReviewDraftEpoch = _parsedInvoiceEpoch;
 
-      // Assigned from the exact pending line identities on first reservation,
-      // so retries replay while a reopened/partially completed invoice gets a
-      // different request fingerprint.
-      _aliExpressSkuReservationOperationKey = null;
-      _aliExpressSkuReservationGeneration = 0;
+      // A reopened review is a new authority: its rows re-derive their keys
+      // from the document they belong to, and nothing survives from the batch
+      // that was abandoned.
+      _skuReservationAuthority = null;
 
-      if (isAliExpressInvoice) {
-        try {
-          // Con tope: es una sugerencia de numeración, no un requisito para
-          // abrir la revisión. Sin él, una consulta lenta dejaba el panel sin
-          // abrir y el botón parecía no responder (2026-08-06); los SKU
-          // definitivos se reservan igual al crear los productos.
-          await _assignNextAliExpressSkus(_newProductEntries)
-              .timeout(const Duration(seconds: 12));
-        } catch (error) {
-          debugPrint(
-              '⚠️ [OCR] No se pudo preparar la secuencia SKU AE: $error');
-        }
-      }
-
-      if (!mounted || !identical(_parsedData, sourceData)) return;
+      if (!_ownsOpeningBulkReview(reviewGeneration, sourceData)) return;
       if (kDebugMode) {
         debugPrint('🧪 [BulkCreate] abriendo panel de revisión');
       }
       setState(() {
         _showBulkCreate = true;
-        _similarProductMessage = null;
+        // Reference data is ready and the workspace is interactive. AI and
+        // duplicate analysis continue per row without globally disabling it.
+        _isOpeningBulkCreate = false;
       });
 
       if (isAliExpressInvoice) {
-        // Matching must consume the final cleaned title/category/brand/model.
-        await _aiCleanProductNamesForEntries();
-        await _checkSimilarProductsForNewEntries(autoTriggered: true);
+        await _runAliExpressProductAnalysis(reviewGeneration);
       }
     } finally {
-      if (mounted) setState(() => _isOpeningBulkCreate = false);
+      if (mounted && _bulkReviewGeneration == reviewGeneration) {
+        setState(() => _isOpeningBulkCreate = false);
+      }
     }
   }
 
-  Future<void> _assignNextAliExpressSkus(
-    List<_NewProductEntry> entries,
-  ) async {
-    if (entries.isEmpty) return;
-    final inventoryService = inv_service.InventoryService(
-      DatabaseService(),
-      TenantService(),
-    );
-    final firstSku = await inventoryService.getNextAliExpressSku(
-      supplierId: _supplierIdForNewProducts ?? widget.supplierId,
-      supplierName:
-          _ocrSupplierName ?? widget.supplierName ?? 'AliExpress Marketplace',
-    );
-    final firstSequence = int.tryParse(
-          RegExp(r'^AE(\d{4,})$', caseSensitive: false)
-                  .firstMatch(firstSku)
-                  ?.group(1) ??
-              '',
-        ) ??
-        1;
-    for (var index = 0; index < entries.length; index++) {
-      entries[index].skuController.text =
-          'AE${(firstSequence + index).toString().padLeft(4, '0')}';
+  bool _ownsOpeningBulkReview(
+    int reviewGeneration,
+    ParsedInvoice sourceData,
+  ) =>
+      mounted &&
+      _bulkReviewGeneration == reviewGeneration &&
+      identical(_parsedData, sourceData);
+
+  bool _ownsBulkReview(int reviewGeneration) =>
+      mounted && _showBulkCreate && _bulkReviewGeneration == reviewGeneration;
+
+  bool _needsSimilaritySearch(_NewProductEntry entry) {
+    if (!entry.isSelected ||
+        !entry.requiresDuplicateReview ||
+        entry.linkedProduct != null ||
+        entry.isAICleaningName ||
+        entry.isCheckingSimilar ||
+        entry.isLinkingExisting ||
+        entry.isUploadingImage) {
+      return false;
     }
+    return entry.resolutionState == OcrProductResolutionState.unsearched ||
+        entry.resolutionState == OcrProductResolutionState.failed;
   }
 
-  Future<void> _reserveAliExpressSkusForEntries(
-    List<_NewProductEntry> entries,
-  ) async {
-    final pending = entries
-        .where((entry) => !entry.hasReservedAliExpressSku)
-        .toList(growable: false);
-    if (pending.isEmpty) return;
+  List<_NewProductEntry> _pendingSimilaritySearchEntries() =>
+      _newProductEntries.where(_needsSimilaritySearch).toList(growable: false);
 
-    final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
-    final supplierName = (_ocrSupplierName ?? widget.supplierName)?.trim();
-    if (supplierId == null || supplierId.isEmpty) {
-      throw StateError('Falta resolver el proveedor AliExpress.');
+  /// Runs independent listing groups through clean → canonical semantics →
+  /// duplicate matching. A slow product no longer delays useful results for
+  /// unrelated rows, while variants from the same listing still share one
+  /// semantic decision boundary.
+  Future<void> _runAliExpressProductAnalysis(int reviewGeneration) async {
+    if (!_ownsBulkReview(reviewGeneration)) return;
+    final inventoryService = context.read<inv_service.InventoryService>();
+    final productsFuture = inventoryService.getProducts().timeout(
+          const Duration(seconds: 20),
+          onTimeout: () => throw TimeoutException(
+            'El catálogo no respondió a tiempo.',
+          ),
+        );
+    final matcher = _buildDuplicateMatcher(inventoryService);
+    final grouped = <String, List<_NewProductEntry>>{};
+    for (final entry in _pendingSimilaritySearchEntries()) {
+      final listingId = _aliExpressItemIdForLine(entry.originalItem);
+      final key = listingId?.trim().isNotEmpty == true
+          ? 'listing:$listingId'
+          : 'row:${entry.reviewId}';
+      grouped.putIfAbsent(key, () => <_NewProductEntry>[]).add(entry);
     }
-    if (supplierName == null || supplierName.isEmpty) {
-      throw StateError('Falta el nombre del proveedor AliExpress.');
-    }
-    final inventoryService = context.read<InventoryService>();
-    for (var attempt = 0; attempt < 5; attempt++) {
-      var operationKey = _aliExpressSkuReservationOperationKey?.trim();
-      if (operationKey == null || operationKey.isEmpty) {
-        operationKey = _buildAliExpressSkuReservationOperationKey(pending);
-        _aliExpressSkuReservationOperationKey = operationKey;
-      }
+    final groups = grouped.values.toList(growable: false);
+    if (groups.isEmpty) return;
 
-      final reservation = await inventoryService.reserveAliExpressSkus(
-        count: pending.length,
-        operationKey: operationKey,
-        supplierId: supplierId,
-        supplierName: supplierName,
-      );
-      if (reservation.skus.length != pending.length) {
-        throw StateError('La reserva SKU devolvió una cantidad inesperada.');
-      }
-
-      var hasForeignCollision = false;
-      for (final sku in reservation.skus) {
-        if (await inventoryService.getProductBySku(sku) != null) {
-          hasForeignCollision = true;
-          break;
+    final iterator = groups.iterator;
+    final workerCount = math.min(3, groups.length);
+    await Future.wait(List.generate(workerCount, (_) async {
+      while (iterator.moveNext()) {
+        if (!_ownsBulkReview(reviewGeneration)) return;
+        final group = iterator.current;
+        await _aiCleanProductNamesForEntries(
+          reviewGeneration: reviewGeneration,
+          concurrency: math.min(2, group.length),
+          targetEntries: group,
+        );
+        if (!_ownsBulkReview(reviewGeneration)) return;
+        try {
+          final products = await productsFuture;
+          await _checkSimilarProductsForNewEntries(
+            targetEntries:
+                group.where(_needsSimilaritySearch).toList(growable: false),
+            autoTriggered: true,
+            reviewGeneration: reviewGeneration,
+            preparedInventoryService: inventoryService,
+            preparedProducts: products,
+            preparedMatcher: matcher,
+          );
+        } catch (error) {
+          for (final entry in group) {
+            if (_newProductEntries.contains(entry) &&
+                _needsSimilaritySearch(entry)) {
+              entry.markResolutionFailed(error);
+            }
+          }
+          if (_ownsBulkReview(reviewGeneration)) setState(() {});
         }
       }
-      if (hasForeignCollision) {
-        _aliExpressSkuReservationGeneration++;
-        _aliExpressSkuReservationOperationKey = null;
-        continue;
-      }
-
-      for (var index = 0; index < pending.length; index++) {
-        pending[index].skuController.text = reservation.skus[index];
-        pending[index].hasReservedAliExpressSku = true;
-      }
-      return;
-    }
-    throw StateError(
-      'No se pudo obtener un rango SKU AE libre después de 5 intentos.',
-    );
+    }));
   }
 
-  String _buildAliExpressSkuReservationOperationKey(
-    List<_NewProductEntry> entries,
-  ) {
+  /// The one authority for this review's SKUs, built lazily from live state.
+  AliExpressSkuReservationAuthority _skuReservationAuthorityOrCreate() {
+    final existing = _skuReservationAuthority;
+    if (existing != null) return existing;
+    final created = AliExpressSkuReservationAuthority(
+      reserve: ({required count, required operationKey}) async {
+        final supplierId =
+            (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+        final supplierName = (_ocrSupplierName ?? widget.supplierName)?.trim();
+        if (supplierId == null || supplierId.isEmpty) {
+          throw StateError('Falta resolver el proveedor AliExpress.');
+        }
+        if (supplierName == null || supplierName.isEmpty) {
+          throw StateError('Falta el nombre del proveedor AliExpress.');
+        }
+        final reservation =
+            await context.read<InventoryService>().reserveAliExpressSkus(
+                  count: count,
+                  operationKey: operationKey,
+                  supplierId: supplierId,
+                  supplierName: supplierName,
+                );
+        return reservation.skus;
+      },
+      isSkuTaken: (sku) async =>
+          await context.read<InventoryService>().getProductBySku(sku) != null,
+    );
+    _skuReservationAuthority = created;
+    return created;
+  }
+
+  /// Which document these rows belong to, in fields that survive a restart.
+  String _reservationDocumentFingerprint() {
     final invoice = _parsedData;
-    final identity = <String>[
-      'v1',
-      'generation=$_aliExpressSkuReservationGeneration',
+    return <String>[
+      'v2',
       invoice?.invoiceNumber?.trim() ?? 'sin-folio',
       invoice?.date?.toIso8601String() ?? 'sin-fecha',
       (_supplierIdForNewProducts ?? widget.supplierId ?? '').trim(),
-      for (final entry in entries) ...[
-        _aliExpressItemIdForLine(entry.originalItem) ?? '',
-        entry.originalItem.productUrl?.trim() ?? '',
-        entry.originalItem.sku?.trim() ?? '',
-        entry.originalItem.description.trim(),
-        '${entry.originalItem.quantity ?? ''}',
-        '${entry.originalItem.total ?? ''}',
-      ],
+      'lines=${invoice?.lineItems.length ?? 0}',
     ].join('\u001f');
-    final digest = ProductImageFingerprintService.contentDigest(
-      Uint8List.fromList(utf8.encode(identity)),
-    );
-    return 'aliexpress-ocr-v1-${digest.substring(0, 32)}';
   }
+
+  /// Exact row identity.
+  ///
+  /// `sourceRowIndex` is the only field that keeps two byte-identical lines of
+  /// the same order apart; listing and variant are what let the same order,
+  /// re-imported tomorrow, replay its reservation instead of burning the
+  /// sequence.
+  AliExpressSkuRowIdentity _reservationIdentityFor(_NewProductEntry entry) =>
+      AliExpressSkuRowIdentity(
+        documentFingerprint: _reservationDocumentFingerprint(),
+        sourceRowIndex: entry.sourceRowIndex,
+        listingId: _aliExpressItemIdForLine(entry.originalItem) ?? '',
+        variantKey: _aliExpressVariantKeyForLine(entry.originalItem) ?? '',
+        generation: entry.skuReservationGeneration,
+      );
 
   Future<void> _showSupplierSelectionDialog() async {
     // Show loading
@@ -2005,6 +1977,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                                           );
                                           if (!mounted) return;
                                           this.setState(() {
+                                            _discardProductReviewDraft(
+                                              advanceDocumentEpoch: true,
+                                            );
                                             _ocrSupplier = supplier;
                                             _ocrSupplierName = supplier.name;
                                             _supplierIdForNewProducts =
@@ -2068,6 +2043,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   void _recomputeSuggestedPricesFromCost() {
     for (final entry in _newProductEntries) {
       entry.costIncludesIva = _costsIncludeIva;
+      if (entry.priceUserEdited) continue;
       final cost =
           double.tryParse(entry.costController.text.replaceAll(',', '.')) ?? 0;
       entry.priceController.text = _NewProductEntry._suggestedPriceFromCost(
@@ -2077,923 +2053,707 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
   }
 
-  /// Compact info strip explaining how the suggested price is calculated and
-  /// letting the user toggle whether the OCR/JSON cost already contains IVA.
-  Widget _buildPricingRuleStrip() {
-    final formula = _costsIncludeIva
-        ? 'Precio sugerido = Costo × 2  (el costo ya incluye IVA, no se vuelve a sumar)'
-        : 'Precio sugerido = Costo × 1,19 × 2  (Neto + IVA, luego margen 2x)';
-    final hint = _costsIncludeIva
-        ? 'Detectado: el proveedor distribuye IVA, envío y descuentos en el costo unitario (ej. AliExpress).'
-        : 'Modo estándar: el costo es Neto y se le suma 19% de IVA antes del margen.';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color:
-            _costsIncludeIva ? Colors.amber.shade50 : Colors.blueGrey.shade50,
-        border: Border.all(
-          color: _costsIncludeIva
-              ? Colors.amber.shade200
-              : Colors.blueGrey.shade200,
-        ),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.calculate_outlined,
-            size: 18,
-            color: _costsIncludeIva
-                ? Colors.amber.shade800
-                : Colors.blueGrey.shade700,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  formula,
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  hint,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Tooltip(
-            message:
-                'Activa si el costo ya trae IVA incluido (no se vuelve a sumar 19%).',
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Costo con IVA',
-                    style:
-                        TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                Switch(
-                  value: _costsIncludeIva,
-                  onChanged: (v) {
-                    setState(() {
-                      _costsIncludeIva = v;
-                      _recomputeSuggestedPricesFromCost();
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  /// Selects a replacement image locally. Upload is intentionally deferred to
+  /// the already guarded product-creation operation so cancelling this review
+  /// cannot leave an invisible remote side effect.
+  Future<void> _pickReviewProductImage(
+    _NewProductEntry entry, {
+    required int reviewGeneration,
+  }) async {
+    final revision = entry.resolutionRevision;
+    final picked = await ImageService.pickImage();
+    if (picked == null ||
+        !_ownsNewProductResolution(
+          entry,
+          revision,
+          reviewGeneration: reviewGeneration,
+        )) {
+      return;
+    }
+    setState(() {
+      entry.imageUrl = null;
+      entry.imageUrlOptimized = null;
+      entry.imageBytes = picked.bytes;
+      entry.imageFileName = picked.name;
+      entry.invalidateDuplicateResolution();
+    });
   }
 
   /// Build the bulk product creation screen
   Widget _buildBulkCreateScreen() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const double baseWChk = 40;
-        const double baseWImg = 58;
-        const double baseWSku = 130;
-        const double baseWName = 260;
-        const double baseWSimilar = 210;
-        const double baseWCost = 110;
-        const double baseWPrice = 110;
-        const double baseWCat = 170;
-        const double baseWBrand = 160;
-        const double baseWTaller = 72;
-        const double gap = 8;
-        const double hPad = 12;
-        const double borderAllowance = 2;
-        const double minTableInnerWidth = hPad * 2 +
-            borderAllowance +
-            baseWChk +
-            baseWImg +
-            baseWSku +
-            baseWName +
-            baseWSimilar +
-            baseWCost +
-            baseWPrice +
-            baseWCat +
-            baseWBrand +
-            baseWTaller +
-            gap * 8;
-
-        final availableWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : minTableInnerWidth;
-        final tableInnerWidth = math.max(minTableInnerWidth, availableWidth);
-        final extraWidth = tableInnerWidth - minTableInnerWidth;
-
-        const wChk = baseWChk;
-        const wImg = baseWImg;
-        final wSku = baseWSku + (extraWidth * 0.14);
-        final wName = baseWName + (extraWidth * 0.30);
-        final wSimilar = baseWSimilar + (extraWidth * 0.12);
-        const wCost = baseWCost;
-        const wPrice = baseWPrice;
-        final wCat = baseWCat + (extraWidth * 0.22);
-        final wBrand = baseWBrand + (extraWidth * 0.22);
-        const wTaller = baseWTaller;
-
-        Widget headerCell(String label, double width,
-                {TextAlign align = TextAlign.left}) =>
-            SizedBox(
-              width: width,
-              child: Text(label,
-                  textAlign: align,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: Color(0xFF616161))),
-            );
-
-        // O-04 de la guía de componentes: cuerpo con scroll propio y pie fijo
-        // con un primario. La altura la acota el diálogo que la contiene.
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Header
-                    Row(
-                      children: [
-                        const Icon(Icons.add_circle,
-                            color: Colors.orange, size: 28),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Revisar productos de la factura',
-                                  style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold)),
-                              Row(
-                                children: [
-                                  Text(
-                                    '${_newProductEntries.where((e) => e.isSelected).length} de ${_newProductEntries.length} seleccionados',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant),
-                                  ),
-                                  Text(' • ',
-                                      style: TextStyle(
-                                          fontSize: 14,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .outline)),
-                                  Icon(
-                                    (_ocrSupplierName ?? widget.supplierName) !=
-                                            null
-                                        ? Icons.local_shipping_outlined
-                                        : Icons.warning_amber_rounded,
-                                    size: 14,
-                                    color: (_ocrSupplierName ??
-                                                widget.supplierName) !=
-                                            null
-                                        ? Colors.orange.shade700
-                                        : Colors.red.shade600,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _ocrSupplierName ??
-                                        widget.supplierName ??
-                                        'Sin proveedor',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: (_ocrSupplierName ??
-                                                  widget.supplierName) !=
-                                              null
-                                          ? Colors.orange.shade700
-                                          : Colors.red.shade600,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        border:
-                            Border.all(color: Theme.of(context).dividerColor),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.manage_search,
-                            size: 18,
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _similarProductMessage ??
-                                  (_looksLikeAliExpressInvoice(_parsedData!)
-                                      ? 'Plantilla AliExpress: revisa parecidos antes de crear productos nuevos.'
-                                      : 'Busca parecidos para reutilizar productos existentes antes de crear nuevos.'),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          OutlinedButton.icon(
-                            onPressed: _bulkCreateBusy()
-                                ? null
-                                : () => _checkSimilarProductsForNewEntries(),
-                            icon: _isCheckingSimilarProducts
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.search, size: 16),
-                            label: Text(_isCheckingSimilarProducts
-                                ? 'Buscando...'
-                                : 'Buscar parecidos'),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Pricing rule strip ─ explains the suggested-price formula and
-                    // lets the user toggle whether the OCR/JSON cost already
-                    // includes IVA (e.g. AliExpress allocates tax into each unit).
-                    _buildPricingRuleStrip(),
-
-                    const SizedBox(height: 12),
-
-                    // Table — always tableInnerWidth wide, scrolls horizontally if needed
-                    Scrollbar(
-                      controller: _bulkCreateHorizontalScrollController,
-                      thumbVisibility: true,
-                      trackVisibility: true,
-                      notificationPredicate: (notification) =>
-                          notification.metrics.axis == Axis.horizontal,
-                      child: SingleChildScrollView(
-                        controller: _bulkCreateHorizontalScrollController,
-                        scrollDirection: Axis.horizontal,
-                        child: Container(
-                          width: tableInnerWidth,
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .outlineVariant),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // ── Header ──────────────────────────────────────────────
-                              Container(
-                                height: 38,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: hPad),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(9)),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    const SizedBox(
-                                        width: wChk), // checkbox placeholder
-                                    headerCell('Img', wImg),
-                                    const SizedBox(width: gap),
-                                    headerCell('SKU', wSku),
-                                    const SizedBox(width: gap),
-                                    headerCell('Nombre', wName),
-                                    const SizedBox(width: gap),
-                                    headerCell('Parecidos', wSimilar),
-                                    const SizedBox(width: gap),
-                                    headerCell(
-                                        _costsIncludeIva
-                                            ? 'Costo (c/IVA)'
-                                            : 'Costo (Neto)',
-                                        wCost,
-                                        align: TextAlign.center),
-                                    const SizedBox(width: gap),
-                                    headerCell(
-                                        _costsIncludeIva
-                                            ? 'Precio (×2)'
-                                            : 'Precio (×1,19×2)',
-                                        wPrice,
-                                        align: TextAlign.center),
-                                    const SizedBox(width: gap),
-                                    headerCell('Categoría', wCat),
-                                    const SizedBox(width: gap),
-                                    headerCell('Marca', wBrand),
-                                    const SizedBox(width: gap),
-                                    headerCell('Taller', wTaller,
-                                        align: TextAlign.center),
-                                  ],
-                                ),
-                              ),
-                              // ── Rows ─────────────────────────────────────────────────
-                              ...List.generate(_newProductEntries.length,
-                                  (index) {
-                                final entry = _newProductEntries[index];
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: hPad, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: entry.isSelected
-                                        ? Colors.white
-                                        : Colors.grey.shade50,
-                                    border: Border(
-                                        top: BorderSide(
-                                            color: Colors.grey.shade200)),
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      // Checkbox
-                                      SizedBox(
-                                        width: wChk,
-                                        child: Checkbox(
-                                          value: entry.isSelected,
-                                          onChanged:
-                                              entry.requiresDuplicateReview
-                                                  ? null
-                                                  : (v) => setState(() => entry
-                                                      .isSelected = v ?? false),
-                                        ),
-                                      ),
-                                      // Image cell
-                                      SizedBox(
-                                        width: wImg - gap,
-                                        child: DropTarget(
-                                          onDragDone: (d) async {
-                                            if (d.files.isNotEmpty) {
-                                              final f = d.files.first;
-                                              _uploadImage(
-                                                  entry,
-                                                  await f.readAsBytes(),
-                                                  f.name);
-                                            }
-                                          },
-                                          onDragEntered: (_) => setState(() =>
-                                              entry.isHoveringImage = true),
-                                          onDragExited: (_) => setState(() =>
-                                              entry.isHoveringImage = false),
-                                          child: MouseRegion(
-                                            onEnter: (_) => setState(() =>
-                                                entry.isHoveringImage = true),
-                                            onExit: (_) => setState(() =>
-                                                entry.isHoveringImage = false),
-                                            child: Stack(children: [
-                                              InkWell(
-                                                onTap: () async {
-                                                  final r = await ImageService
-                                                      .pickImage();
-                                                  if (r != null) {
-                                                    _uploadImage(
-                                                        entry, r.bytes, r.name);
-                                                  }
-                                                },
-                                                child: Container(
-                                                  width: 46,
-                                                  height: 46,
-                                                  decoration: BoxDecoration(
-                                                    color: entry.isHoveringImage
-                                                        ? Colors.blue
-                                                            .withValues(
-                                                                alpha: 0.08)
-                                                        : Colors.grey[100],
-                                                    border: Border.all(
-                                                      color: entry
-                                                              .isHoveringImage
-                                                          ? Colors.blue
-                                                          : Colors.grey[300]!,
-                                                      width:
-                                                          entry.isHoveringImage
-                                                              ? 2
-                                                              : 1,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            4),
-                                                  ),
-                                                  child: entry.isUploadingImage
-                                                      ? const Center(
-                                                          child: SizedBox(
-                                                              width: 18,
-                                                              height: 18,
-                                                              child:
-                                                                  CircularProgressIndicator(
-                                                                      strokeWidth:
-                                                                          2)))
-                                                      : entry.imageUrl != null
-                                                          ? ClipRRect(
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          4),
-                                                              child: ImageService
-                                                                  .buildProductImage(
-                                                                imageUrl: entry
-                                                                    .imageUrl,
-                                                                size: 46,
-                                                              ),
-                                                            )
-                                                          : const Icon(
-                                                              Icons
-                                                                  .add_photo_alternate,
-                                                              size: 18,
-                                                              color:
-                                                                  Colors.grey),
-                                                ),
-                                              ),
-                                              if (entry.imageUrl != null &&
-                                                  entry.isHoveringImage)
-                                                Positioned(
-                                                  right: 0,
-                                                  top: 0,
-                                                  child: GestureDetector(
-                                                    onTap: () => setState(() {
-                                                      entry.imageUrl = null;
-                                                      entry.imageUrlOptimized =
-                                                          null;
-                                                      entry.imageBytes = null;
-                                                      entry.imageFileName =
-                                                          null;
-                                                      entry
-                                                          .invalidateDuplicateResolution();
-                                                    }),
-                                                    child: Container(
-                                                      width: 16,
-                                                      height: 16,
-                                                      decoration:
-                                                          const BoxDecoration(
-                                                              color: Colors.red,
-                                                              shape: BoxShape
-                                                                  .circle),
-                                                      child: const Icon(
-                                                          Icons.close,
-                                                          size: 11,
-                                                          color: Colors.white),
-                                                    ),
-                                                  ),
-                                                ),
-                                            ]),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: gap),
-                                      // SKU
-                                      SizedBox(
-                                        width: wSku,
-                                        child: TextField(
-                                          controller: entry.skuController,
-                                          enabled: entry.isSelected,
-                                          onChanged: (_) => setState(() {
-                                            entry
-                                                .invalidateDuplicateResolution();
-                                          }),
-                                          decoration: InputDecoration(
-                                            isDense: true,
-                                            border: const OutlineInputBorder(),
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                    horizontal: 8, vertical: 8),
-                                            errorText: entry.sku.isEmpty
-                                                ? 'Requerido'
-                                                : null,
-                                            errorStyle:
-                                                const TextStyle(fontSize: 10),
-                                          ),
-                                          style: const TextStyle(
-                                              fontFamily: 'monospace',
-                                              fontSize: 12),
-                                        ),
-                                      ),
-                                      const SizedBox(width: gap),
-                                      // Name
-                                      SizedBox(
-                                        width: wName,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            TextField(
-                                              controller: entry.nameController,
-                                              enabled: entry.isSelected,
-                                              onChanged: (_) => setState(() {}),
-                                              minLines: 1,
-                                              maxLines: 2,
-                                              decoration: const InputDecoration(
-                                                isDense: true,
-                                                border: OutlineInputBorder(),
-                                                contentPadding:
-                                                    EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 8),
-                                              ),
-                                              style:
-                                                  const TextStyle(fontSize: 12),
-                                            ),
-                                            if (entry.isAICleaningName ||
-                                                entry.nameWasAICleaned)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    top: 3),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    if (entry.isAICleaningName)
-                                                      const SizedBox(
-                                                        width: 10,
-                                                        height: 10,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                                strokeWidth:
-                                                                    1.5),
-                                                      )
-                                                    else
-                                                      const Text('✨',
-                                                          style: TextStyle(
-                                                              fontSize: 11)),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      entry.isAICleaningName
-                                                          ? 'IA limpiando título…'
-                                                          : 'Limpiado por IA',
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        color: entry
-                                                                .isAICleaningName
-                                                            ? Colors
-                                                                .grey.shade600
-                                                            : Colors.deepPurple
-                                                                .shade400,
-                                                      ),
-                                                    ),
-                                                    if (entry
-                                                            .nameWasAICleaned &&
-                                                        entry.originalNoisyTitle !=
-                                                            null) ...[
-                                                      const SizedBox(width: 6),
-                                                      Tooltip(
-                                                        message:
-                                                            'Título original:\n${entry.originalNoisyTitle}',
-                                                        child: Icon(
-                                                          Icons.info_outline,
-                                                          size: 12,
-                                                          color: Theme.of(
-                                                                  context)
-                                                              .colorScheme
-                                                              .onSurfaceVariant,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ],
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: gap),
-                                      SizedBox(
-                                        width: wSimilar,
-                                        child: _buildSimilarProductCell(entry),
-                                      ),
-                                      const SizedBox(width: gap),
-                                      // Cost
-                                      SizedBox(
-                                        width: wCost,
-                                        child: TextField(
-                                          controller: entry.costController,
-                                          enabled: entry.isSelected,
-                                          onChanged: (_) => setState(() {}),
-                                          keyboardType: TextInputType.number,
-                                          decoration: InputDecoration(
-                                            isDense: true,
-                                            border: const OutlineInputBorder(),
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                    horizontal: 8, vertical: 8),
-                                            prefixText: '\$ ',
-                                            hintText: '0',
-                                            hintStyle: TextStyle(
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .outline),
-                                          ),
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                      ),
-                                      const SizedBox(width: gap),
-                                      // Price
-                                      SizedBox(
-                                        width: wPrice,
-                                        child: TextField(
-                                          controller: entry.priceController,
-                                          enabled: entry.isSelected,
-                                          onChanged: (_) => setState(() {}),
-                                          keyboardType: TextInputType.number,
-                                          decoration: InputDecoration(
-                                            isDense: true,
-                                            border: const OutlineInputBorder(),
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                    horizontal: 8, vertical: 8),
-                                            prefixText: '\$ ',
-                                            hintText: '0',
-                                            hintStyle: TextStyle(
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .outline),
-                                          ),
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                      ),
-                                      const SizedBox(width: gap),
-                                      // Category
-                                      SizedBox(
-                                        width: wCat,
-                                        child: DropdownMenu<Category>(
-                                          width: wCat,
-                                          menuHeight: 280,
-                                          initialSelection:
-                                              entry.selectedCategory,
-                                          hintText: 'Categoría',
-                                          textStyle:
-                                              const TextStyle(fontSize: 12),
-                                          inputDecorationTheme:
-                                              const InputDecorationTheme(
-                                            isDense: true,
-                                            contentPadding:
-                                                EdgeInsets.symmetric(
-                                                    horizontal: 8, vertical: 8),
-                                            border: OutlineInputBorder(),
-                                          ),
-                                          enabled: entry.isSelected,
-                                          enableFilter: true,
-                                          requestFocusOnTap: true,
-                                          dropdownMenuEntries: _categories
-                                              .map((c) =>
-                                                  DropdownMenuEntry<Category>(
-                                                      value: c, label: c.name))
-                                              .toList(),
-                                          onSelected: (v) {
-                                            if (v != null) {
-                                              setState(() {
-                                                entry.selectedCategory = v;
-                                                entry
-                                                    .invalidateDuplicateResolution();
-                                              });
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: gap),
-                                      // Brand
-                                      SizedBox(
-                                        width: wBrand,
-                                        child: DropdownMenu<ProductBrand>(
-                                          width: wBrand,
-                                          menuHeight: 280,
-                                          initialSelection: entry.selectedBrand,
-                                          hintText: 'Marca',
-                                          textStyle:
-                                              const TextStyle(fontSize: 12),
-                                          inputDecorationTheme:
-                                              const InputDecorationTheme(
-                                            isDense: true,
-                                            contentPadding:
-                                                EdgeInsets.symmetric(
-                                                    horizontal: 8, vertical: 8),
-                                            border: OutlineInputBorder(),
-                                          ),
-                                          enabled: entry.isSelected,
-                                          enableFilter: true,
-                                          requestFocusOnTap: true,
-                                          dropdownMenuEntries: _brands
-                                              .map((b) => DropdownMenuEntry<
-                                                      ProductBrand>(
-                                                  value: b, label: b.name))
-                                              .toList(),
-                                          onSelected: (v) {
-                                            if (v != null) {
-                                              setState(() {
-                                                entry.selectedBrand = v;
-                                                entry
-                                                    .invalidateDuplicateResolution();
-                                              });
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: gap),
-                                      // Workshop toggle
-                                      SizedBox(
-                                        width: wTaller,
-                                        child: Tooltip(
-                                          message: 'Consumible de taller',
-                                          child: Center(
-                                            child: Transform.scale(
-                                              scale: 0.82,
-                                              child: Switch.adaptive(
-                                                value:
-                                                    entry.isWorkshopConsumable,
-                                                onChanged: entry.isSelected
-                                                    ? (v) => setState(() => entry
-                                                        .isWorkshopConsumable = v)
-                                                    : null,
-                                                materialTapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            _buildBulkCreateFooter(),
-          ],
-        );
-      },
+    // Only rows the worker actually decided are «nuevo». Counting every
+    // undecided row promised «Crear 7 productos» before a single one of those
+    // seven decisions existed, which is the button lying about what it will do.
+    final confirmedNewCount = _newProductEntries
+        .where((entry) =>
+            entry.isSelected &&
+            entry.linkedProduct == null &&
+            entry.resolutionState == OcrProductResolutionState.newProduct)
+        .length;
+    final undecidedCount = _newProductEntries
+        .where((entry) =>
+            entry.isSelected &&
+            entry.linkedProduct == null &&
+            entry.requiresDuplicateReview &&
+            entry.resolutionState != OcrProductResolutionState.newProduct)
+        .length;
+    final incompleteCount = _bulkIncompleteRowCount();
+    final pendingSimilaritySearch = _pendingSimilaritySearchEntries();
+    return OcrProductReviewWorkspace(
+      lines: _newProductEntries
+          .map(_buildProductReviewLine)
+          .toList(growable: false),
+      callbacks: OcrProductReviewCallbacks(
+        onSelectionChanged: (lineId, selected) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _creatingProducts) return;
+          setState(() => entry.isSelected = selected);
+        },
+        onLinkCandidate: (lineId, product) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _bulkRowBusy(entry)) return;
+          unawaited(_useExistingProductForEntry(
+            entry,
+            product,
+            expectedRevision: entry.resolutionRevision,
+            reviewGeneration: _bulkReviewGeneration,
+          ));
+        },
+        onConfirmNewProduct: (lineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _bulkRowBusy(entry)) return;
+          unawaited(_confirmNewProductForEntry(entry));
+        },
+        onRetrySkuReservation: (lineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _creatingProducts) return;
+          entry.skuReservationError = null;
+          unawaited(_ensureReservedSkuForEntry(entry));
+        },
+        onRetryLine: (lineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _bulkRowBusy(entry)) return;
+          unawaited(_checkSimilarProductsForNewEntries(
+            entry: entry,
+            reviewGeneration: _bulkReviewGeneration,
+          ));
+        },
+        onSearchPending: pendingSimilaritySearch.isEmpty
+            ? null
+            : () {
+                if (_creatingProducts || _isOpeningBulkCreate) return;
+                final pending = _pendingSimilaritySearchEntries();
+                if (pending.isEmpty) return;
+                unawaited(_checkSimilarProductsForNewEntries(
+                  targetEntries: pending,
+                  reviewGeneration: _bulkReviewGeneration,
+                ));
+              },
+        onOpenCandidates: (lineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _bulkRowBusy(entry)) return;
+          unawaited(_openCandidatePicker(entry));
+        },
+        onSkuChanged: (lineId, _) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _creatingProducts) return;
+          setState(entry.invalidateDuplicateResolution);
+        },
+        onNameChanged: (lineId, _) {
+          if (_newProductEntryForReviewId(lineId) != null && mounted) {
+            setState(() {});
+          }
+        },
+        onCategoryChanged: (lineId, category) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _creatingProducts) return;
+          setState(() {
+            entry.selectedCategory = category;
+            entry.categoryUserEdited = true;
+            entry.aiSuggestedCategoryName = category?.fullPath;
+            entry.invalidateDuplicateResolution();
+          });
+        },
+        onBrandChanged: (lineId, brand) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _creatingProducts) return;
+          setState(() {
+            entry.selectedBrand = brand;
+            entry.brandUserEdited = true;
+            entry.aiSuggestedBrandName = brand?.name;
+            entry.invalidateDuplicateResolution();
+          });
+        },
+        onCostChanged: (lineId, _) {
+          if (_newProductEntryForReviewId(lineId) != null && mounted) {
+            setState(() {});
+          }
+        },
+        onPriceChanged: (lineId, _) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || !mounted) return;
+          entry.priceUserEdited = true;
+          setState(() {});
+        },
+        onSoldChanged: (lineId, isSold) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _creatingProducts) return;
+          setState(() => entry.isWorkshopConsumable = !isSold);
+        },
+        onCopySibling: (lineId, siblingLineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          final sibling = _newProductEntryForReviewId(siblingLineId);
+          if (entry == null || sibling == null || _creatingProducts) return;
+          setState(() {
+            entry.selectedCategory = sibling.selectedCategory;
+            entry.selectedBrand = sibling.selectedBrand;
+            entry.categoryUserEdited = true;
+            entry.brandUserEdited = true;
+            entry.invalidateDuplicateResolution();
+          });
+        },
+        onReplaceImage: (lineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _bulkRowBusy(entry)) return;
+          unawaited(_pickReviewProductImage(
+            entry,
+            reviewGeneration: _bulkReviewGeneration,
+          ));
+        },
+        onRemoveImage: (lineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _bulkRowBusy(entry)) return;
+          setState(() {
+            entry.imageUrl = null;
+            entry.imageUrlOptimized = null;
+            entry.imageBytes = null;
+            entry.imageFileName = null;
+            entry.invalidateDuplicateResolution();
+          });
+        },
+        onChangeDecision: (lineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _bulkRowBusy(entry)) return;
+          _changeProductDecision(entry);
+        },
+        onCostIncludesVatChanged: (value) {
+          setState(() {
+            _costsIncludeIva = value;
+            _recomputeSuggestedPricesFromCost();
+          });
+        },
+        onBack: _closeBulkReview,
+        onPrimary: _canCreateBulkProducts()
+            ? confirmedNewCount == 0
+                ? _finishBulkReview
+                : () => unawaited(_createBulkProducts())
+            : null,
+      ),
+      primaryLabel: _bulkPrimaryLabel(
+        confirmedNewCount: confirmedNewCount,
+        undecidedCount: undecidedCount,
+        incompleteCount: incompleteCount,
+      ),
+      pricingPolicyLabel: _costsIncludeIva
+          ? 'Precio sugerido = costo × 2 · costo con IVA'
+          : 'Precio sugerido = costo × 1,19 × 2 · costo neto',
+      primaryEnabled: _canCreateBulkProducts(),
+      primaryBlockingReason: _bulkCreateBlockingMessage(),
+      costIncludesVat: _costsIncludeIva,
+      readOnly: _creatingProducts,
     );
   }
 
-  /// Pie fijo de la revisión de productos (O-04 de la guía de componentes).
+  /// What the primary button honestly does next.
   ///
-  /// Vive fuera del área con scroll a propósito: con las acciones al final del
-  /// contenido, el botón para crear los productos quedaba bajo el pliegue y
-  /// había que descubrirlo scrolleando —con ocho filas ya no se veía— y el
-  /// motivo por el que estaba deshabilitado quedaba aún más lejos
-  /// (2026-08-06). El aviso acompaña al primario porque explica justamente por
-  /// qué no se puede continuar.
-  Widget _buildBulkCreateFooter() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (_bulkCreateBlockingMessage() case final message?) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            decoration: BoxDecoration(
-              color: VinabikeThemeRoles.of(context).warning.container,
-              border: Border.all(
-                  color: VinabikeThemeRoles.of(context).warning.border),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline,
-                    size: 17,
-                    color: VinabikeThemeRoles.of(context).warning.accent),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    message,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: VinabikeThemeRoles.of(context).warning.onContainer,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _bulkCreateBusy()
-                    ? null
-                    : () {
-                        for (final e in _newProductEntries) {
-                          e.dispose();
-                        }
-                        _newProductEntries.clear();
-                        setState(() => _showBulkCreate = false);
-                      },
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Volver'),
-                style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed:
-                    _canCreateBulkProducts() ? _createBulkProducts : null,
-                icon: _creatingProducts
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.check),
-                label: Text(
-                  _creatingProducts
-                      ? 'Creando...'
-                      : 'Crear ${_newProductEntries.where((entry) => entry.isSelected).length} producto${_newProductEntries.where((entry) => entry.isSelected).length == 1 ? '' : 's'}',
-                ),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor:
-                      VinabikeThemeRoles.of(context).warning.accent,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
+  /// While decisions are missing it says so and stays disabled; it never
+  /// advertises a creation count that no decision has produced yet. A row that
+  /// is decided but still missing a required field gets its own truthful
+  /// wording, because «completar» and «decidir» are different jobs.
+  String _bulkPrimaryLabel({
+    required int confirmedNewCount,
+    required int undecidedCount,
+    required int incompleteCount,
+  }) {
+    if (_creatingProducts) return 'Creando productos…';
+    if (_anyRowReservingSku) return 'Reservando SKU…';
+    if (undecidedCount > 0) {
+      return 'Faltan $undecidedCount '
+          '${undecidedCount == 1 ? 'decisión' : 'decisiones'}';
+    }
+    if (incompleteCount > 0) {
+      return 'Completa $incompleteCount '
+          '${incompleteCount == 1 ? 'fila' : 'filas'}';
+    }
+    if (confirmedNewCount == 0) return 'Continuar';
+    return 'Crear $confirmedNewCount '
+        'producto${confirmedNewCount == 1 ? '' : 's'}';
+  }
+
+  /// Selected rows that are decided but still missing a required field.
+  int _bulkIncompleteRowCount() {
+    final isAliExpress =
+        _parsedData != null && _looksLikeAliExpressInvoice(_parsedData!);
+    return _newProductEntries
+        .where((entry) =>
+            entry.isSelected &&
+            entry.linkedProduct == null &&
+            !(isAliExpress ? entry.isValidWithoutSku : entry.isValid))
+        .length;
+  }
+
+  /// Confirms one row as a new product and gives it its real SKU now.
+  ///
+  /// The legacy flow reserved the whole batch at the final create click, so an
+  /// operator deciding «Nuevo» watched the SKU column stay empty through the
+  /// entire review and had nothing to write on the box. The reservation is
+  /// database-owned and idempotent per row, so asking for it at the moment of
+  /// the decision costs one call and makes the row immediately true.
+  Future<void> _confirmNewProductForEntry(_NewProductEntry entry) async {
+    if (!mounted || _bulkRowBusy(entry)) return;
+    setState(entry.markNewProduct);
+    await _ensureReservedSkuForEntry(entry);
+  }
+
+  /// Gives one row its database-owned SKU, or replays the one it already has.
+  ///
+  /// Ownership is checked twice: once before asking, and again before painting
+  /// the answer. Between those two moments the operator may have linked the row
+  /// to an existing product, closed the review or reopened the invoice, and a
+  /// reservation that arrives into a row that no longer wants it must be
+  /// dropped rather than displayed — while the spinner still clears, because a
+  /// stuck spinner blocks Create and Back forever.
+  Future<void> _ensureReservedSkuForEntry(_NewProductEntry entry) async {
+    if (!mounted) return;
+    if (!entry.requiresDuplicateReview) return;
+    if (!_newProductEntries.contains(entry)) return;
+    if (entry.isReservingSku) return;
+    if (entry.hasReservedAliExpressSku) {
+      setState(entry.syncSkuField);
+      return;
+    }
+
+    final reviewGeneration = _bulkReviewGeneration;
+    final ticket = ++entry.skuReservationTicket;
+    final identity = _reservationIdentityFor(entry);
+    setState(() {
+      entry.isReservingSku = true;
+      entry.skuReservationError = null;
+    });
+    try {
+      final reservation =
+          await _skuReservationAuthorityOrCreate().reserveFor(identity);
+      if (!mounted) return;
+      if (!_ownsSkuReservation(entry, ticket, reviewGeneration)) {
+        if (_newProductEntries.contains(entry) && entry.isReservingSku) {
+          setState(() => entry.isReservingSku = false);
+        }
+        return;
+      }
+      setState(() {
+        entry.isReservingSku = false;
+        entry.reservedSku = reservation.sku;
+        entry.skuOperationKey = reservation.operationKey;
+        entry.skuReservationGeneration = reservation.generation;
+        entry.syncSkuField();
+      });
+    } catch (error) {
+      debugPrint('AliExpress SKU reservation failed for one row: $error');
+      if (!mounted || !_newProductEntries.contains(entry)) return;
+      setState(() {
+        entry.isReservingSku = false;
+        if (_ownsSkuReservation(entry, ticket, reviewGeneration)) {
+          entry.skuReservationError = error;
+        }
+      });
+    }
+  }
+
+  bool _ownsSkuReservation(
+    _NewProductEntry entry,
+    int ticket,
+    int reviewGeneration,
+  ) =>
+      _ownsBulkReview(reviewGeneration) &&
+      _newProductEntries.contains(entry) &&
+      entry.skuReservationTicket == ticket;
+
+  bool get _anyRowReservingSku =>
+      _newProductEntries.any((entry) => entry.isReservingSku);
+
+  /// Opens the centred picker for one line and applies whatever the operator
+  /// decided there.
+  ///
+  /// The picker is the only place alternatives are shown. Expanding them inside
+  /// the reconciliation row made rows different heights and hid the rest of the
+  /// invoice, which is the composition the owner rejected on 2026-08-09.
+  Future<void> _openCandidatePicker(_NewProductEntry entry) async {
+    final reviewGeneration = _bulkReviewGeneration;
+    final inventoryService = context.read<inv_service.InventoryService>();
+    final decision = await OcrCandidatePicker.show(
+      context,
+      line: OcrCandidateLineContext(
+        title: entry.nameController.text.trim().isEmpty
+            ? entry.originalItem.description
+            : entry.nameController.text.trim(),
+        originalTitle: entry.originalNoisyTitle,
+        supplierCode: entry.supplierCode.isEmpty
+            ? entry.originalItem.sku
+            : entry.supplierCode,
+        imageUrl: entry.imageUrlOptimized ?? entry.imageUrl,
+        quantity: entry.originalItem.quantity,
+        unitCost: entry.cost,
+        categoryLabel: entry.selectedCategory?.name,
+        brandLabel: entry.selectedBrand?.name,
+      ),
+      candidates: entry.similarCandidates,
+      isLoading: entry.isCheckingSimilar,
+      // Opening this overlay is the operator saying the row's one answer was
+      // not enough. It therefore asks the wider question — every product of
+      // the same kind, ruled-out ones included with their reason — instead of
+      // re-showing the row's conservative shortlist.
+      onLoadOptions: () => _loadCandidateOptions(entry, inventoryService),
+      onSearch: (query) => inventoryService.searchProductPreviews(
+        query,
+        limit: 25,
+      ),
+    );
+    if (!mounted || !_ownsBulkReview(reviewGeneration)) return;
+    switch (decision) {
+      case OcrCandidateLink(product: final product):
+        await _useExistingProductForEntry(
+          entry,
+          product,
+          expectedRevision: entry.resolutionRevision,
+          reviewGeneration: reviewGeneration,
+        );
+      case OcrCandidateCreateNew():
+        await _confirmNewProductForEntry(entry);
+      case null:
+        break;
+    }
+  }
+
+  /// One invoice row, phrased as the question the matcher answers.
+  ///
+  /// Both entry points build it here: the row's automatic search and the
+  /// picker's wider one. Two copies of this construction is how the overlay
+  /// once asked a subtly different question than the row it belongs to.
+  ProductDuplicateProbe _duplicateProbeFor(_NewProductEntry entry) {
+    return ProductDuplicateProbe(
+      name: entry.nameController.text,
+      description: entry.originalItem.description,
+      sku: _costsIncludeIva && entry.supplierCode.isNotEmpty
+          ? entry.supplierCode
+          : entry.skuController.text.trim().isNotEmpty
+              ? entry.skuController.text.trim()
+              : entry.originalItem.sku,
+      model: entry.aiSuggestedModel,
+      rawText: entry.originalItem.rawRowText,
+      categoryName: _duplicateMatcherCategoryName(entry),
+      brandName: _duplicateMatcherBrandName(entry),
+      supplierId: _supplierIdForNewProducts ?? widget.supplierId,
+      supplierName: _ocrSupplierName ?? widget.supplierName,
+      supplierListingId: _aliExpressItemIdForLine(entry.originalItem),
+      imageUrl: entry.imageUrl,
+      imageBytes: entry.imageBytes,
+      imageFileName: entry.imageFileName,
+      price: entry.price,
+      cost: entry.cost,
     );
   }
 
-  bool _canCreateBulkProducts() => OcrProductResolutionPolicy.canCreate(
-        globalBusy: _isOpeningBulkCreate ||
-            _creatingProducts ||
-            _isCheckingSimilarProducts,
-        lines: _newProductEntries.map(
-          (entry) => OcrProductResolutionSnapshot(
-            selected: entry.isSelected,
-            valid: entry.isValid,
-            requiresDuplicateReview: entry.requiresDuplicateReview,
-            state: entry.resolutionState,
-            aiCleaning: entry.isAICleaningName,
-            matchChecking: entry.isCheckingSimilar ||
-                entry.isLinkingExisting ||
-                entry.isUploadingImage,
-          ),
-        ),
+  /// Everything the catalog offers for one line, for the operator to choose.
+  Future<List<ProductDuplicateCandidate>> _loadCandidateOptions(
+    _NewProductEntry entry,
+    inv_service.InventoryService inventoryService,
+  ) async {
+    final products = await inventoryService.getProducts();
+    final matcher = _buildDuplicateMatcher(inventoryService);
+    final analysis = entry.aiVisualAnalysis;
+    if (analysis != null) {
+      matcher.primeVisualReading(
+        imageUrl: entry.imageUrl,
+        imageBytes: entry.imageBytes,
+        analysis: analysis,
       );
+    }
+    return matcher.findCandidates(
+      probe: _duplicateProbeFor(entry),
+      products: products,
+      scope: ProductDuplicateShortlistScope.operatorChoice,
+    );
+  }
 
-  bool _bulkCreateBusy() =>
-      _isOpeningBulkCreate ||
-      _creatingProducts ||
-      _isCheckingSimilarProducts ||
-      _newProductEntries.any((entry) =>
-          entry.isAICleaningName ||
-          entry.isCheckingSimilar ||
-          entry.isLinkingExisting ||
-          entry.isUploadingImage);
+  OcrProductReviewLine _buildProductReviewLine(_NewProductEntry entry) {
+    final sibling = _semanticSiblingFor(entry);
+    final sku = entry.displaySku.isNotEmpty
+        ? entry.displaySku
+        : entry.requiresDuplicateReview
+            ? 'Se asignará al confirmar «Nuevo»'
+            : 'Falta SKU';
+    final rejectedBrand = entry.semanticEvidence.any(
+      (evidence) =>
+          evidence.kind ==
+              ProductCatalogSemanticEvidenceKind.rejectedBrandHint ||
+          evidence.kind == ProductCatalogSemanticEvidenceKind.unresolvedBrand,
+    );
+    return OcrProductReviewLine(
+      id: entry.reviewId,
+      sku: sku,
+      supplierCode: entry.supplierCode.isEmpty ? null : entry.supplierCode,
+      originalTitle: entry.originalNoisyTitle ?? entry.originalItem.description,
+      sourceQuantity: entry.originalItem.quantity,
+      sourceLineTotal: _getRowDiagnostics(entry.originalItem).displayedTotal,
+      imageUrl: entry.imageUrlOptimized ?? entry.imageUrl,
+      imageBytes: entry.imageUrl == null ? entry.imageBytes : null,
+      controllers: OcrProductDraftControllers(
+        sku: entry.skuController,
+        name: entry.nameController,
+        cost: entry.costController,
+        price: entry.priceController,
+      ),
+      status: _productReviewStatus(entry),
+      isUploadingImage: entry.isUploadingImage,
+      isReservingSku: entry.isReservingSku,
+      // A code the database owns is not an editable field. Showing it as one
+      // invites a worker to "fix" it and send a number nothing reserved.
+      skuIsReadOnly: entry.requiresDuplicateReview,
+      skuErrorMessage: entry.skuReservationError == null
+          ? null
+          : 'No se pudo reservar el SKU. Reintenta.',
+      candidates: entry.similarCandidates,
+      categories: _categories,
+      brands: _brands,
+      category: entry.selectedCategory,
+      brand: entry.selectedBrand,
+      nameOrigin: entry.nameUserEdited
+          ? OcrProductFieldOrigin.user
+          : entry.nameWasAICleaned
+              ? OcrProductFieldOrigin.aiCleaned
+              : OcrProductFieldOrigin.invoice,
+      categoryOrigin: entry.categoryUserEdited
+          ? OcrProductFieldOrigin.user
+          : OcrProductFieldOrigin.aiSuggested,
+      brandOrigin: entry.brandUserEdited
+          ? OcrProductFieldOrigin.user
+          : OcrProductFieldOrigin.aiSuggested,
+      isSold: !entry.isWorkshopConsumable,
+      evidenceDegraded:
+          entry.imageBytes == null && (entry.imageUrl?.isEmpty ?? true),
+      errorMessage: entry.creationError ?? entry.resolutionError,
+      searchSummary: entry.semanticReviewReason,
+      categoryValidationMessage: entry.selectedCategory == null
+          ? entry.categoryReviewReason ??
+              'Falta elegir la familia correcta para este producto.'
+          : null,
+      brandWarning: rejectedBrand && entry.selectedBrand == null
+          ? entry.semanticReviewReason ??
+              'La marca sugerida no tiene evidencia de fabricante.'
+          : null,
+      siblingSuggestion: sibling == null
+          ? null
+          : 'La línea “${sibling.nameController.text}” comparte esta publicación. Puedes reutilizar familia y marca sin fusionar la variante.',
+      siblingLineId: sibling?.reviewId,
+      resolvedProductName: entry.linkedProduct?.name,
+      resolvedProductSku: entry.linkedProduct?.sku,
+      isSelected: entry.isSelected,
+    );
+  }
 
-  String? _bulkCreateBlockingMessage() {
+  OcrProductReviewStatus _productReviewStatus(_NewProductEntry entry) {
+    if (entry.linkedProduct != null) {
+      return OcrProductReviewStatus.linked;
+    }
+    if (entry.isAICleaningName ||
+        entry.isCheckingSimilar ||
+        entry.isLinkingExisting ||
+        entry.resolutionState == OcrProductResolutionState.searching) {
+      return OcrProductReviewStatus.searching;
+    }
+    if (entry.creationError != null ||
+        entry.resolutionState == OcrProductResolutionState.failed) {
+      return OcrProductReviewStatus.failed;
+    }
+    return switch (entry.resolutionState) {
+      OcrProductResolutionState.reviewRequired => OcrProductReviewStatus.ready,
+      OcrProductResolutionState.noCandidates =>
+        OcrProductReviewStatus.noCandidates,
+      OcrProductResolutionState.newProduct =>
+        OcrProductReviewStatus.newProductReady,
+      OcrProductResolutionState.unsearched =>
+        OcrProductReviewStatus.needsSearch,
+      OcrProductResolutionState.searching => OcrProductReviewStatus.searching,
+      OcrProductResolutionState.failed => OcrProductReviewStatus.failed,
+    };
+  }
+
+  _NewProductEntry? _newProductEntryForReviewId(String reviewId) {
+    for (final entry in _newProductEntries) {
+      if (entry.reviewId == reviewId) return entry;
+    }
+    return null;
+  }
+
+  _NewProductEntry? _semanticSiblingFor(_NewProductEntry entry) {
+    final itemId = _aliExpressItemIdForLine(entry.originalItem);
+    if (itemId == null || itemId.isEmpty) return null;
+    for (final candidate in _newProductEntries) {
+      if (identical(candidate, entry)) continue;
+      if (_aliExpressItemIdForLine(candidate.originalItem) == itemId) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  bool _canCreateBulkProducts() {
+    final isAliExpress =
+        _parsedData != null && _looksLikeAliExpressInvoice(_parsedData!);
     final selected =
         _newProductEntries.where((entry) => entry.isSelected).toList();
+    if (selected.isEmpty) return false;
+    final pendingCreation =
+        selected.where((entry) => entry.linkedProduct == null).toList();
+    if (pendingCreation.isEmpty) {
+      return !_isOpeningBulkCreate &&
+          !_creatingProducts &&
+          !_anyRowReservingSku;
+    }
+    // A confirmed «Nuevo» row without its reserved code is not creatable: the
+    // code is the database's to give, and creating without it is how a product
+    // ends up with an invented SKU.
+    if (pendingCreation.any((entry) =>
+        entry.requiresDuplicateReview &&
+        entry.resolutionState == OcrProductResolutionState.newProduct &&
+        !entry.hasReservedAliExpressSku)) {
+      return false;
+    }
+    return OcrProductResolutionPolicy.canCreate(
+      globalBusy:
+          _isOpeningBulkCreate || _creatingProducts || _anyRowReservingSku,
+      lines: pendingCreation.map(
+        (entry) => OcrProductResolutionSnapshot(
+          selected: entry.isSelected,
+          valid: isAliExpress ? entry.isValidWithoutSku : entry.isValid,
+          requiresDuplicateReview: entry.requiresDuplicateReview,
+          state: entry.resolutionState,
+          aiCleaning: entry.isAICleaningName,
+          matchChecking: entry.isCheckingSimilar ||
+              entry.isLinkingExisting ||
+              entry.isUploadingImage,
+        ),
+      ),
+    );
+  }
+
+  bool _bulkRowBusy(_NewProductEntry entry) =>
+      _creatingProducts ||
+      entry.isAICleaningName ||
+      entry.isCheckingSimilar ||
+      entry.isLinkingExisting ||
+      entry.isUploadingImage ||
+      // A row whose SKU is being reserved has an operation running against the
+      // shared AE sequence. Changing its decision mid-flight would either strand
+      // the number or paint it onto a row that no longer wants it.
+      entry.isReservingSku;
+
+  void _closeBulkReview() {
+    if (!mounted || _creatingProducts) return;
+    if (_anyRowReservingSku) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Espera a que termine de reservarse el SKU.'),
+        ),
+      );
+      return;
+    }
+    _bulkReviewGeneration++;
+    setState(() {
+      _showBulkCreate = false;
+      _isOpeningBulkCreate = false;
+      for (final entry in _newProductEntries) {
+        entry.cancelTransientReviewWork();
+      }
+    });
+  }
+
+  void _finishBulkReview() {
+    if (!mounted) return;
+    _bulkReviewGeneration++;
+    setState(() {
+      _removeOmittedLinesFromInvoice();
+      _showBulkCreate = false;
+      _isOpeningBulkCreate = false;
+    });
+  }
+
+  /// Omission is a review decision about the invoice line itself, not merely
+  /// about product creation. Commit it only when the operator finishes the
+  /// review so Back can still restore/reinclude the untouched batch.
+  void _removeOmittedLinesFromInvoice() {
+    final parsed = _parsedData;
+    if (parsed == null) return;
+    final omitted = _newProductEntries
+        .where((entry) => !entry.isSelected)
+        .toList(growable: false);
+    if (omitted.isEmpty) return;
+
+    final parsedItems = List<ParsedLineItem>.from(parsed.lineItems);
+    final baseItems = _baseParsedData == null
+        ? null
+        : List<ParsedLineItem>.from(_baseParsedData!.lineItems);
+    final indices = omitted
+        .map((entry) {
+          final current = parsedItems.indexOf(entry.originalItem);
+          return current >= 0 ? current : entry.sourceRowIndex;
+        })
+        .where((index) => index >= 0 && index < parsedItems.length)
+        .toSet()
+        .toList()
+      ..sort((left, right) => right.compareTo(left));
+
+    for (final index in indices) {
+      parsedItems.removeAt(index);
+      if (baseItems != null && index < baseItems.length) {
+        baseItems.removeAt(index);
+      }
+      _skuControllers.remove(index)?.dispose();
+    }
+    for (final entry in omitted) {
+      _newProductEntries.remove(entry);
+      entry.dispose();
+    }
+    _parsedData = parsed.copyWith(lineItems: parsedItems);
+    if (_baseParsedData != null && baseItems != null) {
+      _baseParsedData = _baseParsedData!.copyWith(lineItems: baseItems);
+    }
+  }
+
+  String? _bulkCreateBlockingMessage() {
+    final selected = _newProductEntries
+        .where((entry) => entry.isSelected && entry.linkedProduct == null)
+        .toList();
     if (_creatingProducts) return null;
+    if (selected.any((entry) => entry.isReservingSku)) {
+      return 'Reservando el SKU de una fila. Espera a que termine.';
+    }
     if (selected.any((entry) =>
         entry.isAICleaningName ||
         entry.isCheckingSimilar ||
         entry.isLinkingExisting ||
         entry.isUploadingImage)) {
       return 'Espera a que termine el análisis o la carga de imágenes.';
+    }
+    final withoutReservedSku = selected
+        .where((entry) =>
+            entry.requiresDuplicateReview &&
+            entry.resolutionState == OcrProductResolutionState.newProduct &&
+            !entry.hasReservedAliExpressSku)
+        .length;
+    if (withoutReservedSku > 0) {
+      return 'Falta el SKU reservado en $withoutReservedSku '
+          'fila${withoutReservedSku == 1 ? '' : 's'}. Reintenta la reserva.';
     }
     final unresolved = selected
         .where(
@@ -3002,144 +2762,19 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     if (unresolved > 0) {
       return 'Revisa $unresolved fila${unresolved == 1 ? '' : 's'}: vincula un producto existente o confirma que es nuevo.';
     }
-    final incomplete = selected.where((entry) => !entry.isValid).length;
+    final isAliExpress =
+        _parsedData != null && _looksLikeAliExpressInvoice(_parsedData!);
+    final incomplete = selected
+        .where((entry) =>
+            !(isAliExpress ? entry.isValidWithoutSku : entry.isValid))
+        .length;
     if (incomplete > 0) {
-      return 'Completa SKU, nombre, categoría, costo y precio en $incomplete fila${incomplete == 1 ? '' : 's'}.';
+      final fields = isAliExpress
+          ? 'nombre, categoría, costo y precio'
+          : 'SKU, nombre, categoría, costo y precio';
+      return 'Completa $fields en $incomplete fila${incomplete == 1 ? '' : 's'}.';
     }
     return null;
-  }
-
-  Widget _buildSimilarProductCell(_NewProductEntry entry) {
-    if (entry.isLinkingExisting) {
-      return const Row(
-        children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          SizedBox(width: 8),
-          Text('Guardando vínculo...', style: TextStyle(fontSize: 11)),
-        ],
-      );
-    }
-
-    if (entry.creationError != null) {
-      return Tooltip(
-        message: entry.creationError!,
-        child: Row(
-          children: [
-            Icon(Icons.error_outline,
-                size: 15, color: Theme.of(context).colorScheme.error),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                'Error al crear · reintentar',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 11, color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (entry.isCheckingSimilar ||
-        entry.resolutionState == OcrProductResolutionState.searching) {
-      return Row(
-        children: [
-          const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Buscando...',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-          ),
-        ],
-      );
-    }
-
-    if (entry.resolutionState == OcrProductResolutionState.newProduct) {
-      return Tooltip(
-        message: 'Revisión completa. Pulsa para buscar nuevamente.',
-        child: InkWell(
-          onTap: entry.isSelected && !_bulkCreateBusy()
-              ? () => _checkSimilarProductsForNewEntries(entry: entry)
-              : null,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-            decoration: BoxDecoration(
-              color: VinabikeThemeRoles.of(context).success.container,
-              border: Border.all(color: Colors.green.shade200),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.add_box_outlined,
-                    size: 15,
-                    color: VinabikeThemeRoles.of(context).success.onContainer),
-                const SizedBox(width: 6),
-                Text(
-                  'Nuevo',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.green.shade900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (entry.resolutionState == OcrProductResolutionState.noCandidates) {
-      return FilledButton.tonalIcon(
-        onPressed: entry.isSelected && !_bulkCreateBusy()
-            ? () => setState(() {
-                  entry.markNewProduct();
-                  _similarProductMessage =
-                      'Producto nuevo confirmado manualmente.';
-                })
-            : null,
-        icon: const Icon(Icons.add_box_outlined, size: 14),
-        label: const Text('Confirmar nuevo'),
-        style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          textStyle: const TextStyle(fontSize: 12),
-        ),
-      );
-    }
-
-    if (entry.resolutionState == OcrProductResolutionState.failed) {
-      return OutlinedButton.icon(
-        onPressed: entry.isSelected && !_bulkCreateBusy()
-            ? () => _checkSimilarProductsForNewEntries(entry: entry)
-            : null,
-        icon: const Icon(Icons.refresh, size: 14),
-        label: const Text('Reintentar'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.red.shade700,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          textStyle: const TextStyle(fontSize: 12),
-        ),
-      );
-    }
-
-    return ProductDuplicateSummaryButton(
-      candidates: entry.similarCandidates,
-      isEnabled: entry.isSelected && !_bulkCreateBusy(),
-      onPressed: () => entry.similarCandidates.isEmpty
-          ? _checkSimilarProductsForNewEntries(entry: entry)
-          : _showSimilarProductsDialog(entry),
-    );
   }
 
   /// Run the AI cleaner over noisy supplier titles (e.g. AliExpress) and
@@ -3147,9 +2782,14 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   /// suggested category/brand. Skips rows the user has already edited.
   /// Concurrency is capped to avoid hammering the Gemini proxy.
   Future<void> _aiCleanProductNamesForEntries({
+    required int reviewGeneration,
     int concurrency = 3,
+    List<_NewProductEntry>? targetEntries,
   }) async {
-    if (_newProductEntries.isEmpty) return;
+    final entries = targetEntries ?? _newProductEntries;
+    if (entries.isEmpty || !_ownsBulkReview(reviewGeneration)) {
+      return;
+    }
 
     // Lightweight normalizer: lowercase, strip accents, drop non-alphanumeric.
     String norm(String value) {
@@ -3182,10 +2822,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       ],
       'valvula tubeless': [
         'valvulas tubeless',
-        'valvula',
-        'valvulas',
         'valves tubeless',
       ],
+      'tee': ['potencia', 'potencias', 'stem', 'stems'],
       'cassette': ['cassettes', 'piñon', 'pinones', 'cassete'],
       'rotores': ['rotor', 'discos freno', 'disco freno'],
       'camaras': ['camara', 'tubos', 'tubo'],
@@ -3397,11 +3036,13 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       'llanta': 'Llantas',
       'camara': 'Cámaras',
       'tubeless': 'Tubeless',
-      'valvula': 'Válvula Tubeless',
       'portacaramagiola': 'Porta Caramagiola',
       'portabotella': 'Porta Caramagiola',
       'portabidon': 'Porta Caramagiola',
       'tija': 'Tija',
+      'tee': 'Tee',
+      'potencia': 'Tee',
+      'stem': 'Tee',
       'shifter': 'Shifters',
       'casco': 'Cascos',
       'guante': 'Guantes',
@@ -3436,7 +3077,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       return (value == null || value.isEmpty) ? null : value;
     }
 
-    for (final entry in _newProductEntries) {
+    for (final entry in entries) {
+      if (!_ownsBulkReview(reviewGeneration)) return;
       if (entry.nameUserEdited) continue;
       final raw = entry.originalItem.rawRowText;
       final isAddonCleaned = raw != null &&
@@ -3451,46 +3093,56 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       if (addonBrand != null) entry.aiSuggestedBrandName = addonBrand;
       if (addonModel != null) entry.aiSuggestedModel = addonModel;
       entry.nameWasAICleaned = true;
-      if (entry.selectedBrand == null && addonBrand != null) {
+      if (!entry.brandUserEdited &&
+          entry.selectedBrand == null &&
+          addonBrand != null) {
         final match = resolveBrand(addonBrand);
         if (match != null) entry.selectedBrand = match;
       }
-      if (entry.selectedCategory == null && addonCategory != null) {
+      if (!entry.categoryUserEdited &&
+          entry.selectedCategory == null &&
+          addonCategory != null) {
         final match = resolveCategory(addonCategory);
         if (match != null) entry.selectedCategory = match;
       }
       // Name-scan fallbacks: if the AI didn't fill or we couldn't resolve,
       // try to extract brand and category directly from the cleaned name.
-      if (entry.selectedBrand == null) {
+      if (!entry.brandUserEdited && entry.selectedBrand == null) {
         final viaName = scanBrandInName(entry.nameController.text) ??
             scanBrandInName(entry.originalNoisyTitle);
         if (viaName != null) entry.selectedBrand = viaName;
       }
-      if (entry.selectedCategory == null) {
+      if (!entry.categoryUserEdited && entry.selectedCategory == null) {
         final viaName = scanCategoryInName(entry.nameController.text) ??
             scanCategoryInName(entry.originalNoisyTitle);
         if (viaName != null) entry.selectedCategory = viaName;
       }
     }
 
-    for (final entry in _newProductEntries) {
+    for (final entry in entries) {
+      if (!_ownsBulkReview(reviewGeneration)) return;
       if (entry.nameUserEdited) continue;
       if (entry.nameWasAICleaned) continue; // addon already cleaned this row
       entry.isAICleaningName = true;
     }
-    if (mounted) setState(() {});
+    if (_ownsBulkReview(reviewGeneration)) setState(() {});
 
-    final pending = _newProductEntries
-        .where((e) => !e.nameUserEdited && !e.nameWasAICleaned)
-        .toList();
+    final pending =
+        entries.where((e) => !e.nameUserEdited && !e.nameWasAICleaned).toList();
     if (pending.isEmpty) {
-      // Nothing left for Gemini to do; just refresh the UI.
-      if (mounted) setState(() {});
+      // The add-on may already have cleaned every title, but its free-form
+      // category/brand suggestions still need the same deterministic catalog
+      // owner used by native OCR rows.
+      if (!_ownsBulkReview(reviewGeneration)) return;
+      _applyCanonicalProductSemantics(targetEntries: entries);
+      if (_ownsBulkReview(reviewGeneration)) setState(() {});
       return;
     }
     final supplierName = _ocrSupplierName ?? widget.supplierName;
 
     Future<void> processOne(_NewProductEntry entry) async {
+      final revision = entry.resolutionRevision;
+      final sourceImageUrl = entry.imageUrl;
       try {
         final raw =
             (entry.originalNoisyTitle ?? entry.nameController.text).trim();
@@ -3498,32 +3150,57 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           entry.isAICleaningName = false;
           return;
         }
-        final result = await _aiAssistantService.cleanProductTitleFromImage(
-          rawTitle: raw,
-          imageBytes: entry.imageBytes,
-          imageUrl: entry.imageUrl,
-          supplierName: supplierName,
-        );
-        if (!mounted) return;
+        await _ensureEntryImageBytes(entry);
+        if (!_ownsBulkReview(reviewGeneration) ||
+            !_ownsNewProductResolution(entry, revision) ||
+            entry.imageUrl != sourceImageUrl) {
+          return;
+        }
+        final result = await _aiAssistantService
+            .cleanProductTitleFromImage(
+              rawTitle: raw,
+              imageBytes: entry.imageBytes,
+              imageUrl: entry.imageUrl,
+              supplierName: supplierName,
+            )
+            .timeout(
+              const Duration(seconds: 20),
+              onTimeout: () => throw TimeoutException(
+                'La identificación por IA no respondió a tiempo.',
+              ),
+            );
+        if (!_ownsBulkReview(reviewGeneration) ||
+            !_ownsNewProductResolution(entry, revision) ||
+            entry.imageUrl != sourceImageUrl) {
+          return;
+        }
         if (result != null) {
+          entry.aiVisualAnalysis =
+              result.visualAnalysis ?? entry.aiVisualAnalysis;
+          entry.aiSuggestedComponentType = result.componentType;
           entry.aiSuggestedCategoryName = result.categoryName;
           entry.aiSuggestedBrandName = result.brand;
           entry.aiSuggestedModel = result.model;
+          entry.aiSuggestionConfidence = result.confidence;
           entry.applyAICleanedName(result.cleanedName);
-          if (entry.selectedBrand == null && result.brand != null) {
+          if (!entry.brandUserEdited &&
+              entry.selectedBrand == null &&
+              result.brand != null) {
             final match = resolveBrand(result.brand);
             if (match != null) entry.selectedBrand = match;
           }
-          if (entry.selectedCategory == null && result.categoryName != null) {
+          if (!entry.categoryUserEdited &&
+              entry.selectedCategory == null &&
+              result.categoryName != null) {
             final match = resolveCategory(result.categoryName);
             if (match != null) entry.selectedCategory = match;
           }
-          if (entry.selectedBrand == null) {
+          if (!entry.brandUserEdited && entry.selectedBrand == null) {
             final viaName = scanBrandInName(entry.nameController.text) ??
                 scanBrandInName(entry.originalNoisyTitle);
             if (viaName != null) entry.selectedBrand = viaName;
           }
-          if (entry.selectedCategory == null) {
+          if (!entry.categoryUserEdited && entry.selectedCategory == null) {
             final viaName = scanCategoryInName(entry.nameController.text) ??
                 scanCategoryInName(entry.originalNoisyTitle);
             if (viaName != null) entry.selectedCategory = viaName;
@@ -3532,55 +3209,307 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       } catch (e) {
         debugPrint('⚠️ [OCR] AI clean name failed for row: $e');
       } finally {
-        entry.isAICleaningName = false;
-        if (mounted) setState(() {});
+        if (_newProductEntries.contains(entry)) {
+          entry.isAICleaningName = false;
+        }
+        if (_ownsBulkReview(reviewGeneration)) setState(() {});
       }
     }
 
     final iterator = pending.iterator;
     final workers = List.generate(concurrency, (_) async {
       while (iterator.moveNext()) {
+        if (!_ownsBulkReview(reviewGeneration)) return;
         await processOne(iterator.current);
       }
     });
     await Future.wait(workers);
+    if (!_ownsBulkReview(reviewGeneration)) return;
+    _applyCanonicalProductSemantics(targetEntries: entries);
+    if (_ownsBulkReview(reviewGeneration)) setState(() {});
+  }
+
+  void _applyCanonicalProductSemantics({
+    List<_NewProductEntry>? targetEntries,
+  }) {
+    final entries = targetEntries ?? _newProductEntries;
+    if (entries.isEmpty || _categories.isEmpty) return;
+
+    final resolver = ProductCatalogSemanticResolver(
+      categories: _categories,
+      brands: _brands,
+    );
+    final entriesByRowId = <String, _NewProductEntry>{};
+    final inputs = <ProductCatalogSemanticInput>[];
+    for (var index = 0; index < entries.length; index++) {
+      final entry = entries[index];
+      final rowId = 'ocr-row-$index';
+      final semanticTitles = <String>{
+        entry.originalItem.description.trim(),
+        if (entry.originalNoisyTitle?.trim().isNotEmpty == true)
+          entry.originalNoisyTitle!.trim(),
+      }..removeWhere((title) => title.isEmpty);
+      entriesByRowId[rowId] = entry;
+      inputs.add(ProductCatalogSemanticInput(
+        rowId: rowId,
+        rawTitle: semanticTitles.join(' | '),
+        supplierId: _supplierIdForNewProducts ?? widget.supplierId,
+        listingId: _aliExpressItemIdForLine(entry.originalItem),
+        variantKey: _aliExpressVariantKeyForLine(entry.originalItem),
+        variantLabel: _aliExpressVariantLabelForLine(entry.originalItem),
+        componentTypeHint: entry.aiSuggestedComponentType,
+        categoryHint: entry.aiSuggestedCategoryName,
+        brandHint: entry.aiSuggestedBrandName,
+        hintConfidence: entry.aiSuggestionConfidence,
+      ));
+    }
+
+    final objectResolver = ProductCategoryResolver(categories: _categories);
+
+    for (final resolution in resolver.resolveAll(inputs)) {
+      final entry = entriesByRowId[resolution.rowId];
+      if (entry == null) continue;
+      entry.semanticFamily = resolution.family;
+      entry.semanticConfidence = resolution.confidence;
+      entry.semanticReviewReason = resolution.reviewReason;
+      entry.semanticEvidence = resolution.evidence;
+
+      final hasDeterministicFamily =
+          resolution.family != ProductCatalogSemanticResolver.unknownFamily;
+      final rejectedCategoryHint = resolution.evidence.any(
+        (item) =>
+            item.kind ==
+                ProductCatalogSemanticEvidenceKind.rejectedCategoryHint ||
+            item.kind == ProductCatalogSemanticEvidenceKind.unresolvedCategory,
+      );
+      // What the thing IS decides where it goes, before any hint does.
+      //
+      // The old order let a hint derived from the words win, and the words of a
+      // bracket name the system it serves. Object-first resolution answers from
+      // the photo and the head noun, refuses a parent node, and refuses
+      // outright when the two disagree — which is why a `Herradura` can no
+      // longer be filed under `Frenos`. It only steps aside where it has
+      // nothing to say, and there the catalog resolver still answers.
+      final objectCategory = _resolveObjectFirstCategory(entry, objectResolver);
+      if (!entry.categoryUserEdited && objectCategory != null) {
+        entry.categoryReviewReason = objectCategory.reviewReason;
+        if (objectCategory.isResolved) {
+          entry.selectedCategory = objectCategory.category;
+          entry.aiSuggestedCategoryName = objectCategory.category?.fullPath;
+          entry.categoryEvidence =
+              List<String>.unmodifiable(objectCategory.evidence);
+          continue;
+        }
+        if (objectCategory.refusal ==
+            ProductCategoryRefusal.conflictingEvidence) {
+          // Fail closed. A plausible leaf chosen while the photo and the title
+          // name different objects is the exact wrong answer this refuses.
+          entry.selectedCategory = null;
+          entry.aiSuggestedCategoryName = null;
+          entry.categoryEvidence =
+              List<String>.unmodifiable(objectCategory.evidence);
+          continue;
+        }
+      }
+      if (!entry.categoryUserEdited &&
+          (resolution.category != null ||
+              hasDeterministicFamily ||
+              rejectedCategoryHint)) {
+        entry.selectedCategory = resolution.category;
+        // The free-form AI hint is no longer authoritative once the catalog
+        // resolver has accepted or rejected it.
+        entry.aiSuggestedCategoryName = resolution.category?.fullPath;
+      }
+      final hasExplicitBrandEvidence = resolution.evidence.any(
+        (item) => item.kind == ProductCatalogSemanticEvidenceKind.explicitBrand,
+      );
+      final rejectedBrandHint = resolution.evidence.any(
+        (item) =>
+            item.kind == ProductCatalogSemanticEvidenceKind.rejectedBrandHint ||
+            item.kind == ProductCatalogSemanticEvidenceKind.unresolvedBrand,
+      );
+      if (!entry.brandUserEdited &&
+          (resolution.brand != null ||
+              hasExplicitBrandEvidence ||
+              rejectedBrandHint)) {
+        // A missing explicit brand (for example IXF not yet present in the
+        // tenant catalog) is a review state, never permission to keep a
+        // conflicting compatibility hint such as Shimano.
+        entry.selectedBrand = resolution.brand;
+        entry.aiSuggestedBrandName = resolution.brand?.name;
+      }
+
+      if (!entry.nameUserEdited &&
+          resolution.family == ProductCatalogSemanticResolver.stemFamily) {
+        final canonicalName =
+            ProductCatalogSemanticResolver.canonicalizeDisplayName(
+          name: entry.nameController.text,
+          family: resolution.family,
+        );
+        entry.applyAICleanedName(canonicalName);
+      }
+    }
+  }
+
+  /// Reads one row as an object, then places it.
+  ///
+  /// The photo evidence is the reading the title cleaner already paid for; no
+  /// extra model call is made here. When the row has no usable photo the
+  /// resolver still runs on the words alone — it simply has one fewer witness.
+  ProductCategoryResolution? _resolveObjectFirstCategory(
+    _NewProductEntry entry,
+    ProductCategoryResolver objectResolver,
+  ) {
+    if (_categories.isEmpty) return null;
+    final title = entry.nameController.text.trim();
+    final noisyTitle = entry.originalNoisyTitle?.trim() ?? '';
+    final sourceTitle = entry.originalItem.description.trim();
+    final name = title.isNotEmpty ? title : sourceTitle;
+    if (name.isEmpty) return null;
+
+    var profile = ProductIdentityExtractor.extract(
+      ProductIdentityInput(
+        name: name,
+        description: noisyTitle == name ? sourceTitle : noisyTitle,
+        knownBrands: _brands.map((brand) => brand.name),
+      ),
+    );
+    final analysis = entry.aiVisualAnalysis;
+    if (analysis != null) {
+      final reading = ProductVisualReadingService.fromAnalysis(analysis);
+      if (reading.isUseful) {
+        profile = profile.withVisualReading(
+          visualFamilyId: reading.familyId,
+          visualTerms: reading.terms,
+          visualConfidence: reading.confidence,
+        );
+      }
+    }
+    return objectResolver.resolve(profile);
+  }
+
+  String? _duplicateMatcherCategoryName(_NewProductEntry entry) {
+    final selected = entry.selectedCategory;
+    if (selected != null) return selected.fullPath;
+    if (entry.categoryUserEdited) return null;
+    final hintWasRejected = entry.semanticEvidence.any(
+      (evidence) =>
+          evidence.kind ==
+              ProductCatalogSemanticEvidenceKind.rejectedCategoryHint ||
+          evidence.kind ==
+              ProductCatalogSemanticEvidenceKind.unresolvedCategory,
+    );
+    return hintWasRejected ? null : entry.aiSuggestedCategoryName;
+  }
+
+  String? _duplicateMatcherBrandName(_NewProductEntry entry) {
+    final selected = entry.selectedBrand;
+    if (selected != null) return selected.name;
+    if (entry.brandUserEdited) return null;
+
+    // Explicit source evidence (for example IXF printed in the title) may be
+    // useful to the matcher even when that brand has not yet been added to the
+    // tenant catalog. It must outrank a rejected AI compatibility guess.
+    for (final evidence in entry.semanticEvidence) {
+      if (evidence.kind == ProductCatalogSemanticEvidenceKind.explicitBrand) {
+        final explicit = evidence.detail.trim();
+        if (explicit.isNotEmpty) return explicit;
+      }
+    }
+    final hintWasRejected = entry.semanticEvidence.any(
+      (evidence) =>
+          evidence.kind ==
+              ProductCatalogSemanticEvidenceKind.rejectedBrandHint ||
+          evidence.kind == ProductCatalogSemanticEvidenceKind.unresolvedBrand,
+    );
+    return hintWasRejected ? null : entry.aiSuggestedBrandName;
+  }
+
+  /// One matcher per review session, holding the catalog identity index.
+  ///
+  /// The index is what makes the second and later lines of an invoice cheap:
+  /// the catalog is analysed once, not once per line. Building a matcher per
+  /// line would throw that away, so both entry points come through here.
+  ///
+  /// The tenant's real brands and category tree are handed over because the
+  /// matcher cannot invent them: `IXF` is printed on the invoice but has no
+  /// `product_brands` row, and only the tree knows that `Corta Cadena` is a
+  /// child of `Herramientas`.
+  ProductDuplicateMatcherService _buildDuplicateMatcher(
+    inv_service.InventoryService inventoryService,
+  ) {
+    return ProductDuplicateMatcherService(
+      inventoryService: inventoryService,
+      aiAssistantService: _aiAssistantService,
+      knownBrands: _brands.map((brand) => brand.name),
+      categoryAncestry:
+          ProductCatalogIdentityIndex.buildCategoryAncestry(_categories),
+      // Product review is a read path. Missing catalog fingerprints can be
+      // backfilled by their maintenance owner; an operator waiting on one
+      // invoice must not pay for hidden product writes.
+      persistComputedImageFingerprints: false,
+    );
   }
 
   Future<void> _checkSimilarProductsForNewEntries({
     _NewProductEntry? entry,
+    List<_NewProductEntry>? targetEntries,
     bool autoTriggered = false,
+    required int reviewGeneration,
+    inv_service.InventoryService? preparedInventoryService,
+    List<inv_models.Product>? preparedProducts,
+    ProductDuplicateMatcherService? preparedMatcher,
   }) async {
-    if (!autoTriggered && _bulkCreateBusy()) return;
-    final entries = entry == null
-        ? _newProductEntries.where((e) => e.isSelected).toList()
-        : [entry];
+    if (!_ownsBulkReview(reviewGeneration)) return;
+    if (_creatingProducts || _isOpeningBulkCreate) {
+      return;
+    }
+    final requestedEntries =
+        targetEntries ?? (entry == null ? _newProductEntries : [entry]);
+    final entries = requestedEntries
+        .where(_newProductEntries.contains)
+        .where(_needsSimilaritySearch)
+        .toList(growable: false);
     if (entries.isEmpty) return;
-
     setState(() {
-      _isCheckingSimilarProducts = entry == null;
-      _similarProductMessage = autoTriggered
-          ? 'Plantilla AliExpress: buscando parecidos antes de crear productos.'
-          : 'Buscando productos parecidos...';
       for (final current in entries) {
         current.markSearching();
       }
     });
 
     try {
-      final inventoryService = context.read<inv_service.InventoryService>();
-      final allProducts = await inventoryService.getProducts();
-      final duplicateMatcher = ProductDuplicateMatcherService(
-        inventoryService: inventoryService,
-        aiAssistantService: _aiAssistantService,
-      );
+      final inventoryService = preparedInventoryService ??
+          context.read<inv_service.InventoryService>();
+      final allProducts =
+          preparedProducts ?? await inventoryService.getProducts();
+      if (!_ownsBulkReview(reviewGeneration)) return;
+      final duplicateMatcher =
+          preparedMatcher ?? _buildDuplicateMatcher(inventoryService);
 
-      var flagged = 0;
-      var unresolved = 0;
-      var autoLinked = 0;
+      // The title cleaner already sent this photo to the model and asked, in
+      // the same call, what object it shows. Handing that reading over is the
+      // difference between one vision call per image and two.
       for (final current in entries) {
+        final analysis = current.aiVisualAnalysis;
+        if (analysis == null) continue;
+        duplicateMatcher.primeVisualReading(
+          imageUrl: current.imageUrl,
+          imageBytes: current.imageBytes,
+          analysis: analysis,
+        );
+      }
+
+      Future<void> processOne(_NewProductEntry current) async {
         final revision = current.resolutionRevision;
         try {
           await _ensureEntryImageBytes(current);
+          if (!_ownsNewProductResolution(
+            current,
+            revision,
+            reviewGeneration: reviewGeneration,
+          )) {
+            return;
+          }
           inv_models.Product? remembered;
           try {
             remembered = await _resolveRememberedProductAlias(
@@ -3594,87 +3523,96 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             debugPrint(
                 'Could not resolve remembered supplier alias: $aliasError');
           }
+          if (!_ownsNewProductResolution(
+            current,
+            revision,
+            reviewGeneration: reviewGeneration,
+          )) {
+            return;
+          }
           if (remembered != null) {
-            final linked =
-                await _useExistingProductForEntry(current, remembered);
-            if (linked) {
-              autoLinked++;
-              continue;
+            final linked = await _useExistingProductForEntry(
+              current,
+              remembered,
+              expectedRevision: revision,
+              reviewGeneration: reviewGeneration,
+              persistAlias: false,
+            );
+            if (linked) return;
+            if (!_ownsNewProductResolution(
+              current,
+              revision,
+              reviewGeneration: reviewGeneration,
+            )) {
+              return;
             }
           }
           final candidates = await duplicateMatcher.findCandidates(
-            probe: ProductDuplicateProbe(
-              name: current.nameController.text,
-              description: current.originalItem.description,
-              sku: _costsIncludeIva && current.supplierCode.isNotEmpty
-                  ? current.supplierCode
-                  : current.skuController.text.trim().isNotEmpty
-                      ? current.skuController.text.trim()
-                      : current.originalItem.sku,
-              model: current.aiSuggestedModel,
-              rawText: current.originalItem.rawRowText,
-              categoryName: current.selectedCategory?.name ??
-                  current.aiSuggestedCategoryName,
-              brandName:
-                  current.selectedBrand?.name ?? current.aiSuggestedBrandName,
-              supplierId: _supplierIdForNewProducts ?? widget.supplierId,
-              supplierName: _ocrSupplierName ?? widget.supplierName,
-              imageUrl: current.imageUrl,
-              imageBytes: current.imageBytes,
-              imageFileName: current.imageFileName,
-              price: current.price,
-              cost: current.cost,
-            ),
+            probe: _duplicateProbeFor(current),
             products: allProducts,
           );
           // Ignore a stale response if the worker edited identity fields while
           // the matcher was running. The row returns to "Buscar" instead.
-          if (current.resolutionRevision != revision) continue;
+          if (!_ownsNewProductResolution(
+            current,
+            revision,
+            reviewGeneration: reviewGeneration,
+          )) {
+            return;
+          }
           if (candidates.isEmpty) {
             current.markNoCandidates();
           } else {
             current.markNeedsReview(candidates);
-            flagged++;
           }
         } catch (error) {
-          if (current.resolutionRevision == revision) {
+          if (_ownsNewProductResolution(
+            current,
+            revision,
+            reviewGeneration: reviewGeneration,
+          )) {
             current.markResolutionFailed(error);
-            unresolved++;
           }
           debugPrint('Error checking OCR row for duplicates: $error');
         }
-        if (mounted) setState(() {});
+        if (_ownsBulkReview(reviewGeneration)) setState(() {});
       }
 
-      if (!mounted) return;
-      setState(() {
-        _similarProductMessage = unresolved > 0
-            ? 'No se pudieron revisar $unresolved fila${unresolved == 1 ? '' : 's'}. Reintenta antes de crear.'
-            : flagged == 0
-                ? autoLinked == 0
-                    ? 'Revisión completa: confirma las filas sin coincidencias antes de crear productos nuevos.'
-                    : '$autoLinked producto${autoLinked == 1 ? '' : 's'} vinculado${autoLinked == 1 ? '' : 's'} por una publicación ya confirmada; confirma las filas restantes.'
-                : 'Hay $flagged fila${flagged == 1 ? '' : 's'} por confirmar. Vincula el existente o confirma producto nuevo.';
-      });
-
-      if (entry != null && entry.similarCandidates.isNotEmpty) {
-        await _showSimilarProductsDialog(entry);
-      }
+      // A whole invoice used to await every row serially. Three workers keep
+      // network/AI pressure bounded while allowing independent rows to
+      // publish results as soon as they finish.
+      final iterator = entries.iterator;
+      final workerCount = math.min(3, entries.length);
+      await Future.wait(List.generate(workerCount, (_) async {
+        while (iterator.moveNext()) {
+          if (!_ownsBulkReview(reviewGeneration)) return;
+          await processOne(iterator.current);
+        }
+      }));
     } catch (e) {
       debugPrint('Error checking OCR similar products: $e');
-      if (!mounted) return;
+      if (!_ownsBulkReview(reviewGeneration)) return;
       setState(() {
-        _similarProductMessage =
-            'No se pudo completar la búsqueda de parecidos.';
         for (final current in entries) {
-          current.markResolutionFailed(e);
+          if (_newProductEntries.contains(current) &&
+              current.isCheckingSimilar &&
+              current.resolutionState == OcrProductResolutionState.searching) {
+            current.markResolutionFailed(e);
+          }
         }
       });
-    } finally {
-      if (mounted) {
-        setState(() => _isCheckingSimilarProducts = false);
-      }
     }
+  }
+
+  bool _ownsNewProductResolution(
+    _NewProductEntry entry,
+    int revision, {
+    int? reviewGeneration,
+  }) {
+    return mounted &&
+        _newProductEntries.contains(entry) &&
+        entry.resolutionRevision == revision &&
+        (reviewGeneration == null || _ownsBulkReview(reviewGeneration));
   }
 
   String _normalizeSimilarityText(String value) {
@@ -3726,81 +3664,60 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     return inventoryService.getProductById(remembered.id);
   }
 
-  Future<void> _showSimilarProductsDialog(_NewProductEntry entry) async {
-    var confirmedNewProduct = false;
-    final selected = await showDialog<inv_models.Product>(
-      context: context,
-      builder: (context) => ProductDuplicateReviewDialog(
-        rows: [
-          ProductDuplicateReviewRow(
-            title: entry.nameController.text,
-            subtitle: entry.originalItem.description,
-            imageUrl: entry.imageUrl,
-            badges: [
-              if (entry.sku.isNotEmpty) entry.sku,
-              if ((entry.selectedCategory?.name ?? '').isNotEmpty)
-                entry.selectedCategory!.name,
-              if ((entry.selectedBrand?.name ?? '').isNotEmpty)
-                entry.selectedBrand!.name,
-              if ((entry.aiSuggestedModel ?? '').isNotEmpty)
-                entry.aiSuggestedModel!,
-            ],
-            candidates: entry.similarCandidates,
-            onCandidateSelected: (product) =>
-                Navigator.of(context).pop(product),
-          ),
-        ],
-        title: 'Productos parecidos',
-        subtitle: entry.nameController.text,
-        emptyActionLabel: 'Crear como producto nuevo',
-        onEmptyAction: () {
-          confirmedNewProduct = true;
-          Navigator.of(context).pop();
-        },
-      ),
-    );
-
-    if (selected != null) {
-      await _useExistingProductForEntry(entry, selected);
-    } else if (confirmedNewProduct && mounted) {
-      setState(() {
-        entry.markNewProduct();
-        _similarProductMessage =
-            'Producto nuevo confirmado. Completa sus datos para crearlo.';
-      });
-    }
-  }
-
   Future<bool> _useExistingProductForEntry(
     _NewProductEntry entry,
-    inv_models.Product product,
-  ) async {
+    inv_models.Product product, {
+    int? expectedRevision,
+    int? reviewGeneration,
+    bool persistAlias = true,
+  }) async {
+    final revision = expectedRevision ?? entry.resolutionRevision;
     final productId = product.id;
-    if (productId == null || _parsedData == null) return false;
+    if (productId == null ||
+        _parsedData == null ||
+        !_ownsNewProductResolution(
+          entry,
+          revision,
+          reviewGeneration: reviewGeneration,
+        )) {
+      return false;
+    }
 
     // 2026-08-05: aprender SIEMPRE, no sólo tras una revisión de duplicados.
     // Con la condición anterior, la primera creación/vínculo de cada producto
     // jamás guardaba su listing y la tabla de aliases llevaba 0 filas tras
     // ~10 facturas: cada re-importación volvía a adivinar desde cero. El
     // helper ya se autoprotege: sin itemId y variante reales no persiste.
-    {
-      if (mounted) setState(() => entry.isLinkingExisting = true);
+    if (persistAlias) {
+      setState(() => entry.isLinkingExisting = true);
       try {
         await _rememberAliExpressAlias(entry, productId: productId);
       } catch (error) {
         debugPrint('Error remembering AliExpress product alias: $error');
-        if (mounted) {
+        if (_ownsNewProductResolution(
+          entry,
+          revision,
+          reviewGeneration: reviewGeneration,
+        )) {
+          if (!mounted) return false;
           setState(() => entry.isLinkingExisting = false);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
                   'Producto vinculado para esta factura, pero no se pudo guardar la publicación para el próximo ingreso. ($error)'),
-              backgroundColor: Colors.orange,
+              backgroundColor: VinabikeThemeRoles.of(context).warning.accent,
             ),
           );
         }
       }
-      if (mounted) setState(() => entry.isLinkingExisting = false);
+      if (!_ownsNewProductResolution(
+        entry,
+        revision,
+        reviewGeneration: reviewGeneration,
+      )) {
+        return false;
+      }
+      setState(() => entry.isLinkingExisting = false);
     }
 
     final oldItem = entry.originalItem;
@@ -3814,8 +3731,17 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       sku: existingSku.isNotEmpty ? existingSku : oldItem.sku,
     );
 
-    final rowIndex = _parsedData!.lineItems.indexOf(oldItem);
-    final updatedItems = _parsedData!.lineItems.map((item) {
+    if (!_ownsNewProductResolution(
+          entry,
+          revision,
+          reviewGeneration: reviewGeneration,
+        ) ||
+        _parsedData == null) {
+      return false;
+    }
+    final parsedData = _parsedData!;
+    final rowIndex = parsedData.lineItems.indexOf(oldItem);
+    final updatedItems = parsedData.lineItems.map((item) {
       return identical(item, oldItem) || item == oldItem ? updatedItem : item;
     }).toList();
 
@@ -3823,8 +3749,15 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       _skuControllers[rowIndex]?.text = updatedItem.sku ?? '';
     }
 
+    if (!_ownsNewProductResolution(
+      entry,
+      revision,
+      reviewGeneration: reviewGeneration,
+    )) {
+      return false;
+    }
     setState(() {
-      _parsedData = _parsedData!.copyWith(lineItems: updatedItems);
+      _parsedData = parsedData.copyWith(lineItems: updatedItems);
       if (_baseParsedData != null &&
           rowIndex >= 0 &&
           rowIndex < _baseParsedData!.lineItems.length) {
@@ -3832,15 +3765,50 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         baseItems[rowIndex] = updatedItem;
         _baseParsedData = _baseParsedData!.copyWith(lineItems: baseItems);
       }
-      _newProductEntries.remove(entry);
-      entry.dispose();
-      _similarProductMessage =
-          'Producto existente seleccionado: ${product.name}. Esa fila salió de la lista de creación.';
-      if (_newProductEntries.isEmpty) {
-        _showBulkCreate = false;
-      }
+      entry.markLinkedProduct(product);
+      // The row now shows the code of the product it points at. Its own
+      // reservation is kept, not released: going back to «Nuevo» must restore
+      // the same number without spending another one.
+      entry.syncSkuField();
     });
     return true;
+  }
+
+  void _changeProductDecision(_NewProductEntry entry) {
+    if (!mounted || _parsedData == null) return;
+    if (entry.isReservingSku) return;
+    if (entry.linkedProduct == null) {
+      if (entry.resolutionState != OcrProductResolutionState.newProduct) return;
+      setState(() {
+        entry.resolutionState = entry.similarCandidates.isEmpty
+            ? OcrProductResolutionState.noCandidates
+            : OcrProductResolutionState.reviewRequired;
+      });
+      return;
+    }
+    final rowIndex = entry.sourceRowIndex;
+    if (rowIndex < 0 || rowIndex >= _parsedData!.lineItems.length) return;
+
+    final parsedItems = List<ParsedLineItem>.from(_parsedData!.lineItems);
+    parsedItems[rowIndex] = entry.originalItem;
+    List<ParsedLineItem>? baseItems;
+    if (_baseParsedData != null &&
+        rowIndex < _baseParsedData!.lineItems.length) {
+      baseItems = List<ParsedLineItem>.from(_baseParsedData!.lineItems);
+      baseItems[rowIndex] = entry.originalItem;
+    }
+
+    setState(() {
+      _parsedData = _parsedData!.copyWith(lineItems: parsedItems);
+      if (_baseParsedData != null && baseItems != null) {
+        _baseParsedData = _baseParsedData!.copyWith(lineItems: baseItems);
+      }
+      _skuControllers[rowIndex]?.text = entry.originalItem.sku ?? '';
+      entry.clearLinkedProduct();
+      // Back to undecided: the row shows its own reservation again if it ever
+      // got one, and no RPC is spent to recover it.
+      entry.syncSkuField();
+    });
   }
 
   String? _aliExpressItemIdForLine(ParsedLineItem item) {
@@ -3862,7 +3830,39 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         return _normalizeSimilarityText(value).replaceAll(' ', '-');
       }
     }
-    return null;
+    final legacyLabel = RegExp(r'\(([^()]{1,120})\)\s*$')
+        .firstMatch(item.description)
+        ?.group(1)
+        ?.trim();
+    if (legacyLabel != null && legacyLabel.isNotEmpty) {
+      return _normalizeSimilarityText(legacyLabel).replaceAll(' ', '-');
+    }
+    final imageUri = Uri.tryParse(item.imageUrl?.trim() ?? '');
+    final imageSegment = imageUri?.pathSegments.isNotEmpty == true
+        ? imageUri!.pathSegments.last.trim()
+        : '';
+    if (imageSegment.isNotEmpty) {
+      return 'image-${_normalizeSimilarityText(imageSegment).replaceAll(' ', '-')}';
+    }
+    // A listing with no variant still has a stable supplier identity. Keeping
+    // it as `default` lets the second import use the learned alias instead of
+    // paying for the full matcher forever.
+    return 'default';
+  }
+
+  String? _aliExpressVariantLabelForLine(ParsedLineItem item) {
+    final raw = item.rawRowText ?? '';
+    final value = RegExp(
+      r'^VARIANT:\s*(.+)$',
+      caseSensitive: false,
+      multiLine: true,
+    ).firstMatch(raw)?.group(1)?.trim();
+    if (value != null && value.isNotEmpty) return value;
+    final legacyLabel = RegExp(r'\(([^()]{1,120})\)\s*$')
+        .firstMatch(item.description)
+        ?.group(1)
+        ?.trim();
+    return legacyLabel == null || legacyLabel.isEmpty ? null : legacyLabel;
   }
 
   Future<bool> _rememberAliExpressAlias(
@@ -3907,10 +3907,34 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     return true;
   }
 
+  Future<void> _uploadSelectedEntryImageForCreation(
+    _NewProductEntry entry,
+  ) async {
+    final bytes = entry.imageBytes;
+    if (entry.imageUrl?.trim().isNotEmpty == true || bytes == null) return;
+    final fileName = entry.imageFileName?.trim().isNotEmpty == true
+        ? entry.imageFileName!.trim()
+        : 'ocr-product.jpg';
+    entry.isUploadingImage = true;
+    if (mounted) setState(() {});
+    try {
+      final uploaded = await ImageService.uploadProductImageWithOptimization(
+        bytes: bytes,
+        fileName: fileName,
+      );
+      entry.imageUrl = uploaded.originalUrl;
+      entry.imageUrlOptimized = uploaded.optimizedUrl;
+    } finally {
+      entry.isUploadingImage = false;
+      if (mounted) setState(() {});
+    }
+  }
+
   /// Create products from the bulk creation form
   Future<void> _createBulkProducts() async {
-    final selectedEntries =
-        _newProductEntries.where((entry) => entry.isSelected).toList();
+    final selectedEntries = _newProductEntries
+        .where((entry) => entry.isSelected && entry.linkedProduct == null)
+        .toList();
     if (!_canCreateBulkProducts() || selectedEntries.isEmpty) return;
 
     setState(() => _creatingProducts = true);
@@ -3926,14 +3950,31 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       var aliasWarnings = 0;
 
       if (_looksLikeAliExpressInvoice(_parsedData!)) {
-        // The database serializes the shared AE namespace and replays this
-        // exact reservation when a response is lost and the worker retries.
-        await _reserveAliExpressSkusForEntries(selectedEntries);
+        // Every row already owns its reserved code from the moment its «Nuevo»
+        // decision was taken. Anything still missing one is a row whose
+        // reservation failed; asking again here is the retry, not a new batch.
+        for (final entry in selectedEntries) {
+          if (!entry.hasReservedAliExpressSku) {
+            await _ensureReservedSkuForEntry(entry);
+          }
+        }
+      }
+      if (selectedEntries.any((entry) => !entry.isValid)) {
+        throw StateError(
+          'La reserva de SKU no dejó todas las fichas listas para crear.',
+        );
       }
 
       for (final entry in selectedEntries) {
         entry.creationError = null;
         await _ensureEntryImageBytes(entry);
+        try {
+          await _uploadSelectedEntryImageForCreation(entry);
+        } catch (error) {
+          failed++;
+          entry.creationError = 'No se pudo guardar la imagen: $error';
+          continue;
+        }
         final product = inv_models.Product(
           tenantId: tenantService.currentTenantId ?? '',
           name: entry.nameController.text.trim(),
@@ -3968,20 +4009,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         );
 
         try {
-          var savedProduct = await inventoryService.createProduct(product);
-          if (savedProduct.id != null) {
-            try {
-              await _rememberAliExpressAlias(
-                entry,
-                productId: savedProduct.id!,
-              );
-            } catch (error) {
-              aliasWarnings++;
-              debugPrint(
-                  'Product was created but its supplier alias was not stored: $error');
-            }
-          }
-          createdProducts[entry] = savedProduct;
+          createdProducts[entry] =
+              await inventoryService.createProduct(product);
           debugPrint('✅ Created product: ${product.name} (${product.sku})');
         } catch (e) {
           // A lost HTTP acknowledgement can happen after the insert commits.
@@ -3997,25 +4026,65 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           }
           if (committedProduct != null &&
               _matchesAttemptedProduct(product, committedProduct)) {
+            // A commit recovered from a lost acknowledgement is a commit. It
+            // joins the same map every ordinary create joins, so it goes
+            // through the same alias persistence and the same line
+            // reconciliation instead of a shortcut that skipped both.
             createdProducts[entry] = committedProduct;
             debugPrint(
                 '✅ Product commit confirmed by SKU read-back: ${entry.sku}');
           } else {
             failed++;
             if (committedProduct != null && entry.requiresDuplicateReview) {
-              // Another legacy creator claimed a reserved-but-not-yet-used SKU.
-              // Never interpret that row as this operation's commit. The next
-              // retry receives a fresh audited range for the affected rows.
-              entry.hasReservedAliExpressSku = false;
-              _aliExpressSkuReservationGeneration++;
-              _aliExpressSkuReservationOperationKey = null;
-              entry.creationError =
-                  'El SKU ${entry.sku} fue ocupado por otro producto. Reintenta para reservar uno nuevo.';
+              // Another creator claimed a reserved-but-not-yet-used SKU. Never
+              // interpret that row as this operation's commit: drop this row's
+              // grant so its retry asks for a genuinely new number.
+              final next = _skuReservationAuthorityOrCreate()
+                  .invalidate(_reservationIdentityFor(entry));
+              entry.reservedSku = null;
+              entry.skuOperationKey = null;
+              entry.skuReservationGeneration = next.generation;
+              entry.syncSkuField();
+              entry.creationError = 'El SKU ${product.sku} fue ocupado por '
+                  'otro producto. Reintenta para reservar uno nuevo.';
             } else {
               entry.creationError = e.toString();
             }
             debugPrint('❌ Failed to create product ${product.sku}: $e');
           }
+        }
+      }
+
+      // One funnel for everything that committed, however it committed.
+      //
+      // The alias is what makes the *next* invoice cheap: without it every
+      // re-import pays the full matcher again. A row is therefore not removed
+      // from the review until both halves of its aftermath succeed — the alias
+      // is stored (or there is genuinely nothing to store) and its invoice line
+      // is reconciled. A row that committed but could not finish stays visible,
+      // marked as linked to the product it created, so a second Create can
+      // never duplicate it.
+      final unreconciled = <_NewProductEntry>{};
+      for (final created in createdProducts.entries) {
+        final entry = created.key;
+        final savedProduct = created.value;
+        final productId = savedProduct.id;
+        if (productId == null) {
+          unreconciled.add(entry);
+          entry.creationError =
+              'El producto se creó pero la base no devolvió su identificador.';
+          continue;
+        }
+        try {
+          await _rememberAliExpressAlias(entry, productId: productId);
+        } catch (error) {
+          aliasWarnings++;
+          unreconciled.add(entry);
+          entry.creationError =
+              'Producto creado. Falta guardar la publicación del proveedor '
+              'para el próximo ingreso. ($error)';
+          debugPrint(
+              'Product was created but its supplier alias was not stored: $error');
         }
       }
 
@@ -4044,6 +4113,16 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                 baseItems[rowIndex] = resolvedItem;
               }
               _skuControllers[rowIndex]?.text = savedProduct.sku;
+            } else {
+              // The line this product belongs to is no longer in the invoice.
+              // Removing the row here would hide a committed product that
+              // nothing points at.
+              unreconciled.add(createdEntry);
+            }
+            if (unreconciled.contains(createdEntry)) {
+              createdEntry.markLinkedProduct(savedProduct);
+              createdEntry.syncSkuField();
+              continue;
             }
             _newProductEntries.remove(createdEntry);
             createdEntry.dispose();
@@ -4052,10 +4131,12 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
           if (_baseParsedData != null && baseItems != null) {
             _baseParsedData = _baseParsedData!.copyWith(lineItems: baseItems);
           }
-          _showBulkCreate = _newProductEntries.isNotEmpty;
-          _similarProductMessage = failed == 0
-              ? null
-              : '$failed producto${failed == 1 ? '' : 's'} no se pudieron crear. Corrige el error y reintenta; los creados no se repetirán.';
+          _showBulkCreate = _newProductEntries.any(
+            (entry) => entry.isSelected && entry.linkedProduct == null,
+          );
+          if (!_showBulkCreate) {
+            _removeOmittedLinesFromInvoice();
+          }
         });
 
         try {
@@ -4072,8 +4153,8 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
                   ? '✅ ${createdProducts.length} producto${createdProducts.length == 1 ? '' : 's'} creado${createdProducts.length == 1 ? '' : 's'}${aliasWarnings == 0 ? '' : '; $aliasWarnings vínculo${aliasWarnings == 1 ? '' : 's'} pendiente${aliasWarnings == 1 ? '' : 's'}'}'
                   : '${createdProducts.length} creados; $failed pendientes de reintento.'),
               backgroundColor: failed == 0 && aliasWarnings == 0
-                  ? Colors.green
-                  : Colors.orange,
+                  ? VinabikeThemeRoles.of(context).success.accent
+                  : VinabikeThemeRoles.of(context).warning.accent,
             ),
           );
         }
@@ -4134,21 +4215,54 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     final imageUrl = entry.imageUrl?.trim();
     if (imageUrl == null || imageUrl.isEmpty) return;
 
+    final cached = _ocrProductImageBytesCache[imageUrl];
+    if (cached != null) {
+      entry.imageBytes = cached;
+      entry.imageFileName ??= _NewProductEntry._imageFileNameFromUrl(imageUrl);
+      return;
+    }
+
+    final load = _ocrProductImageLoads.putIfAbsent(
+      imageUrl,
+      () async {
+        final uri = Uri.tryParse(imageUrl);
+        if (uri == null || !uri.hasScheme) return null;
+        final response =
+            await http.get(uri).timeout(const Duration(seconds: 8));
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return null;
+        }
+        final contentType = response.headers['content-type'] ?? '';
+        if (contentType.isNotEmpty && !contentType.startsWith('image/')) {
+          return null;
+        }
+        if (response.bodyBytes.isEmpty ||
+            response.bodyBytes.length > 8 * 1024 * 1024) {
+          return null;
+        }
+        return response.bodyBytes;
+      },
+    );
     try {
-      final uri = Uri.tryParse(imageUrl);
-      if (uri == null || !uri.hasScheme) return;
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
-      if (response.statusCode < 200 || response.statusCode >= 300) return;
-      final contentType = response.headers['content-type'] ?? '';
-      if (contentType.isNotEmpty && !contentType.startsWith('image/')) return;
-      if (response.bodyBytes.isEmpty ||
-          response.bodyBytes.length > 8 * 1024 * 1024) {
+      final bytes = await load;
+      if (bytes == null) return;
+      if (_ocrProductImageBytesCache.length >= 32) {
+        _ocrProductImageBytesCache.remove(
+          _ocrProductImageBytesCache.keys.first,
+        );
+      }
+      _ocrProductImageBytesCache[imageUrl] = bytes;
+      if (entry.imageUrl?.trim() != imageUrl || entry.imageBytes != null) {
         return;
       }
-      entry.imageBytes = response.bodyBytes;
+      entry.imageBytes = bytes;
       entry.imageFileName ??= _NewProductEntry._imageFileNameFromUrl(imageUrl);
     } catch (e) {
       debugPrint('Could not download OCR row image for fingerprint: $e');
+    } finally {
+      if (identical(_ocrProductImageLoads[imageUrl], load)) {
+        _ocrProductImageLoads.remove(imageUrl);
+      }
     }
   }
 
@@ -4201,43 +4315,6 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         _parsedData = _parsedData!.copyWith(date: result);
       });
     }
-  }
-
-  Widget _buildDetailRow(IconData icon, String label, String value,
-      {bool isBold = false, Color? valueColor, double? valueSize}) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 20, color: Colors.grey.shade700),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: valueSize ?? 14,
-                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-                color: valueColor ?? Colors.black87,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
   }
 
   bool _isAliExpressSupplierName(String? value) {
@@ -4562,7 +4639,6 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
         const SnackBar(
           content: Text(
               'Selecciona un proveedor antes de guardar una plantilla OCR.'),
-          backgroundColor: Colors.orange,
         ),
       );
       return;
@@ -4658,6 +4734,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       if (!mounted) return;
 
       setState(() {
+        _discardProductReviewDraft(advanceDocumentEpoch: true);
         _ocrSupplier = updatedSupplier;
         _ocrSupplierName = updatedSupplier.name;
         _supplierIdForNewProducts = updatedSupplier.id;
@@ -4670,7 +4747,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Plantilla OCR guardada para ${updatedSupplier.name}'),
-          backgroundColor: Colors.green,
+          backgroundColor: VinabikeThemeRoles.of(context).success.accent,
         ),
       );
     } catch (e) {
@@ -4795,7 +4872,6 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             const SnackBar(
               content:
                   Text('Selecciona un proveedor antes de aplicar la factura.'),
-              backgroundColor: Colors.orange,
             ),
           );
         }
@@ -4813,7 +4889,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
               content: Text(data.lineItems.isEmpty
                   ? 'La factura no tiene productos detectados para aplicar.'
                   : 'Resuelve los $unresolved producto${unresolved == 1 ? '' : 's'} antes de usar la factura.'),
-              backgroundColor: Colors.orange,
+              backgroundColor: VinabikeThemeRoles.of(context).warning.accent,
             ),
           );
         }
@@ -4822,18 +4898,21 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
     final diagnostics = _getInvoiceDiagnostics(data);
     if (!diagnostics.shouldWarnBeforeApply) {
-      widget.onComplete(data);
+      await _completeParsedData(data);
       return;
     }
 
     final proceed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('Revisar Totales OCR'),
+            Icon(
+              Icons.warning_amber_rounded,
+              color: VinabikeThemeRoles.of(context).warning.accent,
+            ),
+            const SizedBox(width: 8),
+            const Text('Revisar Totales OCR'),
           ],
         ),
         content: Column(
@@ -4873,7 +4952,25 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     );
 
     if (proceed == true) {
-      widget.onComplete(data);
+      await _completeParsedData(data);
+    }
+  }
+
+  Future<void> _completeParsedData(ParsedInvoice data) async {
+    if (_isApplyingResult) return;
+    if (mounted) setState(() => _isApplyingResult = true);
+    try {
+      await widget.onComplete(data);
+    } catch (error) {
+      final message = 'No se pudo aplicar la factura: $error';
+      widget.onError?.call(message);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isApplyingResult = false);
     }
   }
 
@@ -4932,11 +5029,13 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       if (!mounted) return;
       setState(() {
-        _baseParsedData = prepared.base;
-        _parsedData = parsedData;
-        _ocrSupplier = prepared.supplier;
-        _ocrSupplierName = prepared.supplier?.name;
-        _supplierIdForNewProducts = prepared.supplier?.id;
+        _adoptParsedInvoiceDocument(
+          base: prepared.base,
+          display: parsedData,
+          supplier: prepared.supplier,
+        );
+        _lastReadSource =
+            _useVeryfi ? _OcrReadSource.veryfi : _OcrReadSource.local;
         _isProcessing = false;
       });
       if (!widget.showPreview) {
@@ -5041,6 +5140,9 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
   }) async {
     ParsedInvoice? parsedData;
     ParsedInvoice? directPdfParsedData;
+    var readSource = structuredInvoiceData == null
+        ? _OcrReadSource.local
+        : _OcrReadSource.structured;
     final normalizedExtension = extension.isNotEmpty
         ? extension
         : _inferInvoiceFileExtension(fileBytes);
@@ -5062,6 +5164,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       // same supplier matching, product verification and review below.
     } else if (isImage) {
       if (_useVeryfi) {
+        readSource = _OcrReadSource.veryfi;
         parsedData = await _processWithVeryfi(
           fileBytes,
           _fileNameWithExtension(fileName, normalizedExtension),
@@ -5079,8 +5182,10 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
             'Usa Galería o procesa con OCR en la nube.');
       }
     } else if (normalizedExtension == 'json') {
+      readSource = _OcrReadSource.structured;
       parsedData = _parseAliExpressJsonFile(fileBytes);
     } else if (normalizedExtension == 'html' || normalizedExtension == 'htm') {
+      readSource = _OcrReadSource.structured;
       parsedData = _parseAliExpressHtmlFile(fileBytes);
     } else if (directPdfParsedData != null &&
         directPdfParsedData.lineItems.isNotEmpty &&
@@ -5088,6 +5193,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       parsedData = directPdfParsedData;
     } else if (_useVeryfi) {
       // Use Veryfi for PDFs and other supported document files.
+      readSource = _OcrReadSource.veryfi;
       parsedData = await _processWithVeryfi(fileBytes, fileName);
       parsedData = _mergeLineItemMedia(parsedData, directPdfParsedData);
     } else {
@@ -5121,19 +5227,20 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       sourceSupplierName: sourceSupplierName,
       sourceSupplierWebsite: sourceSupplierWebsite,
     );
-    parsedData = prepared.display;
+    final displayData = prepared.display;
 
     if (!mounted) return;
     setState(() {
-      _baseParsedData = prepared.base;
-      _parsedData = parsedData;
-      _ocrSupplier = prepared.supplier;
-      _ocrSupplierName = prepared.supplier?.name;
-      _supplierIdForNewProducts = prepared.supplier?.id;
+      _adoptParsedInvoiceDocument(
+        base: prepared.base,
+        display: displayData,
+        supplier: prepared.supplier,
+      );
+      _lastReadSource = readSource;
       _isProcessing = false;
     });
     if (!widget.showPreview) {
-      await _handleUseParsedData(parsedData);
+      await _handleUseParsedData(displayData);
     }
   }
 
@@ -5614,7 +5721,13 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     debugPrint('☁️ Processing with Veryfi: $filename');
 
     final veryfi = VeryfiProxyService();
-    final response = await veryfi.parseInvoiceFromBytes(bytes, filename);
+    final response =
+        await veryfi.parseInvoiceFromBytes(bytes, filename).timeout(
+              const Duration(seconds: 60),
+              onTimeout: () => throw TimeoutException(
+                'El lector de facturas no respondió en 60 segundos. Intenta nuevamente.',
+              ),
+            );
     final parsedData = VeryfiAdapter.toParsedInvoice(response);
     return parsedData;
   }
@@ -5632,18 +5745,48 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
     debugPrint(
         '🔍 Verifying ${invoice.lineItems.length} products in database...');
 
-    final verifiedItems = <ParsedLineItem>[];
+    final sourceItems = invoice.lineItems;
+    final allowNameFallback = !_looksLikeAliExpressInvoice(invoice);
+    final verifiedItems = List<ParsedLineItem?>.filled(
+      sourceItems.length,
+      null,
+    );
+    var nextIndex = 0;
 
-    for (final item in invoice.lineItems) {
-      final verifiedItem = await _verifySingleProduct(
-        item,
-        supplierId: supplierId,
-      );
-      verifiedItems.add(verifiedItem);
+    Future<void> worker() async {
+      while (true) {
+        final index = nextIndex++;
+        if (index >= sourceItems.length) return;
+        final item = sourceItems[index];
+        try {
+          verifiedItems[index] = await _verifySingleProduct(
+            item,
+            supplierId: supplierId,
+            allowNameFallback: allowNameFallback,
+          ).timeout(
+            const Duration(seconds: 12),
+            onTimeout: () {
+              debugPrint(
+                'Catalog verification timed out for OCR row ${index + 1}; leaving it for product review.',
+              );
+              return _clearProductResolution(item);
+            },
+          );
+        } catch (error) {
+          debugPrint(
+            'Catalog verification failed for OCR row ${index + 1}: $error',
+          );
+          verifiedItems[index] = _clearProductResolution(item);
+        }
+      }
     }
 
+    final workerCount = math.min(4, sourceItems.length);
+    await Future.wait(List.generate(workerCount, (_) => worker()));
+    final completedItems = verifiedItems.cast<ParsedLineItem>();
+
     debugPrint(
-        '🔍 Verification complete: ${verifiedItems.where((i) => i.existsInDatabase == true).length}/${verifiedItems.length} found');
+        '🔍 Verification complete: ${completedItems.where((i) => i.existsInDatabase == true).length}/${completedItems.length} found');
 
     return ParsedInvoice(
       rut: invoice.rut,
@@ -5651,7 +5794,7 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
       date: invoice.date,
       total: invoice.total,
       supplierName: invoice.supplierName,
-      lineItems: verifiedItems,
+      lineItems: completedItems,
       rawText: invoice.rawText,
     );
   }
@@ -5697,12 +5840,12 @@ class _OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
-    _bulkCreateHorizontalScrollController.dispose();
     for (final entry in _newProductEntries) {
       entry.dispose();
     }
     _newProductEntries.clear();
+    _ocrProductImageBytesCache.clear();
+    _ocrProductImageLoads.clear();
     for (var controller in _skuControllers.values) {
       controller.dispose();
     }
@@ -5731,8 +5874,23 @@ class _PreparedOcrInvoice {
 }
 
 /// Entry for a new product to be created from OCR
+/// Narrowest width at which the nine invoice columns actually fit.
+///
+/// It is arithmetic, not taste: the cells this table lays out are
+/// `#` 28 + producto 320 + código 120 + cantidad 64 + costo 120 + descuento 96
+/// + total 120 + producto ERP 200 + estado 66 = 1134, plus eight 16 px column
+/// gaps and two 12 px horizontal margins = 1286. A previous floor of 1060 let
+/// the table claim it fitted at 1108–1333 and then quietly cut `Total línea`
+/// and `Estado` off the right edge with scrolling already disabled — the two
+/// columns the operator opens this screen to read.
+const double _previewTableFloor = 1286;
+
 class _NewProductEntry {
+  static int _nextReviewSequence = 0;
+
+  late final String reviewId = 'ocr-product-${++_nextReviewSequence}';
   final ParsedLineItem originalItem;
+  final int sourceRowIndex;
   final String supplierCode;
   final bool requiresDuplicateReview;
   bool isSelected;
@@ -5742,6 +5900,8 @@ class _NewProductEntry {
   final TextEditingController priceController;
   Category? selectedCategory;
   ProductBrand? selectedBrand;
+  bool categoryUserEdited = false;
+  bool brandUserEdited = false;
   String? imageUrl;
   String? imageUrlOptimized;
   Uint8List? imageBytes;
@@ -5749,9 +5909,38 @@ class _NewProductEntry {
   bool isUploadingImage = false;
   bool isHoveringImage = false;
   bool isWorkshopConsumable = false;
+  bool priceUserEdited = false;
   bool isCheckingSimilar = false;
   bool isLinkingExisting = false;
-  bool hasReservedAliExpressSku = false;
+  inv_models.Product? linkedProduct;
+
+  /// This row's own database-owned `AE0xxx`, once granted.
+  ///
+  /// The reservation belongs to the row, not to a batch: it is what the worker
+  /// writes on the box the moment they decide «Nuevo», it survives a detour
+  /// through «Vinculado», and it is the only value creation is allowed to
+  /// send. Free text in the SKU field can never become a product code.
+  String? reservedSku;
+
+  /// The idempotency key that produced [reservedSku]. Retrying the same row
+  /// replays it; it is never reused by another row.
+  String? skuOperationKey;
+
+  /// Bumped only when a granted SKU turned out to be taken by someone else, so
+  /// the next request is a new reservation rather than a replay of a lost one.
+  int skuReservationGeneration = 0;
+
+  /// Guards a late reservation answer. A row whose decision changed while the
+  /// RPC was in flight must not be painted with the answer it no longer owns.
+  int skuReservationTicket = 0;
+
+  /// This row is asking the database for its next canonical `AE0xxx`.
+  bool isReservingSku = false;
+
+  /// Why the last reservation attempt for this row failed, if it did.
+  Object? skuReservationError;
+
+  bool get hasReservedAliExpressSku => (reservedSku ?? '').isNotEmpty;
   List<ProductDuplicateCandidate> similarCandidates = [];
   OcrProductResolutionState resolutionState;
   String? resolutionError;
@@ -5775,9 +5964,34 @@ class _NewProductEntry {
   /// correctly even before the user picks a category from the dropdown.
   String? aiSuggestedCategoryName;
 
+  /// Raw component-family hint returned by AI. The canonical semantic
+  /// resolver revalidates it against source evidence and catalog paths.
+  String? aiSuggestedComponentType;
+
+  /// What the cleaner's one call saw in the photo, independent of the title.
+  ///
+  /// It is kept on the row because three consumers need the same reading: the
+  /// matcher's identity gate, the category resolver, and the review's
+  /// «revisar» state. Re-asking the model for each of them is what made every
+  /// row cost two vision calls.
+  AIProductImageAnalysis? aiVisualAnalysis;
+
   /// AI-detected brand visible in the photo (e.g. "ZTTO", "Shimano"). Used
   /// to seed the duplicate-matcher probe.
   String? aiSuggestedBrandName;
+
+  double? aiSuggestionConfidence;
+
+  String? semanticFamily;
+  double? semanticConfidence;
+  String? semanticReviewReason;
+
+  /// Why the object-first pipeline refused to place this row, when it did.
+  String? categoryReviewReason;
+
+  /// What justified the category it did choose, in the shop's own words.
+  List<String> categoryEvidence = const <String>[];
+  List<ProductCatalogSemanticEvidence> semanticEvidence = const [];
 
   /// Model/part number returned by the AI cleaner (for example RT56). Model
   /// identifiers are normalized by the duplicate matcher before comparison.
@@ -5796,6 +6010,7 @@ class _NewProductEntry {
 
   _NewProductEntry({
     required this.originalItem,
+    required this.sourceRowIndex,
     this.isSelected = true,
     String? initialName,
     String? initialSku,
@@ -5834,6 +6049,7 @@ class _NewProductEntry {
     if (!requiresDuplicateReview) return;
     resolutionRevision++;
     isCheckingSimilar = false;
+    isLinkingExisting = false;
     similarCandidates = [];
     resolutionError = null;
     resolutionState = OcrProductResolutionState.unsearched;
@@ -5862,15 +6078,46 @@ class _NewProductEntry {
 
   void markNewProduct() {
     isCheckingSimilar = false;
-    similarCandidates = [];
     resolutionError = null;
     resolutionState = OcrProductResolutionState.newProduct;
+  }
+
+  void markLinkedProduct(inv_models.Product product) {
+    isCheckingSimilar = false;
+    isLinkingExisting = false;
+    resolutionError = null;
+    linkedProduct = product;
+  }
+
+  void clearLinkedProduct() {
+    linkedProduct = null;
+    resolutionState = similarCandidates.isEmpty
+        ? OcrProductResolutionState.unsearched
+        : OcrProductResolutionState.reviewRequired;
   }
 
   void markResolutionFailed(Object error) {
     isCheckingSimilar = false;
     resolutionError = error.toString();
     resolutionState = OcrProductResolutionState.failed;
+  }
+
+  void cancelTransientReviewWork() {
+    final wasTransient = isAICleaningName ||
+        isCheckingSimilar ||
+        isLinkingExisting ||
+        isUploadingImage ||
+        resolutionState == OcrProductResolutionState.searching;
+    if (!wasTransient) return;
+    resolutionRevision++;
+    isAICleaningName = false;
+    isCheckingSimilar = false;
+    isLinkingExisting = false;
+    isUploadingImage = false;
+    if (resolutionState == OcrProductResolutionState.searching) {
+      resolutionState = OcrProductResolutionState.unsearched;
+      resolutionError = null;
+    }
   }
 
   /// Set by the AI cleaner around `nameController.text = ...` so the
@@ -5987,8 +6234,30 @@ class _NewProductEntry {
     priceController.dispose();
   }
 
-  /// Get SKU from controller
-  String get sku => skuController.text.trim();
+  /// The code this row will actually be created with.
+  ///
+  /// For an AliExpress row that is the reserved, database-owned number and
+  /// nothing else. The text field is a display of it; typing over it must not
+  /// be able to send a different code to `createProduct`.
+  String get sku =>
+      requiresDuplicateReview ? (reservedSku ?? '') : skuController.text.trim();
+
+  /// What the SKU column shows: the linked product's code while the row is
+  /// linked, this row's reservation once it has one.
+  String get displaySku {
+    final linked = linkedProduct?.sku.trim() ?? '';
+    if (linked.isNotEmpty) return linked;
+    return requiresDuplicateReview
+        ? (reservedSku ?? '')
+        : skuController.text.trim();
+  }
+
+  /// Puts the SKU field back in agreement with the row's current decision,
+  /// without spending another reservation.
+  void syncSkuField() {
+    final expected = displaySku;
+    if (skuController.text != expected) skuController.text = expected;
+  }
 
   /// Get cost from controller (editable by the user)
   double get cost {
@@ -6003,8 +6272,9 @@ class _NewProductEntry {
       double.tryParse(costController.text.replaceAll(',', '.'));
 
   /// Validate entry is complete
-  bool get isValid =>
-      sku.isNotEmpty &&
+  bool get isValid => sku.isNotEmpty && isValidWithoutSku;
+
+  bool get isValidWithoutSku =>
       nameController.text.isNotEmpty &&
       selectedCategory != null &&
       parsedCost != null &&
