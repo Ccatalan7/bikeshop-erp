@@ -36,6 +36,7 @@ class ProductDuplicateProbe {
     this.cost,
     this.supplierListingId,
     this.confirmedProductId,
+    this.sourceTitle,
   });
 
   final String name;
@@ -58,6 +59,9 @@ class ProductDuplicateProbe {
 
   /// A product the operator already confirmed for this exact listing variant.
   final String? confirmedProductId;
+
+  /// The supplier's own title, when [name] is an AI rewrite of it.
+  final String? sourceTitle;
 }
 
 typedef ProductDuplicateImageLoader = Future<Uint8List?> Function(String url);
@@ -96,12 +100,14 @@ class ProductDuplicateMatcherService {
     Iterable<String> knownBrands = const <String>[],
     Map<String, List<String>> categoryAncestry = const {},
     this.enableVisualReading = true,
+    this.enableMatchAdjudication = true,
     this.persistComputedImageFingerprints = true,
     this.imageByteCacheMaxEntries = _defaultImageByteCacheMaxEntries,
     this.imageByteCacheMaxBytes = _defaultImageByteCacheMaxBytes,
   })  : assert(imageByteCacheMaxEntries >= 0),
         assert(imageByteCacheMaxBytes >= 0),
         _inventoryService = inventoryService,
+        _aiAssistantService = aiAssistantService,
         _imageLoader = imageLoader,
         _visualReadingService = visualReadingService ??
             ProductVisualReadingService(
@@ -115,6 +121,7 @@ class ProductDuplicateMatcherService {
         _knownBrands = List<String>.unmodifiable(knownBrands);
 
   final inv_service.InventoryService _inventoryService;
+  final AIAssistantService? _aiAssistantService;
   final ProductDuplicateImageLoader? _imageLoader;
   final ProductVisualReadingService _visualReadingService;
   final ProductCatalogIdentityIndex _index;
@@ -124,6 +131,10 @@ class ProductDuplicateMatcherService {
   /// Whether the invoice photo may be read once per line to recover a family
   /// the text never states.
   final bool enableVisualReading;
+
+  /// Whether the model may choose among the survivors when the engine is not
+  /// already certain. Off in tests that measure the deterministic engine.
+  final bool enableMatchAdjudication;
 
   final bool persistComputedImageFingerprints;
   final int imageByteCacheMaxEntries;
@@ -165,6 +176,87 @@ class ProductDuplicateMatcherService {
       cacheKey: key,
       reading: ProductVisualReadingService.fromAnalysis(analysis),
     );
+  }
+
+  /// Adjudication calls spent so far, for the cost gate.
+  int _adjudications = 0;
+  int get adjudicationCalls => _adjudications;
+
+  /// Lets the model choose among the survivors when the engine is unsure.
+  ///
+  /// The engine is better at cutting fifteen hundred products down and at
+  /// refusing what physically cannot fit. It is worse at knowing what a thing
+  /// *is* when the word is missing from its dictionary — and supplier Spanish
+  /// is larger than any dictionary. So the two are split by what each is good
+  /// at, and this runs only where the engine has no decisive answer.
+  Future<List<ProductDuplicateCandidate>> _adjudicate({
+    required ProductDuplicateProbe probe,
+    required List<ProductDuplicateCandidate> candidates,
+  }) async {
+    final ai = _aiAssistantService;
+    if (ai == null || candidates.length < 2) return candidates;
+    // Deterministic identity needs no opinion, and a shared manufacturer model
+    // code is already decisive.
+    if (candidates.first.matchTier == ProductDuplicateMatchTier.exact ||
+        candidates.first.matchTier == ProductDuplicateMatchTier.strong) {
+      return candidates;
+    }
+
+    final byId = <String, ProductDuplicateCandidate>{};
+    final options = <AIProductMatchOption>[];
+    for (final candidate in candidates) {
+      final sku = candidate.product.sku.trim();
+      if (sku.isEmpty || byId.containsKey(sku)) continue;
+      byId[sku] = candidate;
+      options.add(AIProductMatchOption(
+        id: sku,
+        name: candidate.product.name,
+        brand: candidate.product.brand,
+        category: candidate.product.categoryName,
+        note: candidate.objections.isEmpty
+            ? candidate.reasons.join(' · ')
+            : candidate.objections.join(' · '),
+      ));
+    }
+    if (options.length < 2) return candidates;
+
+    _adjudications++;
+    final decision = await ai.adjudicateProductMatch(
+      invoiceTitle: probe.sourceTitle?.trim().isNotEmpty == true
+          ? probe.sourceTitle!
+          : probe.name,
+      supplierCode: probe.sku,
+      invoiceBrand: probe.brandName,
+      options: options,
+      imageBytes: probe.imageBytes,
+    );
+    if (decision == null || !decision.hasChoice) return candidates;
+    final chosen = byId[decision.productId!];
+    if (chosen == null) return candidates;
+
+    // The choice reorders and explains; it never promotes a row a gate ruled
+    // out, and it never invents one.
+    if (chosen.isRuledOut) return candidates;
+    final reason = decision.reason;
+    final promoted = ProductDuplicateCandidate(
+      product: chosen.product,
+      matchTier: chosen.matchTier,
+      confidence: chosen.confidence,
+      reasons: <String>[
+        if (reason != null && reason.isNotEmpty) reason,
+        ...chosen.reasons,
+      ],
+      objections: chosen.objections,
+      gates: chosen.gates,
+      variantMismatch: chosen.variantMismatch,
+      hasProductImage: chosen.hasProductImage,
+      matchedModelCodes: chosen.matchedModelCodes,
+    );
+    return <ProductDuplicateCandidate>[
+      promoted,
+      for (final candidate in candidates)
+        if (!identical(candidate, chosen)) candidate,
+    ];
   }
 
   Future<List<ProductDuplicateCandidate>> findCandidates({
@@ -263,7 +355,7 @@ class ProductDuplicateMatcherService {
       ],
     ];
 
-    return <ProductDuplicateCandidate>[
+    final built = <ProductDuplicateCandidate>[
       for (final candidate in offered.take(
         scope == ProductDuplicateShortlistScope.operatorChoice
             ? math.max(limit, 24)
@@ -283,6 +375,9 @@ class ProductDuplicateMatcherService {
           matchedModelCodes: candidate.match.matchedModelCodes,
         ),
     ];
+
+    if (!enableMatchAdjudication) return built;
+    return _adjudicate(probe: probe, candidates: built);
   }
 
   /// The invoice photo's fingerprint, computed once per line.
@@ -310,6 +405,7 @@ class ProductDuplicateMatcherService {
       ProductIdentityInput(
         name: probe.name,
         description: probe.description,
+        sourceTitle: probe.sourceTitle,
         rawText: probe.rawText,
         brandHint: probe.brandName,
         modelHint: probe.model,

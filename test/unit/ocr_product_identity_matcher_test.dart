@@ -329,6 +329,65 @@ void main() {
     });
   });
 
+  group('una palabra ambigua tiene que ganarse su familia', () {
+    // `Pinza` es un caliper en una bicicleta y un alicate en un banco de
+    // trabajo, y el taller compra las dos cosas. Listar cada frase de
+    // herramienta como negativo es una carrera que nadie gana: `pinzas
+    // industriales`, `pinza de precisión`, la próxima que alguien invente.
+    ProductIdentityProfile of(String name) =>
+        ProductIdentityExtractor.extract(ProductIdentityInput(name: name));
+
+    test('con contexto de freno, una pinza es un caliper', () {
+      expect(
+          of('Pinza freno disco mecanico Bucklos').familyId, 'brake_caliper');
+      expect(
+        of('Pinzas de doble pivote para bicicleta de carretera ZTTO, frenos C')
+            .familyId,
+        'brake_caliper',
+      );
+    });
+
+    test('sin ese contexto, una pinza no es una pieza de bicicleta', () {
+      expect(of('Pinzas Industriales Precisión').familyId, isNull);
+      expect(of('Pinza de punta larga').familyId, isNull);
+    });
+
+    test('la palabra inequívoca sigue valiendo sola', () {
+      expect(of('Caliper Freno Delantero Mecánico Bucklos').familyId,
+          'brake_caliper');
+    });
+
+    test('un patín de freno es una pastilla aunque diga v-brake', () {
+      // El título nombra el sistema al que sirve; el objeto son las pastillas.
+      expect(of('PATINES DE FRENOS V-BRAKE ALIEXPRESS').familyId, 'brake_pad');
+    });
+  });
+
+  group('el título del proveedor manda sobre el renombre de la IA', () {
+    test('un renombre equivocado ya no decide qué objeto es', () {
+      const supplier =
+          'Pinzas de doble pivote para bicicleta de carretera ZTTO, frenos C';
+      const renamed = 'Freno de Herradura ZTTO ASA-2.5D';
+      expect(
+        ProductIdentityExtractor.extract(
+          const ProductIdentityInput(name: renamed, description: supplier),
+        ).familyId,
+        'rim_brake_arm',
+        reason: 'sin la fuente, el renombre gana y el objeto queda mal leído',
+      );
+      expect(
+        ProductIdentityExtractor.extract(
+          const ProductIdentityInput(
+            name: renamed,
+            description: supplier,
+            sourceTitle: supplier,
+          ),
+        ).familyId,
+        'brake_caliper',
+      );
+    });
+  });
+
   group('un color en plural es el mismo color', () {
     ProductIdentityProfile of(String name, {String? description}) =>
         ProductIdentityExtractor.extract(

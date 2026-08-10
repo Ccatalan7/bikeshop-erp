@@ -58,6 +58,8 @@ class BikePartFamily {
     required this.heads,
     this.negativeHeads = const <String>[],
     this.absorbs = const <String>[],
+    this.ambiguousHeads = const <String>[],
+    this.contextWords = const <String>[],
   });
 
   /// Stable identifier used by profiles, explanations and tests.
@@ -79,6 +81,19 @@ class BikePartFamily {
   /// else. `porta bidon` is not a `bidon`; `adaptador de tija` is not a
   /// `tija`.
   final List<String> negativeHeads;
+
+  /// Heads that name this family only when the sentence corroborates them.
+  ///
+  /// `Pinza` is a caliper on a bicycle and a pair of pliers on a workbench,
+  /// and a shop buys both. Listing every tool phrase as a negative is a race
+  /// nobody wins — `pinzas industriales`, `pinza de precisión`, the next one
+  /// somebody invents. An ambiguous head instead has to be *earned*: it counts
+  /// only when a word from [contextWords] appears in the same text, and is
+  /// simply not a head otherwise.
+  final List<String> ambiguousHeads;
+
+  /// What has to appear for [ambiguousHeads] to count.
+  final List<String> contextWords;
 
   /// Families this one supersedes when both match the identity segment.
   /// A crankset sold with its bottom bracket is still a crankset.
@@ -461,6 +476,11 @@ class BikePartTaxonomy {
         'zapatas',
         'patin de freno',
         'patines de freno',
+        // Bare, because the shop writes `patines de frenos` in the plural and
+        // the exact phrase then misses. With no pad head left, `v brake` won
+        // the title and a set of brake shoes was read as a brake arm.
+        'patin',
+        'patines',
       ],
     ),
     BikePartFamily(
@@ -472,6 +492,30 @@ class BikePartTaxonomy {
         'calipers',
         'brake caliper',
         'mordaza de freno',
+        // `Pinza` is what the shop and the supplier both call a caliper, on
+        // disc and on rim brakes alike. Without it a caliper had no family at
+        // all, so nothing could eliminate anything and the AI's guessed name
+        // decided the object.
+        'pinza de freno',
+        'pinzas de freno',
+      ],
+      // Bare `pinza` is the word the supplier uses for a caliper — and the
+      // word a tool catalogue uses for pliers. It counts only next to
+      // something that makes it a brake.
+      ambiguousHeads: ['pinza', 'pinzas'],
+      contextWords: [
+        'freno',
+        'frenos',
+        'disco',
+        'discos',
+        'v brake',
+        'vbrake',
+        'doble pivote',
+        'hidraulico',
+        'hidraulica',
+        'mecanico',
+        'mecanica',
+        'bicicleta',
       ],
     ),
     // A `herradura` is the arm pair of a rim brake. It is not a disc caliper,
@@ -915,6 +959,13 @@ class BikePartTaxonomy {
       for (final family in families)
         for (final head in family.heads)
           BikePartHeadPhrase(phrase: head, familyId: family.id),
+      for (final family in families)
+        for (final head in family.ambiguousHeads)
+          BikePartHeadPhrase(
+            phrase: head,
+            familyId: family.id,
+            requiresContext: true,
+          ),
     ];
     phrases.sort((left, right) {
       final byLength = right.phrase.length.compareTo(left.phrase.length);
@@ -964,8 +1015,16 @@ class BikePartTaxonomy {
 
 /// One head noun and the family it identifies.
 class BikePartHeadPhrase {
-  const BikePartHeadPhrase({required this.phrase, required this.familyId});
+  const BikePartHeadPhrase({
+    required this.phrase,
+    required this.familyId,
+    this.requiresContext = false,
+  });
 
   final String phrase;
   final String familyId;
+
+  /// The phrase names this family only when one of the family's context words
+  /// is present in the same text.
+  final bool requiresContext;
 }

@@ -150,6 +150,43 @@ class AICleanedProductName {
   final AIProductImageAnalysis? visualAnalysis;
 }
 
+/// One shortlisted catalog product offered to the adjudicator.
+class AIProductMatchOption {
+  const AIProductMatchOption({
+    required this.id,
+    required this.name,
+    this.brand,
+    this.category,
+    this.note,
+  });
+
+  /// The catalog SKU. It is what the model must echo back to choose this row.
+  final String id;
+  final String name;
+  final String? brand;
+  final String? category;
+
+  /// What the deterministic engine already concluded about this row, so the
+  /// model sees the same evidence the operator does.
+  final String? note;
+}
+
+/// Which product the model says the invoice line is.
+class AIProductMatchDecision {
+  const AIProductMatchDecision({
+    required this.productId,
+    required this.reason,
+    required this.confidence,
+  });
+
+  /// `null` means «ninguno de estos», which is a real answer.
+  final String? productId;
+  final String? reason;
+  final double confidence;
+
+  bool get hasChoice => productId != null && productId!.isNotEmpty;
+}
+
 class _TireWidthRange {
   const _TireWidthRange({
     required this.minWidth,
@@ -259,6 +296,124 @@ class AIAssistantService extends ChangeNotifier
     String modelName = 'gemini-2.5-flash-lite',
   }) async {
     return _geminiProxy.generateText(prompt: prompt, model: modelName);
+  }
+
+  /// One catalog product the shortlist offered, as the model sees it.
+  ///
+  /// Only these rows may be chosen. The model never writes a SKU: it returns
+  /// one of the ids it was handed, or nothing.
+  static const int maxAdjudicationCandidates = 12;
+
+  /// Picks which shortlisted product an invoice line actually is.
+  ///
+  /// The deterministic engine is better at what it does — cutting fifteen
+  /// hundred products to a handful, and refusing the ones that physically
+  /// cannot fit. What it cannot do is *know what a thing is* without a word
+  /// for it in its dictionary, and supplier Spanish is bigger than any
+  /// dictionary. This step closes that gap: given the line and the survivors,
+  /// the model answers the question a person answers by looking.
+  ///
+  /// It is deliberately narrow:
+  ///
+  /// * it chooses among rows it was given, or returns none — it cannot invent;
+  /// * it is asked only when the engine is not already certain;
+  /// * it must say why, in the shop's words, and that reason is what the row
+  ///   renders. No score, no percentage.
+  Future<AIProductMatchDecision?> adjudicateProductMatch({
+    required String invoiceTitle,
+    String? supplierCode,
+    String? invoiceBrand,
+    required List<AIProductMatchOption> options,
+    Uint8List? imageBytes,
+    String modelName = 'gemini-2.5-flash',
+  }) async {
+    if (invoiceTitle.trim().isEmpty || options.isEmpty) return null;
+    final bounded = options.take(maxAdjudicationCandidates).toList();
+    final allowedIds = bounded.map((option) => option.id).toSet();
+
+    final catalogLines = <String>[
+      for (final option in bounded)
+        '- id: ${option.id}\n'
+            '  nombre: ${option.name}\n'
+            '  marca: ${option.brand ?? 'sin marca'}\n'
+            '  categoria: ${option.category ?? 'sin categoria'}'
+            '${option.note == null ? '' : '\n  nota del motor: ${option.note}'}',
+    ];
+
+    final prompt = '''
+Eres el maestro de bodega de una bicicleteria chilena. Te llega UNA linea de una
+factura de proveedor y la lista de productos que ya existen en el catalogo y que
+podrian ser esa misma pieza. Tu unica tarea es decir CUAL de ellos es el mismo
+producto, o que ninguno lo es.
+
+Linea de la factura:
+  titulo: ${invoiceTitle.trim()}
+  codigo del proveedor: ${supplierCode?.trim().isNotEmpty == true ? supplierCode!.trim() : 'sin codigo'}
+  marca leida: ${invoiceBrand?.trim().isNotEmpty == true ? invoiceBrand!.trim() : 'sin marca'}
+
+Candidatos del catalogo:
+${catalogLines.join('\n')}
+
+Responde SOLO JSON valido con esta forma exacta:
+{"id": "<id de la lista o null>", "reason": "<por que, en una frase>", "confidence": 0.0}
+
+Reglas duras:
+- El id DEBE ser uno de los ids de la lista, tal cual. Si ninguno es el mismo
+  producto, responde id: null. NUNCA inventes un id ni un producto.
+- Es el MISMO producto solo si es la misma pieza: mismo tipo de objeto, misma
+  medida decisiva y mismo fabricante cuando ambos lo declaran. Una pieza que
+  sirve para lo mismo NO es la misma pieza.
+- Un accesorio, un repuesto o una herramienta que se nombra parecido no es el
+  producto. Una pinza de freno no es un alicate; un eslabon rapido no es un
+  sticker; una extension de postiza no es una postiza.
+- La variante importa: color, velocidades, diametro y lado (delantero/trasero)
+  distintos significan otro producto.
+- reason va en español de Chile, en una frase corta, nombrando la evidencia
+  concreta que decidio (el modelo, la medida, la marca). Nada de porcentajes.
+- confidence entre 0 y 1: que tan seguro estas de que es exactamente el mismo.
+''';
+
+    try {
+      final parts = <Map<String, dynamic>>[
+        {'text': prompt},
+      ];
+      if (imageBytes != null && imageBytes.isNotEmpty) {
+        final prepared = _prepareImageForGemini(imageBytes);
+        parts.add({
+          'inlineData': {
+            'mimeType': prepared.mimeType,
+            'data': base64Encode(prepared.bytes),
+          },
+        });
+      }
+      final response = await _geminiProxy.generateContent(
+        model: modelName,
+        contents: [
+          {'role': 'user', 'parts': parts},
+        ],
+      );
+      final jsonBlock = _extractJsonObject(response.text.trim());
+      if (jsonBlock == null) return null;
+      final decoded = jsonDecode(jsonBlock);
+      if (decoded is! Map<String, dynamic>) return null;
+
+      final rawId = decoded['id']?.toString().trim() ?? '';
+      // A model that answers with an id nobody offered has not chosen a
+      // product; it has written one. That is refused, not repaired.
+      final id = allowedIds.contains(rawId) ? rawId : null;
+      final reason = _normalizeImageAnalysisTerm(
+        decoded['reason']?.toString(),
+        maxWords: 24,
+      );
+      return AIProductMatchDecision(
+        productId: id,
+        reason: reason.isEmpty ? null : reason,
+        confidence: _coerceAnalysisConfidence(decoded['confidence']),
+      );
+    } catch (_) {
+      _debugAi('❌ [AI] Product match adjudication failed.');
+      return null;
+    }
   }
 
   Future<AIProductImageAnalysis?> analyzeProductImage(

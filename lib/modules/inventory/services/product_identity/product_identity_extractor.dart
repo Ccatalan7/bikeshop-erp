@@ -41,6 +41,7 @@ class ProductIdentityInput {
     required this.name,
     this.description,
     this.rawText,
+    this.sourceTitle,
     this.brandHint,
     this.brandIsAsserted = false,
     this.modelHint,
@@ -51,6 +52,17 @@ class ProductIdentityInput {
   final String name;
   final String? description;
   final String? rawText;
+
+  /// The supplier's own words for this product, when [name] is a rewrite.
+  ///
+  /// The AI cleaner exists to produce a readable shop name, not to decide what
+  /// the object is — and it does get the object wrong: it renamed
+  /// `Pinzas de doble pivote … frenos C` into `Frenos de herradura`, turning a
+  /// road caliper into a V-brake arm. The supplier's title is the primary
+  /// source and the rewrite is derived from it, so when the two name different
+  /// families the original wins. Left null for a catalog row, whose `name` is
+  /// already the shop's own statement.
+  final String? sourceTitle;
 
   /// A brand the caller believes applies. It is a *hint*: it is promoted to an
   /// assertion only when the identity text confirms it. An AI reading
@@ -392,7 +404,12 @@ class ProductIdentityExtractor {
         .where((value) => value.trim().isNotEmpty)
         .join(' ');
 
-    var heads = _detectHeads(identityText);
+    // The supplier's own words decide the object before the rewrite does.
+    final normalizedSource = _normalize(input.sourceTitle ?? '');
+    var heads = normalizedSource.isEmpty
+        ? _detectHeads(identityText)
+        : _detectHeads(_segment(normalizedSource).identity);
+    if (heads.winner == null) heads = _detectHeads(identityText);
     if (heads.winner == null && fitmentText.isNotEmpty) {
       // Segmentation must never leave the identity without a head noun.
       //
@@ -540,6 +557,16 @@ class ProductIdentityExtractor {
 
   // ── Family ────────────────────────────────────────────────────────────
 
+  /// Whether an ambiguous head has earned its family in this sentence.
+  static bool _hasFamilyContext(String familyId, String haystack) {
+    final family = BikePartTaxonomy.byId(familyId);
+    if (family == null || family.contextWords.isEmpty) return false;
+    for (final word in family.contextWords) {
+      if (haystack.contains(' $word ')) return true;
+    }
+    return false;
+  }
+
   static _HeadDetection _detectHeads(String identityText) {
     if (identityText.isEmpty) {
       return const _HeadDetection(winner: null, candidates: <String>{});
@@ -550,6 +577,9 @@ class ProductIdentityExtractor {
     final lengths = <String, int>{};
 
     for (final head in BikePartTaxonomy.orderedHeads) {
+      if (head.requiresContext && !_hasFamilyContext(head.familyId, haystack)) {
+        continue;
+      }
       final needle = ' ${head.phrase} ';
       var from = 0;
       while (true) {

@@ -2443,6 +2443,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     return ProductDuplicateProbe(
       name: entry.nameController.text,
       description: entry.originalItem.description,
+      // The invoice line as the supplier wrote it. `originalNoisyTitle` is a
+      // working copy that the cleaner may already have replaced; the parsed
+      // line item is the document itself.
+      sourceTitle: entry.originalItem.description,
       sku: _costsIncludeIva && entry.supplierCode.isNotEmpty
           ? entry.supplierCode
           : entry.skuController.text.trim().isNotEmpty
@@ -3371,6 +3375,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       ProductIdentityInput(
         name: name,
         description: noisyTitle == name ? sourceTitle : noisyTitle,
+        // Same rule as the matcher: the supplier's own words decide the
+        // object, so a mislabelled AI name cannot file the row under the
+        // wrong shelf either.
+        sourceTitle: entry.originalItem.description,
         knownBrands: _brands.map((brand) => brand.name),
       ),
     );
