@@ -101,7 +101,7 @@ dependencies:
   math_expressions: ^3.1.0
   speech_to_text: ^7.0.0
 
-  supabase: any
+  supabase: 2.16.0
 dependency_overrides:
   # Security-patched Android WebView bridge. Returning false from
   # onConsoleMessage makes Chromium mirror console source URLs (including
