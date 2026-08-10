@@ -311,7 +311,7 @@ jobs:
             Set-Content -LiteralPath (Join-Path $dist 'windows-release-manifest.json') -Encoding UTF8
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vinabike-erp-windows
           path: dist/*
