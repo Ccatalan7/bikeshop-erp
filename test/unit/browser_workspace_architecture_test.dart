@@ -267,7 +267,8 @@ void main() {
     expect(browser, contains('allowInsecureSupplierOrigin: false'));
     expect(browser, isNot(contains('filled-insecure')));
     expect(supplierForm, contains('canonicalSupplierCredentialOrigin'));
-    expect(supplierForm, contains('obscureText: true'));
+    expect(supplierForm, contains('_obscureSecret = true'));
+    expect(supplierForm, contains('obscureText: _obscureSecret'));
     expect(supplierForm, contains('enableSuggestions: false'));
     expect(supplierForm, isNot(contains('PurchaseService')));
     expect(supplierForm, isNot(contains('_showPortalPassword')));
