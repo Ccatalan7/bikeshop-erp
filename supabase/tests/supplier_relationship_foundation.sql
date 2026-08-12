@@ -233,8 +233,17 @@ select ok(
     'supplier_credential_operation:' in lower(pg_get_functiondef(
       'public.delete_supplier_credential_v2_without_secret_status_internal(uuid,uuid,text,text,uuid,timestamptz)'::regprocedure
     ))
+  )
+  and position(
+    'for update' in lower(pg_get_functiondef(
+      'public.update_supplier_credential_origin_v1(uuid,uuid,text,text,uuid,timestamptz,text,boolean)'::regprocedure
+    ))
+  ) < position(
+    'supplier_credential_operation:' in lower(pg_get_functiondef(
+      'public.update_supplier_credential_origin_v1(uuid,uuid,text,text,uuid,timestamptz,text,boolean)'::regprocedure
+    ))
   ),
-  'credential upsert/delete and their replay paths lock supplier before credential coordination'
+  'credential upsert/delete/origin commands lock supplier before credential coordination'
 );
 select ok(
   pg_get_functiondef(
@@ -676,8 +685,16 @@ select ok(
     'public',
     'public.delete_supplier_credential_v2(uuid,uuid,text,text,uuid,timestamptz)',
     'EXECUTE'
+  ) and not has_function_privilege(
+    'anon',
+    'public.update_supplier_credential_origin_v1(uuid,uuid,text,text,uuid,timestamptz,text,boolean)',
+    'EXECUTE'
+  ) and has_function_privilege(
+    'authenticated',
+    'public.update_supplier_credential_origin_v1(uuid,uuid,text,text,uuid,timestamptz,text,boolean)',
+    'EXECUTE'
   ),
-  'credential v2 commands have no PUBLIC or anon execution'
+  'credential commands have no PUBLIC or anon execution and publish origin metadata updates only to authenticated'
 );
 select ok(
   not has_function_privilege(
@@ -2971,7 +2988,7 @@ select ok(
 
 select ok(
   public.supplier_credential_acl_cutover_ready_internal(),
-  'credential cutover preflight accepts exact legacy, metadata, origin, and decrypted Vault parity'
+  'credential cutover preflight accepts exact legacy username and decrypted Vault parity'
 );
 create temporary table cutover_secret_snapshot as
 select
@@ -3041,10 +3058,9 @@ set origin_url = 'https://cutover-mismatch.example.test'
 from cutover_secret_snapshot snapshot
 where credential.id = snapshot.credential_id;
 set local session_replication_role = origin;
-select is(
+select ok(
   public.supplier_credential_acl_cutover_ready_internal(),
-  false,
-  'credential cutover fails closed when canonical origin differs from the legacy website'
+  'credential cutover keeps managed login origin independent from the public supplier website'
 );
 set local session_replication_role = replica;
 update public.supplier_credentials credential
@@ -3054,7 +3070,7 @@ where credential.id = snapshot.credential_id;
 set local session_replication_role = origin;
 select ok(
   public.supplier_credential_acl_cutover_ready_internal(),
-  'credential cutover recovers after exact canonical-origin parity is restored'
+  'credential cutover remains ready after managed origin metadata is restored'
 );
 
 create temporary table dirty_origin_repaired (payload jsonb);
@@ -3124,6 +3140,225 @@ select is(
   'repaired credential origin disappears from current profile attention'
 );
 
+create temporary table origin_metadata_created (payload jsonb);
+insert into origin_metadata_created
+select public.upsert_supplier_credential_v2(
+  'a8082100-0000-4000-8000-000000000001',
+  'a8082100-0001-4000-8000-000000000101',
+  'portal_password', 'originmeta',
+  'a8082100-0400-4000-8000-0000000000c1',
+  null, null, 'https://origin-old.example.test',
+  'Origen administrado', 'origin-user', 'origin-secret', false, false
+);
+create temporary table origin_metadata_snapshot as
+select
+  credential.id as credential_id,
+  credential.vault_secret_id,
+  credential.username,
+  credential.label,
+  credential.engagement_id,
+  credential.updated_at,
+  supplier.updated_at as supplier_updated_at,
+  secret.decrypted_secret as secret_value
+from public.supplier_credentials credential
+join public.suppliers supplier
+  on supplier.tenant_id = credential.tenant_id
+ and supplier.id = credential.supplier_id
+join vault.decrypted_secrets secret
+  on secret.id = credential.vault_secret_id
+where credential.supplier_id = 'a8082100-0001-4000-8000-000000000101'
+  and credential.credential_kind = 'portal_password'
+  and credential.credential_key = 'originmeta';
+
+create temporary table origin_metadata_updated (payload jsonb);
+insert into origin_metadata_updated
+select public.update_supplier_credential_origin_v1(
+  'a8082100-0000-4000-8000-000000000001',
+  'a8082100-0001-4000-8000-000000000101',
+  'portal_password', 'originmeta',
+  'a8082100-0400-4000-8000-0000000000c2',
+  (select updated_at from origin_metadata_snapshot),
+  'https://ORIGIN-NEW.example.test:443', false
+);
+select ok(
+  (
+    select payload->>'action' = 'update_origin'
+      and payload->>'origin_updated' = 'true'
+      and payload->>'origin_url' = 'https://origin-new.example.test'
+      and payload->>'idempotent_replay' = 'false'
+      and not payload ?| array['secret', 'username', 'vault_secret_id']
+      and not (payload->'current_credential')
+        ?| array['secret', 'username', 'vault_secret_id']
+    from origin_metadata_updated
+  ),
+  'origin command returns only secret-free metadata and canonicalizes the exact HTTPS origin'
+);
+select ok(
+  (
+    select credential.origin_url = 'https://origin-new.example.test'
+      and credential.vault_secret_id = snapshot.vault_secret_id
+      and credential.username = snapshot.username
+      and credential.label = snapshot.label
+      and credential.engagement_id is not distinct from snapshot.engagement_id
+      and credential.updated_at > snapshot.updated_at
+      and supplier.updated_at = snapshot.supplier_updated_at
+      and secret.decrypted_secret = snapshot.secret_value
+    from public.supplier_credentials credential
+    join origin_metadata_snapshot snapshot
+      on snapshot.credential_id = credential.id
+    join public.suppliers supplier
+      on supplier.tenant_id = credential.tenant_id
+     and supplier.id = credential.supplier_id
+    join vault.decrypted_secrets secret
+      on secret.id = credential.vault_secret_id
+  ),
+  'origin command changes neither Vault bytes/reference nor unrelated credential/supplier metadata'
+);
+select is(
+  public.update_supplier_credential_origin_v1(
+    'a8082100-0000-4000-8000-000000000001',
+    'a8082100-0001-4000-8000-000000000101',
+    'portal_password', 'originmeta',
+    'a8082100-0400-4000-8000-0000000000c2',
+    (select updated_at from origin_metadata_snapshot),
+    'https://origin-new.example.test', false
+  )->>'idempotent_replay',
+  'true',
+  'lost-ack origin update replays without another mutation'
+);
+select is(
+  (
+    select count(*)
+    from public.supplier_credential_command_receipts receipt
+    where receipt.operation_id =
+      'a8082100-0400-4000-8000-0000000000c2'
+      and receipt.command_kind = 'update_origin'
+      and not receipt.result ?| array['secret', 'username', 'vault_secret_id']
+  ),
+  1::bigint,
+  'origin retry owns one durable secret-free command receipt'
+);
+select is(
+  (
+    select count(*)
+    from public.supplier_credential_access_events event
+    where event.credential_id =
+      (select credential_id from origin_metadata_snapshot)
+      and event.action = 'update_origin'
+      and event.metadata->>'operation_id' =
+        'a8082100-0400-4000-8000-0000000000c2'
+  ),
+  1::bigint,
+  'origin retry emits one operation-correlated audit event'
+);
+select throws_ok(
+  $$select public.update_supplier_credential_origin_v1(
+    'a8082100-0000-4000-8000-000000000001',
+    'a8082100-0001-4000-8000-000000000101',
+    'portal_password', 'originmeta',
+    'a8082100-0400-4000-8000-0000000000c2',
+    (select updated_at from origin_metadata_snapshot),
+    'https://operation-reused.example.test', false
+  )$$,
+  '23505',
+  'Supplier credential operation id was reused with different content',
+  'origin operation id cannot be reused for different metadata'
+);
+select throws_ok(
+  $$select public.update_supplier_credential_origin_v1(
+    'a8082100-0000-4000-8000-000000000001',
+    'a8082100-0001-4000-8000-000000000101',
+    'portal_password', 'originmeta',
+    'a8082100-0400-4000-8000-0000000000c3',
+    (select updated_at from origin_metadata_snapshot),
+    'https://stale-origin.example.test', false
+  )$$,
+  '40001',
+  'Supplier credential changed concurrently',
+  'stale origin metadata cannot overwrite a newer credential generation'
+);
+select throws_ok(
+  $$select public.update_supplier_credential_origin_v1(
+    'a8082100-0000-4000-8000-000000000001',
+    'a8082100-0001-4000-8000-000000000101',
+    'portal_password', 'originmeta',
+    'a8082100-0400-4000-8000-0000000000c4',
+    ((select payload->>'updated_at' from origin_metadata_updated))::timestamptz,
+    'https://origin-new.example.test/login', false
+  )$$,
+  '22023',
+  'Valid credential kind, key, operation id, expected updated_at, and canonical HTTPS origin are required',
+  'origin command rejects paths instead of widening an exact-origin binding'
+);
+select is(
+  public.update_supplier_credential_origin_v1(
+    'a8082100-0000-4000-8000-000000000001',
+    'a8082100-0001-4000-8000-000000000101',
+    'portal_password', 'originmeta',
+    'a8082100-0400-4000-8000-0000000000c5',
+    ((select payload->>'updated_at' from origin_metadata_updated))::timestamptz,
+    null, true
+  )->>'origin_url',
+  null::text,
+  'origin command can explicitly clear only the browser binding'
+);
+select ok(
+  (
+    select credential.origin_url is null
+      and credential.vault_secret_id = snapshot.vault_secret_id
+      and secret.decrypted_secret = snapshot.secret_value
+    from public.supplier_credentials credential
+    join origin_metadata_snapshot snapshot
+      on snapshot.credential_id = credential.id
+    join vault.decrypted_secrets secret
+      on secret.id = credential.vault_secret_id
+  ),
+  'clearing an origin leaves the Vault credential intact'
+);
+
+create temporary table username_only_origin_updated (payload jsonb);
+insert into username_only_origin_updated
+select public.update_supplier_credential_origin_v1(
+  'a8082100-0000-4000-8000-000000000001',
+  'a8082100-0001-4000-8000-0000000001b7',
+  'portal_password', 'default',
+  'a8082100-0400-4000-8000-0000000000c6',
+  (
+    select updated_at
+    from public.supplier_credentials credential
+    where credential.supplier_id =
+      'a8082100-0001-4000-8000-0000000001b7'
+      and credential.credential_kind = 'portal_password'
+      and credential.credential_key = 'default'
+  ),
+  'https://username-only.example.test', false
+);
+select ok(
+  (
+    select credential.origin_url = 'https://username-only.example.test'
+      and credential.vault_secret_id is null
+      and credential.username = 'username-only'
+      and updated.payload->>'has_secret' = 'false'
+    from public.supplier_credentials credential
+    cross join username_only_origin_updated updated
+    where credential.supplier_id =
+      'a8082100-0001-4000-8000-0000000001b7'
+      and credential.credential_kind = 'portal_password'
+      and credential.credential_key = 'default'
+  ),
+  'origin metadata can be configured for username-only state without inventing a Vault secret'
+);
+select is(
+  (
+    select status
+    from public.supplier_data_quality_candidates
+    where supplier_id = 'a8082100-0001-4000-8000-0000000001b7'
+      and issue_code = 'legacy_portal_origin_not_canonical'
+  ),
+  'resolved',
+  'origin metadata command resolves the corresponding portal-origin incident'
+);
+
 select is(
   public.upsert_supplier_credential_v2(
     'a8082100-0000-4000-8000-000000000001',
@@ -3167,6 +3402,26 @@ select ok(
       ))::uuid
   ),
   'legacy rotation preserves v2 origin and engagement metadata'
+);
+update public.suppliers
+set website = 'https://corporate.example.test',
+    portal_password = 'legacy-trigger-origin-preserved'
+where id = 'a8082100-0001-4000-8000-000000000101';
+select ok(
+  (
+    select credential.origin_url = 'https://portal.example.test'
+      and public.get_supplier_credential_v2(
+        credential.tenant_id,
+        credential.supplier_id,
+        credential.credential_kind,
+        credential.credential_key
+      )->>'secret' = 'legacy-trigger-origin-preserved'
+    from public.supplier_credentials credential
+    where credential.supplier_id = 'a8082100-0001-4000-8000-000000000101'
+      and credential.credential_kind = 'portal_password'
+      and credential.credential_key = 'default'
+  ),
+  'legacy username/password trigger rotates the secret without replacing the managed login origin from the corporate website'
 );
 
 select is(
@@ -3450,6 +3705,25 @@ select throws_ok(
   '42501',
   'Supplier credential authority required',
   'origin metadata discovery also requires dedicated authority'
+);
+select throws_ok(
+  $$select public.update_supplier_credential_origin_v1(
+    'a8082100-0000-4000-8000-000000000001',
+    'a8082100-0001-4000-8000-000000000101',
+    'portal_password', 'originmeta',
+    'a8082100-0400-4000-8000-0000000000c7',
+    (
+      select updated_at
+      from public.supplier_credentials
+      where supplier_id = 'a8082100-0001-4000-8000-000000000101'
+        and credential_kind = 'portal_password'
+        and credential_key = 'originmeta'
+    ),
+    'https://unauthorized-origin.example.test', false
+  )$$,
+  '42501',
+  'Supplier credential authority required',
+  'origin metadata update requires dedicated credential authority'
 );
 
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);

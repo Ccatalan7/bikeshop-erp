@@ -167,13 +167,16 @@ void main() {
         'clearOrigin: existing?.originUrl != null && draft.origin == null',
       ),
     );
-    expect(source, contains("if (text.isEmpty) return null"));
-    expect(
-      source,
-      matches(RegExp(r'origin:\s+originText\.isEmpty\s+\?\s+null')),
-    );
+    expect(source, contains("'Usuario o correo'"));
+    expect(source, contains("'Contraseña'"));
+    expect(source, contains("'Opciones avanzadas'"));
+    expect(source, contains("'Identificador interno'"));
+    expect(source, contains('_nextAvailableCredentialKey'));
+    expect(source, contains('_canonicalCredentialOriginFromInput'));
     expect(source, contains('canonicalSupplierCredentialOrigin'));
-    expect(source, contains("'Origen HTTPS autorizado (opcional)'"));
+    expect(source, contains("'Página de inicio de sesión'"));
+    expect(source, isNot(contains("'Clave estable'")));
+    expect(source, isNot(contains("'Secreto'")));
     expect(source, contains('SupplierCredentialService'));
     expect(source, isNot(contains('SupplierCredentialRevealController')));
     expect(source, isNot(contains('.get(')));

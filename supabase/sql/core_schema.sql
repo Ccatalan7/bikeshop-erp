@@ -75137,3 +75137,8 @@ comment on column public.suppliers.portal_username is
   'LEGACY COPY ONLY. Hidden from client roles at the 20260808211000 cutover; current clients use Vault-backed credential metadata RPCs.';
 comment on column public.suppliers.portal_password is
   'LEGACY COPY ONLY. Hidden from client roles at the 20260808211000 cutover. A later migration may clear it only after full Vault/client readback.';
+
+-- Secret-free, idempotent command for changing only a supplier credential's
+-- exact browser origin. This also keeps managed origins independent from the
+-- transitional legacy username/password mirror.
+\ir ../migrations/20260811160000_supplier_credential_origin_metadata_command.sql
