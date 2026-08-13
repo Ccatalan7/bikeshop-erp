@@ -364,6 +364,7 @@ jobs:
           VINABIKE_ANDROID_INTEGRITY_RUN_ATTEMPT: ${{ inputs.integrity_run_attempt }}
           VINABIKE_ANDROID_INTEGRITY_RESULT: ${{ needs.integrity.result }}
           SUPABASE_RELEASE_SECRET: ${{ secrets.SUPABASE_RELEASE_SECRET }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           VINABIKE_ANDROID_RELEASE_NOTES_PATH: ${{ runner.temp }}/android-release-notes.json
           VINABIKE_ANDROID_RELEASE_NOTES_FROM_COMMIT: ${{ steps.notes-base.outputs.commit }}
           VINABIKE_ANDROID_RELEASE_EVIDENCE_PATH: ${{ runner.temp }}/android-release-manifest.json

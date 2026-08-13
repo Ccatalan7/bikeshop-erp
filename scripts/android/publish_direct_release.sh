@@ -17,6 +17,8 @@ KEY_ALIAS="${VINABIKE_ANDROID_KEY_ALIAS:-vinabike-erp}"
 KEYSTORE_PATH="${VINABIKE_ANDROID_KEYSTORE_PATH:-${HOME}/Library/Application Support/Vinabike ERP/signing/android-release.jks}"
 KEYCHAIN_SIGNING_SERVICE="Vinabike ERP Android release keystore password"
 KEYCHAIN_SIGNING_ACCOUNT="com.vinabike.erp"
+KEYCHAIN_PUBLISHABLE_SERVICE="Vinabike ERP Supabase publishable key"
+KEYCHAIN_PUBLISHABLE_ACCOUNT="supabase"
 LATEST_MANIFEST_PATH="${TENANT_ID}/android/latest.json"
 CHECK_ONLY=false
 PREPARE_VERSION=false
@@ -103,7 +105,8 @@ if [[ -n "$CI_EXACT_SHA" ]]; then
     -z "${VINABIKE_ANDROID_STORE_PASSWORD:-}" ||
     -z "${VINABIKE_ANDROID_KEY_PASSWORD:-}" ||
     -z "${VINABIKE_ANDROID_KEY_ALIAS:-}" ||
-    -z "${SUPABASE_RELEASE_SECRET:-}"
+    -z "${SUPABASE_RELEASE_SECRET:-}" ||
+    -z "${SUPABASE_PUBLISHABLE_KEY:-}"
   ]]; then
     echo 'The protected Android publisher is missing a required Production secret.' >&2
     exit 66
@@ -205,6 +208,21 @@ resolve_supabase_secret() {
   security find-generic-password \
     -s "Vinabike ERP Supabase secret key" \
     -a supabase \
+    -w 2>/dev/null
+}
+
+resolve_supabase_publishable_key() {
+  local value="${SUPABASE_PUBLISHABLE_KEY:-}"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return
+  fi
+  if ! command -v security >/dev/null 2>&1; then
+    return 1
+  fi
+  security find-generic-password \
+    -s "$KEYCHAIN_PUBLISHABLE_SERVICE" \
+    -a "$KEYCHAIN_PUBLISHABLE_ACCOUNT" \
     -w 2>/dev/null
 }
 
@@ -712,11 +730,22 @@ export VINABIKE_ANDROID_STORE_PASSWORD="$SIGNING_PASSWORD"
 export VINABIKE_ANDROID_KEY_ALIAS="$KEY_ALIAS"
 export VINABIKE_ANDROID_KEY_PASSWORD="$SIGNING_KEY_PASSWORD"
 
+SUPABASE_PUBLISHABLE_KEY="$(resolve_supabase_publishable_key || true)"
+case "$SUPABASE_PUBLISHABLE_KEY" in
+  sb_publishable_*) ;;
+  *)
+    echo 'The Android release requires a valid Supabase publishable key.' >&2
+    exit 66
+    ;;
+esac
+
 "${FLUTTER_COMMAND[@]}" build apk \
   --release \
   --split-per-abi \
   --build-name "$VERSION_NAME" \
-  --build-number "$VERSION_CODE"
+  --build-number "$VERSION_CODE" \
+  --dart-define=AI_AGENT_GATEWAY_ENABLED=true \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
 
 APK_PATH="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
 [[ -f "$APK_PATH" ]] || {

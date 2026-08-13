@@ -39,6 +39,20 @@ void main() {
     expect(publisher, contains('chunk_size=6291456'));
     expect(publisher, contains('Tus-Resumable: 1.0.0'));
     expect(publisher, contains('--split-per-abi'));
+    expect(
+      publisher,
+      contains('--dart-define=AI_AGENT_GATEWAY_ENABLED=true'),
+    );
+    expect(
+      publisher,
+      contains(
+        '--dart-define=SUPABASE_PUBLISHABLE_KEY="\$SUPABASE_PUBLISHABLE_KEY"',
+      ),
+    );
+    expect(
+      publisher,
+      contains('Vinabike ERP Supabase publishable key'),
+    );
     expect(publisher, contains('app-arm64-v8a-release.apk'));
     expect(publisher, contains('ANDROID_ARM64_VERSION_CODE_OFFSET=2000'));
     expect(publisher, contains(r'"$AAPT" dump badging "$APK_PATH"'));
@@ -207,6 +221,7 @@ void main() {
       r'${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}',
       r'${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}',
       r'${{ secrets.SUPABASE_RELEASE_SECRET }}',
+      r'${{ secrets.SUPABASE_PUBLISHABLE_KEY }}',
     ]) {
       expect(workflow.indexOf(secret), greaterThan(productionBoundary));
     }
