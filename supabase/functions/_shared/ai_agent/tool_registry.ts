@@ -13,6 +13,8 @@ const purchasesRead = "ai.read.purchases";
 const accountingRead = "ai.read.accounting";
 const publicResearchToolName = "research_public_web";
 const prepareTaskToolName = "prepare_task";
+const inventorySchemaToolName = "inspect_inventory_schema";
+const capabilityGapToolName = "report_capability_gap";
 
 export class ToolRegistryError extends Error {
   constructor(
@@ -125,17 +127,160 @@ export class AgentToolRegistry {
   }
 }
 
-const querySchema: StrictJsonSchema = {
+const inventorySearchSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    query: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 240,
+      description:
+        "Identidad o contexto textual opcional del producto: nombre, marca, modelo, SKU o código. Usa null cuando categoría y predicados técnicos expresen completamente la búsqueda.",
+    },
+    category: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 160,
+      description:
+        'Categoría canónica del catálogo, por ejemplo "Cámaras". El backend la resuelve contra product_categories y expande sólo su category_tech_mappings. Usa null únicamente si la petición identifica un producto pero no una familia/categoría.',
+    },
+    availability: enumProperty(
+      ["any", "in_stock", "low_stock", "out_of_stock"],
+      "Filtro de disponibilidad pedido: in_stock incluye stock bajo; any sólo cuando el operador no condicionó disponibilidad.",
+    ),
+    presentation: enumProperty(
+      ["answer", "open_list"],
+      "Usa open_list sólo cuando abrir el listado filtrado completa una petición explícita de buscar, mostrar, listar o abrir productos. Usa answer para preguntas, conteos, comparaciones o resúmenes.",
+    ),
+    technicalPredicates: {
+      type: "array",
+      minItems: 0,
+      maxItems: 8,
+      description:
+        "Predicados técnicos explícitos obtenidos de inspect_inventory_schema. No inventes claves, operadores ni valores. Usa [] cuando no exista una restricción técnica.",
+      items: {
+        type: "object",
+        properties: {
+          field: {
+            type: "string",
+            minLength: 2,
+            maxLength: 64,
+            description: "Clave snake_case exacta de spec_definitions.key.",
+          },
+          operator: {
+            type: "string",
+            enum: ["eq", "neq", "lt", "lte", "gt", "gte", "between", "in", "contains"],
+            description: "Operador anunciado por inspect_inventory_schema para el campo exacto.",
+          },
+          values: {
+            type: "array",
+            minItems: 1,
+            maxItems: 10,
+            items: { type: ["string", "number", "boolean"] },
+            description:
+              "Uno o más valores tipados. between usa exactamente dos; los operadores escalares usan uno.",
+          },
+        },
+        required: ["field", "operator", "values"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["query", "category", "availability", "presentation", "technicalPredicates"],
+  additionalProperties: false,
+};
+
+const inventorySchemaInspectionSchema: StrictJsonSchema = {
   type: "object",
   properties: {
     query: {
       type: "string",
       minLength: 1,
       maxLength: 240,
-      description: "Texto breve y específico para filtrar datos autorizados.",
+      description:
+        "Petición técnica breve del operador. Se usa sólo para descubrir categorías y campos autorizados; no ejecuta la búsqueda.",
+    },
+    category: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 160,
+      description:
+        "Categoría que crees pertinente, o null para que el servidor proponga candidatos desde el árbol real.",
     },
   },
-  required: ["query"],
+  required: ["query", "category"],
+  additionalProperties: false,
+};
+
+const capabilityGapSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    domain: {
+      type: "string",
+      enum: [
+        "inventory",
+        "workshop",
+        "sales",
+        "purchases",
+        "accounting",
+        "customers",
+        "suppliers",
+        "tasks",
+        "communications",
+        "files",
+        "public_web",
+        "other",
+      ],
+      description: "Dominio principal que la petición necesita.",
+    },
+    operation: {
+      type: "string",
+      enum: [
+        "read",
+        "filter",
+        "compare",
+        "aggregate",
+        "draft",
+        "mutate",
+        "navigate",
+        "research",
+        "other",
+      ],
+      description: "Tipo de operación que no se pudo completar con precisión.",
+    },
+    reason: {
+      type: "string",
+      enum: [
+        "missing_tool",
+        "unsupported_filter",
+        "missing_structured_data",
+        "permission_required",
+        "ambiguous_request",
+        "source_unavailable",
+      ],
+      description:
+        "Motivo exacto. No uses source_unavailable para un argumento inválido ni missing_tool si una herramienta anunciada sí cubre la petición.",
+    },
+    alternative: {
+      type: "string",
+      enum: [
+        "none",
+        "broader_search",
+        "exact_match",
+        "ask_clarification",
+        "public_research",
+      ],
+      description: "Alternativa segura que el operador puede intentar, si existe.",
+    },
+    field: {
+      type: ["string", "null"],
+      minLength: 2,
+      maxLength: 64,
+      description:
+        "Clave exacta devuelta por inspect_inventory_schema cuando reason es missing_structured_data; null para cualquier otra causa.",
+    },
+  },
+  required: ["domain", "operation", "reason", "alternative", "field"],
   additionalProperties: false,
 };
 
@@ -345,9 +490,15 @@ const prepareTaskSchema: StrictJsonSchema = {
 export function createDefaultAgentToolRegistry(options: { publicResearch?: boolean } = {}) {
   return new AgentToolRegistry([
     readTool(
+      inventorySchemaToolName,
+      "Descubre el árbol real de categorías, familias técnicas, campos de ficha, tipos, unidades, operadores y cobertura de datos antes de construir una búsqueda técnica de inventario. No adivines claves desde la frase del operador: llama primero a esta herramienta y usa exactamente su contrato.",
+      inventorySchemaInspectionSchema,
+      operationalRead,
+    ),
+    readTool(
       "search_inventory",
-      "Busca productos, precio y stock en el inventario autorizado del taller.",
-      querySchema,
+      "Busca productos, precio y stock en el inventario autorizado. Separa categoría, identidad y especificaciones: category se valida contra el árbol real y sus descendientes; query queda sólo para identidad/contexto; restricciones técnicas van en technicalPredicates con las claves, tipos y operadores devueltos por inspect_inventory_schema. La base aplica categoría, ficha técnica y disponibilidad antes de devolver IDs. Separa una respuesta informativa de una petición explícita de abrir el listado y nunca enumeres un conjunto distinto del devuelto por la herramienta.",
+      inventorySearchSchema,
       operationalRead,
     ),
     readTool(
@@ -427,6 +578,11 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
       "Prepara una tarea exacta y durable para revisión. Nunca la crea: la escritura sólo ocurre después de una confirmación explícita en la tarjeta.",
       prepareTaskSchema,
       operationalRead,
+    ),
+    localTool(
+      capabilityGapToolName,
+      "Termina de forma honesta una petición que ninguna herramienta o dato autorizado puede resolver con precisión. Úsala sólo después de comparar la intención con las herramientas anunciadas o después de que una lectura demuestre la carencia; la respuesta final la redacta el servidor y nunca debe inventar ejecución ni disponibilidad.",
+      capabilityGapSchema,
     ),
     readTool(
       publicResearchToolName,
@@ -660,6 +816,19 @@ function readTool(
     description,
     parameters,
     requiredPermissions: [requiredCapability],
+  };
+}
+
+function localTool(
+  name: string,
+  description: string,
+  parameters: StrictJsonSchema,
+): AgentToolDefinition {
+  return {
+    name,
+    description,
+    parameters,
+    requiredPermissions: [],
   };
 }
 

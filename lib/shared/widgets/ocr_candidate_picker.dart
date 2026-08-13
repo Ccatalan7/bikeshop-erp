@@ -56,6 +56,32 @@ class OcrCandidateLineContext {
 
 typedef OcrCandidateSearch = Future<List<Product>> Function(String query);
 
+/// The row and the picker must ask the operator about candidates in exactly
+/// the same order. Normal survivors come first; manual-only rows follow in the
+/// matcher's stable ranking order. A category conflict is deliberately not
+/// part of this list: it owns a separate section and must never become the
+/// row's quick-link merely because the normal pool was exhausted.
+List<ProductDuplicateCandidate> orderOcrCandidateChoices(
+  Iterable<ProductDuplicateCandidate> candidates,
+) {
+  final normal = <ProductDuplicateCandidate>[];
+  final manual = <ProductDuplicateCandidate>[];
+  final seen = <String>{};
+  for (final candidate in candidates) {
+    final product = candidate.product;
+    final key = product.id?.trim().isNotEmpty == true
+        ? product.id!.trim()
+        : product.sku.trim();
+    if (!seen.add(key)) continue;
+    if (candidate.isRuledOut || candidate.isReviewOnlyFamilyScope) {
+      manual.add(candidate);
+    } else {
+      normal.add(candidate);
+    }
+  }
+  return <ProductDuplicateCandidate>[...normal, ...manual];
+}
+
 /// Centred picker for «¿cuál de estos es?».
 ///
 /// Deliberately *not* an in-row disclosure. Expanding alternatives inside the
@@ -417,10 +443,7 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Cancelar'),
                   ),
-                  if (!widget.inspectionOnly &&
-                      widget.allowCreateNew &&
-                      widget.aiCompositeProposal?.trim().isNotEmpty !=
-                          true) ...[
+                  if (!widget.inspectionOnly && widget.allowCreateNew) ...[
                     const SizedBox(width: 8),
                     FilledButton.tonal(
                       key: const Key('ocr-candidate-create-new'),
@@ -445,9 +468,6 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
       compact ? 12 : 16,
       12,
     );
-    final compositeReview =
-        widget.aiCompositeProposal?.trim().isNotEmpty == true;
-
     if (widget.errorMessage != null) {
       return Padding(
         padding: padding,
@@ -507,7 +527,7 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
             manual[index],
             products: manual,
           ),
-          onSelected: compositeReview || widget.inspectionOnly
+          onSelected: widget.inspectionOnly
               ? null
               : () =>
                   Navigator.of(context).pop(OcrCandidateLink(manual[index])),
@@ -515,7 +535,7 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
       );
     }
 
-    final offered = widget.candidates;
+    final offered = orderOcrCandidateChoices(widget.candidates);
     final categoryConflicts = widget.categoryConflicts;
     if (offered.isEmpty && categoryConflicts.isEmpty) {
       return Padding(
@@ -531,9 +551,14 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
 
     // Three explicit scopes, one list. Products from another category never
     // compete with the normal answer merely because they share words.
-    final viable = offered.where((candidate) => !candidate.isRuledOut).toList();
-    final ruledOut =
-        offered.where((candidate) => candidate.isRuledOut).toList();
+    final viable = offered
+        .where((candidate) =>
+            !candidate.isRuledOut && !candidate.isReviewOnlyFamilyScope)
+        .toList();
+    final ruledOut = offered
+        .where((candidate) =>
+            candidate.isRuledOut || candidate.isReviewOnlyFamilyScope)
+        .toList();
     final rows = <Widget>[
       if (viable.isNotEmpty)
         Padding(
@@ -553,7 +578,7 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
           objections: candidate.objections,
           tier: candidate.matchTier,
           onImageTap: () => _openProductImage(candidate.product),
-          onSelected: compositeReview || widget.inspectionOnly
+          onSelected: widget.inspectionOnly
               ? null
               : () => Navigator.of(context)
                   .pop(OcrCandidateLink(candidate.product)),
@@ -563,9 +588,13 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
           key: const Key('ocr-candidate-ruled-out-heading'),
           padding: const EdgeInsets.only(top: 8, bottom: 2),
           child: Text(
-            ruledOut.length == 1
-                ? '1 descartado por una diferencia'
-                : '${ruledOut.length} descartados por una diferencia',
+            ruledOut.any((candidate) => candidate.isReviewOnlyFamilyScope)
+                ? ruledOut.length == 1
+                    ? '1 opción para revisión manual'
+                    : '${ruledOut.length} opciones para revisión manual'
+                : ruledOut.length == 1
+                    ? '1 descartado por una diferencia'
+                    : '${ruledOut.length} descartados por una diferencia',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -578,7 +607,7 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
             objections: candidate.objections,
             tier: candidate.matchTier,
             onImageTap: () => _openProductImage(candidate.product),
-            onSelected: compositeReview || widget.inspectionOnly
+            onSelected: widget.inspectionOnly
                 ? null
                 : () => Navigator.of(context)
                     .pop(OcrCandidateLink(candidate.product)),
@@ -607,7 +636,7 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
             ],
             tier: candidate.matchTier,
             onImageTap: () => _openProductImage(candidate.product),
-            onSelected: compositeReview || widget.inspectionOnly
+            onSelected: widget.inspectionOnly
                 ? null
                 : () => Navigator.of(context)
                     .pop(OcrCandidateLink(candidate.product)),

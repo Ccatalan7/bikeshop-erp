@@ -162,7 +162,8 @@ void main() {
     expect(apiCollection, contains("'orders.api.shape'"));
     expect(apiCollection, contains("method: 'ordersApiShapeProbe'"));
     expect(apiCollection, contains('scalarByLeaf'));
-    expect(apiCollection, contains("'filterOptions': response['filterOptions']"));
+    expect(
+        apiCollection, contains("'filterOptions': response['filterOptions']"));
     expect(apiCollection, isNot(contains("'keyPaths':")));
     expect(
       apiCollection.indexOf("method: 'ordersApiShapeProbe'"),
@@ -170,8 +171,12 @@ void main() {
     );
     expect(apiCollection, contains("coverage['targetDateComplete'] == true"));
     expect(apiCollection, contains("certification['certified'] == true"));
-    expect(apiCollection, contains("'evaluationOnly': kDebugMode"));
-    expect(apiCollection, contains('kDebugMode && result[\'evaluationOnly\'] == true'));
+    expect(apiCollection, contains("'evaluationOnly': false"));
+    expect(apiCollection, isNot(contains("'evaluationOnly': kDebugMode")));
+    expect(
+      apiCollection,
+      isNot(contains("result['evaluationOnly'] == true")),
+    );
     expect(
       apiCollection,
       contains("termination['naturalExhaustion'] == true"),
@@ -209,13 +214,18 @@ void main() {
     expect(dailyCollection, contains("listCoverage['certified'] == true"));
     expect(
       dailyCollection,
-      contains("kDebugMode && listResult['evaluationOnly'] == true"),
+      contains("listResult['evaluationOnly'] == true"),
     );
     expect(
       dailyCollection,
       contains("listTermination['naturalExhaustion'] == true"),
     );
     expect(dailyCollection, contains("'list.coverage.rejected'"));
+    expect(dailyCollection, contains('if (!targetDateComplete)'));
+    expect(
+      dailyCollection,
+      isNot(contains('if (!targetDateComplete && !readOnlyEvaluation)')),
+    );
 
     expect(extractor, contains('const defaultMaxPages = exactDate ? 60 : 30'));
     expect(
@@ -235,16 +245,17 @@ void main() {
     expect(extractor, isNot(contains("reason = 'día superado'")));
   });
 
-  test('debug discovery reaches OCR with every mutation path disabled', () {
+  test('certified daily OCR is operational while diagnostics remain locked',
+      () {
     final browser =
         File('lib/shared/widgets/webview_module_page.dart').readAsStringSync();
     final ocr =
         File('lib/shared/widgets/ocr_upload_widget.dart').readAsStringSync();
 
-    expect(browser, contains("invoice['evaluationOnly'] = true"));
+    expect(browser, contains("..['evaluationOnly'] = true"));
     expect(
       browser,
-      contains("kDebugMode && listResult['evaluationOnly'] == true"),
+      contains("'evaluationOnly': false"),
     );
     expect(
       ocr,
@@ -253,21 +264,37 @@ void main() {
         "structuredInvoiceData?['evaluationOnly'] == true",
       ),
     );
-    expect(ocr, contains('if (_isReadOnlyEvaluation) return false;'));
-    expect(ocr, contains('if (_isReadOnlyEvaluation) return;'));
+    expect(
+      ocr,
+      contains('bool get _readOnlyEvaluationBlocksMutations'),
+    );
+    expect(ocr, contains("coverage['certified'] == true"));
+    expect(ocr, contains("coverage['targetDateComplete'] == true"));
+    expect(
+      ocr,
+      contains('if (_readOnlyEvaluationBlocksMutations) return false;'),
+    );
+    expect(
+      ocr,
+      contains('if (_readOnlyEvaluationBlocksMutations) return;'),
+    );
     expect(
       ocr,
       contains(
-        'if (_isReadOnlyEvaluation || !mounted || _bulkRowBusy(entry)) return;',
+        'if (_readOnlyEvaluationBlocksMutations || !mounted || '
+        '_bulkRowBusy(entry)) {',
       ),
     );
     expect(
       ocr,
-      contains("'Revisar \$unresolved producto\${unresolved == 1 ? '' : 's'} · solo lectura'"),
+      contains(
+          "'Revisar \$unresolved producto\${unresolved == 1 ? '' : 's'} · solo lectura'"),
     );
     expect(
       ocr,
-      contains('readOnly: _creatingProducts || _isReadOnlyEvaluation'),
+      contains(
+        'readOnly: _creatingProducts || _readOnlyEvaluationBlocksMutations',
+      ),
     );
   });
 }

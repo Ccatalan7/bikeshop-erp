@@ -45,6 +45,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ] as const;
 const DEFAULT_MAX_REQUEST_BYTES = 32 * 1024;
 const DEFAULT_TIMEOUT_MS = 90_000;
+const RESULT_LISTS_CAPABILITY_HEADER = "x-vinabike-ai-result-lists";
 
 type EnvReader = (name: string) => string | undefined;
 
@@ -213,6 +214,7 @@ async function completeGatewayTurn(
     systemInstruction: options.systemInstruction,
     maxOutputTokens: options.maxOutputTokens,
     pricingCatalog: options.pricingCatalog,
+    supportsResultLists: request.headers.get(RESULT_LISTS_CAPABILITY_HEADER) === "1",
   }, signal);
 }
 
@@ -610,7 +612,8 @@ function corsHeaders(
   origins: ReadonlySet<string>,
 ): HeadersInit {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers":
+      `authorization, x-client-info, apikey, content-type, ${RESULT_LISTS_CAPABILITY_HEADER}`,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",

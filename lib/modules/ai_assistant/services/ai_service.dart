@@ -286,10 +286,12 @@ class AIProductIdentityInvestigation {
   double get confidence => object.confidence;
 
   bool get isSufficient =>
-      composition.kind != AIProductPackageKind.insufficient &&
       object.label?.trim().isNotEmpty == true &&
       leafProposals.isNotEmpty &&
       abstainReason == null;
+
+  bool get hasSufficientComposition =>
+      composition.kind != AIProductPackageKind.insufficient;
 }
 
 class AIProductImageAnalysis {
@@ -556,6 +558,9 @@ enum AIProductMatchDecisionKind {
 }
 
 enum AIProductMatchBasis {
+  object,
+  function,
+  shape,
   model,
   spec,
   manufacturer,
@@ -810,7 +815,7 @@ class AIAssistantService extends ChangeNotifier
       ProductIdentityAIContract.schemaVersion;
   static const String productIdentityVisionModel = 'gemini-3.6-flash';
   static const String productMatchPromptKey =
-      'ai-product-grounded-adjudication-v5';
+      'ai-product-grounded-adjudication-v6';
   static const String productCatalogScreenPromptKey =
       'ai-product-catalog-screen-v1';
 
@@ -1547,9 +1552,9 @@ Responde SOLO JSON valido con esta forma exacta:
   "decision": "same|different|composite|insufficient",
   "picks": [{"product_id": "<id ofrecido>", "qty": 1,
               "role": "primary|front|rear|left|right|component|homogeneous",
-              "basis": ["model|spec|manufacturer|image|name|history|cost"]}],
+              "basis": ["object|function|shape|model|spec|manufacturer|image|name|history|cost"]}],
   "rejected": [{"product_id": "<id ofrecido>", "reason": "<breve>",
-                 "basis": ["model|spec|manufacturer|image|name|history|cost"]}],
+                 "basis": ["object|function|shape|model|spec|manufacturer|image|name|history|cost"]}],
   "confidence": 0.0,
   "prompt_version": "${promptVersion.trim()}",
   "model_id": "${modelName.trim()}"
@@ -1583,11 +1588,13 @@ Reglas duras:
   `composite` y su ausencia en la foto o nombre del catálogo no prueba que el
   producto principal sea distinto. Sólo `primary`/`component` cuentan para una
   resolución de varios productos.
-- `rejected` es sólo el resumen para el operador, no una transcripción de toda
-  la comparación. Incluye como máximo $maxDetailedAdjudicationRejections
-  candidatos: únicamente los competidores más cercanos o las diferencias más
-  decisivas. No enumeres todos los demás productos; ya permanecen disponibles
-  en el catálogo y el cliente conserva sus gates deterministas.
+- `rejected` es además el orden canónico de revisión humana cuando no eliges un
+  producto exacto. Ordénalo SIEMPRE desde el candidato más cercano al objeto
+  comprado hasta el más lejano, comparando primero objeto vendido, función,
+  forma física e imagen y luego modelo, fabricante y especificaciones. El
+  primer rechazo debe ser la mejor alternativa para inspeccionar aunque una
+  diferencia decisiva impida responder `same`. Incluye como máximo
+  $maxDetailedAdjudicationRejections candidatos y no enumeres el resto.
 - NUNCA inventes una referencia ni un producto. Sólo puedes usar referencias
   de esta lista.
 - product_id debe copiar EXACTAMENTE el campo `id` opaco del candidato (por
@@ -1967,6 +1974,23 @@ END_UNTRUSTED_CATALOG_DATA_JSON
         final original = item.trim();
         final token = original.toLowerCase();
         final basis = switch (token) {
+          'object' => AIProductMatchBasis.object,
+          'objeto' ||
+          'piece_type' ||
+          'product_type' =>
+            AIProductMatchBasis.object,
+          'function' => AIProductMatchBasis.function,
+          'funcion' ||
+          'función' ||
+          'purpose' ||
+          'role' =>
+            AIProductMatchBasis.function,
+          'shape' => AIProductMatchBasis.shape,
+          'forma' ||
+          'geometry' ||
+          'geometria' ||
+          'geometría' =>
+            AIProductMatchBasis.shape,
           'model' => AIProductMatchBasis.model,
           'modelo' || 'model_code' || 'model code' => AIProductMatchBasis.model,
           'spec' => AIProductMatchBasis.spec,
@@ -3152,7 +3176,12 @@ Reglas de identidad:
   sigue siendo `single`. En `single` puede haber un `primary` qty=1 y cualquier
   cantidad de `included_accessory`; en `composite`, enumera como `component`
   cada producto/unidad que sí debe resolverse por separado. Usa `insufficient`
-  cuando la evidencia no permite saberlo.
+  cuando la evidencia no permite saberlo. La composición puede ser
+  `insufficient` aunque el objeto y su hoja estén claros: en ese caso conserva
+  identity.object y leaf_proposals, deja components=[], y abstain_reason=null.
+  Sólo usa abstain_reason y leaf_proposals=[] cuando la IDENTIDAD completa no
+  alcanza. Nunca conviertas piezas físicas visibles en productos de inventario
+  independientes sin evidencia comercial.
 - identity.packaging describe unidades contenidas en UNA compra sólo cuando lo
   prueba el título o la variante seleccionada. La cantidad comprada de la
   factura nunca es packaging.count.

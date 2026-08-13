@@ -75498,6 +75498,29 @@ comment on column public.suppliers.portal_password is
 -- composite resolution flows only through the new versioned graph.
 \ir ../migrations/20260812040000_supplier_variant_resolution_graph.sql
 
+-- One typed inventory result set feeds assistant synthesis, compact UI and
+-- exact product-list navigation; availability is filtered before first-N.
+\ir ../migrations/20260813174500_ai_assistant_inventory_list_projection.sql
+
+-- Durable run completion accepts only the exact typed list reference emitted
+-- by the inventory projection; arbitrary card JSON remains closed.
+\ir ../migrations/20260813180300_ai_assistant_inventory_list_card_contract.sql
+
+-- Inventory discovery binds AI-planned technical filters to the canonical
+-- Spec Engine; populated specs outrank identity fallback and availability is
+-- applied inside the same server-owned projection.
+\ir ../migrations/20260813190000_ai_assistant_inventory_identity_constraints.sql
+
+-- Resolve the model-planned catalog category through the canonical category
+-- and technical-family graph before applying specifications and stock.
+\ir ../migrations/20260813203000_ai_assistant_inventory_category_spec_projection.sql
+
+-- Let the assistant discover real category/spec capabilities and data coverage
+-- before it emits typed equality, comparison, membership or range predicates.
+\ir ../migrations/20260813213000_ai_assistant_capability_aware_inventory.sql
+\ir ../migrations/20260813214500_ai_assistant_capability_tool_receipts.sql
+\ir ../migrations/20260813215000_ai_assistant_tool_receipt_contract.sql
+
 -- Bootstrap-wide service-role grants above predate the notification ACL
 -- hardening. Preserve the production end state after every included migration.
 revoke all on function public.create_sales_payment_erp_notification()

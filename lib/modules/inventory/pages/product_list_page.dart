@@ -270,7 +270,7 @@ class _ProductListPageState extends State<ProductListPage> {
   StreamSubscription? _scanSubscription;
   StreamSubscription<String>? _externalSearchSub;
   List<String>?
-      _aiMatchedSkus; // SKUs from AI search, used instead of keyword search
+      _aiMatchedProductIds; // Exact IDs from a complete server-projected search
   bool _shouldRestoreState = false; // Local flag for this page instance
 
   // Hardware keyboard scanner state (USB/Bluetooth barcode scanners)
@@ -319,7 +319,7 @@ class _ProductListPageState extends State<ProductListPage> {
         setState(() {
           _searchTerm = term;
           _searchController.text = term;
-          _aiMatchedSkus = _inventoryService.aiMatchedSkus;
+          _aiMatchedProductIds = _inventoryService.aiMatchedProductIds;
           if (_inventoryService.aiStockFilterIndex != null) {
             _stockFilter = StockFilter.values[_inventoryService
                 .aiStockFilterIndex!
@@ -474,7 +474,7 @@ class _ProductListPageState extends State<ProductListPage> {
     // Restore state from service
     _searchTerm = _inventoryService.savedSearchTerm ?? '';
     _searchController.text = _searchTerm;
-    _aiMatchedSkus = _inventoryService.aiMatchedSkus;
+    _aiMatchedProductIds = _inventoryService.aiMatchedProductIds;
     _currentPage = _inventoryService.savedCurrentPage;
     _savedScrollOffset = _inventoryService.savedScrollOffset > 0
         ? _inventoryService.savedScrollOffset
@@ -1102,11 +1102,14 @@ class _ProductListPageState extends State<ProductListPage> {
       filtered = filtered.where((product) => product.isActive).toList();
     }
 
-    // 5. Search — use AI-matched SKUs if available, otherwise keyword search
-    if (_aiMatchedSkus != null && _aiMatchedSkus!.isNotEmpty) {
-      final skuSet = _aiMatchedSkus!.toSet();
-      filtered =
-          filtered.where((product) => skuSet.contains(product.sku)).toList();
+    // 5. Search — use an exact complete assistant result when available.
+    // An empty ID set is meaningful: it keeps a verified-empty search empty
+    // instead of falling back to a broader local keyword match.
+    if (_aiMatchedProductIds != null) {
+      final idSet = _aiMatchedProductIds!.toSet();
+      filtered = filtered
+          .where((product) => product.id != null && idSet.contains(product.id))
+          .toList();
     } else if (_searchTerm.isNotEmpty) {
       filtered = filtered.where((product) {
         return _matchesTokenSearch(_searchTerm, product);
@@ -1182,7 +1185,7 @@ class _ProductListPageState extends State<ProductListPage> {
   void _onSearchChanged(String value) {
     setState(() {
       _searchTerm = value.trim();
-      _aiMatchedSkus = null; // Clear AI results when user types manually
+      _aiMatchedProductIds = null; // Manual input owns the next local search
       _applyFilters();
     });
   }

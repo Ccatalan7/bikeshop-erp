@@ -53,7 +53,9 @@ any of them. The canonical AliExpress review order is now fixed:
    unknown word cannot erase a candidate or become the only identity source.
 5. **Grounded adjudication.** A second multimodal pass compares the source with
    every viable normal/conflict candidate and their real images. It returns
-   `same`, `different`, `composite` or `insufficient` with typed evidence.
+   `same`, `different`, `composite` or `insufficient` with typed evidence. A
+   negative/insufficient decision also orders its bounded manual-review leads
+   closest-first; it does not erase the comparison it just performed.
 6. **Human review.** AI output is a cached recommendation, never an automatic
    link or a write. Only confirmed authority can bypass review.
 
@@ -241,6 +243,16 @@ quantity only after the immutable supplier variant and catalog selling unit
 prove the conversion. Supplier quantity alone, listing-menu text and a photo
 never authorize either expansion; uncertainty must remain review-only.
 
+2026-08-13 correction: composition uncertainty is not identity uncertainty.
+The primary investigation runs before catalog comparison and may correctly
+identify an object and exact leaf while being unable to prove whether visible
+subparts are independent inventory identities. An internally contradictory
+composition is downgraded to `insufficient` composition only; it must not erase
+the object, leaf or grounded candidate universe. The later catalog-aware pass
+owns `single`, homogeneous-pack and multi-product resolution. This prevents a
+provider response such as “one BH59 fitting kit” plus separately described
+olive/pin hardware from turning a correctly recognized row into zero results.
+
 When the ordered components exactly equal one active canonical inventory set,
 the supplier resolution points to that set parent and the established
 `product_set_components` stock kernel owns the eventual expansion. Otherwise a
@@ -269,9 +281,13 @@ receives the source image/identity plus all viable normal and catalog-conflict
 candidates, their real images and explicit differences. It is not restricted
 to a deterministic score band. Its strict result is one of `same`, `different`,
 `composite` or `insufficient`; every pick/rejection uses only offered product IDs
-and typed basis values (`model`, `spec`, `manufacturer`, `image`, `name`,
-`history`). A missing field, invented ID, invalid basis, inconsistent cardinality,
-timeout, malformed response or candidate-budget overflow becomes
+and typed basis values (`object`, `function`, `shape`, `model`, `spec`,
+`manufacturer`, `image`, `name`, `history`, `cost`). For `different` and
+`insufficient`, rejected candidates are ordered from the closest sold object to
+the farthest. That order drives only manual review and keeps each decisive
+difference visible; it cannot populate recommendations or change the decision.
+A missing field, invented ID, invalid basis, inconsistent cardinality, timeout,
+malformed response or candidate-budget overflow becomes
 `insufficient` without silent truncation or heuristic fallback.
 
 The model's self-reported confidence is descriptive and is never a linking

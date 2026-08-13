@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/ai_assistant/services/ai_service.dart';
+import 'package:vinabike_erp/modules/inventory/models/inventory_models.dart';
+import 'package:vinabike_erp/modules/inventory/models/product_duplicate_candidate.dart';
 import 'package:vinabike_erp/modules/inventory/services/product_duplicate_matcher_service.dart';
 import 'package:vinabike_erp/shared/services/gemini_proxy_service.dart';
 
@@ -176,7 +178,7 @@ void main() {
     expect(proxy.lastPrompt, contains('BEGIN_UNTRUSTED_CATALOG_DATA_JSON'));
     expect(
       proxy.lastPrompt,
-      contains('Incluye como máximo 5'),
+      contains('Incluye como máximo'),
       reason: 'todos los candidatos se comparan, pero no se narran 40 rechazos',
     );
     expect(
@@ -203,7 +205,7 @@ void main() {
     final rejected = <String>[
       for (var index = 2; index <= 7; index++)
         '{"product_id":"C00$index","reason":"diferencia $index",'
-            '"basis":["spec"]}',
+            '"basis":[${index == 2 ? '"object","shape","spec"' : '"spec"'}]}',
     ].join(',');
     final proxy = _ScriptedProxy(
       '{"decision":"same","picks":['
@@ -239,7 +241,78 @@ void main() {
         'product-6',
       ],
     );
+    expect(
+      decision.rejected.first.basis,
+      containsAll(<AIProductMatchBasis>[
+        AIProductMatchBasis.object,
+        AIProductMatchBasis.shape,
+        AIProductMatchBasis.spec,
+      ]),
+    );
+    expect(
+      proxy.lastPrompt,
+      contains('primer rechazo debe ser la mejor alternativa'),
+    );
     service.dispose();
+  });
+
+  test('different conserva el candidato más cercano primero sin recomendarlo',
+      () async {
+    const hoseId = 'hose-product';
+    const oilId = 'oil-product';
+    const decision = AIProductMatchDecision(
+      decision: AIProductMatchDecisionKind.different,
+      productId: null,
+      rejected: <AIProductMatchRejection>[
+        AIProductMatchRejection(
+          productId: hoseId,
+          reason:
+              'Es la misma clase de objeto, pero mide 1 m y la fuente 2,5 m.',
+          basis: <AIProductMatchBasis>[
+            AIProductMatchBasis.object,
+            AIProductMatchBasis.shape,
+            AIProductMatchBasis.spec,
+          ],
+        ),
+        AIProductMatchRejection(
+          productId: oilId,
+          reason: 'Es líquido de frenos, no una manguera.',
+          basis: <AIProductMatchBasis>[
+            AIProductMatchBasis.object,
+            AIProductMatchBasis.function,
+            AIProductMatchBasis.shape,
+          ],
+        ),
+      ],
+      reason: 'Ninguno es exactamente la variante comprada.',
+      confidence: 1,
+    );
+    final original = <ProductDuplicateCandidate>[
+      _manualCandidate(id: oilId, sku: 'OIL', name: 'Aceite mineral'),
+      _manualCandidate(id: hoseId, sku: 'HOSE', name: 'Manguera 1 m'),
+      _manualCandidate(id: 'rotor', sku: 'ROTOR', name: 'Rotor'),
+    ];
+
+    final ordered = aiOrderedManualReviewLeads(
+      decision: decision,
+      candidates: original,
+    );
+
+    expect(ordered.map((candidate) => candidate.product.id),
+        <String>[hoseId, oilId]);
+    expect(ordered.first.objections.first, contains('mide 1 m'));
+    expect(decision.productId, isNull,
+        reason: 'ordenar revisión nunca convierte different en same');
+
+    final completeOrder = applyAIManualReviewOrder(
+      decision: decision,
+      candidates: original,
+    );
+    expect(
+      completeOrder.map((candidate) => candidate.product.id),
+      <String>[hoseId, oilId, 'rotor'],
+      reason: 'el recibo prioriza sin ocultar el resto del catálogo',
+    );
   });
 
   test('propone un conjunto sólo con ids ofrecidos y cantidades positivas',
@@ -457,6 +530,29 @@ void main() {
     service.dispose();
   });
 }
+
+ProductDuplicateCandidate _manualCandidate({
+  required String id,
+  required String sku,
+  required String name,
+}) =>
+    ProductDuplicateCandidate(
+      product: Product(
+        id: id,
+        tenantId: 'tenant-test',
+        sku: sku,
+        name: name,
+        price: 1,
+        cost: 1,
+      ),
+      matchTier: ProductDuplicateMatchTier.possible,
+      confidence: 0,
+      reasons: const <String>[],
+      objections: const <String>[],
+      gates: const [],
+      variantMismatch: false,
+      hasProductImage: true,
+    );
 
 class _ScriptedProxy extends GeminiProxyService {
   _ScriptedProxy(this.reply)

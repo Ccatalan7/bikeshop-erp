@@ -205,6 +205,24 @@ Deno.test("missing bearer is rejected before production transports are construct
   assertEquals((await response.json()).code, "invalid_session", "missing bearer is sanitized");
 });
 
+Deno.test("CORS preflight permits the result-list rollout capability header", async () => {
+  const setup = options();
+  const response = await handler(
+    new Request(endpoint, {
+      method: "OPTIONS",
+      headers: { origin },
+    }),
+    setup.value,
+  );
+  assertEquals(response.status, 204, "preflight succeeds");
+  assert(
+    response.headers.get("access-control-allow-headers")?.includes(
+      "x-vinabike-ai-result-lists",
+    ),
+    "web clients may negotiate typed result lists",
+  );
+});
+
 Deno.test("v1 request parser accepts only the closed client contract", () => {
   const parsed = parseGatewayRequest(body());
   assertEquals(parsed.version, 1, "version remains fixed");
@@ -675,7 +693,7 @@ Deno.test("production wiring isolates caller data and assistant_runtime ledger t
         })),
       );
     }
-    if (rpc === "assistant_search_inventory_v1") {
+    if (rpc === "assistant_search_inventory_v5") {
       return Promise.resolve(
         new Response(JSON.stringify({
           authorityTenantId: tenantId,
@@ -732,7 +750,13 @@ Deno.test("production wiring isolates caller data and assistant_runtime ledger t
     {
       id: "call-1",
       name: "search_inventory",
-      arguments: { query: "cadena" },
+      arguments: {
+        query: "cadena",
+        category: null,
+        availability: "any",
+        presentation: "answer",
+        technicalPredicates: [],
+      },
     },
     resolved,
     signal,
@@ -750,7 +774,7 @@ Deno.test("production wiring isolates caller data and assistant_runtime ledger t
 
   assertEquals(requests.map((entry) => entry.path), [
     "/rest/v1/rpc/assistant_get_authority_v1",
-    "/rest/v1/rpc/assistant_search_inventory_v1",
+    "/rest/v1/rpc/assistant_search_inventory_v5",
     "/rest/v1/rpc/assistant_begin_run_v1",
     "/rest/v1/rpc/assistant_heartbeat_run_v2",
   ], "only fixed transports are reached");

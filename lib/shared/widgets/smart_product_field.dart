@@ -39,6 +39,13 @@ class SmartProductField extends StatefulWidget {
   /// Whether the field is editable
   final bool enabled;
 
+  /// Whether the selected catalog identity may be replaced or cleared.
+  ///
+  /// Some workflows keep the catalog product immutable while still allowing
+  /// operators to edit the line description. In that state the normal product
+  /// card remains visible, but its clear/search affordances are removed.
+  final bool canChangeProduct;
+
   /// Callback for when product is selected and new line should be added
   final VoidCallback? onAutoAddLine;
 
@@ -73,6 +80,7 @@ class SmartProductField extends StatefulWidget {
     this.compatibilityContextKey,
     this.allowCustomItems = true,
     this.enabled = true,
+    this.canChangeProduct = true,
     this.onAutoAddLine,
     this.onEditProduct,
     this.onShowProductDetails,
@@ -162,6 +170,7 @@ class _SmartProductFieldState extends State<SmartProductField> {
   bool get _hasProduct => _productName?.isNotEmpty ?? false;
 
   void _clearProduct() {
+    if (!widget.enabled || !widget.canChangeProduct) return;
     setState(() {
       _product = null;
       _productName = null;
@@ -259,6 +268,12 @@ class _SmartProductFieldState extends State<SmartProductField> {
     // If product is set, show Zoho-style card
     if (_hasProduct) {
       return _buildProductCard(theme);
+    }
+
+    // A locked identity without a selected product cannot truthfully offer a
+    // catalog search. Keep the same read-only projection instead.
+    if (!widget.canChangeProduct) {
+      return _buildReadOnlyView(theme);
     }
 
     // Otherwise show search field
@@ -486,20 +501,24 @@ class _SmartProductFieldState extends State<SmartProductField> {
                               ),
                           ],
                         ),
-                      // X button - CLEARS product and returns to search mode
-                      InkWell(
-                        onTap: _clearProduct,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.close,
-                            size: 16,
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.6),
+                      // X button - CLEARS product and returns to search mode.
+                      // A provenance-owned line keeps the normal card and
+                      // description editor but cannot silently replace one
+                      // component of the confirmed composition.
+                      if (widget.canChangeProduct)
+                        InkWell(
+                          onTap: _clearProduct,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.close,
+                              size: 16,
+                              color: theme.colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.6),
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                   // SKU

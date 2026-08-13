@@ -41,6 +41,9 @@ select has_function('assistant_runtime', 'assistant_record_provider_attempt_v2',
   array['text','text','text'], 'attested provider accounting RPC exists');
 select has_function('assistant_runtime', 'assistant_record_tool_receipt_v2',
   array['text','text','text'], 'attested tool receipt RPC exists');
+select has_function('assistant_runtime',
+  'assistant_tool_receipt_contract_internal_v1', array['text'],
+  'typed receipt contract exists for the model-visible catalog');
 select has_function('assistant_runtime', 'assistant_complete_run_v2',
   array['text','text','text'], 'attested terminal RPC exists');
 select has_function('assistant_runtime', 'assistant_purge_expired_runtime_v1',
@@ -142,6 +145,24 @@ select is(public.assistant_cards_valid_v1(
 select is(public.assistant_cards_valid_v1(
   '[{"kind":"job","title":"Trabajo","destination":"workshopJobs","chips":[]}]'),
   false, 'legacy camel-case destinations fail closed');
+select is(public.assistant_cards_valid_v1(
+  '[{"kind":"inventory","title":"2 resultados","destination":"inventory_products","chips":["En stock"],"listRef":{"kind":"inventory","query":"camaras 29","availability":"in_stock","resultCount":2,"hasMore":false,"entityIds":["a1700000-0000-4000-8000-000000000104","a1700000-0000-4000-8000-000000000105"],"autoOpen":true}}]'),
+  true, 'durable cards accept one exact complete inventory result set');
+select is(public.assistant_cards_valid_v1(
+  '[{"kind":"inventory","title":"10+ resultados","destination":"inventory_products","chips":["Todos"],"listRef":{"kind":"inventory","query":"camara","availability":"any","resultCount":10,"hasMore":true,"entityIds":null,"autoOpen":false}}]'),
+  true, 'truncated inventory lists retain no misleading first-page IDs');
+select is(public.assistant_cards_valid_v1(
+  '[{"kind":"inventory","title":"2 resultados","destination":"inventory_products","chips":[],"listRef":{"kind":"inventory","query":"camara","availability":"in_stock","resultCount":2,"hasMore":false,"entityIds":["a1700000-0000-4000-8000-000000000104"],"autoOpen":true}}]'),
+  false, 'inventory list count must equal its complete ID set');
+select is(public.assistant_cards_valid_v1(
+  '[{"kind":"inventory","title":"2 resultados","destination":"inventory_products","chips":[],"listRef":{"kind":"inventory","query":"camara","availability":"in_stock","resultCount":2,"hasMore":false,"entityIds":["a1700000-0000-4000-8000-000000000104","a1700000-0000-4000-8000-000000000104"],"autoOpen":true}}]'),
+  false, 'inventory list IDs are unique canonical UUIDs');
+select is(public.assistant_cards_valid_v1(
+  '[{"kind":"job","title":"Trabajo","destination":"workshop_jobs","chips":[],"listRef":{"kind":"inventory","query":"camara","availability":"in_stock","resultCount":0,"hasMore":false,"entityIds":[],"autoOpen":true}}]'),
+  false, 'a list reference cannot escape its closed inventory destination');
+select is(public.assistant_cards_valid_v1(
+  '[{"kind":"inventory","title":"Producto","destination":"inventory_products","chips":[],"entityRef":{"kind":"product","id":"a1700000-0000-4000-8000-000000000104"},"listRef":{"kind":"inventory","query":"camara","availability":"in_stock","resultCount":1,"hasMore":false,"entityIds":["a1700000-0000-4000-8000-000000000104"],"autoOpen":true}}]'),
+  false, 'entity and list references cannot coexist');
 select is(public.assistant_cards_valid_v1(jsonb_build_array(jsonb_build_object(
   'kind','job','title',repeat('😀',41),'destination','workshop_jobs','chips','[]'::jsonb
 ))), false, 'card title bound uses exact UTF-8 bytes');
@@ -415,8 +436,24 @@ select lives_ok(format(
   (select payload->>'fenceToken' from runtime_begin),repeat('5',64),'research_public_web',
   'v1','public_research','allowed','succeeded',repeat('6',64),repeat('7',64)),
   'isolated public research is accepted only with its exact risk class');
+select lives_ok(format(
+  'select assistant_runtime.assistant_record_tool_receipt_v1(%L::uuid,%L::uuid,%L,%L::uuid,%L::uuid,%s,4,1,%L,%L,%L,%L,%L,%L,%L,%L,40,100,false,true,null,now(),now())',
+  'a1700000-0000-4000-8000-000000000001','a1700000-0000-4000-8000-000000000011',
+  (select payload->>'authorityFingerprint' from runtime_authority),
+  (select payload->>'runId' from runtime_begin),(select payload->>'leaseToken' from runtime_begin),
+  (select payload->>'fenceToken' from runtime_begin),repeat('8',64),'inspect_inventory_schema',
+  'v1','read','allowed','succeeded',repeat('9',64),repeat('a',64)),
+  'schema discovery has a durable read receipt at its forty-row ceiling');
+select lives_ok(format(
+  'select assistant_runtime.assistant_record_tool_receipt_v1(%L::uuid,%L::uuid,%L,%L::uuid,%L::uuid,%s,5,1,%L,%L,%L,%L,%L,%L,%L,%L,1,100,false,true,null,now(),now())',
+  'a1700000-0000-4000-8000-000000000001','a1700000-0000-4000-8000-000000000011',
+  (select payload->>'authorityFingerprint' from runtime_authority),
+  (select payload->>'runId' from runtime_begin),(select payload->>'leaseToken' from runtime_begin),
+  (select payload->>'fenceToken' from runtime_begin),repeat('b',64),'report_capability_gap',
+  'v1','read','allowed','succeeded',repeat('c',64),repeat('d',64)),
+  'server-owned capability terminal has a durable read receipt');
 select throws_ok(format(
-  'select assistant_runtime.assistant_record_tool_receipt_v1(%L::uuid,%L::uuid,%L,%L::uuid,%L::uuid,%s,4,1,%L,%L,%L,%L,%L,%L,%L,%L,1,10,false,true,null,now(),now())',
+  'select assistant_runtime.assistant_record_tool_receipt_v1(%L::uuid,%L::uuid,%L,%L::uuid,%L::uuid,%s,6,1,%L,%L,%L,%L,%L,%L,%L,%L,1,10,false,true,null,now(),now())',
   'a1700000-0000-4000-8000-000000000001','a1700000-0000-4000-8000-000000000011',
   (select payload->>'authorityFingerprint' from runtime_authority),
   (select payload->>'runId' from runtime_begin),(select payload->>'leaseToken' from runtime_begin),
@@ -856,8 +893,8 @@ select is((select count(*)::text from public.assistant_threads
 
 select is((select count(*)::text from public.assistant_runs),'6',
   'replay, budget, cancel, reclaim and concurrency admissions create only intended runs');
-select is((select count(*)::text from public.assistant_tool_receipts),'7',
-  'normal, snapshot, research, budget-crossing and cancel-raced receipts persisted');
+select is((select count(*)::text from public.assistant_tool_receipts),'9',
+  'normal, capability, research, budget-crossing and cancel-raced receipts persisted');
 select is((select count(*)::text from public.assistant_messages message
   where message.thread_id = (select (payload->>'threadId')::uuid from runtime_cancel)),
   '0', 'thread deletion scrubs all visible messages even after lease removal');

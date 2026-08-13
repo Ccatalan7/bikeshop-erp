@@ -5,7 +5,13 @@ import 'dart:convert';
 
 import 'dart:async';
 import 'package:flutter/foundation.dart'
-    show kDebugMode, kIsWeb, defaultTargetPlatform, TargetPlatform, listEquals;
+    show
+        TargetPlatform,
+        defaultTargetPlatform,
+        kDebugMode,
+        kIsWeb,
+        listEquals,
+        visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
@@ -200,6 +206,33 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   // debug build, but it must never reserve a SKU, learn an alias, create a
   // product or apply a purchase draft.
   bool _isReadOnlyEvaluation = false;
+
+  /// Whether the current OCR review must actually block business mutations.
+  ///
+  /// Older debug handoffs marked every daily invoice as evaluation-only even
+  /// after the exact-date collector had certified the full source day. During
+  /// hot reload that flag remains in the in-memory document. A certified
+  /// internal handoff can therefore be promoted safely without rerunning its
+  /// image/AI work; a canary or partial discovery remains locked.
+  bool get _readOnlyEvaluationBlocksMutations {
+    if (!_isReadOnlyEvaluation) return false;
+    if (!kDebugMode) return true;
+    final rawText = _parsedData?.rawText.trim();
+    if (rawText == null || rawText.isEmpty) return true;
+    try {
+      final decoded = jsonDecode(rawText);
+      if (decoded is! Map) return true;
+      final invoice = Map<String, dynamic>.from(decoded);
+      final rawCoverage = invoice['coverage'];
+      if (rawCoverage is! Map) return true;
+      final coverage = Map<String, dynamic>.from(rawCoverage);
+      return !(coverage['certified'] == true &&
+          coverage['targetDateComplete'] == true);
+    } catch (_) {
+      return true;
+    }
+  }
+
   // True when the costs coming from OCR/JSON already include IVA (19%).
   // Auto-detected from the parsed invoice (e.g. AliExpress allocates IVA into
   // each unit price). Used to compute the suggested selling price correctly
@@ -683,6 +716,90 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         'Revisa los datos importados del archivo antes de usarlos.',
     };
 
+    Map<String, inv_models.Product> previewProductsById() {
+      final products = <String, inv_models.Product>{};
+      for (final product in _productReviewCatalogSnapshot ?? const []) {
+        final id = product.id;
+        if (id != null) products[id] = product;
+      }
+      for (final entry in _newProductEntries) {
+        for (final product in entry.supplierResolutionProducts) {
+          final id = product.id;
+          if (id != null) products[id] = product;
+        }
+      }
+      return products;
+    }
+
+    List<OcrPreviewResolutionComponent> previewComponents(
+      ParsedLineItem item,
+    ) =>
+        buildOcrPreviewResolutionComponents(
+          item: item,
+          productsById: previewProductsById(),
+        );
+
+    String resolutionStatus(ParsedLineItem item) {
+      final resolution = item.supplierResolution;
+      if (resolution?.isResolved != true) {
+        return _isParsedLineResolved(item) ? 'Vinculado' : 'Por revisar';
+      }
+      return switch (resolution!.kind) {
+        SupplierVariantResolutionKind.composite => 'Descompuesto',
+        SupplierVariantResolutionKind.homogeneous => 'Pack resuelto',
+        SupplierVariantResolutionKind.single =>
+          resolution.edges.single.componentRole == 'catalog_set'
+              ? 'Set vinculado'
+              : 'Vinculado',
+        null => 'Vinculado',
+      };
+    }
+
+    Widget resolvedOutput(
+      ParsedLineItem item, {
+      required bool desktop,
+    }) {
+      final components = previewComponents(item);
+      if (components.isEmpty) {
+        return Text(
+          _isParsedLineResolved(item) &&
+                  item.matchedProductName?.trim().isNotEmpty == true
+              ? item.matchedProductName!.trim()
+              : 'Sin vínculo',
+          maxLines: desktop ? 2 : null,
+          overflow: desktop ? TextOverflow.ellipsis : null,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: _isParsedLineResolved(item)
+                ? roles.success.accent
+                : theme.colorScheme.onSurfaceVariant,
+            fontWeight:
+                _isParsedLineResolved(item) ? FontWeight.w600 : FontWeight.w400,
+          ),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (final component in components)
+            Padding(
+              padding: EdgeInsets.only(
+                bottom: component == components.last ? 0 : 4,
+              ),
+              child: Text(
+                component.displayLabel,
+                maxLines: desktop ? 2 : null,
+                overflow: desktop ? TextOverflow.ellipsis : null,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: roles.success.accent,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     Widget invoiceDatum({
       required IconData icon,
       required String label,
@@ -739,13 +856,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
     Widget productRow(ParsedLineItem item, int index) {
       final resolved = _isParsedLineResolved(item);
+      final status = resolutionStatus(item);
       final code = item.sku?.trim();
       final imageUrl = item.imageUrl?.trim();
       final rowDiagnostics = _getRowDiagnostics(item);
       return Semantics(
         container: true,
         label:
-            'Línea ${index + 1}, ${item.description}, ${resolved ? 'vinculada' : 'por revisar'}',
+            'Línea ${index + 1}, ${item.description}, ${status.toLowerCase()}',
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
@@ -837,15 +955,21 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                             ),
                         ],
                       ),
-                      if (resolved &&
-                          item.matchedProductName?.trim().isNotEmpty ==
-                              true) ...[
+                      if (resolved) ...[
                         const SizedBox(height: 5),
-                        Text(
-                          'Usará ${item.matchedProductName}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: roles.success.accent,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Entrará a inventario  ',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            Expanded(
+                              child: resolvedOutput(item, desktop: false),
+                            ),
+                          ],
                         ),
                       ],
                     ],
@@ -853,7 +977,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                 ),
                 const SizedBox(width: 10),
                 VbStatusBadge(
-                  label: resolved ? 'Vinculado' : 'Por revisar',
+                  label: status,
                   tone: resolved ? VbStatusTone.success : VbStatusTone.warning,
                 ),
               ],
@@ -903,7 +1027,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                           showCheckboxColumn: false,
                           headingRowHeight: 42,
                           dataRowMinHeight: 64,
-                          dataRowMaxHeight: 82,
+                          dataRowMaxHeight: double.infinity,
                           horizontalMargin: 12,
                           columnSpacing: 16,
                           dividerThickness: 1,
@@ -992,6 +1116,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
     DataRow previewDataRow(ParsedLineItem item, int index) {
       final resolved = _isParsedLineResolved(item);
+      final status = resolutionStatus(item);
       final code = item.sku?.trim();
       final imageUrl = item.imageUrl?.trim();
       final unitPrice = item.unitPrice;
@@ -1136,19 +1261,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             SizedBox(
               key: Key('ocr-preview-cell-erp-product-$index'),
               width: 156,
-              child: Text(
-                resolved && item.matchedProductName?.trim().isNotEmpty == true
-                    ? item.matchedProductName!.trim()
-                    : 'Sin vínculo',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: resolved
-                      ? roles.success.accent
-                      : theme.colorScheme.onSurfaceVariant,
-                  fontWeight: resolved ? FontWeight.w600 : FontWeight.w400,
-                ),
-              ),
+              child: resolvedOutput(item, desktop: true),
             ),
           ),
           DataCell(
@@ -1156,7 +1269,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
               key: Key('ocr-preview-cell-status-$index'),
               width: 104,
               child: VbStatusBadge(
-                label: resolved ? 'Vinculado' : 'Por revisar',
+                label: status,
                 tone: resolved ? VbStatusTone.success : VbStatusTone.warning,
                 dense: true,
               ),
@@ -1166,7 +1279,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       );
     }
 
-    final primaryLabel = _isReadOnlyEvaluation
+    final primaryLabel = _readOnlyEvaluationBlocksMutations
         ? widget.showLineItemReview && unresolved > 0
             ? 'Revisar $unresolved producto${unresolved == 1 ? '' : 's'} · solo lectura'
             : 'Evaluación completada'
@@ -1177,7 +1290,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                 : widget.showLineItemReview && unresolved > 0
                     ? 'Revisar $unresolved producto${unresolved == 1 ? '' : 's'}'
                     : 'Usar esta factura';
-    final primaryAction = _isReadOnlyEvaluation
+    final primaryAction = _readOnlyEvaluationBlocksMutations
         ? widget.showLineItemReview && unresolved > 0
             ? _isOpeningBulkCreate
                 ? null
@@ -2347,10 +2460,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       primaryEnabled: _canCreateBulkProducts(),
       primaryBlockingReason: _bulkCreateBlockingMessage(),
       costIncludesVat: _costsIncludeIva,
-      readOnly: _creatingProducts || _isReadOnlyEvaluation,
+      readOnly: _creatingProducts || _readOnlyEvaluationBlocksMutations,
       readOnlyReason: _creatingProducts
           ? 'Creando productos. Espera a que termine antes de volver.'
-          : _isReadOnlyEvaluation
+          : _readOnlyEvaluationBlocksMutations
               ? 'Evaluación de solo lectura: no se vinculará, creará ni guardará ningún producto.'
               : null,
     );
@@ -2403,7 +2516,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   /// database-owned and idempotent per row, so asking for it at the moment of
   /// the decision costs one call and makes the row immediately true.
   Future<void> _confirmNewProductForEntry(_NewProductEntry entry) async {
-    if (_isReadOnlyEvaluation || !mounted || _bulkRowBusy(entry)) return;
+    if (_readOnlyEvaluationBlocksMutations || !mounted || _bulkRowBusy(entry)) {
+      return;
+    }
     setState(entry.markNewProduct);
     _reconcileListingGroupResults();
     await _ensureReservedSkuForEntry(entry);
@@ -2418,7 +2533,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   /// dropped rather than displayed — while the spinner still clears, because a
   /// stuck spinner blocks Create and Back forever.
   Future<void> _ensureReservedSkuForEntry(_NewProductEntry entry) async {
-    if (_isReadOnlyEvaluation || !mounted) return;
+    if (_readOnlyEvaluationBlocksMutations || !mounted) return;
     if (!entry.requiresDuplicateReview) return;
     if (!_newProductEntries.contains(entry)) return;
     if (entry.isReservingSku) return;
@@ -2484,6 +2599,16 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   Future<void> _openCandidatePicker(_NewProductEntry entry) async {
     final reviewGeneration = _bulkReviewGeneration;
     final inventoryService = context.read<inv_service.InventoryService>();
+    final cachedResult = entry.duplicateResult;
+    final cachedOperatorChoices = applyAIManualReviewOrder(
+      decision: cachedResult?.adjudication,
+      candidates: cachedResult?.operatorChoices ?? entry.similarCandidates,
+    );
+    final cachedCategoryConflicts = applyAIManualReviewOrder(
+      decision: cachedResult?.adjudication,
+      candidates: cachedResult?.categoryConflicts ??
+          const <ProductDuplicateCandidate>[],
+    );
     final traceId = _productIdentityTraceId(entry, entry.resolutionRevision);
     ProductIdentityTrace.emit(
       traceId: traceId,
@@ -2518,16 +2643,15 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         categoryLabel: entry.selectedCategory?.name,
         brandLabel: entry.selectedBrand?.name,
       ),
-      candidates:
-          entry.duplicateResult?.operatorChoices ?? entry.similarCandidates,
-      categoryConflicts: entry.duplicateResult?.categoryConflicts ?? const [],
+      candidates: cachedOperatorChoices,
+      categoryConflicts: cachedCategoryConflicts,
       aiCompositeProposal: entry.supplierResolutionProposal?.displaySummary ??
           entry.duplicateResult?.aiCompositeProposal,
-      canConfirmCompositeProposal:
-          entry.supplierResolutionProposal != null && !_isReadOnlyEvaluation,
+      canConfirmCompositeProposal: entry.supplierResolutionProposal != null &&
+          !_readOnlyEvaluationBlocksMutations,
       allowCreateNew: entry.duplicateResult?.adjudicationState !=
           ProductDuplicateAdjudicationState.failed,
-      inspectionOnly: _isReadOnlyEvaluation,
+      inspectionOnly: _readOnlyEvaluationBlocksMutations,
       isLoading: entry.isCheckingSimilar,
       onSearch: (query) => inventoryService.searchProductPreviews(
         query,
@@ -2626,8 +2750,15 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   OcrProductReviewLine _buildProductReviewLine(_NewProductEntry entry) {
     final sibling = _semanticSiblingFor(entry);
-    final cachedChoices =
-        entry.duplicateResult?.operatorChoices ?? entry.similarCandidates;
+    final cachedChoices = applyAIManualReviewOrder(
+      decision: entry.duplicateResult?.adjudication,
+      candidates:
+          entry.duplicateResult?.operatorChoices ?? entry.similarCandidates,
+    );
+    // This is the same ordered list the picker renders. A rejected normal
+    // candidate may still be the operator's best manual lead, but a catalog
+    // category conflict never jumps ahead of it or becomes a quick-link.
+    final rowCandidates = orderOcrCandidateChoices(cachedChoices);
     final sku = entry.displaySku.isNotEmpty
         ? entry.displaySku
         : entry.requiresDuplicateReview
@@ -2664,7 +2795,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       skuErrorMessage: entry.skuReservationError == null
           ? null
           : 'No se pudo reservar el SKU. Reintenta.',
-      candidates: entry.similarCandidates,
+      candidates: rowCandidates,
       viableCandidateCount: cachedChoices
           .where((candidate) =>
               !candidate.isRuledOut && !candidate.isReviewOnlyFamilyScope)
@@ -2721,9 +2852,71 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
               : entry.supplierResolutionProducts
                   .map((product) => product.sku)
                   .join(' + ')),
+      resolvedOutcomeSummary: _rememberedSupplierResolutionSummary(entry),
+      resolvedMode: _resolvedModeFor(entry),
+      // A remembered supplier graph is durable authority, not a transient
+      // row choice. The old "Cambiar" callback deliberately refused it, so
+      // rendering that button was a lie. A future correction surface must
+      // create a new revision with an explicit reason instead of silently
+      // replacing the remembered graph.
+      canChangeResolvedDecision: !entry.hasSupplierResolution,
       isSelected: entry.isSelected,
-      inspectionOnly: _isReadOnlyEvaluation,
+      inspectionOnly: _readOnlyEvaluationBlocksMutations,
     );
+  }
+
+  OcrProductResolvedMode _resolvedModeFor(_NewProductEntry entry) {
+    final resolution = entry.supplierResolution;
+    if (resolution?.isResolved != true) {
+      return OcrProductResolvedMode.catalogLink;
+    }
+    return switch (resolution!.kind) {
+      SupplierVariantResolutionKind.composite =>
+        OcrProductResolvedMode.rememberedComposite,
+      SupplierVariantResolutionKind.homogeneous =>
+        OcrProductResolvedMode.rememberedPack,
+      SupplierVariantResolutionKind.single => resolution.edges.length == 1 &&
+              resolution.edges.single.componentRole == 'catalog_set'
+          ? OcrProductResolvedMode.rememberedSet
+          : OcrProductResolvedMode.rememberedLink,
+      null => OcrProductResolvedMode.rememberedLink,
+    };
+  }
+
+  String? _rememberedSupplierResolutionSummary(_NewProductEntry entry) {
+    final resolution = entry.supplierResolution;
+    final products = entry.supplierResolutionProducts;
+    if (resolution?.isResolved != true ||
+        resolution!.edges.isEmpty ||
+        resolution.edges.length != products.length) {
+      return null;
+    }
+    final sourceQuantity = entry.originalItem.sourcePurchaseQuantity ??
+        entry.originalItem.quantity;
+    if (sourceQuantity == null ||
+        !sourceQuantity.isFinite ||
+        sourceQuantity <= 0) {
+      return null;
+    }
+    return <String>[
+      for (var index = 0; index < resolution.edges.length; index++)
+        _rememberedSupplierResolutionComponent(
+          product: products[index],
+          quantity:
+              sourceQuantity * resolution.edges[index].catalogUnitsPerPurchase,
+          role: resolution.edges[index].componentRole,
+        ),
+    ].join(' + ');
+  }
+
+  String _rememberedSupplierResolutionComponent({
+    required inv_models.Product product,
+    required double quantity,
+    required String role,
+  }) {
+    final roleLabel = _ocrPreviewComponentRoleLabel(role);
+    return '${_ocrPreviewQuantityLabel(quantity)} × ${product.sku}'
+        '${roleLabel == null ? '' : ' · $roleLabel'}';
   }
 
   String? _currentSemanticReviewSummary(_NewProductEntry entry) {
@@ -2798,7 +2991,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   bool _canCreateBulkProducts() {
-    if (_isReadOnlyEvaluation) return false;
+    if (_readOnlyEvaluationBlocksMutations) return false;
     final isAliExpress =
         _parsedData != null && _looksLikeAliExpressInvoice(_parsedData!);
     final selected =
@@ -4303,7 +4496,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     int? expectedRevision,
     int? reviewGeneration,
   }) async {
-    if (_isReadOnlyEvaluation) return false;
+    if (_readOnlyEvaluationBlocksMutations) return false;
     final revision = expectedRevision ?? entry.resolutionRevision;
     final productId = product.id;
     if (productId == null ||
@@ -4741,25 +4934,56 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         });
       },
     );
-    if (kDebugMode && proposal != null) {
+    if (kDebugMode) {
+      final trace = <String, Object?>{
+        'reviewId': entry.reviewId,
+        'accepted': proposal != null,
+        'decision': decision.decision.name,
+        'decisionConfidence': decision.confidence,
+        'decisionComponents': [
+          for (final component in decision.components)
+            <String, Object?>{
+              'productId': component.productId,
+              'quantity': component.quantity,
+              'role': component.role.name,
+            },
+        ],
+        'sourcePurchaseQuantity': sourceQuantity,
+        'optionPackCount': optionEvidence.packCount,
+        'optionUnitClass': optionEvidence.unitClass,
+        'investigationPackageKind': entry.aiInvestigation?.packageKind.name,
+        'investigationComponents': [
+          for (final component
+              in entry.aiInvestigation?.composition.components ??
+                  const <AIProductCompositionComponent>[])
+            <String, Object?>{
+              'label': component.label,
+              'quantity': component.quantity,
+              'role': component.role.name,
+            },
+        ],
+        'kind': proposal?.kind.name,
+        'usesCanonicalSet': proposal?.usesCanonicalSet,
+        'canonicalSetSku': proposal?.canonicalSetProduct?.sku,
+        'items': [
+          for (final item
+              in proposal?.items ?? const <SupplierResolutionProposalItem>[])
+            <String, Object?>{
+              'sku': item.product.sku,
+              'productId': item.product.id,
+              'unitsPerPurchase': item.catalogUnitsPerPurchase,
+              'role': item.role.wireValue,
+            },
+        ],
+        'edges': proposal?.edges
+                .map((edge) => edge.toRpcJson())
+                .toList(growable: false) ??
+            const <Object?>[],
+      };
       debugPrint(
-        '[OCR-RESOLUTION-PROPOSAL] ${jsonEncode(<String, Object?>{
-              'reviewId': entry.reviewId,
-              'kind': proposal.kind.name,
-              'sourcePurchaseQuantity': proposal.sourcePurchaseQuantity,
-              'usesCanonicalSet': proposal.usesCanonicalSet,
-              'canonicalSetSku': proposal.canonicalSetProduct?.sku,
-              'items': [
-                for (final item in proposal.items)
-                  <String, Object?>{
-                    'sku': item.product.sku,
-                    'productId': item.product.id,
-                    'unitsPerPurchase': item.catalogUnitsPerPurchase,
-                    'role': item.role.wireValue,
-                  },
-              ],
-              'edges': proposal.edges.map((edge) => edge.toRpcJson()).toList(),
-            })}',
+        proposal == null
+            ? '[OCR-RESOLUTION-PROPOSAL-REJECTED] ${jsonEncode(trace)}'
+            : '[OCR-RESOLUTION-PROPOSAL] ${jsonEncode(trace)}',
       );
     }
     return proposal;
@@ -4769,7 +4993,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     _NewProductEntry entry,
   ) async {
     final proposal = entry.supplierResolutionProposal;
-    if (_isReadOnlyEvaluation || proposal == null || _bulkRowBusy(entry)) {
+    if (_readOnlyEvaluationBlocksMutations ||
+        proposal == null ||
+        _bulkRowBusy(entry)) {
       return;
     }
     final inventoryService = context.read<inv_service.InventoryService>();
@@ -4983,7 +5209,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     _NewProductEntry entry, {
     required String productId,
   }) async {
-    if (_isReadOnlyEvaluation) return null;
+    if (_readOnlyEvaluationBlocksMutations) return null;
     final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
     if (supplierId == null || supplierId.isEmpty) {
       throw StateError('Falta resolver el proveedor AliExpress.');
@@ -5099,7 +5325,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   /// Create products from the bulk creation form
   Future<void> _createBulkProducts() async {
-    if (_isReadOnlyEvaluation) return;
+    if (_readOnlyEvaluationBlocksMutations) return;
     final selectedEntries = _newProductEntries
         .where((entry) =>
             entry.isSelected &&
@@ -6053,7 +6279,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   Future<void> _handleUseParsedData(ParsedInvoice data) async {
-    if (_isReadOnlyEvaluation) return;
+    if (_readOnlyEvaluationBlocksMutations) return;
     if (widget.showLineItemReview) {
       if (_ocrSupplier == null) {
         if (mounted) {
@@ -7270,6 +7496,79 @@ class _PreparedOcrInvoice {
   final ParsedInvoice display;
   final shared_supplier.Supplier? supplier;
 }
+
+/// One catalog line that a resolved supplier row will contribute to the
+/// purchase draft.
+///
+/// The supplier row remains singular so its quantity and landed total are
+/// audited once. This projection explains the inventory result that the
+/// purchase form will materialize after the operator applies the invoice.
+@visibleForTesting
+final class OcrPreviewResolutionComponent {
+  const OcrPreviewResolutionComponent({
+    required this.product,
+    required this.quantity,
+    required this.roleLabel,
+  });
+
+  final inv_models.Product product;
+  final double quantity;
+  final String? roleLabel;
+
+  String get displayLabel {
+    final role = roleLabel == null ? '' : ' · $roleLabel';
+    return '${_ocrPreviewQuantityLabel(quantity)} × ${product.sku}$role · '
+        '${product.name}';
+  }
+}
+
+/// Projects an authoritative supplier graph into what will enter inventory.
+///
+/// It returns no partial answer: if an edge lacks a catalog row, the preview
+/// falls back to the unresolved display just as the apply path fails closed.
+@visibleForTesting
+List<OcrPreviewResolutionComponent> buildOcrPreviewResolutionComponents({
+  required ParsedLineItem item,
+  required Map<String, inv_models.Product> productsById,
+}) {
+  final resolution = item.supplierResolution;
+  if (resolution?.isResolved != true || resolution!.edges.isEmpty) {
+    return const [];
+  }
+  final sourceQuantity = item.sourcePurchaseQuantity ?? item.quantity;
+  if (sourceQuantity == null ||
+      !sourceQuantity.isFinite ||
+      sourceQuantity <= 0) {
+    return const [];
+  }
+
+  final components = <OcrPreviewResolutionComponent>[];
+  for (final edge in resolution.edges) {
+    final product = productsById[edge.productId];
+    if (product == null) return const [];
+    components.add(OcrPreviewResolutionComponent(
+      product: product,
+      quantity: sourceQuantity * edge.catalogUnitsPerPurchase,
+      roleLabel: _ocrPreviewComponentRoleLabel(edge.componentRole),
+    ));
+  }
+  return List<OcrPreviewResolutionComponent>.unmodifiable(components);
+}
+
+String? _ocrPreviewComponentRoleLabel(String rawRole) =>
+    switch (rawRole.trim().toLowerCase()) {
+      'front' => 'delantero',
+      'rear' => 'trasero',
+      'left' => 'izquierdo',
+      'right' => 'derecho',
+      'homogeneous' => 'unidades iguales',
+      'catalog_set' => 'set canónico',
+      _ => null,
+    };
+
+String _ocrPreviewQuantityLabel(double value) => value == value.roundToDouble()
+    ? value.round().toString()
+    : value.toString();
 
 /// Entry for a new product to be created from OCR
 /// Narrowest width at which the nine invoice columns actually fit.

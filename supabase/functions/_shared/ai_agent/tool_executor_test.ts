@@ -1,5 +1,5 @@
 import type { AgentAuthority, AgentToolCall, JsonObject } from "./contracts.ts";
-import type { AgentRpcClient } from "./supabase_user_data.ts";
+import { type AgentRpcClient, SupabaseUserDataError } from "./supabase_user_data.ts";
 import { createSupabaseAgentToolExecutor } from "./tool_executor.ts";
 import { createDefaultAgentToolRegistry, ToolRegistryError } from "./tool_registry.ts";
 
@@ -104,7 +104,17 @@ Deno.test("tool executor maps all ERP reads to fixed caller-scoped RPCs", async 
   };
   const executor = createSupabaseAgentToolExecutor(client);
   const tools: AgentToolCall[] = [
-    { id: "1", name: "search_inventory", arguments: { query: "cadena" } },
+    {
+      id: "1",
+      name: "search_inventory",
+      arguments: {
+        query: "cadena",
+        category: null,
+        availability: "any",
+        presentation: "answer",
+        technicalPredicates: [],
+      },
+    },
     { id: "2", name: "list_attention_items", arguments: { horizon: "today" } },
     { id: "3", name: "get_business_snapshot", arguments: { horizon: "next_7_days" } },
     {
@@ -176,7 +186,7 @@ Deno.test("tool executor maps all ERP reads to fixed caller-scoped RPCs", async 
     assertEquals(execution.succeeded, true, `${tool.name} executes`);
   }
   assertEquals(calls.map((call) => call.name), [
-    "assistant_search_inventory_v1",
+    "assistant_search_inventory_v5",
     "assistant_list_attention_items_v1",
     "assistant_get_business_snapshot_v1",
     "assistant_query_workshop_jobs_v2",
@@ -190,7 +200,16 @@ Deno.test("tool executor maps all ERP reads to fixed caller-scoped RPCs", async 
     "assistant_analyze_cash_and_receivables_v1",
     "assistant_search_conversations_v1",
   ], "only fixed RPC names are reachable");
-  assertEquals(calls[0].parameters, { p_query: "cadena" }, "inventory body is fixed");
+  assertEquals(
+    calls[0].parameters,
+    {
+      p_query: "cadena",
+      p_category: null,
+      p_availability: "any",
+      p_technical_predicates: [],
+    },
+    "inventory body is fixed",
+  );
   assertEquals(calls[1].parameters, { p_horizon: "today" }, "attention body is fixed");
   assertEquals(calls[2].parameters, { p_horizon: "next_7_days" }, "snapshot body is fixed");
   assertEquals(calls[3].parameters, {
@@ -253,7 +272,13 @@ Deno.test("tool executor contains tenant mismatch as unavailable", async () => {
     {
       id: "1",
       name: "search_inventory",
-      arguments: { query: "cadena" },
+      arguments: {
+        query: "cadena",
+        category: null,
+        availability: "any",
+        presentation: "answer",
+        technicalPredicates: [],
+      },
     },
     authority,
     new AbortController().signal,
@@ -274,14 +299,24 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
         category: "Transmisión",
         price: 12000,
         stock: 3,
+        minimumStock: 1,
+        availability: "in_stock",
+        tracksInventory: true,
         location: "A1",
+        technicalMatch: "not_applicable",
       }])),
   });
   const execution = await executor.execute(
     {
       id: "private-ref",
       name: "search_inventory",
-      arguments: { query: "cadena" },
+      arguments: {
+        query: "cadena",
+        category: null,
+        availability: "in_stock",
+        presentation: "answer",
+        technicalPredicates: [],
+      },
     },
     authority,
     new AbortController().signal,
@@ -295,6 +330,245 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
     "verified tenant field is not model-visible",
   );
   assertEquals(execution.outputText.includes(tenantId), false, "tenant UUID is not model-visible");
+});
+
+Deno.test("inventory availability is mapped before limit and revalidated after the RPC", async () => {
+  const row = {
+    entityId: "77777777-7777-4777-8777-777777777777",
+    name: "Camara 29",
+    sku: "TUBE-29",
+    brand: null,
+    category: "Camaras",
+    price: 7000,
+    stock: 0,
+    minimumStock: 2,
+    availability: "out_of_stock",
+    tracksInventory: true,
+    location: null,
+    technicalMatch: "identity_fallback",
+  };
+  let captured: { name: string; parameters: JsonObject } | null = null;
+  const invalid = await createSupabaseAgentToolExecutor({
+    rpc(name, parameters) {
+      captured = { name, parameters };
+      return Promise.resolve(envelope([row]));
+    },
+  }).execute(
+    {
+      id: "inventory-filter",
+      name: "search_inventory",
+      arguments: {
+        query: "camara 29",
+        category: "Cámaras",
+        availability: "in_stock",
+        presentation: "open_list",
+        technicalPredicates: [{ field: "wheel_size", operator: "eq", values: ['29"'] }],
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(captured, {
+    name: "assistant_search_inventory_v5",
+    parameters: {
+      p_query: "camara 29",
+      p_category: "Cámaras",
+      p_availability: "in_stock",
+      p_technical_predicates: [{ field: "wheel_size", operator: "eq", values: ['29"'] }],
+    },
+  }, "category, canonical specs and availability reach only the V5 projection");
+  assertEquals(
+    invalid.succeeded,
+    false,
+    "an RPC row contradicting the requested filter is rejected",
+  );
+
+  let calls = 0;
+  const malformed = await createSupabaseAgentToolExecutor({
+    rpc() {
+      calls++;
+      return Promise.resolve(envelope());
+    },
+  }).execute(
+    {
+      id: "inventory-presentation",
+      name: "search_inventory",
+      arguments: {
+        query: "camara 29",
+        category: null,
+        availability: "in_stock",
+        presentation: "teleport",
+        technicalPredicates: [],
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(malformed.failureCode, "tool_arguments_invalid", "presentation is closed");
+  assertEquals(calls, 0, "malformed planning never reaches PostgREST");
+});
+
+Deno.test("inventory schema discovery and typed comparisons are composable primitives", async () => {
+  const calls: Array<{ name: string; parameters: JsonObject }> = [];
+  const executor = createSupabaseAgentToolExecutor({
+    rpc(name, parameters) {
+      calls.push({ name, parameters });
+      if (name === "assistant_inspect_inventory_schema_v1") {
+        return Promise.resolve(envelope([{
+          kind: "field",
+          category: "Motor",
+          categoryPath: "Componentes / Transmisión / Motores / Motor",
+          technicalFamily: "bottom_bracket",
+          field: "spindle_length_mm",
+          label: "Largo eje",
+          dataType: "number",
+          unit: "mm",
+          operators: "eq,neq,lt,lte,gt,gte,between,in",
+          allowedValues: null,
+          productCount: 8,
+          populatedCount: 3,
+        }]));
+      }
+      return Promise.resolve(envelope());
+    },
+  });
+  const inspection = await executor.execute(
+    {
+      id: "inspect-motors",
+      name: "inspect_inventory_schema",
+      arguments: {
+        query: "motores con eje de menos de 125 mm",
+        category: "Motores",
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(inspection.succeeded, true, "schema discovery succeeds");
+  assertEquals(
+    inspection.outputText.includes("spindle_length_mm"),
+    true,
+    "canonical field is model-visible",
+  );
+
+  const search = await executor.execute(
+    {
+      id: "search-motors",
+      name: "search_inventory",
+      arguments: {
+        query: null,
+        category: "Motores",
+        availability: "in_stock",
+        presentation: "open_list",
+        technicalPredicates: [{
+          field: "spindle_length_mm",
+          operator: "lt",
+          values: [125],
+        }],
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(search.succeeded, true, "typed range search executes");
+  assertEquals(calls, [{
+    name: "assistant_inspect_inventory_schema_v1",
+    parameters: {
+      p_query: "motores con eje de menos de 125 mm",
+      p_category: "Motores",
+    },
+  }, {
+    name: "assistant_search_inventory_v5",
+    parameters: {
+      p_query: null,
+      p_category: "Motores",
+      p_availability: "in_stock",
+      p_technical_predicates: [{
+        field: "spindle_length_mm",
+        operator: "lt",
+        values: [125],
+      }],
+    },
+  }], "discovery and search reach only fixed RPCs");
+});
+
+Deno.test("database argument rejection is not mislabeled as a source outage", async () => {
+  const executor = createSupabaseAgentToolExecutor({
+    rpc: () =>
+      Promise.reject(
+        new SupabaseUserDataError("rpc_invalid_response", false, "idempotency_conflict"),
+      ),
+  });
+  const result = await executor.execute(
+    {
+      id: "bad-plan",
+      name: "search_inventory",
+      arguments: {
+        query: null,
+        category: "Motores",
+        availability: "in_stock",
+        presentation: "answer",
+        technicalPredicates: [{ field: "invented_field", operator: "lt", values: [125] }],
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(result.succeeded, false, "rejected plan fails");
+  assertEquals(
+    result.failureCode,
+    "tool_arguments_invalid",
+    "SQLSTATE 22023 is a planning failure at the tool boundary",
+  );
+});
+
+Deno.test("capability gap is server-local and never becomes an arbitrary RPC", async () => {
+  let rpcCalls = 0;
+  const executor = createSupabaseAgentToolExecutor({
+    rpc: () => {
+      rpcCalls++;
+      return Promise.resolve(envelope());
+    },
+  });
+  const result = await executor.execute(
+    {
+      id: "gap",
+      name: "report_capability_gap",
+      arguments: {
+        domain: "accounting",
+        operation: "mutate",
+        reason: "missing_tool",
+        alternative: "none",
+        field: null,
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(result.succeeded, true, "closed gap is accepted");
+  assertEquals(rpcCalls, 0, "model cannot turn the gap into a database call");
+
+  const malformed = await executor.execute(
+    {
+      id: "bad-gap",
+      name: "report_capability_gap",
+      arguments: {
+        domain: "accounting",
+        operation: "mutate",
+        reason: "invented_reason",
+        alternative: "none",
+        field: null,
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(malformed.succeeded, false, "gap enums are revalidated at execution");
+  assertEquals(
+    malformed.failureCode,
+    "tool_arguments_invalid",
+    "invalid gap cannot become a successful terminal",
+  );
 });
 
 Deno.test("workshop context uses one fixed reread RPC and strips unapproved fields", async () => {
@@ -346,7 +620,13 @@ Deno.test("aborted tool signal propagates and does not degrade to verified empty
     {
       id: "1",
       name: "search_inventory",
-      arguments: { query: "cadena" },
+      arguments: {
+        query: "cadena",
+        category: null,
+        availability: "any",
+        presentation: "answer",
+        technicalPredicates: [],
+      },
     },
     authority,
     controller.signal,
@@ -374,7 +654,13 @@ Deno.test("tool query limit is 240 UTF-8 bytes and invalid calls never reach RPC
     {
       id: "1",
       name: "search_inventory",
-      arguments: { query: "😀".repeat(61) },
+      arguments: {
+        query: "😀".repeat(61),
+        category: null,
+        availability: "any",
+        presentation: "answer",
+        technicalPredicates: [],
+      },
     },
     authority,
     new AbortController().signal,
@@ -1150,6 +1436,21 @@ Deno.test("tool result rows cannot exceed or contradict requested filters", asyn
 Deno.test("prepare_task is model-visible but create_task is never a provider tool", async () => {
   const registry = createDefaultAgentToolRegistry();
   const names = registry.advertisedFor(authority).map((tool) => tool.name);
+  assertEquals(
+    names.includes("inspect_inventory_schema"),
+    true,
+    "schema discovery is advertised as a general planning primitive",
+  );
+  assertEquals(
+    names.includes("report_capability_gap"),
+    true,
+    "capability disclosure is advertised for every domain",
+  );
+  assertEquals(
+    registry.advertisedFor({ ...authority, capabilities: [] }).map((tool) => tool.name),
+    ["report_capability_gap"],
+    "an authority with no data capability can still receive an honest limitation",
+  );
   assertEquals(names.includes("prepare_task"), true, "draft preparation is advertised");
   assertEquals(names.includes("create_task"), false, "write action is post-click only");
 

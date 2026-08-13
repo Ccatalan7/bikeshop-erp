@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/ai_assistant/models/ai_assistant_destination.dart';
 import 'package:vinabike_erp/modules/ai_assistant/models/ai_assistant_session_state.dart';
 import 'package:vinabike_erp/modules/ai_assistant/services/ai_assistant_context_service.dart';
@@ -19,6 +21,8 @@ import 'package:vinabike_erp/modules/purchases/services/purchase_service.dart';
 import 'package:vinabike_erp/modules/sales/services/sales_service.dart';
 import 'package:vinabike_erp/modules/tasks/services/task_service.dart';
 import 'package:vinabike_erp/shared/services/right_toolbar_service.dart';
+import 'package:vinabike_erp/shared/services/database_service.dart';
+import 'package:vinabike_erp/shared/services/tenant_service.dart';
 import 'package:vinabike_erp/shared/services/workspace_manager.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
@@ -190,6 +194,16 @@ const _discardedTaskResolution = AIAssistantApprovalResolution(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await Supabase.initialize(
+      url: 'http://127.0.0.1:54321',
+      anonKey: 'test-anon-key',
+    );
+  });
+
   Future<
       ({
         _RecordingWorkspace workspace,
@@ -201,6 +215,8 @@ void main() {
     required Brightness brightness,
     AIAssistantResponse response = _briefing,
     _CardsEngine? engine,
+    AIAssistantTurnServices? turnServicesOverride,
+    bool seedResponse = true,
   }) async {
     final activeEngine = engine ?? _CardsEngine(response);
     final session = await boundAiSession(engineFactory: () => activeEngine);
@@ -223,11 +239,15 @@ void main() {
             preset: AppearancePresets.all.first,
             brightness: brightness,
           ),
-          home: const Scaffold(
+          home: Scaffold(
             body: SizedBox(
               width: 520,
               height: 900,
-              child: AIChatPanel(jobs: [], embedded: true),
+              child: AIChatPanel(
+                jobs: const [],
+                embedded: true,
+                turnServicesOverride: turnServicesOverride,
+              ),
             ),
           ),
         ),
@@ -235,16 +255,18 @@ void main() {
     );
     await tester.pump();
 
-    unawaited(
-      session.send(
-        'qué necesita atención hoy',
-        services: const AIAssistantTurnServices(),
-        visibleJobs: const [],
-        hasVisibleJobsContext: false,
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+    if (seedResponse) {
+      unawaited(
+        session.send(
+          'qué necesita atención hoy',
+          services: const AIAssistantTurnServices(),
+          visibleJobs: const [],
+          hasVisibleJobsContext: false,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+    }
 
     return (
       workspace: workspace,
@@ -441,6 +463,164 @@ void main() {
         .where((e) => e.role == AIAssistantTranscriptRole.assistant)
         .toList();
     expect(assistantTurns.last.cards, hasLength(2));
+  });
+
+  testWidgets('inventory results render as one compact list action',
+      (tester) async {
+    const response = AIAssistantResponse(
+      text: 'Encontré resultados verificados.',
+      cards: <AIAssistantActionCard>[
+        AIAssistantActionCard(
+          kind: 'inventory',
+          title: '4 resultados',
+          subtitle: 'Coincidencias para “camara 29”',
+          destination: AIAssistantDestination.inventoryProducts,
+          chips: <String>['En stock'],
+          inventoryListRef: AIAssistantInventoryListRef(
+            query: 'camara 29',
+            availability: AIAssistantInventoryAvailability.inStock,
+            resultCount: 4,
+            hasMore: true,
+            entityIds: null,
+            autoOpen: false,
+          ),
+        ),
+      ],
+    );
+    await pump(
+      tester,
+      brightness: Brightness.light,
+      response: response,
+    );
+
+    final action = find.byKey(
+      const ValueKey('ai-action-card-inventory-inventoryProducts'),
+    );
+    expect(action, findsOneWidget);
+    expect(tester.widget(action), isA<ListTile>());
+    expect(
+        find.descendant(of: action, matching: find.byType(Wrap)), findsNothing);
+    expect(find.text('Abrir Inventario'), findsNothing);
+    expect(find.textContaining('En stock'), findsOneWidget);
+  });
+
+  testWidgets(
+      'explicit inventory list applies the exact filter then auto-opens',
+      (tester) async {
+    final inventory = InventoryService(
+      DatabaseService(),
+      TenantService.testing(
+        currentUserId: () => 'user-test',
+        profileLookup: (_) async => const <Map<String, dynamic>>[],
+      ),
+    );
+    addTearDown(inventory.dispose);
+    const productA = '11111111-1111-4111-8111-111111111111';
+    const productB = '22222222-2222-4222-8222-222222222222';
+    const response = AIAssistantResponse(
+      text: 'Abrí 2 resultados coincidentes en Inventario.',
+      cards: <AIAssistantActionCard>[
+        AIAssistantActionCard(
+          kind: 'inventory',
+          title: '2 resultados',
+          destination: AIAssistantDestination.inventoryProducts,
+          chips: <String>['En stock'],
+          inventoryListRef: AIAssistantInventoryListRef(
+            query: 'camara 29',
+            availability: AIAssistantInventoryAvailability.inStock,
+            resultCount: 2,
+            hasMore: false,
+            entityIds: <String>[productA, productB],
+            autoOpen: true,
+          ),
+        ),
+      ],
+    );
+    final recorded = await pump(
+      tester,
+      brightness: Brightness.light,
+      response: response,
+      turnServicesOverride: AIAssistantTurnServices(
+        inventoryService: inventory,
+      ),
+      seedResponse: false,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('ai-assistant-message-input')),
+      'buscame camaras 29 que tengamos en stock',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('ai-assistant-send-message')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(recorded.workspace.routes, <String>['/inventory/products']);
+    expect(
+      inventory.savedSearchTerm,
+      isEmpty,
+      reason: 'an exact server ID projection is not shown as a manual search',
+    );
+    expect(inventory.savedStockFilterIndex,
+        InventoryExternalStockFilter.inStock.productListIndex);
+    expect(inventory.aiMatchedProductIds, <String>[productA, productB]);
+  });
+
+  testWidgets('informational inventory answer waits for a deliberate card tap',
+      (tester) async {
+    final inventory = InventoryService(
+      DatabaseService(),
+      TenantService.testing(
+        currentUserId: () => 'user-test',
+        profileLookup: (_) async => const <Map<String, dynamic>>[],
+      ),
+    );
+    addTearDown(inventory.dispose);
+    const response = AIAssistantResponse(
+      text: 'Hay 4 cámaras con stock.',
+      cards: <AIAssistantActionCard>[
+        AIAssistantActionCard(
+          kind: 'inventory',
+          title: '4 resultados',
+          destination: AIAssistantDestination.inventoryProducts,
+          chips: <String>['En stock'],
+          inventoryListRef: AIAssistantInventoryListRef(
+            query: 'camara 29',
+            availability: AIAssistantInventoryAvailability.inStock,
+            resultCount: 4,
+            hasMore: true,
+            entityIds: null,
+            autoOpen: false,
+          ),
+        ),
+      ],
+    );
+    final recorded = await pump(
+      tester,
+      brightness: Brightness.light,
+      response: response,
+      turnServicesOverride: AIAssistantTurnServices(
+        inventoryService: inventory,
+      ),
+      seedResponse: false,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('ai-assistant-message-input')),
+      'cuantas camaras 29 hay en stock?',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('ai-assistant-send-message')),
+    );
+    await tester.pumpAndSettle();
+    expect(recorded.workspace.routes, isEmpty);
+
+    final action = find.byKey(
+      const ValueKey('ai-action-card-inventory-inventoryProducts'),
+    );
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+    expect(recorded.workspace.routes, <String>['/inventory/products']);
   });
 
   testWidgets('a verified result card opens its exact canonical record',

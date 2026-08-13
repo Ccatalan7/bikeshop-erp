@@ -893,7 +893,7 @@ test('la recolección normal sigue devolviendo sólo los pedidos del día', asyn
     Array.from(result.datesWithOrders),
     ['2026-04-06', '2026-06-15'],
   );
-  assert.equal(result.coverage.mode, 'two-pass-v1');
+  assert.equal(result.coverage.mode, 'two-pass-target-v2');
   assert.equal(result.coverage.targetDateComplete, true);
   assert.equal(result.coverage.certified, true);
 });
@@ -922,7 +922,7 @@ test('rechaza una página no terminal corta antes de certificar', async () => {
   assert.deepEqual(Array.from(result.orders), []);
 });
 
-test('cualquier orderId repetido entre páginas aborta como feed desplazado', async () => {
+test('un solapamiento idéntico entre páginas se deduplica y certifica', async () => {
   const fields = (orderId) => ({
     orderId,
     orderDateText: 'Jun 1, 2025',
@@ -943,8 +943,65 @@ test('cualquier orderId repetido entre páginas aborta como feed desplazado', as
 
   const result = await bridge.ordersApiCollect({ exactDate: '2025-06-01' });
 
+  assert.equal(result.ok, true);
+  assert.equal(result.coverage.certified, true);
+  assert.equal(result.orders.length, 2);
+  assert.ok(result.certification.passes.every(
+    (pass) => pass.overlapOrderCount === 1,
+  ));
+});
+
+test('un orderId repetido con payload distinto aborta como drift real', async () => {
+  const fields = (quantity) => ({
+    orderId: '1001',
+    orderDateText: 'Jun 1, 2025',
+    totalPriceText: 'CLP 1,000',
+    currencyCode: 'CLP',
+    orderLines: [{ productId: 'p1', quantity, formatPriceInfo: 'CLP 1,000' }],
+  });
+  const bridge = await installOrdersApiFixture(
+    {
+      1: { pc_om_list_order_1: { fields: fields(1) } },
+      2: { pc_om_list_order_2: { fields: fields(2) } },
+    },
+    { hasMoreByPage: { 1: true, 2: false } },
+  );
+
+  const result = await bridge.ordersApiCollect({ exactDate: '2025-06-01' });
+
   assert.equal(result.ok, false);
-  assert.equal(result.certification.mismatchCodes[0], 'feed-shifted');
+  assert.equal(result.certification.mismatchCodes[0], 'duplicate-order-drift');
+});
+
+test('una página completa sin pedidos nuevos aborta como paginación estancada', async () => {
+  const fields = (orderId) => ({
+    orderId,
+    orderDateText: 'Jun 1, 2025',
+    totalPriceText: 'CLP 1,000',
+    currencyCode: 'CLP',
+    orderLines: [],
+  });
+  const bridge = await installOrdersApiFixture(
+    {
+      1: { pc_om_list_order_1: { fields: fields('1001') } },
+      2: { pc_om_list_order_2: { fields: fields('1001') } },
+      3: {},
+    },
+    { hasMoreByPage: { 1: true, 2: true, 3: false } },
+  );
+
+  const result = await bridge.ordersApiCollect({ exactDate: '2025-06-01' });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.certification.mismatchCodes[0], 'stalled-pagination');
+});
+
+test('elige la ventana temporal mínima con margen seguro', () => {
+  const now = new Date('2026-08-13T18:00:00Z');
+  assert.equal(parser.exactDateTimeOption('2026-08-12', now), '6m');
+  assert.equal(parser.exactDateTimeOption('2026-03-01', now), '1y');
+  assert.equal(parser.exactDateTimeOption('2025-09-01', now), '2y');
+  assert.equal(parser.exactDateTimeOption('2024-01-01', now), 'all');
 });
 
 test('dos recorridos con conjuntos distintos nunca se certifican', async () => {

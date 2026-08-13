@@ -1435,9 +1435,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final targetDateComplete = listCoverage['targetDateComplete'] == true &&
         listTermination['naturalExhaustion'] == true &&
         listCoverage['certified'] == true;
-    final discoveryEvaluation =
-        kDebugMode && listResult['evaluationOnly'] == true;
-    if (!targetDateComplete && !discoveryEvaluation) {
+    final readOnlyEvaluation = listResult['evaluationOnly'] == true;
+    if (!targetDateComplete) {
       final reason = listTermination['reason']?.toString().trim() ?? '';
       final message = listWarnings.isNotEmpty
           ? listWarnings.join(' ')
@@ -1520,11 +1519,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       orders: enriched,
       sourcePageUrl: listResult['pageUrl']?.toString(),
     );
-    if (discoveryEvaluation) {
-      // This document exists only to exercise categorization and matching in
-      // a debug build. The offset feed did not prove completeness, so carry a
-      // durable guard into OCR instead of relying on the operator remembering
-      // which progress warning they saw several screens ago.
+    if (readOnlyEvaluation) {
+      // Only an explicitly diagnostic collector may mark the resulting OCR
+      // workspace read-only. A certified daily invoice is operational in both
+      // debug and release builds; build mode is not a business permission.
       invoice['evaluationOnly'] = true;
       invoice['coverage'] = listCoverage;
     }
@@ -1751,7 +1749,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           'filters': <String, dynamic>{
             'exactDate': dateText,
             'maxPages': 60,
-            'evaluationOnly': kDebugMode,
+            // Debug must exercise the same exact collector as release. The
+            // read-only guard is attached to the resulting invoice below;
+            // selecting the discovery collector here previously made real
+            // runtime verification incapable of detecting release failures.
+            'evaluationOnly': false,
           },
         },
       );
@@ -1772,14 +1774,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           coverage['targetDateComplete'] == true &&
           termination['naturalExhaustion'] == true &&
           certification['certified'] == true;
-      final discoveryEvaluation =
-          kDebugMode && result['evaluationOnly'] == true;
       _aliExpressDebug(
-        targetDateComplete
-            ? 'orders.api.complete'
-            : discoveryEvaluation
-                ? 'orders.api.discovery'
-                : 'orders.api.rejected',
+        targetDateComplete ? 'orders.api.complete' : 'orders.api.rejected',
         <String, dynamic>{
           'date': dateText,
           'orderCount': (result['orders'] as List?)?.length ?? 0,
@@ -1792,7 +1788,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           'certification': certification,
         },
       );
-      if (!targetDateComplete && !discoveryEvaluation) {
+      if (!targetDateComplete) {
         final reason = termination['reason']?.toString().trim() ?? '';
         throw StateError(
           warnings.isNotEmpty
@@ -1822,7 +1818,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         'coverage': coverage,
         'termination': termination,
         'certification': certification,
-        'evaluationOnly': discoveryEvaluation,
+        // This exact-date result passed the same two-pass certification in
+        // every build, so it is an operational invoice. The single-order
+        // canary and any partial diagnostic path set evaluationOnly themselves.
+        'evaluationOnly': false,
         'preload': <String, dynamic>{
           'source': 'api',
           'pagesRead': result['pagesRead'],

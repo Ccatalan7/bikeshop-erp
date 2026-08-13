@@ -4,6 +4,9 @@ import {
   agentApprovalStates,
   agentCardDestinations,
   type AgentEntityKind,
+  type AgentInventoryAvailabilityFilter,
+  agentInventoryAvailabilityFilters,
+  type AgentListRef,
   type AgentToolResultEnvelope,
   type JsonObject,
 } from "./contracts.ts";
@@ -36,7 +39,11 @@ const entityKindByCardKind: Readonly<Record<string, AgentEntityKind | undefined>
 export function cardsForToolResult(
   toolName: string,
   result: AgentToolResultEnvelope,
+  argumentsValue: JsonObject = {},
 ): readonly AgentActionCard[] {
+  if (toolName === "search_inventory") {
+    return inventorySearchCards(result, argumentsValue);
+  }
   if (result.status !== "success" && result.status !== "partial") return [];
   if (toolName === "list_attention_items") return attentionCards(result.items);
   if (toolName === "find_inventory_risks") return inventoryRiskCards(result.items);
@@ -45,19 +52,6 @@ export function cardsForToolResult(
   }
   const items = result.items.slice(0, 3);
   switch (toolName) {
-    case "search_inventory":
-      return items.map((item) =>
-        card({
-          kind: "inventory",
-          eyebrow: "Inventario",
-          title: text(item, "name", "Producto"),
-          subtitle: join([optionalText(item, "sku"), optionalText(item, "brand")]),
-          description: join([money(item.price, "Precio"), number(item.stock, "Stock")]),
-          destination: "inventory_products",
-          chips: optionalText(item, "category") ? [text(item, "category", "")] : [],
-          entityRef: entityRef(item, "product"),
-        })
-      );
     case "search_workshop_jobs":
       return items.map((item) =>
         card({
@@ -101,6 +95,203 @@ export function cardsForToolResult(
       return conversationCards(items);
     default:
       return [];
+  }
+}
+
+function inventorySearchCards(
+  result: AgentToolResultEnvelope,
+  argumentsValue: JsonObject,
+): readonly AgentActionCard[] {
+  const technicalFilterChips = inventoryTechnicalFilterChips(
+    argumentsValue.technicalPredicates,
+  );
+  const category = argumentsValue.category === null
+    ? null
+    : typeof argumentsValue.category === "string" && argumentsValue.category.trim() &&
+        new TextEncoder().encode(argumentsValue.category.trim()).length <= 160
+    ? argumentsValue.category.trim()
+    : undefined;
+  const technicalMatchSummary = inventoryTechnicalMatchSummary(
+    result,
+    technicalFilterChips,
+  );
+  if (
+    !["success", "partial", "verifiedEmpty"].includes(result.status) ||
+    !(argumentsValue.query === null ||
+      (typeof argumentsValue.query === "string" && argumentsValue.query.trim())) ||
+    !agentInventoryAvailabilityFilters.includes(
+      argumentsValue.availability as AgentInventoryAvailabilityFilter,
+    ) ||
+    !["answer", "open_list"].includes(String(argumentsValue.presentation)) ||
+    technicalFilterChips === null || category === undefined ||
+    technicalMatchSummary === null
+  ) return [];
+  const entityIds = result.items.map((item) => {
+    if (typeof item.entityId !== "string" || !validUuid(item.entityId)) {
+      throw new Error("Invalid inventory list entity id");
+    }
+    return item.entityId.toLowerCase();
+  });
+  if (new Set(entityIds).size !== entityIds.length) {
+    throw new Error("Duplicate inventory list entity id");
+  }
+  const availability = argumentsValue.availability as AgentInventoryAvailabilityFilter;
+  const resultCount = result.resultCount;
+  const title = resultCount === 0
+    ? "Sin resultados"
+    : `${resultCount}${result.hasMore ? "+" : ""} ${
+      resultCount === 1 ? "resultado" : "resultados"
+    }`;
+  const filterLabel = category ??
+    (typeof argumentsValue.query === "string" ? argumentsValue.query.trim() : null);
+  if (!filterLabel) return [];
+  return [card({
+    kind: "inventory",
+    eyebrow: "Inventario",
+    title,
+    subtitle: technicalMatchSummary
+      ? `${filterLabel} · ${technicalMatchSummary}`
+      : `Coincidencias para “${filterLabel}”`,
+    destination: "inventory_products",
+    chips: [inventoryAvailabilityLabel(availability), ...technicalFilterChips],
+    listRef: Object.freeze({
+      kind: "inventory",
+      query: filterLabel,
+      availability,
+      resultCount,
+      hasMore: result.hasMore,
+      entityIds: result.hasMore ? null : Object.freeze(entityIds),
+      autoOpen: argumentsValue.presentation === "open_list",
+    }),
+  })];
+}
+
+function inventoryTechnicalMatchSummary(
+  result: AgentToolResultEnvelope,
+  technicalFilterChips: readonly string[] | null,
+): string | null {
+  if (technicalFilterChips === null) return null;
+  if (technicalFilterChips.length === 0 || result.items.length === 0) return "";
+  let productSpec = 0;
+  let identityFallback = 0;
+  for (const item of result.items) {
+    if (item.technicalMatch === "product_spec") productSpec++;
+    else if (item.technicalMatch === "identity_fallback") identityFallback++;
+    else return null;
+  }
+  return [
+    productSpec > 0
+      ? `${productSpec} ${productSpec === 1 ? "ficha técnica" : "fichas técnicas"}`
+      : null,
+    identityFallback > 0 ? `${identityFallback} por identidad` : null,
+  ].filter((value): value is string => value !== null).join(" · ");
+}
+
+function inventoryTechnicalFilterChips(value: unknown): readonly string[] | null {
+  if (!Array.isArray(value) || value.length > 8) return null;
+  const fields = new Set<string>();
+  const chips: string[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const entries = Object.entries(item);
+    if (
+      entries.length !== 3 ||
+      !entries.every(([key]) => key === "field" || key === "operator" || key === "values")
+    ) return null;
+    const field = (item as Record<string, unknown>).field;
+    const operator = (item as Record<string, unknown>).operator;
+    const values = (item as Record<string, unknown>).values;
+    if (
+      typeof field !== "string" || !/^[a-z][a-z0-9_]{1,63}$/.test(field) ||
+      fields.has(field) || typeof operator !== "string" ||
+      !["eq", "neq", "lt", "lte", "gt", "gte", "between", "in", "contains"]
+        .includes(operator) ||
+      !Array.isArray(values) || values.length < 1 || values.length > 10 ||
+      values.some((filterValue) =>
+        !["string", "number", "boolean"].includes(typeof filterValue) ||
+        (typeof filterValue === "string" &&
+          (!filterValue.trim() ||
+            new TextEncoder().encode(filterValue.trim()).length > 120))
+      )
+    ) return null;
+    fields.add(field);
+    const renderedValues = values.map((filterValue) =>
+      typeof filterValue === "string" ? filterValue.trim() : String(filterValue)
+    );
+    chips.push(inventoryPredicateLabel(operator, renderedValues));
+  }
+  return Object.freeze(chips.slice(0, 3));
+}
+
+function inventoryPredicateLabel(operator: string, values: readonly string[]): string {
+  switch (operator) {
+    case "eq":
+      return values[0];
+    case "neq":
+      return `≠ ${values[0]}`;
+    case "lt":
+      return `< ${values[0]}`;
+    case "lte":
+      return `≤ ${values[0]}`;
+    case "gt":
+      return `> ${values[0]}`;
+    case "gte":
+      return `≥ ${values[0]}`;
+    case "between":
+      return `${values[0]}–${values[1]}`;
+    case "in":
+      return values.join(" / ");
+    case "contains":
+      return `contiene ${values[0]}`;
+    default:
+      return values[0] ?? "";
+  }
+}
+
+export function autoOpenListAnswer(
+  cards: readonly AgentActionCard[],
+  supportsResultLists: boolean,
+): string | undefined {
+  if (cards.length !== 1) return undefined;
+  const listRef = cards[0].listRef;
+  if (!listRef?.autoOpen || listRef.kind !== "inventory") return undefined;
+  const filter = inventoryAvailabilityLabel(listRef.availability);
+  if (listRef.resultCount === 0) {
+    return supportsResultLists
+      ? `No encontré resultados con el filtro “${filter}”. Abrí Inventario para que puedas revisarlo o ajustarlo.`
+      : `No encontré resultados con el filtro “${filter}”. Usa la tarjeta para revisar o ajustar la búsqueda en Inventario.`;
+  }
+  const count = listRef.hasMore
+    ? `${listRef.resultCount} o más resultados`
+    : `${listRef.resultCount} ${listRef.resultCount === 1 ? "resultado" : "resultados"}`;
+  return supportsResultLists
+    ? `Abrí ${count} coincidentes en Inventario con el filtro “${filter}”.`
+    : `Encontré ${count} coincidentes en Inventario con el filtro “${filter}”. Usa la tarjeta para abrirlos.`;
+}
+
+/** Keeps rolling client updates compatible with the strict v1 card decoder. */
+export function cardsForClient(
+  cards: readonly AgentActionCard[],
+  supportsResultLists: boolean,
+): readonly AgentActionCard[] {
+  if (supportsResultLists || !cards.some((item) => item.listRef)) return cards;
+  return Object.freeze(cards.map((item) => {
+    if (!item.listRef) return item;
+    const { listRef: _unsupportedListRef, ...compatible } = item;
+    return card(compatible);
+  }));
+}
+
+function inventoryAvailabilityLabel(value: AgentInventoryAvailabilityFilter): string {
+  switch (value) {
+    case "any":
+      return "Todos";
+    case "in_stock":
+      return "En stock";
+    case "low_stock":
+      return "Stock bajo";
+    case "out_of_stock":
+      return "Agotados";
   }
 }
 
@@ -224,6 +415,8 @@ function cardIdentity(item: AgentActionCard): string {
     ? `approval\u0000${item.approvalRef.id}`
     : item.entityRef
     ? `entity\u0000${item.entityRef.kind}\u0000${item.entityRef.id}`
+    : item.listRef
+    ? `list\u0000${item.listRef.kind}\u0000${item.listRef.query}\u0000${item.listRef.availability}`
     : `aggregate\u0000${item.destination}\u0000${item.kind}\u0000${item.title}`;
 }
 
@@ -238,6 +431,7 @@ export function validateStoredCards(value: unknown): readonly AgentActionCard[] 
       "description",
       "entityRef",
       "approvalRef",
+      "listRef",
     ]);
     if (Object.keys(item).some((key) => !requiredKeys.has(key) && !optionalKeys.has(key))) {
       throw new Error("Invalid stored card");
@@ -254,6 +448,13 @@ export function validateStoredCards(value: unknown): readonly AgentActionCard[] 
     if (!Array.isArray(item.chips) || item.chips.length > 4) throw new Error("Invalid card chips");
     const entityRefValue = validateEntityRef(item.entityRef, item.kind);
     const approvalRefValue = validateApprovalRef(item.approvalRef, item.kind);
+    const listRefValue = validateListRef(
+      item.listRef,
+      item.kind,
+      closedDestination,
+      entityRefValue,
+      approvalRefValue,
+    );
     return card({
       kind: bounded(item.kind, 32, true),
       title: bounded(item.title, 160, true),
@@ -264,6 +465,7 @@ export function validateStoredCards(value: unknown): readonly AgentActionCard[] 
       chips: item.chips.map((chip) => bounded(chip, 64, true)),
       entityRef: entityRefValue,
       approvalRef: approvalRefValue,
+      listRef: listRefValue,
     });
   }));
 }
@@ -366,6 +568,16 @@ function card(value: AgentActionCard): AgentActionCard {
     ...(description ? { description } : {}),
     ...(value.entityRef ? { entityRef: Object.freeze({ ...value.entityRef }) } : {}),
     ...(value.approvalRef ? { approvalRef: Object.freeze({ ...value.approvalRef }) } : {}),
+    ...(value.listRef
+      ? {
+        listRef: Object.freeze({
+          ...value.listRef,
+          entityIds: value.listRef.entityIds === null
+            ? null
+            : Object.freeze([...value.listRef.entityIds]),
+        }),
+      }
+      : {}),
   });
 }
 
@@ -426,6 +638,59 @@ function validateApprovalRef(
   });
 }
 
+function validateListRef(
+  value: unknown,
+  cardKind: unknown,
+  destination: AgentActionCard["destination"],
+  entityRefValue: AgentActionCard["entityRef"],
+  approvalRefValue: AgentActionCard["approvalRef"],
+): AgentListRef | undefined {
+  if (value === undefined) return undefined;
+  if (
+    cardKind !== "inventory" || destination !== "inventory_products" ||
+    entityRefValue !== undefined || approvalRefValue !== undefined ||
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "kind",
+      "query",
+      "availability",
+      "resultCount",
+      "hasMore",
+      "entityIds",
+      "autoOpen",
+    ]) ||
+    value.kind !== "inventory" ||
+    typeof value.query !== "string" || !value.query.trim() ||
+    new TextEncoder().encode(value.query.trim()).byteLength > 240 ||
+    typeof value.availability !== "string" ||
+    !(agentInventoryAvailabilityFilters as readonly string[]).includes(value.availability) ||
+    !Number.isSafeInteger(value.resultCount) ||
+    (value.resultCount as number) < 0 || (value.resultCount as number) > 10 ||
+    typeof value.hasMore !== "boolean" || typeof value.autoOpen !== "boolean" ||
+    !(value.entityIds === null || Array.isArray(value.entityIds))
+  ) throw new Error("Invalid list reference");
+  const entityIds = value.entityIds === null ? null : value.entityIds.map((id) => {
+    if (typeof id !== "string" || !validUuid(id)) {
+      throw new Error("Invalid list reference");
+    }
+    return id.toLowerCase();
+  });
+  if (
+    (value.hasMore ? entityIds !== null : entityIds === null) ||
+    (entityIds !== null && entityIds.length !== value.resultCount) ||
+    (entityIds !== null && new Set(entityIds).size !== entityIds.length)
+  ) throw new Error("Invalid list reference");
+  return Object.freeze({
+    kind: "inventory",
+    query: value.query.trim(),
+    availability: value.availability as AgentInventoryAvailabilityFilter,
+    resultCount: value.resultCount as number,
+    hasMore: value.hasMore,
+    entityIds: entityIds === null ? null : Object.freeze(entityIds),
+    autoOpen: value.autoOpen,
+  });
+}
+
 function validUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     .test(value);
@@ -455,10 +720,6 @@ function currencyAmount(value: unknown, currency: unknown, prefix: string): stri
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
   const code = typeof currency === "string" && currency.trim() ? currency.trim() : "CLP";
   return `${prefix} ${code} ${value.toLocaleString("es-CL", { maximumFractionDigits: 6 })}`;
-}
-
-function number(value: unknown, prefix: string): string | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? `${prefix} ${value}` : undefined;
 }
 
 function join(values: readonly (string | undefined)[]): string | undefined {

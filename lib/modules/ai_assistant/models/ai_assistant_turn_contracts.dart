@@ -120,6 +120,37 @@ class AIAssistantApprovalRef {
       );
 }
 
+enum AIAssistantInventoryAvailability {
+  any,
+  inStock,
+  lowStock,
+  outOfStock,
+}
+
+/// One exact server-projected inventory result set.
+///
+/// When [hasMore] is false, [entityIds] is the complete verified selection.
+/// A truncated result intentionally carries no ID list so the client cannot
+/// pretend that the first page is the full catalog result.
+@immutable
+class AIAssistantInventoryListRef {
+  const AIAssistantInventoryListRef({
+    required this.query,
+    required this.availability,
+    required this.resultCount,
+    required this.hasMore,
+    required this.entityIds,
+    required this.autoOpen,
+  });
+
+  final String query;
+  final AIAssistantInventoryAvailability availability;
+  final int resultCount;
+  final bool hasMore;
+  final List<String>? entityIds;
+  final bool autoOpen;
+}
+
 /// A card the assistant offers after answering.
 ///
 /// The card carries a closed [destination] and may carry one verified,
@@ -137,6 +168,7 @@ class AIAssistantActionCard {
     this.chips = const <String>[],
     this.entityRef,
     this.approvalRef,
+    this.inventoryListRef,
   });
 
   final String kind;
@@ -148,8 +180,11 @@ class AIAssistantActionCard {
   final List<String> chips;
   final AIAssistantEntityRef? entityRef;
   final AIAssistantApprovalRef? approvalRef;
+  final AIAssistantInventoryListRef? inventoryListRef;
 
-  String get ctaLabel => entityRef?.detailCtaLabel ?? destination.ctaLabel;
+  String get ctaLabel => inventoryListRef != null
+      ? 'Ver resultados'
+      : entityRef?.detailCtaLabel ?? destination.ctaLabel;
 
   AIAssistantActionCard withApprovalState(
     AIAssistantApprovalState state,
@@ -166,6 +201,7 @@ class AIAssistantActionCard {
       chips: chips,
       entityRef: entityRef,
       approvalRef: approval.withState(state),
+      inventoryListRef: inventoryListRef,
     );
   }
 }

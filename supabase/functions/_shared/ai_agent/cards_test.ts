@@ -1,4 +1,10 @@
-import { cardsForToolResult, mergeCards, validateStoredCards } from "./cards.ts";
+import {
+  autoOpenListAnswer,
+  cardsForClient,
+  cardsForToolResult,
+  mergeCards,
+  validateStoredCards,
+} from "./cards.ts";
 import type { AgentActionCard, AgentToolResultEnvelope, JsonObject } from "./contracts.ts";
 
 const tenantId = "22222222-2222-4222-8222-222222222222";
@@ -69,13 +75,6 @@ Deno.test("server cards match every closed Flutter destination-kind pair", () =>
       "purchase_invoice",
       "purchaseInvoice",
     ],
-    [
-      "search_inventory",
-      { entityId, name: "Cadena" },
-      "inventory_products",
-      "inventory",
-      "product",
-    ],
     ["search_tasks", { entityId, title: "Llamar" }, "tasks", "task", null],
     [
       "list_recent_expenses",
@@ -115,6 +114,130 @@ Deno.test("server cards match every closed Flutter destination-kind pair", () =>
     assertEquals(card.entityRef?.kind ?? null, entityKind, `${tool} exact entity route kind`);
     assertEquals(card.entityRef?.id ?? null, entityKind ? entityId : null, `${tool} server ID`);
   }
+});
+
+Deno.test("inventory search projects one exact compact result set instead of arbitrary rows", () => {
+  const inventoryResult: AgentToolResultEnvelope = {
+    authorityTenantId: tenantId,
+    asOf: "2026-08-13T12:00:00Z",
+    status: "success",
+    items: [
+      {
+        entityId,
+        name: "Camara 29 A",
+        stock: 7,
+        technicalMatch: "product_spec",
+      },
+      {
+        entityId: "22222222-2222-4222-8222-222222222222",
+        name: "Camara 29 B",
+        stock: 1,
+        technicalMatch: "identity_fallback",
+      },
+    ],
+    resultCount: 2,
+    hasMore: false,
+  };
+  const cards = cardsForToolResult(
+    "search_inventory",
+    inventoryResult,
+    {
+      query: "camara 29",
+      category: "Cámaras",
+      availability: "in_stock",
+      presentation: "open_list",
+      technicalPredicates: [{ field: "wheel_size", operator: "eq", values: ['29"'] }],
+    },
+  );
+  assertEquals(cards.length, 1, "all rows collapse into one result-set action");
+  assertEquals(cards[0].entityRef ?? null, null, "list action never picks an arbitrary product");
+  assertEquals(
+    cards[0].chips,
+    ["En stock", '29"'],
+    "the compact action exposes the database-validated technical constraint",
+  );
+  assertEquals(cards[0].listRef, {
+    kind: "inventory",
+    query: "Cámaras",
+    availability: "in_stock",
+    resultCount: 2,
+    hasMore: false,
+    entityIds: [
+      entityId,
+      "22222222-2222-4222-8222-222222222222",
+    ],
+    autoOpen: true,
+  }, "the exact complete server result is retained for the product list");
+  assertEquals(
+    cards[0].subtitle,
+    "Cámaras · 1 ficha técnica · 1 por identidad",
+    "the card distinguishes canonical specs from the explicit sparse-catalog fallback",
+  );
+  assertEquals(
+    autoOpenListAnswer(cards, true),
+    "Abrí 2 resultados coincidentes en Inventario con el filtro “En stock”.",
+    "model prose cannot diverge from an explicit list action",
+  );
+  assertEquals(
+    autoOpenListAnswer(cards, false),
+    "Encontré 2 resultados coincidentes en Inventario con el filtro “En stock”. Usa la tarjeta para abrirlos.",
+    "an older client gets truthful server-owned click guidance",
+  );
+  validateStoredCards(cards);
+  assertEquals(
+    cardsForClient(cards, false)[0].listRef ?? null,
+    null,
+    "older strict clients receive the aggregate action without the new field",
+  );
+  assertEquals(
+    cardsForClient(cards, true)[0].listRef,
+    cards[0].listRef,
+    "capable clients receive the typed result set",
+  );
+  validateStoredCards(cardsForClient(cards, false));
+});
+
+Deno.test("inventory empty and truncated result sets remain truthful", () => {
+  const empty: AgentToolResultEnvelope = {
+    authorityTenantId: tenantId,
+    asOf: "2026-08-13T12:00:00Z",
+    status: "verifiedEmpty",
+    items: [],
+    resultCount: 0,
+    hasMore: false,
+  };
+  const emptyCard = cardsForToolResult("search_inventory", empty, {
+    query: "camara 31",
+    category: null,
+    availability: "in_stock",
+    presentation: "open_list",
+    technicalPredicates: [{ field: "wheel_size", operator: "eq", values: ['31"'] }],
+  })[0];
+  assertEquals(emptyCard.listRef?.entityIds, [], "verified empty is an exact empty selection");
+  assertEquals(
+    autoOpenListAnswer([emptyCard], true),
+    "No encontré resultados con el filtro “En stock”. Abrí Inventario para que puedas revisarlo o ajustarlo.",
+    "empty output is not rewritten as source failure",
+  );
+
+  const truncated = cardsForToolResult("search_inventory", {
+    ...result({ entityId, name: "Camara" }),
+    hasMore: true,
+  }, {
+    query: "camara",
+    category: null,
+    availability: "any",
+    presentation: "answer",
+    technicalPredicates: [],
+  })[0];
+  assertEquals(truncated.listRef?.entityIds, null, "a truncated page never claims exact IDs");
+  assertEquals(truncated.listRef?.hasMore, true, "truncation survives persistence");
+  assertEquals(
+    autoOpenListAnswer([truncated], true) ?? null,
+    null,
+    "informational reads never auto-open",
+  );
+  validateStoredCards([emptyCard, truncated]);
 });
 
 Deno.test("inventory risks use one aggregate card and cash summary creates no route", () => {
@@ -205,6 +328,44 @@ Deno.test("stored cards reject oversize or non-closed payloads", () => {
       [{ kind: "task", title: "T", destination: "tasks", chips: Array(5).fill("x") }],
       [{ kind: "task", title: "T", destination: "tasks", chips: [], route: "/evil" }],
       [{ kind: "task", title: "T", destination: "tasks", chips: [], entityRef: null }],
+      [{
+        kind: "inventory",
+        title: "T",
+        destination: "inventory_products",
+        chips: [],
+        listRef: null,
+      }],
+      [{
+        kind: "inventory",
+        title: "T",
+        destination: "inventory_products",
+        chips: [],
+        entityRef: { kind: "product", id: entityId },
+        listRef: {
+          kind: "inventory",
+          query: "camara",
+          availability: "in_stock",
+          resultCount: 1,
+          hasMore: false,
+          entityIds: [entityId],
+          autoOpen: true,
+        },
+      }],
+      [{
+        kind: "inventory",
+        title: "T",
+        destination: "inventory_products",
+        chips: [],
+        listRef: {
+          kind: "inventory",
+          query: "camara",
+          availability: "invented",
+          resultCount: 0,
+          hasMore: false,
+          entityIds: [],
+          autoOpen: true,
+        },
+      }],
       [{
         kind: "expense",
         title: "Gasto",

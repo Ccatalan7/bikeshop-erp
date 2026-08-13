@@ -8,6 +8,17 @@ import '../../ai_assistant/services/ai_service.dart';
 import '../models/inventory_models.dart';
 import '../models/stock_adjustment.dart';
 
+enum InventoryExternalStockFilter {
+  any(0),
+  inStock(1),
+  lowStock(2),
+  outOfStock(3);
+
+  const InventoryExternalStockFilter(this.productListIndex);
+
+  final int productListIndex;
+}
+
 class InventoryService extends ChangeNotifier {
   static final RegExp _aliExpressSkuPattern =
       RegExp(r'^AE(\d+)$', caseSensitive: false);
@@ -68,16 +79,25 @@ class InventoryService extends ChangeNotifier {
   final _externalSearchController = StreamController<String>.broadcast();
   Stream<String> get externalSearchStream => _externalSearchController.stream;
 
-  /// SKUs matched by the AI assistant's semantic+keyword search.
-  /// When set, the product list filters by these SKUs instead of keyword search.
-  List<String>? aiMatchedSkus;
+  /// Exact product IDs from a complete server-projected assistant result.
+  /// Null means the server reported more rows than its bounded projection and
+  /// the product list must apply the visible query locally instead.
+  List<String>? aiMatchedProductIds;
   int? aiStockFilterIndex;
 
-  void applyExternalSearch(String term,
-      {List<String>? matchedSkus, int? stockFilterIndex}) {
-    aiMatchedSkus = matchedSkus;
-    aiStockFilterIndex = stockFilterIndex;
-    saveListState(searchTerm: term, stockFilterIndex: stockFilterIndex);
+  void applyExternalSearch(
+    String term, {
+    List<String>? matchedProductIds,
+    required InventoryExternalStockFilter stockFilter,
+  }) {
+    aiMatchedProductIds = matchedProductIds == null
+        ? null
+        : List<String>.unmodifiable(matchedProductIds);
+    aiStockFilterIndex = stockFilter.productListIndex;
+    saveListState(
+      searchTerm: term,
+      stockFilterIndex: stockFilter.productListIndex,
+    );
     _externalSearchController.add(term);
   }
 
@@ -136,7 +156,7 @@ class InventoryService extends ChangeNotifier {
     savedFilterGoogleMerchant = false;
     savedShowInactive = false;
     savedSortOptionIndex = 2;
-    aiMatchedSkus = null;
+    aiMatchedProductIds = null;
     aiStockFilterIndex = null;
   }
 

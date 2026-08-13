@@ -1,11 +1,11 @@
 # Asistente IA — plan maestro del runtime agéntico
 
 - Fecha de inicio: 2026-08-04
-- Estado: runtime durable activo en producción; gateway Edge v61 `ACTIVE`,
+- Estado: runtime durable activo en producción; gateway Edge v66 `ACTIVE`,
   `verify_jwt=true`, bundle
-  `2b3319554082600ff8c6558c8cfa6ca6d6042cca662085bc82e735e873164b78`, con
-  búsqueda web general y técnica verificadas en producción el 12 de agosto de
-  2026
+  `d34f707a703baa1cd5fa829b33059ae3d0462e4562e509962b34df5d1b8b1808`, con
+  búsqueda web general/técnica, inventario estructurado y reconocimiento de
+  límites verificados en producción el 13 de agosto de 2026
 - Owner de contratos, seguridad e integración: Codex
 - Owner de interacción y revisión visual: Claude
 
@@ -70,7 +70,9 @@ Desde esa línea base, la implementación local de este plan ya agregó:
   permitido, OpenAI `tool_choice` de función y Anthropic `tool_choice` de tool—.
   El proveedor conserva el ID y la continuación reales, pero no puede cerrar con
   una respuesta de memoria; la síntesis posterior vuelve al planning normal;
-- tarjetas con destinos cerrados, sin autonavegación;
+- tarjetas con destinos cerrados; las lecturas informativas esperan clic y una
+  petición explícita de lista puede abrir únicamente una proyección server-owned
+  ya filtrada;
 - gateway Gemini/OpenAI/Anthropic autenticado y tenant-bound con tool loop,
   cuotas, leases, recibos y replay durable implementados localmente;
 - engine Flutter completo para ese gateway, seleccionado una sola vez por sesión
@@ -216,9 +218,11 @@ Evidencia productiva v61:
    portales externos sin API; no opera el propio ERP por píxeles.
 8. **Ausencia de evidencia no es evidencia de ausencia.** Respuestas parciales,
    paginación y fuentes no disponibles son visibles.
-9. **No hay autonavegación sorpresiva.** Una lectura puede ofrecer tarjetas; el
-   operador decide abrirlas. Una acción mutativa se confirma en el punto exacto
-   de riesgo.
+9. **No hay autonavegación sorpresiva.** Una lectura informativa puede ofrecer
+   tarjetas y el operador decide abrirlas. Una petición explícita de buscar,
+   mostrar, listar o abrir puede activar sólo un destino agregado cerrado cuando
+   el receipt adjunta la consulta, el filtro y el conjunto server-owned exactos.
+   Una acción mutativa se confirma en el punto exacto de riesgo.
 
 ## Niveles de riesgo
 
@@ -287,24 +291,180 @@ Cada herramienta declara como mínimo:
 El catálogo se filtra **antes** de llegar al modelo. Una herramienta que el
 operador no puede usar no se anuncia y tampoco puede ejecutarse por nombre.
 
-## Primer catálogo operacional
+## Catálogo operacional y reconocimiento de límites
 
-Las lecturas de primera ola, en orden de valor, son:
+El modelo recibe diecisiete primitivas actuales, filtradas por autoridad:
 
-1. `get_business_snapshot`
-2. `list_attention_items`
-3. `search_workshop_jobs`
-4. `search_tasks`
-5. `search_inventory`
-6. `find_inventory_risks`
-7. `search_customers`
-8. `search_suppliers`
-9. `search_sales_invoices`
-10. `search_purchase_invoices`
-11. `analyze_cash_and_receivables`
+1. `inspect_inventory_schema`
+2. `search_inventory`
+3. `find_inventory_risks`
+4. `get_business_snapshot`
+5. `list_attention_items`
+6. `search_workshop_jobs`
+7. `search_tasks`
+8. `search_customers`
+9. `search_suppliers`
+10. `search_sales_invoices`
+11. `search_purchase_invoices`
 12. `list_recent_expenses`
-13. `search_conversations`
-14. `research_public_web`
+13. `analyze_cash_and_receivables`
+14. `search_conversations`
+15. `prepare_task`
+16. `report_capability_gap`
+17. `research_public_web`, sólo cuando el worker server-side está activo
+
+No existe una función por frase, producto o ejemplo. El modelo decide y encadena
+primitivas según la intención; el código define únicamente la gramática segura,
+la autoridad, las fuentes y los efectos que puede ejecutar. Cuando ninguna
+composición cubre la petición, `report_capability_gap` acepta sólo dominio,
+operación, causa y alternativa desde enums cerrados; para carencia de datos
+estructurados exige además la clave exacta inspeccionada y `null` para cualquier
+otra causa. El runtime ignora toda prosa del modelo y persiste una explicación
+server-owned. La herramienta se
+anuncia incluso si la autoridad no tiene lecturas de negocio, por lo que un
+usuario sin permiso recibe una negativa honesta en vez de silencio. Una
+respuesta `source_unavailable` sólo se autoriza después de un fallo real de
+fuente; un schema/argumento rechazado, cero filas o cero cobertura nunca se
+traducen como caída del servicio.
+
+`inspect_inventory_schema` es introspección de negocio, no acceso a SQL. Recibe
+una consulta y una categoría tentativa, resuelve el árbol real del tenant y
+devuelve como máximo cuarenta filas cerradas con categoría/path, familia,
+`spec_definitions.key`, label, tipo, unidad, operadores, valores finitos y
+`populatedCount/productCount`. Para medidas, rangos, estándares o compatibilidad,
+el runtime exige que esta inspección ocurra en una ronda anterior y vincula la
+búsqueda posterior a una categoría, claves y operadores presentes en esa
+respuesta; así el modelo no puede precomprometer ni cambiar una clave inventada
+después de ver el esquema.
+
+`search_inventory` conserva una sola selección para texto, cards y navegación.
+Su v5 separa `query` opcional, categoría canónica, disponibilidad, presentación
+y `technicalPredicates`. La categoría incluye descendientes y sus familias
+técnicas activas. Los predicados tipados soportan igualdad/desigualdad,
+comparaciones numéricas, rango y membresía —más `contains` sólo para texto— y
+PostgreSQL los revalida contra el tipo descubierto. `product_spec_values` es
+autoridad y un conflicto estructurado elimina la fila. El fallback de identidad
+se conserva únicamente para igualdad/membresía exacta con ficha vacía; nunca
+satisface `<`, `>`, `between` ni otra comparación. Por eso un nombre con varias
+medidas como `68x122.5` no puede probar cuál de ellas es el largo de eje. Cada
+fila sigue declarando `product_spec`, `identity_fallback` o `not_applicable`.
+Disponibilidad se aplica antes del límite. Con `open_list`, el runtime reemplaza
+la prosa del modelo y Flutter abre sólo el `listRef` server-owned; con `answer`,
+la card espera clic.
+
+### Matriz de escenarios del negocio
+
+Esta matriz evita dos extremos: herramientas diminutas por frase y una
+herramienta genérica con SQL o writes arbitrarios. Cada familia nueva debe
+componerse de `discover/read/filter/aggregate/compare/draft/confirm/commit`, con
+un dueño canónico y un receipt verificable.
+
+| Familia | Preguntas/peticiones frecuentes | Primitivas actuales | Brecha que debe declarar hoy / próxima primitiva segura |
+|---|---|---|---|
+| Operación diaria | qué urge, qué vence, qué hago primero | snapshot, atención, trabajos, tareas | asignación/estado masivo requiere preview + confirmación |
+| Inventario y compatibilidad | stock por ficha, medidas, estándares, riesgos, equivalentes | inspector, búsqueda tipada, riesgos | cero cobertura se declara; comparación de compatibilidad necesita un scorer tipado |
+| Taller | estado de trabajos, solicitudes, técnico, fecha prometida | búsqueda de trabajos + contexto visible | diagnóstico, presupuesto y cambio de estado requieren draft/confirm separados |
+| Clientes | encontrar ficha, historial operativo, seguimiento | búsqueda de clientes; joins acotados con trabajos | timeline y borrador de contacto aún necesitan herramientas propias |
+| Comunicaciones | pendientes de respuesta, canal, contexto, redactar/enviar | metadata de conversaciones | cuerpo/borrador/envío no existen; enviar será siempre sensitiveWrite confirmado |
+| Ventas | factura, deuda, vencimiento, cotización, devolución | facturas de venta + cobranza | cotización/orden/devolución requieren preview exacto y commit idempotente |
+| Compras | proveedor, factura, faltantes, orden, recepción | proveedores, facturas, riesgos | orden/recepción necesitan draft y confirmación; no se simulan desde texto |
+| Contabilidad | gastos, caja contable, cartera, conciliación, pago | gastos + caja/cobranza | conciliación, asiento y pago no tienen tool y se declaran explícitamente |
+| Tareas | buscar, priorizar, crear recordatorio | búsqueda + `prepare_task` + aprobación post-click | edición/cierre masivo requieren nuevos comandos CAS |
+| Archivos y OCR | leer factura PDF/imagen, revisar candidatos, importar | el módulo OCR existe fuera del agente | el chat no tiene tool de archivo; debe declararlo hasta crear upload/parse/preview |
+| Web pública | manuales, actualidad, Reddit, comparaciones públicas | investigación pública general | portal autenticado sigue desactivado y se declara, no se finge navegación |
+| Proveedores autenticados | estado de pedido, disponibilidad privada, carrito | ninguna | browser aislado + allowlist + stop antes de submit; hoy capability gap |
+| Tienda/marketing | productos publicados, campañas, SEO, rendimiento | ninguna lectura anunciada | read models primero; publicación siempre preview/confirm |
+| Personal/nómina | turnos, liquidaciones, pendientes, pagos | ninguna herramienta del agente | lecturas PII mínimas por permiso; pagos siempre sensitiveWrite específico |
+| Analítica | margen, rotación, forecast, comparación por período | snapshots acotados solamente | agregadores server-owned con métricas definidas; nunca descargar tablas al modelo |
+
+El dataset de evaluación incluye desde esta corrección consultas técnicas con
+inspección previa y escenarios no cubiertos de conciliación, pricing masivo,
+OCR y forecast. El éxito no consiste en que el modelo siempre responda: consiste
+en ejecutar la composición correcta o detenerse con la limitación correcta.
+
+Las migraciones `20260813174500` y `20260813180300` desplegaron inicialmente la
+proyección/lista cerrada. El smoke autenticado
+`clientRequestId=4384c657-d143-43f6-8aef-cc8efa9b6cf6`, run
+`ea305ead-1b18-4a78-9745-2ce6cdcd7e62`, respondió HTTP 200 con seis supuestas
+cámaras 29,
+una sola card, `availability=in_stock`, seis UUID exactos y `autoOpen=true`.
+Ese transporte era sano, pero no fue aceptación de producto: `29` coincidió con
+el sufijo del EAN `6938112671129` de una cámara aro 26. El smoke de cliente
+anterior `ed358d3c-9530-4e3d-96fc-d6049bb56a8d` heredó los mismos seis
+resultados; sólo probó compatibilidad de wire sin `listRef`, no precisión de
+catálogo.
+
+**Cierre productivo supersedido del 13 de agosto de 2026:** la migración
+`20260813190000` y el smoke v3 demostraron el filtro técnico y eliminaron la
+cámara aro 26, pero todavía mezclaban categoría e identidad en `query` y el
+listado parecía una búsqueda manual. Esa prueba queda como evidencia histórica,
+no como contrato vigente.
+
+**Cierre productivo supersedido del 13 de agosto de 2026:** la migración
+  `20260813203000` quedó aplicada, leída de vuelta y registrada. La función v4 era
+`SECURITY DEFINER`, `STABLE`, tiene `search_path=pg_catalog, public, pg_temp` y
+timeout de 4500 ms; sólo `authenticated` puede ejecutarla. El gateway quedó en
+v65 `ACTIVE`, `verify_jwt=true`, bundle
+`ed4821b9376fafad50a2ab8f3c290b3aaf11e8e15766c88752193f880b0994e6`.
+
+La prueba en la sesión macOS canónica usó el prompt
+`buscame camaras 29 que tengamos en stock` y produjo
+`clientRequestId=8c0d93c5-e0fe-495d-8e32-3513b1b7b043`, run
+`5bc63393-a0b4-429b-8336-ae59a7f692a2`. Abrió Product List con cinco UUID
+exactos, `availability=in_stock`, `autoOpen=true`, buscador local vacío y la card
+`Cámaras · 1 ficha técnica · 4 por identidad · En stock · 29"`. Los cinco tenían
+stock positivo; la cámara aro 26 no apareció. El run terminó `succeeded`, sin
+`error_code`, con 14855 tokens de entrada, 1659 de salida y costo total 49618
+µUSD. Los tres intentos `gemini-3.1-pro-preview` quedaron contabilizados y
+`succeeded`. El primer tool call fue rechazado y receipted como
+`invalid_tool_arguments`; el runtime lo reparó sin ejecutar la consulta. El
+segundo receipt `search_inventory` fue la única lectura ejecutada: `succeeded`,
+sin `failure_code`, `result_count=5` y `read_back_verified=true`. El transcript,
+la card persistida y el listado real muestran la misma selección y declaran la
+fuente técnica en vez de esconder el fallback.
+
+La compatibilidad de rollout se mantiene: un cliente sin el header de listas
+recibe la misma card sin el campo desconocido `listRef` y copy de clic veraz;
+el auto-open y la lista exacta sólo se activan cuando el cliente anuncia el
+contrato.
+
+**Cierre productivo vigente del 13 de agosto de 2026:** las migraciones
+`20260813213000`, `20260813214500` y `20260813215000` quedaron aplicadas, con
+read-back exacto y registro de historia. La última reemplaza el allowlist y
+límite global duplicados del ledger por un contrato tipado de riesgo, política
+y máximo por herramienta; el inspector admite cuarenta filas, las lecturas
+ordinarias siguen limitadas a diez y un nombre no registrado no produce
+contrato. `assistant_runtime` permanece sin `EXECUTE` para `authenticated` ni
+`service_role`; sólo los wrappers v2 atestados siguen expuestos. El validador
+derivado de producción ahora captura también ese schema aislado, sin filas, y
+la regresión de ledger pasó 107 assertions. El gateway v66 quedó `ACTIVE`,
+`verify_jwt=true`, bundle
+`d34f707a703baa1cd5fa829b33059ae3d0462e4562e509962b34df5d1b8b1808`.
+
+La prueba real `buscame motores de menos de 125mm de eje` produjo
+`clientRequestId=5d5adc5d-4085-4e02-a54d-9c14fae3c83c`, run
+`441f3833-0a4b-4462-bfeb-9490e3fa683c`: `succeeded`, sin `error_code`, 14906
+tokens de entrada, 917 de salida y 40816 µUSD. Los receipts fueron
+`inspect_inventory_schema` (`result_count=40`) y `report_capability_gap`
+(`result_count=1`), ambos `succeeded`, sin `failure_code` y con
+`read_back_verified=true`. La respuesta visible declaró que el largo de eje no
+está poblado en las fichas y se negó a inferirlo desde nombres ambiguos.
+
+La prueba independiente `concilia ahora la cuenta bancaria de este mes`
+produjo `clientRequestId=e6ee8f1c-dc65-4ba6-bec9-64c4fea7f204`, run
+`d53ea661-8525-4a54-bf7f-15953595e59a`: `succeeded`, sin `error_code`, con un
+receipt `report_capability_gap` verificado. La salida server-owned dijo que no
+existe una herramienta autorizada para modificar Contabilidad y no afirmó
+haber conciliado nada. Esto demuestra reconocimiento general de una capacidad
+ausente fuera del caso de inventario.
+
+La regresión real `buscame camaras 29 que tengamos en stock` produjo
+`clientRequestId=07663b4f-6758-4289-86be-97fcb7d9be13`, run
+`ab231a10-ade3-412a-9c84-77907d87eb37`: `succeeded`, sin `error_code`, con
+receipts verificados de inspector (`result_count=6`) y búsqueda v5
+(`result_count=5`). Abrió el listado server-owned de cinco cámaras con stock,
+buscador manual vacío y la misma separación visible de una ficha técnica y
+cuatro matches de identidad; la aro 26 no apareció.
 
 Las primeras acciones llegan sólo cuando esas lecturas estén verificadas:
 
@@ -516,7 +676,7 @@ El benchmark final tendrá entre 50 y 100 tareas reales y medirá:
 - latencia, vueltas, tokens y costo;
 - consistencia entre Gemini, GPT y Claude con el mismo catálogo.
 
-El dataset inicial ya fija 50 prompts sin datos personales reales y cubre
+El dataset inicial ya fija 56 prompts sin datos personales reales y cubre
 español coloquial, errores tipográficos, fuentes parciales, cambio de tenant,
 permisos, tool calls fabricados, límites, drafts, escrituras y navegador. Su
 test valida el contrato estático; ejecutar la matriz contra proveedores y

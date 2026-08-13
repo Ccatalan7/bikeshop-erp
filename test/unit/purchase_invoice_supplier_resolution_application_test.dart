@@ -80,7 +80,74 @@ void main() {
         expect(line.hasCompleteSupplierResolutionProvenance, isTrue);
         expect(isPurchaseSupplierResolutionLineLocked(line), isTrue);
       }
+      expect(
+        purchaseSupplierResolutionLinesShareGroup(lines.first, lines.last),
+        isTrue,
+      );
       expect(hasPurchaseSupplierResolutionLines(lines), isTrue);
+    });
+
+    test('manual editing detaches the complete group without losing values',
+        () {
+      final prepared = _preparedSource(
+        sourceQuantity: 3,
+        sourceTotalMinor: 10001,
+        components: const <_ComponentFixture>[
+          _ComponentFixture(
+            id: _componentOneId,
+            edgeId: _edgeOneId,
+            productId: _productOneId,
+            position: 1,
+            units: 1,
+            quantity: 3,
+            ratio: 0.4,
+            allocatedMinor: 4000,
+            role: 'front',
+          ),
+          _ComponentFixture(
+            id: _componentTwoId,
+            edgeId: _edgeTwoId,
+            productId: _productTwoId,
+            position: 2,
+            units: 1,
+            quantity: 3,
+            ratio: 0.6,
+            allocatedMinor: 6001,
+            role: 'rear',
+          ),
+        ],
+      );
+      final lines = buildPreparedSupplierPurchaseLines(
+        prepared: prepared,
+        productsById: <String, Product>{
+          _productOneId: _product(_productOneId, 'Delantero', 'AE0009'),
+          _productTwoId: _product(_productTwoId, 'Trasero', 'AE0010'),
+        },
+      );
+
+      final manual = lines
+          .where(
+            (line) => purchaseSupplierResolutionLinesShareGroup(
+              lines.first,
+              line,
+            ),
+          )
+          .map((line) => line.withoutSupplierResolutionProvenance())
+          .toList(growable: false);
+
+      expect(manual, hasLength(2));
+      expect(manual.map((line) => line.productId),
+          lines.map((line) => line.productId));
+      expect(manual.map((line) => line.quantity),
+          lines.map((line) => line.quantity));
+      expect(manual.map((line) => line.unitCost),
+          lines.map((line) => line.unitCost));
+      expect(manual.map((line) => line.description),
+          lines.map((line) => line.description));
+      expect(manual.every((line) => !line.hasSupplierResolutionProvenance),
+          isTrue);
+      expect(manual.every((line) => !line.hasSupplierSourceEvidence), isTrue);
+      expect(hasPurchaseSupplierResolutionLines(manual), isFalse);
     });
 
     test('keeps a resolved set parent as one invoice line', () {

@@ -22,8 +22,13 @@ Deno.test("caller data transport keeps publishable key and user JWT together", a
     },
   });
   await client.rpc(
-    "assistant_search_inventory_v1",
-    { p_query: "cadena" },
+    "assistant_search_inventory_v5",
+    {
+      p_query: "cadena",
+      p_category: null,
+      p_availability: "any",
+      p_technical_predicates: [],
+    },
     new AbortController().signal,
   );
   const callerHeaders = headers as Headers | null;
@@ -152,7 +157,7 @@ Deno.test("runtime transport rejects every authority and business RPC before fet
     const rpc of [
       "assistant_begin_run_v1",
       "assistant_get_authority_v1",
-      "assistant_search_inventory_v1",
+      "assistant_search_inventory_v5",
       "assistant_heartbeat_run_v1",
     ]
   ) {
@@ -176,7 +181,7 @@ Deno.test("caller RPC errors discard upstream details", async () => {
     fetchImpl: () => Promise.resolve(new Response(secret, { status: 500 })),
   });
   try {
-    await client.rpc("assistant_search_inventory_v1", {}, new AbortController().signal);
+    await client.rpc("assistant_search_inventory_v5", {}, new AbortController().signal);
   } catch (error) {
     assertEquals(error instanceof SupabaseUserDataError, true, "typed transport error");
     assertEquals(String(error).includes(secret), false, "body never reaches the error");

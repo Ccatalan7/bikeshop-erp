@@ -2,7 +2,7 @@
   'use strict';
 
   const SOURCE = 'AliExpress';
-  const CONTENT_VERSION = '0.9.9';
+  const CONTENT_VERSION = '0.9.10';
   const DEBUG_PREFIX = `[AE-DEBUG][content][v${CONTENT_VERSION}]`;
 
   function aeDebug(event, details = {}, level = 'log') {
@@ -220,6 +220,7 @@
       ordersApiTemplateSummary,
       ordersApiResponseSummary,
       ordersApiScopeProbe,
+      exactDateTimeOption,
     },
   };
 
@@ -1313,13 +1314,34 @@
     };
   }
 
+  function exactDateTimeOption(exactDate, now = new Date()) {
+    const target = new Date(`${String(exactDate || '').trim()}T12:00:00Z`);
+    const current = now instanceof Date ? now : new Date(now);
+    if (!Number.isFinite(target.getTime()) || !Number.isFinite(current.getTime())) {
+      return 'all';
+    }
+    const ageDays = Math.floor(
+      (current.getTime() - target.getTime()) / (24 * 60 * 60 * 1000),
+    );
+    // AliExpress offers bounded server-side windows. Use a safety margin
+    // instead of the exact advertised boundary so local/server time zones can
+    // never exclude a purchase that lies on the edge of 6m, 1y or 2y.
+    if (ageDays < -2) return 'all';
+    if (ageDays <= 150) return '6m';
+    if (ageDays <= 330) return '1y';
+    if (ageDays <= 690) return '2y';
+    return 'all';
+  }
+
   async function runOrdersApiCertifiedPass({
     exactDate,
     maxPages,
     scope,
     overrides = {},
+    passLabel = 'probe',
   }) {
     const seenIds = new Set();
+    const seenEvidence = new Map();
     const datesWithOrders = new Set();
     const targetOrders = new Map();
     const pageIdSets = [];
@@ -1328,6 +1350,7 @@
     let newestObservedDate = '';
     let previousCount = null;
     let filterEcho = 'absent';
+    let overlapOrderCount = 0;
 
     for (let page = 1; page <= maxPages; page += 1) {
       let response;
@@ -1362,6 +1385,7 @@
       }
 
       const pageIds = [];
+      let newOrderCount = 0;
       for (const key of state.orderKeys) {
         const fields = state.modules[key] && state.modules[key].fields;
         const orderId = String(fields && fields.orderId || '').trim();
@@ -1370,14 +1394,6 @@
           return {
             ok: false,
             reason: 'invalid-order-identity',
-            pagesRead: page,
-            partialTargetCount: targetOrders.size,
-          };
-        }
-        if (seenIds.has(orderId)) {
-          return {
-            ok: false,
-            reason: 'feed-shifted',
             pagesRead: page,
             partialTargetCount: targetOrders.size,
           };
@@ -1391,8 +1407,32 @@
             partialTargetCount: targetOrders.size,
           };
         }
-        seenIds.add(orderId);
         pageIds.push(orderId);
+        const evidence = JSON.stringify(canonicalApiOrderEvidence(order));
+        if (seenIds.has(orderId)) {
+          if (seenEvidence.get(orderId) !== evidence) {
+            aeDebug('orders.certification.duplicate-drift', {
+              pass: passLabel,
+              page,
+              targetOrderCount: targetOrders.size,
+            }, 'warn');
+            return {
+              ok: false,
+              reason: 'duplicate-order-drift',
+              pagesRead: page,
+              partialTargetCount: targetOrders.size,
+            };
+          }
+          // Offset pagination may repeat a boundary order while AliExpress
+          // inserts or reorders cards. A byte-identical overlap is harmless;
+          // the independent second pass below still has to reproduce the
+          // complete target-day evidence before the invoice is accepted.
+          overlapOrderCount += 1;
+          continue;
+        }
+        seenIds.add(orderId);
+        seenEvidence.set(orderId, evidence);
+        newOrderCount += 1;
         globalIdentity.push(`${orderId}|${orderDate}`);
         datesWithOrders.add(orderDate);
         if (!oldestObservedDate || orderDate < oldestObservedDate) {
@@ -1404,6 +1444,29 @@
         if (orderDate === exactDate) targetOrders.set(orderId, order);
       }
       pageIdSets.push(pageIds.sort());
+      aeDebug('orders.certification.page', {
+        pass: passLabel,
+        page,
+        returnedOrderCount: state.orderKeys.length,
+        newOrderCount,
+        overlapOrderCount,
+        targetOrderCount: targetOrders.size,
+        hasMore: state.hasMore,
+      });
+
+      if (state.hasMore && newOrderCount === 0) {
+        aeDebug('orders.certification.stalled', {
+          pass: passLabel,
+          page,
+          targetOrderCount: targetOrders.size,
+        }, 'warn');
+        return {
+          ok: false,
+          reason: 'stalled-pagination',
+          pagesRead: page,
+          partialTargetCount: targetOrders.size,
+        };
+      }
 
       if (!state.hasMore) {
         if (page === 1 && state.orderKeys.length === 0) {
@@ -1438,6 +1501,7 @@
           pageIdSets,
           globalIdentity: globalIdentity.sort(),
           targetEvidence,
+          overlapOrderCount,
         };
       }
       previousCount = state.orderKeys.length;
@@ -1460,6 +1524,7 @@
       terminalPage: pass.terminalPage,
       uniqueOrderCount: pass.globalIdentity.length,
       targetOrderCount: pass.targetEvidence.length,
+      overlapOrderCount: pass.overlapOrderCount || 0,
       filterEcho: pass.filterEcho,
       pageIdSetHashes,
       globalIdSetHash: stableEvidenceHash(JSON.stringify(pass.globalIdentity)),
@@ -1468,14 +1533,18 @@
   }
 
   function certifiedPassesMatch(first, second) {
-    return first.terminalPage === second.terminalPage &&
-      JSON.stringify(first.pageIdSets) === JSON.stringify(second.pageIdSets) &&
-      JSON.stringify(first.globalIdentity) === JSON.stringify(second.globalIdentity) &&
-      JSON.stringify(first.targetEvidence) === JSON.stringify(second.targetEvidence);
+    // Non-target cards may move between offset pages while the operator is
+    // collecting a date. Completeness belongs to the selected day: both
+    // passes must independently reach hasMore=false under the same bounded
+    // server filter and reproduce the exact target payload. Page boundaries
+    // and unrelated order sets are retained as diagnostics, not authority.
+    return JSON.stringify(first.targetEvidence) ===
+      JSON.stringify(second.targetEvidence);
   }
 
   async function collectCertifiedExactDate({ exactDate, maxPages }) {
-    const scopeResult = ordersApiTemplateScope();
+    const overrides = { timeOption: exactDateTimeOption(exactDate) };
+    const scopeResult = ordersApiTemplateScope(overrides);
     const capturedAt = new Date().toISOString();
     if (!scopeResult.ok) {
       const reason = scopeResult.reason;
@@ -1486,22 +1555,59 @@
         pagesRead: 0,
         reason,
       });
-      coverage.mode = 'two-pass-v1';
+      coverage.mode = 'two-pass-target-v2';
       coverage.certified = false;
       coverage.scope = { capturedAt };
       coverage.targetDateComplete = false;
       return certifiedFailureResult({ exactDate, maxPages, coverage, reason });
     }
     const scope = scopeResult.scope;
-    const first = await runOrdersApiCertifiedPass({ exactDate, maxPages, scope });
+    aeDebug('orders.certification.start', {
+      exactDate,
+      maxPages,
+      timeOption: scope.timeOption,
+      pageSize: scope.pageSize,
+    });
+    const first = await runOrdersApiCertifiedPass({
+      exactDate,
+      maxPages,
+      scope,
+      overrides,
+      passLabel: 'first',
+    });
     if (!first.ok) {
+      aeDebug('orders.certification.failed', {
+        exactDate,
+        pass: 'first',
+        reason: first.reason,
+        pagesRead: first.pagesRead,
+        partialTargetCount: first.partialTargetCount || 0,
+      }, 'warn');
       return certifiedFailureFromPass({ exactDate, maxPages, scope, capturedAt, pass: first });
     }
-    const second = await runOrdersApiCertifiedPass({ exactDate, maxPages, scope });
+    const second = await runOrdersApiCertifiedPass({
+      exactDate,
+      maxPages,
+      scope,
+      overrides,
+      passLabel: 'second',
+    });
     if (!second.ok) {
+      aeDebug('orders.certification.failed', {
+        exactDate,
+        pass: 'second',
+        reason: second.reason,
+        pagesRead: second.pagesRead,
+        partialTargetCount: second.partialTargetCount || 0,
+      }, 'warn');
       return certifiedFailureFromPass({ exactDate, maxPages, scope, capturedAt, pass: second });
     }
     if (!certifiedPassesMatch(first, second)) {
+      aeDebug('orders.certification.target-drift', {
+        exactDate,
+        first: certifiedPassEvidence(first),
+        second: certifiedPassEvidence(second),
+      }, 'warn');
       return certifiedFailureFromPass({
         exactDate,
         maxPages,
@@ -1535,7 +1641,7 @@
       terminalPage: second.terminalPage,
     };
     const coverage = {
-      mode: 'two-pass-v1',
+      mode: 'two-pass-target-v2',
       complete: true,
       partial: false,
       certified: true,
@@ -1549,6 +1655,13 @@
       termination,
     };
     const orders = Array.from(second.targetOrders.values());
+    aeDebug('orders.certification.complete', {
+      exactDate,
+      timeOption: scope.timeOption,
+      targetOrderCount: orders.length,
+      first: certifiedPassEvidence(first),
+      second: certifiedPassEvidence(second),
+    });
     return {
       ok: true,
       orders,
@@ -1563,7 +1676,7 @@
       coverage,
       certification: {
         certified: true,
-        mode: 'two-pass-v1',
+        mode: 'two-pass-target-v2',
         scope: scopeEvidence,
         passCount: 2,
         passes: [certifiedPassEvidence(first), certifiedPassEvidence(second)],
@@ -1588,7 +1701,7 @@
       pagesRead: pass.pagesRead || 0,
       reason: pass.reason,
     });
-    coverage.mode = 'two-pass-v1';
+    coverage.mode = 'two-pass-target-v2';
     coverage.certified = false;
     coverage.scope = {
       statusTab: scope.statusTab,
@@ -1635,7 +1748,7 @@
       coverage,
       certification: {
         certified: false,
-        mode: 'two-pass-v1',
+        mode: 'two-pass-target-v2',
         scope: coverage.scope || {},
         passCount: passes.length,
         passes: passes.map(certifiedPassEvidence),

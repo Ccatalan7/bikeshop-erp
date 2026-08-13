@@ -81,11 +81,14 @@ representative; pair it with live read-only evidence and post-deployment
 verification.
 
 The production-derived capture includes the `public` schema plus the
-dependency-only `private` schema, both schema-only. Supabase-managed `auth` or
-`storage` policies can reference helper functions in `private`; restoring those
-policies before their helpers produces a false compatibility failure. The
-capture guard rejects table/blob data, so adding this dependency schema does
-not copy production rows.
+dependency-only `private` schema and the isolated `assistant_runtime` ledger
+schema, all schema-only. Supabase-managed `auth` or `storage` policies can
+reference helper functions in `private`; restoring those policies before their
+helpers produces a false compatibility failure. Assistant migrations can
+replace attested ledger functions in `assistant_runtime`, so excluding it made
+an otherwise valid production-derived test fail before pgTAP on 2026-08-13.
+The capture guard rejects table/blob data, so adding either dependency schema
+does not copy production rows.
 
 ## Reuse of a production-derived snapshot
 

@@ -503,6 +503,29 @@ class PurchaseInvoiceItem {
     );
   }
 
+  /// Converts a graph-backed supplier component into an ordinary manual
+  /// invoice line while preserving the operator-visible commercial values.
+  ///
+  /// Supplier-resolution provenance is an all-or-nothing database contract:
+  /// retaining only part of it would make the invoice look editable while the
+  /// save trigger correctly rejects the drift. Callers must detach every line
+  /// sharing the same resolution application together.
+  PurchaseInvoiceItem withoutSupplierResolutionProvenance() {
+    return PurchaseInvoiceItem(
+      lineId: lineId,
+      productId: productId,
+      productName: productName,
+      productSku: productSku,
+      description: description,
+      purchaseTreatment: purchaseTreatment,
+      quantity: quantity,
+      unitCost: unitCost,
+      discount: discount,
+      ivaRate: ivaRate,
+      createdAt: createdAt,
+    );
+  }
+
   factory PurchaseInvoiceItem.fromJson(Map<String, dynamic> json) {
     return PurchaseInvoiceItem(
       lineId: json['line_id']?.toString(),

@@ -2,7 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/inventory/models/inventory_models.dart'
+    as inventory_models;
 import 'package:vinabike_erp/modules/purchases/pages/purchase_invoice_form_page.dart';
+import 'package:vinabike_erp/shared/models/supplier_variant_resolution.dart';
+import 'package:vinabike_erp/shared/services/invoice_parser_service.dart';
+import 'package:vinabike_erp/shared/widgets/ocr_upload_widget.dart';
 
 void main() {
   final source = File(
@@ -182,6 +187,109 @@ void main() {
       ),
     );
     expect(source, contains('productRow(data.lineItems[index], index)'));
+  });
+
+  test('preview projects a composite as real inventory lines once', () {
+    const frontId = '20000000-0000-4000-8000-000000000001';
+    const rearId = '20000000-0000-4000-8000-000000000002';
+    final evidence = SupplierOptionEvidence(
+      variantKey: 'sku:immutable-bucklos-set',
+      packCount: 2,
+      rawUnitToken: 'pcs',
+    );
+    final resolution = SupplierVariantResolution.fromLookupJson(
+      <String, dynamic>{
+        'status': 'resolved',
+        'authoritative': true,
+        'id': '10000000-0000-4000-8000-000000000001',
+        'tenant_id': '10000000-0000-4000-8000-000000000002',
+        'supplier_id': '10000000-0000-4000-8000-000000000003',
+        'listing_id': '1005005789807730',
+        'variant_key': evidence.variantKey.value,
+        'revision_number': 1,
+        'state': 'active',
+        'resolution_kind': 'composite',
+        'option_evidence_hash': evidence.sha256Hex,
+        'option_pack_count': 2,
+        'option_unit_class': 'piece',
+        'pack_evidence_conflict': false,
+        'edge_set_hash':
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'operation_id': '10000000-0000-4000-8000-000000000004',
+        'request_fingerprint':
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        'decision_source': 'operator_confirmed',
+        'decision_evidence_hash':
+            'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        'decision_evidence': <String, dynamic>{
+          'confirmation_surface': 'purchase_invoice_ocr',
+        },
+        'edges': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'edge_id': '30000000-0000-4000-8000-000000000001',
+            'edge_ordinal': 1,
+            'product_id': frontId,
+            'catalog_units_per_purchase': 1,
+            'allocation_ratio': 0.5,
+            'component_role': 'front',
+          },
+          <String, dynamic>{
+            'edge_id': '30000000-0000-4000-8000-000000000002',
+            'edge_ordinal': 2,
+            'product_id': rearId,
+            'catalog_units_per_purchase': 1,
+            'allocation_ratio': 0.5,
+            'component_role': 'rear',
+          },
+        ],
+      },
+    );
+    final item = ParsedLineItem(
+      description: 'BUCKLOS Front-Rear Calipers',
+      sourcePurchaseQuantity: 3,
+      quantity: 3,
+      total: 35737,
+      supplierResolution: resolution,
+    );
+    inventory_models.Product product(
+      String id,
+      String sku,
+      String name,
+    ) =>
+        inventory_models.Product(
+          id: id,
+          tenantId: '10000000-0000-4000-8000-000000000002',
+          sku: sku,
+          name: name,
+          price: 0,
+          cost: 0,
+        );
+
+    final components = buildOcrPreviewResolutionComponents(
+      item: item,
+      productsById: <String, inventory_models.Product>{
+        frontId: product(frontId, 'AE0145', 'Caliper delantero BUCKLOS'),
+        rearId: product(rearId, 'AE0144', 'Caliper trasero BUCKLOS'),
+      },
+    );
+
+    expect(resolution.isResolved, isTrue);
+    expect(components, hasLength(2));
+    expect(
+      components.map((component) => component.displayLabel),
+      <String>[
+        '3 × AE0145 · delantero · Caliper delantero BUCKLOS',
+        '3 × AE0144 · trasero · Caliper trasero BUCKLOS',
+      ],
+    );
+    expect(
+      buildOcrPreviewResolutionComponents(
+        item: item,
+        productsById: const <String, inventory_models.Product>{},
+      ),
+      isEmpty,
+      reason: 'the preview must never display only part of a source graph',
+    );
   });
 
   test('preview has one neutral handoff into product review', () {
@@ -655,7 +763,20 @@ void main() {
       isNot(contains('ProductDuplicateShortlistScope.operatorChoice')),
     );
     expect(picker, isNot(contains('onLoadOptions')));
-    expect(picker, contains('final offered = widget.candidates;'));
+    expect(
+      picker,
+      contains(
+        'final offered = orderOcrCandidateChoices(widget.candidates);',
+      ),
+      reason: 'el picker usa la misma prioridad estable que la fila',
+    );
+    expect(
+      source,
+      contains(
+        'final rowCandidates = orderOcrCandidateChoices(cachedChoices);',
+      ),
+      reason: 'la fila no sustituye el primer resultado por un conflicto',
+    );
     expect(picker, contains('ocr-candidate-ruled-out-heading'));
     expect(picker, contains('ocr-candidate-category-conflicts-heading'));
     expect(picker, contains('widget.categoryConflicts'));

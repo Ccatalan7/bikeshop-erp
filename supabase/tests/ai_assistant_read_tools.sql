@@ -4,6 +4,20 @@ select no_plan();
 
 select has_function('public', 'assistant_search_inventory_v1', array['text'],
   'inventory tool RPC exists');
+select has_function('public', 'assistant_search_inventory_v2', array['text','text'],
+  'filtered inventory list RPC exists');
+select has_function('public', 'assistant_search_inventory_v3',
+  array['text','text','jsonb'],
+  'technical-spec inventory list RPC exists');
+select has_function('public', 'assistant_search_inventory_v4',
+  array['text','text','text','jsonb'],
+  'category-and-spec inventory list RPC exists');
+select has_function('public', 'assistant_inspect_inventory_schema_v1',
+  array['text','text'],
+  'inventory capability discovery RPC exists');
+select has_function('public', 'assistant_search_inventory_v5',
+  array['text','text','text','jsonb'],
+  'typed-predicate inventory list RPC exists');
 select has_function('public', 'assistant_list_attention_items_v1', array['text'],
   'attention tool RPC exists');
 select has_function('public', 'assistant_search_workshop_jobs_v1',
@@ -29,7 +43,10 @@ select ok(
    join pg_namespace namespace on namespace.oid = function.pronamespace
    where namespace.nspname = 'public'
      and function.proname in (
-       'assistant_search_inventory_v1', 'assistant_list_attention_items_v1',
+       'assistant_search_inventory_v1', 'assistant_search_inventory_v2',
+       'assistant_search_inventory_v3',
+       'assistant_search_inventory_v4',
+       'assistant_list_attention_items_v1',
        'assistant_search_workshop_jobs_v1',
        'assistant_get_workshop_view_context_v1', 'assistant_search_tasks_v1',
        'assistant_search_customers_v1', 'assistant_search_suppliers_v1',
@@ -49,7 +66,10 @@ select ok(
    join pg_namespace namespace on namespace.oid = function.pronamespace
    where namespace.nspname = 'public'
      and function.proname in (
-       'assistant_search_inventory_v1', 'assistant_list_attention_items_v1',
+       'assistant_search_inventory_v1', 'assistant_search_inventory_v2',
+       'assistant_search_inventory_v3',
+       'assistant_search_inventory_v4',
+       'assistant_list_attention_items_v1',
        'assistant_search_workshop_jobs_v1',
        'assistant_get_workshop_view_context_v1', 'assistant_search_tasks_v1',
        'assistant_search_customers_v1', 'assistant_search_suppliers_v1',
@@ -168,16 +188,174 @@ insert into public.suppliers (
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
+insert into public.product_categories (
+  id, tenant_id, name, full_path, level, is_active
+) values
+  ('a1710000-0000-4000-8000-000000000921',
+   'a1710000-0000-4000-8000-000000000001',
+   'Camaras', 'Camaras', 0, true),
+  ('a1710000-0000-4000-8000-000000000922',
+   'a1710000-0000-4000-8000-000000000001',
+   'Accesorios', 'Accesorios', 0, true),
+  ('a1710000-0000-4000-8000-000000000930',
+   'a1710000-0000-4000-8000-000000000001',
+   'Motores', 'Componentes / Transmision / Motores', 2, true),
+  ('a1710000-0000-4000-8000-000000000931',
+   'a1710000-0000-4000-8000-000000000001',
+   'Motor', 'Componentes / Transmision / Motores / Motor', 3, true)
+on conflict do nothing;
+
+update public.product_categories
+set parent_id = 'a1710000-0000-4000-8000-000000000930'
+where id = 'a1710000-0000-4000-8000-000000000931';
+
+insert into public.spec_templates (
+  id, tenant_id, key, name, technical_family, is_active
+) values (
+  'a1710000-0000-4000-8000-000000000933',
+  'a1710000-0000-4000-8000-000000000001',
+  'ai_motor_test', 'Motor AI test', 'bottom_bracket', true
+)
+on conflict do nothing;
+
+insert into public.category_tech_mappings (
+  id, tenant_id, category_id, technical_family, template_id, status
+) values
+  ('a1710000-0000-4000-8000-000000000923',
+   'a1710000-0000-4000-8000-000000000001',
+   'a1710000-0000-4000-8000-000000000921',
+   'tube', null, 'active'),
+  ('a1710000-0000-4000-8000-000000000932',
+   'a1710000-0000-4000-8000-000000000001',
+   'a1710000-0000-4000-8000-000000000931',
+   'bottom_bracket', 'a1710000-0000-4000-8000-000000000933', 'active')
+on conflict (tenant_id, category_id) do update
+set technical_family = excluded.technical_family,
+  template_id = excluded.template_id, status = excluded.status;
+
 insert into public.products (
   id, tenant_id, name, sku, price, cost, inventory_qty, stock_quantity,
-  brand, category_name, warehouse_location, is_active
+  brand, category_id, category_name, warehouse_location, is_active,
+  min_stock_level
 ) values
   ('a1710000-0000-4000-8000-000000000301',
    'a1710000-0000-4000-8000-000000000001', 'Cadena Shimano Deore',
-   'CHAIN-DEORE-12', 29990, 10000, 4, 4, 'Shimano', 'Cadenas', 'A-03', true),
+   'CHAIN-DEORE-12', 29990, 10000, 4, 4, 'Shimano', null,
+   'Cadenas', 'A-03', true, 2),
   ('a1710000-0000-4000-8000-000000000302',
    'a1710000-0000-4000-8000-000000000002', 'Cadena Vecina Secreta',
-   'CHAIN-NEIGHBOR', 999, 1, 8, 8, 'Secret', 'Cadenas', 'Z-99', true);
+   'CHAIN-NEIGHBOR', 999, 1, 8, 8, 'Secret', null,
+   'Cadenas', 'Z-99', true, 2),
+  ('a1710000-0000-4000-8000-000000000303',
+   'a1710000-0000-4000-8000-000000000001', 'Camara 29 Disponible',
+   'TUBE-29-OK', 7000, 3000, 7, 7, 'Test',
+   'a1710000-0000-4000-8000-000000000921', 'Camaras', 'A-04', true, 2),
+  ('a1710000-0000-4000-8000-000000000304',
+   'a1710000-0000-4000-8000-000000000001', 'Camara 29 Stock Bajo',
+   'TUBE-29-LOW', 6500, 2800, 1, 1, 'Test',
+   'a1710000-0000-4000-8000-000000000921', 'Camaras', 'A-04', true, 2),
+  ('a1710000-0000-4000-8000-000000000305',
+   'a1710000-0000-4000-8000-000000000001', 'Camara 29 Agotada',
+   'TUBE-29-ZERO', 6000, 2500, 0, 0, 'Test',
+   'a1710000-0000-4000-8000-000000000921', 'Camaras', 'A-04', true, 2),
+  ('a1710000-0000-4000-8000-000000000306',
+   'a1710000-0000-4000-8000-000000000001', 'Camara 26 Incidental',
+   '6938112671129', 5000, 1900, 3, 3, 'Test',
+   'a1710000-0000-4000-8000-000000000921', 'Camaras', 'A-04', true, 2),
+  ('a1710000-0000-4000-8000-000000000307',
+   'a1710000-0000-4000-8000-000000000001', 'Camara Kenda 26',
+   '4420', 7000, 2600, 3, 3, 'Kenda',
+   'a1710000-0000-4000-8000-000000000921', 'Camaras', 'A-04', true, 2),
+  ('a1710000-0000-4000-8000-000000000308',
+   'a1710000-0000-4000-8000-000000000001',
+   'Camara 29 Etiqueta Equivocada', 'TUBE-CONFLICT',
+   7000, 2600, 4, 4, 'Test',
+   'a1710000-0000-4000-8000-000000000921', 'Camaras', 'A-04', true, 2),
+  ('a1710000-0000-4000-8000-000000000309',
+   'a1710000-0000-4000-8000-000000000001',
+   'Camara 29 Mal Categorizada', 'TUBE-WRONG-CATEGORY',
+   7000, 2600, 4, 4, 'Test',
+   'a1710000-0000-4000-8000-000000000922', 'Accesorios', 'A-04', true, 2);
+
+insert into public.products (
+  id, tenant_id, name, sku, price, cost, inventory_qty, stock_quantity,
+  brand, category_id, category_name, warehouse_location, is_active,
+  min_stock_level
+) values
+  ('a1710000-0000-4000-8000-000000000310',
+   'a1710000-0000-4000-8000-000000000001',
+   'Motor cuadradillo 118 mm', 'MOTOR-118', 12000, 5000, 3, 3, 'Test',
+   'a1710000-0000-4000-8000-000000000931', 'Motor', 'A-05', true, 1),
+  ('a1710000-0000-4000-8000-000000000311',
+   'a1710000-0000-4000-8000-000000000001',
+   'Motor cuadradillo 127 mm', 'MOTOR-127', 12000, 5000, 3, 3, 'Test',
+   'a1710000-0000-4000-8000-000000000931', 'Motor', 'A-05', true, 1),
+  ('a1710000-0000-4000-8000-000000000312',
+   'a1710000-0000-4000-8000-000000000001',
+   'Motor sellado 68x122.5 mm', 'MOTOR-AMBIGUO', 12000, 5000, 3, 3, 'Test',
+   'a1710000-0000-4000-8000-000000000931', 'Motor', 'A-05', true, 1);
+
+update public.products
+set description = 'Alternativa compatible cuando no exista camara 29'
+where id = 'a1710000-0000-4000-8000-000000000306';
+
+insert into public.spec_definitions (
+  id, tenant_id, key, label, data_type, allowed_values,
+  is_filterable, is_compatibility_relevant
+) values
+  ('a1710000-0000-4000-8000-000000000901', null, 'wheel_size',
+   'Tamaño de Rueda', 'single_select',
+   '["26\"","27.5\"","29\"","700c"]'::jsonb, true, true),
+  ('a1710000-0000-4000-8000-000000000902', null, 'spindle_length_mm',
+   'Largo eje', 'number', '[]'::jsonb, true, true)
+on conflict do nothing;
+
+insert into public.spec_template_fields (
+  id, tenant_id, template_id, spec_definition_id, section_key, sort_order
+)
+select 'a1710000-0000-4000-8000-000000000934',
+  'a1710000-0000-4000-8000-000000000001',
+  'a1710000-0000-4000-8000-000000000933', definition.id,
+  'compatibility', 1
+from public.spec_definitions definition
+where definition.key = 'spindle_length_mm'
+  and definition.tenant_id is null
+on conflict do nothing;
+
+insert into public.product_spec_values (
+  id, tenant_id, product_id, spec_definition_id,
+  value_option, display_value
+)
+select fixture.id, 'a1710000-0000-4000-8000-000000000001',
+  fixture.product_id, definition.id, fixture.value_option, fixture.value_option
+from (values
+  ('a1710000-0000-4000-8000-000000000911'::uuid,
+   'a1710000-0000-4000-8000-000000000303'::uuid, '29"'),
+  ('a1710000-0000-4000-8000-000000000912'::uuid,
+   'a1710000-0000-4000-8000-000000000306'::uuid, '26"'),
+  ('a1710000-0000-4000-8000-000000000913'::uuid,
+   'a1710000-0000-4000-8000-000000000308'::uuid, '26"'),
+  ('a1710000-0000-4000-8000-000000000914'::uuid,
+   'a1710000-0000-4000-8000-000000000309'::uuid, '29"')
+) fixture(id, product_id, value_option)
+join public.spec_definitions definition
+  on definition.key = 'wheel_size' and definition.tenant_id is null;
+
+insert into public.product_spec_values (
+  id, tenant_id, product_id, spec_definition_id,
+  value_number, display_value
+)
+select fixture.id, 'a1710000-0000-4000-8000-000000000001',
+  fixture.product_id, definition.id, fixture.value_number,
+  fixture.value_number::text || ' mm'
+from (values
+  ('a1710000-0000-4000-8000-000000000915'::uuid,
+   'a1710000-0000-4000-8000-000000000310'::uuid, 118::numeric),
+  ('a1710000-0000-4000-8000-000000000916'::uuid,
+   'a1710000-0000-4000-8000-000000000311'::uuid, 127::numeric)
+) fixture(id, product_id, value_number)
+join public.spec_definitions definition
+  on definition.key = 'spindle_length_mm' and definition.tenant_id is null;
 
 insert into public.sales_invoices (
   id, tenant_id, invoice_number, customer_name, date, status, total, balance
@@ -251,6 +429,142 @@ select is(public.assistant_search_inventory_v1('Cadena Shimano')
   'inventory result returns its tenant-validated entity reference');
 select is(public.assistant_search_inventory_v1('Cadena Vecina') ->> 'resultCount',
   '0', 'inventory search cannot see another tenant');
+select is(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","value":"29"}]'::jsonb
+)
+  ->> 'resultCount', '2',
+  'category, canonical specs, identity fallback and stock are applied before the bound');
+select ok(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","value":"29\""}]'::jsonb
+)::text
+  not like '%Camara 26 Incidental%',
+  'a measurement cannot be satisfied by an EAN suffix or compatibility prose');
+select ok(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","value":"29\""}]'::jsonb
+)::text
+  not like '%Etiqueta Equivocada%',
+  'a populated conflicting technical spec outranks a matching product name');
+select ok(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","value":"29\""}]'::jsonb
+)::text
+  not like '%TUBE-29-ZERO%',
+  'in-stock synthesis cannot receive an out-of-stock product');
+select ok(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","value":"29\""}]'::jsonb
+)::text not like '%TUBE-WRONG-CATEGORY%',
+  'a matching name and spec outside the resolved technical family is excluded');
+select is(public.assistant_search_inventory_v4(
+  'Camara 4420', 'Camaras', 'in_stock', '[]'::jsonb
+)
+  #>> '{items,0,entityId}', 'a1710000-0000-4000-8000-000000000307',
+  'an exact SKU remains authoritative when combined with a product-family term');
+select is(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'low_stock',
+  '[{"field":"wheel_size","value":"29\""}]'::jsonb
+)
+  #>> '{items,0,entityId}', 'a1710000-0000-4000-8000-000000000304',
+  'missing structured data may use explicit identity evidence without guessing');
+select is(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'out_of_stock',
+  '[{"field":"wheel_size","value":"29\""}]'::jsonb
+)
+  #>> '{items,0,entityId}', 'a1710000-0000-4000-8000-000000000305',
+  'out-of-stock list returns only the exact matching product');
+select is(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'any',
+  '[{"field":"wheel_size","value":"29\""}]'::jsonb
+) ->> 'resultCount', '3',
+  'unfiltered availability preserves only technically valid matches');
+select throws_ok(
+  $$select public.assistant_search_inventory_v4(
+    'Camara 29', 'Camaras', 'available-ish', '[]'::jsonb
+  )$$,
+  '22023', 'Invalid AI tool arguments',
+  'inventory availability is a closed server-side filter'
+);
+select throws_ok(
+  $$select public.assistant_search_inventory_v4(
+    'Camara 29', 'Camaras', 'in_stock',
+    '[{"field":"invented_measurement","value":"29"}]'::jsonb
+  )$$,
+  '22023', 'Invalid AI tool arguments',
+  'the model cannot invent a technical field outside the canonical registry'
+);
+select throws_ok(
+  $$select public.assistant_search_inventory_v4(
+    'Camara 29', 'Categoria Inventada', 'in_stock', '[]'::jsonb
+  )$$,
+  '22023', 'Invalid AI tool arguments',
+  'the model cannot invent a category outside the tenant catalog'
+);
+select is(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","value":"29\""}]'::jsonb
+) #>> '{items,0,technicalMatch}', 'product_spec',
+  'the result exposes when its technical fact came from product_spec_values');
+select is(public.assistant_search_inventory_v4(
+  'Camara 29', 'Camaras', 'low_stock',
+  '[{"field":"wheel_size","value":"29\""}]'::jsonb
+) #>> '{items,0,technicalMatch}', 'identity_fallback',
+  'the result exposes an identity fallback instead of calling it a filled ficha');
+select is(public.assistant_inspect_inventory_schema_v1(
+  'motores con eje de menos de 125 mm', 'Motores'
+) #>> '{items,2,field}', 'spindle_length_mm',
+  'schema discovery expands a parent category and exposes its canonical numeric field');
+select is(public.assistant_inspect_inventory_schema_v1(
+  'motores con eje de menos de 125 mm', 'Motores'
+) #>> '{items,2,operators}', 'eq,neq,lt,lte,gt,gte,between,in',
+  'schema discovery advertises only the supported numeric operators');
+select is(public.assistant_inspect_inventory_schema_v1(
+  'motores con eje de menos de 125 mm', 'Motores'
+) #>> '{items,2,populatedCount}', '2',
+  'schema discovery reports actual structured coverage instead of guessing from names');
+select is(public.assistant_search_inventory_v5(
+  null, 'Motores', 'in_stock',
+  '[{"field":"spindle_length_mm","operator":"lt","values":[125]}]'::jsonb
+) ->> 'resultCount', '1',
+  'a numeric less-than predicate is evaluated from product_spec_values');
+select is(public.assistant_search_inventory_v5(
+  null, 'Motores', 'in_stock',
+  '[{"field":"spindle_length_mm","operator":"lt","values":[125]}]'::jsonb
+) #>> '{items,0,entityId}', 'a1710000-0000-4000-8000-000000000310',
+  'a parent category includes a matching descendant product');
+select ok(public.assistant_search_inventory_v5(
+  null, 'Motores', 'in_stock',
+  '[{"field":"spindle_length_mm","operator":"lt","values":[125]}]'::jsonb
+)::text not like '%MOTOR-AMBIGUO%',
+  'a range never infers axle length from an ambiguous multi-measurement name');
+select is(public.assistant_search_inventory_v5(
+  null, 'Motores', 'in_stock',
+  '[{"field":"spindle_length_mm","operator":"gt","values":[125]}]'::jsonb
+) #>> '{items,0,entityId}', 'a1710000-0000-4000-8000-000000000311',
+  'the same typed primitive supports the opposite numeric comparison');
+select is(public.assistant_search_inventory_v5(
+  null, 'Camaras', 'low_stock',
+  '[{"field":"wheel_size","operator":"eq","values":["29\""]}]'::jsonb
+) #>> '{items,0,technicalMatch}', 'identity_fallback',
+  'exact equality preserves the explicitly labelled sparse-catalog fallback');
+select throws_ok(
+  $$select public.assistant_search_inventory_v5(
+    null, 'Motores', 'in_stock',
+    '[{"field":"spindle_length_mm","operator":"contains","values":["125"]}]'::jsonb
+  )$$,
+  '22023', 'Invalid AI tool arguments',
+  'a numeric field rejects a text operator instead of degrading to keywords'
+);
+select throws_ok(
+  $$select public.assistant_search_inventory_v5(
+    null, 'Motores', 'in_stock',
+    '[{"field":"invented_measurement","operator":"lt","values":[125]}]'::jsonb
+  )$$,
+  '22023', 'Invalid AI tool arguments',
+  'typed search still rejects invented registry fields'
+);
 select is(public.assistant_search_sales_invoices_v1('FV-AI-001', 10) ->> 'resultCount',
   '1', 'cashier has the sales capability');
 select is(public.assistant_search_sales_invoices_v1('FV-AI-001', 10)

@@ -358,7 +358,7 @@ Deno.test("runtime executes tool rounds sequentially and persists receipts befor
         authorityTenantId: tenantId,
         asOf: "2026-08-11T12:00:00Z",
         status: "success" as const,
-        items: [{ name: "Cadena 10v", sku: "CAD-10", stock: 2 }],
+        items: [{ entityId: contextJobId, name: "Cadena 10v", sku: "CAD-10", stock: 2 }],
         resultCount: 1,
         hasMore: false,
       };
@@ -383,7 +383,13 @@ Deno.test("runtime executes tool rounds sequentially and persists receipts befor
           toolCalls: [{
             id: "call-1",
             name: "search_inventory",
-            arguments: { query: "cadena" },
+            arguments: {
+              query: "cadena",
+              category: null,
+              availability: "any",
+              presentation: "answer",
+              technicalPredicates: [],
+            },
           }],
           usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
           finishReason: "tool_calls",
@@ -426,6 +432,486 @@ Deno.test("runtime executes tool rounds sequentially and persists receipts befor
     [8, 4],
     "each attempt records exact integer micro-USD",
   );
+});
+
+Deno.test("explicit inventory listing has one server-owned answer, result set and navigation intent", async () => {
+  const store = new TestRunStore();
+  const providerRequests: AgentProviderRequest[] = [];
+  const secondProductId = "88888888-8888-4888-8888-888888888888";
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      if (call.name === "inspect_inventory_schema") {
+        const result = {
+          authorityTenantId: tenantId,
+          asOf: "2026-08-13T17:00:00Z",
+          status: "success" as const,
+          items: [{
+            kind: "field",
+            category: "Cámaras",
+            categoryPath: "Cámaras",
+            technicalFamily: "tube",
+            field: "wheel_size",
+            label: "Tamaño de Rueda",
+            dataType: "single_select",
+            unit: null,
+            operators: "eq,neq,in",
+            allowedValues: '["26\\"","29\\""]',
+            productCount: 6,
+            populatedCount: 2,
+          }],
+          resultCount: 1,
+          hasMore: false,
+        };
+        const outputText = JSON.stringify(result);
+        return Promise.resolve({
+          result,
+          outputText,
+          outputBytes: new TextEncoder().encode(outputText).byteLength,
+          succeeded: true,
+        });
+      }
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-13T17:00:00Z",
+        status: "success" as const,
+        items: [
+          {
+            entityId: contextJobId,
+            name: "Camara 29 A",
+            stock: 7,
+            technicalMatch: "product_spec",
+          },
+          {
+            entityId: secondProductId,
+            name: "Camara 29 B",
+            stock: 1,
+            technicalMatch: "identity_fallback",
+          },
+        ],
+        resultCount: 2,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify(result);
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+
+  const response = await executeAgentRun(
+    { ...request(), message: "buscame camaras 29 que tengamos en stock" },
+    authority,
+    {
+      providerRouter: providerRouter((providerRequest) => {
+        providerRequests.push(providerRequest);
+        if (providerRequests.length === 1) {
+          const definition = providerRequest.tools.find((tool) => tool.name === "search_inventory");
+          assertEquals(
+            definition?.parameters.required,
+            ["query", "category", "availability", "presentation", "technicalPredicates"],
+            "planner must choose availability, presentation and technical facts explicitly",
+          );
+          return Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: [{
+              id: "inspect-inventory",
+              name: "inspect_inventory_schema",
+              arguments: {
+                query: "cámaras aro 29",
+                category: "Cámaras",
+              },
+            }],
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "opaque-inventory-inspection",
+          });
+        }
+        if (providerRequests.length === 2) {
+          return Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: [{
+              id: "inventory-list",
+              name: "search_inventory",
+              arguments: {
+                query: null,
+                category: "Cámaras",
+                availability: "in_stock",
+                presentation: "open_list",
+                technicalPredicates: [{
+                  field: "wheel_size",
+                  operator: "eq",
+                  values: ['29"'],
+                }],
+              },
+            }],
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "opaque-inventory-list",
+          });
+        }
+        return Promise.resolve(finalTurn(
+          "Texto inconsistente del modelo que enumera productos agotados.",
+        ));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+      supportsResultLists: true,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(
+    response.text,
+    "Abrí 2 resultados coincidentes en Inventario con el filtro “En stock”.",
+    "server projection replaces divergent model prose",
+  );
+  assertEquals(response.cards.length, 1, "only one compact result-set action is returned");
+  assertEquals(
+    response.cards[0].chips,
+    ["En stock", '29"'],
+    "the action exposes the technical filter that PostgreSQL validated",
+  );
+  assertEquals(response.cards[0].listRef?.entityIds, [
+    contextJobId,
+    secondProductId,
+  ], "UI receives the exact verified result IDs");
+  assertEquals(response.cards[0].listRef?.autoOpen, true, "explicit list request may auto-open");
+});
+
+Deno.test("technical inventory search cannot skip schema discovery or fake an outage", async () => {
+  const store = new TestRunStore();
+  let providerCalls = 0;
+  let executorCalls = 0;
+  const response = await executeAgentRun(
+    { ...request(), message: "buscame motores de menos de 125mm de eje" },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        providerCalls++;
+        if (providerCalls === 1) {
+          return Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: [{
+              id: "premature-range",
+              name: "search_inventory",
+              arguments: {
+                query: null,
+                category: "Motores",
+                availability: "in_stock",
+                presentation: "open_list",
+                technicalPredicates: [{
+                  field: "spindle_length_mm",
+                  operator: "lt",
+                  values: [125],
+                }],
+              },
+            }],
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "premature-range-1",
+          });
+        }
+        return Promise.resolve(finalTurn(
+          "El inventario no está disponible, intenta nuevamente.",
+        ));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: {
+        execute: () => {
+          executorCalls++;
+          return Promise.reject(new Error("must not execute"));
+        },
+        workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+      },
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+  assertEquals(executorCalls, 0, "guessed technical predicate never reaches the RPC");
+  assert(
+    response.text.includes("consultar primero el esquema autorizado"),
+    "server explains the real planning gap",
+  );
+  assertEquals(
+    response.text.includes("inventario no está disponible"),
+    false,
+    "model cannot turn schema rejection into a fake outage",
+  );
+  assertEquals(
+    store.toolReceiptInputs[0].failureCode,
+    "schema_discovery_required",
+    "receipt identifies the exact correction",
+  );
+});
+
+Deno.test("technical inventory plan stays bound to the inspected category and fields", async () => {
+  const store = new TestRunStore();
+  let providerCalls = 0;
+  let executorCalls = 0;
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      executorCalls++;
+      assertEquals(call.name, "inspect_inventory_schema", "only inspection executes");
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-13T18:00:00Z",
+        status: "success" as const,
+        items: [{
+          kind: "field",
+          category: "Cámaras",
+          categoryPath: "Inventario / Cámaras",
+          technicalFamily: "tube",
+          field: "wheel_size",
+          label: "Tamaño de rueda",
+          dataType: "single_select",
+          unit: null,
+          operators: "eq,neq,in",
+          allowedValues: '["29"]',
+          productCount: 6,
+          populatedCount: 2,
+        }],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify(result);
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  const response = await executeAgentRun(
+    { ...request(), message: "busca motores con eje de menos de 125 mm" },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        providerCalls++;
+        if (providerCalls === 1) {
+          return Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: [{
+              id: "inspect-wrong-schema",
+              name: "inspect_inventory_schema",
+              arguments: { query: "cámaras 29", category: "Cámaras" },
+            }],
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "inspect-wrong-schema-1",
+          });
+        }
+        if (providerCalls === 2) {
+          return Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: [{
+              id: "search-uninspected-motor-field",
+              name: "search_inventory",
+              arguments: {
+                query: null,
+                category: "Motores",
+                availability: "any",
+                presentation: "answer",
+                technicalPredicates: [{
+                  field: "spindle_length_mm",
+                  operator: "lt",
+                  values: [125],
+                }],
+              },
+            }],
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "search-uninspected-motor-field-2",
+          });
+        }
+        return Promise.resolve(finalTurn("Encontré motores compatibles."));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+  assertEquals(executorCalls, 1, "only the inspector reaches its RPC");
+  assert(
+    response.text.includes("consultar primero el esquema autorizado"),
+    "server rejects a category or field not present in the inspected snapshot",
+  );
+  assertEquals(
+    store.toolReceiptInputs.at(-1)?.failureCode,
+    "schema_discovery_required",
+    "receipt identifies the inspected-plan mismatch",
+  );
+});
+
+Deno.test("zero structured coverage yields a server-owned honest capability gap", async () => {
+  const store = new TestRunStore();
+  let providerCalls = 0;
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      const item: JsonObject = call.name === "inspect_inventory_schema"
+        ? {
+          kind: "field",
+          category: "Motor",
+          categoryPath: "Componentes / Transmisión / Motores / Motor",
+          technicalFamily: "bottom_bracket",
+          field: "spindle_length_mm",
+          label: "Largo eje",
+          dataType: "number",
+          unit: "mm",
+          operators: "eq,neq,lt,lte,gt,gte,between,in",
+          allowedValues: null,
+          productCount: 8,
+          populatedCount: 0,
+        }
+        : {
+          domain: "inventory",
+          operation: "filter",
+          reason: "missing_structured_data",
+          alternative: "broader_search",
+          field: "spindle_length_mm",
+        };
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-13T18:00:00Z",
+        status: "success" as const,
+        items: [item],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify(result);
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  const response = await executeAgentRun(
+    { ...request(), message: "buscame motores de menos de 125mm de eje" },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        providerCalls++;
+        return providerCalls === 1
+          ? Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: [{
+              id: "inspect-motor-schema",
+              name: "inspect_inventory_schema",
+              arguments: {
+                query: "motores con eje de menos de 125 mm",
+                category: "Motores",
+              },
+            }],
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "inspect-motor-schema-1",
+          })
+          : Promise.resolve<AgentProviderTurn>({
+            text: "Texto del modelo que debe ignorarse.",
+            toolCalls: [{
+              id: "motor-data-gap",
+              name: "report_capability_gap",
+              arguments: {
+                domain: "inventory",
+                operation: "filter",
+                reason: "missing_structured_data",
+                alternative: "broader_search",
+                field: "spindle_length_mm",
+              },
+            }],
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "motor-data-gap-2",
+          });
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+  assert(response.text.includes("fichas autorizadas no tienen cargado"), "gap names missing data");
+  assert(response.text.includes("No voy a inferirlo"), "gap refuses ambiguous names");
+  assertEquals(response.text.includes("no está disponible"), false, "gap is not an outage");
+  assertEquals(store.completions, ["succeeded"], "gap is a valid completed response");
+});
+
+Deno.test("an unrelated unavailable operation uses the same capability terminal", async () => {
+  const store = new TestRunStore();
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-13T18:00:00Z",
+        status: "success" as const,
+        items: [call.arguments],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify(result);
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  const response = await executeAgentRun(
+    { ...request(), message: "concilia ahora la cuenta bancaria del mes" },
+    authority,
+    {
+      providerRouter: providerRouter(() =>
+        Promise.resolve<AgentProviderTurn>({
+          text: "Conciliación terminada.",
+          toolCalls: [{
+            id: "accounting-gap",
+            name: "report_capability_gap",
+            arguments: {
+              domain: "accounting",
+              operation: "mutate",
+              reason: "missing_tool",
+              alternative: "none",
+              field: null,
+            },
+          }],
+          usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+          finishReason: "tool_calls",
+          continuationToken: "accounting-gap-1",
+        })
+      ),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+  assert(
+    response.text.includes("no tengo una herramienta autorizada"),
+    "generic missing-tool response is explicit",
+  );
+  assertEquals(response.text.includes("terminada"), false, "model cannot fake the mutation");
 });
 
 Deno.test("model repairs invalid known-tool arguments without executing the rejected call", async () => {
@@ -549,7 +1035,7 @@ Deno.test("tool prompt injection stays inside the exact receipted untrusted enve
         authorityTenantId: tenantId,
         asOf: "2026-08-11T12:00:00Z",
         status: "success" as const,
-        items: [{ name: injection, sku: "ADV-1", stock: 1 }],
+        items: [{ entityId: contextJobId, name: injection, sku: "ADV-1", stock: 1 }],
         resultCount: 1,
         hasMore: false,
       };
@@ -572,7 +1058,13 @@ Deno.test("tool prompt injection stays inside the exact receipted untrusted enve
           toolCalls: [{
             id: "call-1",
             name: "search_inventory",
-            arguments: { query: "ADV" },
+            arguments: {
+              query: "ADV",
+              category: null,
+              availability: "any",
+              presentation: "answer",
+              technicalPredicates: [],
+            },
           }],
           usage: { inputTokens: 2, outputTokens: 2, totalTokens: 4 },
           finishReason: "tool_calls",
@@ -650,7 +1142,12 @@ Deno.test("model-first runtime can plan ERP and public-web tools in one turn", a
           authorityTenantId: tenantId,
           asOf: "2026-08-11T12:00:00Z",
           status: "success" as const,
-          items: [{ name: "Cambio Shimano", sku: "RD-M6100", stock: 1 }],
+          items: [{
+            entityId: contextJobId,
+            name: "Cambio Shimano",
+            sku: "RD-M6100",
+            stock: 1,
+          }],
           resultCount: 1,
           hasMore: false,
         };
@@ -694,7 +1191,13 @@ Deno.test("model-first runtime can plan ERP and public-web tools in one turn", a
             {
               id: "erp-1",
               name: "search_inventory",
-              arguments: { query: "RD-M6100" },
+              arguments: {
+                query: "RD-M6100",
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                technicalPredicates: [],
+              },
             },
             {
               id: "web-1",
@@ -1782,6 +2285,10 @@ Deno.test("ERP reads remain available before an incomplete-research terminal ans
               name: "search_inventory",
               arguments: {
                 query: "maza trasera",
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                technicalPredicates: [],
               },
             }],
             usage: { inputTokens: 2, outputTokens: 2, totalTokens: 4 },
@@ -2650,7 +3157,13 @@ Deno.test("tool wrapper stays within the exact 48 KiB receipt boundary", async (
           toolCalls: [{
             id: "call-1",
             name: "search_inventory",
-            arguments: { query: "x" },
+            arguments: {
+              query: "x",
+              category: null,
+              availability: "any",
+              presentation: "answer",
+              technicalPredicates: [],
+            },
           }],
           usage: { inputTokens: 2, outputTokens: 2, totalTokens: 4 },
           finishReason: "tool_calls",
@@ -2905,12 +3418,24 @@ Deno.test("runtime abort stops the current tool fan-out and all later model call
             {
               id: "call-1",
               name: "search_inventory",
-              arguments: { query: "cadena" },
+              arguments: {
+                query: "cadena",
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                technicalPredicates: [],
+              },
             },
             {
               id: "call-2",
               name: "search_inventory",
-              arguments: { query: "freno" },
+              arguments: {
+                query: "freno",
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                technicalPredicates: [],
+              },
             },
           ],
           usage: { inputTokens: 2, outputTokens: 2, totalTokens: 4 },
@@ -2981,12 +3506,24 @@ Deno.test("cancellation after tool execution records its receipt before stopping
             {
               id: "call-1",
               name: "search_inventory",
-              arguments: { query: "cadena" },
+              arguments: {
+                query: "cadena",
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                technicalPredicates: [],
+              },
             },
             {
               id: "call-2",
               name: "search_inventory",
-              arguments: { query: "freno" },
+              arguments: {
+                query: "freno",
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                technicalPredicates: [],
+              },
             },
           ],
           usage: { inputTokens: 2, outputTokens: 2, totalTokens: 4 },
@@ -3057,7 +3594,13 @@ Deno.test("aggregate tool output exhaustion never leaves an executed tool withou
           toolCalls: [1, 2, 3].map((ordinal) => ({
             id: `call-${ordinal}`,
             name: "search_inventory",
-            arguments: { query: `query-${ordinal}` },
+            arguments: {
+              query: `query-${ordinal}`,
+              category: null,
+              availability: "any",
+              presentation: "answer",
+              technicalPredicates: [],
+            },
           })),
           usage: { inputTokens: 2, outputTokens: 2, totalTokens: 4 },
           finishReason: "tool_calls",
@@ -3338,7 +3881,13 @@ Deno.test("duplicate provider call ids across rounds are rejected before executi
           toolCalls: [{
             id: "duplicate-id",
             name: "search_inventory",
-            arguments: { query: "cadena" },
+            arguments: {
+              query: "cadena",
+              category: null,
+              availability: "any",
+              presentation: "answer",
+              technicalPredicates: [],
+            },
           }],
           usage: { inputTokens: 2, outputTokens: 2, totalTokens: 4 },
           finishReason: "tool_calls",

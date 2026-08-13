@@ -138,6 +138,32 @@ export interface AgentEntityRef {
   id: string;
 }
 
+export const agentInventoryAvailabilityFilters = [
+  "any",
+  "in_stock",
+  "low_stock",
+  "out_of_stock",
+] as const;
+
+export type AgentInventoryAvailabilityFilter = (typeof agentInventoryAvailabilityFilters)[number];
+
+/**
+ * A server-projected result set that the client can reopen without asking the
+ * model to invent a route or independently reconstruct the selected rows.
+ * `kind` is a discriminator so other ERP lists can join this closed union.
+ */
+export interface AgentInventoryListRef {
+  kind: "inventory";
+  query: string;
+  availability: AgentInventoryAvailabilityFilter;
+  resultCount: number;
+  hasMore: boolean;
+  entityIds: readonly string[] | null;
+  autoOpen: boolean;
+}
+
+export type AgentListRef = AgentInventoryListRef;
+
 export interface AgentActionCard {
   kind: string;
   title: string;
@@ -148,6 +174,7 @@ export interface AgentActionCard {
   chips: readonly string[];
   entityRef?: AgentEntityRef;
   approvalRef?: AgentApprovalRef;
+  listRef?: AgentListRef;
 }
 
 export const agentApprovalStates = [

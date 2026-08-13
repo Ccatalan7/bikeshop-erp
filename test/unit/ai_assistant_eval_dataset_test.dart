@@ -9,7 +9,9 @@ void main() {
     'list_attention_items',
     'search_workshop_jobs',
     'search_tasks',
+    'inspect_inventory_schema',
     'search_inventory',
+    'report_capability_gap',
     'find_inventory_risks',
     'search_customers',
     'search_suppliers',
@@ -45,7 +47,7 @@ void main() {
     expect(decoded, isA<List<Object?>>());
     final cases = (decoded as List<Object?>).cast<Map<String, Object?>>();
 
-    expect(cases, hasLength(51));
+    expect(cases, hasLength(56));
     expect(cases.map((item) => item['id']).toSet(), hasLength(cases.length));
 
     final categories = <String>{};
@@ -130,6 +132,7 @@ void main() {
         'workshop',
         'tasks',
         'inventory',
+        'capability',
         'crm',
         'purchases',
         'sales',

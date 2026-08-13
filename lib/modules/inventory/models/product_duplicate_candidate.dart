@@ -37,7 +37,9 @@ enum ProductDuplicateMatchTier {
   possible,
 
   /// The same kind of object, ruled out by a gate that is stated in words.
-  /// Only ever offered inside the picker, never as a row's recommendation.
+  /// It is never a recommendation. The review row may expose the first one as
+  /// a clearly-labelled manual lead when no survivor exists, using the exact
+  /// same order as the picker so the operator can overrule a misread gate.
   ruledOut,
 }
 

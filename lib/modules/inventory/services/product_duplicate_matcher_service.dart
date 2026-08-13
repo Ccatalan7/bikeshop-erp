@@ -224,6 +224,88 @@ class ProductDuplicateSearchResult {
           : recommendations;
 }
 
+/// Turns the grounded adjudicator's ordered rejections into manual-review
+/// leads without manufacturing a recommendation.
+///
+/// `different` means "do not auto-link", not "all offered rows are equally
+/// useful". The adjudicator has already compared object, function, shape,
+/// image and specifications. Preserving its closest-first order keeps the
+/// nearest sold object ahead of functionally related but physically different
+/// products, while decisive differences remain visible and recommendations
+/// stay empty.
+@visibleForTesting
+List<ProductDuplicateCandidate> aiOrderedManualReviewLeads({
+  required AIProductMatchDecision? decision,
+  required List<ProductDuplicateCandidate> candidates,
+}) {
+  if (decision == null ||
+      (decision.decision != AIProductMatchDecisionKind.different &&
+          decision.decision != AIProductMatchDecisionKind.insufficient) ||
+      decision.rejected.isEmpty ||
+      candidates.isEmpty) {
+    return const <ProductDuplicateCandidate>[];
+  }
+  final byId = <String, ProductDuplicateCandidate>{
+    for (final candidate in candidates)
+      if (candidate.product.id?.trim().isNotEmpty == true)
+        candidate.product.id!.trim(): candidate,
+  };
+  final ordered = <ProductDuplicateCandidate>[];
+  for (final rejection in decision.rejected) {
+    final candidate = byId[rejection.productId];
+    if (candidate == null) continue;
+    final comparison = 'Diferencia indicada por IA: ${rejection.reason}';
+    ordered.add(ProductDuplicateCandidate(
+      product: candidate.product,
+      matchTier: candidate.matchTier,
+      confidence: candidate.confidence,
+      reasons: candidate.reasons,
+      objections: List<String>.unmodifiable(<String>[
+        comparison,
+        for (final objection in candidate.objections)
+          if (objection != comparison) objection,
+      ]),
+      gates: candidate.gates,
+      variantMismatch: candidate.variantMismatch,
+      hasProductImage: candidate.hasProductImage,
+      matchedModelCodes: candidate.matchedModelCodes,
+      isReviewOnlyFamilyScope: candidate.isReviewOnlyFamilyScope,
+      lineConfidence: candidate.lineConfidence,
+      variantAgreement: candidate.variantAgreement,
+    ));
+  }
+  return List<ProductDuplicateCandidate>.unmodifiable(ordered);
+}
+
+/// Applies the grounded closest-first review order to an already cached
+/// candidate bucket, preserving every candidate the catalog search exposed.
+///
+/// This is intentionally pure and performs no model call. It lets every row
+/// and picker consume the adjudication receipt already attached to the row,
+/// instead of falling back to category/SKU order until another model request.
+List<ProductDuplicateCandidate> applyAIManualReviewOrder({
+  required AIProductMatchDecision? decision,
+  required List<ProductDuplicateCandidate> candidates,
+}) {
+  final leads = aiOrderedManualReviewLeads(
+    decision: decision,
+    candidates: candidates,
+  );
+  if (leads.isEmpty) return candidates;
+  final promotedIds = leads
+      .map((candidate) => candidate.product.id?.trim())
+      .whereType<String>()
+      .where((id) => id.isNotEmpty)
+      .toSet();
+  return List<ProductDuplicateCandidate>.unmodifiable(
+    <ProductDuplicateCandidate>[
+      ...leads,
+      for (final candidate in candidates)
+        if (!promotedIds.contains(candidate.product.id?.trim())) candidate,
+    ],
+  );
+}
+
 /// Resolves which catalog product an invoice line refers to.
 ///
 /// Rebuilt on 2026-08-09 after measuring the previous implementation against
@@ -1429,6 +1511,30 @@ class ProductDuplicateMatcherService {
         _buildCandidate(candidate,
             categoryConflictWith: probeIdentity.category),
     ];
+    final aiOperatorReviewLeads = aiOrderedManualReviewLeads(
+      decision: adjudication.decision,
+      candidates: deterministicOperatorChoices,
+    );
+    final aiCategoryReviewLeads = aiOrderedManualReviewLeads(
+      decision: adjudication.decision,
+      candidates: builtCategoryConflicts,
+    );
+    if (aiOperatorReviewLeads.isNotEmpty || aiCategoryReviewLeads.isNotEmpty) {
+      ProductIdentityTrace.emit(
+        traceId: traceId,
+        event: 'adjudication.manual_review_order',
+        sink: _traceSink,
+        data: <String, Object?>{
+          'decision': adjudication.decision?.decision.name,
+          'operator_choice_ids': aiOperatorReviewLeads
+              .map((candidate) => candidate.product.id)
+              .toList(growable: false),
+          'category_conflict_ids': aiCategoryReviewLeads
+              .map((candidate) => candidate.product.id)
+              .toList(growable: false),
+        },
+      );
+    }
     var recommendations = !requireAIPrimaryInvestigation &&
             (adjudication.state ==
                     ProductDuplicateAdjudicationState.notNeeded ||
@@ -1459,6 +1565,11 @@ class ProductDuplicateMatcherService {
         <ProductDuplicateCandidate>[chosen],
         builtCategoryConflicts,
       );
+    } else if (aiCategoryReviewLeads.isNotEmpty) {
+      promotedCategoryConflicts = _promoteInsideOperatorChoices(
+        aiCategoryReviewLeads,
+        builtCategoryConflicts,
+      );
     }
     recommendations = choseCategoryConflict
         ? const <ProductDuplicateCandidate>[]
@@ -1471,6 +1582,7 @@ class ProductDuplicateMatcherService {
     final operatorChoices = _promoteInsideOperatorChoices(
       <ProductDuplicateCandidate>[
         ...recommendations,
+        if (recommendations.isEmpty) ...aiOperatorReviewLeads,
         if (exactLeafTentativeSelection != null) exactLeafTentativeSelection,
       ],
       deterministicOperatorChoices,

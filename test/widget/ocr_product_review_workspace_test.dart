@@ -160,6 +160,55 @@ void main() {
   });
 
   group('decisión de la fila', () {
+    testWidgets(
+        'una composición recordada muestra su salida y no ofrece un cambio falso',
+        (tester) async {
+      var changed = false;
+      await _pump(
+        tester,
+        size: const Size(1440, 900),
+        lines: <OcrProductReviewLine>[
+          _line(
+            id: 'l1',
+            status: OcrProductReviewStatus.linked,
+            resolvedMode: OcrProductResolvedMode.rememberedComposite,
+            resolvedOutcomeSummary:
+                '3 × AE0145 · delantero + 3 × AE0144 · trasero',
+            canChangeResolvedDecision: false,
+          ),
+        ],
+        callbacks: OcrProductReviewCallbacks(
+          onChangeDecision: (_) => changed = true,
+        ),
+      );
+
+      expect(find.textContaining('Descomposición recordada'), findsOneWidget);
+      expect(find.textContaining('3 × AE0145 · delantero'), findsOneWidget);
+      expect(find.byKey(const Key('ocr-review-change-l1')), findsNothing);
+      expect(changed, isFalse);
+    });
+
+    testWidgets('un pack recordado conserva su significado en vista compacta',
+        (tester) async {
+      await _pump(
+        tester,
+        size: const Size(390, 844),
+        lines: <OcrProductReviewLine>[
+          _line(
+            id: 'l1',
+            status: OcrProductReviewStatus.linked,
+            resolvedMode: OcrProductResolvedMode.rememberedPack,
+            resolvedOutcomeSummary: '10 × OL03 · unidades iguales',
+            canChangeResolvedDecision: false,
+          ),
+        ],
+      );
+
+      expect(find.text('Pack recordado'), findsOneWidget);
+      expect(find.textContaining('10 × OL03'), findsOneWidget);
+      expect(find.byKey(const Key('ocr-review-change-l1')), findsNothing);
+    });
+
     testWidgets('los parecidos no se expanden dentro de la fila',
         (tester) async {
       var opened = <String>[];
@@ -218,6 +267,7 @@ void main() {
       await tester.tap(find.byKey(const Key('ocr-review-new-l1')));
       await tester.pump();
       expect(created, 'l1');
+      expect(find.text('Ver alternativas'), findsOneWidget);
     });
 
     testWidgets('sin coincidencia se dice, no se rellena', (tester) async {
@@ -233,7 +283,36 @@ void main() {
       expect(find.byKey(const Key('ocr-review-new-l1')), findsOneWidget);
     });
 
-    testWidgets('una abstención nunca se convierte en crear nuevo',
+    testWidgets('una abstención muestra el mejor candidato sin automatizarlo',
+        (tester) async {
+      Product? linked;
+      await _pump(
+        tester,
+        size: const Size(1440, 900),
+        lines: <OcrProductReviewLine>[
+          _line(
+            id: 'l1',
+            status: OcrProductReviewStatus.abstained,
+            candidates: _candidates(2),
+          ),
+        ],
+        callbacks: OcrProductReviewCallbacks(
+          onLinkCandidate: (_, product) => linked = product,
+        ),
+      );
+
+      expect(find.text('Más parecido'), findsOneWidget);
+      expect(find.textContaining('Tee Aluminio Wake'), findsOneWidget);
+      expect(find.byKey(const Key('ocr-review-new-l1')), findsOneWidget);
+      expect(
+        find.byKey(const Key('ocr-review-alternatives-l1')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('ocr-review-link-l1')));
+      expect(linked?.sku, 'AE0001');
+    });
+
+    testWidgets('sin candidato la abstención conserva todas las salidas',
         (tester) async {
       await _pump(
         tester,
@@ -244,7 +323,8 @@ void main() {
       );
 
       expect(find.text('La evidencia no alcanza para decidir'), findsOneWidget);
-      expect(find.byKey(const Key('ocr-review-new-l1')), findsNothing);
+      expect(find.byKey(const Key('ocr-review-new-l1')), findsOneWidget);
+      expect(find.byKey(const Key('ocr-review-retry-l1')), findsOneWidget);
       expect(
         find.byKey(const Key('ocr-review-alternatives-l1')),
         findsOneWidget,
@@ -273,7 +353,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const Key('ocr-review-link-l1')), findsNothing);
-      expect(find.byKey(const Key('ocr-review-new-l1')), findsNothing);
+      expect(find.byKey(const Key('ocr-review-new-l1')), findsOneWidget);
       expect(
         find.byKey(const Key('ocr-review-alternatives-l1')),
         findsOneWidget,
@@ -334,11 +414,43 @@ void main() {
       );
       expect(find.textContaining('8 opciones'), findsNothing);
       expect(find.textContaining('8 parecidos'), findsNothing);
-      expect(find.byKey(const Key('ocr-review-new-l1')), findsNothing);
+      expect(find.byKey(const Key('ocr-review-new-l1')), findsOneWidget);
       expect(
         find.byKey(const Key('ocr-review-alternatives-l1')),
         findsOneWidget,
       );
+    });
+
+    testWidgets('un descarte útil se muestra como revisión manual',
+        (tester) async {
+      Product? linked;
+      await _pump(
+        tester,
+        size: const Size(1440, 900),
+        lines: <OcrProductReviewLine>[
+          _line(
+            id: 'l1',
+            status: OcrProductReviewStatus.abstained,
+            candidates: <ProductDuplicateCandidate>[
+              _candidate(
+                id: 'manual',
+                sku: 'AE0007',
+                name: 'Disco freno G3 AE 160mm',
+                tier: ProductDuplicateMatchTier.ruledOut,
+              ),
+            ],
+          ),
+        ],
+        callbacks: OcrProductReviewCallbacks(
+          onLinkCandidate: (_, product) => linked = product,
+        ),
+      );
+
+      expect(find.text('Revisión manual'), findsOneWidget);
+      expect(find.textContaining('Disco freno G3 AE'), findsOneWidget);
+      expect(find.byKey(const Key('ocr-review-link-l1')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('ocr-review-link-l1')));
+      expect(linked?.sku, 'AE0007');
     });
 
     testWidgets('usa singular honesto cuando sólo hay un descartado',
@@ -763,6 +875,9 @@ OcrProductReviewLine _line({
   int categoryConflictCount = 0,
   String? aiCompositeProposal,
   bool canConfirmCompositeProposal = false,
+  OcrProductResolvedMode resolvedMode = OcrProductResolvedMode.catalogLink,
+  String? resolvedOutcomeSummary,
+  bool canChangeResolvedDecision = true,
 }) {
   return OcrProductReviewLine(
     id: id,
@@ -798,6 +913,9 @@ OcrProductReviewLine _line({
     skuErrorMessage: skuErrorMessage,
     resolvedProductName: 'Tee Aluminio Wake MTB 31.8MM Rojo',
     resolvedProductSku: 'AE0137',
+    resolvedMode: resolvedMode,
+    resolvedOutcomeSummary: resolvedOutcomeSummary,
+    canChangeResolvedDecision: canChangeResolvedDecision,
   );
 }
 
@@ -826,4 +944,31 @@ List<ProductDuplicateCandidate> _candidates(int count) {
         hasProductImage: false,
       ),
   ];
+}
+
+ProductDuplicateCandidate _candidate({
+  required String id,
+  required String sku,
+  required String name,
+  required ProductDuplicateMatchTier tier,
+}) {
+  return ProductDuplicateCandidate(
+    product: Product(
+      id: id,
+      tenantId: 'tenant-test',
+      sku: sku,
+      name: name,
+      brand: '',
+      categoryName: 'Rotores',
+      price: 16000,
+      cost: 8000,
+    ),
+    matchTier: tier,
+    confidence: 0.4,
+    reasons: const ['Es rotor', 'Diámetro 160mm'],
+    objections: const ['Modelo incompatible: G3CS ≠ G3'],
+    gates: const [],
+    variantMismatch: true,
+    hasProductImage: false,
+  );
 }

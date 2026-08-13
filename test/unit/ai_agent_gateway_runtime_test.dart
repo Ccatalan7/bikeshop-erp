@@ -233,6 +233,7 @@ void main() {
     );
     expect(captured.headers['authorization'], 'Bearer caller-jwt');
     expect(captured.headers['apikey'], 'public-project-key');
+    expect(captured.headers['x-vinabike-ai-result-lists'], '1');
     expect(captured.headers.values, isNot(contains('service-role')));
     expect(jsonDecode(captured.body), <String, Object?>{'version': 1});
   });
@@ -415,6 +416,76 @@ void main() {
 
     expect(response.cards.single.entityRef, isNull);
     expect(response.cards.single.ctaLabel, 'Abrir Clientes');
+  });
+
+  test('inventory list reference decodes one exact bounded result set', () {
+    final response = AIAgentGatewayResponse.fromJson(
+      _response(cards: <Object?>[
+        <String, Object?>{
+          'kind': 'inventory',
+          'title': '2 resultados',
+          'destination': 'inventory_products',
+          'chips': <String>['En stock'],
+          'listRef': <String, Object?>{
+            'kind': 'inventory',
+            'query': 'camara 29',
+            'availability': 'in_stock',
+            'resultCount': 2,
+            'hasMore': false,
+            'entityIds': <String>[_customerA, _jobA],
+            'autoOpen': true,
+          },
+        },
+      ]),
+    );
+
+    final list = response.cards.single.inventoryListRef!;
+    expect(list.query, 'camara 29');
+    expect(list.availability, AIAssistantInventoryAvailability.inStock);
+    expect(list.entityIds, <String>[_customerA, _jobA]);
+    expect(list.autoOpen, isTrue);
+    expect(response.cards.single.entityRef, isNull);
+    expect(response.cards.single.ctaLabel, 'Ver resultados');
+  });
+
+  test('inventory list reference rejects broadened or contradictory payloads',
+      () {
+    final base = <String, Object?>{
+      'kind': 'inventory',
+      'query': 'camara 29',
+      'availability': 'in_stock',
+      'resultCount': 1,
+      'hasMore': false,
+      'entityIds': <String>[_customerA],
+      'autoOpen': true,
+    };
+    for (final listRef in <Object?>[
+      null,
+      <String, Object?>{...base, 'availability': 'available-ish'},
+      <String, Object?>{...base, 'resultCount': 2},
+      <String, Object?>{...base, 'hasMore': true},
+      <String, Object?>{
+        ...base,
+        'entityIds': <String>['../../product']
+      },
+      <String, Object?>{...base, 'route': '/admin'},
+    ]) {
+      expect(
+        () => AIAgentGatewayResponse.fromJson(
+          _response(cards: <Object?>[
+            <String, Object?>{
+              'kind': 'inventory',
+              'title': 'Resultado',
+              'destination': 'inventory_products',
+              'chips': <String>[],
+              'listRef': listRef,
+            },
+          ]),
+        ),
+        throwsA(isA<AIAgentGatewayContractException>()),
+        reason: '$listRef',
+      );
+    }
   });
 
   test('task preview decodes its complete governed approval reference', () {

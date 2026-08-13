@@ -140,7 +140,7 @@ void main() {
       expect(result.failure, isNull);
     });
 
-    test('does not let an included accessory manufacture a composite', () {
+    test('downgrades contradictory composition without losing identity', () {
       final payload = _validPayload();
       final identity = payload['identity'] as Map<String, Object?>;
       identity['composition'] = <String, Object?>{
@@ -161,9 +161,66 @@ void main() {
 
       final result = validate(payload);
 
-      expect(result.isValid, isFalse);
-      expect(result.failure?.jsonPointer, 'identity.composition.components');
-      expect(result.failure?.code, 'composite_cardinality');
+      expect(result.isValid, isTrue);
+      expect(result.failure, isNull);
+      final normalizedIdentity =
+          result.payload!['identity'] as Map<String, dynamic>;
+      expect(
+        normalizedIdentity['composition'],
+        <String, Object?>{
+          'kind': 'insufficient',
+          'components': <Object?>[],
+        },
+      );
+      expect(result.normalizations, hasLength(1));
+      expect(
+        result.normalizations.single,
+        containsPair('pointer', 'identity.composition'),
+      );
+      expect(
+        result.normalizations.single,
+        containsPair('action', 'contradictory_composition_downgraded'),
+      );
+      expect(
+        (normalizedIdentity['leaf_proposals'] as List).single['category_id'],
+        _leafId,
+      );
+    });
+
+    test('keeps a clear identity usable when package composition is unknown',
+        () async {
+      final payload = _validPayload(leafId: 'L001');
+      final identity = payload['identity'] as Map<String, Object?>;
+      identity['composition'] = <String, Object?>{
+        'kind': 'single',
+        'components': <Map<String, Object?>>[
+          <String, Object?>{
+            'label': 'oliva BH59',
+            'role': 'component',
+            'qty': 10,
+          },
+        ],
+      };
+      identity['packaging'] = <String, Object?>{
+        'count': 10,
+        'unit_token': 'pcs',
+        'source': 'option',
+      };
+      final proxy = _ContractInspectingProxy(jsonEncode(payload));
+      final service = AIAssistantService(geminiProxy: proxy);
+
+      final result = await _strictCall(service);
+
+      expect(result, isNotNull);
+      final investigation = result!.identityInvestigation!;
+      expect(investigation.isSufficient, isTrue);
+      expect(investigation.hasSufficientComposition, isFalse);
+      expect(investigation.packageKind, AIProductPackageKind.insufficient);
+      expect(investigation.composition.components, isEmpty);
+      expect(investigation.categoryLeafIntent, _leafId);
+      expect(investigation.packaging.count, 10);
+      expect(proxy.calls, 1, reason: 'safe downgrade does not spend a retry');
+      service.dispose();
     });
 
     test('ignores innocent extra fields without granting them authority',

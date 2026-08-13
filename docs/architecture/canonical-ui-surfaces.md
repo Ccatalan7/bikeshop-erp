@@ -172,6 +172,29 @@ parallel visual workspace or its own behavioral test suite.
 | Purchase receipt formal detail | `/purchases/receipts/:receiptId` from the invoice evidence register and any linked resolution | `purchase_receipt_detail_page.dart` + shared `PurchaseReceiptDetailView` | The persisted `REC-*` opens inside the existing `MainLayout` with a task-appropriate detail composition, not a replacement application shell. Its compact header identifies receipt, invoice, supplier, registration state and unresolved-case state. The primary table uses product thumbnails and the operational projection `Producto`, `Pedido`, `Recibido`, `Diferencia`, `Motivo / evidencia`; prior quantity, cost, stock movement identifiers, operation IDs and actors remain available as secondary or collapsed technical trace rather than parallel decision columns. All open and completed resolution evidence remains linked to the exact case. Choosing a resolution uses the host-appropriate blocking or contextual surface selected under the GUI guides; it remains keyboard/touch accessible, scroll-safe, and preserves the receipt context, and the selection itself never rewrites the physical receipt. |
 | AliExpress daily purchase intake | Contextual `Compras del día` action in the embedded ERP browser while visiting `*.aliexpress.com`; Chrome companion side panel when the legacy add-on is used | `webview_module_page.dart` + `AliExpressDailyInvoiceService` + packaged `content.js` extractor + shared packaged `invoice.js` / `invoice.css` document renderer + `OcrFileHandoffService` + canonical `OCRUploadWidget` in `purchase_invoice_form_page.dart` | Reuse the signed-in browser session and the same packaged extractor only on trusted HTTPS AliExpress hosts; select a day, automatically traverse/load the order history, collect and enrich every matching order, preserve product images/source links, and consolidate all landed costs into one draft. The embedded browser offers two explicit continuations: `Generar preview` converts the same packaged HTML renderer used by the Chrome companion into the PDF shown to the user, including compact names, images and every landed-cost column, then waits for `Enviar al OCR`; `Preparar factura` skips that visual stop and continues directly with bytes from that same renderer. Preview and OCR handoff must reuse one identical byte payload; an independent simplified ERP invoice template is not a valid preview. Either continuation opens `/purchases/new` in a fresh workspace tab, preserving the signed-in AliExpress tab and its current page. The Chrome side panel mirrors the underlying workflow as `Factura: fecha → buscar → revisar → crear`; manual export/settings live under `Más` and AI Vision remains a separate explicit fallback. Repeated DOM observations are deduplicated per order and identical products are aggregated across the day before cost allocation. Explicit pack labels are converted into shop inventory units (for example, `2 × 4 pares` becomes `8 pares`) while retaining purchased quantity and pack factor for audit. Subtotal, shipping, tax, discount and final total remain separate source facts; an unexplained difference adjusts landed cost but is never relabeled as a fabricated tax or discount. The bridge never reads or transports stored credentials. Collection itself performs no database writes. Product resolution waits for title/model cleanup, resolves tenant-and-supplier-scoped listing aliases first, gives exact image identity priority, normalizes model forms such as `RT56` / `RT-56`, and uses fuzzy/vision analysis only for a bounded ambiguous shortlist. Every unresolved row is explicitly `Revisar` or `Nuevo`; creation stays blocked during analysis and until the worker links a candidate or confirms the new product. A confirmed existing-product choice persists the AliExpress listing as an alias so later purchases auto-link. A new AliExpress product receives an atomically reserved, idempotently replayable internal `AE0001…` SKU while the full listing identifier remains its supplier code; partial failures retain only the failed rows for retry. Applying the OCR draft requires every source line to resolve and the landed line sum to reconcile with the invoice total within whole-peso rounding tolerance. AliExpress landed unit costs already contain distributed shipping, tax and discounts, so the purchase form must not add another 19% IVA. Invoice save and receiving remain separate explicit actions. **La revisión de productos es full-page** (corrección 2026-08-09): ocupa el área completa de la factura de compra, conserva el batch vertical en orden de factura y no usa una receta de side sheet. El cuerpo de página tiene scroll y un pie propio mantiene alcanzables la política de precios, el bloqueo exacto y la acción final sin introducir otro shell o modal. El estado del día en el selector de fecha usa **E-04 `VbNotice`** en vez de una fila de texto local. **Bajo 900px el WebView se comporta como el navegador de un teléfono** (2026-08-06): `useWideViewPort` queda desactivado —en Android medía la página contra ~980px y los sitios servían su versión de escritorio dentro del teléfono— y la escala efectiva es 1.0, sin el zoom de escritorio. La acción «Compras del día» baja a su propia fila contextual de ancho completo y 48px, visible sólo dentro de AliExpress: dentro de la barra ocupaba ~250px de 420 y volvía a dejar la dirección como un candado ilegible, y esconderla en el menú degradaría la acción por la que el ERP tiene navegador propio. **Bajo 900px la barra del navegador se recompone, no se encoge** (2026-08-06): en compacto sobreviven en la fila sólo «Atrás», la dirección y el menú «⋮»; adelante, recargar, inicio y marcador pasan al menú y «abrir afuera» reutiliza el ítem que ya existía ahí. Con los nueve controles de escritorio metidos en 420px, la dirección quedaba reducida a un candado de ~40px: ilegible, intocable y sin decir en qué sitio estabas. El control que permanece usa objetivo de 48px. **El listado se pide a la API de pedidos, no se raspa del DOM** (2026-08-06): la página construye su listado llamando a `mtop.aliexpress.trade.buyer.order.list` y expone su cliente firmado en `window.lib.mtop`; el puente reutiliza ese cliente y toma la plantilla del cuerpo de una llamada real de la sesión (los ids de módulo cambian por cuenta y versión, reconstruirlos sería adivinar). De ahí salen número, fecha, total, tienda y cada línea con producto, cantidad, precio unitario e imagen, con paginación por número de página. Resultado medido el 2026-04-06: 6 de 6 pedidos en 2 páginas y segundos, contra 4 de 6 tras minutos de scroll. El índice se precarga al abrir el flujo y **D-01 marca dentro de cada celda los días con pedidos antes de cualquier selección**; informa sin bloquear, por lo que un día sin marca significa «no consta», nunca «no hubo compras». Ese índice se contrasta además con las facturas ya emitidas (`AEDDMMYY`, `AliExpressPendingDaysService`) para distinguir **compras sin factura registrada** de días ya cerrados, y avisar de las primeras. Ese contraste —cuenta del proveedor contra facturas del ERP— es lo que cubre la compra hecha fuera del navegador del ERP (teléfono, otro equipo): **no** depende del correo, porque AliExpress sólo envía avisos de entrega y su número es el seguimiento del courier, que no liga con el pedido ni con la factura (verificado en la bandeja real el 2026-08-06). El recorrido del DOM permanece **sólo como respaldo** para cuando la página no exponga su cliente de API. **Ese respaldo lo gobierna Dart, no la página** (2026-08-06): macOS marca como ocluida la ventana tapada y WebKit suspende entonces la página del WebView —sus timers y hasta el JavaScript que se le pide evaluar—, así que un recorrido que esperaba con `setTimeout` dentro del WebView se congelaba indefinidamente en cuanto el usuario ponía otra ventana encima. El puente expone pasos atómicos y síncronos (`ordersListBeginSteppedRun`, `ordersListScrollTo`, `ordersListHarvestStep`, `ordersListClickLoadMore`, `ordersListFinishSteppedRun`) y el ritmo lo pone Dart; además la ventana macOS activa `preventsOcclusion` y toda llamada al puente tiene tope de tiempo. El recorrido nunca baja más allá del final de la lista de pedidos: debajo vive un carrusel de recomendaciones con scroll infinito que, si se toca, crece sin techo, deja el botón «ver más pedidos» fuera de pantalla y vuelve cuadrático cualquier escaneo del documento. |
 
+#### Certificación de un día exacto en AliExpress (corrección 2026-08-13)
+
+La paginación de AliExpress es por offset sobre un feed mutable: una orden puede
+repetirse legítimamente en páginas vecinas cuando el límite se mueve. Esa
+repetición idéntica se deduplica y se registra como solapamiento; sólo el mismo
+ID con payload distinto o una página `hasMore=true` sin ningún ID nuevo es
+deriva y falla cerrada. Para no recorrer toda la historia, el colector elige la
+ventana temporal mínima ofrecida por el servidor que contiene el día, verifica
+el eco exacto del filtro y ejecuta dos recorridos hasta `hasMore=false`. Sólo
+certifica si ambos producen el mismo payload del día objetivo. La lectura de
+debug usa este mismo colector certificado; un colector parcial especial para
+debug ocultaría fallos que después aparecerían en la versión publicada.
+**Corrección 2026-08-13 — debug no es un permiso de negocio:** una factura
+diaria certificada abre la revisión operativa tanto en debug como en release.
+Sólo el canario de una orden o una lectura parcial marcada explícitamente como
+diagnóstico conserva bloqueados vínculo, creación, descomposición y aplicación.
+Antes, el build debug convertía incluso una fuente certificada en auditoría y
+obligaba a repetir toda la lectura e investigación IA para poder usarla; ahora
+un handoff certificado ya cargado puede promoverse sin repetir ese trabajo.
+Medición real del 2026-08-12:
+ventana `6m`, 8 páginas por recorrido, 67 órdenes únicas, 5 solapamientos
+idénticos, 7 órdenes objetivo y el mismo hash objetivo en ambas pasadas.
+
 ### OCR product-review composition (2026-08-10)
 
 The OCR review is a full-page child of the existing purchase-invoice
@@ -214,7 +237,29 @@ ancho de la ventana; restaurar el antiguo shell angosto de 720 px es una
 regresión. Its manual search owns a generation: a slower
 older response never replaces a newer one or a cleared box, and a failed search
 says so instead of looking like «no existe». The row keeps the two peer
-decisions `Vincular` and `Nuevo`; the picker is one click away.
+decisions `Vincular` and `Crear nuevo`; `Ver alternativas` is labelled and one
+click away rather than hidden behind an ellipsis.
+
+**La abstención bloquea automatización, no al operador — corrección
+2026-08-13.** El fin de la revisión es producir las líneas reales de la
+factura, no exhibir el estado interno del matcher. Por eso cada fila conserva
+una salida completa y contextual: si hay un candidato normal viable se muestra
+el primero como `Más parecido` con `Vincular`, `Ver alternativas` y `Crear
+nuevo`; si el único candidato recuperado está fuera de la categoría autoritativa
+permanece únicamente en la sección separada de conflictos del picker, nunca
+como vínculo rápido; si no sobrevivió ningún candidato normal pero el picker
+conserva un descarte útil, la fila muestra ese mismo primer elemento como
+`Revisión manual` y en el mismo orden —jamás sustituye ese elemento por el
+primer conflicto de categoría—; si existe una composición validada, `Usar
+descomposición` reemplaza a `Vincular` como
+acción principal; y si no existe candidato visible se ofrecen búsqueda,
+creación y reintento. La lista del picker sigue separando viables, descartados
+y conflictos de catálogo, pero una propuesta composite no puede deshabilitar
+por accidente la selección manual ni ocultar `Ninguno · crear nuevo`. Los
+descartes conservan sus objeciones y toda elección es explícita: ninguna se
+aplica o aprende al abrir la superficie. La columna `Decisión` recibe la mayor
+prioridad flexible de la tabla; sus acciones se envuelven y la fila crece antes
+de reducir texto, ocultar una decisión frecuente o volverla un icono críptico.
 
 **Inspección de imágenes — corrección 2026-08-12.** La imagen fuente y las
 imágenes de cada candidato son evidencia para decidir, no decoración. Sus
@@ -262,6 +307,13 @@ fuente con todos los candidatos viables y devuelve `same`, `different`,
 revisión; abrir/cerrar agrega cero llamadas. Toda opinión IA es evidencia de
 revisión: no vincula, crea, persiste alias, escribe fingerprints/factura/catálogo
 ni aprende. Un fallo queda abstained/reintentable y nunca implica `Nuevo`.
+Cuando la segunda pasada responde `different` o `insufficient`, conserva además
+un orden de revisión fundamentado: primero el candidato más cercano por objeto
+vendido, función, forma física, imagen y especificaciones, aun cuando una
+diferencia decisiva impida vincularlo. Ese orden sólo organiza el picker y
+expone la diferencia; jamás transforma un rechazo en recomendación. Volver al
+orden determinista después de que la IA comparó las fotos es una pérdida de
+evidencia y puede poner aceite antes que una manguera visualmente equivalente.
 
 **Descomposición de sets, pares y packs — corrección 2026-08-13.** Esta regla
 reemplaza cualquier frase anterior que convierta una etiqueta de pack en stock
@@ -284,6 +336,33 @@ bloquea edición independiente de los componentes. La confirmación persiste y
 lee de vuelta la revisión inmutable; siguientes compras de la misma variante se
 resuelven sin IA. Guardar la factura y recibir stock siguen siendo acciones
 posteriores e independientes.
+
+Una resolución recuperada se presenta por lo que realmente hará:
+`Descomposición recordada`, `Pack recordado` o `Set recordado`, con cantidades,
+SKUs y roles resultantes. Nunca se colapsa a un `Vinculado` genérico ni muestra
+un `Cambiar` inerte. Corregir una regla recordada requiere una revisión durable
+nueva con motivo explícito; no es una limpieza de caché ni una mutación local de
+la fila.
+
+El preview conserva esa única línea fuente y sus importes, pero `Producto ERP`
+proyecta **cada salida real** antes de aplicar: cantidad resultante, SKU, rol
+(`delantero/trasero`, `izquierdo/derecho`) y nombre. Un composite se rotula
+`Descompuesto`, un pack homogéneo `Pack resuelto` y un padre Product Set
+`Set vinculado`; nunca se presenta la concatenación de componentes como si
+fuera un SKU-set nuevo. La fila puede crecer para mostrar todos sus componentes
+sin duplicar cantidad, costo ni total de origen. El reparto monetario exacto
+sigue ocurriendo sólo al aplicar la factura y no se inventa en el preview.
+
+En el formulario, una salida descompuesta conserva la misma anatomía visual que
+cualquier línea de compra: la descripción sigue siendo editable. Producto,
+cantidad, tarifa y descuento no se editan de forma independiente mientras la
+resolución está protegida, porque hacerlo dejaría un composite incompleto o un
+reparto que ya no suma la línea fuente. Tocar uno de esos campos ofrece una sola
+decisión explícita para **todo el grupo**: mantener la resolución protegida o
+convertir juntos sus componentes en líneas manuales, conservando los valores
+actuales y retirando toda la provenance reservada antes de habilitar la edición.
+Nunca se muestra texto plano con una anatomía distinta ni se promete una edición
+que el guardado vaya a rechazar.
 
 **Conteos de revisión — corrección 2026-08-12.** La fila y el picker consumen
 la misma decisión cacheada y publican sus alcances por separado: `N viables`,
@@ -1170,10 +1249,15 @@ que deba reproducirse.
 - El briefing **heredado** no pasa por un modelo. En el gateway, la evidencia es
   reproducible y server-owned, pero la priorización y redacción sí pertenecen
   al modelo y se evalúan por exactitud y utilidad, no por una frase fija.
-- **No navega solo**. Una tarjeta de lectura sólo abre algo después del clic
-  del operador. La única escritura admitida durante este rollout es la
-  aprobación gobernada de una propuesta de tarea descrita abajo; no existe un
-  writer libre ni un write tool redactado por el modelo.
+- **No hay navegación sorpresiva.** Una pregunta informativa conserva la
+  tarjeta de lectura hasta que el operador la toque. La excepción cerrada es
+  una petición explícita de buscar, mostrar, listar o abrir productos: el
+  servidor puede adjuntar un `listRef` verificado con `autoOpen=true`, aplicar
+  primero su búsqueda y disponibilidad y abrir la lista agregada de Inventario.
+  No acepta una ruta ni un conjunto de filas escrito por el modelo. La única
+  escritura admitida durante este rollout es la aprobación gobernada de una
+  propuesta de tarea descrita abajo; no existe un writer libre ni un write tool
+  redactado por el modelo.
 - El briefing heredado ofrece sólo Taller y Tareas agregados. El gateway puede
   ofrecer otros destinos cerrados y detalles exactos únicamente cuando una
   herramienta server-owned adjunta una referencia de entidad verificada; nunca
@@ -1237,6 +1321,30 @@ canónico seguro. El resumen contable de caja y cuentas por cobrar no inventa
 una tarjeta agregada: sólo las facturas por cobrar llevan su referencia exacta.
 Una referencia desconocida, inválida o incompatible falla cerrada y nunca cae a
 una ruta aportada por el modelo ni a una lista que oculte el error.
+
+La búsqueda de productos tiene además un contrato de lista server-owned. El
+modelo sólo elige campos cerrados —categoría, identidad/contexto,
+disponibilidad, presentación y un arreglo acotado de filtros técnicos
+canónicos—. `assistant_search_inventory_v4` resuelve primero la categoría
+contra `product_categories` y expande sólo su `category_tech_mappings` activo.
+Cada filtro técnico usa una clave real de `spec_definitions`: la RPC aplica
+primero `product_spec_values`, elimina conflictos estructurados y sólo permite
+que un campo todavía vacío se sostenga en un valor explícito del nombre/modelo
+del producto. Cada fila declara `product_spec`, `identity_fallback` o
+`not_applicable`, de modo que la card puede distinguir una ficha realmente
+poblada de una identidad válida en un catálogo todavía incompleto. Descripción,
+compatibilidad, SKU y barcode no prueban una especificación. La disponibilidad
+se aplica antes del límite y la RPC devuelve estado de stock e IDs autorizados;
+executor, respuesta breve, card y Product List consumen esa misma proyección.
+Una proyección completa conserva los IDs exactos —incluido el vacío
+verificado—. Cuando existen IDs completos, Flutter deja vacío el buscador
+manual de Product List: esos productos fueron seleccionados por el contrato
+estructurado, no por texto escrito en el control. Una truncada conserva
+`hasMore` y nunca finge que los primeros diez son el universo. El panel muestra
+una sola acción compacta de lista, no una card grande por fila. Clientes
+nuevos anuncian soporte mediante `x-vinabike-ai-result-lists: 1`; durante el
+rollout el gateway omite sólo el `listRef` para clientes anteriores, sin romper
+su decoder estricto.
 
 El catálogo server-owned expone sólo lecturas cuya capacidad y RPC están
 verificados para la autoridad actual. El navegador autenticado y toda escritura

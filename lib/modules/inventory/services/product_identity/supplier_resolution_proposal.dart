@@ -123,7 +123,7 @@ class SupplierResolutionProposalBuilder {
           product.id!: product,
     };
 
-    final directItems = <SupplierResolutionProposalItem>[];
+    var directItems = <SupplierResolutionProposalItem>[];
     if (decision.decision == AIProductMatchDecisionKind.composite) {
       if (decision.components.isEmpty) return null;
       for (final component in decision.components) {
@@ -138,7 +138,15 @@ class SupplierResolutionProposalBuilder {
         ));
       }
       if (!_packageCountAgrees(optionEvidence, investigation, directItems)) {
-        return null;
+        final normalized = _normalizeInvoiceTotalComponents(
+          directItems,
+          sourcePurchaseQuantity: sourcePurchaseQuantity,
+        );
+        if (normalized == null ||
+            !_packageCountAgrees(optionEvidence, investigation, normalized)) {
+          return null;
+        }
+        directItems = normalized;
       }
     } else if (decision.decision == AIProductMatchDecisionKind.same &&
         decision.productId != null &&
@@ -265,10 +273,14 @@ class SupplierResolutionProposalBuilder {
       if (items.single.role != AIProductMatchComponentRole.homogeneous) {
         return false;
       }
-      if (evidence.unitClass == 'piece' || evidence.unitClass == 'unit') {
-        return count != null &&
-            count > 1 &&
-            items.single.catalogUnitsPerPurchase == count;
+      // `packageKind` describes how many different catalog identities are in
+      // the package, not whether a single identity is repeated. A supplier
+      // option such as `4 pairs` can therefore be a `single` package while
+      // still representing four catalog units of the same product. The
+      // immutable option count is the authority for that homogeneous graph;
+      // the AI may only name the grounded catalog product.
+      if (count != null && count > 1) {
+        return items.single.catalogUnitsPerPurchase == count;
       }
       return sourceComponentUnits != null &&
           sourceComponentUnits > 1 &&
@@ -283,6 +295,43 @@ class SupplierResolutionProposalBuilder {
     }
     return sourceComponentUnits != null &&
         proposedUnits == sourceComponentUnits;
+  }
+
+  /// Some multimodal providers naturally answer a composition using the
+  /// invoice-total quantities (for example, three purchased front/rear sets
+  /// become `3 front + 3 rear`) while the durable graph stores catalog units
+  /// *per supplier purchase* (`1 front + 1 rear`). Accept that representation
+  /// only when every quantity divides exactly by the same integer purchase
+  /// count and the normalized result then agrees with the independently read
+  /// package composition. No SKU, product family or role is special-cased.
+  static List<SupplierResolutionProposalItem>? _normalizeInvoiceTotalComponents(
+    List<SupplierResolutionProposalItem> items, {
+    required double sourcePurchaseQuantity,
+  }) {
+    final purchaseCount = sourcePurchaseQuantity.round();
+    if (purchaseCount <= 1 ||
+        sourcePurchaseQuantity != purchaseCount.toDouble()) {
+      return null;
+    }
+    final normalized = <SupplierResolutionProposalItem>[];
+    for (final item in items) {
+      final quantity = item.catalogUnitsPerPurchase;
+      if (quantity <= 0 || quantity % purchaseCount != 0) return null;
+      final perPurchase = quantity ~/ purchaseCount;
+      if (perPurchase <= 0) return null;
+      normalized.add(SupplierResolutionProposalItem(
+        product: item.product,
+        catalogUnitsPerPurchase: perPurchase,
+        // A composite answer with one grounded catalog identity is a
+        // homogeneous pack after exact invoice-total normalization. The
+        // provider's generic `primary` role must not prevent the structured
+        // pack evidence from reaching the durable graph.
+        role: items.length == 1
+            ? AIProductMatchComponentRole.homogeneous
+            : item.role,
+      ));
+    }
+    return normalized;
   }
 
   static bool _setCountAgrees(

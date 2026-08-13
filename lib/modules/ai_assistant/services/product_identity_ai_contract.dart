@@ -10,7 +10,7 @@ class ProductIdentityAIContract {
   const ProductIdentityAIContract._();
 
   static const String schemaVersion = '4';
-  static const String promptVersion = 'ai-product-identity-investigation-v4';
+  static const String promptVersion = 'ai-product-identity-investigation-v5';
   static const String responseMimeType = 'application/json';
 
   static const Set<String> rootKeys = <String>{
@@ -328,6 +328,7 @@ class ProductIdentityAIContract {
       ..._normalizeManufacturerEvidence(payload),
       ..._normalizeEvidenceSources(payload),
       ..._normalizeDuplicateSpecs(payload),
+      ..._downgradeContradictoryComposition(payload),
     ];
     try {
       _validatePayload(
@@ -357,6 +358,79 @@ class ProductIdentityAIContract {
     final end = text.lastIndexOf('}');
     if (start < 0 || end <= start) return null;
     return text.substring(start, end + 1);
+  }
+
+  /// Keeps product identity usable when the provider confuses physical parts
+  /// with independently stocked catalog products.
+  ///
+  /// The primary investigation runs before catalog comparison, so it can
+  /// identify an object and its exact leaf without being able to prove whether
+  /// visible subparts are separate inventory identities. A contradictory
+  /// composition must therefore lose only its composition authority. The
+  /// grounded catalog adjudication remains responsible for deciding single,
+  /// homogeneous pack or multi-product resolution.
+  ///
+  /// This repair never invents a component, quantity, category or product id.
+  /// Unknown shapes and enum values are left untouched for strict validation.
+  static List<Map<String, String>> _downgradeContradictoryComposition(
+    Map<String, dynamic> payload,
+  ) {
+    final identity = payload['identity'];
+    if (identity is! Map) return const <Map<String, String>>[];
+    final rawComposition = identity['composition'];
+    if (rawComposition is! Map) return const <Map<String, String>>[];
+    final kind = rawComposition['kind'];
+    final rawComponents = rawComposition['components'];
+    if (kind is! String ||
+        !compositionKinds.contains(kind) ||
+        rawComponents is! List) {
+      return const <Map<String, String>>[];
+    }
+
+    final roles = <String>[];
+    final quantities = <int>[];
+    for (final rawComponent in rawComponents) {
+      if (rawComponent is! Map) return const <Map<String, String>>[];
+      final role = rawComponent['role'];
+      final quantity = rawComponent['qty'];
+      if (role is! String ||
+          !componentRoles.contains(role) ||
+          quantity is! int ||
+          quantity < 1 ||
+          quantity > 1000000) {
+        return const <Map<String, String>>[];
+      }
+      roles.add(role);
+      quantities.add(quantity);
+    }
+
+    final inventoryIndexes = <int>[
+      for (var index = 0; index < roles.length; index++)
+        if (roles[index] != 'included_accessory') index,
+    ];
+    final inventoryQuantity = inventoryIndexes.fold<int>(
+      0,
+      (total, index) => total + quantities[index],
+    );
+    final contradictsKind = switch (kind) {
+      'single' => inventoryIndexes.length > 1 ||
+          (inventoryIndexes.length == 1 &&
+              (roles[inventoryIndexes.single] != 'primary' ||
+                  quantities[inventoryIndexes.single] != 1)),
+      'composite' => inventoryQuantity < 2,
+      'insufficient' => rawComponents.isNotEmpty,
+      _ => false,
+    };
+    if (!contradictsKind) return const <Map<String, String>>[];
+
+    rawComposition['kind'] = 'insufficient';
+    rawComposition['components'] = <Object?>[];
+    return const <Map<String, String>>[
+      <String, String>{
+        'pointer': 'identity.composition',
+        'action': 'contradictory_composition_downgraded',
+      },
+    ];
   }
 
   /// Canonicalizes the two response layouts observed from the same Gemini
@@ -957,8 +1031,12 @@ class ProductIdentityAIContract {
       allowNewlines: true,
     );
     final objectLabel = object['label'] as String?;
-    if (kind == 'insufficient' && abstainReason == null) {
+    final hasUsableIdentity = objectLabel != null && proposals.isNotEmpty;
+    if (kind == 'insufficient' && !hasUsableIdentity && abstainReason == null) {
       _violate('identity.abstain_reason', 'missing_abstain_reason');
+    }
+    if (kind == 'insufficient' && hasUsableIdentity && abstainReason != null) {
+      _violate('identity', 'identity_abstention_contradiction');
     }
     if (kind != 'insufficient' &&
         (abstainReason != null || objectLabel == null || proposals.isEmpty)) {

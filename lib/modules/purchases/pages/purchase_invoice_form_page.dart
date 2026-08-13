@@ -116,6 +116,21 @@ bool isPurchaseSupplierResolutionLineLocked(PurchaseInvoiceItem line) =>
     line.hasSupplierResolutionProvenance;
 
 @visibleForTesting
+bool purchaseSupplierResolutionLinesShareGroup(
+  PurchaseInvoiceItem left,
+  PurchaseInvoiceItem right,
+) {
+  final applicationId = left.resolutionApplicationId;
+  if (applicationId != null && applicationId.isNotEmpty) {
+    return right.resolutionApplicationId == applicationId;
+  }
+  final sourceLineKey = left.sourceLineKey;
+  return sourceLineKey != null &&
+      sourceLineKey.isNotEmpty &&
+      right.sourceLineKey == sourceLineKey;
+}
+
+@visibleForTesting
 bool hasPurchaseSupplierResolutionLines(
   Iterable<PurchaseInvoiceItem> lines,
 ) =>
@@ -2962,6 +2977,69 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
   }
 
+  Future<bool> _requestManualSupplierResolutionEdit(
+    _PurchaseLineEntry selectedEntry,
+  ) async {
+    if (!selectedEntry.isSupplierResolutionLocked) return true;
+    if (!_canEditFields) return false;
+
+    final groupEntries = _lineEntries
+        .where(
+          (entry) => purchaseSupplierResolutionLinesShareGroup(
+            selectedEntry.line,
+            entry.line,
+          ),
+        )
+        .toList(growable: false);
+    if (groupEntries.isEmpty) return false;
+
+    final isComposite = groupEntries.length > 1;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          isComposite
+              ? 'Editar esta descomposición'
+              : 'Editar esta conversión de unidades',
+        ),
+        content: Text(
+          isComposite
+              ? 'Estas ${groupEntries.length} líneas provienen de una sola '
+                  'línea del proveedor y ahora se validan juntas. Para cambiar '
+                  'producto, cantidad, tarifa o descuento se convertirán '
+                  'juntas en líneas manuales. Se conservarán los valores '
+                  'actuales, pero dejarán de estar protegidas por la '
+                  'descomposición confirmada.'
+              : 'Esta línea convierte automáticamente la unidad comprada en '
+                  'unidades de inventario. Para cambiar producto, cantidad, '
+                  'tarifa o descuento se convertirá en una línea manual. Se '
+                  'conservarán los valores actuales, pero dejará de estar '
+                  'protegida por la conversión confirmada.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Mantener protegida'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Editar manualmente'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return false;
+
+    setState(() {
+      for (final entry in groupEntries) {
+        entry.line = entry.line.withoutSupplierResolutionProvenance();
+        entry.invalidateSmartProductFieldCache();
+      }
+    });
+    _recalculateTotals();
+    return true;
+  }
+
   void _removeLine(_PurchaseLineEntry entry) {
     if (entry.isSupplierResolutionLocked) return;
     setState(() {
@@ -4387,7 +4465,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Widget _buildMobileItemCard(
       ThemeData theme, int index, _PurchaseLineEntry entry) {
-    final canEditLine = _canEditFields && !entry.isSupplierResolutionLocked;
+    final isResolutionLocked = entry.isSupplierResolutionLocked;
+    final canEditStructure = _canEditFields && !isResolutionLocked;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias,
@@ -4408,7 +4487,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                       entry.buildSmartProductField(
                         context,
                         theme,
-                        canEditLine,
+                        _canEditFields,
+                        canEditStructure,
                         () {},
                         () => _autoAddEmptyLineIfNeeded(),
                       ),
@@ -4417,7 +4497,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                     ],
                   ),
                 ),
-                if (canEditLine)
+                if (canEditStructure)
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 20),
                     color: theme.colorScheme.error,
@@ -4441,11 +4521,19 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                         children: [
                           Text('Cantidad', style: theme.textTheme.labelSmall),
                           const SizedBox(height: 4),
-                          canEditLine
+                          _canEditFields
                               ? SizedBox(
                                   height: 40,
                                   child: TextField(
                                     controller: entry.quantityController,
+                                    readOnly: isResolutionLocked,
+                                    onTap: isResolutionLocked
+                                        ? () => unawaited(
+                                              _requestManualSupplierResolutionEdit(
+                                                entry,
+                                              ),
+                                            )
+                                        : null,
                                     decoration: const InputDecoration(
                                       border: OutlineInputBorder(),
                                       contentPadding:
@@ -4471,11 +4559,19 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                           Text('Costo Unit.',
                               style: theme.textTheme.labelSmall),
                           const SizedBox(height: 4),
-                          canEditLine
+                          _canEditFields
                               ? SizedBox(
                                   height: 40,
                                   child: TextField(
                                     controller: entry.unitCostController,
+                                    readOnly: isResolutionLocked,
+                                    onTap: isResolutionLocked
+                                        ? () => unawaited(
+                                              _requestManualSupplierResolutionEdit(
+                                                entry,
+                                              ),
+                                            )
+                                        : null,
                                     decoration: const InputDecoration(
                                       border: OutlineInputBorder(),
                                       prefixText: '\$',
@@ -4507,11 +4603,19 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                         children: [
                           Text('Descuento', style: theme.textTheme.labelSmall),
                           const SizedBox(height: 4),
-                          canEditLine
+                          _canEditFields
                               ? SizedBox(
                                   height: 40,
                                   child: TextField(
                                     controller: entry.discountController,
+                                    readOnly: isResolutionLocked,
+                                    onTap: isResolutionLocked
+                                        ? () => unawaited(
+                                              _requestManualSupplierResolutionEdit(
+                                                entry,
+                                              ),
+                                            )
+                                        : null,
                                     decoration: InputDecoration(
                                       border: const OutlineInputBorder(),
                                       contentPadding:
@@ -4519,6 +4623,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                                               horizontal: 8),
                                       suffixIcon: InkWell(
                                         onTap: () {
+                                          if (isResolutionLocked) {
+                                            unawaited(
+                                              _requestManualSupplierResolutionEdit(
+                                                entry,
+                                              ),
+                                            );
+                                            return;
+                                          }
                                           setState(() {
                                             entry.toggleDiscountType();
                                             _recalculateTotals();
@@ -4590,21 +4702,22 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   Widget _buildCompactLineRow(
       ThemeData theme, int index, _PurchaseLineEntry entry) {
     final line = entry.line;
-    final canEditLine = _canEditFields && !entry.isSupplierResolutionLocked;
+    final isResolutionLocked = entry.isSupplierResolutionLocked;
+    final canEditStructure = _canEditFields && !isResolutionLocked;
 
     return LineRowWrapper(
       key: ValueKey('line_${entry.hashCode}_$index'),
       index: index,
-      canMoveUp: canEditLine &&
+      canMoveUp: canEditStructure &&
           index > 1 &&
           !_lineEntries[index - 2].isSupplierResolutionLocked,
-      canMoveDown: canEditLine &&
+      canMoveDown: canEditStructure &&
           index < _lineEntries.length &&
           !_lineEntries[index].isSupplierResolutionLocked,
       onMoveUp: () => _moveLineUp(entry),
       onMoveDown: () => _moveLineDown(entry),
       onRemove: () => _removeLine(entry),
-      canEdit: canEditLine,
+      canEdit: canEditStructure,
       indexColumnWidth: _colIndexWidth,
       actionsColumnWidth: _colActionsWidth,
       columns: [
@@ -4619,7 +4732,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               entry.buildSmartProductField(
                 context,
                 theme,
-                canEditLine,
+                _canEditFields,
+                canEditStructure,
                 () {},
                 () => _autoAddEmptyLineIfNeeded(),
               ),
@@ -4633,9 +4747,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         LineColumn(
           width: _colQuantityWidth,
           alignment: Alignment.center,
-          child: canEditLine
+          child: _canEditFields
               ? TextField(
                   controller: entry.quantityController,
+                  readOnly: isResolutionLocked,
+                  onTap: isResolutionLocked
+                      ? () => unawaited(
+                            _requestManualSupplierResolutionEdit(entry),
+                          )
+                      : null,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     contentPadding:
@@ -4659,9 +4779,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         LineColumn(
           width: _colPriceWidth,
           alignment: Alignment.center,
-          child: canEditLine
+          child: _canEditFields
               ? TextField(
                   controller: entry.unitCostController,
+                  readOnly: isResolutionLocked,
+                  onTap: isResolutionLocked
+                      ? () => unawaited(
+                            _requestManualSupplierResolutionEdit(entry),
+                          )
+                      : null,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     contentPadding:
@@ -4687,9 +4813,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         LineColumn(
           width: _colDiscountWidth,
           alignment: Alignment.center,
-          child: canEditLine
+          child: _canEditFields
               ? TextField(
                   controller: entry.discountController,
+                  readOnly: isResolutionLocked,
+                  onTap: isResolutionLocked
+                      ? () => unawaited(
+                            _requestManualSupplierResolutionEdit(entry),
+                          )
+                      : null,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     contentPadding:
@@ -4697,6 +4829,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                     isDense: true,
                     suffixIcon: InkWell(
                       onTap: () {
+                        if (isResolutionLocked) {
+                          unawaited(
+                            _requestManualSupplierResolutionEdit(entry),
+                          );
+                          return;
+                        }
                         setState(() {
                           entry.toggleDiscountType();
                           // Trigger recalculation in UI
@@ -5165,7 +5303,6 @@ class _PurchaseLineEntry {
     });
     // Add listener for description updates
     descriptionController.addListener(() {
-      if (isSupplierResolutionLocked) return;
       line = line.copyWith(description: descriptionController.text);
       onChanged();
     });
@@ -5185,6 +5322,13 @@ class _PurchaseLineEntry {
   // This is the fix for flickering and disappearing dropdown when mouse moves
   Widget? _cachedSmartProductField;
   bool? _cachedCanEdit;
+  bool? _cachedCanChangeProduct;
+
+  void invalidateSmartProductFieldCache() {
+    _cachedSmartProductField = null;
+    _cachedCanEdit = null;
+    _cachedCanChangeProduct = null;
+  }
 
   /// Build the SmartProductField for this line entry
   /// This method lives on the entry (not the row widget state) to prevent
@@ -5193,16 +5337,20 @@ class _PurchaseLineEntry {
     BuildContext context,
     ThemeData theme,
     bool canEdit,
+    bool canChangeProduct,
     VoidCallback onUpdate,
     VoidCallback onAutoAdd,
   ) {
     // Return cached widget if nothing meaningful changed
     // Only rebuild if canEdit changes (not on hover which doesn't change canEdit)
-    if (_cachedSmartProductField != null && _cachedCanEdit == canEdit) {
+    if (_cachedSmartProductField != null &&
+        _cachedCanEdit == canEdit &&
+        _cachedCanChangeProduct == canChangeProduct) {
       return _cachedSmartProductField!;
     }
 
     _cachedCanEdit = canEdit;
+    _cachedCanChangeProduct = canChangeProduct;
     _cachedSmartProductField = SmartProductField(
       key: ValueKey('product_$hashCode'),
       initialData: ProductFieldData(
@@ -5214,6 +5362,7 @@ class _PurchaseLineEntry {
         description: descriptionController.text,
       ),
       enabled: canEdit,
+      canChangeProduct: canChangeProduct,
       showCost: true, // Purchases use cost, not price
       allowCustomItems: true,
       autoFocus: shouldAutoFocus,

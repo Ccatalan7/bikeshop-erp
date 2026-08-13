@@ -371,6 +371,7 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     'description',
     'entityRef',
     'approvalRef',
+    'listRef',
   };
   _requireExactKeys(json, <String>{...required, ...optional},
       required: required);
@@ -457,6 +458,91 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     throw const AIAgentGatewayContractException();
   }
 
+  AIAssistantInventoryListRef? inventoryListRef;
+  if (json.containsKey('listRef')) {
+    final rawListRef = json['listRef'];
+    if (rawListRef is! Map ||
+        kind != 'inventory' ||
+        destination != AIAssistantDestination.inventoryProducts ||
+        entityRef != null ||
+        approvalRef != null) {
+      throw const AIAgentGatewayContractException();
+    }
+    final listJson = rawListRef.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    _requireExactKeys(
+      listJson,
+      const <String>{
+        'kind',
+        'query',
+        'availability',
+        'resultCount',
+        'hasMore',
+        'entityIds',
+        'autoOpen',
+      },
+    );
+    if (listJson['kind'] != 'inventory' ||
+        listJson['resultCount'] is! int ||
+        (listJson['resultCount'] as int) < 0 ||
+        (listJson['resultCount'] as int) > 10 ||
+        listJson['hasMore'] is! bool ||
+        listJson['autoOpen'] is! bool) {
+      throw const AIAgentGatewayContractException();
+    }
+    final availability = switch (listJson['availability']) {
+      'any' => AIAssistantInventoryAvailability.any,
+      'in_stock' => AIAssistantInventoryAvailability.inStock,
+      'low_stock' => AIAssistantInventoryAvailability.lowStock,
+      'out_of_stock' => AIAssistantInventoryAvailability.outOfStock,
+      _ => null,
+    };
+    if (availability == null) {
+      throw const AIAgentGatewayContractException();
+    }
+    final hasMore = listJson['hasMore'] as bool;
+    final rawEntityIds = listJson['entityIds'];
+    if ((hasMore && rawEntityIds != null) ||
+        (!hasMore && rawEntityIds is! List)) {
+      throw const AIAgentGatewayContractException();
+    }
+    List<String>? entityIds;
+    if (rawEntityIds is List) {
+      entityIds = <String>[];
+      final seen = <String>{};
+      for (final rawId in rawEntityIds) {
+        if (rawId is! String) {
+          throw const AIAgentGatewayContractException();
+        }
+        try {
+          final verified = AIAssistantEntityRef.verified(
+            kind: AIAssistantEntityKind.product,
+            id: rawId,
+          );
+          if (!seen.add(verified.id)) {
+            throw const AIAgentGatewayContractException();
+          }
+          entityIds.add(verified.id);
+        } on ArgumentError {
+          throw const AIAgentGatewayContractException();
+        }
+      }
+      if (entityIds.length != listJson['resultCount']) {
+        throw const AIAgentGatewayContractException();
+      }
+      entityIds = List<String>.unmodifiable(entityIds);
+    }
+    inventoryListRef = AIAssistantInventoryListRef(
+      query: _requiredBoundedText(listJson['query'], maxBytes: 240),
+      availability: availability,
+      resultCount: listJson['resultCount'] as int,
+      hasMore: hasMore,
+      entityIds: entityIds,
+      autoOpen: listJson['autoOpen'] as bool,
+    );
+  }
+
   final rawChips = json['chips'];
   if (rawChips is! List || rawChips.length > 4) {
     throw const AIAgentGatewayContractException();
@@ -475,6 +561,7 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     chips: List<String>.unmodifiable(chips),
     entityRef: entityRef,
     approvalRef: approvalRef,
+    inventoryListRef: inventoryListRef,
   );
 }
 

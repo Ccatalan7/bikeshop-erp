@@ -140,7 +140,41 @@ void main() {
     );
   });
 
-  testWidgets('muestra la propuesta composite cacheada sin aplicarla',
+  testWidgets(
+      'conserva el orden razonado por IA dentro de los conflictos de categoría',
+      (tester) async {
+    final hose = _categoryConflictCandidate(
+      id: 'hose',
+      sku: 'AE0013',
+      name: 'Manguera Freno Hidráulico 1M',
+      objection: 'Diferencia indicada por IA: misma pieza, pero 1 m ≠ 2,5 m.',
+    );
+    final oil = _categoryConflictCandidate(
+      id: 'oil',
+      sku: 'OIL',
+      name: 'Aceite Mineral para Freno Hidráulico',
+      objection: 'Diferencia indicada por IA: es líquido, no una manguera.',
+    );
+
+    await _open(
+      tester,
+      candidates: const <ProductDuplicateCandidate>[],
+      categoryConflicts: <ProductDuplicateCandidate>[hose, oil],
+    );
+
+    final hoseFinder = find.text('Manguera Freno Hidráulico 1M');
+    final oilFinder = find.text('Aceite Mineral para Freno Hidráulico');
+    expect(hoseFinder, findsOneWidget);
+    expect(oilFinder, findsOneWidget);
+    expect(
+      tester.getTopLeft(hoseFinder).dy,
+      lessThan(tester.getTopLeft(oilFinder).dy),
+    );
+    expect(
+        find.textContaining('misma pieza, pero 1 m ≠ 2,5 m'), findsOneWidget);
+  });
+
+  testWidgets('la propuesta composite no bloquea otras decisiones humanas',
       (tester) async {
     final manualQueries = <String>[];
     await _open(
@@ -162,10 +196,25 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('¿Qué productos incluye esta línea?'), findsOneWidget);
-    expect(find.text('Es este'), findsNothing);
-    expect(find.byKey(const Key('ocr-candidate-create-new')), findsNothing);
+    expect(find.text('Es este'), findsWidgets);
+    expect(find.byKey(const Key('ocr-candidate-create-new')), findsOneWidget);
     expect(manualQueries, isEmpty,
         reason: 'abrir reutiliza la decisión; no ejecuta otra búsqueda');
+  });
+
+  testWidgets('se puede escoger un producto aun con propuesta composite',
+      (tester) async {
+    final decision = await _open(
+      tester,
+      candidates: _candidates(2),
+      aiCompositeProposal: 'La IA propone un conjunto; el operador decide.',
+    );
+
+    await tester.tap(find.text('Es este').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(await decision, isA<OcrCandidateLink>());
   });
 
   testWidgets('confirma la descomposición sólo cuando el host la habilita',
@@ -236,6 +285,19 @@ void main() {
     );
     expect(find.textContaining('3 opciones'), findsNothing);
     expect(find.textContaining('3 sugerencias'), findsNothing);
+  });
+
+  test('fila y picker comparten una sola prioridad de candidatos', () {
+    final ruledOut = _ruledOutCandidate();
+    final viable = _candidates(1).single;
+
+    final ordered = orderOcrCandidateChoices(<ProductDuplicateCandidate>[
+      ruledOut,
+      viable,
+    ]);
+
+    expect(ordered.first.product.id, viable.product.id);
+    expect(ordered.last.product.id, ruledOut.product.id);
   });
 
   testWidgets('abrir conserva la lista cacheada y no dispara búsqueda manual',
@@ -525,13 +587,18 @@ Product _named(String name) => Product(
       cost: 1,
     );
 
-ProductDuplicateCandidate _categoryConflictCandidate() =>
+ProductDuplicateCandidate _categoryConflictCandidate({
+  String id = 'category-conflict',
+  String sku = 'AE0420',
+  String name = 'Maza ZTTO Boost 32H',
+  String objection = 'Archivada en Mazas',
+}) =>
     ProductDuplicateCandidate(
       product: Product(
-        id: 'category-conflict',
+        id: id,
         tenantId: 't',
-        sku: 'AE0420',
-        name: 'Maza ZTTO Boost 32H',
+        sku: sku,
+        name: name,
         brand: 'ZTTO',
         categoryName: 'Mazas',
         price: 24000,
@@ -540,7 +607,7 @@ ProductDuplicateCandidate _categoryConflictCandidate() =>
       matchTier: ProductDuplicateMatchTier.possible,
       confidence: 0.72,
       reasons: const ['Misma pieza'],
-      objections: const ['Archivada en Mazas'],
+      objections: <String>[objection],
       gates: const [],
       variantMismatch: false,
       hasProductImage: false,

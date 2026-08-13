@@ -5,7 +5,7 @@ import type {
   JsonObject,
   JsonValue,
 } from "./contracts.ts";
-import type { AgentRpcClient } from "./supabase_user_data.ts";
+import { type AgentRpcClient, SupabaseUserDataError } from "./supabase_user_data.ts";
 import {
   type AgentPublicResearchClient,
   createPublicResearchRequest,
@@ -29,10 +29,42 @@ const workshopViewFields = [
 ] as const;
 
 const toolContracts = {
+  inspect_inventory_schema: {
+    rpc: "assistant_inspect_inventory_schema_v1",
+    parameters: inventorySchemaInspectionParameters,
+    fields: [
+      "kind",
+      "category",
+      "categoryPath",
+      "technicalFamily",
+      "field",
+      "label",
+      "dataType",
+      "unit",
+      "operators",
+      "allowedValues",
+      "productCount",
+      "populatedCount",
+    ],
+    maxItems: 40,
+  },
   search_inventory: {
-    rpc: "assistant_search_inventory_v1",
-    parameters: (args: JsonObject) => ({ p_query: args.query }),
-    fields: ["entityId", "name", "sku", "brand", "category", "price", "stock", "location"],
+    rpc: "assistant_search_inventory_v5",
+    parameters: inventorySearchParameters,
+    fields: [
+      "entityId",
+      "name",
+      "sku",
+      "brand",
+      "category",
+      "price",
+      "stock",
+      "minimumStock",
+      "availability",
+      "tracksInventory",
+      "location",
+      "technicalMatch",
+    ],
   },
   find_inventory_risks: {
     rpc: "assistant_find_inventory_risks_v1",
@@ -285,6 +317,9 @@ export function createSupabaseAgentToolExecutor(
           context,
         );
       }
+      if (call.name === "report_capability_gap") {
+        return capabilityGapExecution(call.arguments, authority.tenantId);
+      }
       const contract = toolContracts[call.name as keyof typeof toolContracts];
       if (!contract) return unavailable(authority.tenantId, "unknown_tool");
       try {
@@ -318,7 +353,9 @@ export function createSupabaseAgentToolExecutor(
         throwIfAborted(signal);
         return unavailable(
           authority.tenantId,
-          error instanceof InvalidToolArguments
+          error instanceof InvalidToolArguments ||
+            (error instanceof SupabaseUserDataError &&
+              error.outcome === "idempotency_conflict")
             ? "tool_arguments_invalid"
             : "tool_source_unavailable",
         );
@@ -464,6 +501,88 @@ function boundedSearchParameters(args: JsonObject): JsonObject {
   return { p_query: args.query, p_limit: args.limit };
 }
 
+function inventorySchemaInspectionParameters(args: JsonObject): JsonObject {
+  if (
+    !hasExactKeys(args, ["query", "category"]) ||
+    typeof args.query !== "string" || !args.query.trim() ||
+    utf8Bytes(args.query.trim()) > 240 ||
+    !(args.category === null ||
+      (typeof args.category === "string" && args.category.trim() &&
+        utf8Bytes(args.category.trim()) <= 160))
+  ) throw new InvalidToolArguments();
+  return {
+    p_query: args.query.trim(),
+    p_category: typeof args.category === "string" ? args.category.trim() : null,
+  };
+}
+
+function inventorySearchParameters(args: JsonObject): JsonObject {
+  if (
+    !hasExactKeys(args, [
+      "query",
+      "category",
+      "availability",
+      "presentation",
+      "technicalPredicates",
+    ]) ||
+    !(args.query === null ||
+      (typeof args.query === "string" && args.query.trim() &&
+        utf8Bytes(args.query.trim()) <= 240)) ||
+    !(args.category === null ||
+      (typeof args.category === "string" && args.category.trim() &&
+        utf8Bytes(args.category.trim()) <= 160)) ||
+    !["any", "in_stock", "low_stock", "out_of_stock"].includes(
+      String(args.availability),
+    ) ||
+    !["answer", "open_list"].includes(String(args.presentation))
+  ) throw new InvalidToolArguments();
+  const technicalPredicates = normalizedInventoryTechnicalPredicates(
+    args.technicalPredicates,
+  );
+  if (args.query === null && args.category === null && technicalPredicates.length === 0) {
+    throw new InvalidToolArguments();
+  }
+  return {
+    p_query: typeof args.query === "string" ? args.query.trim() : null,
+    p_category: typeof args.category === "string" ? args.category.trim() : null,
+    p_availability: args.availability,
+    p_technical_predicates: technicalPredicates,
+  };
+}
+
+function normalizedInventoryTechnicalPredicates(value: JsonValue): JsonValue[] {
+  if (!Array.isArray(value) || value.length > 8) throw new InvalidToolArguments();
+  const fields = new Set<string>();
+  return value.map((predicate) => {
+    if (
+      !isRecord(predicate) ||
+      !hasExactKeys(predicate, ["field", "operator", "values"]) ||
+      typeof predicate.field !== "string" ||
+      !/^[a-z][a-z0-9_]{1,63}$/.test(predicate.field) ||
+      fields.has(predicate.field) ||
+      typeof predicate.operator !== "string" ||
+      !["eq", "neq", "lt", "lte", "gt", "gte", "between", "in", "contains"]
+        .includes(predicate.operator) ||
+      !Array.isArray(predicate.values) || predicate.values.length < 1 ||
+      predicate.values.length > 10 ||
+      (predicate.operator === "between" && predicate.values.length !== 2) ||
+      (predicate.operator !== "between" && predicate.operator !== "in" &&
+        predicate.values.length !== 1) ||
+      predicate.values.some((item) =>
+        !["string", "number", "boolean"].includes(typeof item) ||
+        (typeof item === "string" &&
+          (!item.trim() || utf8Bytes(item.trim()) > 120))
+      )
+    ) throw new InvalidToolArguments();
+    fields.add(predicate.field);
+    return {
+      field: predicate.field,
+      operator: predicate.operator,
+      values: predicate.values.map((item) => typeof item === "string" ? item.trim() : item),
+    };
+  });
+}
+
 function workshopQueryParameters(args: JsonObject): JsonObject {
   return {
     p_query: normalizedOptionalQuery(args.query),
@@ -537,7 +656,32 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
     (typeof query !== "string" || !query.trim() ||
       new TextEncoder().encode(query).byteLength > 240)
   ) throw new InvalidToolArguments();
-  if (toolName === "search_inventory" && typeof query !== "string") {
+  if (toolName === "inspect_inventory_schema") {
+    if (
+      typeof query !== "string" ||
+      !(parameters.p_category === null ||
+        (typeof parameters.p_category === "string" && parameters.p_category.trim()))
+    ) throw new InvalidToolArguments();
+    return;
+  }
+  if (
+    toolName === "search_inventory" &&
+    query === null && parameters.p_category === null &&
+    Array.isArray(parameters.p_technical_predicates) &&
+    parameters.p_technical_predicates.length === 0
+  ) {
+    throw new InvalidToolArguments();
+  }
+  if (
+    toolName === "search_inventory" &&
+    !["any", "in_stock", "low_stock", "out_of_stock"].includes(
+      String(parameters.p_availability),
+    )
+  ) throw new InvalidToolArguments();
+  if (
+    toolName === "search_inventory" &&
+    !Array.isArray(parameters.p_technical_predicates)
+  ) {
     throw new InvalidToolArguments();
   }
   if (
@@ -746,10 +890,76 @@ function validateSpecializedResult(
   result: AgentToolResultEnvelope,
   args: JsonObject,
 ): void {
+  if (toolName === "search_inventory") validateInventorySearch(result, args);
+  if (toolName === "inspect_inventory_schema") {
+    validateInventorySchemaInspection(result);
+  }
   if (toolName === "find_inventory_risks") validateInventoryRisks(result, args);
   if (toolName === "list_recent_expenses") validateRecentExpenses(result, args);
   if (toolName === "search_conversations") validateConversations(result, args);
   if (toolName === "prepare_task") validatePreparedTask(result, args);
+}
+
+function validateInventorySearch(result: AgentToolResultEnvelope, args: JsonObject): void {
+  for (const item of result.items) {
+    const stock = item.stock;
+    const minimumStock = item.minimumStock;
+    const availability = item.availability;
+    const tracksInventory = item.tracksInventory;
+    if (
+      typeof item.name !== "string" || !item.name.trim() ||
+      !nullableString(item.sku) || !nullableString(item.brand) ||
+      !nullableString(item.category) || !nullableString(item.location) ||
+      !["not_applicable", "product_spec", "identity_fallback"].includes(
+        String(item.technicalMatch),
+      ) ||
+      ((args.technicalPredicates as JsonValue[]).length === 0
+        ? item.technicalMatch !== "not_applicable"
+        : item.technicalMatch === "not_applicable") ||
+      !finiteNumber(item.price) || !Number.isSafeInteger(stock) ||
+      !Number.isSafeInteger(minimumStock) || (minimumStock as number) < 0 ||
+      typeof tracksInventory !== "boolean" ||
+      !["not_tracked", "in_stock", "low_stock", "out_of_stock"].includes(
+        String(availability),
+      ) ||
+      (tracksInventory === false && availability !== "not_tracked") ||
+      (tracksInventory === true && availability === "not_tracked") ||
+      (availability === "in_stock" && (stock as number) <= (minimumStock as number)) ||
+      (availability === "low_stock" &&
+        ((stock as number) <= 0 || (stock as number) > (minimumStock as number))) ||
+      (availability === "out_of_stock" && (stock as number) > 0) ||
+      (args.availability === "in_stock" && (stock as number) <= 0) ||
+      (args.availability === "low_stock" && availability !== "low_stock") ||
+      (args.availability === "out_of_stock" && availability !== "out_of_stock")
+    ) throw new Error("invalid inventory search");
+  }
+}
+
+function validateInventorySchemaInspection(result: AgentToolResultEnvelope): void {
+  for (const item of result.items) {
+    if (
+      !["category", "field"].includes(String(item.kind)) ||
+      typeof item.category !== "string" || !item.category.trim() ||
+      typeof item.categoryPath !== "string" || !item.categoryPath.trim() ||
+      !nullableString(item.technicalFamily) ||
+      !nullableString(item.field) || !nullableString(item.label) ||
+      !nullableString(item.dataType) || !nullableString(item.unit) ||
+      !nullableString(item.operators) || !nullableString(item.allowedValues) ||
+      !Number.isSafeInteger(item.productCount) || (item.productCount as number) < 0 ||
+      !Number.isSafeInteger(item.populatedCount) || (item.populatedCount as number) < 0 ||
+      (item.populatedCount as number) > (item.productCount as number) ||
+      (item.kind === "category" &&
+        [item.field, item.label, item.dataType, item.unit, item.operators, item.allowedValues]
+          .some((value) => value !== null)) ||
+      (item.kind === "field" &&
+        (typeof item.field !== "string" ||
+          !/^[a-z][a-z0-9_]{1,63}$/.test(item.field) ||
+          typeof item.label !== "string" ||
+          !["text", "number", "boolean", "single_select", "multi_select", "range"]
+            .includes(String(item.dataType)) ||
+          typeof item.operators !== "string" || !item.operators.trim()))
+    ) throw new Error("invalid inventory schema inspection");
+  }
 }
 
 function validatePreparedTask(result: AgentToolResultEnvelope, args: JsonObject): void {
@@ -1095,6 +1305,85 @@ function unavailable(tenantId: string, failureCode: string): AgentToolExecution 
     outputBytes: new TextEncoder().encode(outputText).byteLength,
     succeeded: false,
     failureCode,
+  };
+}
+
+function capabilityGapExecution(
+  argumentsValue: JsonObject,
+  tenantId: string,
+): AgentToolExecution {
+  const exactKeys = ["domain", "operation", "reason", "alternative", "field"];
+  const domains = [
+    "inventory",
+    "workshop",
+    "sales",
+    "purchases",
+    "accounting",
+    "customers",
+    "suppliers",
+    "tasks",
+    "communications",
+    "files",
+    "public_web",
+    "other",
+  ];
+  const operations = [
+    "read",
+    "filter",
+    "compare",
+    "aggregate",
+    "draft",
+    "mutate",
+    "navigate",
+    "research",
+    "other",
+  ];
+  const reasons = [
+    "missing_tool",
+    "unsupported_filter",
+    "missing_structured_data",
+    "permission_required",
+    "ambiguous_request",
+    "source_unavailable",
+  ];
+  const alternatives = [
+    "none",
+    "broader_search",
+    "exact_match",
+    "ask_clarification",
+    "public_research",
+  ];
+  const field = argumentsValue.field;
+  if (
+    !hasExactKeys(argumentsValue, exactKeys) ||
+    !domains.includes(String(argumentsValue.domain)) ||
+    !operations.includes(String(argumentsValue.operation)) ||
+    !reasons.includes(String(argumentsValue.reason)) ||
+    !alternatives.includes(String(argumentsValue.alternative)) ||
+    !(field === null ||
+      (typeof field === "string" && /^[a-z][a-z0-9_]{1,63}$/.test(field))) ||
+    (argumentsValue.reason === "missing_structured_data" ? field === null : field !== null)
+  ) {
+    return unavailable(tenantId, "tool_arguments_invalid");
+  }
+  const item = Object.freeze({ ...argumentsValue });
+  const result: AgentToolResultEnvelope = Object.freeze({
+    authorityTenantId: tenantId,
+    asOf: new Date().toISOString(),
+    status: "success",
+    items: Object.freeze([item]),
+    resultCount: 1,
+    hasMore: false,
+  });
+  const outputText = JSON.stringify({
+    status: "accepted",
+    message: "El servidor redactará una respuesta honesta sobre esta limitación.",
+  });
+  return {
+    result,
+    outputText,
+    outputBytes: new TextEncoder().encode(outputText).byteLength,
+    succeeded: true,
   };
 }
 

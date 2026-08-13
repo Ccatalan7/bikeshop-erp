@@ -125,6 +125,52 @@ void main() {
       );
     });
 
+    test('invoice-total component quantities normalize per supplier purchase',
+        () async {
+      final front = _product(_frontId, 'AE0145', 'Caliper delantero', cost: 20);
+      final rear = _product(_rearId, 'AE0144', 'Caliper trasero', cost: 10);
+      const decision = AIProductMatchDecision(
+        decision: AIProductMatchDecisionKind.composite,
+        productId: null,
+        components: <AIProductMatchComponent>[
+          AIProductMatchComponent(
+            productId: _frontId,
+            quantity: 3,
+            role: AIProductMatchComponentRole.front,
+          ),
+          AIProductMatchComponent(
+            productId: _rearId,
+            quantity: 3,
+            role: AIProductMatchComponentRole.rear,
+          ),
+        ],
+        reason: 'Tres compras contienen tres delanteros y tres traseros.',
+        confidence: 0.95,
+      );
+
+      final proposal = await SupplierResolutionProposalBuilder.build(
+        decision: decision,
+        investigation: _twoPartInvestigation(),
+        optionEvidence: SupplierOptionEvidence(
+          variantKey: 'sku:invoice-total-calipers',
+          packCount: 1,
+          rawUnitToken: 'pair',
+        ),
+        sourcePurchaseQuantity: 3,
+        catalog: <Product>[front, rear],
+        lookupSetComposition: (_) async => null,
+      );
+
+      expect(proposal, isNotNull);
+      expect(
+        proposal!.edges.map((edge) => edge.catalogUnitsPerPurchase),
+        <int>[1, 1],
+      );
+      expect(proposal.invoiceImpactSummary, contains('3 × AE0145 · delantero'));
+      expect(proposal.invoiceImpactSummary, contains('3 × AE0144 · trasero'));
+      expect(proposal.persistedQuantity, 6);
+    });
+
     test('BH59 10PCS becomes ten catalog units after grounded same identity',
         () async {
       final olive = _product(_oliveId, 'OL03', 'Oliva y pin Shimano BH59');
@@ -166,6 +212,47 @@ void main() {
       expect(proposal.edges.single.componentRole, 'homogeneous');
       expect(proposal.persistedQuantity, 10);
       expect(proposal.invoiceImpactSummary, contains('10 × OL03'));
+    });
+
+    test('invoice-total homogeneous pack normalizes before graph creation',
+        () async {
+      final pad = _product(_oliveId, 'AE0292', 'Pastillas ZTTO MS01B');
+      final proposal = await SupplierResolutionProposalBuilder.build(
+        decision: AIProductMatchDecision(
+          decision: AIProductMatchDecisionKind.composite,
+          productId: null,
+          components: <AIProductMatchComponent>[
+            AIProductMatchComponent(
+              productId: pad.id!,
+              quantity: 8,
+              role: AIProductMatchComponentRole.primary,
+            ),
+          ],
+          reason: 'Dos compras contienen ocho pares en total.',
+          confidence: 0.96,
+        ),
+        // A single catalog identity repeated by the supplier pack is still a
+        // homogeneous resolution even when the investigator calls the
+        // package kind `single`.
+        investigation: _packInvestigation(
+          count: 4,
+          packageKind: AIProductPackageKind.single,
+        ),
+        optionEvidence: SupplierOptionEvidence(
+          variantKey: 'sku:four-unit-pack',
+          packCount: 4,
+          rawUnitToken: 'pcs',
+        ),
+        sourcePurchaseQuantity: 2,
+        catalog: <Product>[pad],
+        lookupSetComposition: (_) async => null,
+      );
+
+      expect(proposal, isNotNull);
+      expect(proposal!.kind, SupplierVariantResolutionKind.homogeneous);
+      expect(proposal.edges.single.catalogUnitsPerPurchase, 4);
+      expect(proposal.edges.single.componentRole, 'homogeneous');
+      expect(proposal.invoiceImpactSummary, contains('8 × AE0292'));
     });
 
     test('one pair without known composition stays unresolved', () async {
@@ -285,7 +372,10 @@ AIProductIdentityInvestigation _twoPartInvestigation() {
   );
 }
 
-AIProductIdentityInvestigation _packInvestigation({required int count}) {
+AIProductIdentityInvestigation _packInvestigation({
+  required int count,
+  AIProductPackageKind packageKind = AIProductPackageKind.composite,
+}) {
   return AIProductIdentityInvestigation(
     schemaVersion: AIAssistantService.productIdentitySchemaVersion,
     promptVersion: AIAssistantService.productIdentityPromptKey,
@@ -303,12 +393,12 @@ AIProductIdentityInvestigation _packInvestigation({required int count}) {
     specs: const <AIProductSpecificationIdentity>[],
     fitment: const <String>[],
     composition: AIProductCompositionIdentity(
-      kind: AIProductPackageKind.composite,
+      kind: packageKind,
       components: <AIProductCompositionComponent>[
         AIProductCompositionComponent(
           label: 'oliva BH59',
           role: AIProductCompositionRole.component,
-          quantity: count,
+          quantity: packageKind == AIProductPackageKind.single ? 1 : count,
         ),
       ],
     ),

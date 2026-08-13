@@ -126,6 +126,46 @@ void main() {
 
     expect(find.text('Pieza de juego'), findsOneWidget);
   });
+
+  testWidgets('locked catalog identity keeps the normal description editor',
+      (tester) async {
+    final description = TextEditingController();
+    addTearDown(description.dispose);
+    final changes = <ProductFieldSelection?>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 600,
+            child: SmartProductField(
+              initialData: ProductFieldData(
+                product: _setComponent,
+                productName: _setComponent.name,
+                productSku: _setComponent.sku,
+                isCatalogProduct: true,
+              ),
+              descriptionController: description,
+              canChangeProduct: false,
+              onProductChanged: changes.add,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Freno delantero'), findsOneWidget);
+    expect(find.byIcon(Icons.close), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'Componente delantero');
+    await tester.pump();
+
+    expect(description.text, 'Componente delantero');
+    expect(changes.single?.description, 'Componente delantero');
+    expect(changes.single?.product?.id, _setComponent.id);
+  });
 }
 
 class _RecordingInventoryService extends InventoryService {

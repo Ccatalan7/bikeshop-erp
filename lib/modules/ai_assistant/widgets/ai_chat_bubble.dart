@@ -46,6 +46,7 @@ class AIChatPanel extends StatefulWidget {
   final bool jobsAreCurrentView;
   final String? jobsScopeLabel;
   final bool allowJobCacheFallback;
+  final AIAssistantTurnServices? turnServicesOverride;
 
   const AIChatPanel({
     super.key,
@@ -54,6 +55,7 @@ class AIChatPanel extends StatefulWidget {
     this.jobsAreCurrentView = false,
     this.jobsScopeLabel,
     this.allowJobCacheFallback = true,
+    @visibleForTesting this.turnServicesOverride,
   });
 
   @override
@@ -96,6 +98,28 @@ class _AIChatPanelState extends State<AIChatPanel> {
   /// route table and the toolbar table. An unregistered identifier produces no
   /// effect at all rather than a guessed route.
   void _handleCard(AIAssistantActionCard card) {
+    final inventoryList = card.inventoryListRef;
+    if (inventoryList != null) {
+      final inventoryService = widget.turnServicesOverride?.inventoryService ??
+          context.read<InventoryService>();
+      inventoryService.applyExternalSearch(
+        // A complete server projection is an exact ID selection, not a local
+        // keyword search. Keep the search box empty so the Product List does
+        // not misrepresent structured category/spec filtering as typed text.
+        inventoryList.entityIds == null ? inventoryList.query : '',
+        matchedProductIds: inventoryList.entityIds,
+        stockFilter: switch (inventoryList.availability) {
+          AIAssistantInventoryAvailability.any =>
+            InventoryExternalStockFilter.any,
+          AIAssistantInventoryAvailability.inStock =>
+            InventoryExternalStockFilter.inStock,
+          AIAssistantInventoryAvailability.lowStock =>
+            InventoryExternalStockFilter.lowStock,
+          AIAssistantInventoryAvailability.outOfStock =>
+            InventoryExternalStockFilter.outOfStock,
+        },
+      );
+    }
     final workspaceManager = context.read<WorkspaceManager>();
     final toolbar = context.read<RightToolbarService>();
     final resolver = AIAssistantDestinationResolver(
@@ -140,14 +164,16 @@ class _AIChatPanelState extends State<AIChatPanel> {
     _scrollToBottom();
 
     final aiContext = context.read<AIAssistantContextService>();
-    final services = AIAssistantTurnServices(
-      customerService: context.read<CustomerService>(),
-      inventoryService: context.read<InventoryService>(),
-      bikeshopService: context.read<BikeshopService>(),
-      purchaseService: context.read<PurchaseService>(),
-      salesService: context.read<SalesService>(),
-      taskService: context.read<TaskService>(),
-    );
+    final services = widget.turnServicesOverride ??
+        AIAssistantTurnServices(
+          customerService: context.read<CustomerService>(),
+          inventoryService: context.read<InventoryService>(),
+          bikeshopService: context.read<BikeshopService>(),
+          purchaseService: context.read<PurchaseService>(),
+          salesService: context.read<SalesService>(),
+          taskService: context.read<TaskService>(),
+        );
+    final transcriptLengthBefore = session.transcript.length;
 
     await session.send(
       text,
@@ -161,6 +187,21 @@ class _AIChatPanelState extends State<AIChatPanel> {
 
     if (mounted) {
       _scrollToBottom();
+      final transcript = session.transcript;
+      if (transcript.length > transcriptLengthBefore) {
+        final newAssistantTurns = transcript
+            .skip(transcriptLengthBefore)
+            .where((entry) => entry.role == AIAssistantTranscriptRole.assistant)
+            .toList(growable: false);
+        if (newAssistantTurns.length == 1) {
+          final autoOpenCards = newAssistantTurns.single.cards
+              .where((card) => card.inventoryListRef?.autoOpen == true)
+              .toList(growable: false);
+          if (autoOpenCards.length == 1) {
+            _handleCard(autoOpenCards.single);
+          }
+        }
+      }
     }
   }
 
@@ -735,6 +776,9 @@ class _AssistantActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (card.inventoryListRef != null) {
+      return _buildCompactInventoryResult(context);
+    }
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final accent = _accentFor(card.kind, theme);
@@ -901,6 +945,32 @@ class _AssistantActionCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCompactInventoryResult(BuildContext context) {
+    final theme = Theme.of(context);
+    final cardKey = 'ai-action-card-${card.kind}-${card.destination.name}';
+    final details = <String>[
+      if ((card.subtitle ?? '').isNotEmpty) card.subtitle!,
+      ...card.chips,
+    ].join(' · ');
+    return Semantics(
+      button: true,
+      label: '${card.ctaLabel}: ${card.title}',
+      child: ListTile(
+        key: ValueKey<String>(cardKey),
+        contentPadding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        leading: Icon(
+          Icons.inventory_2_outlined,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        title: Text(card.title),
+        subtitle: details.isEmpty ? null : Text(details),
+        trailing: const Icon(Icons.arrow_forward_rounded),
+        onTap: onTap,
       ),
     );
   }
