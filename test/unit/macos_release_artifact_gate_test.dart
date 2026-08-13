@@ -120,6 +120,33 @@ void main() {
     );
   });
 
+  test('macOS release enables the production AI gateway explicitly', () {
+    final buildStep = workflow.substring(
+      workflow.indexOf('- name: Build macOS release'),
+      workflow.indexOf(
+        '- name: Validate macOS application bundle without launching it',
+      ),
+    );
+
+    expect(
+      buildStep,
+      contains(
+        r'SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}',
+      ),
+    );
+    expect(buildStep, contains('sb_publishable_*'));
+    expect(
+      buildStep,
+      contains('--dart-define=AI_AGENT_GATEWAY_ENABLED=true'),
+    );
+    expect(
+      buildStep,
+      contains(
+        r'--dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"',
+      ),
+    );
+  });
+
   test('protected publish binds release notes before signing the manifest', () {
     final publishJob = workflow.indexOf('\n  publish:');
     final geminiReleaseNotesSecret = workflow.indexOf(

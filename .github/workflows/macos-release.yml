@@ -221,11 +221,19 @@ jobs:
           RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
           APP_VERSION: ${{ steps.meta.outputs.app_version }}
           BUNDLE_VERSION: ${{ steps.meta.outputs.bundle_version }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
+          case "$SUPABASE_PUBLISHABLE_KEY" in
+            sb_publishable_*) ;;
+            *) echo 'Missing or invalid SUPABASE_PUBLISHABLE_KEY.' >&2; exit 1 ;;
+          esac
+
           flutter build macos --release \
             --build-name="$APP_VERSION" \
             --build-number="$BUNDLE_VERSION" \
-            --dart-define=VINABIKE_BUILD_TAG="$RELEASE_TAG"
+            --dart-define=VINABIKE_BUILD_TAG="$RELEASE_TAG" \
+            --dart-define=AI_AGENT_GATEWAY_ENABLED=true \
+            --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
 
       - name: Validate macOS application bundle without launching it
         id: validate
