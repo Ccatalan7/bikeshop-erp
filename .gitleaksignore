@@ -8,3 +8,7 @@ lib/firebase_options.dart:gcp-api-key:67
 lib/firebase_options.dart:gcp-api-key:75
 lib/shared/config/supabase_config.dart:jwt:18
 web/firebase-messaging-sw.js:gcp-api-key:9
+
+# Historical test-only HMAC fixture from the first guarded Prepare attempt.
+# The next canonical Prepare replaces it; only this exact immutable finding is allowed.
+da71f1b2ad4505ef4b46a14c51ff1eac0fe79c80:supabase/functions/_shared/ai_agent/runtime_test.ts:generic-api-key:27
