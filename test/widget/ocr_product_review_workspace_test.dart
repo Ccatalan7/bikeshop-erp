@@ -280,6 +280,36 @@ void main() {
       );
     });
 
+    testWidgets(
+        'la descomposición confirmable ejecuta una sola acción explícita',
+        (tester) async {
+      final confirmed = <String>[];
+      await _pump(
+        tester,
+        size: const Size(1440, 900),
+        lines: <OcrProductReviewLine>[
+          _line(
+            id: 'l1',
+            status: OcrProductReviewStatus.abstained,
+            aiCompositeProposal:
+                '3 compras → 3 × AE0145 · delantero + 3 × AE0144 · trasero',
+            canConfirmCompositeProposal: true,
+          ),
+        ],
+        callbacks: OcrProductReviewCallbacks(
+          onConfirmCompositeProposal: confirmed.add,
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const Key('ocr-review-confirm-composite-l1')),
+      );
+      await tester.pump();
+
+      expect(confirmed, <String>['l1']);
+      expect(find.byKey(const Key('ocr-review-link-l1')), findsNothing);
+    });
+
     testWidgets('cuenta viables, descartados y otra categoría por separado',
         (tester) async {
       await _pump(
@@ -732,6 +762,7 @@ OcrProductReviewLine _line({
   int discardedCandidateCount = 0,
   int categoryConflictCount = 0,
   String? aiCompositeProposal,
+  bool canConfirmCompositeProposal = false,
 }) {
   return OcrProductReviewLine(
     id: id,
@@ -753,6 +784,7 @@ OcrProductReviewLine _line({
     discardedCandidateCount: discardedCandidateCount,
     categoryConflictCount: categoryConflictCount,
     aiCompositeProposal: aiCompositeProposal,
+    canConfirmCompositeProposal: canConfirmCompositeProposal,
     categories: categories ?? _categories,
     brands: _brands,
     category: categoryValidationMessage != null

@@ -168,6 +168,41 @@ void main() {
         reason: 'abrir reutiliza la decisión; no ejecuta otra búsqueda');
   });
 
+  testWidgets('confirma la descomposición sólo cuando el host la habilita',
+      (tester) async {
+    final decision = await _open(
+      tester,
+      candidates: _candidates(2),
+      aiCompositeProposal:
+          '3 compras → 3 × AE0145 · delantero + 3 × AE0144 · trasero',
+      canConfirmCompositeProposal: true,
+    );
+
+    await tester.tap(
+      find.byKey(const Key('ocr-candidate-confirm-composite')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(await decision, isA<OcrCandidateConfirmComposition>());
+  });
+
+  testWidgets('auditoría nunca permite confirmar una descomposición',
+      (tester) async {
+    await _open(
+      tester,
+      candidates: _candidates(2),
+      aiCompositeProposal: '1 compra → 10 × OL03',
+      canConfirmCompositeProposal: true,
+      inspectionOnly: true,
+    );
+
+    expect(
+      find.byKey(const Key('ocr-candidate-confirm-composite')),
+      findsNothing,
+    );
+  });
+
   testWidgets('un fallo de identidad permite buscar pero no implica crear',
       (tester) async {
     await _open(
@@ -394,7 +429,9 @@ Future<Future<OcrCandidateDecision?>> _open(
   required List<ProductDuplicateCandidate> candidates,
   List<ProductDuplicateCandidate> categoryConflicts = const [],
   String? aiCompositeProposal,
+  bool canConfirmCompositeProposal = false,
   bool allowCreateNew = true,
+  bool inspectionOnly = false,
   OcrCandidateSearch? onSearch,
   bool isLoading = false,
   String? lineImageUrl,
@@ -427,7 +464,9 @@ Future<Future<OcrCandidateDecision?>> _open(
                   candidates: candidates,
                   categoryConflicts: categoryConflicts,
                   aiCompositeProposal: aiCompositeProposal,
+                  canConfirmCompositeProposal: canConfirmCompositeProposal,
                   allowCreateNew: allowCreateNew,
+                  inspectionOnly: inspectionOnly,
                   onSearch: onSearch,
                   isLoading: isLoading,
                 );

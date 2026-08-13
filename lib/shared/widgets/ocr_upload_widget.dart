@@ -42,6 +42,7 @@ import '../../modules/inventory/services/product_identity/product_catalog_identi
 import '../../modules/inventory/services/product_identity/product_category_resolver.dart';
 import '../../modules/inventory/services/product_identity/product_identity_extractor.dart';
 import '../../modules/inventory/services/product_identity/product_visual_reading.dart';
+import '../../modules/inventory/services/product_identity/supplier_resolution_proposal.dart';
 import '../../modules/inventory/services/product_image_fingerprint_service.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import '../../modules/inventory/models/brand_models.dart' show ProductBrand;
@@ -236,6 +237,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   List<inv_models.Product>? _productReviewCatalogSnapshot;
   ProductDuplicateMatcherService? _productReviewDuplicateMatcher;
   int? _productReviewCatalogGeneration;
+  final Map<String, Future<inv_models.ProductSetCompositionSnapshot?>>
+      _productSetCompositionLoads =
+      <String, Future<inv_models.ProductSetCompositionSnapshot?>>{};
 
   @override
   void initState() {
@@ -399,6 +403,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     _productReviewCatalogSnapshot = null;
     _productReviewDuplicateMatcher = null;
     _productReviewCatalogGeneration = null;
+    _productSetCompositionLoads.clear();
     _productReviewDraftEpoch = null;
     _skuReservationAuthority = null;
     _showBulkCreate = false;
@@ -2193,6 +2198,11 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           if (entry == null || _bulkRowBusy(entry)) return;
           unawaited(_confirmNewProductForEntry(entry));
         },
+        onConfirmCompositeProposal: (lineId) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry == null || _bulkRowBusy(entry)) return;
+          unawaited(_confirmSupplierResolutionProposal(entry));
+        },
         onRetrySkuReservation: (lineId) {
           final entry = _newProductEntryForReviewId(lineId);
           if (entry == null || _creatingProducts) return;
@@ -2511,7 +2521,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       candidates:
           entry.duplicateResult?.operatorChoices ?? entry.similarCandidates,
       categoryConflicts: entry.duplicateResult?.categoryConflicts ?? const [],
-      aiCompositeProposal: entry.duplicateResult?.aiCompositeProposal,
+      aiCompositeProposal: entry.supplierResolutionProposal?.displaySummary ??
+          entry.duplicateResult?.aiCompositeProposal,
+      canConfirmCompositeProposal:
+          entry.supplierResolutionProposal != null && !_isReadOnlyEvaluation,
       allowCreateNew: entry.duplicateResult?.adjudicationState !=
           ProductDuplicateAdjudicationState.failed,
       inspectionOnly: _isReadOnlyEvaluation,
@@ -2529,6 +2542,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         'decision': switch (decision) {
           OcrCandidateLink() => 'link',
           OcrCandidateCreateNew() => 'create_new',
+          OcrCandidateConfirmComposition() => 'confirm_composition',
           null => 'dismissed',
         },
         if (decision
@@ -2548,6 +2562,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         );
       case OcrCandidateCreateNew():
         await _confirmNewProductForEntry(entry);
+      case OcrCandidateConfirmComposition():
+        await _confirmSupplierResolutionProposal(entry);
       case null:
         break;
     }
@@ -2559,6 +2575,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   /// picker's wider one. Two copies of this construction is how the overlay
   /// once asked a subtly different question than the row it belongs to.
   ProductDuplicateProbe _duplicateProbeFor(_NewProductEntry entry) {
+    final optionEvidence = _supplierOptionEvidenceForLine(entry.originalItem);
     return ProductDuplicateProbe(
       name: entry.nameController.text,
       description: _aiLineContextWithoutVariant(entry),
@@ -2589,6 +2606,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       price: entry.price,
       cost: entry.cost,
       sourcePurchaseUnitCost: entry.originalItem.sourcePurchaseUnitPrice,
+      sourcePurchaseQuantity: entry.originalItem.sourcePurchaseQuantity ??
+          entry.originalItem.quantity,
+      supplierPackCount: optionEvidence?.packCount,
+      supplierUnitClass: optionEvidence?.unitClass,
+      supplierPackEvidenceConflict:
+          optionEvidence?.packEvidenceConflict ?? false,
+      requiresExplicitComposition:
+          optionEvidence?.requiresExplicitComposition ?? false,
     );
   }
 
@@ -2670,7 +2695,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           entry.resolutionError ??
           entry.aiInvestigationError,
       searchSummary: currentSemanticSummary,
-      aiCompositeProposal: entry.duplicateResult?.aiCompositeProposal,
+      aiCompositeProposal: entry.supplierResolutionProposal?.displaySummary ??
+          entry.duplicateResult?.aiCompositeProposal,
+      canConfirmCompositeProposal: entry.supplierResolutionProposal != null,
       categoryValidationMessage: entry.selectedCategory == null
           ? entry.categoryReviewReason ??
               'Falta elegir la familia correcta para este producto.'
@@ -4023,7 +4050,23 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           )) {
             return;
           }
-          current.markSearchResult(result);
+          final resolutionProposal = await _buildSupplierResolutionProposal(
+            current,
+            result,
+            inventoryService: inventoryService,
+            products: allProducts,
+          );
+          if (!_ownsNewProductResolution(
+            current,
+            revision,
+            reviewGeneration: reviewGeneration,
+          )) {
+            return;
+          }
+          current.markSearchResult(
+            result,
+            supplierResolutionProposal: resolutionProposal,
+          );
           ProductIdentityTrace.emit(
             traceId: _productIdentityTraceId(current, revision),
             event: 'row.final_decision',
@@ -4036,6 +4079,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
               'operator_choice_count': result.operatorChoices.length,
               'category_conflict_count': result.categoryConflicts.length,
               'reason': result.reason,
+              'resolution_proposal_kind': resolutionProposal?.kind.name,
+              'resolution_proposal_edges': resolutionProposal?.edges.length,
+              'resolution_proposal_uses_catalog_set':
+                  resolutionProposal?.usesCanonicalSet,
             },
           );
         } catch (error) {
@@ -4653,6 +4700,283 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           })}');
     }
     return true;
+  }
+
+  Future<SupplierResolutionProposal?> _buildSupplierResolutionProposal(
+    _NewProductEntry entry,
+    ProductDuplicateSearchResult result, {
+    required inv_service.InventoryService inventoryService,
+    required List<inv_models.Product> products,
+  }) async {
+    final decision = result.adjudication;
+    final optionEvidence = _supplierOptionEvidenceForLine(entry.originalItem);
+    final sourceQuantity = entry.originalItem.sourcePurchaseQuantity ??
+        entry.originalItem.quantity;
+    if (decision == null ||
+        optionEvidence == null ||
+        sourceQuantity == null ||
+        sourceQuantity <= 0) {
+      return null;
+    }
+    final proposal = await SupplierResolutionProposalBuilder.build(
+      decision: decision,
+      investigation: entry.aiInvestigation,
+      optionEvidence: optionEvidence,
+      sourcePurchaseQuantity: sourceQuantity,
+      catalog: products,
+      lookupSetComposition: (setProduct) {
+        final productId = setProduct.id;
+        if (productId == null) return Future.value(null);
+        return _productSetCompositionLoads.putIfAbsent(productId, () async {
+          try {
+            return await inventoryService.getProductSetComposition(productId);
+          } on Object catch (error) {
+            if (kDebugMode) {
+              debugPrint(
+                '[OCR-SET-COMPOSITION] No se pudo leer $productId: $error',
+              );
+            }
+            return null;
+          }
+        });
+      },
+    );
+    if (kDebugMode && proposal != null) {
+      debugPrint(
+        '[OCR-RESOLUTION-PROPOSAL] ${jsonEncode(<String, Object?>{
+              'reviewId': entry.reviewId,
+              'kind': proposal.kind.name,
+              'sourcePurchaseQuantity': proposal.sourcePurchaseQuantity,
+              'usesCanonicalSet': proposal.usesCanonicalSet,
+              'canonicalSetSku': proposal.canonicalSetProduct?.sku,
+              'items': [
+                for (final item in proposal.items)
+                  <String, Object?>{
+                    'sku': item.product.sku,
+                    'productId': item.product.id,
+                    'unitsPerPurchase': item.catalogUnitsPerPurchase,
+                    'role': item.role.wireValue,
+                  },
+              ],
+              'edges': proposal.edges.map((edge) => edge.toRpcJson()).toList(),
+            })}',
+      );
+    }
+    return proposal;
+  }
+
+  Future<void> _confirmSupplierResolutionProposal(
+    _NewProductEntry entry,
+  ) async {
+    final proposal = entry.supplierResolutionProposal;
+    if (_isReadOnlyEvaluation || proposal == null || _bulkRowBusy(entry)) {
+      return;
+    }
+    final inventoryService = context.read<inv_service.InventoryService>();
+    final revision = entry.resolutionRevision;
+    final reviewGeneration = _bulkReviewGeneration;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirmar ingreso al inventario'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(proposal.displaySummary),
+            const SizedBox(height: 12),
+            Text(
+              proposal.usesCanonicalSet
+                  ? 'Se usará el producto-set existente. Sus componentes '
+                      'recibirán stock con la composición ya definida en inventario.'
+                  : 'Cada componente recibirá su cantidad. El total de la línea '
+                      'se repartirá entre ellos sin duplicar el costo.',
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Esta regla quedará aprendida sólo para esta variante inmutable '
+              'del proveedor.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            key: const Key('ocr-confirm-supplier-composition'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Confirmar descomposición'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true ||
+        !_ownsNewProductResolution(
+          entry,
+          revision,
+          reviewGeneration: reviewGeneration,
+        )) {
+      return;
+    }
+
+    setState(() {
+      entry.isLinkingExisting = true;
+      entry.resolutionError = null;
+    });
+    try {
+      final resolution = await _rememberSupplierResolutionProposal(
+        entry,
+        proposal,
+      );
+      if (!_ownsNewProductResolution(
+        entry,
+        revision,
+        reviewGeneration: reviewGeneration,
+      )) {
+        return;
+      }
+      final products =
+          _productReviewCatalogSnapshot ?? await inventoryService.getProducts();
+      final applied = await _useSupplierVariantResolutionForEntry(
+        entry,
+        resolution,
+        inventoryService: inventoryService,
+        products: products,
+        expectedRevision: revision,
+        reviewGeneration: reviewGeneration,
+      );
+      if (!applied) {
+        throw StateError(
+          'La descomposición se confirmó, pero la fila cambió antes de aplicarla.',
+        );
+      }
+    } on Object catch (error) {
+      if (_ownsNewProductResolution(
+        entry,
+        revision,
+        reviewGeneration: reviewGeneration,
+      )) {
+        setState(() {
+          entry.isLinkingExisting = false;
+          entry.resolutionError = error.toString();
+          entry.resolutionState = OcrProductResolutionState.abstained;
+        });
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo guardar la descomposición: $error'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<SupplierVariantResolution> _rememberSupplierResolutionProposal(
+    _NewProductEntry entry,
+    SupplierResolutionProposal proposal,
+  ) async {
+    final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+    final itemId = _aliExpressItemIdForLine(entry.originalItem);
+    final evidence = _supplierOptionEvidenceForLine(entry.originalItem);
+    final invoice = _parsedData;
+    final sourceDate = invoice?.date;
+    final currencyCode = invoice?.currencyCode?.trim().toUpperCase();
+    final sourceQuantity = entry.originalItem.sourcePurchaseQuantity ??
+        entry.originalItem.quantity;
+    final sourceTotal = entry.originalItem.total ??
+        ((entry.originalItem.unitPrice ?? 0) * (sourceQuantity ?? 0));
+    if (supplierId == null ||
+        supplierId.isEmpty ||
+        itemId == null ||
+        itemId.isEmpty ||
+        evidence == null ||
+        sourceDate == null ||
+        currencyCode != 'CLP' ||
+        sourceQuantity == null ||
+        sourceQuantity <= 0 ||
+        sourceTotal < 0 ||
+        entry.originalItem.sourceOrderNumbers.isEmpty) {
+      throw StateError(
+        'La línea no conserva toda la evidencia necesaria para aprender la descomposición.',
+      );
+    }
+    final sourceLineKey = SupplierVariantResolutionService.buildSourceLineKey(
+      supplierId: supplierId,
+      sourceDate: sourceDate,
+      sourceOrderNumbers: entry.originalItem.sourceOrderNumbers,
+      listingId: itemId,
+      variantKey: evidence.variantKey,
+      commercialSplitKey: entry.originalItem.sourcePurchaseUnitPrice == null
+          ? null
+          : 'source-price:${entry.originalItem.sourcePurchaseUnitPrice}',
+    );
+    final decision = entry.duplicateResult?.adjudication;
+    final operationId =
+        entry.supplierResolutionOperationId ??= const Uuid().v4();
+    final resolution = await SupplierVariantResolutionService(
+      database: context.read<DatabaseService>(),
+    ).remember(
+      operationId: operationId,
+      supplierId: supplierId,
+      itemId: itemId,
+      productUrl: entry.originalItem.productUrl?.trim() ?? '',
+      optionEvidence: evidence,
+      action: SupplierVariantResolutionAction.activate,
+      kind: proposal.kind,
+      edges: proposal.edges,
+      decisionSource: SupplierVariantResolutionDecisionSource.operatorConfirmed,
+      decisionEvidence: <String, dynamic>{
+        'source_line_key': sourceLineKey,
+        'source_document_date': sourceDate.toIso8601String().substring(0, 10),
+        'supplier_order_numbers': entry.originalItem.sourceOrderNumbers,
+        'source_purchase_quantity': sourceQuantity,
+        'persisted_quantity': proposal.persistedQuantity,
+        'source_total_minor': sourceTotal.round(),
+        'persisted_total_minor': sourceTotal.round(),
+        'currency_code': currencyCode,
+        'confirmation_surface': 'purchase_invoice_ocr_composition_review',
+        'resolution_kind': proposal.kind.name,
+        'listing_id': itemId,
+        'variant_key': evidence.variantKey.value,
+        'source_title': entry.supplierIdentityTitle,
+        'model_version': decision?.modelId ?? 'operator-confirmed',
+        'match_prompt_version': decision?.promptVersion,
+        'match_confidence': decision?.confidence,
+        'uses_catalog_set': proposal.usesCanonicalSet,
+        if (proposal.canonicalSetProduct?.id != null)
+          'canonical_set_product_id': proposal.canonicalSetProduct!.id,
+        'components': <Map<String, Object?>>[
+          for (final item in proposal.items)
+            <String, Object?>{
+              'product_id': item.product.id,
+              'sku': item.product.sku,
+              'units_per_purchase': item.catalogUnitsPerPurchase,
+              'role': item.role.wireValue,
+            },
+        ],
+        if (_aliExpressVariantLabelForLine(entry.originalItem) != null)
+          'selected_option': _aliExpressVariantLabelForLine(entry.originalItem),
+      },
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '[OCR-RESOLUTION-CONFIRMED] ${jsonEncode(<String, Object?>{
+              'reviewId': entry.reviewId,
+              'operationId': operationId,
+              'revisionId': resolution.revisionId,
+              'kind': resolution.kind?.name,
+              'edgeCount': resolution.edges.length,
+              'sourceQuantity': sourceQuantity,
+              'persistedQuantity': proposal.persistedQuantity,
+              'sourceTotalMinor': sourceTotal.round(),
+            })}',
+      );
+    }
+    return resolution;
   }
 
   Future<SupplierVariantResolution?> _rememberAliExpressResolution(
@@ -7018,6 +7342,7 @@ class _NewProductEntry {
   List<ProductDuplicateCandidate> similarCandidates = [];
   ProductDuplicateSearchResult? independentDuplicateResult;
   ProductDuplicateSearchResult? duplicateResult;
+  SupplierResolutionProposal? supplierResolutionProposal;
   SupplierVariantResolution? supplierResolution;
   List<inv_models.Product> supplierResolutionProducts = const [];
   String? supplierResolutionOperationId;
@@ -7158,6 +7483,7 @@ class _NewProductEntry {
     similarCandidates = [];
     independentDuplicateResult = null;
     duplicateResult = null;
+    supplierResolutionProposal = null;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.unsearched;
   }
@@ -7190,6 +7516,7 @@ class _NewProductEntry {
     similarCandidates = [];
     independentDuplicateResult = null;
     duplicateResult = null;
+    supplierResolutionProposal = null;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.unsearched;
   }
@@ -7198,6 +7525,7 @@ class _NewProductEntry {
     isCheckingSimilar = true;
     independentDuplicateResult = null;
     duplicateResult = null;
+    supplierResolutionProposal = null;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.searching;
   }
@@ -7209,18 +7537,26 @@ class _NewProductEntry {
     isCheckingSimilar = false;
     independentDuplicateResult = null;
     duplicateResult = null;
+    supplierResolutionProposal = null;
     similarCandidates = candidates;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.reviewRequired;
   }
 
-  void markSearchResult(ProductDuplicateSearchResult result) {
+  void markSearchResult(
+    ProductDuplicateSearchResult result, {
+    SupplierResolutionProposal? supplierResolutionProposal,
+  }) {
     independentDuplicateResult = result;
+    this.supplierResolutionProposal = supplierResolutionProposal;
     applyReconciledSearchResult(result);
   }
 
   void applyReconciledSearchResult(ProductDuplicateSearchResult result) {
     isCheckingSimilar = false;
+    if (!identical(result, independentDuplicateResult)) {
+      supplierResolutionProposal = null;
+    }
     duplicateResult = result;
     similarCandidates = result.recommendations;
     resolutionError = null;
@@ -7236,12 +7572,14 @@ class _NewProductEntry {
     similarCandidates = [];
     independentDuplicateResult = null;
     duplicateResult = null;
+    supplierResolutionProposal = null;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.noCandidates;
   }
 
   void markNewProduct() {
     isCheckingSimilar = false;
+    supplierResolutionProposal = null;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.newProduct;
   }
@@ -7254,6 +7592,7 @@ class _NewProductEntry {
     isLinkingExisting = false;
     resolutionError = null;
     supplierResolution = resolution;
+    supplierResolutionProposal = null;
     supplierResolutionProducts = List<inv_models.Product>.unmodifiable(
       products,
     );

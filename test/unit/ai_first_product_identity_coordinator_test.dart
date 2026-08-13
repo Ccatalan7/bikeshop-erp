@@ -377,6 +377,65 @@ void main() {
       service.dispose();
     });
 
+    test('same identity cannot collapse a structured 10-piece pack to one unit',
+        () async {
+      final proxy = _Proxy(_typedDecision(
+        decision: 'same',
+        picks: const <Map<String, Object?>>[
+          <String, Object?>{
+            'product_id': 'olive',
+            'qty': 1,
+            'role': 'primary',
+            'basis': <String>['model', 'spec'],
+          },
+        ],
+      ));
+      final service = AIAssistantService(geminiProxy: proxy);
+      final matcher = ProductDuplicateMatcherService(
+        inventoryService: _SpyInventoryService(),
+        aiAssistantService: service,
+        categories: _categories,
+        enableVisualReading: false,
+        enableDeterministicRanking: false,
+        persistComputedImageFingerprints: false,
+      );
+
+      final result = await matcher.resolveCandidates(
+        probe: ProductDuplicateProbe(
+          name: 'Inserto y oliva BH59',
+          imageBytes: _sourceImageBytes,
+          sourcePurchaseQuantity: 1,
+          supplierPackCount: 10,
+          supplierUnitClass: 'piece',
+          requiresExplicitComposition: true,
+          investigation: _investigation(
+            leafId: 'novel-leaf',
+            objectLabel: 'oliva hidráulica BH59',
+            modelCode: 'BH59',
+          ),
+        ),
+        products: <Product>[
+          _product(
+            id: 'olive',
+            sku: 'OL03',
+            name: 'Oliva y pin Shimano BH59',
+            model: 'BH59',
+            categoryId: 'novel-leaf',
+            categoryName: 'Objetos nuevos',
+          ),
+        ],
+      );
+
+      expect(result.kind, ProductDuplicateDecisionKind.abstained);
+      expect(result.recommendations, isEmpty);
+      expect(result.adjudication?.decision, AIProductMatchDecisionKind.same);
+      expect(result.adjudication?.productId, 'olive');
+      expect(result.reason, contains('paquete'));
+      expect(proxy.calls, 1,
+          reason: 'el paquete no debe provocar una segunda adjudicación');
+      service.dispose();
+    });
+
     test('misfiled gold stays only in category conflicts and is adjudicated',
         () async {
       final proxy = _Proxy.sequence(<String>[

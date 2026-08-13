@@ -263,6 +263,28 @@ revisión; abrir/cerrar agrega cero llamadas. Toda opinión IA es evidencia de
 revisión: no vincula, crea, persiste alias, escribe fingerprints/factura/catálogo
 ni aprende. Un fallo queda abstained/reintentable y nunca implica `Nuevo`.
 
+**Descomposición de sets, pares y packs — corrección 2026-08-13.** Esta regla
+reemplaza cualquier frase anterior que convierta una etiqueta de pack en stock
+antes de resolver el catálogo. La primera lectura conserva cantidad comprada,
+conteo y unidad del proveedor como evidencia; la segunda puede proponer un pack
+homogéneo (`10 × OL03`) o componentes ordenados con roles
+(`delantero/trasero`, `izquierdo/derecho`, u otros independientes). La fila y el
+picker muestran el efecto completo para la cantidad comprada y nunca ofrecen
+`Vincular` a una sola parte. `1 pair` o `1 set` no implica dos unidades por
+convenio: la composición debe estar probada por variante, foto y título
+estructurados; evidencia contradictoria o insuficiente sigue abstained.
+`Usar descomposición` abre una confirmación bloqueante y existe sólo con listing
++ variante inmutable y evidencia de pack coherente. Si los componentes
+coinciden exactamente con un Product set activo, la resolución guarda el padre
+y el kernel canónico expande stock al recibir; si no existe ese set, guarda
+aristas directas ordenadas. En ambos casos la compra usa
+`source quantity × units per purchase`, reparte el costo landed del renglón en
+pesos exactos sin duplicar total, preserva una sola línea fuente auditada y
+bloquea edición independiente de los componentes. La confirmación persiste y
+lee de vuelta la revisión inmutable; siguientes compras de la misma variante se
+resuelven sin IA. Guardar la factura y recibir stock siguen siendo acciones
+posteriores e independientes.
+
 **Conteos de revisión — corrección 2026-08-12.** La fila y el picker consumen
 la misma decisión cacheada y publican sus alcances por separado: `N viables`,
 `M descartados` y `K en otra categoría`, con singulares honestos. Un producto

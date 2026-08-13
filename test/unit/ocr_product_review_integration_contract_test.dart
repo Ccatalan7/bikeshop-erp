@@ -642,7 +642,12 @@ void main() {
       ),
       reason: 'los descartados conservan su propio conteo honesto',
     );
-    expect(source, contains('current.markSearchResult(result)'));
+    expect(source, contains('current.markSearchResult('));
+    expect(
+      source,
+      contains('supplierResolutionProposal: resolutionProposal'),
+      reason: 'la misma decisión cacheada debe conservar la descomposición',
+    );
     expect(source, isNot(contains('onLoadOptions:')));
     expect(source, isNot(contains('_loadCandidateOptions(')));
     expect(

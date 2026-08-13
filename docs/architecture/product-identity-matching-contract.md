@@ -241,6 +241,15 @@ quantity only after the immutable supplier variant and catalog selling unit
 prove the conversion. Supplier quantity alone, listing-menu text and a photo
 never authorize either expansion; uncertainty must remain review-only.
 
+When the ordered components exactly equal one active canonical inventory set,
+the supplier resolution points to that set parent and the established
+`product_set_components` stock kernel owns the eventual expansion. Otherwise a
+confirmed supplier graph keeps the ordered ordinary products directly. A
+`pair` or `set` token never means two by convention: its independently stocked
+components and quantities must be proved by the structured investigation. A
+plain `10PCS` option may become one homogeneous edge of ten only after the
+catalog selling unit is confirmed as one piece.
+
 The document is resolved as a joint assignment rather than independent row
 argmaxes. Distinct immutable supplier variants cannot collapse onto one catalog
 row without authoritative evidence, while real repeated purchases of the same
@@ -270,9 +279,13 @@ threshold. The complete evidence path must be calibrated on a locked holdout.
 
 The automatic-link policy accepts only an active confirmed immutable supplier
 resolution or an equivalently proven catalog/SKU identity. AI `same` is still a
-review recommendation. AI `composite` displays component IDs and quantities but
-offers no single-product/link/apply action. A failure remains retryable and
-`abstained`; it never implies `Crear nuevo`.
+review recommendation. AI `composite` displays grounded product IDs, ordered
+roles and per-purchase quantities and offers no single-product link. When the
+line also has an immutable supplier variant and non-conflicting package
+evidence, the operator may choose `Usar descomposición`; a blocking confirmation
+states the invoice-wide stock effect before the versioned writer persists and
+reads back the supplier graph. No AI opinion writes or applies itself. A failure
+remains retryable and `abstained`; it never implies `Crear nuevo`.
 
 ## A missing deterministic family cannot own or erase identity
 
@@ -397,8 +410,9 @@ replace the required sealed listing-group holdout.
 `test/unit/ai_first_product_identity_coordinator_test.dart` asserts authority
 ordering, offered-leaf validation, full-catalog admission, prompt-injection
 isolation, typed adjudication, ablation and fail-closed behavior. Widget gates
-assert that row and picker render the same cached decision and that an AI
-composite exposes no single-product action.
+assert that row and picker render the same cached decision, that an AI composite
+exposes no single-product action, and that only the explicit non-audit
+confirmation command can persist its decomposition.
 
 `test/unit/aliexpress_sku_reservation_key_test.dart` drives the reservation
 authority against a fake sequence with `Completer`s: two byte-identical rows get

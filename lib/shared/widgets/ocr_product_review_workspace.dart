@@ -83,6 +83,7 @@ class OcrProductReviewLine {
     this.errorMessage,
     this.searchSummary,
     this.aiCompositeProposal,
+    this.canConfirmCompositeProposal = false,
     this.categoryValidationMessage,
     this.brandValidationMessage,
     this.brandWarning,
@@ -147,11 +148,11 @@ class OcrProductReviewLine {
   final String? errorMessage;
   final String? searchSummary;
 
-  /// Cached, review-only proposal that this supplier line represents more
-  /// than one existing catalog product. It is evidence for the operator, not
-  /// an applied link: only the supplier-resolution graph may authoritatively
-  /// resolve a composite without this row's confirmation.
+  /// Cached proposal that this supplier line represents multiple catalog
+  /// units. It is evidence until the operator confirms it; only then may the
+  /// host persist an authoritative supplier-resolution graph.
   final String? aiCompositeProposal;
+  final bool canConfirmCompositeProposal;
   final String? categoryValidationMessage;
   final String? brandValidationMessage;
   final String? brandWarning;
@@ -195,6 +196,7 @@ class OcrProductReviewCallbacks {
     this.onSelectionChanged,
     this.onLinkCandidate,
     this.onConfirmNewProduct,
+    this.onConfirmCompositeProposal,
     this.onRetryLine,
     this.onRetrySkuReservation,
     this.onSearchPending,
@@ -219,6 +221,7 @@ class OcrProductReviewCallbacks {
   final void Function(String lineId, bool selected)? onSelectionChanged;
   final void Function(String lineId, Product product)? onLinkCandidate;
   final ValueChanged<String>? onConfirmNewProduct;
+  final ValueChanged<String>? onConfirmCompositeProposal;
   final ValueChanged<String>? onRetryLine;
 
   /// Ask again for this row's reserved SKU.
@@ -1556,6 +1559,22 @@ class _DecisionCell extends StatelessWidget {
         final hasCatalogRows = reviewSummary.isNotEmpty;
         final compositeProposal = line.aiCompositeProposal?.trim();
         final hasCompositeProposal = compositeProposal?.isNotEmpty == true;
+        if (hasCompositeProposal && line.canConfirmCompositeProposal) {
+          return _DecisionActions(
+            message: compositeProposal!,
+            tone: roles.warning,
+            primaryLabel: 'Usar descomposición',
+            primaryKey: Key('ocr-review-confirm-composite-${line.id}'),
+            onPrimary: enabled && callbacks.onConfirmCompositeProposal != null
+                ? () => callbacks.onConfirmCompositeProposal!(line.id)
+                : null,
+            secondaryLabel: 'Revisar catálogo',
+            secondaryKey: Key('ocr-review-alternatives-${line.id}'),
+            onSecondary: canInspect && callbacks.onOpenCandidates != null
+                ? () => callbacks.onOpenCandidates!(line.id)
+                : null,
+          );
+        }
         return _DecisionActions(
           message: hasCompositeProposal
               ? compositeProposal!

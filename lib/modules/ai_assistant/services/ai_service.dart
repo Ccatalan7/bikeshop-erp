@@ -446,6 +446,9 @@ class AIProductMatchOption {
     this.variant,
     this.imageBytes,
     this.note,
+    this.isSet = false,
+    this.setType,
+    this.setComponents = const <AIProductMatchSetComponent>[],
   });
 
   /// Stable catalog product id. It is what the model must echo back.
@@ -467,6 +470,24 @@ class AIProductMatchOption {
   /// What the deterministic engine already concluded about this row, so the
   /// model sees the same evidence the operator does.
   final String? note;
+  final bool isSet;
+  final String? setType;
+  final List<AIProductMatchSetComponent> setComponents;
+}
+
+/// Existing canonical inventory composition attached to an offered set parent.
+class AIProductMatchSetComponent {
+  const AIProductMatchSetComponent({
+    required this.sku,
+    required this.name,
+    required this.quantity,
+    required this.role,
+  });
+
+  final String sku;
+  final String name;
+  final int quantity;
+  final String role;
 }
 
 /// Compact catalog evidence used by the global AI recall pass.
@@ -544,16 +565,43 @@ enum AIProductMatchBasis {
   cost,
 }
 
+/// Inventory role of one grounded catalog pick inside a supplier package.
+///
+/// These values are intentionally closed. The model may describe its reasoning
+/// freely elsewhere, but stock composition needs stable roles that can survive
+/// confirmation, replay and accounting read-back.
+enum AIProductMatchComponentRole {
+  primary,
+  front,
+  rear,
+  left,
+  right,
+  component,
+  homogeneous;
+
+  String get wireValue => name;
+
+  static AIProductMatchComponentRole? fromWire(Object? raw) {
+    final value = raw?.toString().trim().toLowerCase();
+    for (final role in values) {
+      if (role.wireValue == value) return role;
+    }
+    return null;
+  }
+}
+
 class AIProductMatchPick {
   const AIProductMatchPick({
     required this.productId,
     required this.quantity,
     required this.basis,
+    this.role = AIProductMatchComponentRole.component,
   });
 
   final String productId;
   final int quantity;
   final List<AIProductMatchBasis> basis;
+  final AIProductMatchComponentRole role;
 }
 
 class AIProductMatchRejection {
@@ -572,10 +620,12 @@ class AIProductMatchComponent {
   const AIProductMatchComponent({
     required this.productId,
     required this.quantity,
+    this.role = AIProductMatchComponentRole.component,
   });
 
   final String productId;
   final int quantity;
+  final AIProductMatchComponentRole role;
 }
 
 /// Grounded second-pass decision over the offered catalog candidates.
@@ -760,7 +810,7 @@ class AIAssistantService extends ChangeNotifier
       ProductIdentityAIContract.schemaVersion;
   static const String productIdentityVisionModel = 'gemini-3.6-flash';
   static const String productMatchPromptKey =
-      'ai-product-grounded-adjudication-v4';
+      'ai-product-grounded-adjudication-v5';
   static const String productCatalogScreenPromptKey =
       'ai-product-catalog-screen-v1';
 
@@ -1300,6 +1350,9 @@ END_UNTRUSTED_CATALOG_CARDS_JSON
     Map<String, String> invoiceSpecifications = const <String, String>{},
     String? selectedVariant,
     num? quantity,
+    int? supplierPackCount,
+    String? supplierUnitClass,
+    bool supplierPackEvidenceConflict = false,
     String? lineContext,
     AIProductIdentityInvestigation? investigation,
     required List<AIProductMatchOption> options,
@@ -1393,6 +1446,11 @@ END_UNTRUSTED_CATALOG_CARDS_JSON
       'invoice_model_codes': invoiceModelCodes.toList()..sort(),
       'selected_variant': selectedVariant?.trim(),
       'quantity': quantity,
+      'supplier_package': <String, Object?>{
+        'count': supplierPackCount,
+        'unit_class': supplierUnitClass,
+        'conflict': supplierPackEvidenceConflict,
+      },
       'line_context': lineContext?.trim(),
       'source_image_available': imageBytes?.isNotEmpty == true,
       'specifications': invoiceSpecifications,
@@ -1462,6 +1520,17 @@ END_UNTRUSTED_CATALOG_CARDS_JSON
             option.specifications,
           ),
           'image_available': option.imageBytes?.isNotEmpty == true,
+          'is_set': option.isSet,
+          'set_type': option.setType,
+          'set_components': <Map<String, Object?>>[
+            for (final component in option.setComponents)
+              <String, Object?>{
+                'sku': component.sku,
+                'name': component.name,
+                'qty': component.quantity,
+                'role': component.role,
+              },
+          ],
           'validator_trace': option.note,
         },
     ]);
@@ -1477,6 +1546,7 @@ Responde SOLO JSON valido con esta forma exacta:
 {
   "decision": "same|different|composite|insufficient",
   "picks": [{"product_id": "<id ofrecido>", "qty": 1,
+              "role": "primary|front|rear|left|right|component|homogeneous",
               "basis": ["model|spec|manufacturer|image|name|history|cost"]}],
   "rejected": [{"product_id": "<id ofrecido>", "reason": "<breve>",
                  "basis": ["model|spec|manufacturer|image|name|history|cost"]}],
@@ -1486,15 +1556,27 @@ Responde SOLO JSON valido con esta forma exacta:
 }
 
 Reglas duras:
-- `same`: exactamente un pick con qty=1.
+- `same`: exactamente un pick con qty=1 y role=primary. Úsalo sólo cuando una
+  unidad comprada equivale a una unidad del producto de catálogo ofrecido.
 - `different`: hay evidencia suficiente de que ninguno es el mismo;
   picks debe ser [].
 - `insufficient`: la evidencia no alcanza para decidir; picks es []. No uses
   `different` sólo por falta de datos.
-- `composite`: la linea representa un conjunto de productos ofrecidos;
-  picks contiene al menos dos ids distintos y cantidades enteras
-  positivas que representa UNA unidad comprada del conjunto. No descartes un
-  lado, pieza o subproducto para forzar una coincidencia simple.
+- `composite`: la línea necesita descomposición de inventario. Puede ser:
+  (a) dos o más ids ofrecidos con cantidades enteras positivas por UNA compra
+  (`front`/`rear`, `left`/`right` o `component`), o (b) un solo id ofrecido con
+  qty>1 y role=`homogeneous` cuando el proveedor vende un pack y el catálogo
+  controla cada pieza como unidad. No descartes un lado, pieza o subproducto
+  para forzar una coincidencia simple.
+- SOURCE.supplier_package es evidencia estructurada del option comprado. Si
+  `conflict=true`, usa `insufficient`. Si count>1 y el catálogo controla una
+  pieza, no respondas `same`: devuelve `composite` con esa cantidad. Si la
+  unidad es `pair` o `set`, no inventes cuántas piezas contiene; usa la
+  composición visible/nombrada o `insufficient`.
+- Un candidato con `is_set=true` es un producto-set canónico cuyo stock se
+  controla mediante `set_components`. Puedes responder `same` para ese padre
+  sólo si su composición completa coincide con lo comprado; no elijas además
+  sus componentes por separado.
 - SOURCE.composition ya distingue `primary`, `component` e
   `included_accessory`. Un `included_accessory` es hardware subordinado que
   viene con el producto principal: no exige otro SKU, no convierte la compra en
@@ -1682,6 +1764,7 @@ END_UNTRUSTED_CATALOG_DATA_JSON
                 <String, Object?>{
                   'product_id': pick.productId,
                   'qty': pick.quantity,
+                  'role': pick.role.wireValue,
                   'basis': pick.basis.map((value) => value.name).toList(),
                 },
             ],
@@ -1994,7 +2077,17 @@ END_UNTRUSTED_CATALOG_DATA_JSON
     final pickIds = <String>{};
     final inventedPickIds = <String>[];
     for (final raw in rawPicks) {
-      if (raw is! Map || raw.keys.toSet().length != 3) {
+      const allowedPickKeys = <String>{
+        'product_id',
+        'qty',
+        'role',
+        'basis',
+      };
+      if (raw is! Map ||
+          raw.keys.any((key) => !allowedPickKeys.contains(key.toString())) ||
+          !raw.keys.contains('product_id') ||
+          !raw.keys.contains('qty') ||
+          !raw.keys.contains('basis')) {
         return fail('pick_shape', '/picks', <String, Object?>{
           'index': rawPicks.indexOf(raw),
           'type': raw.runtimeType.toString(),
@@ -2003,6 +2096,7 @@ END_UNTRUSTED_CATALOG_DATA_JSON
       }
       final id = raw['product_id'];
       final qty = raw['qty'];
+      final explicitRole = AIProductMatchComponentRole.fromWire(raw['role']);
       final basis = parseBasis(
         raw['basis'],
         pointer: '/picks/${rawPicks.indexOf(raw)}/basis',
@@ -2014,6 +2108,7 @@ END_UNTRUSTED_CATALOG_DATA_JSON
           qty != qty.toInt() ||
           qty <= 0 ||
           qty > 1000000 ||
+          (raw.containsKey('role') && explicitRole == null) ||
           basis == null ||
           !pickIds.add(id.trim())) {
         return fail('pick_value', '/picks', <String, Object?>{
@@ -2035,6 +2130,12 @@ END_UNTRUSTED_CATALOG_DATA_JSON
         productId: id.trim(),
         quantity: qty.toInt(),
         basis: basis,
+        role: explicitRole ??
+            (decision == AIProductMatchDecisionKind.same
+                ? AIProductMatchComponentRole.primary
+                : rawPicks.length == 1 && qty.toInt() > 1
+                    ? AIProductMatchComponentRole.homogeneous
+                    : AIProductMatchComponentRole.component),
       ));
     }
     final rejected = <AIProductMatchRejection>[];
@@ -2124,7 +2225,9 @@ END_UNTRUSTED_CATALOG_DATA_JSON
       );
     }
     if (decision == AIProductMatchDecisionKind.same &&
-        (picks.length != 1 || picks.single.quantity != 1)) {
+        (picks.length != 1 ||
+            picks.single.quantity != 1 ||
+            picks.single.role != AIProductMatchComponentRole.primary)) {
       return fail('same_cardinality', '/picks', <String, Object?>{
         'count': picks.length,
         'qty': picks.length == 1 ? picks.single.quantity : null,
@@ -2138,7 +2241,12 @@ END_UNTRUSTED_CATALOG_DATA_JSON
         'count': picks.length,
       });
     }
-    if (decision == AIProductMatchDecisionKind.composite && picks.length < 2) {
+    if (decision == AIProductMatchDecisionKind.composite &&
+        (picks.isEmpty ||
+            (picks.length == 1 &&
+                (picks.single.quantity <= 1 ||
+                    picks.single.role !=
+                        AIProductMatchComponentRole.homogeneous)))) {
       return fail('composite_cardinality', '/picks', <String, Object?>{
         'count': picks.length,
       });
@@ -2148,6 +2256,7 @@ END_UNTRUSTED_CATALOG_DATA_JSON
         AIProductMatchComponent(
           productId: pick.productId,
           quantity: pick.quantity,
+          role: pick.role,
         ),
     ];
     final basisLabel = picks.isEmpty

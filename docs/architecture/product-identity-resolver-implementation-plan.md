@@ -85,8 +85,9 @@ offered product IDs, positive quantities and typed basis values. It is not
 restricted to a deterministic score band. Invalid IDs/basis/cardinality,
 malformed output, timeout or a request exceeding the explicit model budget
 becomes `insufficient` without silent truncation. Confidence is descriptive,
-never an auto-link threshold. AI composite components are review-only and expose
-no `Vincular`, `Es este`, apply or graph-write action.
+never an auto-link threshold. AI composite components expose no `Vincular` or
+`Es este`. They stay review evidence until a separate operator confirmation
+shows the complete inventory impact and persists an immutable supplier graph.
 
 The prior read-only canonical macOS pass regenerated 2024-12-26 and inspected
 the completed picker without pressing a persistence action. The spacer row was
@@ -240,7 +241,7 @@ The implementation follows these rules.
 | Missing, timeout, malformed or invalid-leaf investigation | None | Cached manual catalog search | Abstain; no heuristic fallback |
 | AI `same` | One offered review recommendation | Same stored snapshot | Never auto-link |
 | AI `different` / `insufficient` | None | Stored operator choices and conflicts | Abstain |
-| AI `composite` | Ordered components/quantities, no single-product action | Review-only component evidence | Never apply/write graph |
+| AI `composite` | Ordered components/quantities, no single-product action | `Usar descomposición` only with immutable variant + coherent package evidence | Persist guarded graph after explicit confirmation |
 | Proved family/manufacturer/exclusive-spec contradiction | Excluded from recommendation | Ruled-out diagnostic with typed objection | Never |
 | Same image/listing without immutable variant authority | Supporting evidence only | Grounded comparison | Never by itself |
 | Non-merchandise / workshop consumable | No catalog duplicate recommendation | Explicit operational-supply outcome | Never create sellable product implicitly |
@@ -348,8 +349,9 @@ brand, category, model or image. UI-only changes do not rerun it.
   resolved/not-found/error and validates active non-service catalog targets.
 - A confirmed graph resolution materializes its normal or composite review state
   with zero AI. An error or malformed edge fails closed with zero AI.
-- AI and discovery never create, revise or learn graph edges. Only a separately
-  confirmed human outcome may do so through its guarded writer/read-back flow.
+- AI and discovery never create, revise or learn graph edges. Only the
+  separately confirmed `Usar descomposición` outcome may do so through its
+  guarded writer/read-back flow.
 
 ### F. Sets and document-level consistency
 
@@ -358,17 +360,16 @@ brand, category, model or image. UI-only changes do not rerun it.
   supplier variants cannot collapse onto one catalog variant without exact
   evidence; genuine repeated purchases may share a product.
 - AI composite recommendations are rendered as ordered components/quantities in
-  an abstained review-only state with no single-product/link/apply action.
-  Existing product-set membership remains catalog composition and is not
-  repurposed as supplier resolution storage.
-- Lossless one-source-row-to-many-independent-products needs a dedicated
-  additive persistence model. Until that migration exists, the resolver must
-  abstain and present component recommendations; it must not silently split or
-  create the wrong sellable product.
-
-The additive one-to-many persistence model remains a separate product/schema
-release. A confirmed supplier graph may materialize its existing composite
-authority; an AI opinion may only display the proposal.
+  an abstained state with no single-product link. An explicit operator command
+  may confirm the entire graph; it never confirms only one component.
+- Exact existing `product_set_components` composition is reused through its set
+  parent. If no exact set exists, the supplier graph keeps ordered ordinary
+  component edges; it never reparents those products or invents a new set.
+- The deployed source-resolution application expands direct graph edges into
+  ordinary purchase lines with exact landed-cost allocation and immutable
+  source-line provenance. Set-parent edges remain one purchase line and expand
+  later through the existing receipt/stock kernel, so the client never
+  double-expands them.
 
 ### G. Trace and rollback
 

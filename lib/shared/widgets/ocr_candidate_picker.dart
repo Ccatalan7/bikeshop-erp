@@ -25,6 +25,11 @@ class OcrCandidateCreateNew extends OcrCandidateDecision {
   const OcrCandidateCreateNew();
 }
 
+/// Confirm the cached, grounded supplier-package decomposition.
+class OcrCandidateConfirmComposition extends OcrCandidateDecision {
+  const OcrCandidateConfirmComposition();
+}
+
 /// The line whose identity is being decided, shown so the operator never has
 /// to remember what they clicked.
 class OcrCandidateLineContext {
@@ -69,6 +74,7 @@ class OcrCandidatePicker extends StatefulWidget {
     required this.candidates,
     this.categoryConflicts = const [],
     this.aiCompositeProposal,
+    this.canConfirmCompositeProposal = false,
     this.allowCreateNew = true,
     this.inspectionOnly = false,
     this.onSearch,
@@ -86,9 +92,10 @@ class OcrCandidatePicker extends StatefulWidget {
   /// visible for catalog repair, but never compete in the normal list.
   final List<ProductDuplicateCandidate> categoryConflicts;
 
-  /// The same immutable, review-only composite proposal shown in the row.
-  /// The picker displays it but never applies or persists it.
+  /// The same immutable composite proposal shown in the row. It stays
+  /// review-only until the host explicitly enables operator confirmation.
   final String? aiCompositeProposal;
+  final bool canConfirmCompositeProposal;
 
   /// False when the identity review failed. Manual catalog search remains
   /// available, but a failed model call must never be rendered as evidence
@@ -114,6 +121,7 @@ class OcrCandidatePicker extends StatefulWidget {
     required List<ProductDuplicateCandidate> candidates,
     List<ProductDuplicateCandidate> categoryConflicts = const [],
     String? aiCompositeProposal,
+    bool canConfirmCompositeProposal = false,
     bool allowCreateNew = true,
     bool inspectionOnly = false,
     OcrCandidateSearch? onSearch,
@@ -128,6 +136,7 @@ class OcrCandidatePicker extends StatefulWidget {
         candidates: candidates,
         categoryConflicts: categoryConflicts,
         aiCompositeProposal: aiCompositeProposal,
+        canConfirmCompositeProposal: canConfirmCompositeProposal,
         allowCreateNew: allowCreateNew,
         inspectionOnly: inspectionOnly,
         onSearch: onSearch,
@@ -392,6 +401,18 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
                     ),
                   ),
                   const SizedBox(width: 12),
+                  if (!widget.inspectionOnly &&
+                      widget.canConfirmCompositeProposal &&
+                      widget.aiCompositeProposal?.trim().isNotEmpty ==
+                          true) ...[
+                    FilledButton(
+                      key: const Key('ocr-candidate-confirm-composite'),
+                      onPressed: () => Navigator.of(context)
+                          .pop(const OcrCandidateConfirmComposition()),
+                      child: const Text('Usar descomposición'),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Cancelar'),

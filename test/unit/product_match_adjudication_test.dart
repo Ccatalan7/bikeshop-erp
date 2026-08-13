@@ -273,6 +273,78 @@ void main() {
     service.dispose();
   });
 
+  test('el contrato tipado representa un pack homogéneo de diez unidades',
+      () async {
+    final proxy = _ScriptedProxy(
+      '{"decision":"composite","picks":['
+      '{"product_id":"C001","qty":10,"role":"homogeneous",'
+      '"basis":["model","spec"]}],"rejected":[],'
+      '"confidence":0.98,'
+      '"prompt_version":"${AIAssistantService.productMatchPromptKey}",'
+      '"model_id":"gemini-2.5-flash"}',
+    );
+    final service = AIAssistantService(geminiProxy: proxy);
+
+    final decision = await service.adjudicateProductMatch(
+      invoiceTitle: 'Oliva Shimano BH59',
+      selectedVariant: 'for BH59-10pcs',
+      supplierPackCount: 10,
+      supplierUnitClass: 'piece',
+      imageBytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF, 0xD9]),
+      requireTypedBasis: true,
+      options: const <AIProductMatchOption>[
+        AIProductMatchOption(id: 'OL03-ID', name: 'Oliva y pin Shimano BH59'),
+      ],
+    );
+
+    expect(decision, isNotNull);
+    expect(decision!.decision, AIProductMatchDecisionKind.composite);
+    expect(decision.components, hasLength(1));
+    expect(decision.components.single.productId, 'OL03-ID');
+    expect(decision.components.single.quantity, 10);
+    expect(
+      decision.components.single.role,
+      AIProductMatchComponentRole.homogeneous,
+    );
+    expect(proxy.lastPrompt, contains('"count":10'));
+    expect(proxy.lastPrompt, contains('"unit_class":"piece"'));
+    expect(proxy.lastPrompt, contains('role=`homogeneous`'));
+    service.dispose();
+  });
+
+  test('roles delantero y trasero sobreviven la adjudicación tipada', () async {
+    final proxy = _ScriptedProxy(
+      '{"decision":"composite","picks":['
+      '{"product_id":"C001","qty":1,"role":"front",'
+      '"basis":["image","spec"]},'
+      '{"product_id":"C002","qty":1,"role":"rear",'
+      '"basis":["image","spec"]}],"rejected":[],'
+      '"confidence":0.96,'
+      '"prompt_version":"${AIAssistantService.productMatchPromptKey}",'
+      '"model_id":"gemini-2.5-flash"}',
+    );
+    final service = AIAssistantService(geminiProxy: proxy);
+
+    final decision = await service.adjudicateProductMatch(
+      invoiceTitle: 'Juego pinzas Bucklos delantera y trasera',
+      imageBytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF, 0xD9]),
+      requireTypedBasis: true,
+      options: const <AIProductMatchOption>[
+        AIProductMatchOption(id: 'FRONT-ID', name: 'Pinza delantera'),
+        AIProductMatchOption(id: 'REAR-ID', name: 'Pinza trasera'),
+      ],
+    );
+
+    expect(
+      decision!.components.map((component) => component.role),
+      <AIProductMatchComponentRole>[
+        AIProductMatchComponentRole.front,
+        AIProductMatchComponentRole.rear,
+      ],
+    );
+    service.dispose();
+  });
+
   test('un id inventado dentro del conjunto falla cerrado y queda marcado',
       () async {
     final proxy = _ScriptedProxy(

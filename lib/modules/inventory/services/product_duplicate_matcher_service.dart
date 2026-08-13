@@ -39,6 +39,11 @@ class ProductDuplicateProbe {
     this.price,
     this.cost,
     this.sourcePurchaseUnitCost,
+    this.sourcePurchaseQuantity,
+    this.supplierPackCount,
+    this.supplierUnitClass,
+    this.supplierPackEvidenceConflict = false,
+    this.requiresExplicitComposition = false,
     this.supplierListingId,
     this.confirmedProductId,
     this.confirmedAliasIsImmutable = false,
@@ -73,6 +78,14 @@ class ProductDuplicateProbe {
   /// allocation. This is kept separate from [cost], which is the landed unit
   /// cost shown on the purchase draft.
   final double? sourcePurchaseUnitCost;
+  final double? sourcePurchaseQuantity;
+
+  /// Structured supplier-package evidence. It is deliberately separate from
+  /// title text so a model cannot silently collapse `10PCS` into one unit.
+  final int? supplierPackCount;
+  final String? supplierUnitClass;
+  final bool supplierPackEvidenceConflict;
+  final bool requiresExplicitComposition;
 
   /// Supplier listing identity (an AliExpress `itemId`), when known.
   final String? supplierListingId;
@@ -452,6 +465,27 @@ class ProductDuplicateMatcherService {
         (candidate) => _firstProductImageBytes(candidate.product),
       ),
     );
+    final candidateSetCompositions =
+        await Future.wait<ProductSetCompositionSnapshot?>(
+      adjudicationCandidates.map((candidate) async {
+        final product = candidate.product;
+        if (!product.isSet || product.id == null) return null;
+        try {
+          return await _inventoryService.getProductSetComposition(product.id!);
+        } on Object catch (error) {
+          ProductIdentityTrace.emit(
+            traceId: traceId,
+            event: 'adjudication.set_composition_failed',
+            sink: _traceSink,
+            data: <String, Object?>{
+              'product_id': product.id,
+              'error_type': error.runtimeType.toString(),
+            },
+          );
+          return null;
+        }
+      }),
+    );
     for (var index = 0; index < adjudicationCandidates.length; index++) {
       final candidate = adjudicationCandidates[index];
       final productId = candidate.product.id?.trim() ?? '';
@@ -493,6 +527,18 @@ class ProductDuplicateMatcherService {
         specifications: specifications,
         variant: variant.isEmpty ? null : variant,
         imageBytes: candidateImages[index],
+        isSet: candidate.product.isSet,
+        setType: candidate.product.setType,
+        setComponents: <AIProductMatchSetComponent>[
+          for (final component in candidateSetCompositions[index]?.components ??
+              const <ProductSetCompositionItem>[])
+            AIProductMatchSetComponent(
+              sku: component.sku,
+              name: component.name,
+              quantity: component.quantityInSet,
+              role: component.label,
+            ),
+        ],
         note: <String>[
           if (candidate.reasons.isNotEmpty)
             'Evidencia: ${candidate.reasons.join(' · ')}',
@@ -575,7 +621,10 @@ class ProductDuplicateMatcherService {
                         partSpecValueLabel(entry.key, entry.value),
                 },
             selectedVariant: _selectedVariantForProbe(probe),
-            quantity: null,
+            quantity: probe.sourcePurchaseQuantity,
+            supplierPackCount: probe.supplierPackCount,
+            supplierUnitClass: probe.supplierUnitClass,
+            supplierPackEvidenceConflict: probe.supplierPackEvidenceConflict,
             lineContext: probe.description,
             investigation: probe.investigation,
             options: options,
@@ -614,6 +663,15 @@ class ProductDuplicateMatcherService {
         'decision': decision?.decision.name,
         'product_id': decision?.productId,
         'component_count': decision?.components.length ?? 0,
+        if (decision != null)
+          'components': <Map<String, Object?>>[
+            for (final component in decision.components)
+              <String, Object?>{
+                'product_id': component.productId,
+                'qty': component.quantity,
+                'role': component.role.wireValue,
+              },
+          ],
         'confidence': decision?.confidence,
         'invalid_product_id': decision?.invalidProductId,
         'reason': decision?.reason,
@@ -678,6 +736,22 @@ class ProductDuplicateMatcherService {
         state: ProductDuplicateAdjudicationState.failed,
         reason:
             'La IA devolvió un producto que no estaba entre los candidatos.',
+      );
+    }
+
+    // An exact product identity is not yet an inventory-unit identity. A
+    // selected `10PCS`, `pair` or `set` must become a confirmed supplier graph
+    // before it can be linked. Keep the grounded chosen product in the typed
+    // decision so the OCR proposal builder can offer the correct homogeneous
+    // pack or canonical set without asking the model again.
+    if (probe.requiresExplicitComposition) {
+      return _AdjudicationOutcome(
+        candidates: const <ProductDuplicateCandidate>[],
+        state: ProductDuplicateAdjudicationState.abstained,
+        reason: probe.supplierPackEvidenceConflict
+            ? 'La evidencia del paquete es contradictoria; no se aplicó una descomposición.'
+            : 'La identidad del producto coincide, pero el paquete requiere confirmar cómo entra al inventario.',
+        decision: decision,
       );
     }
 
@@ -1217,7 +1291,12 @@ class ProductDuplicateMatcherService {
       final leafResolved = leafAdjudication.state ==
               ProductDuplicateAdjudicationState.accepted ||
           leafAdjudication.decision?.decision ==
-              AIProductMatchDecisionKind.composite;
+              AIProductMatchDecisionKind.composite ||
+          (probe.requiresExplicitComposition &&
+              leafAdjudication.state ==
+                  ProductDuplicateAdjudicationState.abstained &&
+              leafAdjudication.decision?.decision ==
+                  AIProductMatchDecisionKind.same);
       final tentativeLeafSame = leafAdjudication.state ==
               ProductDuplicateAdjudicationState.lowConfidence &&
           leafAdjudication.decision?.decision ==
