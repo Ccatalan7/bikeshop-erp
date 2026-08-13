@@ -39,6 +39,11 @@ void main() {
     );
 
     expect(proxy.calls, 1);
+    expect(
+      proxy.models,
+      <String>[AIAssistantService.productIdentityVisionModel],
+      reason: 'el OCR visual usa Gemini 3.6 Flash por defecto',
+    );
     expect(result, isNotNull);
     final identity = result!.identityInvestigation!;
     expect(identity.objectLabel, 'maza trasera');
@@ -98,7 +103,7 @@ void main() {
       String categoryTreeKey = 'tree A',
       String catalogKey = 'catalog A',
       String supplierName = 'AliExpress',
-      String visionModel = 'gemini-2.5-flash',
+      String visionModel = AIAssistantService.productIdentityVisionModel,
     }) async {
       await service.cleanProductTitleFromImage(
         rawTitle: 'NOVATEC D042SB rear hub',
@@ -138,7 +143,7 @@ void main() {
     expect(
         proxy.models,
         containsAll(<String>[
-          'gemini-2.5-flash',
+          AIAssistantService.productIdentityVisionModel,
           'gemini-2.5-pro',
         ]));
     service.dispose();
@@ -206,7 +211,7 @@ String _validIdentityReply({
   return jsonEncode(<String, Object?>{
     'schema_version': AIAssistantService.productIdentitySchemaVersion,
     'prompt_version': AIAssistantService.productIdentityPromptKey,
-    'model_id': 'gemini-2.5-flash',
+    'model_id': AIAssistantService.productIdentityVisionModel,
     'cleaned_name': 'Maza trasera Novatec D042SB 32H',
     'identity': <String, Object?>{
       'object': <String, Object?>{

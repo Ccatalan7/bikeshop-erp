@@ -1,8 +1,13 @@
-import { normalizeGenerateResponse, safeProviderFailure } from "./index.ts";
+import { isAllowedGenerateModel, normalizeGenerateResponse, safeProviderFailure } from "./index.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
+
+Deno.test("product OCR can use the current Gemini 3.6 Flash model", () => {
+  assert(isAllowedGenerateModel("gemini-3.6-flash"), "3.6 Flash is allowed");
+  assert(!isAllowedGenerateModel("gemini-3.5-flash"), "unused 3.5 is not enabled");
+});
 
 Deno.test("generate response exposes only redacted completion metadata", () => {
   const result = normalizeGenerateResponse({

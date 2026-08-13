@@ -758,6 +758,7 @@ class AIAssistantService extends ChangeNotifier
 
   static const String productIdentitySchemaVersion =
       ProductIdentityAIContract.schemaVersion;
+  static const String productIdentityVisionModel = 'gemini-3.6-flash';
   static const String productMatchPromptKey =
       'ai-product-grounded-adjudication-v4';
   static const String productCatalogScreenPromptKey =
@@ -2677,7 +2678,7 @@ ${contextLines.isEmpty ? 'sin texto adicional' : contextLines.join('\n')}
         const <AIProductCategoryLeaf>[],
     bool requireLeafAuthority = false,
     String promptKey = productIdentityPromptKey,
-    String visionModel = 'gemini-2.5-flash',
+    String visionModel = productIdentityVisionModel,
     void Function(AIProductIdentityFailure failure)? onFailure,
   }) async {
     final strictInvestigation =

@@ -8,7 +8,7 @@ import 'package:vinabike_erp/modules/ai_assistant/services/ai_service.dart';
 import 'package:vinabike_erp/shared/services/gemini_proxy_service.dart';
 
 const String _leafId = 'leaf-active';
-const String _modelId = 'gemini-2.5-flash';
+const String _modelId = AIAssistantService.productIdentityVisionModel;
 final Uint8List _image = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
 );

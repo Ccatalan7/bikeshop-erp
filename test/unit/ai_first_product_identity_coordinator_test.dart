@@ -797,7 +797,7 @@ String _strictInvestigationReply(String leafId) => jsonEncode(
       <String, Object?>{
         'schema_version': AIAssistantService.productIdentitySchemaVersion,
         'prompt_version': AIAssistantService.productIdentityPromptKey,
-        'model_id': 'gemini-2.5-flash',
+        'model_id': AIAssistantService.productIdentityVisionModel,
         'cleaned_name': 'Objeto novedoso ZX-77',
         'identity': <String, Object?>{
           'object': <String, Object?>{

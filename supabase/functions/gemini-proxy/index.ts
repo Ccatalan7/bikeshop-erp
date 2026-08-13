@@ -7,8 +7,16 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const allowedGenerateModels = new Set(["gemini-2.5-flash-lite", "gemini-2.5-flash"]);
+const allowedGenerateModels = new Set([
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-3.6-flash",
+]);
 const allowedEmbeddingModels = new Set(["gemini-embedding-001"]);
+
+export function isAllowedGenerateModel(model: string): boolean {
+  return allowedGenerateModels.has(model);
+}
 
 class ProxyError extends Error {
   constructor(
@@ -192,7 +200,7 @@ export async function handler(request: Request): Promise<Response> {
     const action = (body.action ?? "").toString();
     if (action === "generate-content") {
       const model = (body.model ?? "").toString();
-      if (!allowedGenerateModels.has(model)) {
+      if (!isAllowedGenerateModel(model)) {
         return errorResponse(400, "model_not_allowed", "Model not allowed");
       }
       const contents = Array.isArray(body.contents) ? body.contents : [];
