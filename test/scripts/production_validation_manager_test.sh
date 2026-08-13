@@ -113,7 +113,8 @@ data_toc="$TEST_TMP/data.toc"
 acl_toc="$TEST_TMP/acl.toc"
 printf '%s\n' \
   '1; 2615 2200 SCHEMA - public postgres' \
-  '2; 1259 100 TABLE public expenses postgres' \
+  '2; 2615 2201 SCHEMA - private postgres' \
+  '3; 1259 100 TABLE public expenses postgres' \
   >"$clean_toc"
 printf '%s\n' \
   '1; 2615 2200 SCHEMA - public postgres' \
@@ -143,6 +144,10 @@ printf '%s\n' \
   '   FROM public.user_profiles profile' \
   '  WHERE ((profile.user_id = auth.uid()) AND (profile.is_active IS TRUE)))));' \
   '' \
+  'CREATE POLICY employee_advance_receipt_guard ON storage.objects USING (' \
+  '  (NOT private.is_locked_employee_advance_storage_object(name))' \
+  ');' \
+  '' \
   'ALTER TABLE ONLY storage.objects' \
   '    ADD CONSTRAINT objects_bucket_id_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id);' \
   >"$managed_post"
@@ -154,13 +159,24 @@ grep -q 'CREATE INDEX users_email_idx' "$managed_post_early" ||
   fail "managed post-data split lost an independent early statement"
 grep -q 'ADD CONSTRAINT objects_bucket_id_fkey' "$managed_post_early" ||
   fail "managed post-data split lost a multiline early statement"
-if grep -q 'public\\.' "$managed_post_early"; then
-  fail "managed post-data split left a public-schema dependency in early SQL"
+if grep -Eq '(public|private)\.' "$managed_post_early"; then
+  fail "managed post-data split left a public/private dependency in early SQL"
 fi
 grep -q 'CREATE POLICY users_tenant_access' "$managed_post_late" ||
   fail "managed post-data split lost the deferred policy statement"
 grep -q 'FROM public.user_profiles profile' "$managed_post_late" ||
   fail "managed post-data split detached the deferred policy body"
+grep -q 'private.is_locked_employee_advance_storage_object' "$managed_post_late" ||
+  fail "managed post-data split left a private-schema dependency before restore"
+
+grep -q -- '--schema=private' "$ROOT_DIR/scripts/db/production_validation.sh" ||
+  fail "production capture omitted the dependency-only private schema"
+grep -q "namespace.nspname in ('public', 'private')" \
+  "$ROOT_DIR/scripts/db/production_validation_catalog.sql" ||
+  fail "catalog fingerprint omitted private schema drift"
+grep -q "namespace.nspname in ('public', 'private')" \
+  "$ROOT_DIR/scripts/db/production_validation_acl_roles.sql" ||
+  fail "ACL role capture omitted private schema grants"
 
 stale_lock="$PRODUCTION_VALIDATION_LOCKS/stale"
 mkdir -p "$stale_lock"

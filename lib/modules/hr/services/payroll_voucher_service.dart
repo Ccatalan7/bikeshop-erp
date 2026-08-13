@@ -1161,6 +1161,61 @@ class PayrollVoucherService extends ChangeNotifier {
     }).toList(growable: false);
   }
 
+  /// Active non-salary expense accounts offered by the canonical payment
+  /// workspace for reimbursements and other employee payables.
+  Future<List<Map<String, dynamic>>>
+      getPayrollAdditionalExpenseAccounts() async {
+    final results = await Future.wait<List<Map<String, dynamic>>>([
+      _db.select(
+        'accounts',
+        selectColumns: 'id,code,name,type,parent_id,is_active',
+        where: 'type=expense',
+        orderBy: 'code',
+      ),
+      _db.select('employees', selectColumns: 'salary_account_id'),
+      _db.select('payroll_voucher_lines', selectColumns: 'salary_account_id'),
+    ]);
+    final rows = results[0];
+    final salaryFamily = <String>{
+      for (final source in <Map<String, dynamic>>[
+        ...results[1],
+        ...results[2],
+      ])
+        if (source['salary_account_id']?.toString().trim() case final id?
+            when id.isNotEmpty)
+          id,
+    };
+
+    // Salary accounts are person-specific children in the current chart, but
+    // the editor must also hide their parent and any future siblings/children.
+    // Walking the connected account branch avoids encoding Chilean account
+    // numbers or names as business logic.
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (final row in rows) {
+        final id = row['id']?.toString().trim() ?? '';
+        final parentId = row['parent_id']?.toString().trim() ?? '';
+        if (id.isEmpty) continue;
+        if (salaryFamily.contains(id) &&
+            parentId.isNotEmpty &&
+            salaryFamily.add(parentId)) {
+          changed = true;
+        }
+        if (parentId.isNotEmpty &&
+            salaryFamily.contains(parentId) &&
+            salaryFamily.add(id)) {
+          changed = true;
+        }
+      }
+    }
+
+    return rows
+        .where((row) => row['is_active'] != false)
+        .where((row) => !salaryFamily.contains(row['id']?.toString().trim()))
+        .toList(growable: false);
+  }
+
   /// Every tenant employee, ACTIVE OR NOT: the Anticipos surface must keep an
   /// inactive person with advance history discoverable (Codex cross-review
   /// 2026-07-30). Eligibility for NEW advances is gated per person by status

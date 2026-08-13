@@ -1,9 +1,4 @@
-import {
-  type AgentGatewayRequest,
-  type AgentMessage,
-  isLogicalModelRole,
-  type LogicalModelRole,
-} from "../_shared/ai_agent/contracts.ts";
+import type { AgentGatewayRequest, LogicalModelRole } from "../_shared/ai_agent/contracts.ts";
 import {
   type AgentAuthorityDataSource,
   AuthorityError,
@@ -16,12 +11,31 @@ import {
   ToolRegistryError,
 } from "../_shared/ai_agent/tool_registry.ts";
 import { createGeminiAgentProvider } from "../_shared/ai_agent/providers/gemini.ts";
+import {
+  AgentApprovalActionError,
+  type AgentApprovalActionExecutor,
+  createSupabaseAgentApprovalActionExecutor,
+  parseApprovalActionRequest,
+} from "../_shared/ai_agent/action_endpoint.ts";
 import { createOpenAIResponsesProvider } from "../_shared/ai_agent/providers/openai_responses.ts";
+import { createAnthropicMessagesProvider } from "../_shared/ai_agent/providers/anthropic.ts";
 import {
   type AgentProviderId,
   AgentProviderRouter,
   ProviderError,
 } from "../_shared/ai_agent/providers/provider.ts";
+import { AgentRuntimeError, executeAgentRun } from "../_shared/ai_agent/runtime.ts";
+import { type AgentRunStore, createSupabaseAgentRunStore } from "../_shared/ai_agent/run_store.ts";
+import {
+  type AgentToolExecutor,
+  createSupabaseAgentToolExecutor,
+} from "../_shared/ai_agent/tool_executor.ts";
+import {
+  createSupabaseRuntimeStoreClient,
+  createSupabaseUserDataClient,
+} from "../_shared/ai_agent/supabase_user_data.ts";
+import { AgentPricingCatalog } from "../_shared/ai_agent/pricing.ts";
+import { createGeminiGoogleSearchPublicResearchClient } from "../_shared/ai_agent/public_research.ts";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://project-vinabike.web.app",
@@ -29,28 +43,29 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:54330",
   "http://127.0.0.1:54330",
 ] as const;
-
-const DEFAULT_MAX_REQUEST_BYTES = 128 * 1024;
-const DEFAULT_MAX_MESSAGES = 60;
-const DEFAULT_MAX_TOOL_TURNS = 5;
-const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_MAX_OUTPUT_TOKENS = 2_048;
-const MAX_TEXT_CHARS = 64 * 1024;
-const MAX_PROVIDER_TEXT_CHARS = 256 * 1024;
+const DEFAULT_MAX_REQUEST_BYTES = 32 * 1024;
+const DEFAULT_TIMEOUT_MS = 90_000;
 
 type EnvReader = (name: string) => string | undefined;
 
-export interface AgentGatewayOptions {
+export interface AgentRequestServices {
   authoritySource: AgentAuthorityDataSource;
+  runStore: AgentRunStore;
+  toolExecutor: AgentToolExecutor;
+  approvalActionExecutor?: AgentApprovalActionExecutor;
+}
+
+export interface AgentGatewayOptions {
   providerRouter: AgentProviderRouter;
+  requestServices(request: Request): AgentRequestServices;
   toolRegistry?: AgentToolRegistry;
   allowedOrigins?: readonly string[];
   systemInstruction?: string;
+  auditHmacKey: string;
   maxRequestBytes?: number;
-  maxMessages?: number;
-  maxTurns?: number;
   timeoutMs?: number;
   maxOutputTokens?: number;
+  pricingCatalog: AgentPricingCatalog;
 }
 
 class GatewayError extends Error {
@@ -64,8 +79,13 @@ class GatewayError extends Error {
   }
 }
 
-export async function handler(request: Request, options: AgentGatewayOptions): Promise<Response> {
-  const allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
+export async function handler(
+  request: Request,
+  options: AgentGatewayOptions,
+): Promise<Response> {
+  const allowedOrigins = normalizeAllowedOrigins(
+    options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS,
+  );
   const origin = request.headers.get("origin");
   if (origin && !allowedOrigins.has(normalizeOrigin(origin))) {
     return json(request, allowedOrigins, 403, {
@@ -73,9 +93,11 @@ export async function handler(request: Request, options: AgentGatewayOptions): P
       code: "origin_not_allowed",
     });
   }
-
   if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders(request, allowedOrigins) });
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(request, allowedOrigins),
+    });
   }
   if (request.method !== "POST") {
     return json(request, allowedOrigins, 405, {
@@ -85,39 +107,45 @@ export async function handler(request: Request, options: AgentGatewayOptions): P
   }
 
   const controller = new AbortController();
-  const timeoutMs = boundedInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS, 1, 120_000);
+  const timeoutMs = boundedInteger(
+    options.timeoutMs,
+    DEFAULT_TIMEOUT_MS,
+    1,
+    90_000,
+  );
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  let rejectClientAbort: ((reason: GatewayError) => void) | undefined;
-  const clientAbort = new Promise<never>((_, reject) => {
-    rejectClientAbort = reject;
-  });
   const abortFromClient = () => {
     if (!controller.signal.aborted) controller.abort(request.signal.reason);
-    rejectClientAbort?.(
-      new GatewayError(499, "request_aborted", "Assistant request was cancelled"),
-    );
   };
-  const clientAlreadyAborted = request.signal.aborted;
-  if (clientAlreadyAborted) {
-    controller.abort(request.signal.reason);
-  } else {
-    request.signal.addEventListener("abort", abortFromClient, { once: true });
-  }
+  if (request.signal.aborted) controller.abort(request.signal.reason);
+  else {request.signal.addEventListener("abort", abortFromClient, {
+      once: true,
+    });}
+
   try {
-    if (clientAlreadyAborted) {
-      throw new GatewayError(499, "request_aborted", "Assistant request was cancelled");
+    if (request.signal.aborted) {
+      throw new GatewayError(
+        499,
+        "request_aborted",
+        "Assistant request was cancelled",
+      );
     }
-    const result = await Promise.race([
-      completeGatewayTurn(request, options, controller.signal),
-      clientAbort,
-      new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          controller.abort(new DOMException("AI gateway deadline exceeded", "TimeoutError"));
-          reject(new GatewayError(504, "request_timeout", "Assistant request timed out"));
-        }, timeoutMs);
-      }),
-    ]);
-    return json(request, allowedOrigins, 200, result);
+    timeoutId = setTimeout(() => {
+      controller.abort(
+        new DOMException("AI gateway deadline exceeded", "TimeoutError"),
+      );
+    }, timeoutMs);
+    const result = await completeGatewayTurn(
+      request,
+      options,
+      controller.signal,
+    );
+    return json(
+      request,
+      allowedOrigins,
+      200,
+      result as unknown as Record<string, unknown>,
+    );
   } catch (error) {
     const safe = safeGatewayError(error);
     return json(request, allowedOrigins, safe.status, {
@@ -127,7 +155,6 @@ export async function handler(request: Request, options: AgentGatewayOptions): P
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
     request.signal.removeEventListener("abort", abortFromClient);
-    rejectClientAbort = undefined;
   }
 }
 
@@ -135,80 +162,91 @@ async function completeGatewayTurn(
   request: Request,
   options: AgentGatewayOptions,
   signal: AbortSignal,
-): Promise<Record<string, unknown>> {
-  const maxRequestBytes = boundedInteger(
-    options.maxRequestBytes,
-    DEFAULT_MAX_REQUEST_BYTES,
-    1_024,
-    1024 * 1024,
-  );
-  const authority = await resolveAgentAuthority(request, options.authoritySource, signal);
-  const body = await readBoundedJson(request, maxRequestBytes, signal);
-  const parsed = parseGatewayRequest(
-    body,
-    boundedInteger(options.maxMessages, DEFAULT_MAX_MESSAGES, 1, 200),
-    boundedInteger(options.maxTurns, DEFAULT_MAX_TOOL_TURNS, 1, 20),
-  );
-  const toolRegistry = options.toolRegistry ?? createDefaultAgentToolRegistry();
-  const tools = toolRegistry.advertisedFor(authority);
-  const provider = options.providerRouter.providerFor(parsed.modelRole);
-  const turn = await provider.generate({
-    modelRole: parsed.modelRole,
-    systemInstruction: options.systemInstruction ?? defaultSystemInstruction(),
-    messages: parsed.messages,
-    tools,
-    maxOutputTokens: boundedInteger(
-      options.maxOutputTokens,
-      DEFAULT_MAX_OUTPUT_TOKENS,
-      64,
-      8_192,
-    ),
-  }, signal);
-  if (turn.text.length > MAX_PROVIDER_TEXT_CHARS) {
-    throw new GatewayError(502, "provider_invalid_response", "AI provider response is invalid");
+) {
+  // Validate the caller session before constructing any request-scoped
+  // transport. The production transport intentionally rejects a missing
+  // bearer header at construction time; doing this first preserves the public
+  // 401 contract instead of collapsing that safe rejection into a generic 500.
+  const authorization = request.headers.get("authorization") ?? "";
+  const bearer = /^Bearer\s+(\S+)$/i.exec(authorization);
+  if (!bearer || bearer[1].length > 8_192) {
+    throw new AuthorityError(401, "invalid_session", "Authentication required");
   }
-  toolRegistry.validateProviderCalls(turn.toolCalls, authority);
-  if (turn.toolCalls.length > 0) {
-    throw new GatewayError(
-      501,
-      "agent_tool_loop_not_activated",
-      "Server-owned AI tool execution is not activated",
+  const services = options.requestServices(request);
+  const authority = await resolveAgentAuthority(
+    request,
+    services.authoritySource,
+    signal,
+  );
+  const body = await readBoundedJson(
+    request,
+    boundedInteger(
+      options.maxRequestBytes,
+      DEFAULT_MAX_REQUEST_BYTES,
+      1024,
+      128 * 1024,
+    ),
+    signal,
+  );
+  if (isRecord(body) && body.operation === "approval_action") {
+    const action = parseApprovalActionRequest(body);
+    if (!services.approvalActionExecutor) {
+      throw new GatewayError(
+        503,
+        "approval_unavailable",
+        "Approval could not be completed",
+      );
+    }
+    return await services.approvalActionExecutor.apply(
+      action,
+      authority,
+      signal,
     );
   }
-
-  return {
-    turn: {
-      text: turn.text,
-      toolCalls: turn.toolCalls,
-      usage: turn.usage,
-      finishReason: turn.finishReason,
-    },
-    modelRole: parsed.modelRole,
-  };
+  const parsed = parseGatewayRequest(body);
+  return await executeAgentRun(parsed, authority, {
+    providerRouter: options.providerRouter,
+    toolRegistry: options.toolRegistry ?? createDefaultAgentToolRegistry(),
+    toolExecutor: services.toolExecutor,
+    runStore: services.runStore,
+    auditHmacKey: options.auditHmacKey,
+    systemInstruction: options.systemInstruction,
+    maxOutputTokens: options.maxOutputTokens,
+    pricingCatalog: options.pricingCatalog,
+  }, signal);
 }
 
 export function createProductionOptions(
   getEnv: EnvReader = (name) => Deno.env.get(name),
   fetchImpl: typeof fetch = fetch,
 ): AgentGatewayOptions {
-  const providerRoutes: Record<LogicalModelRole, { provider: AgentProviderId }> = {
+  const providerRoutes: Record<
+    LogicalModelRole,
+    { provider: AgentProviderId }
+  > = {
     fast: { provider: configuredProvider(getEnv("AI_AGENT_FAST_PROVIDER")) },
     deep: { provider: configuredProvider(getEnv("AI_AGENT_DEEP_PROVIDER")) },
-    vision: { provider: configuredProvider(getEnv("AI_AGENT_VISION_PROVIDER")) },
+    vision: {
+      provider: configuredProvider(getEnv("AI_AGENT_VISION_PROVIDER")),
+    },
   };
-  const selectedProviders = new Set(Object.values(providerRoutes).map((route) => route.provider));
+  const selectedProviders = new Set(
+    Object.values(providerRoutes).map((route) => route.provider),
+  );
   const providers = [];
-
   if (selectedProviders.has("gemini")) {
     const allowedModels = csvValues(getEnv("AI_AGENT_GEMINI_MODEL_ALLOWLIST"));
     providers.push(createGeminiAgentProvider({
       apiKey: requiredEnv(getEnv, "GEMINI_API_KEY"),
       fetchImpl,
-      allowedModels: allowedModels.length > 0 ? allowedModels : undefined,
+      allowedModels: allowedModels.length ? allowedModels : undefined,
       modelByRole: {
-        fast: getEnv("AI_AGENT_GEMINI_FAST_MODEL")?.trim() || "gemini-2.5-flash-lite",
-        deep: getEnv("AI_AGENT_GEMINI_DEEP_MODEL")?.trim() || "gemini-2.5-flash",
-        vision: getEnv("AI_AGENT_GEMINI_VISION_MODEL")?.trim() || "gemini-2.5-flash",
+        fast: getEnv("AI_AGENT_GEMINI_FAST_MODEL")?.trim() ||
+          "gemini-3.6-flash",
+        deep: getEnv("AI_AGENT_GEMINI_DEEP_MODEL")?.trim() ||
+          "gemini-3.1-pro-preview",
+        vision: getEnv("AI_AGENT_GEMINI_VISION_MODEL")?.trim() ||
+          "gemini-3.6-flash",
       },
     }));
   }
@@ -217,61 +255,231 @@ export function createProductionOptions(
     providers.push(createOpenAIResponsesProvider({
       apiKey: requiredEnv(getEnv, "OPENAI_API_KEY"),
       fetchImpl,
-      allowedModels: allowedModels.length > 0 ? allowedModels : undefined,
+      allowedModels: allowedModels.length ? allowedModels : undefined,
       modelByRole: {
         fast: getEnv("AI_AGENT_OPENAI_FAST_MODEL")?.trim() || "gpt-5.6-sol",
         deep: getEnv("AI_AGENT_OPENAI_DEEP_MODEL")?.trim() || "gpt-5.6-sol",
         vision: getEnv("AI_AGENT_OPENAI_VISION_MODEL")?.trim() || "gpt-5.6-sol",
       },
+      reasoningEffortByRole: {
+        fast: configuredOpenAIEffort(
+          getEnv("AI_AGENT_OPENAI_FAST_EFFORT"),
+          "medium",
+        ),
+        deep: configuredOpenAIEffort(
+          getEnv("AI_AGENT_OPENAI_DEEP_EFFORT"),
+          "high",
+        ),
+        vision: configuredOpenAIEffort(
+          getEnv("AI_AGENT_OPENAI_VISION_EFFORT"),
+          "medium",
+        ),
+      },
     }));
   }
-
-  return {
-    authoritySource: createSupabaseAuthorityDataSource({
-      supabaseUrl: requiredEnv(getEnv, "SUPABASE_URL"),
-      anonKey: requiredEnv(getEnv, "SUPABASE_ANON_KEY"),
-      serviceRoleKey: requiredEnv(getEnv, "SUPABASE_SERVICE_ROLE_KEY"),
+  if (selectedProviders.has("anthropic")) {
+    const allowedModels = csvValues(
+      getEnv("AI_AGENT_ANTHROPIC_MODEL_ALLOWLIST"),
+    );
+    providers.push(createAnthropicMessagesProvider({
+      apiKey: requiredEnv(getEnv, "ANTHROPIC_API_KEY"),
       fetchImpl,
+      allowedModels: allowedModels.length ? allowedModels : undefined,
+      modelByRole: {
+        fast: getEnv("AI_AGENT_ANTHROPIC_FAST_MODEL")?.trim() ||
+          "claude-sonnet-5",
+        deep: getEnv("AI_AGENT_ANTHROPIC_DEEP_MODEL")?.trim() ||
+          "claude-opus-5",
+        vision: getEnv("AI_AGENT_ANTHROPIC_VISION_MODEL")?.trim() ||
+          "claude-sonnet-5",
+      },
+      effortByRole: {
+        fast: configuredProviderEffort(
+          getEnv("AI_AGENT_ANTHROPIC_FAST_EFFORT"),
+          "low",
+        ),
+        deep: configuredProviderEffort(
+          getEnv("AI_AGENT_ANTHROPIC_DEEP_EFFORT"),
+          "high",
+        ),
+        vision: configuredProviderEffort(
+          getEnv("AI_AGENT_ANTHROPIC_VISION_EFFORT"),
+          "medium",
+        ),
+      },
+    }));
+  }
+  const supabaseUrl = requiredEnv(getEnv, "SUPABASE_URL");
+  const publishableKey = resolveSupabasePublishableKey(getEnv, supabaseUrl);
+  const runtimeAttestationKeyId = requiredEnv(
+    getEnv,
+    "AI_AGENT_RUNTIME_ATTESTATION_KID",
+  );
+  const runtimeAttestationKeyHex = requiredEnv(
+    getEnv,
+    "AI_AGENT_RUNTIME_ATTESTATION_KEY_HEX",
+  );
+  const runtimeAttestationAudience = requiredEnv(
+    getEnv,
+    "AI_AGENT_RUNTIME_ATTESTATION_AUDIENCE",
+  );
+  const timeoutMs = optionalInteger(getEnv("AI_AGENT_TIMEOUT_MS"));
+  if (timeoutMs !== undefined) {
+    boundedInteger(timeoutMs, DEFAULT_TIMEOUT_MS, 1, 90_000);
+  }
+  const maxOutputTokens = optionalInteger(getEnv("AI_AGENT_MAX_OUTPUT_TOKENS"));
+  if (maxOutputTokens !== undefined) boundedOutputTokens(maxOutputTokens);
+  const geminiResearchApiKey = getEnv("GEMINI_API_KEY")?.trim();
+  const pricingCatalog = AgentPricingCatalog.parse(
+    requiredEnv(getEnv, "AI_AGENT_MODEL_PRICING_JSON"),
+  );
+  // Public research uses the provider-native, forced Google Search contract.
+  // Browser Use remains implemented but deliberately dormant: its current API
+  // cannot prove a provider-side read-only action policy or attest every
+  // visited URL, so merely adding a key must never silently widen authority.
+  const publicResearch = geminiResearchApiKey
+    ? createGeminiGoogleSearchPublicResearchClient({
+      apiKey: geminiResearchApiKey,
+      fetchImpl,
+      model: getEnv("AI_AGENT_GEMINI_RESEARCH_MODEL")?.trim() ||
+        "gemini-3.6-flash",
+      timeoutMs: optionalInteger(getEnv("AI_AGENT_GEMINI_RESEARCH_TIMEOUT_MS")),
+      pricingCatalog,
+      searchMicrousdPerQuery: requiredInteger(
+        getEnv,
+        "AI_AGENT_GEMINI_SEARCH_MICROUSD_PER_QUERY",
+      ),
+      // Search establishes publisher evidence. URL Context then reads only the
+      // validated direct publisher URLs to fill unresolved subfacts; any
+      // enrichment failure preserves the proven Search result as partial.
+      enrichWithUrlContext: true,
+      // Technical facts are finally re-read from the exact selected publisher
+      // pages. Only deterministic page text can authorize field-level quotes;
+      // Gemini's grounded prose remains useful context but not a specification.
+      enrichWithPublisherContent: true,
+      resolvePublisherDns: (hostname, recordType) => Deno.resolveDns(hostname, recordType),
+    })
+    : undefined;
+  return {
+    providerRouter: new AgentProviderRouter({
+      providers,
+      routes: providerRoutes,
     }),
-    providerRouter: new AgentProviderRouter({ providers, routes: providerRoutes }),
+    requestServices(request) {
+      const authorization = request.headers.get("authorization") ?? "";
+      const client = createSupabaseUserDataClient({
+        supabaseUrl,
+        publishableKey,
+        authorization,
+        fetchImpl,
+      });
+      const runtimeClient = createSupabaseRuntimeStoreClient({
+        supabaseUrl,
+        publishableKey,
+        authorization,
+        attestationKeyId: runtimeAttestationKeyId,
+        attestationKeyHex: runtimeAttestationKeyHex,
+        attestationAudience: runtimeAttestationAudience,
+        fetchImpl,
+      });
+      return {
+        authoritySource: createSupabaseAuthorityDataSource(client),
+        runStore: createSupabaseAgentRunStore(client, runtimeClient),
+        toolExecutor: createSupabaseAgentToolExecutor(client, {
+          publicResearch,
+        }),
+        approvalActionExecutor: createSupabaseAgentApprovalActionExecutor(
+          client,
+        ),
+      };
+    },
+    toolRegistry: createDefaultAgentToolRegistry({
+      publicResearch: Boolean(publicResearch),
+    }),
     allowedOrigins: [
       ...DEFAULT_ALLOWED_ORIGINS,
       ...csvValues(getEnv("AI_AGENT_CORS_ALLOWED_ORIGINS")),
     ],
-    toolRegistry: createDefaultAgentToolRegistry(),
-    systemInstruction: getEnv("AI_AGENT_SYSTEM_INSTRUCTION")?.trim() || defaultSystemInstruction(),
+    systemInstruction: getEnv("AI_AGENT_SYSTEM_INSTRUCTION")?.trim(),
+    auditHmacKey: requiredEnv(getEnv, "AI_AGENT_AUDIT_HMAC_KEY"),
+    pricingCatalog,
     maxRequestBytes: optionalInteger(getEnv("AI_AGENT_MAX_REQUEST_BYTES")),
-    maxMessages: optionalInteger(getEnv("AI_AGENT_MAX_MESSAGES")),
-    maxTurns: optionalInteger(getEnv("AI_AGENT_MAX_TURNS")),
-    timeoutMs: optionalInteger(getEnv("AI_AGENT_TIMEOUT_MS")),
-    maxOutputTokens: optionalInteger(getEnv("AI_AGENT_MAX_OUTPUT_TOKENS")),
+    timeoutMs,
+    maxOutputTokens,
   };
 }
 
-export function parseGatewayRequest(
-  value: unknown,
-  maxMessages = DEFAULT_MAX_MESSAGES,
-  maxTurns = DEFAULT_MAX_TOOL_TURNS,
-): AgentGatewayRequest {
-  if (!isRecord(value) || !hasExactKeys(value, ["messages", "modelRole"])) {
-    throw new GatewayError(400, "invalid_request", "Invalid assistant request");
+export function parseGatewayRequest(value: unknown): AgentGatewayRequest {
+  if (!isRecord(value)) return invalidRequest();
+  const allowedKeys = value.threadId === undefined
+    ? ["version", "clientRequestId", "modelRole", "message", "viewContext"]
+    : [
+      "version",
+      "clientRequestId",
+      "threadId",
+      "modelRole",
+      "message",
+      "viewContext",
+    ];
+  if (!hasExactKeys(value, allowedKeys) || value.version !== 1) {
+    return invalidRequest();
   }
-  if (!isLogicalModelRole(value.modelRole) || !Array.isArray(value.messages)) {
-    throw new GatewayError(400, "invalid_request", "Invalid assistant request");
+  if (
+    !validUuid(value.clientRequestId) ||
+    (value.threadId !== undefined && value.threadId !== null &&
+      !validUuid(value.threadId))
+  ) {
+    return invalidRequest();
   }
-  if (value.messages.length < 1 || value.messages.length > maxMessages) {
-    throw new GatewayError(400, "message_limit_exceeded", "Assistant message limit exceeded");
+  if (value.modelRole !== "fast" && value.modelRole !== "deep") {
+    return invalidRequest();
   }
+  if (typeof value.message !== "string") return invalidRequest();
+  const message = value.message.trim();
+  if (!message || new TextEncoder().encode(message).byteLength > 8192) {
+    return invalidRequest();
+  }
+  const viewContext = parseViewContext(value.viewContext);
+  return {
+    version: 1,
+    clientRequestId: value.clientRequestId,
+    threadId: value.threadId ?? null,
+    modelRole: value.modelRole,
+    message,
+    viewContext,
+  };
+}
 
-  const messages = value.messages.map(parseClientMessage);
-  if (messages.length > maxTurns) {
-    throw new GatewayError(400, "turn_limit_exceeded", "Assistant turn limit exceeded");
+function parseViewContext(value: unknown): AgentGatewayRequest["viewContext"] {
+  if (
+    !isRecord(value) || !hasExactKeys(value, ["kind", "jobIds", "truncated"])
+  ) {
+    return invalidRequest();
   }
-  const last = messages[messages.length - 1];
-  if (!last || (last.role !== "user" && last.role !== "tool")) {
-    throw new GatewayError(400, "invalid_request", "Assistant input must end with user data");
+  if (!Array.isArray(value.jobIds) || typeof value.truncated !== "boolean") {
+    return invalidRequest();
   }
-  return { modelRole: value.modelRole, messages };
+  if (value.kind === "none" || value.kind === "rejected") {
+    if (value.jobIds.length || value.truncated) return invalidRequest();
+    return { kind: value.kind, jobIds: [], truncated: false };
+  }
+  if (
+    value.kind !== "workshop_jobs" || value.jobIds.length > 20 ||
+    value.jobIds.length < 1
+  ) {
+    return invalidRequest();
+  }
+  if (
+    !value.jobIds.every(validUuid) ||
+    new Set(value.jobIds).size !== value.jobIds.length
+  ) {
+    return invalidRequest();
+  }
+  return {
+    kind: "workshop_jobs",
+    jobIds: value.jobIds,
+    truncated: value.truncated,
+  };
 }
 
 export function isAllowedCorsOrigin(
@@ -281,34 +489,6 @@ export function isAllowedCorsOrigin(
   return normalizeAllowedOrigins(configured).has(normalizeOrigin(origin));
 }
 
-function parseClientMessage(value: unknown): AgentMessage {
-  if (!isRecord(value) || typeof value.role !== "string") {
-    throw new GatewayError(400, "invalid_request", "Invalid assistant message");
-  }
-  if (value.role === "system") {
-    throw new GatewayError(400, "system_prompt_forbidden", "System instructions are server-owned");
-  }
-  if (value.role === "user") {
-    if (!hasExactKeys(value, ["role", "text"])) return invalidMessage();
-    return { role: "user", text: boundedText(value.text, false) };
-  }
-  if (value.role === "assistant") {
-    throw new GatewayError(
-      400,
-      "assistant_history_forbidden",
-      "Assistant history is server-owned",
-    );
-  }
-  if (value.role === "tool") {
-    throw new GatewayError(
-      400,
-      "tool_history_forbidden",
-      "Tool execution history is server-owned",
-    );
-  }
-  return invalidMessage();
-}
-
 async function readBoundedJson(
   request: Request,
   maxBytes: number,
@@ -316,88 +496,119 @@ async function readBoundedJson(
 ): Promise<unknown> {
   const contentLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    throw new GatewayError(413, "request_too_large", "Assistant request is too large");
+    throw new GatewayError(
+      413,
+      "request_too_large",
+      "Assistant request is too large",
+    );
   }
   const reader = request.body?.getReader();
-  if (!reader) throw new GatewayError(400, "invalid_json", "Assistant request must be valid JSON");
-  const abortReader = () => {
-    void reader.cancel("request_timeout").catch(() => {});
-  };
+  if (!reader) {
+    throw new GatewayError(
+      400,
+      "invalid_json",
+      "Assistant request must be valid JSON",
+    );
+  }
+  const abortReader = () => void reader.cancel("request_aborted").catch(() => {});
   signal.addEventListener("abort", abortReader, { once: true });
   const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
+  let total = 0;
   try {
     while (true) {
       if (signal.aborted) {
-        throw new GatewayError(504, "request_timeout", "Assistant request timed out");
+        throw new GatewayError(
+          504,
+          "request_timeout",
+          "Assistant request timed out",
+        );
       }
       const { done, value } = await reader.read();
       if (done) break;
-      totalBytes += value.byteLength;
-      if (totalBytes > maxBytes) {
+      total += value.byteLength;
+      if (total > maxBytes) {
         await reader.cancel("request_too_large");
-        throw new GatewayError(413, "request_too_large", "Assistant request is too large");
+        throw new GatewayError(
+          413,
+          "request_too_large",
+          "Assistant request is too large",
+        );
       }
       chunks.push(value);
     }
   } catch (error) {
     if (error instanceof GatewayError) throw error;
-    throw new GatewayError(400, "invalid_json", "Assistant request must be valid JSON");
+    throw new GatewayError(
+      400,
+      "invalid_json",
+      "Assistant request must be valid JSON",
+    );
   } finally {
     signal.removeEventListener("abort", abortReader);
     reader.releaseLock();
   }
-  const bytes = new Uint8Array(totalBytes);
+  const bytes = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  let raw: string;
   try {
-    raw = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch (_) {
-    throw new GatewayError(400, "invalid_json", "Assistant request must be valid JSON");
-  }
-  try {
-    return JSON.parse(raw);
-  } catch (_) {
-    throw new GatewayError(400, "invalid_json", "Assistant request must be valid JSON");
+    throw new GatewayError(
+      400,
+      "invalid_json",
+      "Assistant request must be valid JSON",
+    );
   }
 }
 
 function safeGatewayError(error: unknown): GatewayError {
   if (error instanceof GatewayError) return error;
-  if (error instanceof AuthorityError) {
+  if (error instanceof AgentApprovalActionError) {
     return new GatewayError(error.status, error.code, error.publicMessage);
   }
-  if (error instanceof ToolRegistryError) {
+  if (
+    error instanceof AuthorityError || error instanceof ToolRegistryError ||
+    error instanceof AgentRuntimeError
+  ) {
     return new GatewayError(error.status, error.code, error.publicMessage);
   }
   if (error instanceof ProviderError) {
-    const status = error.status === 429 ? 429 : error.status === 408 ? 504 : 502;
-    return new GatewayError(status, error.code, "AI provider is temporarily unavailable");
+    return new GatewayError(
+      502,
+      error.code,
+      "AI provider is temporarily unavailable",
+    );
   }
-  return new GatewayError(500, "assistant_unavailable", "Assistant is temporarily unavailable");
+  return new GatewayError(
+    500,
+    "assistant_unavailable",
+    "Assistant is temporarily unavailable",
+  );
 }
 
 function json(
   request: Request,
-  allowedOrigins: ReadonlySet<string>,
+  origins: ReadonlySet<string>,
   status: number,
   body: Record<string, unknown>,
 ): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders(request, allowedOrigins),
+      ...corsHeaders(request, origins),
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
     },
   });
 }
 
-function corsHeaders(request: Request, allowedOrigins: ReadonlySet<string>): HeadersInit {
+function corsHeaders(
+  request: Request,
+  origins: ReadonlySet<string>,
+): HeadersInit {
   const headers: Record<string, string> = {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -405,18 +616,22 @@ function corsHeaders(request: Request, allowedOrigins: ReadonlySet<string>): Hea
     Vary: "Origin",
   };
   const origin = normalizeOrigin(request.headers.get("origin") ?? "");
-  if (allowedOrigins.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  if (origins.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
   return headers;
 }
 
-function normalizeAllowedOrigins(values: readonly string[]): ReadonlySet<string> {
-  const origins = new Set<string>();
+function normalizeAllowedOrigins(
+  values: readonly string[],
+): ReadonlySet<string> {
+  const result = new Set<string>();
   for (const value of values) {
-    if (value.trim() === "*") throw new Error("Wildcard CORS origins are forbidden");
+    if (value.trim() === "*") {
+      throw new Error("Wildcard CORS origins are forbidden");
+    }
     const origin = normalizeOrigin(value);
-    if (origin) origins.add(origin);
+    if (origin) result.add(origin);
   }
-  return origins;
+  return result;
 }
 
 function normalizeOrigin(value: string): string {
@@ -428,17 +643,93 @@ function normalizeOrigin(value: string): string {
   }
 }
 
-function defaultSystemInstruction(): string {
-  return "Eres el asistente operativo de Viñabike. Usa sólo herramientas anunciadas por el " +
-    "servidor, no inventes datos del ERP y pide confirmación antes de cualquier acción sensible.";
-}
-
 function configuredProvider(value: string | undefined): AgentProviderId {
   const provider = value?.trim().toLowerCase() || "gemini";
-  if (provider !== "gemini" && provider !== "openai") {
+  if (
+    provider !== "gemini" && provider !== "openai" && provider !== "anthropic"
+  ) {
     throw new Error("AI provider route is not allowed");
   }
   return provider;
+}
+
+function configuredOpenAIEffort(
+  value: string | undefined,
+  fallback: "medium" | "high",
+): "low" | "medium" | "high" | "xhigh" | "max" {
+  return configuredProviderEffort(value, fallback);
+}
+
+function configuredProviderEffort(
+  value: string | undefined,
+  fallback: "low" | "medium" | "high",
+): "low" | "medium" | "high" | "xhigh" | "max" {
+  const effort = value?.trim().toLowerCase() || fallback;
+  if (
+    effort !== "low" && effort !== "medium" && effort !== "high" &&
+    effort !== "xhigh" &&
+    effort !== "max"
+  ) {
+    throw new Error("AI reasoning effort is not allowed");
+  }
+  return effort;
+}
+
+export function resolveSupabasePublishableKey(
+  getEnv: EnvReader,
+  supabaseUrl: string,
+): string {
+  const rawMap = getEnv("SUPABASE_PUBLISHABLE_KEYS")?.trim();
+  if (rawMap) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawMap);
+    } catch (_) {
+      throw new Error("Supabase publishable key map is invalid");
+    }
+    if (!isRecord(parsed) || Object.keys(parsed).length === 0) {
+      throw new Error("Supabase publishable key map is invalid");
+    }
+    const validated = new Map<string, string>();
+    for (const [name, value] of Object.entries(parsed)) {
+      if (!validPublishableKeyName(name) || !validPublishableKey(value)) {
+        throw new Error("Supabase publishable key map is invalid");
+      }
+      validated.set(name, value);
+    }
+    const selectedName = getEnv("AI_AGENT_SUPABASE_PUBLISHABLE_KEY_NAME")?.trim() || "default";
+    if (!validPublishableKeyName(selectedName)) {
+      throw new Error("Supabase publishable key name is invalid");
+    }
+    const selected = validated.get(selectedName);
+    if (!selected) {
+      throw new Error("Supabase publishable key is not configured");
+    }
+    return selected;
+  }
+
+  if (isLocalSupabaseUrl(supabaseUrl)) {
+    const fallback = getEnv("SUPABASE_PUBLISHABLE_KEY")?.trim();
+    if (validPublishableKey(fallback)) return fallback;
+  }
+  throw new Error("Supabase publishable key is not configured");
+}
+
+function validPublishableKeyName(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value);
+}
+
+function validPublishableKey(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^sb_publishable_[A-Za-z0-9_-]{4,512}$/.test(value);
+}
+
+function isLocalSupabaseUrl(value: string): boolean {
+  try {
+    return ["localhost", "127.0.0.1", "::1"].includes(new URL(value).hostname);
+  } catch (_) {
+    return false;
+  }
 }
 
 function requiredEnv(getEnv: EnvReader, name: string): string {
@@ -446,51 +737,57 @@ function requiredEnv(getEnv: EnvReader, name: string): string {
   if (!value) throw new Error(`${name} is not configured`);
   return value;
 }
-
 function csvValues(value: string | undefined): string[] {
   return (value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
 }
-
 function optionalInteger(value: string | undefined): number | undefined {
   if (!value?.trim()) return undefined;
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) throw new Error("AI gateway limit is invalid");
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error("AI gateway limit is invalid");
+  }
   return parsed;
 }
-
+function requiredInteger(getEnv: EnvReader, name: string): number {
+  const value = optionalInteger(requiredEnv(getEnv, name));
+  if (value === undefined) throw new Error(`${name} is not configured`);
+  return value;
+}
+function boundedOutputTokens(value: number): number {
+  if (value < 64 || value > 8192) {
+    throw new Error("AI gateway output limit is invalid");
+  }
+  return value;
+}
 function boundedInteger(
   value: number | undefined,
   fallback: number,
-  minimum: number,
-  maximum: number,
+  min: number,
+  max: number,
 ): number {
-  if (value === undefined) return fallback;
-  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+  const result = value ?? fallback;
+  if (!Number.isSafeInteger(result) || result < min || result > max) {
     throw new Error("AI gateway limit is invalid");
   }
-  return value;
+  return result;
 }
-
-function boundedText(value: unknown, allowEmpty: boolean): string {
-  if (
-    typeof value !== "string" || value.length > MAX_TEXT_CHARS || (!allowEmpty && !value.trim())
-  ) {
-    return invalidMessage();
-  }
-  return value;
+function invalidRequest(): never {
+  throw new GatewayError(400, "invalid_request", "Invalid assistant request");
 }
-
-function invalidMessage(): never {
-  throw new GatewayError(400, "invalid_request", "Invalid assistant message");
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-
-function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
-  const actual = Object.keys(value).sort();
-  return JSON.stringify(actual) === JSON.stringify([...expected].sort());
+function hasExactKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+): boolean {
+  return JSON.stringify(Object.keys(value).sort()) ===
+    JSON.stringify([...expected].sort());
+}
+function validUuid(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(value);
 }
 
 if (import.meta.main) {

@@ -296,6 +296,565 @@ void main() {
   );
 
   testWidgets(
+    'acceso de portal prioriza usuario y contraseña y genera la clave interna',
+    (tester) async {
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: _profile(),
+        canManageCredentials: true,
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+      );
+
+      final addAccess = find.text('Agregar acceso');
+      await tester.ensureVisible(addAccess);
+      await tester.tap(addAccess);
+      await tester.pumpAndSettle();
+
+      final username =
+          find.byKey(const ValueKey('supplier-credential-username'));
+      final password = find.byKey(const ValueKey('supplier-credential-secret'));
+      expect(find.text('Usuario o correo'), findsOneWidget);
+      expect(find.text('Contraseña'), findsOneWidget);
+      expect(tester.getTopLeft(username).dy,
+          lessThan(tester.getTopLeft(password).dy));
+      expect(find.text('Identificador interno'), findsNothing);
+      expect(find.text('Secreto'), findsNothing);
+      expect(find.text('Opciones avanzadas'), findsOneWidget);
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                  of: password, matching: find.byType(EditableText)),
+            )
+            .obscureText,
+        isTrue,
+      );
+
+      final submit = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Agregar'),
+      );
+      await tester.tap(submit);
+      await tester.pump();
+      expect(find.text('Ingresa el usuario del portal'), findsOneWidget);
+      expect(find.text('Ingresa la contraseña'), findsOneWidget);
+
+      await tester.enterText(username, 'cuenta@proveedor.cl');
+      await tester.enterText(password, ' contraseña exacta ');
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(source.credentialInputs, hasLength(1));
+      final input = source.credentialInputs.single;
+      expect(input.kind, SupplierCredentialKind.portalPassword);
+      expect(input.credentialKey, 'default');
+      expect(input.username, 'cuenta@proveedor.cl');
+      expect(input.secret, ' contraseña exacta ');
+      expect(input.originUrl, isNull);
+    },
+  );
+
+  testWidgets(
+    'una URL normal de login se guarda como origen HTTPS exacto',
+    (tester) async {
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: _profile(),
+        canManageCredentials: true,
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+      );
+
+      final addAccess = find.text('Agregar acceso');
+      await tester.ensureVisible(addAccess);
+      await tester.tap(addAccess);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-username')),
+        'cuenta.portal',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-secret')),
+        'clave portal',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('supplier-credential-browser-login')),
+      );
+      await tester.pumpAndSettle();
+      final loginUrl =
+          find.byKey(const ValueKey('supplier-credential-login-url'));
+      await tester.enterText(loginUrl, 'http://dermanalmayor.cl/login');
+      final submit = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Agregar'),
+      );
+      await tester.tap(submit);
+      await tester.pump();
+      expect(find.text('Usa una dirección HTTPS válida'), findsOneWidget);
+      expect(source.credentialInputs, isEmpty);
+
+      await tester.enterText(
+        loginUrl,
+        'https://DermanAlMayor.cl/login?volver=portal',
+      );
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(source.credentialInputs, hasLength(1));
+      expect(
+        source.credentialInputs.single.originUrl,
+        'https://dermanalmayor.cl',
+      );
+    },
+  );
+
+  testWidgets(
+    'resultado ambiguo nunca se confirma por una fila visible coincidente',
+    (tester) async {
+      final initialStatus = Completer<SupplierCredentialStatus>()
+        ..complete(_credentialStatus());
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: _profile(),
+        canManageCredentials: true,
+        credentialStatusCompleter: initialStatus,
+        credentialUpsertError: StateError('acknowledgement unavailable'),
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+      );
+
+      source.credentialStatusCompleter = Completer<SupplierCredentialStatus>()
+        ..complete(
+          _credentialStatus(
+            label: 'Fila coincidente sin recibo',
+            username: 'cuenta.portal',
+            credentialKey: 'default',
+          ),
+        );
+      final addAccess = find.text('Agregar acceso');
+      await tester.ensureVisible(addAccess);
+      await tester.tap(addAccess);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-username')),
+        'cuenta.portal',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-secret')),
+        'clave de prueba',
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, 'Agregar'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(source.credentialMutationCalls, 2);
+      expect(find.text('Fila coincidente sin recibo'), findsOneWidget);
+      expect(find.text('Resultado del acceso no confirmado'), findsOneWidget);
+      expect(find.text('Acceso agregado'), findsNothing);
+      expect(find.textContaining('ya quedó guardado'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'guardado pendiente absorbe ediciones y acciones hasta cerrar el comando',
+    (tester) async {
+      final saveCompleter = Completer<SupplierProfileCommandResult>();
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: _profile(displayName: 'Servidor original'),
+        saveCompleter: saveCompleter,
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+        size: const Size(1024, 844),
+      );
+
+      const localDraft = 'Borrador capturado por el comando';
+      final nameField = find.byKey(const ValueKey('supplier-display-name'));
+      await tester.enterText(nameField, localDraft);
+      await tester.tap(
+        find.byKey(const ValueKey('supplier-save-header')),
+      );
+      await tester.pump();
+
+      expect(source.profileCommands, hasLength(1));
+      expect(
+        tester
+            .widget<AbsorbPointer>(
+              find.byKey(
+                const ValueKey('supplier-editor-write-barrier'),
+              ),
+            )
+            .absorbing,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('supplier-save-header')),
+            )
+            .onPressed,
+        isNull,
+      );
+
+      await tester.tap(nameField, warnIfMissed: false);
+      await tester.pump();
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: nameField, matching: find.byType(EditableText)),
+      );
+      expect(editable.focusNode.hasFocus, isFalse);
+      final activeSwitch = find.byType(SwitchListTile).first;
+      expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
+      await tester.tap(activeSwitch, warnIfMissed: false);
+      await tester.pump();
+      expect(tester.widget<SwitchListTile>(activeSwitch).value, isTrue);
+
+      saveCompleter.completeError(StateError('offline'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<AbsorbPointer>(
+              find.byKey(
+                const ValueKey('supplier-editor-write-barrier'),
+              ),
+            )
+            .absorbing,
+        isFalse,
+      );
+      expect(
+        tester.widget<TextFormField>(nameField).controller?.text,
+        localDraft,
+      );
+    },
+  );
+
+  testWidgets(
+    'acceso refresca el token sin borrar el borrador y explica que ya quedó guardado',
+    (tester) async {
+      final original = _profile(
+        displayName: 'Nombre original',
+        updatedAt: '2026-08-08T10:00:00Z',
+      );
+      final refreshed = _profile(
+        displayName: 'Nombre original',
+        updatedAt: '2026-08-09T11:00:00Z',
+      );
+      final initialProfile = Completer<SupplierProfile?>()..complete(original);
+      final refreshedProfile = Completer<SupplierProfile?>();
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: original,
+        canManageCredentials: true,
+        saveError: const PostgrestException(
+          message: 'canceling statement due to statement timeout',
+          code: '57014',
+        ),
+        profileCompleters: [initialProfile, refreshedProfile],
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+      );
+
+      const localDraft = 'Nombre editado todavía sin guardar';
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-display-name')),
+        localDraft,
+      );
+      final addAccess = find.text('Agregar acceso');
+      await tester.ensureVisible(addAccess);
+      await tester.tap(addAccess);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-username')),
+        'cuenta.portal',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-secret')),
+        'clave de prueba',
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, 'Agregar'),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('supplier-save')),
+            )
+            .onPressed,
+        isNull,
+      );
+      refreshedProfile.complete(refreshed);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Acceso agregado'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'No necesitas pulsar Guardar cambios',
+        ),
+        findsOneWidget,
+      );
+      final nameField = tester.widget<TextFormField>(
+        find.byKey(const ValueKey('supplier-display-name')),
+      );
+      expect(nameField.controller?.text, localDraft);
+
+      final save = find.byKey(const ValueKey('supplier-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(source.profileCommands, hasLength(1));
+      expect(source.profileCommands.single.party.displayName, localDraft);
+      expect(
+        source.profileCommands.single.expectedUpdatedAt,
+        DateTime.parse('2026-08-09T11:00:00Z'),
+      );
+      expect(find.text('El acceso ya está guardado'), findsOneWidget);
+      expect(find.textContaining('El acceso no se perdió'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'fallo del refresh no convierte un acceso confirmado en rechazo',
+    (tester) async {
+      final original = _profile(updatedAt: '2026-08-08T10:00:00Z');
+      final refreshed = _profile(updatedAt: '2026-08-09T11:00:00Z');
+      final initialProfile = Completer<SupplierProfile?>()..complete(original);
+      final failedRefresh = Completer<SupplierProfile?>();
+      final retryRefresh = Completer<SupplierProfile?>();
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: original,
+        canManageCredentials: true,
+        profileCompleters: [
+          initialProfile,
+          failedRefresh,
+          retryRefresh,
+        ],
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+      );
+
+      const localDraft = 'Borrador que no debe perderse';
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-display-name')),
+        localDraft,
+      );
+      final addAccess = find.text('Agregar acceso');
+      await tester.ensureVisible(addAccess);
+      await tester.tap(addAccess);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-username')),
+        'cuenta.portal',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-secret')),
+        'clave de prueba',
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, 'Agregar'),
+        ),
+      );
+      await tester.pump();
+      failedRefresh.completeError(StateError('readback unavailable'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Acceso guardado; falta actualizar la ficha'),
+        findsOneWidget,
+      );
+      expect(find.text('El acceso fue rechazado'), findsNothing);
+      expect(source.credentialInputs, hasLength(1));
+
+      final save = find.byKey(const ValueKey('supplier-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pump();
+      expect(source.profileCommands, isEmpty);
+
+      final refreshAction = find.text('Actualizar ficha');
+      await tester.ensureVisible(refreshAction);
+      await tester.tap(refreshAction);
+      await tester.pump();
+      retryRefresh.complete(refreshed);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ficha actualizada'), findsOneWidget);
+      final nameField = tester.widget<TextFormField>(
+        find.byKey(const ValueKey('supplier-display-name')),
+      );
+      expect(nameField.controller?.text, localDraft);
+
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(source.profileCommands, hasLength(1));
+      expect(source.profileCommands.single.party.displayName, localDraft);
+      expect(
+        source.profileCommands.single.expectedUpdatedAt,
+        DateTime.parse('2026-08-09T11:00:00Z'),
+      );
+    },
+  );
+
+  testWidgets(
+    'cambio concurrente de nombre y rol no recibe un token nuevo ni se sobrescribe',
+    (tester) async {
+      final original = _profile(
+        displayName: 'Servidor original',
+        updatedAt: '2026-08-08T10:00:00Z',
+      );
+      final concurrent = _profile(
+        displayName: 'Servidor cambiado por otra sesión',
+        updatedAt: '2026-08-09T11:00:00Z',
+        roles: const [
+          {
+            'id': '90100000-0000-0000-0000-000000000009',
+            'definition_id': '50000000-0000-0000-0000-000000000005',
+            'code': 'digital_platform',
+            'label': 'Servicios digitales',
+            'source': 'manual',
+            'metadata': <String, dynamic>{},
+          },
+        ],
+      );
+      final initialProfile = Completer<SupplierProfile?>()..complete(original);
+      final concurrentProfile = Completer<SupplierProfile?>()
+        ..complete(concurrent);
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: original,
+        canManageCredentials: true,
+        profileCompleters: [initialProfile, concurrentProfile],
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+      );
+
+      const localDraft = 'Mi borrador local';
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-display-name')),
+        localDraft,
+      );
+      final addAccess = find.text('Agregar acceso');
+      await tester.ensureVisible(addAccess);
+      await tester.tap(addAccess);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-username')),
+        'cuenta.portal',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-credential-secret')),
+        'clave de prueba',
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, 'Agregar'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('La ficha cambió mientras guardabas el acceso'),
+        findsOneWidget,
+      );
+      expect(find.text('Revisar'), findsOneWidget);
+      expect(find.text('El acceso fue rechazado'), findsNothing);
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.byKey(const ValueKey('supplier-display-name')),
+            )
+            .controller
+            ?.text,
+        localDraft,
+      );
+      expect(
+        find.byKey(const ValueKey('supplier-relation-goods')),
+        findsOneWidget,
+      );
+
+      final save = find.byKey(const ValueKey('supplier-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pump();
+      expect(source.profileCommands, isEmpty);
+      expect(
+        find.text('La ficha cambió mientras guardabas el acceso'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'diálogo simple y opciones avanzadas no desbordan en compacto oscuro',
+    (tester) async {
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: _profile(),
+        canManageCredentials: true,
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+        size: const Size(320, 640),
+        brightness: Brightness.dark,
+      );
+
+      final addAccess = find.text('Agregar acceso');
+      await tester.ensureVisible(addAccess);
+      await tester.tap(addAccess);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Usuario o correo'), findsOneWidget);
+      expect(find.text('Contraseña'), findsOneWidget);
+
+      final advanced =
+          find.byKey(const ValueKey('supplier-credential-advanced-toggle'));
+      await tester.ensureVisible(advanced);
+      await tester.tap(advanced);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Tipo de acceso'), findsOneWidget);
+      expect(find.text('Identificador interno'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'token protegido puede guardarse sin inventar origen web en compacto',
     (tester) async {
       final source = _FakeSupplierEditorDataSource(
@@ -315,24 +874,23 @@ void main() {
       await tester.tap(addAccess);
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byType(DropdownButtonFormField<SupplierCredentialKind>),
-      );
+      final advanced =
+          find.byKey(const ValueKey('supplier-credential-advanced-toggle'));
+      await tester.ensureVisible(advanced);
+      await tester.tap(advanced);
+      await tester.pumpAndSettle();
+      final kind = find.byKey(const ValueKey('supplier-credential-kind'));
+      await tester.ensureVisible(kind);
+      await tester.tap(kind);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Token de API').last);
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.ancestor(
-          of: find.text('Clave estable'),
-          matching: find.byType(TextFormField),
-        ),
+        find.byKey(const ValueKey('supplier-credential-key')),
         'api_principal',
       );
       await tester.enterText(
-        find.ancestor(
-          of: find.text('Secreto'),
-          matching: find.byType(TextFormField),
-        ),
+        find.byKey(const ValueKey('supplier-credential-secret')),
         ' secreto exacto ',
       );
       await tester.tap(
@@ -356,7 +914,12 @@ void main() {
     'rotar acceso puede retirar explícitamente un origen web anterior',
     (tester) async {
       final status = Completer<SupplierCredentialStatus>()
-        ..complete(_credentialStatus(label: 'Acceso existente'));
+        ..complete(
+          _credentialStatus(
+            label: 'Acceso existente',
+            username: 'cuenta.portal',
+          ),
+        );
       final source = _FakeSupplierEditorDataSource(
         catalog: _catalog(),
         profile: _profile(),
@@ -373,16 +936,16 @@ void main() {
       await tester.ensureVisible(rotate);
       await tester.tap(rotate);
       await tester.pumpAndSettle();
-      final originField = find.ancestor(
-        of: find.text('Origen HTTPS autorizado (opcional)'),
-        matching: find.byType(TextFormField),
+      await tester.tap(
+        find.byKey(const ValueKey('supplier-credential-browser-login')),
       );
-      await tester.enterText(originField, '');
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('supplier-credential-login-url')),
+        findsNothing,
+      );
       await tester.enterText(
-        find.ancestor(
-          of: find.text('Nuevo secreto'),
-          matching: find.byType(TextFormField),
-        ),
+        find.byKey(const ValueKey('supplier-credential-secret')),
         'rotación exacta',
       );
       await tester.tap(
@@ -430,12 +993,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Completar acceso'), findsOneWidget);
-      expect(find.text('Aún no hay una clave guardada'), findsOneWidget);
+      expect(find.text('Aún no hay una contraseña guardada'), findsOneWidget);
       final usernameField = tester.widget<TextFormField>(
-        find.ancestor(
-          of: find.text('Usuario (protegido)'),
-          matching: find.byType(TextFormField),
-        ),
+        find.byKey(const ValueKey('supplier-credential-username')),
       );
       expect(usernameField.controller?.text, 'cuenta.portal');
 
@@ -445,17 +1005,11 @@ void main() {
       );
       await tester.tap(submit);
       await tester.pump();
-      expect(
-        find.text('Ingresa una clave para completar este acceso'),
-        findsOneWidget,
-      );
+      expect(find.text('Ingresa la contraseña'), findsOneWidget);
       expect(source.credentialInputs, isEmpty);
 
       await tester.enterText(
-        find.ancestor(
-          of: find.text('Guardar una clave'),
-          matching: find.byType(TextFormField),
-        ),
+        find.byKey(const ValueKey('supplier-credential-secret')),
         'clave real nueva',
       );
       await tester.tap(submit);
@@ -1201,6 +1755,8 @@ SupplierClassificationCatalog _catalog() {
 SupplierProfile _profile({
   String displayName = 'Proveedor mutable',
   String tenantId = _tenantId,
+  String updatedAt = '2026-08-08T00:00:00Z',
+  List<Map<String, dynamic>>? roles,
 }) =>
     SupplierProfile.fromJson({
       'tenant_id': tenantId,
@@ -1208,18 +1764,20 @@ SupplierProfile _profile({
       'party_id': '30000000-0000-0000-0000-000000000003',
       'party_kind': 'organization',
       'display_name': displayName,
+      'updated_at': updatedAt,
       'is_active': true,
       'has_portal_credential': false,
-      'relationship_roles': const [
-        {
-          'id': '90000000-0000-0000-0000-000000000009',
-          'definition_id': '40000000-0000-0000-0000-000000000004',
-          'code': 'goods_vendor',
-          'label': 'Bienes e inventario',
-          'source': 'manual',
-          'metadata': <String, dynamic>{},
-        },
-      ],
+      'relationship_roles': roles ??
+          const [
+            {
+              'id': '90000000-0000-0000-0000-000000000009',
+              'definition_id': '40000000-0000-0000-0000-000000000004',
+              'code': 'goods_vendor',
+              'label': 'Bienes e inventario',
+              'source': 'manual',
+              'metadata': <String, dynamic>{},
+            },
+          ],
       'relationship_capabilities': const <Map<String, dynamic>>[],
       'relationship_tags': const <Map<String, dynamic>>[],
       'engagements': const <Map<String, dynamic>>[],
@@ -1291,6 +1849,7 @@ SupplierCredentialStatus _credentialStatus({
   String? label,
   String? username,
   bool secretAvailable = true,
+  String credentialKey = 'portal',
 }) =>
     SupplierCredentialStatus(
       tenantId: _tenantId,
@@ -1303,7 +1862,7 @@ SupplierCredentialStatus _credentialStatus({
                 tenantId: _tenantId,
                 supplierId: _supplierFixtureId,
                 kind: SupplierCredentialKind.portalPassword,
-                credentialKey: 'portal',
+                credentialKey: credentialKey,
                 originUrl: 'https://portal.proveedor.cl',
                 label: label,
                 username: username,
@@ -1427,8 +1986,10 @@ class _FakeSupplierEditorDataSource implements SupplierEditorDataSource {
     required this.catalog,
     this.profile,
     this.saveError,
+    this.saveCompleter,
     this.appendEngagementError,
     this.appendAccountingError,
+    this.credentialUpsertError,
     this.credentialStatusCompleter,
     List<Completer<SupplierProfile?>> profileCompleters = const [],
     this.canManageCredentials = false,
@@ -1438,8 +1999,10 @@ class _FakeSupplierEditorDataSource implements SupplierEditorDataSource {
   final SupplierClassificationCatalog catalog;
   final SupplierProfile? profile;
   final Object? saveError;
+  final Completer<SupplierProfileCommandResult>? saveCompleter;
   final Object? appendEngagementError;
   final Object? appendAccountingError;
+  final Object? credentialUpsertError;
   Completer<SupplierCredentialStatus>? credentialStatusCompleter;
   final List<Completer<SupplierProfile?>> profileCompleters;
   final List<SaveSupplierRelationshipProfileCommand> profileCommands = [];
@@ -1497,6 +2060,8 @@ class _FakeSupplierEditorDataSource implements SupplierEditorDataSource {
     profileCommands.add(command);
     final error = saveError;
     if (error != null) throw error;
+    final completer = saveCompleter;
+    if (completer != null) return completer.future;
     return SupplierProfileCommandResult(profile: profile ?? _profile());
   }
 
@@ -1559,6 +2124,8 @@ class _FakeSupplierEditorDataSource implements SupplierEditorDataSource {
     childMutationCalls++;
     credentialMutationCalls++;
     credentialInputs.add(input);
+    final error = credentialUpsertError;
+    if (error != null) throw error;
     final metadata = SupplierCredentialMetadata(
       tenantId: profile?.relationship.tenantId ?? _tenantId,
       supplierId: input.supplierId,

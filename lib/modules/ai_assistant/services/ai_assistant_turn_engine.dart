@@ -30,3 +30,14 @@ abstract interface class AIAssistantTurnEngine {
 
   void resetChat();
 }
+
+/// Optional direct-command capability implemented only by the governed
+/// gateway runtime. The legacy model engine remains source-compatible and can
+/// never receive an approval by accident.
+abstract interface class AIAssistantApprovalTurnEngine {
+  Future<AIAssistantApprovalResolution> resolveApproval(
+    AIAssistantApprovalRef approval,
+    AIAssistantApprovalDecision decision, {
+    required AIAssistantTurnAuthority authority,
+  });
+}

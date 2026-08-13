@@ -65,6 +65,18 @@ const List<String> _payrollShortMonths = [
   'dic',
 ];
 
+/// ISO-8601 week number, calculated in UTC so daylight-saving changes cannot
+/// move a civil payroll week to the previous number.
+int payrollIsoWeekNumber(DateTime date) {
+  final day = DateTime.utc(date.year, date.month, date.day);
+  final thursday = day.add(Duration(days: 3 - ((day.weekday + 6) % 7)));
+  final fourthOfJanuary = DateTime.utc(thursday.year, 1, 4);
+  final firstWeekThursday = fourthOfJanuary.add(
+    Duration(days: 3 - ((fourthOfJanuary.weekday + 6) % 7)),
+  );
+  return 1 + thursday.difference(firstWeekThursday).inDays ~/ 7;
+}
+
 /// Short Chilean week range, e.g. `21 – 27 jul`.
 String formatPayrollWeekRange(DateTime start, DateTime end) {
   final startMonth = _payrollShortMonths[start.month - 1];

@@ -22,7 +22,7 @@ export async function readProviderJson(
   let totalBytes = 0;
   try {
     while (true) {
-      if (signal.aborted) throw new ProviderError("provider_unavailable", 503, true);
+      if (signal.aborted) throw new ProviderError("provider_unavailable", 503, false);
       const { done, value } = await reader.read();
       if (done) break;
       totalBytes += value.byteLength;
@@ -37,7 +37,7 @@ export async function readProviderJson(
     throw new ProviderError(
       signal.aborted ? "provider_unavailable" : "provider_invalid_response",
       signal.aborted ? 503 : 502,
-      signal.aborted,
+      false,
     );
   } finally {
     signal.removeEventListener("abort", abortReader);

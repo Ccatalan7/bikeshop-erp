@@ -630,6 +630,42 @@ Shared requirements:
 Phone and tablet recomposition is owned by the mobile guide. A desktop table
 must not become a horizontally scrolling miniature table by default.
 
+### Una etapa que pide N decisiones es una tabla (corrección del dueño, 2026-08-10)
+
+Cuando el operador tiene que **contestar muchas filas del mismo tipo**, la
+representación es una tabla con la comparación en columnas y **un control de
+decisión por fila**. No una tarjeta por decisión, ni «una pregunta a la vez»
+con las demás apiladas debajo.
+
+La versión anterior de la conciliación de nóminas (paso «Propuestas») hacía
+exactamente eso: cada decisión abierta era un bloque de pantalla completa con
+cuatro tarjetas de opción, y encima había tres grupos plegables. Con la cartola
+real —96 movimientos, 19 decisiones, 26 cargos ajenos— el dueño no pudo usarla:
+*«I literally don't understand anything on what the fuck is going on there»*.
+
+Las tres causas, para no repetirlas:
+
+1. **La comparación que la etapa existe para resolver no tenía columna.** Lo
+   que pagó el banco y lo que debe la nómina son dos números que hay que
+   restar; uno vivía como línea de texto dentro de la celda de la persona. Si
+   una pantalla existe para comparar A contra B, A y B van en columnas
+   adyacentes y la diferencia debajo, no dentro de una frase.
+2. **La descripción honesta de cada opción se reimprimía en cada fila.** El
+   texto es correcto y necesario —lo que hace honesta la decisión—, pero es el
+   MISMO en todas las filas: se publica **una vez**, al pie de la tabla o del
+   grupo, y la fila queda con su control.
+3. **Una decisión por pantalla convierte «revisar» en «recorrer».** Un contador
+   `i DE n` con flechas obliga a atravesar la lista para encontrar lo que falta
+   y hace imposible ver el conjunto. Ordenar por lo que la fila *es* —y no por
+   lo que se contestó— deja el trabajo pendiente arriba sin esconder nada ni
+   mover filas bajo el cursor.
+
+Esto es el mismo fallo que `.github/copilot-instructions.md` ya advertía en su
+corrección del 2026-08-09 —«una superficie visualmente moderna sustituyó un
+batch comprensible por un panel/accordion que ocultaba la visión conjunta»— y
+se repitió igual. La regla de arriba existe para que la próxima vez se note
+antes de construirla, no después de que el dueño la use.
+
 ## 8. Forms and editing
 
 Forms should reflect the operator's mental model, not the storage schema.

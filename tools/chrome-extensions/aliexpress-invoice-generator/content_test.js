@@ -40,20 +40,83 @@ function loadTestingBridge() {
   return loadBridge().bridge._testing;
 }
 
-async function installOrdersApiFixture(pages) {
+async function installOrdersApiFixture(pages, options = {}) {
   const { bridge, sandbox } = loadBridge();
+  let requestIndex = 0;
+  const orderCountFor = (page) => Object.keys(page || {})
+    .filter((key) => /^pc_om_list_order_\d+$/.test(key)).length;
+  const fixturePageSize = Number(options.pageSize) || Math.max(
+    1,
+    ...Object.values(pages).filter((page) => !(page instanceof Error))
+      .map(orderCountFor),
+  );
+  const templateParams = options.templateParams || {
+    pageIndex: 1,
+    pageSize: fixturePageSize,
+    statusTab: 'all',
+    timeOption: 'all',
+    searchOption: 'order',
+    searchInput: '',
+  };
   await Promise.resolve();
   await sandbox.fetch('https://mtop.aliexpress.com/order/list', {
     method: 'POST',
     body: `data=${encodeURIComponent(JSON.stringify({
-      params: JSON.stringify({ pageIndex: 1 }),
+      params: JSON.stringify(templateParams),
     }))}`,
   });
   sandbox.lib = {
     mtop: {
       request: async ({ data }) => {
-        const pageIndex = JSON.parse(data.params).pageIndex;
-        return { data: { data: pages[pageIndex] || {} } };
+        requestIndex += 1;
+        const parsedParams = JSON.parse(data.params);
+        if (Array.isArray(options.requests)) options.requests.push(parsedParams);
+        const pageIndex = parsedParams.pageIndex;
+        const page = typeof options.pageProvider === 'function'
+          ? options.pageProvider({ pageIndex, parsedParams, requestIndex })
+          : pages[pageIndex];
+        if (page instanceof Error) throw page;
+        const modules = { ...(page || {}) };
+        const orderCount = orderCountFor(modules);
+        const explicitHasMore = options.hasMoreByPage &&
+          Object.prototype.hasOwnProperty.call(options.hasMoreByPage, pageIndex)
+          ? options.hasMoreByPage[pageIndex]
+          : null;
+        const hasMore = explicitHasMore === null
+          ? (orderCount === 0
+            ? false
+            : (Object.prototype.hasOwnProperty.call(pages, pageIndex + 1) || true))
+          : explicitHasMore;
+        const responsePageIndex = options.responsePageIndexByPage &&
+          Object.prototype.hasOwnProperty.call(options.responsePageIndexByPage, pageIndex)
+          ? options.responsePageIndexByPage[pageIndex]
+          : pageIndex;
+        const responsePageSize = options.responsePageSizeByPage &&
+          Object.prototype.hasOwnProperty.call(options.responsePageSizeByPage, pageIndex)
+          ? options.responsePageSizeByPage[pageIndex]
+          : fixturePageSize;
+        modules.pc_om_list_body_fixture = {
+          fields: {
+            pageIndex: responsePageIndex,
+            pageSize: responsePageSize,
+            hasMore,
+          },
+        };
+        modules.pc_om_list_header_action_fixture = {
+          fields: {
+            statusTab: options.responseStatusByPage &&
+              options.responseStatusByPage[pageIndex] ||
+              parsedParams.statusTab || 'all',
+            timeOption: options.responseTimeByPage &&
+              options.responseTimeByPage[pageIndex] ||
+              parsedParams.timeOption || 'all',
+            searchOption: options.responseSearchByPage &&
+              options.responseSearchByPage[pageIndex] ||
+              parsedParams.searchOption || 'order',
+            searchInput: parsedParams.searchInput || '',
+          },
+        };
+        return { data: { data: modules } };
       },
     },
   };
@@ -310,28 +373,6 @@ test('un pedido sin identificador no produce una fila fantasma', () => {
   assert.equal(parser.mapApiOrder({ orderDateText: 'Apr 6, 2026' }), null);
 });
 
-test('el corte por fecha exige que la página entera sea anterior al día', () => {
-  // Reproduce el defecto real del 2026-04-06: la página trae pedidos del día
-  // buscado junto a uno más antiguo, y quedan más del mismo día en la página
-  // siguiente. Cortar al ver el primer pedido viejo perdía esos pedidos.
-  const page = [
-    { orderDate: '2026-04-06' },
-    { orderDate: '2026-04-06' },
-    { orderDate: '2026-04-05' },
-  ];
-  const newestOnPage = page
-    .map((order) => order.orderDate)
-    .reduce((newest, date) => (date > newest ? date : newest), '');
-  assert.equal(newestOnPage, '2026-04-06');
-  assert.equal(newestOnPage < '2026-04-06', false, 'no debe cortar todavía');
-
-  const nextPage = [{ orderDate: '2026-04-05' }, { orderDate: '2026-04-04' }];
-  const newestOnNextPage = nextPage
-    .map((order) => order.orderDate)
-    .reduce((newest, date) => (date > newest ? date : newest), '');
-  assert.equal(newestOnNextPage < '2026-04-06', true, 'ahora sí corta');
-});
-
 test('dos líneas del mismo producto suman unidades en vez de perderse', () => {
   const order = parser.mapApiOrder({
     orderId: '8209933206118042',
@@ -340,6 +381,7 @@ test('dos líneas del mismo producto suman unidades en vez de perderse', () => {
     orderLines: [
       {
         productId: '1005008554962320',
+        skuId: '12000049999999999',
         quantity: '1',
         formatPriceInfo: 'CLP 3,490',
         itemTitle: 'ROCKBROS botella de agua 600ML',
@@ -347,6 +389,7 @@ test('dos líneas del mismo producto suman unidades en vez de perderse', () => {
       },
       {
         productId: '1005008554962320',
+        skuId: '12000049999999999',
         quantity: '1',
         formatPriceInfo: 'CLP 3,490',
         itemTitle: 'ROCKBROS botella de agua 600ML',
@@ -360,29 +403,262 @@ test('dos líneas del mismo producto suman unidades en vez de perderse', () => {
   assert.equal(order.items[0].total, 6980);
 });
 
-test('el corte exige dos páginas seguidas anteriores al día', () => {
-  // La lista no viene estrictamente ordenada por fecha: una sola página
-  // «vieja» no prueba que el día terminó, y cortar ahí devolvía conjuntos
-  // distintos entre corridas del mismo día (6 y luego 8 pedidos del
-  // 2026-04-06). Se confirma con una segunda página.
-  const target = '2026-04-06';
-  const newestOf = (page) => page.reduce((newest, date) => (date > newest ? date : newest), '');
+test('la API no agrega líneas sin una variante inmutable', () => {
+  const order = parser.mapApiOrder({
+    orderId: '8209933206118043',
+    orderDateText: 'Apr 6, 2026',
+    totalPriceText: 'CLP 6,980',
+    orderLines: [
+      {
+        productId: '1005008554962320',
+        quantity: '1',
+        formatPriceInfo: 'CLP 3,490',
+        itemTitle: 'Producto con variante no estructurada',
+        skuAttrs: [{ value: 'Black' }],
+      },
+      {
+        productId: '1005008554962320',
+        quantity: '1',
+        formatPriceInfo: 'CLP 3,490',
+        itemTitle: 'Producto con variante no estructurada',
+        skuAttrs: [{ value: 'Negro' }],
+      },
+    ],
+  });
 
-  let pagesPast = 0;
-  const cut = (page) => {
-    if (newestOf(page) < target) {
-      pagesPast += 1;
-      return pagesPast >= 2;
-    }
-    pagesPast = 0;
-    return false;
+  assert.equal(order.items.length, 2);
+  assert.deepEqual(
+    Array.from(order.items, (item) => item.sourceApiLineOrdinal),
+    [1, 2],
+  );
+});
+
+test('la API agrega sólo la misma variante inmutable', () => {
+  const base = {
+    productId: '1005007336672891',
+    formatPriceInfo: 'CLP 7,172',
+    itemTitle: 'WAKE Tee 31.8mm',
+    itemImgUrl: '//ae01.alicdn.com/kf/wake.jpg',
   };
+  const order = parser.mapApiOrder({
+    orderId: '8209933206999999',
+    orderDateText: 'Jun 28, 2025',
+    totalPriceText: 'CLP 21,516',
+    orderLines: [
+      {
+        ...base,
+        quantity: '1',
+        skuId: '12000040000000001',
+        skuAttrs: [{ value: 'Red' }],
+      },
+      {
+        ...base,
+        quantity: '1',
+        skuId: '12000040000000002',
+        skuAttrs: [{ value: 'Purple' }],
+      },
+      {
+        ...base,
+        quantity: '1',
+        skuId: '12000040000000001',
+        skuAttrs: [{ value: 'Rojo' }],
+      },
+    ],
+  });
 
-  assert.equal(cut(['2026-04-06', '2026-04-05']), false, 'aún hay del día');
-  assert.equal(cut(['2026-04-05', '2026-04-04']), false, 'primera página vieja');
-  assert.equal(cut(['2026-04-06']), false, 'reaparece el día: el contador se reinicia');
-  assert.equal(cut(['2026-04-03']), false);
-  assert.equal(cut(['2026-04-02']), true, 'dos seguidas confirman el fin');
+  assert.equal(order.items.length, 2);
+  assert.deepEqual(
+    Array.from(order.items, (item) => [item.variantKey, item.quantity]),
+    [
+      ['sku:12000040000000001', 2],
+      ['sku:12000040000000002', 1],
+    ],
+  );
+});
+
+test('exactDate conserva pedidos que reaparecen tras dos páginas antiguas', async () => {
+  const fields = (orderId, orderDateText) => ({
+    orderId,
+    orderDateText,
+    totalPriceText: 'CLP 10,790',
+    currencyCode: 'CLP',
+    orderLines: [],
+  });
+  const bridge = await installOrdersApiFixture({
+    1: {
+      pc_om_list_order_1: {
+        fields: fields('8211744661738042', 'Apr 6, 2026'),
+      },
+    },
+    2: {
+      pc_om_list_order_2: {
+        fields: fields('8209933206078042', 'Apr 5, 2026'),
+      },
+    },
+    3: {
+      pc_om_list_order_3: {
+        fields: fields('8209933206078043', 'Apr 4, 2026'),
+      },
+    },
+    4: {
+      pc_om_list_order_4: {
+        fields: fields('8209933206078044', 'Apr 6, 2026'),
+      },
+    },
+    5: {},
+  });
+
+  const result = await bridge.ordersApiCollect({ exactDate: '2026-04-06' });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    Array.from(result.orders, (order) => order.orderNumber),
+    ['8211744661738042', '8209933206078044'],
+  );
+  assert.equal(result.pagesRead, 10);
+  assert.equal(result.coverage.pageLimit, 60);
+  assert.equal(result.coverage.targetDateComplete, true);
+  assert.equal(result.termination.kind, 'certified-has-more-false');
+  assert.equal(result.termination.naturalExhaustion, true);
+  assert.equal(result.certification.certified, true);
+  assert.equal(result.certification.passCount, 2);
+  assert.deepEqual(Array.from(result.warnings), []);
+});
+
+test('reescribe sólo el único pageIndex estructurado de la plantilla', async () => {
+  const requests = [];
+  const bridge = await installOrdersApiFixture(
+    { 1: {} },
+    {
+      requests,
+      templateParams: {
+        pageIndex: 1,
+        pageSize: 20,
+        status: 'all',
+        fromDate: '2025-06-01',
+        accessToken: 'must-not-leak',
+      },
+    },
+  );
+
+  const probe = await bridge.ordersApiShapeProbe();
+  assert.equal(probe.ok, true);
+  const rewritten = JSON.parse(bridge._testing.ordersApiParamsForPage(7));
+  assert.deepEqual(rewritten, {
+    pageIndex: 7,
+    pageSize: 20,
+    status: 'all',
+    fromDate: '2025-06-01',
+    accessToken: 'must-not-leak',
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].pageIndex, 1);
+
+  const serializedProbe = JSON.stringify(probe);
+  assert.match(serializedProbe, /pageIndex/);
+  assert.match(serializedProbe, /pageSize/);
+  assert.match(serializedProbe, /fromDate/);
+  assert.doesNotMatch(serializedProbe, /accessToken|must-not-leak/i);
+});
+
+test('rechaza una plantilla con más de un pageIndex', async () => {
+  const bridge = await installOrdersApiFixture(
+    {},
+    { templateParams: { pageIndex: 1, nested: { pageIndex: 2 } } },
+  );
+
+  const probe = await bridge.ordersApiShapeProbe();
+  assert.equal(probe.ok, false);
+  assert.match(probe.reason, /pageIndex único/);
+  assert.equal(bridge._testing.ordersApiParamsForPage(3), null);
+});
+
+test('reescribe pageIndex dentro de JSON serializado sin tocar otros campos', async () => {
+  const nested = JSON.stringify({
+    pageIndex: '1',
+    pageSize: 50,
+    status: 'archived',
+  });
+  const bridge = await installOrdersApiFixture(
+    { undefined: {} },
+    {
+      templateParams: {
+        request: nested,
+        signatureToken: 'must-not-leak',
+      },
+    },
+  );
+
+  const probe = await bridge.ordersApiShapeProbe();
+  assert.equal(probe.ok, true);
+  assert.equal(probe.template.pageIndexSlots, 1);
+  assert.equal(probe.template.fields['request.pageIndex'], '1');
+  assert.equal(probe.template.fields['request.pageSize'], 50);
+  assert.equal(probe.template.fields['request.status'], 'archived');
+  const rewritten = JSON.parse(bridge._testing.ordersApiParamsForPage(9));
+  assert.deepEqual(JSON.parse(rewritten.request), {
+    pageIndex: '9',
+    pageSize: 50,
+    status: 'archived',
+  });
+  assert.equal(rewritten.signatureToken, 'must-not-leak');
+  assert.doesNotMatch(JSON.stringify(probe), /signatureToken|must-not-leak/i);
+});
+
+test('la sonda de respuesta expone metadata y nunca datos de pedidos o secretos', () => {
+  const summary = parser.ordersApiResponseSummary({
+    accessToken: 'root-secret',
+    data: {
+      totalCount: 45,
+      data: {
+        pc_om_list_header_1: {
+          fields: {
+            searchTimeOptions: [
+              { code: 'all', text: 'All time' },
+              { code: '2025', text: '2025' },
+            ],
+            statusTabList: [
+              { code: 'all', title: 'All orders' },
+              { code: 'archived', title: 'Archived' },
+            ],
+          },
+        },
+        pagination: {
+          hasNext: true,
+          hasMore: true,
+          totalPage: 3,
+          pageSize: 20,
+          token: 'next-page-secret',
+        },
+        pc_om_list_order_1: {
+          fields: {
+            orderId: '8211744661738042',
+            itemTitle: 'private product title',
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(summary.orderModuleCount, 1);
+  assert.equal(summary.pagination['data.totalCount'], 45);
+  assert.equal(summary.pagination['data.data.pagination.hasNext'], true);
+  assert.equal(summary.pagination['data.data.pagination.hasMore'], true);
+  assert.equal(summary.pagination['data.data.pagination.totalPage'], 3);
+  assert.equal(summary.pagination['data.data.pagination.pageSize'], 20);
+  assert.deepEqual(JSON.parse(JSON.stringify(summary.filterOptions.time)), [
+    { code: 'all', text: 'All time' },
+    { code: '2025', text: '2025' },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(summary.filterOptions.status)), [
+    { code: 'all', title: 'All orders' },
+    { code: 'archived', title: 'Archived' },
+  ]);
+  const serialized = JSON.stringify(summary);
+  assert.doesNotMatch(
+    serialized,
+    /root-secret|next-page-secret|accessToken|orderId|itemTitle|private product/i,
+  );
 });
 
 test('datesOnly devuelve el índice completo sin materializar pedidos', async () => {
@@ -453,6 +729,136 @@ test('datesOnly declara cobertura parcial cuando alcanza el límite', async () =
   assert.equal(result.coverage.stopReason, 'max-pages');
 });
 
+test('exactDate rechaza el resultado parcial al alcanzar maxPages', async () => {
+  const bridge = await installOrdersApiFixture({
+    1: {
+      pc_om_list_order_1: {
+        fields: {
+          orderId: '8211744661738042',
+          orderDateText: 'Jun 15, 2026',
+          totalPriceText: 'CLP 10,790',
+          currencyCode: 'CLP',
+          orderLines: [],
+        },
+      },
+    },
+  });
+
+  const result = await bridge.ordersApiCollect({
+    exactDate: '2026-06-15',
+    maxPages: 1,
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(Array.from(result.orders), []);
+  assert.equal(result.partialOrderCount, 1);
+  assert.equal(result.coverage.targetDateComplete, false);
+  assert.equal(result.coverage.partial, true);
+  assert.equal(result.termination.kind, 'max-pages');
+  assert.equal(result.termination.naturalExhaustion, false);
+  assert.equal(result.warnings.length, 1);
+  assert.match(result.warnings[0], /No se generó una factura parcial/);
+});
+
+test('evaluationOnly expone filas reales sólo como discovery no certificado', async () => {
+  const bridge = await installOrdersApiFixture({
+    1: {
+      pc_om_list_order_1: {
+        fields: {
+          orderId: '8211744661738042',
+          orderDateText: 'Jun 1, 2025',
+          totalPriceText: 'CLP 10,790',
+          currencyCode: 'CLP',
+          orderLines: [],
+        },
+      },
+    },
+  });
+
+  const result = await bridge.ordersApiCollect({
+    exactDate: '2025-06-01',
+    maxPages: 1,
+    evaluationOnly: true,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.evaluationOnly, true);
+  assert.equal(result.orders.length, 1);
+  assert.equal(result.coverage.mode, 'discovery-read-only');
+  assert.equal(result.coverage.certified, false);
+  assert.equal(result.coverage.targetDateComplete, false);
+  assert.equal(result.termination.naturalExhaustion, false);
+  assert.match(result.warnings[0], /no autoriza guardar, vincular ni crear/);
+});
+
+test('evaluationOnly corta tras cinco páginas antiguas sin fingir cobertura', async () => {
+  const page = (id, date) => ({
+    pc_om_list_order_1: {
+      fields: {
+        orderId: id,
+        orderDateText: date,
+        totalPriceText: 'CLP 1,000',
+        currencyCode: 'CLP',
+        orderLines: [],
+      },
+    },
+  });
+  const bridge = await installOrdersApiFixture({
+    1: page('target', 'Jun 7, 2025'),
+    2: page('older-1', 'Jun 6, 2025'),
+    3: page('older-2', 'Jun 5, 2025'),
+    4: page('older-3', 'Jun 4, 2025'),
+    5: page('older-4', 'Jun 3, 2025'),
+    6: page('older-5', 'Jun 2, 2025'),
+    7: page('unread', 'Jun 7, 2025'),
+  });
+
+  const result = await bridge.ordersApiCollect({
+    exactDate: '2025-06-07',
+    maxPages: 20,
+    evaluationOnly: true,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.evaluationOnly, true);
+  assert.equal(result.orders.length, 1);
+  assert.equal(result.pagesRead, 6);
+  assert.equal(result.reason, 'discovery-frontier');
+  assert.equal(result.coverage.targetDateComplete, false);
+  assert.equal(result.coverage.certified, false);
+});
+
+test('exactDate rechaza y advierte si una página de la API falla', async () => {
+  const bridge = await installOrdersApiFixture({
+    1: {
+      pc_om_list_order_1: {
+        fields: {
+          orderId: '8211744661738042',
+          orderDateText: 'Jun 15, 2026',
+          totalPriceText: 'CLP 10,790',
+          currencyCode: 'CLP',
+          orderLines: [],
+        },
+      },
+    },
+    2: new Error('network interrupted'),
+  });
+
+  const result = await bridge.ordersApiCollect({
+    exactDate: '2026-06-15',
+    maxPages: 60,
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(Array.from(result.orders), []);
+  assert.equal(result.partialOrderCount, 1);
+  assert.equal(result.coverage.targetDateComplete, false);
+  assert.equal(result.termination.kind, 'error');
+  assert.equal(result.termination.naturalExhaustion, false);
+  assert.equal(result.warnings.length, 1);
+  assert.match(result.warnings[0], /error en página 2/);
+});
+
 test('la recolección normal sigue devolviendo sólo los pedidos del día', async () => {
   const fields = (orderId, orderDateText) => ({
     orderId,
@@ -487,6 +893,153 @@ test('la recolección normal sigue devolviendo sólo los pedidos del día', asyn
     Array.from(result.datesWithOrders),
     ['2026-04-06', '2026-06-15'],
   );
-  assert.equal(result.coverage.mode, 'exact-date');
+  assert.equal(result.coverage.mode, 'two-pass-v1');
   assert.equal(result.coverage.targetDateComplete, true);
+  assert.equal(result.coverage.certified, true);
+});
+
+test('rechaza una página no terminal corta antes de certificar', async () => {
+  const fields = (orderId) => ({
+    orderId,
+    orderDateText: 'Jun 1, 2025',
+    totalPriceText: 'CLP 1,000',
+    currencyCode: 'CLP',
+    orderLines: [],
+  });
+  const bridge = await installOrdersApiFixture({
+    1: { pc_om_list_order_1: { fields: fields('1001') } },
+    2: {
+      pc_om_list_order_2: { fields: fields('1002') },
+      pc_om_list_order_3: { fields: fields('1003') },
+    },
+    3: {},
+  });
+
+  const result = await bridge.ordersApiCollect({ exactDate: '2025-06-01' });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.certification.mismatchCodes[0], 'inconsistent-page-size');
+  assert.deepEqual(Array.from(result.orders), []);
+});
+
+test('cualquier orderId repetido entre páginas aborta como feed desplazado', async () => {
+  const fields = (orderId) => ({
+    orderId,
+    orderDateText: 'Jun 1, 2025',
+    totalPriceText: 'CLP 1,000',
+    currencyCode: 'CLP',
+    orderLines: [],
+  });
+  const bridge = await installOrdersApiFixture(
+    {
+      1: {
+        pc_om_list_order_1: { fields: fields('1001') },
+        pc_om_list_order_2: { fields: fields('1002') },
+      },
+      2: { pc_om_list_order_3: { fields: fields('1002') } },
+    },
+    { hasMoreByPage: { 1: true, 2: false } },
+  );
+
+  const result = await bridge.ordersApiCollect({ exactDate: '2025-06-01' });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.certification.mismatchCodes[0], 'feed-shifted');
+});
+
+test('dos recorridos con conjuntos distintos nunca se certifican', async () => {
+  const fields = (orderId) => ({
+    orderId,
+    orderDateText: 'Jun 1, 2025',
+    totalPriceText: 'CLP 1,000',
+    currencyCode: 'CLP',
+    orderLines: [],
+  });
+  const basePages = {
+    1: { pc_om_list_order_1: { fields: fields('1001') } },
+    2: {},
+  };
+  const bridge = await installOrdersApiFixture(basePages, {
+    pageProvider: ({ pageIndex, requestIndex }) => {
+      if (pageIndex === 1 && requestIndex >= 3) {
+        return { pc_om_list_order_1: { fields: fields('1002') } };
+      }
+      return basePages[pageIndex];
+    },
+  });
+
+  const result = await bridge.ordersApiCollect({ exactDate: '2025-06-01' });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.certification.mismatchCodes[0], 'pass-drift');
+  assert.deepEqual(Array.from(result.orders), []);
+});
+
+test('un eco de filtros distinto aborta sin conservar pedidos', async () => {
+  const bridge = await installOrdersApiFixture(
+    {
+      1: {
+        pc_om_list_order_1: {
+          fields: {
+            orderId: '1001',
+            orderDateText: 'Jun 1, 2025',
+            totalPriceText: 'CLP 1,000',
+            currencyCode: 'CLP',
+            orderLines: [],
+          },
+        },
+      },
+      2: {},
+    },
+    { responseStatusByPage: { 1: 'completed' } },
+  );
+
+  const result = await bridge.ordersApiCollect({ exactDate: '2025-06-01' });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.certification.mismatchCodes[0], 'filter-coerced');
+});
+
+test('una primera página vacía no certifica que el día no tenga pedidos', async () => {
+  const bridge = await installOrdersApiFixture({ 1: {} });
+
+  const result = await bridge.ordersApiCollect({ exactDate: '2025-06-01' });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.certification.mismatchCodes[0],
+    'unavailable-empty-first-page',
+  );
+});
+
+test('la sonda recycle reescribe sólo statusTab y no devuelve pedidos', async () => {
+  const requests = [];
+  const bridge = await installOrdersApiFixture(
+    {
+      1: {
+        pc_om_list_order_1: {
+          fields: {
+            orderId: '1001',
+            orderDateText: 'Jun 1, 2025',
+            totalPriceText: 'CLP 1,000',
+            currencyCode: 'CLP',
+            orderLines: [],
+          },
+        },
+      },
+      2: {},
+    },
+    { requests },
+  );
+
+  const result = await bridge.ordersApiScopeProbe({
+    exactDate: '2025-06-01',
+    statusTab: 'recycle',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.targetDateCount, 1);
+  assert.equal(result.scope.statusTab, 'recycle');
+  assert.ok(requests.every((request) => request.statusTab === 'recycle'));
+  assert.equal(Object.prototype.hasOwnProperty.call(result, 'orders'), false);
 });

@@ -67,26 +67,34 @@ class OcrCandidatePicker extends StatefulWidget {
     super.key,
     required this.line,
     required this.candidates,
+    this.categoryConflicts = const [],
+    this.aiCompositeProposal,
+    this.allowCreateNew = true,
+    this.inspectionOnly = false,
     this.onSearch,
-    this.onLoadOptions,
     this.isLoading = false,
     this.errorMessage,
   });
 
   final OcrCandidateLineContext line;
 
-  /// What the row already had. Shown immediately so the overlay never opens
-  /// empty, then replaced by [onLoadOptions] when that answers.
+  /// The immutable decision computed for this row revision. Opening the
+  /// picker must not rerun vision, matching or AI adjudication.
   final List<ProductDuplicateCandidate> candidates;
 
-  /// The wider question this surface exists to ask: every product of the same
-  /// kind, including the ones a gate ruled out and why.
-  ///
-  /// The row's list is deliberately conservative. Reusing it here left the
-  /// operator with one wrong option and «crear nuevo» — and creating a
-  /// duplicate of a product that already exists is the failure the whole
-  /// reconciliation step exists to prevent.
-  final Future<List<ProductDuplicateCandidate>> Function()? onLoadOptions;
+  /// Same-family products filed outside the resolved category. They stay
+  /// visible for catalog repair, but never compete in the normal list.
+  final List<ProductDuplicateCandidate> categoryConflicts;
+
+  /// The same immutable, review-only composite proposal shown in the row.
+  /// The picker displays it but never applies or persists it.
+  final String? aiCompositeProposal;
+
+  /// False when the identity review failed. Manual catalog search remains
+  /// available, but a failed model call must never be rendered as evidence
+  /// that a new product should be created.
+  final bool allowCreateNew;
+  final bool inspectionOnly;
 
   /// Free-text catalog search. Absent when the host cannot search.
   final OcrCandidateSearch? onSearch;
@@ -94,17 +102,21 @@ class OcrCandidatePicker extends StatefulWidget {
   final bool isLoading;
   final String? errorMessage;
 
-  /// Comfortable for a photo grid; still clearly a decision about one line and
-  /// not a second application window.
-  static const double maxWidth = 720;
-  static const double maxHeight = 640;
+  /// The picker shares the large centred review envelope with the image
+  /// comparison pop-over. On desktop the invoice remains visible behind the
+  /// scrim, while the candidate evidence gets the space the window already has.
+  static const double maxWidth = 1180;
+  static const double maxHeight = 920;
 
   static Future<OcrCandidateDecision?> show(
     BuildContext context, {
     required OcrCandidateLineContext line,
     required List<ProductDuplicateCandidate> candidates,
+    List<ProductDuplicateCandidate> categoryConflicts = const [],
+    String? aiCompositeProposal,
+    bool allowCreateNew = true,
+    bool inspectionOnly = false,
     OcrCandidateSearch? onSearch,
-    Future<List<ProductDuplicateCandidate>> Function()? onLoadOptions,
     bool isLoading = false,
     String? errorMessage,
   }) {
@@ -114,8 +126,11 @@ class OcrCandidatePicker extends StatefulWidget {
       builder: (_) => OcrCandidatePicker(
         line: line,
         candidates: candidates,
+        categoryConflicts: categoryConflicts,
+        aiCompositeProposal: aiCompositeProposal,
+        allowCreateNew: allowCreateNew,
+        inspectionOnly: inspectionOnly,
         onSearch: onSearch,
-        onLoadOptions: onLoadOptions,
         isLoading: isLoading,
         errorMessage: errorMessage,
       ),
@@ -144,31 +159,76 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
 
   bool _owns(int generation) => mounted && generation == _generation;
 
-  /// The full option list, once the host has answered.
-  List<ProductDuplicateCandidate>? _options;
-  bool _loadingOptions = false;
+  List<_OcrComparisonImage> _comparisonImages({List<Product>? products}) {
+    final images = <_OcrComparisonImage>[];
+    final sourceUrl = widget.line.imageUrl?.trim();
+    if (sourceUrl != null && sourceUrl.isNotEmpty) {
+      images.add(
+        _OcrComparisonImage(
+          key: 'source',
+          imageUrl: sourceUrl,
+          title: 'Imagen de la factura',
+          detail: widget.line.originalTitle?.trim().isNotEmpty == true
+              ? widget.line.originalTitle!.trim()
+              : widget.line.title,
+        ),
+      );
+    }
 
-  List<ProductDuplicateCandidate> get _offered => _options ?? widget.candidates;
+    final rows = products ??
+        <Product>[
+          for (final candidate in widget.candidates) candidate.product,
+          for (final candidate in widget.categoryConflicts) candidate.product,
+        ];
+    final seenProducts = <String>{};
+    for (final product in rows) {
+      final imageUrl = (product.imageUrl ?? product.imageUrlOptimized)?.trim();
+      if (imageUrl == null || imageUrl.isEmpty) continue;
+      final productKey = product.id?.trim().isNotEmpty == true
+          ? product.id!.trim()
+          : '${product.sku}|$imageUrl';
+      if (!seenProducts.add(productKey)) continue;
+      images.add(
+        _OcrComparisonImage(
+          key: 'product:$productKey',
+          imageUrl: imageUrl,
+          title: product.name,
+          detail: <String>[
+            product.sku,
+            if (product.brand?.trim().isNotEmpty == true) product.brand!.trim(),
+            if (product.categoryName?.trim().isNotEmpty == true)
+              product.categoryName!.trim(),
+          ].join(' · '),
+        ),
+      );
+    }
+    return images;
+  }
 
-  @override
-  void initState() {
-    super.initState();
-    final loader = widget.onLoadOptions;
-    if (loader == null) return;
-    _loadingOptions = true;
-    final generation = _generation;
-    loader().then((options) {
-      if (!_owns(generation)) return;
-      setState(() {
-        _options = options;
-        _loadingOptions = false;
-      });
-    }).catchError((Object _) {
-      if (!_owns(generation)) return;
-      // The row's own candidates remain; failing to widen the list is not a
-      // reason to show nothing.
-      setState(() => _loadingOptions = false);
-    });
+  void _openImageViewer({
+    required String initialKey,
+    List<Product>? products,
+  }) {
+    final images = _comparisonImages(products: products);
+    if (images.isEmpty) return;
+    final requested = images.indexWhere((image) => image.key == initialKey);
+    _OcrComparisonImageViewer.show(
+      context,
+      images: images,
+      initialIndex: requested < 0 ? 0 : requested,
+    );
+  }
+
+  void _openProductImage(Product product, {List<Product>? products}) {
+    final imageUrl = (product.imageUrl ?? product.imageUrlOptimized)?.trim();
+    if (imageUrl == null || imageUrl.isEmpty) return;
+    final productKey = product.id?.trim().isNotEmpty == true
+        ? product.id!.trim()
+        : '${product.sku}|$imageUrl';
+    _openImageViewer(
+      initialKey: 'product:$productKey',
+      products: products,
+    );
   }
 
   @override
@@ -231,20 +291,39 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final compact = MediaQuery.sizeOf(context).width < 720;
+    final screenSize = MediaQuery.sizeOf(context);
+    final compact = screenSize.width < 720;
+    final horizontalInset = compact ? 12.0 : 42.0;
+    final verticalInset = screenSize.height < 720 ? 12.0 : 24.0;
+    final dialogWidth = (screenSize.width - horizontalInset * 2)
+        .clamp(320.0, OcrCandidatePicker.maxWidth)
+        .toDouble();
+    final dialogHeight = (screenSize.height - verticalInset * 2)
+        .clamp(360.0, OcrCandidatePicker.maxHeight)
+        .toDouble();
 
     return Dialog(
-      insetPadding: EdgeInsets.all(compact ? 12 : 32),
+      key: const Key('ocr-candidate-picker-dialog'),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: horizontalInset,
+        vertical: verticalInset,
+      ),
       clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: OcrCandidatePicker.maxWidth,
-          maxHeight: OcrCandidatePicker.maxHeight,
-        ),
+      child: SizedBox(
+        key: const Key('ocr-candidate-picker-shell'),
+        width: dialogWidth,
+        height: dialogHeight,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            _Header(line: widget.line, compact: compact),
+            _Header(
+              line: widget.line,
+              compact: compact,
+              compositeReview:
+                  widget.aiCompositeProposal?.trim().isNotEmpty == true,
+              onImageTap: widget.line.imageUrl?.trim().isNotEmpty == true
+                  ? () => _openImageViewer(initialKey: 'source')
+                  : null,
+            ),
             Divider(height: 1, color: theme.dividerColor),
             if (widget.onSearch != null)
               Padding(
@@ -254,7 +333,8 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
                   controller: _query,
                   decoration: InputDecoration(
                     isDense: true,
-                    hintText: 'Buscar otro producto por nombre, SKU o marca',
+                    hintText:
+                        'Buscar manualmente en todo el catálogo por nombre, SKU o marca',
                     prefixIcon: const Icon(Icons.search, size: 18),
                     suffixIcon: _searching
                         ? const Padding(
@@ -270,6 +350,21 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
                   onChanged: _onQueryChanged,
                 ),
               ),
+            if (widget.aiCompositeProposal?.trim().isNotEmpty == true)
+              Padding(
+                key: const Key('ocr-candidate-ai-composite-proposal'),
+                padding: EdgeInsets.fromLTRB(
+                  compact ? 12 : 16,
+                  widget.onSearch == null ? 12 : 0,
+                  compact ? 12 : 16,
+                  8,
+                ),
+                child: VbNotice(
+                  title: 'Conjunto propuesto por IA',
+                  body: widget.aiCompositeProposal!.trim(),
+                  tone: VbNoticeTone.warning,
+                ),
+              ),
             Flexible(child: _body(context, compact)),
             Divider(height: 1, color: theme.dividerColor),
             Padding(
@@ -283,7 +378,14 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Si ninguno es, se crea un producto nuevo con esta ficha.',
+                      widget.inspectionOnly
+                          ? 'Auditoría de solo lectura: ninguna opción se aplicará.'
+                          : widget.aiCompositeProposal?.trim().isNotEmpty ==
+                                  true
+                              ? 'La propuesta no se vincula ni se aprende automáticamente.'
+                              : !widget.allowCreateNew
+                                  ? 'La revisión falló: reintenta o busca manualmente.'
+                                  : 'Si ninguno es, se crea un producto nuevo con esta ficha.',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -294,13 +396,18 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Cancelar'),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton.tonal(
-                    key: const Key('ocr-candidate-create-new'),
-                    onPressed: () => Navigator.of(context)
-                        .pop(const OcrCandidateCreateNew()),
-                    child: const Text('Ninguno · crear nuevo'),
-                  ),
+                  if (!widget.inspectionOnly &&
+                      widget.allowCreateNew &&
+                      widget.aiCompositeProposal?.trim().isNotEmpty !=
+                          true) ...[
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      key: const Key('ocr-candidate-create-new'),
+                      onPressed: () => Navigator.of(context)
+                          .pop(const OcrCandidateCreateNew()),
+                      child: const Text('Ninguno · crear nuevo'),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -317,6 +424,8 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
       compact ? 12 : 16,
       12,
     );
+    final compositeReview =
+        widget.aiCompositeProposal?.trim().isNotEmpty == true;
 
     if (widget.errorMessage != null) {
       return Padding(
@@ -373,17 +482,21 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
           reasons: const <String>[],
           objections: const <String>[],
           tier: null,
-          onSelected: () =>
-              Navigator.of(context).pop(OcrCandidateLink(manual[index])),
+          onImageTap: () => _openProductImage(
+            manual[index],
+            products: manual,
+          ),
+          onSelected: compositeReview || widget.inspectionOnly
+              ? null
+              : () =>
+                  Navigator.of(context).pop(OcrCandidateLink(manual[index])),
         ),
       );
     }
 
-    final offered = _offered;
-    if (offered.isEmpty) {
-      if (_loadingOptions) {
-        return const Center(child: CircularProgressIndicator());
-      }
+    final offered = widget.candidates;
+    final categoryConflicts = widget.categoryConflicts;
+    if (offered.isEmpty && categoryConflicts.isEmpty) {
       return Padding(
         padding: padding,
         child: const VbNotice(
@@ -395,30 +508,43 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
       );
     }
 
-    // Two groups, one list. The offered products come first; the ones a gate
-    // ruled out follow under a heading that says so, because the operator may
-    // be here precisely because the specification this engine read is what is
-    // wrong. Hiding them made the overlay a dead end whose only exits were the
-    // wrong product or a duplicate.
+    // Three explicit scopes, one list. Products from another category never
+    // compete with the normal answer merely because they share words.
     final viable = offered.where((candidate) => !candidate.isRuledOut).toList();
     final ruledOut =
         offered.where((candidate) => candidate.isRuledOut).toList();
     final rows = <Widget>[
+      if (viable.isNotEmpty)
+        Padding(
+          key: const Key('ocr-candidate-viable-heading'),
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Text(
+            viable.length == 1 ? '1 viable' : '${viable.length} viables',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ),
       for (final candidate in viable)
         _CandidateRow(
           product: candidate.product,
           reasons: candidate.reasons,
           objections: candidate.objections,
           tier: candidate.matchTier,
-          onSelected: () =>
-              Navigator.of(context).pop(OcrCandidateLink(candidate.product)),
+          onImageTap: () => _openProductImage(candidate.product),
+          onSelected: compositeReview || widget.inspectionOnly
+              ? null
+              : () => Navigator.of(context)
+                  .pop(OcrCandidateLink(candidate.product)),
         ),
       if (ruledOut.isNotEmpty) ...[
         Padding(
           key: const Key('ocr-candidate-ruled-out-heading'),
           padding: const EdgeInsets.only(top: 8, bottom: 2),
           child: Text(
-            'Del mismo tipo, descartados por una diferencia',
+            ruledOut.length == 1
+                ? '1 descartado por una diferencia'
+                : '${ruledOut.length} descartados por una diferencia',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -430,21 +556,42 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
             reasons: candidate.reasons,
             objections: candidate.objections,
             tier: candidate.matchTier,
-            onSelected: () =>
-                Navigator.of(context).pop(OcrCandidateLink(candidate.product)),
+            onImageTap: () => _openProductImage(candidate.product),
+            onSelected: compositeReview || widget.inspectionOnly
+                ? null
+                : () => Navigator.of(context)
+                    .pop(OcrCandidateLink(candidate.product)),
           ),
       ],
-      if (_loadingOptions)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 12),
-          child: Center(
-            child: SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+      if (categoryConflicts.isNotEmpty) ...[
+        Padding(
+          key: const Key('ocr-candidate-category-conflicts-heading'),
+          padding: const EdgeInsets.only(top: 8, bottom: 2),
+          child: Text(
+            categoryConflicts.length == 1
+                ? '1 producto del mismo tipo en otra categoría'
+                : '${categoryConflicts.length} productos del mismo tipo en otra categoría',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
         ),
+        for (final candidate in categoryConflicts)
+          _CandidateRow(
+            product: candidate.product,
+            reasons: candidate.reasons,
+            objections: <String>[
+              ...candidate.objections,
+              'Revisa la categoría del producto antes de vincular',
+            ],
+            tier: candidate.matchTier,
+            onImageTap: () => _openProductImage(candidate.product),
+            onSelected: compositeReview || widget.inspectionOnly
+                ? null
+                : () => Navigator.of(context)
+                    .pop(OcrCandidateLink(candidate.product)),
+          ),
+      ],
     ];
 
     return ListView.separated(
@@ -458,10 +605,17 @@ class _OcrCandidatePickerState extends State<OcrCandidatePicker> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.line, required this.compact});
+  const _Header({
+    required this.line,
+    required this.compact,
+    required this.compositeReview,
+    required this.onImageTap,
+  });
 
   final OcrCandidateLineContext line;
   final bool compact;
+  final bool compositeReview;
+  final VoidCallback? onImageTap;
 
   @override
   Widget build(BuildContext context) {
@@ -481,16 +635,12 @@ class _Header extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              width: 52,
-              height: 52,
-              child: ImageService.buildProductImage(
-                imageUrl: line.imageUrl,
-                size: 52,
-              ),
-            ),
+          _ReviewThumbnail(
+            key: const Key('ocr-candidate-source-image'),
+            imageUrl: line.imageUrl,
+            compact: compact,
+            semanticLabel: 'Ampliar imagen de la factura',
+            onTap: onImageTap,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -498,7 +648,9 @@ class _Header extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '¿Cuál de estos es?',
+                  compositeReview
+                      ? '¿Qué productos incluye esta línea?'
+                      : '¿Cuál de estos es?',
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
@@ -547,13 +699,15 @@ class _CandidateRow extends StatelessWidget {
     required this.objections,
     required this.tier,
     required this.onSelected,
+    required this.onImageTap,
   });
 
   final Product product;
   final List<String> reasons;
   final List<String> objections;
   final ProductDuplicateMatchTier? tier;
-  final VoidCallback onSelected;
+  final VoidCallback? onSelected;
+  final VoidCallback? onImageTap;
 
   @override
   Widget build(BuildContext context) {
@@ -589,16 +743,12 @@ class _CandidateRow extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 64,
-                  height: 64,
-                  child: ImageService.buildProductImage(
-                    imageUrl: product.imageUrlOptimized ?? product.imageUrl,
-                    size: 64,
-                  ),
-                ),
+              _ReviewThumbnail(
+                key: Key('ocr-candidate-product-image-${product.id}'),
+                imageUrl: product.imageUrlOptimized ?? product.imageUrl,
+                compact: MediaQuery.sizeOf(context).width < 720,
+                semanticLabel: 'Ampliar imagen de ${product.name}',
+                onTap: onImageTap,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -684,17 +834,284 @@ class _CandidateRow extends StatelessWidget {
                         ),
                       ),
                     ),
-                  const SizedBox(height: 8),
-                  FilledButton(
-                    onPressed: onSelected,
-                    style: FilledButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
+                  if (onSelected != null) ...[
+                    const SizedBox(height: 8),
+                    FilledButton(
+                      onPressed: onSelected,
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: const Text('Es este'),
                     ),
-                    child: const Text('Es este'),
-                  ),
+                  ],
                 ],
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewThumbnail extends StatelessWidget {
+  const _ReviewThumbnail({
+    super.key,
+    required this.imageUrl,
+    required this.compact,
+    required this.semanticLabel,
+    required this.onTap,
+  });
+
+  final String? imageUrl;
+  final bool compact;
+  final String semanticLabel;
+  final VoidCallback? onTap;
+
+  // DesignSync was unavailable in this task. These owner-requested review
+  // extents are explicitly unsourced until the component guide publishes an
+  // image-inspection token; the large comparison pop-over below does not depend on
+  // either value.
+  static const double _compactExtent = 72;
+  static const double _desktopExtent = 112;
+
+  @override
+  Widget build(BuildContext context) {
+    final extent = compact ? _compactExtent : _desktopExtent;
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: extent,
+        height: extent,
+        child: ImageService.buildProductImage(
+          imageUrl: imageUrl,
+          size: extent,
+        ),
+      ),
+    );
+    if (onTap == null) return image;
+
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Tooltip(
+        message: 'Ampliar imagen',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                image,
+                const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.open_in_full, size: 18),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OcrComparisonImage {
+  const _OcrComparisonImage({
+    required this.key,
+    required this.imageUrl,
+    required this.title,
+    required this.detail,
+  });
+
+  final String key;
+  final String imageUrl;
+  final String title;
+  final String detail;
+}
+
+class _OcrComparisonImageViewer extends StatefulWidget {
+  const _OcrComparisonImageViewer({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  final List<_OcrComparisonImage> images;
+  final int initialIndex;
+
+  static Future<void> show(
+    BuildContext context, {
+    required List<_OcrComparisonImage> images,
+    required int initialIndex,
+  }) {
+    return showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      barrierLabel: 'Cerrar visor de imágenes',
+      builder: (_) => _OcrComparisonImageViewer(
+        images: images,
+        initialIndex: initialIndex,
+      ),
+    );
+  }
+
+  @override
+  State<_OcrComparisonImageViewer> createState() =>
+      _OcrComparisonImageViewerState();
+}
+
+class _OcrComparisonImageViewerState extends State<_OcrComparisonImageViewer> {
+  late final PageController _controller;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _controller = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _show(int index) {
+    if (index < 0 || index >= widget.images.length) return;
+    _controller.jumpToPage(index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final current = widget.images[_index];
+    final hasSeveral = widget.images.length > 1;
+    final screenSize = MediaQuery.sizeOf(context);
+    // Reuse the established large-preview dialog envelope used by Files: this
+    // keeps the candidate picker visible behind the scrim instead of replacing
+    // the whole ERP surface with a second page.
+    final horizontalInset = screenSize.width < 760 ? 12.0 : 42.0;
+    final verticalInset = screenSize.height < 720 ? 12.0 : 24.0;
+    final dialogWidth = (screenSize.width - horizontalInset * 2)
+        .clamp(320.0, 1180.0)
+        .toDouble();
+    final dialogHeight =
+        (screenSize.height - verticalInset * 2).clamp(360.0, 920.0).toDouble();
+
+    return Dialog(
+      key: const Key('ocr-comparison-image-viewer'),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: horizontalInset,
+        vertical: verticalInset,
+      ),
+      backgroundColor: Colors.transparent,
+      child: SizedBox(
+        width: dialogWidth,
+        height: dialogHeight,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Material(
+            color: scheme.surface,
+            child: Column(
+              children: [
+                ListTile(
+                  title: Text(
+                    current.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    current.detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (hasSeveral)
+                        Text('${_index + 1} de ${widget.images.length}'),
+                      IconButton(
+                        key: const Key('ocr-comparison-image-close'),
+                        tooltip: 'Volver a los productos parecidos',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: theme.dividerColor),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: PageView.builder(
+                          key: const Key('ocr-comparison-image-pages'),
+                          controller: _controller,
+                          itemCount: widget.images.length,
+                          onPageChanged: (index) =>
+                              setState(() => _index = index),
+                          itemBuilder: (context, index) {
+                            final image = widget.images[index];
+                            return LayoutBuilder(
+                              builder: (context, constraints) {
+                                return Semantics(
+                                  image: true,
+                                  label: '${image.title}. ${image.detail}',
+                                  child: InteractiveViewer(
+                                    key: ValueKey<String>(
+                                      'ocr-comparison-image-${image.key}',
+                                    ),
+                                    minScale: 0.75,
+                                    maxScale: 8,
+                                    child: SizedBox(
+                                      key: ValueKey<String>(
+                                        'ocr-comparison-image-canvas-${image.key}',
+                                      ),
+                                      width: constraints.maxWidth,
+                                      height: constraints.maxHeight,
+                                      child: ImageService.buildCachedImage(
+                                        imageUrl: image.imageUrl,
+                                        width: constraints.maxWidth,
+                                        height: constraints.maxHeight,
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                      if (_index > 0)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton.filledTonal(
+                            key: const Key('ocr-comparison-image-previous'),
+                            tooltip: 'Imagen anterior',
+                            onPressed: () => _show(_index - 1),
+                            icon: const Icon(Icons.chevron_left),
+                          ),
+                        ),
+                      if (_index + 1 < widget.images.length)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: IconButton.filledTonal(
+                            key: const Key('ocr-comparison-image-next'),
+                            tooltip: 'Imagen siguiente',
+                            onPressed: () => _show(_index + 1),
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

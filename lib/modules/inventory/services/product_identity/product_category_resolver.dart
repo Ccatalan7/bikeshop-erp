@@ -97,11 +97,14 @@ class ProductCategoryResolver {
   static const Map<String, List<String>> canonicalLeavesByFamily =
       <String, List<String>>{
     'stem': ['tee'],
+    'stem_spacer': ['espaciadores', 'espaciador'],
     'handlebar': ['manubrios', 'manubrio', 'manillar'],
     'headset': ['direccion', 'juego de direccion'],
     'grip': ['punos', 'puños'],
     'saddle': ['asiento', 'asientos', 'sillin'],
+    'saddle_cover': ['cubre asientos', 'funda de asiento', 'fundas'],
     'seatpost': ['tija', 'tijas'],
+    'seatpost_shim': ['adaptadores de tija', 'adaptador de tija'],
     'seat_clamp': ['collarin', 'collarines', 'abrazadera de tija'],
     'crankset': ['volante', 'volantes'],
     'crank_arm': ['biela izquierda', 'bielas'],
@@ -128,6 +131,7 @@ class ProductCategoryResolver {
     'brake_rotor': ['rotores', 'rotor'],
     'brake_pad': ['pastillas', 'pastilla'],
     'brake_caliper': ['calipers', 'caliper'],
+    'hydraulic_brake_assembly': ['frenos hidraulicos completos'],
     'rim_brake_arm': ['herraduras', 'herradura'],
     'brake_lever': ['manillas', 'manilla de freno'],
     'brake_adapter': ['adaptadores'],
@@ -147,14 +151,16 @@ class ProductCategoryResolver {
     'fork': ['horquillas', 'horquilla'],
     'shock': ['amortiguadores', 'amortiguador'],
     'frame': ['cuadros', 'cuadro'],
-    'cable_housing': ['fundas y piolas', 'piolas', 'fundas'],
+    'cable_end_cap': ['terminales y topes'],
+    'cable_housing': ['cambios', 'frenos'],
     'light': ['luces', 'luz'],
     'lock': ['candados', 'candado'],
-    'bell': ['timbres', 'timbre'],
+    'bell': ['campanillas', 'campanilla', 'timbres', 'timbre'],
     'mirror': ['espejos', 'espejo'],
     'bottle_cage': ['porta caramagiola', 'portabidon'],
-    'bottle': ['botellas', 'caramagiola', 'bidon'],
-    'phone_mount': ['porta celular', 'soporte de celular'],
+    'applicator_bottle': ['botellas aplicadoras'],
+    'bottle': ['botella de agua', 'botellas', 'caramagiola', 'bidon'],
+    'phone_mount': ['porta celular', 'soporte celular', 'soporte de celular'],
     'bag': ['bolsos', 'alforjas', 'mochilas'],
     'rack': ['parrillas', 'parrilla', 'portaequipaje'],
     'fender': ['barrofangos', 'guardabarros'],
@@ -163,11 +169,14 @@ class ProductCategoryResolver {
     'glove': ['guantes', 'guante'],
     'chain_tool': ['corta cadena', 'cortacadena'],
     'puller_tool': ['extractores', 'extractor'],
+    'valve_core_tool': ['extractores', 'herramientas'],
     'pump': ['bombines', 'bombin', 'infladores'],
     'tool': ['herramientas', 'herramienta'],
+    'tubeless_repair_kit': ['tripas tubeless', 'herramientas'],
     'lubricant': ['lubricantes', 'aceites', 'grasas'],
     'bearing': ['rodamientos', 'rodamiento'],
     'axle': ['ejes', 'eje'],
+    'axle_adapter': ['adaptadores'],
     'bolt': ['pernos', 'perno'],
   };
 
@@ -204,7 +213,22 @@ class ProductCategoryResolver {
           : 'La foto la reconoce: $label',
     );
 
-    final aliases = canonicalLeavesByFamily[familyId];
+    final aliases = _categoryAliasesFor(profile, familyId);
+    if (_usesCableSystemShelf(familyId) && aliases == null) {
+      final possibleLeaves = <Category>[
+        ..._leavesNamed('cambios'),
+        ..._leavesNamed('frenos'),
+      ];
+      return ProductCategoryResolution(
+        category: null,
+        evidence: <String>[
+          ...evidence,
+          for (final category in possibleLeaves) category.fullPath,
+        ],
+        refusal: ProductCategoryRefusal.ambiguousLeaf,
+        refusalDetail: label.toLowerCase(),
+      );
+    }
     if (aliases == null || aliases.isEmpty) {
       return ProductCategoryResolution(
         category: null,
@@ -244,6 +268,70 @@ class ProductCategoryResolver {
       refusal: ProductCategoryRefusal.noCanonicalLeaf,
       refusalDetail: label.toLowerCase(),
     );
+  }
+
+  /// Category placement for a family when its own text states a sub-use.
+  ///
+  /// `Fundas y piolas` is a system node in the real tenant tree. Its assignable
+  /// shelves are `Cambios` and `Frenos`; falling through to the unrelated
+  /// `Accesorios / Fundas` shelf reproduced the exact category leakage this
+  /// resolver exists to prevent. The cleaned name comes first in
+  /// [identityText], so the actually selected `Shift Cap`/`cambio` variant
+  /// outranks generic listing prose that may mention both uses.
+  List<String>? _categoryAliasesFor(
+    ProductIdentityProfile profile,
+    String familyId,
+  ) {
+    if (!_usesCableSystemShelf(familyId)) {
+      return canonicalLeavesByFamily[familyId];
+    }
+
+    // A dedicated terminal shelf describes the sold object more precisely than
+    // the system it serves. Older tenant trees may not have that leaf; only in
+    // that case may the typed shift/brake system choose the compatible shelf.
+    if (familyId == 'cable_end_cap') {
+      final dedicated = canonicalLeavesByFamily[familyId];
+      if (dedicated != null &&
+          dedicated.any((alias) => _leavesNamed(alias).isNotEmpty)) {
+        return dedicated;
+      }
+    }
+
+    final typedSystem = profile.variantSpecs[PartSpecKind.cableSystem] ??
+        profile.lineSpecs[PartSpecKind.cableSystem] ??
+        profile.specs[PartSpecKind.cableSystem];
+    if (typedSystem == 'shift') return const <String>['cambios'];
+    if (typedSystem == 'brake') return const <String>['frenos'];
+
+    final shiftAt = _firstPhrase(
+      profile.identityText,
+      const <String>['cambio', 'cambios', 'shift'],
+    );
+    final brakeAt = _firstPhrase(
+      profile.identityText,
+      const <String>['freno', 'frenos', 'brake'],
+    );
+    if (shiftAt == null && brakeAt == null) return null;
+    if (brakeAt == null || (shiftAt != null && shiftAt < brakeAt)) {
+      return const <String>['cambios'];
+    }
+    if (shiftAt == null || brakeAt < shiftAt) {
+      return const <String>['frenos'];
+    }
+    return null;
+  }
+
+  bool _usesCableSystemShelf(String familyId) =>
+      familyId == 'cable_housing' || familyId == 'cable_end_cap';
+
+  int? _firstPhrase(String text, List<String> phrases) {
+    final haystack = ' ${ProductIdentityExtractor.normalize(text)} ';
+    int? first;
+    for (final phrase in phrases) {
+      final at = haystack.indexOf(' $phrase ');
+      if (at >= 0 && (first == null || at < first)) first = at;
+    }
+    return first;
   }
 
   /// Categories with that name that are **leaves**.

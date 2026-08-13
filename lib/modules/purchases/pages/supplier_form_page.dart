@@ -25,6 +25,12 @@ class SupplierCredentialCommandOutcomeUnknown implements Exception {
   const SupplierCredentialCommandOutcomeUnknown();
 }
 
+enum _CredentialProfileRefreshOutcome {
+  refreshed,
+  unavailable,
+  concurrentChange,
+}
+
 @visibleForTesting
 Future<T> replayAmbiguousSupplierCredentialCommand<T>(
   Future<T> Function() operation,
@@ -458,6 +464,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
   int _loadGeneration = 0;
   int _accountingCatalogGeneration = 0;
   int _credentialStatusGeneration = 0;
+  bool _credentialWriteCommittedInSession = false;
+  bool _profileSnapshotNeedsRefresh = false;
+  SupplierProfile? _concurrentProfileSnapshot;
 
   SupplierEditorDataSource get _source => _dataSource!;
   bool get _editing => widget.supplierId != null;
@@ -602,6 +611,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       _noticeAction = null;
       _profileOperationId = null;
       _profileOperationFingerprint = null;
+      _credentialWriteCommittedInSession = false;
+      _profileSnapshotNeedsRefresh = false;
+      _concurrentProfileSnapshot = null;
     });
   }
 
@@ -908,6 +920,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
   }
 
   void _close({bool saved = false}) {
+    _credentialWriteCommittedInSession = false;
+    _profileSnapshotNeedsRefresh = false;
+    _concurrentProfileSnapshot = null;
     ReturnNavigation.close(
       context,
       fallbackRoute: '/purchases/suppliers',
@@ -961,6 +976,17 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
 
   Future<void> _save() async {
     FocusScope.of(context).unfocus();
+    if (_profileSnapshotNeedsRefresh) {
+      if (_concurrentProfileSnapshot != null) {
+        _showCredentialProfileConcurrentChange();
+      } else {
+        final supplierId = widget.supplierId;
+        if (supplierId != null) {
+          _showCredentialProfileRefreshRequired(supplierId);
+        }
+      }
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     if (_selectedRoleIds.isEmpty) {
       _showNotice(
@@ -1064,6 +1090,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       if (!mounted) return;
       _profileOperationId = null;
       _profileOperationFingerprint = null;
+      _credentialWriteCommittedInSession = false;
+      _profileSnapshotNeedsRefresh = false;
+      _concurrentProfileSnapshot = null;
       _profile = result.profile;
       _close(saved: true);
     } on SupplierFoundationUnavailable {
@@ -1073,7 +1102,14 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
         VbNoticeTone.danger,
       );
     } catch (error) {
-      if (_isOptimisticConflict(error)) {
+      if (_credentialWriteCommittedInSession &&
+          _isTransientSupplierWriteContention(error)) {
+        _showNotice(
+          'El acceso ya está guardado',
+          'La ficha no se guardó porque otra operación seguía terminando. El acceso no se perdió y este intento no modificó los demás datos. Vuelve a pulsar Guardar cambios.',
+          VbNoticeTone.warning,
+        );
+      } else if (_isOptimisticConflict(error)) {
         _showNotice(
           'El proveedor cambió mientras lo editabas',
           'Conservamos tus datos. Revisa la ficha actual y vuelve a guardar; nunca se reescribe historia.',
@@ -1097,7 +1133,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     if (!widget.includeWorkspaceShell) return surface;
     return MainLayout(
       title: 'Proveedores',
-      onBackPressed: _close,
+      onBackPressed: _saving ? null : _close,
       child: surface,
     );
   }
@@ -1136,152 +1172,157 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
         Expanded(
           child: Form(
             key: _formKey,
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                compact ? 16 : 28,
-                22,
-                compact ? 16 : 28,
-                40,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1040),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_noticeTitle != null) ...[
-                        VbNotice(
-                          title: _noticeTitle!,
-                          body: _noticeBody,
-                          tone: _noticeTone,
-                          action: _noticeAction == null
-                              ? null
-                              : TextButton(
-                                  onPressed: _noticeAction,
-                                  child: Text(_noticeActionLabel!),
-                                ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      _IdentitySection(
-                        compact: compact,
-                        displayName: _displayName,
-                        legalName: _legalName,
-                        tradeName: _tradeName,
-                        aliases: _aliases,
-                        taxIdentifier: _taxIdentifier,
-                        partyKind: _partyKind,
-                        isActive: _isActive,
-                        showLegalDetails: _showLegalDetails,
-                        onPartyKindChanged: (value) =>
-                            setState(() => _partyKind = value),
-                        onActiveChanged: (value) =>
-                            setState(() => _isActive = value),
-                        onShowLegalDetails: () =>
-                            setState(() => _showLegalDetails = true),
-                      ),
-                      const SizedBox(height: 16),
-                      _RelationKindSection(
-                        choices: _relationChoices,
-                        availableKinds: _supportedRelationKinds
-                            .where((kind) => !_relationChoices
-                                .any((c) => c.kindKey == kind.key))
-                            .toList(growable: false),
-                        onAdd: _openRelationPicker,
-                        onRemove: (kindKey) => setState(() {
-                          _relationChoices
-                              .removeWhere((c) => c.kindKey == kindKey);
-                          _syncClassificationFromRelations();
-                        }),
-                        onSubtypeChanged: (kindKey, subtypeKey) => setState(() {
-                          for (final choice in _relationChoices) {
-                            if (choice.kindKey == kindKey) {
-                              choice.subtypeKey = subtypeKey;
-                            }
-                          }
-                          _syncClassificationFromRelations();
-                        }),
-                      ),
-                      const SizedBox(height: 16),
-                      if (_showOptionalDetails || _profile != null)
-                        _ContactSection(
-                          compact: compact,
-                          contactPerson: _contactPerson,
-                          email: _email,
-                          phone: _phone,
-                          website: _website,
-                          address: _address,
-                          comuna: _comuna,
-                          city: _city,
-                          region: _region,
-                          notes: _notes,
-                        )
-                      else
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton.icon(
-                            key: const ValueKey(
-                              'supplier-show-optional-details',
-                            ),
-                            onPressed: () => setState(
-                              () => _showOptionalDetails = true,
-                            ),
-                            icon: const Icon(Icons.add),
-                            label: const Text('Agregar contacto y ubicación'),
+            child: AbsorbPointer(
+              key: const ValueKey('supplier-editor-write-barrier'),
+              absorbing: _saving,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  compact ? 16 : 28,
+                  22,
+                  compact ? 16 : 28,
+                  40,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1040),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_noticeTitle != null) ...[
+                          VbNotice(
+                            title: _noticeTitle!,
+                            body: _noticeBody,
+                            tone: _noticeTone,
+                            action: _noticeAction == null
+                                ? null
+                                : TextButton(
+                                    onPressed: _noticeAction,
+                                    child: Text(_noticeActionLabel!),
+                                  ),
                           ),
-                        ),
-                      if (_profile != null) ...[
-                        const SizedBox(height: 16),
-                        _RelationshipSection(
-                          engagements: _profile!.engagements,
-                          onCreate: () => _editEngagement(),
-                          onAppend: _editEngagement,
-                        ),
-                        const SizedBox(height: 16),
-                        _AccountingSection(
-                          policies: _profile!.accounting.policies,
-                          accounts: _accounts,
-                          canManageAccounting: _source.canManageAccounting,
-                          catalogsLoading: _optionalCatalogsLoading,
-                          accountCatalogUnavailable:
-                              _accountCatalogError != null,
-                          expenseCatalogUnavailable:
-                              _expenseCategoryCatalogError != null,
-                          onRetryCatalogs: () => _loadOptionalData(
-                            _profile!.relationship.id,
-                          ),
-                          onCreate: () => _editAccountingPolicy(),
-                          onAppend: _editAccountingPolicy,
-                        ),
-                        if (_source.canManageCredentials) ...[
                           const SizedBox(height: 16),
-                          _CredentialsSection(
-                            status: _credentialStatus,
-                            onRetry: () => _loadCredentialStatus(
+                        ],
+                        _IdentitySection(
+                          compact: compact,
+                          displayName: _displayName,
+                          legalName: _legalName,
+                          tradeName: _tradeName,
+                          aliases: _aliases,
+                          taxIdentifier: _taxIdentifier,
+                          partyKind: _partyKind,
+                          isActive: _isActive,
+                          showLegalDetails: _showLegalDetails,
+                          onPartyKindChanged: (value) =>
+                              setState(() => _partyKind = value),
+                          onActiveChanged: (value) =>
+                              setState(() => _isActive = value),
+                          onShowLegalDetails: () =>
+                              setState(() => _showLegalDetails = true),
+                        ),
+                        const SizedBox(height: 16),
+                        _RelationKindSection(
+                          choices: _relationChoices,
+                          availableKinds: _supportedRelationKinds
+                              .where((kind) => !_relationChoices
+                                  .any((c) => c.kindKey == kind.key))
+                              .toList(growable: false),
+                          onAdd: _openRelationPicker,
+                          onRemove: (kindKey) => setState(() {
+                            _relationChoices
+                                .removeWhere((c) => c.kindKey == kindKey);
+                            _syncClassificationFromRelations();
+                          }),
+                          onSubtypeChanged: (kindKey, subtypeKey) =>
+                              setState(() {
+                            for (final choice in _relationChoices) {
+                              if (choice.kindKey == kindKey) {
+                                choice.subtypeKey = subtypeKey;
+                              }
+                            }
+                            _syncClassificationFromRelations();
+                          }),
+                        ),
+                        const SizedBox(height: 16),
+                        if (_showOptionalDetails || _profile != null)
+                          _ContactSection(
+                            compact: compact,
+                            contactPerson: _contactPerson,
+                            email: _email,
+                            phone: _phone,
+                            website: _website,
+                            address: _address,
+                            comuna: _comuna,
+                            city: _city,
+                            region: _region,
+                            notes: _notes,
+                          )
+                        else
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              key: const ValueKey(
+                                'supplier-show-optional-details',
+                              ),
+                              onPressed: () => setState(
+                                () => _showOptionalDetails = true,
+                              ),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Agregar contacto y ubicación'),
+                            ),
+                          ),
+                        if (_profile != null) ...[
+                          const SizedBox(height: 16),
+                          _RelationshipSection(
+                            engagements: _profile!.engagements,
+                            onCreate: () => _editEngagement(),
+                            onAppend: _editEngagement,
+                          ),
+                          const SizedBox(height: 16),
+                          _AccountingSection(
+                            policies: _profile!.accounting.policies,
+                            accounts: _accounts,
+                            canManageAccounting: _source.canManageAccounting,
+                            catalogsLoading: _optionalCatalogsLoading,
+                            accountCatalogUnavailable:
+                                _accountCatalogError != null,
+                            expenseCatalogUnavailable:
+                                _expenseCategoryCatalogError != null,
+                            onRetryCatalogs: () => _loadOptionalData(
                               _profile!.relationship.id,
                             ),
-                            onCreate: () => _editCredential(),
-                            onRotate: _editCredential,
-                            onDelete: _deleteCredential,
+                            onCreate: () => _editAccountingPolicy(),
+                            onAppend: _editAccountingPolicy,
+                          ),
+                          if (_source.canManageCredentials) ...[
+                            const SizedBox(height: 16),
+                            _CredentialsSection(
+                              status: _credentialStatus,
+                              onRetry: () => _loadCredentialStatus(
+                                _profile!.relationship.id,
+                              ),
+                              onCreate: () => _editCredential(),
+                              onRotate: _editCredential,
+                              onDelete: _deleteCredential,
+                            ),
+                          ],
+                        ] else ...[
+                          const SizedBox(height: 16),
+                          const VbNotice(
+                            title: 'Primero crea la identidad',
+                            body:
+                                'Después podrás agregar relaciones versionadas, criterios contables y accesos. Ninguno es obligatorio para crear un proveedor.',
+                            tone: VbNoticeTone.neutral,
                           ),
                         ],
-                      ] else ...[
-                        const SizedBox(height: 16),
-                        const VbNotice(
-                          title: 'Primero crea la identidad',
-                          body:
-                              'Después podrás agregar relaciones versionadas, criterios contables y accesos. Ninguno es obligatorio para crear un proveedor.',
-                          tone: VbNoticeTone.neutral,
+                        const SizedBox(height: 22),
+                        _EditorActions(
+                          saving: _saving,
+                          editing: _editing,
+                          onCancel: _close,
+                          onSave: _save,
                         ),
                       ],
-                      const SizedBox(height: 22),
-                      _EditorActions(
-                        saving: _saving,
-                        editing: _editing,
-                        onCancel: _close,
-                        onSave: _save,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1476,6 +1517,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       builder: (_) => _CredentialDialog(
         existing: existing,
         engagements: profile.engagements,
+        existingCredentials: _credentialStatus?.credentials ?? const [],
       ),
     );
     if (draft == null) return;
@@ -1494,25 +1536,35 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
           existing?.engagementId != null && draft.engagementId == null,
       clearOrigin: existing?.originUrl != null && draft.origin == null,
     );
+    if (mounted) setState(() => _saving = true);
     try {
       await replayAmbiguousSupplierCredentialCommand(
         () => _source.upsertCredential(input),
       );
+      _credentialWriteCommittedInSession = true;
+      final refreshOutcome = await _refreshProfileSnapshotAfterCredentialWrite(
+        profile.relationship.id,
+      );
       await _loadCredentialStatus(profile.relationship.id);
-      _showNotice(
-        existing == null
+      _showCommittedCredentialOutcome(
+        refreshOutcome,
+        supplierId: profile.relationship.id,
+        successTitle: existing == null
             ? 'Acceso agregado'
             : existing.secretAvailable
                 ? 'Acceso rotado'
                 : 'Acceso completado',
-        'La ficha conserva sólo metadatos; el secreto quedó en el Vault.',
-        VbNoticeTone.success,
+        successBody:
+            'El acceso ya quedó guardado de forma protegida. No necesitas pulsar Guardar cambios; ese botón guarda sólo los demás datos de la ficha.',
       );
     } on SupplierCredentialCommandOutcomeUnknown {
       await _loadCredentialStatus(profile.relationship.id);
+      await _refreshProfileSnapshotAfterUnknownCredentialOutcome(
+        profile.relationship.id,
+      );
       _showNotice(
         'Resultado del acceso no confirmado',
-        'La operación pudo haberse aplicado y se reintentó con la misma clave de operación. Revisa el inventario actualizado antes de volver a ingresar el secreto.',
+        'La operación pudo haberse aplicado y se reintentó de forma segura. El inventario visible se actualizó, pero no prueba qué ocurrió con esta contraseña o token. Revísalo antes de volver a ingresarlo.',
         VbNoticeTone.warning,
       );
     } catch (error) {
@@ -1521,10 +1573,12 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
             ? 'El acceso cambió mientras lo editabas'
             : 'El acceso fue rechazado',
         _isOptimisticConflict(error)
-            ? 'El secreto fue descartado. Actualiza los metadatos antes de volver a escribirlo.'
-            : 'El servidor rechazó la operación. Revisa el origen HTTPS exacto y los datos ingresados.',
+            ? 'La contraseña o el token se descartó. Actualiza el acceso antes de volver a escribirlo.'
+            : 'El servidor rechazó la operación. Revisa la página de inicio de sesión y los datos ingresados.',
         VbNoticeTone.warning,
       );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -1536,7 +1590,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       builder: (context) => AlertDialog(
         title: const Text('Eliminar acceso'),
         content: Text(
-          'Se eliminará “${metadata.label ?? metadata.credentialKey}”. Esta acción no revela el secreto.',
+          'Se eliminará “${metadata.label ?? metadata.credentialKey}”. La contraseña o el token no se mostrará.',
         ),
         actions: [
           TextButton(
@@ -1552,6 +1606,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     );
     if (confirmed != true) return;
     final operationId = _uuid.v4();
+    if (mounted) setState(() => _saving = true);
     try {
       await replayAmbiguousSupplierCredentialCommand(
         () => _source.deleteCredential(
@@ -1562,17 +1617,26 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
           expectedUpdatedAt: metadata.updatedAt!,
         ),
       );
+      _credentialWriteCommittedInSession = true;
+      final refreshOutcome = await _refreshProfileSnapshotAfterCredentialWrite(
+        profile.relationship.id,
+      );
       await _loadCredentialStatus(profile.relationship.id);
-      _showNotice(
-        'Acceso eliminado',
-        'El inventario de accesos ya refleja el cambio.',
-        VbNoticeTone.success,
+      _showCommittedCredentialOutcome(
+        refreshOutcome,
+        supplierId: profile.relationship.id,
+        successTitle: 'Acceso eliminado',
+        successBody:
+            'El acceso ya fue eliminado. No necesitas pulsar Guardar cambios; ese botón guarda sólo los demás datos de la ficha.',
       );
     } on SupplierCredentialCommandOutcomeUnknown {
       await _loadCredentialStatus(profile.relationship.id);
+      await _refreshProfileSnapshotAfterUnknownCredentialOutcome(
+        profile.relationship.id,
+      );
       _showNotice(
         'Resultado de eliminación no confirmado',
-        'La operación se reintentó con la misma clave. Revisa el inventario actualizado antes de intentarlo otra vez.',
+        'La operación se reintentó con la misma clave. El inventario visible se actualizó, pero no prueba qué ocurrió con esta eliminación. Revísalo antes de intentarlo otra vez.',
         VbNoticeTone.warning,
       );
     } catch (error) {
@@ -1587,7 +1651,180 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
             ? VbNoticeTone.warning
             : VbNoticeTone.danger,
       );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<_CredentialProfileRefreshOutcome>
+      _refreshProfileSnapshotAfterCredentialWrite(
+    String supplierId,
+  ) async {
+    final authorityFingerprint = _source.authorityFingerprint;
+    _profileSnapshotNeedsRefresh = true;
+    try {
+      final profile = await _source.getProfile(supplierId);
+      if (!mounted ||
+          widget.supplierId != supplierId ||
+          authorityFingerprint != _source.authorityFingerprint ||
+          profile == null) {
+        return _CredentialProfileRefreshOutcome.unavailable;
+      }
+      final previousProfile = _profile;
+      if (previousProfile == null ||
+          _profileOwnedServerFingerprint(previousProfile) !=
+              _profileOwnedServerFingerprint(profile)) {
+        _concurrentProfileSnapshot = profile;
+        return _CredentialProfileRefreshOutcome.concurrentChange;
+      }
+      setState(() {
+        // Only accept the fresh concurrency token. Rehydrating the controllers
+        // here would discard profile edits that have not been saved yet.
+        _profile = profile;
+        _profileOperationId = null;
+        _profileOperationFingerprint = null;
+        _profileSnapshotNeedsRefresh = false;
+        _concurrentProfileSnapshot = null;
+      });
+      return _CredentialProfileRefreshOutcome.refreshed;
+    } catch (_) {
+      return _CredentialProfileRefreshOutcome.unavailable;
+    }
+  }
+
+  Future<void> _refreshProfileSnapshotAfterUnknownCredentialOutcome(
+    String supplierId,
+  ) async {
+    final authorityFingerprint = _source.authorityFingerprint;
+    try {
+      final profile = await _source.getProfile(supplierId);
+      if (!mounted ||
+          widget.supplierId != supplierId ||
+          authorityFingerprint != _source.authorityFingerprint ||
+          profile == null) {
+        return;
+      }
+      final previousProfile = _profile;
+      if (previousProfile == null ||
+          _profileOwnedServerFingerprint(previousProfile) !=
+              _profileOwnedServerFingerprint(profile)) {
+        return;
+      }
+      setState(() {
+        // A current, semantically equal profile can safely advance only the
+        // optimistic-concurrency token. It does not prove whether the
+        // credential command committed, so the caller still reports unknown.
+        _profile = profile;
+        _profileOperationId = null;
+        _profileOperationFingerprint = null;
+      });
+    } catch (_) {
+      // Best effort only. Keeping the old token is safe: a later profile save
+      // will conflict instead of overwriting a supplier changed by this or
+      // another session.
+    }
+  }
+
+  void _showCommittedCredentialOutcome(
+    _CredentialProfileRefreshOutcome outcome, {
+    required String supplierId,
+    required String successTitle,
+    required String successBody,
+  }) {
+    switch (outcome) {
+      case _CredentialProfileRefreshOutcome.refreshed:
+        _showNotice(successTitle, successBody, VbNoticeTone.success);
+        return;
+      case _CredentialProfileRefreshOutcome.unavailable:
+        _showCredentialProfileRefreshRequired(supplierId);
+        return;
+      case _CredentialProfileRefreshOutcome.concurrentChange:
+        _showCredentialProfileConcurrentChange();
+        return;
+    }
+  }
+
+  void _showCredentialProfileRefreshRequired(String supplierId) {
+    _showNotice(
+      'Acceso guardado; falta actualizar la ficha',
+      'El cambio de acceso ya quedó guardado y no se perdió. Antes de guardar otros datos, actualiza la ficha para tomar su versión vigente.',
+      VbNoticeTone.warning,
+      actionLabel: 'Actualizar ficha',
+      action: () => unawaited(
+        _retryProfileRefreshAfterCredentialWrite(supplierId),
+      ),
+    );
+  }
+
+  void _showCredentialProfileConcurrentChange() {
+    _showNotice(
+      'La ficha cambió mientras guardabas el acceso',
+      'El acceso ya quedó guardado. Otra sesión cambió datos del proveedor; no guardaremos este borrador sobre esa versión sin que la revises.',
+      VbNoticeTone.warning,
+      actionLabel: 'Revisar',
+      action: () => unawaited(_reviewConcurrentProfileChange()),
+    );
+  }
+
+  Future<void> _reviewConcurrentProfileChange() async {
+    final profile = _concurrentProfileSnapshot;
+    final catalog = _catalog;
+    if (profile == null || catalog == null) return;
+    final replaceDraft = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Revisar versión vigente'),
+        content: const Text(
+          'Otra sesión cambió la identidad, el contacto o la clasificación del proveedor. El acceso ya está guardado. Cargar la versión vigente reemplazará los cambios de esta ficha que aún no hayas guardado.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Conservar mi borrador'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Cargar versión vigente'),
+          ),
+        ],
+      ),
+    );
+    if (replaceDraft != true || !mounted) return;
+    setState(() {
+      _selectedRoleIds.clear();
+      _selectedCapabilityIds.clear();
+      _selectedTagIds.clear();
+      _roleAssignmentIds.clear();
+      _capabilityAssignmentIds.clear();
+      _tagAssignmentIds.clear();
+      _profile = profile;
+      _hydrate(profile, catalog);
+      _profileOperationId = null;
+      _profileOperationFingerprint = null;
+      _profileSnapshotNeedsRefresh = false;
+      _concurrentProfileSnapshot = null;
+    });
+    _showNotice(
+      'Versión vigente cargada',
+      'El acceso ya estaba guardado. La ficha ahora muestra los cambios más recientes.',
+      VbNoticeTone.success,
+    );
+  }
+
+  Future<void> _retryProfileRefreshAfterCredentialWrite(
+    String supplierId,
+  ) async {
+    if (mounted) setState(() => _saving = true);
+    final outcome =
+        await _refreshProfileSnapshotAfterCredentialWrite(supplierId);
+    _showCommittedCredentialOutcome(
+      outcome,
+      supplierId: supplierId,
+      successTitle: 'Ficha actualizada',
+      successBody:
+          'El acceso ya estaba guardado. Ahora también puedes guardar los demás cambios de la ficha.',
+    );
+    if (mounted) setState(() => _saving = false);
   }
 
   Future<void> _reloadProfileAfterChildWrite(String title) async {
@@ -1633,7 +1870,7 @@ class _EditorHeader extends StatelessWidget {
         children: [
           if (!compact)
             IconButton(
-              onPressed: onClose,
+              onPressed: saving ? null : onClose,
               tooltip: 'Volver',
               icon: const Icon(Icons.arrow_back),
             ),
@@ -2465,7 +2702,7 @@ class _CredentialsSection extends StatelessWidget {
   Widget build(BuildContext context) => _EditorSection(
         title: 'Accesos',
         description:
-            'Inventario protegido por clave estable. Un origen HTTPS exacto habilita el acceso web; los secretos nunca forman parte de la ficha.',
+            'Guarda usuarios y contraseñas de forma protegida. Si vinculas el sitio de inicio, el navegador del ERP puede completar el acceso.',
         trailing: TextButton.icon(
             onPressed: onCreate,
             icon: const Icon(Icons.add),
@@ -3755,9 +3992,14 @@ class _CredentialDraft {
 }
 
 class _CredentialDialog extends StatefulWidget {
-  const _CredentialDialog({required this.existing, required this.engagements});
+  const _CredentialDialog({
+    required this.existing,
+    required this.engagements,
+    required this.existingCredentials,
+  });
   final SupplierCredentialMetadata? existing;
   final List<SupplierEngagement> engagements;
+  final List<SupplierCredentialMetadata> existingCredentials;
   @override
   State<_CredentialDialog> createState() => _CredentialDialogState();
 }
@@ -3772,6 +4014,9 @@ class _CredentialDialogState extends State<_CredentialDialog> {
   final String _operationId = const Uuid().v4();
   late SupplierCredentialKind _kind;
   String? _engagementId;
+  bool _showAdvanced = false;
+  bool _useBrowserLogin = false;
+  bool _obscureSecret = true;
 
   bool get _completingExisting =>
       widget.existing != null && !widget.existing!.secretAvailable;
@@ -3781,11 +4026,13 @@ class _CredentialDialogState extends State<_CredentialDialog> {
     super.initState();
     final existing = widget.existing;
     _kind = existing?.kind ?? SupplierCredentialKind.portalPassword;
-    _key.text = existing?.credentialKey ?? '';
+    _key.text = existing?.credentialKey ??
+        _nextAvailableCredentialKey(_kind, widget.existingCredentials);
     _origin.text = existing?.originUrl ?? '';
     _label.text = existing?.label ?? '';
     _username.text = existing?.username ?? '';
     _engagementId = existing?.engagementId;
+    _useBrowserLogin = existing?.originUrl != null;
   }
 
   @override
@@ -3810,97 +4057,209 @@ class _CredentialDialogState extends State<_CredentialDialog> {
                 key: _form,
                 child: SingleChildScrollView(
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  DropdownButtonFormField<SupplierCredentialKind>(
-                      initialValue: _kind,
-                      isExpanded: true,
-                      decoration:
-                          const InputDecoration(labelText: 'Tipo de acceso'),
-                      items: SupplierCredentialKind.values
-                          .map((value) => DropdownMenuItem(
-                              value: value,
-                              child: Text(_credentialKindLabel(value))))
-                          .toList(),
-                      onChanged: widget.existing == null
-                          ? (value) {
-                              if (value != null) setState(() => _kind = value);
-                            }
-                          : null),
+                  TextFormField(
+                    key: const ValueKey('supplier-credential-username'),
+                    controller: _username,
+                    decoration: InputDecoration(
+                      labelText: _kind == SupplierCredentialKind.portalPassword
+                          ? 'Usuario o correo'
+                          : 'Usuario (opcional)',
+                    ),
+                    validator: (value) =>
+                        _kind == SupplierCredentialKind.portalPassword &&
+                                (value?.trim().isEmpty ?? true)
+                            ? 'Ingresa el usuario del portal'
+                            : null,
+                  ),
                   const SizedBox(height: 12),
                   TextFormField(
+                    key: const ValueKey('supplier-credential-secret'),
+                    controller: _secret,
+                    obscureText: _obscureSecret,
+                    enableSuggestions: false,
+                    autocorrect: false,
+                    decoration: InputDecoration(
+                      labelText: _credentialSecretLabel(
+                        _kind,
+                        replacing:
+                            widget.existing != null && !_completingExisting,
+                      ),
+                      suffixIcon: IconButton(
+                        tooltip: _obscureSecret
+                            ? 'Mostrar ${_credentialSecretNoun(_kind)}'
+                            : 'Ocultar ${_credentialSecretNoun(_kind)}',
+                        onPressed: () => setState(
+                          () => _obscureSecret = !_obscureSecret,
+                        ),
+                        icon: Icon(
+                          _obscureSecret
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                      ),
+                    ),
+                    validator: (value) => (value?.isEmpty ?? true)
+                        ? _credentialSecretRequiredMessage(_kind)
+                        : null,
+                  ),
+                  if (_kind == SupplierCredentialKind.portalPassword) ...[
+                    const SizedBox(height: 8),
+                    CheckboxListTile(
+                      key: const ValueKey('supplier-credential-browser-login'),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: _useBrowserLogin,
+                      onChanged: (value) => setState(
+                        () => _useBrowserLogin = value ?? false,
+                      ),
+                      title: const Text(
+                        'Usar para iniciar sesión en el navegador del ERP',
+                      ),
+                      subtitle: const Text(
+                        'Al abrir ese portal, el ERP completa el usuario y la contraseña e intenta ingresar una vez.',
+                      ),
+                    ),
+                    if (_useBrowserLogin) ...[
+                      const SizedBox(height: 4),
+                      TextFormField(
+                        key: const ValueKey('supplier-credential-login-url'),
+                        controller: _origin,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'Página de inicio de sesión',
+                          helperText:
+                              'Pega la URL del portal; guardaremos sólo https://dominio.cl.',
+                        ),
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          if (text.isEmpty) {
+                            return 'Ingresa la página de inicio de sesión';
+                          }
+                          return _canonicalCredentialOriginFromInput(text) ==
+                                  null
+                              ? 'Usa una dirección HTTPS válida'
+                              : null;
+                        },
+                      ),
+                    ],
+                  ],
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey(
+                        'supplier-credential-advanced-toggle',
+                      ),
+                      onPressed: () =>
+                          setState(() => _showAdvanced = !_showAdvanced),
+                      icon: Icon(
+                        _showAdvanced ? Icons.expand_less : Icons.expand_more,
+                      ),
+                      label: Text(
+                        _showAdvanced
+                            ? 'Ocultar opciones avanzadas'
+                            : 'Opciones avanzadas',
+                      ),
+                    ),
+                  ),
+                  if (_showAdvanced) ...[
+                    const SizedBox(height: 4),
+                    VbShortSelect<SupplierCredentialKind>(
+                      key: const ValueKey('supplier-credential-kind'),
+                      value: _kind,
+                      label: 'Tipo de acceso',
+                      sheetTitle: 'Elegir tipo de acceso',
+                      options: [
+                        for (final value in SupplierCredentialKind.values)
+                          VbShortSelectOption(
+                            value: value,
+                            label: _credentialKindLabel(value),
+                          ),
+                      ],
+                      onChanged: widget.existing == null
+                          ? (value) => setState(() {
+                                _kind = value;
+                                _key.text = _nextAvailableCredentialKey(
+                                  value,
+                                  widget.existingCredentials,
+                                );
+                                if (value !=
+                                    SupplierCredentialKind.portalPassword) {
+                                  _useBrowserLogin = false;
+                                }
+                              })
+                          : null,
+                    ),
+                    if (_kind != SupplierCredentialKind.portalPassword) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        key: const ValueKey(
+                          'supplier-credential-associated-origin',
+                        ),
+                        controller: _origin,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'Origen HTTPS asociado (opcional)',
+                          helperText:
+                              'Pega una URL; guardaremos sólo https://dominio.cl.',
+                        ),
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          return text.isNotEmpty &&
+                                  _canonicalCredentialOriginFromInput(text) ==
+                                      null
+                              ? 'Usa una dirección HTTPS válida'
+                              : null;
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    _field(
+                      _label,
+                      'Nombre de esta cuenta (opcional)',
+                    ),
+                    if (widget.engagements.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String?>(
+                          initialValue: _engagementId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                              labelText: 'Relación asociada (opcional)'),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('Sin relación asociada')),
+                            ...widget.engagements.map((item) =>
+                                DropdownMenuItem<String?>(
+                                    value: item.id, child: Text(item.name)))
+                          ],
+                          onChanged: (value) =>
+                              setState(() => _engagementId = value)),
+                    ],
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const ValueKey('supplier-credential-key'),
                       controller: _key,
                       enabled: widget.existing == null,
                       decoration: const InputDecoration(
-                          labelText: 'Clave estable',
-                          helperText:
-                              'Minúsculas, números, punto, guion o guion bajo.'),
+                        labelText: 'Identificador interno',
+                        helperText:
+                            'Se genera automáticamente. Cámbialo sólo para distinguir varias cuentas.',
+                      ),
                       validator: (value) => RegExp(r'^[a-z][a-z0-9_.-]*$')
                               .hasMatch(value?.trim() ?? '')
                           ? null
-                          : 'Usa una clave estable válida'),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                      controller: _origin,
-                      decoration: const InputDecoration(
-                          labelText: 'Origen HTTPS autorizado (opcional)',
-                          helperText:
-                              'Sólo para acceso web: https://portal.proveedor.cl (sin ruta)'),
-                      validator: (value) {
-                        final text = value?.trim() ?? '';
-                        if (text.isEmpty) return null;
-                        final canonical =
-                            canonicalSupplierCredentialOrigin(text);
-                        return canonical == null ||
-                                canonical != text.toLowerCase()
-                            ? 'Ingresa el origen HTTPS exacto, sin ruta ni parámetros'
-                            : null;
-                      }),
-                  const SizedBox(height: 12),
-                  _field(_label, 'Nombre visible'),
-                  const SizedBox(height: 12),
-                  _field(_username, 'Usuario (protegido)'),
-                  if (widget.engagements.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String?>(
-                        initialValue: _engagementId,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                            labelText: 'Relación asociada (opcional)'),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('Sin relación asociada')),
-                          ...widget.engagements.map((item) =>
-                              DropdownMenuItem<String?>(
-                                  value: item.id, child: Text(item.name)))
-                        ],
-                        onChanged: (value) =>
-                            setState(() => _engagementId = value))
+                          : 'Usa minúsculas, números, punto, guion o guion bajo',
+                    ),
                   ],
-                  const SizedBox(height: 12),
-                  TextFormField(
-                      controller: _secret,
-                      obscureText: true,
-                      enableSuggestions: false,
-                      autocorrect: false,
-                      decoration: InputDecoration(
-                          labelText: widget.existing == null
-                              ? 'Secreto'
-                              : _completingExisting
-                                  ? 'Guardar una clave'
-                                  : 'Nuevo secreto'),
-                      validator: (value) => (value?.isEmpty ?? true)
-                          ? _completingExisting
-                              ? 'Ingresa una clave para completar este acceso'
-                              : 'El secreto es obligatorio'
-                          : null),
                   const SizedBox(height: 10),
                   VbNotice(
                       title: _completingExisting
-                          ? 'Aún no hay una clave guardada'
-                          : 'El secreto no entra a la ficha',
+                          ? 'Aún no hay una contraseña guardada'
+                          : _credentialProtectionTitle(_kind),
                       body: _completingExisting
-                          ? 'La cuenta y sus metadatos ya están protegidos. La nueva clave se enviará directamente al Vault.'
-                          : 'Se envía directamente al Vault y este formulario lo descarta al cerrarse.',
+                          ? 'El usuario ya está protegido. La contraseña se guardará cifrada al completar este acceso.'
+                          : 'Se guarda de forma cifrada y protegida, no aparece en la ficha y este formulario descarta el valor al cerrarse.',
                       tone: VbNoticeTone.info),
                 ])))),
         actions: [
@@ -3919,16 +4278,18 @@ class _CredentialDialogState extends State<_CredentialDialog> {
 
   void _submit() {
     if (!_form.currentState!.validate()) return;
-    final originText = _origin.text.trim();
+    final origin = _kind == SupplierCredentialKind.portalPassword
+        ? _useBrowserLogin
+            ? _canonicalCredentialOriginFromInput(_origin.text)
+            : null
+        : _canonicalCredentialOriginFromInput(_origin.text);
     Navigator.pop(
         context,
         _CredentialDraft(
           operationId: _operationId,
           kind: _kind,
           credentialKey: _key.text.trim(),
-          origin: originText.isEmpty
-              ? null
-              : canonicalSupplierCredentialOrigin(originText),
+          origin: origin,
           secret: _secret.text,
           engagementId: _engagementId,
           label: _textOrNull(_label.text),
@@ -3965,6 +4326,72 @@ Widget _responsivePair(bool compact, Widget first, Widget second) {
 
 String? _textOrNull(String value) => value.trim().isEmpty ? null : value.trim();
 
+String _nextAvailableCredentialKey(
+  SupplierCredentialKind kind,
+  Iterable<SupplierCredentialMetadata> credentials,
+) {
+  final used = credentials
+      .where((credential) => credential.kind == kind)
+      .map((credential) => credential.credentialKey)
+      .toSet();
+  if (!used.contains('default')) return 'default';
+  final prefix = switch (kind) {
+    SupplierCredentialKind.portalPassword => 'portal',
+    SupplierCredentialKind.apiToken => 'api',
+    SupplierCredentialKind.other => 'access',
+  };
+  for (var suffix = 2; suffix < 1000; suffix++) {
+    final candidate = '${prefix}_$suffix';
+    if (!used.contains(candidate)) return candidate;
+  }
+  return '${prefix}_${const Uuid().v4().replaceAll('-', '').substring(0, 8)}';
+}
+
+String? _canonicalCredentialOriginFromInput(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+  final candidate = trimmed.contains('://') ? trimmed : 'https://$trimmed';
+  final uri = Uri.tryParse(candidate);
+  if (uri == null ||
+      uri.scheme.toLowerCase() != 'https' ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty) {
+    return null;
+  }
+  return canonicalSupplierCredentialOrigin(uri.origin);
+}
+
+String _credentialSecretNoun(SupplierCredentialKind kind) => switch (kind) {
+      SupplierCredentialKind.portalPassword => 'contraseña',
+      SupplierCredentialKind.apiToken => 'token',
+      SupplierCredentialKind.other => 'clave',
+    };
+
+String _credentialSecretLabel(
+  SupplierCredentialKind kind, {
+  required bool replacing,
+}) =>
+    switch (kind) {
+      SupplierCredentialKind.portalPassword =>
+        replacing ? 'Nueva contraseña' : 'Contraseña',
+      SupplierCredentialKind.apiToken => replacing ? 'Nuevo token' : 'Token',
+      SupplierCredentialKind.other => replacing ? 'Nueva clave' : 'Clave',
+    };
+
+String _credentialSecretRequiredMessage(SupplierCredentialKind kind) =>
+    switch (kind) {
+      SupplierCredentialKind.portalPassword => 'Ingresa la contraseña',
+      SupplierCredentialKind.apiToken => 'Ingresa el token',
+      SupplierCredentialKind.other => 'Ingresa la clave',
+    };
+
+String _credentialProtectionTitle(SupplierCredentialKind kind) =>
+    switch (kind) {
+      SupplierCredentialKind.portalPassword => 'Contraseña protegida',
+      SupplierCredentialKind.apiToken => 'Token protegido',
+      SupplierCredentialKind.other => 'Clave protegida',
+    };
+
 DateTime _civilDate(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
@@ -3985,8 +4412,79 @@ String _formatCivilDate(DateTime value) {
       '${civil.month.toString().padLeft(2, '0')}-${civil.year}';
 }
 
+String _profileOwnedServerFingerprint(SupplierProfile profile) {
+  List<String> stableRows(Iterable<Map<String, dynamic>> rows) {
+    final values = rows.map(jsonEncode).toList(growable: false)..sort();
+    return values;
+  }
+
+  final party = profile.party;
+  final relationship = profile.relationship;
+  final legacy = profile.legacyDetails;
+  final activeTaxIdentifiers = party.identifiers
+      .where(
+        (identifier) =>
+            identifier.kind == 'tax_id' && identifier.validUntil == null,
+      )
+      .map(
+        (identifier) => <String, dynamic>{
+          'value': identifier.value,
+          'country_code': identifier.issuerCountry,
+          'is_primary': identifier.isPrimary,
+          'metadata': identifier.publicMetadata,
+        },
+      );
+  return jsonEncode({
+    'party': {
+      'id': party.id,
+      'tenant_id': party.tenantId,
+      'kind': party.kind.dbValue,
+      'name': party.name,
+      'legal_name': party.legalName,
+      'trade_name': party.tradeName,
+      'aliases': party.aliases,
+      'country_code': party.countryCode,
+      'notes': party.notes,
+      'metadata': party.publicMetadata,
+      'is_active': party.isActive,
+      'active_tax_identifiers': stableRows(activeTaxIdentifiers),
+    },
+    'relationship': {
+      'id': relationship.id,
+      'tenant_id': relationship.tenantId,
+      'party_id': relationship.externalPartyId,
+      'name': relationship.name,
+      'status': relationship.status.name,
+      'email': relationship.email,
+      'phone': relationship.phone,
+      'contact_person': relationship.contactPerson,
+      'website': relationship.website,
+      'notes': relationship.notes,
+      'payment_terms': relationship.paymentTermsCode,
+      'roles': stableRows(relationship.roles.map((item) => item.toJson())),
+      'capabilities': stableRows(
+        relationship.capabilities.map((item) => item.toJson()),
+      ),
+      'tags': stableRows(relationship.tags.map((item) => item.toJson())),
+    },
+    'legacy': {
+      'address': legacy.address,
+      'city': legacy.city,
+      'region': legacy.region,
+      'comuna': legacy.comuna,
+      'type': legacy.type.name,
+      'payment_terms': legacy.paymentTerms.name,
+      'default_tax_treatment': legacy.defaultTaxTreatment.toValue(),
+    },
+  });
+}
+
 bool _isOptimisticConflict(Object error) =>
     error is PostgrestException && error.code == '40001';
+
+bool _isTransientSupplierWriteContention(Object error) =>
+    error is PostgrestException &&
+    (error.code == '57014' || error.code == '55P03');
 
 bool _isEffectiveDateConflict(Object error) {
   if (error is! PostgrestException || error.code != '23514') return false;

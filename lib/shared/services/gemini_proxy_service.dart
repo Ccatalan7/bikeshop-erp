@@ -32,10 +32,12 @@ class GeminiProxyGenerateResult {
   const GeminiProxyGenerateResult({
     required this.text,
     required this.functionCalls,
+    this.finishReason,
   });
 
   final String text;
   final List<GeminiProxyFunctionCall> functionCalls;
+  final String? finishReason;
 }
 
 class GeminiProxyException implements Exception {
@@ -44,6 +46,8 @@ class GeminiProxyException implements Exception {
     this.statusCode,
     this.functionStatus,
     this.apiStatus,
+    this.proxyCode,
+    this.providerFieldPaths = const <String>[],
     this.details,
   });
 
@@ -51,6 +55,8 @@ class GeminiProxyException implements Exception {
   final int? statusCode;
   final int? functionStatus;
   final String? apiStatus;
+  final String? proxyCode;
+  final List<String> providerFieldPaths;
   final Object? details;
 
   bool get isAuthenticationError => functionStatus == 401 || statusCode == 401;
@@ -81,7 +87,8 @@ class GeminiProxyException implements Exception {
   String toString() {
     final status = statusCode != null ? 'statusCode: $statusCode, ' : '';
     final api = apiStatus != null ? 'apiStatus: $apiStatus, ' : '';
-    return 'GeminiProxyException($status$api'
+    final proxy = proxyCode != null ? 'proxyCode: $proxyCode, ' : '';
+    return 'GeminiProxyException($status$api$proxy'
         'message: $message)';
   }
 }
@@ -120,6 +127,7 @@ class GeminiProxyService {
     return GeminiProxyGenerateResult(
       text: (data['text'] ?? '').toString(),
       functionCalls: functionCalls,
+      finishReason: data['finishReason']?.toString(),
     );
   }
 
@@ -184,11 +192,11 @@ class GeminiProxyService {
         }
 
         final delay = Duration(milliseconds: 700 * (1 << attempt));
-        debugPrint(
-          'Gemini proxy transient error '
-          '(${error.statusCode ?? error.functionStatus ?? 'unknown'}), '
-          'retrying in ${delay.inMilliseconds}ms: ${error.message}',
-        );
+        if (kDebugMode) {
+          debugPrint(
+            'Gemini proxy transient error; retrying after a safe backoff.',
+          );
+        }
         await Future.delayed(delay);
       }
     }
@@ -227,7 +235,9 @@ class GeminiProxyService {
       return Map<String, dynamic>.from(data);
     }
 
-    debugPrint('Unexpected Gemini proxy response type: ${data.runtimeType}');
+    if (kDebugMode) {
+      debugPrint('Gemini proxy returned an invalid response shape.');
+    }
     throw const GeminiProxyException(
       message: 'Invalid response from Gemini proxy',
     );
@@ -259,12 +269,22 @@ class GeminiProxyService {
         _parseStatusFromMessage(rawMessage);
     final apiStatus = map?['upstreamStatusText']?.toString() ??
         _parseApiStatusFromMessage(rawMessage);
+    final providerFieldPaths = map?['providerFieldPaths'] is List
+        ? (map!['providerFieldPaths'] as List)
+            .whereType<String>()
+            .where(
+                (path) => RegExp(r'^[A-Za-z0-9_.\[\]-]{1,160}$').hasMatch(path))
+            .take(10)
+            .toList(growable: false)
+        : const <String>[];
 
     return GeminiProxyException(
       message: message.isEmpty ? 'Unknown Gemini proxy error' : message,
       statusCode: upstreamStatus ?? functionStatus,
       functionStatus: functionStatus,
       apiStatus: apiStatus,
+      proxyCode: map?['code']?.toString(),
+      providerFieldPaths: providerFieldPaths,
       details: data,
     );
   }

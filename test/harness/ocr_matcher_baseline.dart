@@ -27,6 +27,7 @@ void main() {
       inventoryService: _FakeInventoryService(),
       imageLoader: (_) async => null,
       enableVisualReading: false,
+      requireAIPrimaryInvestigation: false,
       persistComputedImageFingerprints: false,
     );
 

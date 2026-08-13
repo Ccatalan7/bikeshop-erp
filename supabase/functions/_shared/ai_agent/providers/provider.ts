@@ -4,6 +4,7 @@ export type AgentProviderId = "anthropic" | "gemini" | "openai";
 
 export interface AgentModelProvider {
   readonly id: AgentProviderId;
+  modelFor(role: LogicalModelRole): string;
   generate(request: AgentProviderRequest, signal: AbortSignal): Promise<AgentProviderTurn>;
 }
 
@@ -16,6 +17,18 @@ export class ProviderError extends Error {
     super("AI provider request failed");
     this.name = "ProviderError";
   }
+}
+
+export function requiredToolNameFor(request: AgentProviderRequest): string | undefined {
+  const requiredToolName = request.requiredToolName;
+  if (requiredToolName === undefined) return undefined;
+  if (
+    !requiredToolName ||
+    request.tools.filter((tool) => tool.name === requiredToolName).length !== 1
+  ) {
+    throw new ProviderError("provider_invalid_response", 502, false);
+  }
+  return requiredToolName;
 }
 
 export interface ProviderRoute {

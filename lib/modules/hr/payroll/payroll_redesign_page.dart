@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/current_user_profile_service.dart';
+import '../../../shared/services/database_service.dart';
 import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/vb_money_text.dart';
@@ -16,9 +17,14 @@ import '../models/payroll_audit_read_models.dart';
 import '../models/payroll_voucher.dart';
 import '../services/payroll_employee_payment_method_command.dart';
 import '../services/payroll_advance_registration_service.dart';
+import '../services/payroll_payment_workspace_service.dart';
 import '../services/payroll_voucher_service.dart';
 import '../widgets/payroll_advance_entry.dart' show showPayrollAdvanceEntry;
 import 'payroll_draft_editor_adapter.dart';
+import 'payment_workspace/payroll_payment_workspace_adapter.dart';
+import 'payment_workspace/payroll_payment_workspace_controller.dart';
+import 'payment_workspace/payroll_payment_workspace_models.dart';
+import 'payment_workspace/payroll_payment_workspace.dart';
 import 'surfaces/payroll_accent_action.dart';
 import 'surfaces/payroll_advances_and_cash_surfaces.dart';
 import 'surfaces/payroll_history_surface.dart';
@@ -222,6 +228,8 @@ class PayrollRedesignActions {
     this.tenantCivilDateOf,
     this.reverseSettlement,
     this.updateDraft,
+    this.settlePaymentTarget,
+    this.loadAdditionalExpenseAccounts,
   });
 
   /// Saca una línea del borrador (`is_included = false`). No es una capacidad
@@ -262,6 +270,17 @@ class PayrollRedesignActions {
     required String operationKey,
     required int expectedReconciliationVersion,
   }) payLine;
+
+  /// Writer canónico del workspace. Si está disponible, single y OCR batch
+  /// usan la misma operación y conservan evidencia/conceptos adicionales.
+  /// Inyecciones antiguas pueden omitirlo y conservan el kernel salarial v2.
+  final Future<void> Function({
+    required PayrollPaymentTargetSaveCommand command,
+    PayrollOcrStatementSource? ocrSource,
+  })? settlePaymentTarget;
+
+  final Future<List<PayrollExpenseAccountOption>> Function()?
+      loadAdditionalExpenseAccounts;
 
   /// Corrige un movimiento sin borrarlo: el backend agrega la compensación,
   /// su asiento inverso y la trazabilidad del motivo/actor.
@@ -330,6 +349,19 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   String? _error;
   bool _busy = false;
   bool _authoritativeReloadRequired = false;
+
+  /// Si el movimiento que levantó la valla **sí llegó a confirmarse**.
+  ///
+  /// **Corrección medida contra producción el 2026-08-10.** La valla se
+  /// levantaba igual en los dos casos —recibo confirmado con recarga fallida, y
+  /// comando que reventó sin recibo— pero el cartel afirmaba siempre «El
+  /// servidor confirmó el último movimiento». Con la base de datos delante:
+  /// cero filas en `payroll_statement_imports` y cero en
+  /// `payroll_money_operations`, o sea **no se había confirmado nada**, y la
+  /// pantalla le decía al dueño que sí. Una pantalla de dinero que afirma un
+  /// movimiento que no existe es peor que una que no dice nada: manda a buscar
+  /// una plata que nadie movió y bloquea el reintento legítimo.
+  bool _fencedMovementWasConfirmed = false;
   int _loadEpoch = 0;
 
   _PayrollScope _scope = _PayrollScope.weeks;
@@ -520,6 +552,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   }
 
   PayrollRedesignActions _providerActions(PayrollVoucherService service) {
+    final paymentWorkspaceService = PayrollPaymentWorkspaceService(
+      database: context.read<DatabaseService>(),
+    );
     return PayrollRedesignActions(
       load: () async {
         final tenantId =
@@ -616,6 +651,21 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         operationKey: operationKey,
         expectedReconciliationVersion: expectedReconciliationVersion,
       ),
+      settlePaymentTarget: ({required command, ocrSource}) async {
+        await paymentWorkspaceService.applyTarget(
+          command: command,
+          ocrSource: ocrSource,
+        );
+        service.invalidateVouchersCache();
+      },
+      loadAdditionalExpenseAccounts: () async {
+        final rows = await service.getPayrollAdditionalExpenseAccounts();
+        return rows
+            .map(PayrollExpenseAccountOption.fromMap)
+            .where((account) =>
+                account.accountId.isNotEmpty && account.label.isNotEmpty)
+            .toList(growable: false);
+      },
       journalEntriesForPayments: service.fetchJournalEntriesForPayments,
       reverseSettlement: ({
         required voucherId,
@@ -728,6 +778,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         _data = data;
         _isLoading = false;
         _authoritativeReloadRequired = false;
+        _fencedMovementWasConfirmed = false;
         _hydratedHistoryVoucherIds.clear();
         _hydratingHistoryVoucherId = null;
         _historyHydrationError = null;
@@ -1300,12 +1351,31 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     Future<void> Function() command, {
     bool commandConfirmationIsEnough = false,
   }) async {
-    if (_busy) return false;
+    // **Ninguna negativa es muda** (2026-08-10). `_busy` volvía `false` sin
+    // aviso ni registro: el dueño apretaba `Confirmar semana`, no pasaba nada,
+    // y el log quedaba **exactamente igual que antes de apretar** — sin una
+    // sola línea que dijera que la pantalla se había negado. Un botón de dinero
+    // que no hace nada y no dice nada es indistinguible de uno roto, y cuesta
+    // rondas enteras averiguar cuál de las tres compuertas fue.
+    if (_busy) {
+      debugPrint('⛔ [PayrollRedesign] comando rechazado: hay uno en curso');
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+        content: Text('Hay un movimiento en curso. Espera a que termine antes '
+            'de enviar otro.'),
+      ));
+      return false;
+    }
     if (!_versionedMutationsAvailable) {
+      debugPrint(
+        '⛔ [PayrollRedesign] comando rechazado: backend sin comandos v2',
+      );
       _showVersionedUpdateRequired();
       return false;
     }
     if (_authoritativeReloadRequired) {
+      debugPrint(
+        '⛔ [PayrollRedesign] comando rechazado: falta recarga autoritativa',
+      );
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
         content: Text('La vista necesita una recarga autoritativa antes de '
             'aceptar otro movimiento. Usa Reintentar y verifica el saldo.'),
@@ -1326,6 +1396,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       // A receipt confirms the command, but the old projection is not safe for
       // another mutation until a new authoritative read succeeds.
       _authoritativeReloadRequired = true;
+      _fencedMovementWasConfirmed = true;
       final refreshed = await _load();
       if (!refreshed && mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
@@ -1352,7 +1423,10 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       debugPrint('❌ [PayrollRedesign] comando: $error');
       // A transport failure may happen after the server committed. Fence every
       // repeat until an authoritative projection resolves that ambiguity.
+      // **Ambigüedad, no confirmación**: acá no hubo recibo, así que el cartel
+      // no puede afirmar que el servidor confirmó nada.
       _authoritativeReloadRequired = true;
+      _fencedMovementWasConfirmed = false;
       if (mounted) {
         final refreshed = await _load();
         if (!mounted) return false;
@@ -1503,7 +1577,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     // absent the reconciliation route opens as an honest read-only preview
     // (extract, match and review locally) and only import/apply stay
     // disabled there with the reason visible.
-    await context.push('/hr/payroll/reconcile');
+    await context.push<void>('/hr/payroll/reconcile');
     if (!mounted) return;
     await _load();
   }
@@ -1788,7 +1862,14 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
           ),
         ) ??
         false;
-    if (!proceed || !mounted) return;
+    if (!proceed || !mounted) {
+      // Cerrar el diálogo es una respuesta legítima, pero tiene que quedar en
+      // el registro: sin esto, «apreté Confirmar semana y no pasó nada» y
+      // «apreté y cancelé» producen el mismo log vacío.
+      debugPrint('⛔ [PayrollRedesign] confirmación de semana cancelada');
+      return;
+    }
+    debugPrint('▶️ [PayrollRedesign] confirmando semana $id');
     await _run(() => _resolveActions().commitWeek(id));
   }
 
@@ -1837,18 +1918,17 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
           range: _range(v.periodStart, v.periodEnd),
           amountLabel: _clp(_pendingOf(v)),
           amountCaption: v.periodEnd.isAfter(today) ? 'acumulado' : 'por pagar',
-          // "ABIERTA" y "EN COLA" eran el mismo hecho —no está pagada— con dos
-          // nombres, y ninguno decía qué hacer: era el orden interno disfrazado
-          // de estado. La etiqueta sólo aparece cuando dice algo que no se
-          // puede deducir del monto ni del pie: si la semana todavía corre, o
-          // si sigue en borrador (que es lo que realmente impide pagar).
+          // El estado nunca queda mudo: una semana terminada que ya fijó sus
+          // obligaciones está CONFIRMADA aunque todavía tenga saldos. Mandar
+          // una cadena vacía hacía que el renderer compacto dibujara un círculo
+          // sin significado en las semanas que más importa distinguir.
           statusLabel: v.periodEnd.isAfter(today)
               ? 'EN CURSO'
               : v.status == PayrollVoucherStatus.draft
                   ? 'SIN CONFIRMAR'
                   : _pendingOf(v) <= 0.01
                       ? 'PAGADA'
-                      : '',
+                      : 'CONFIRMADA',
           tone: v.id == oldestPendingId ? visual.warning : visual.neutral,
           selected: v.id == selectedId,
           settledFraction: _settledFractionOf(v),
@@ -2878,10 +2958,6 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         break;
       }
     }
-    final firstName = firstPending == null
-        ? ''
-        : firstPending.employeeName.trim().split(RegExp(r'\s+')).first;
-
     return PayrollWeekTotalsVM(
       title: 'Semana ${_isoWeek(week.periodStart)} · '
           '${_range(week.periodStart, week.periodEnd)}',
@@ -2909,12 +2985,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
               ? ''
               : _requiresMethodConfiguration(firstPending)
                   ? _employeePaymentMethodCommandAvailable
-                      ? 'Configurar método de $firstName'
+                      ? 'Configurar método'
                       : ''
-                  : _statusOf(week, firstPending) ==
-                          PayrollRowStatus.pendingCash
-                      ? 'Confirmar efectivo'
-                      : 'Pagar a $firstName',
+                  : 'Continuar pagos',
     );
   }
 
@@ -2929,6 +3002,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   }) {
     final media = MediaQuery.of(context);
     final compact = ResponsiveViewport.usesCompactShell(context);
+    final panelVisual = PayrollVisualTokens.of(context);
     return SafeArea(
       child: AnimatedPadding(
         duration: PayrollTokens.fast,
@@ -2954,14 +3028,14 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: radius,
-                  boxShadow: visual.overlay,
+                  boxShadow: panelVisual.overlay,
                 ),
                 child: Material(
                   color: background,
                   clipBehavior: Clip.antiAlias,
                   shape: RoundedRectangleBorder(
                     borderRadius: radius,
-                    side: BorderSide(color: visual.borderStrong),
+                    side: BorderSide(color: panelVisual.borderStrong),
                   ),
                   child: SizedBox(
                     width: width,
@@ -3037,7 +3111,133 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
 
   // ── Composer (2b) ────────────────────────────────────────────────────────
 
+  Future<void> _openPaymentWorkspace(
+    PayrollPaymentWorkspaceRequest request,
+  ) async {
+    if (!_versionedMutationsAvailable) {
+      _showVersionedUpdateRequired();
+      return;
+    }
+    final actions = _resolveActions();
+    List<PayrollExpenseAccountOption> expenseAccounts = const [];
+    if (actions.settlePaymentTarget != null &&
+        actions.loadAdditionalExpenseAccounts != null) {
+      try {
+        expenseAccounts = await actions.loadAdditionalExpenseAccounts!();
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+          content: Text('No pudimos cargar las cuentas de gasto. El sueldo '
+              'todavía puede pagarse; los conceptos adicionales quedan '
+              'deshabilitados en este intento.'),
+        ));
+      }
+    }
+    if (!mounted) return;
+
+    late final PayrollPaymentWorkspaceController controller;
+    controller = PayrollPaymentWorkspaceController(
+      request: request,
+      additionalConceptsSupported: actions.settlePaymentTarget != null,
+      onSaveTarget: (command) async {
+        final liveWeek = _data?.vouchers
+            .where((voucher) => voucher.id == command.target.voucherId)
+            .firstOrNull;
+        final adjusted = liveWeek == null
+            ? command
+            : command.copyWith(
+                target: command.target.copyWith(
+                  reconciliationVersion: liveWeek.reconciliationVersion,
+                ),
+              );
+        final ok = await _run(
+          () async {
+            final workspaceWriter = actions.settlePaymentTarget;
+            if (workspaceWriter != null) {
+              await workspaceWriter(
+                command: adjusted,
+                ocrSource: request.ocrSource,
+              );
+              return;
+            }
+            if (request.ocrSource != null ||
+                adjusted.additionalConcepts.isNotEmpty) {
+              throw const PayrollVoucherPreflightException.unavailable(
+                'La actualización del panel flexible todavía no está instalada '
+                'en el servidor. No se registró ningún pago.',
+              );
+            }
+            await actions.payLine(
+              voucherId: adjusted.target.voucherId,
+              lineId: adjusted.target.voucherLineId,
+              splits: adjusted.salarySplits,
+              operationKey: adjusted.operationKey,
+              expectedReconciliationVersion:
+                  adjusted.target.reconciliationVersion,
+            );
+          },
+          // El editor recibe confirmación del RPC idempotente directamente.
+          // Una recarga fallida cerca la proyección padre, pero no convierte un
+          // pago ya confirmado en un falso error ni habilita un duplicado.
+          commandConfirmationIsEnough: true,
+        );
+        if (!ok) {
+          throw const PayrollPaymentWorkspaceSaveException(
+            'No pudimos registrar este pago. Revisa el aviso de Nóminas y '
+            'reintenta con la misma operación.',
+          );
+        }
+      },
+    );
+
+    final workspaceVisual = visual;
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'Cerrar panel de pago',
+      barrierColor: workspaceVisual.overlayVeil,
+      transitionDuration: PayrollTokens.base,
+      pageBuilder: (dialogContext, _, __) => _adaptivePayrollPanel(
+        dialogContext,
+        desktopWidth: 560,
+        background: workspaceVisual.surfaceOverlay,
+        child: PayrollPaymentWorkspace(
+          controller: controller,
+          expenseAccounts: expenseAccounts,
+          onClose: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
+    );
+    controller.dispose();
+  }
+
   Future<void> _openComposer(
+    PayrollVoucher week,
+    PayrollVoucherLine line,
+  ) async {
+    final data = _data;
+    if (data == null || line.id == null || week.id == null) return;
+    final resolvedMethod = _resolvedMethodForLine(line);
+    final editorLine = resolvedMethod == null
+        ? line
+        : line.copyWith(
+            paymentMethodId: resolvedMethod['id']?.toString(),
+            paymentAccountId: resolvedMethod['account_id']?.toString(),
+          );
+    await _openPaymentWorkspace(
+      payrollPaymentWorkspaceRequestForLine(
+        voucher: week,
+        line: editorLine,
+        paymentMethods: data.paymentMethods,
+        openAdvances: data.openAdvances,
+      ),
+    );
+  }
+
+  // Reopenable legacy receipt renderer only; no production action calls it.
+  // ignore: unused_element
+  Future<void> _openLegacyComposer(
       PayrollVoucher week, PayrollVoucherLine line) async {
     final data = _data;
     final lineId = line.id;
@@ -3401,7 +3601,14 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
 
   // ── Efectivo (2e) ────────────────────────────────────────────────────────
 
-  Future<void> _openCash(PayrollVoucher week, PayrollVoucherLine line) async {
+  Future<void> _openCash(PayrollVoucher week, PayrollVoucherLine line) =>
+      _openComposer(week, line);
+
+  // Legacy evidence renderer; payments now use the canonical workspace even
+  // when the person's habitual method is cash.
+  // ignore: unused_element
+  Future<void> _openLegacyCash(
+      PayrollVoucher week, PayrollVoucherLine line) async {
     final lineId = line.id;
     final voucherId = week.id;
     if (lineId == null || voucherId == null) return;
@@ -4270,7 +4477,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
             button: true,
             label: 'Importar cartola con OCR',
             child: Tooltip(
-              message: 'Importar PDF o imagen y conciliar pagos con OCR',
+              message: 'Importar PDF o imagen para preparar pagos con OCR',
               child: SizedBox(
                 height: 28,
                 child: OutlinedButton.icon(
@@ -4513,11 +4720,21 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   Widget? _staleProjectionBanner() {
     if (_error == null && !_authoritativeReloadRequired) return null;
     final visual = PayrollVisualTokens.of(context);
-    final message = _authoritativeReloadRequired
-        ? 'El servidor confirmó el último movimiento, pero la vista no pudo '
-            'recargarse. Recarga y verifica el saldo antes de repetir nada.'
-        : 'No pudimos actualizar los datos: estás viendo la última carga '
-            'buena. Recarga antes de registrar movimientos.';
+    final message = switch ((
+      _authoritativeReloadRequired,
+      _fencedMovementWasConfirmed,
+    )) {
+      // Hubo recibo del servidor: eso sí se puede afirmar.
+      (true, true) => 'El servidor confirmó el último movimiento, pero la '
+          'vista no pudo recargarse. Recarga y verifica el saldo antes de '
+          'repetir nada.',
+      // El comando falló sin recibo. No se sabe si alcanzó a escribirse, y
+      // decir que se confirmó sería inventar un movimiento.
+      (true, false) => 'No pudimos verificar si el último movimiento quedó '
+          'registrado. Recarga y revisa el saldo antes de repetirlo.',
+      _ => 'No pudimos actualizar los datos: estás viendo la última carga '
+          'buena. Recarga antes de registrar movimientos.',
+    };
     return Container(
       key: const ValueKey<String>('payroll-stale-projection-banner'),
       margin: const EdgeInsets.fromLTRB(13, 10, 13, 0),
@@ -5698,65 +5915,50 @@ class _MobilePersonCard extends StatelessWidget {
           ],
           if (hasAction) ...[
             const SizedBox(height: 11),
-            if (vm.status == PayrollRowStatus.pendingTransfer)
-              PayrollAccentAction(
-                actionKey: ValueKey<String>(
-                  'payroll-mobile-person-action-${vm.name}',
-                ),
-                label: pending
-                    ? '${vm.actionLabel} ${vm.newMoney}'
-                    : 'Ver respaldo del pago',
-                semanticLabel: '${vm.actionLabel} para ${vm.name}',
-                onTap: vm.onAction,
-                height: PayrollTokens.touchMobile,
-                fontSize: 13,
-                borderRadius: 11,
-              )
-            else
-              Semantics(
-                button: true,
-                label: vm.actionMode == PayrollRowActionMode.paidDetails
-                    ? 'Ver respaldo de pago de ${vm.name}'
-                    : '${vm.actionLabel} para ${vm.name}',
-                child: Material(
-                  color: vm.actionMode == PayrollRowActionMode.paidDetails
-                      ? visual.successSoft
-                      : visual.surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(11),
-                    side: BorderSide(
-                      color: vm.actionMode == PayrollRowActionMode.paidDetails
-                          ? visual.successBorder
-                          : visual.borderStrong,
-                    ),
+            Semantics(
+              button: true,
+              label: vm.actionMode == PayrollRowActionMode.paidDetails
+                  ? 'Ver respaldo de pago de ${vm.name}'
+                  : '${vm.actionLabel} para ${vm.name}',
+              child: Material(
+                color: vm.actionMode == PayrollRowActionMode.paidDetails
+                    ? visual.successSoft
+                    : visual.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(11),
+                  side: BorderSide(
+                    color: vm.actionMode == PayrollRowActionMode.paidDetails
+                        ? visual.successBorder
+                        : visual.borderStrong,
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    key: ValueKey<String>(
-                      'payroll-mobile-person-action-${vm.name}',
-                    ),
-                    onTap: vm.onAction,
-                    mouseCursor: SystemMouseCursors.click,
-                    child: SizedBox(
-                      height: PayrollTokens.touchMobile,
-                      child: Center(
-                        child: Text(
-                          pending
-                              ? '${vm.actionLabel} ${vm.newMoney}'
-                              : 'Ver respaldo del pago',
-                          style: visual.labelStrong.copyWith(
-                            fontSize: 13,
-                            color: vm.actionMode ==
-                                    PayrollRowActionMode.paidDetails
-                                ? visual.successFg
-                                : visual.inkMuted,
-                          ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  key: ValueKey<String>(
+                    'payroll-mobile-person-action-${vm.name}',
+                  ),
+                  onTap: vm.onAction,
+                  mouseCursor: SystemMouseCursors.click,
+                  child: SizedBox(
+                    height: PayrollTokens.touchMobile,
+                    child: Center(
+                      child: Text(
+                        pending
+                            ? '${vm.actionLabel} ${vm.newMoney}'
+                            : 'Ver respaldo del pago',
+                        style: visual.labelStrong.copyWith(
+                          fontSize: 13,
+                          color:
+                              vm.actionMode == PayrollRowActionMode.paidDetails
+                                  ? visual.successFg
+                                  : visual.inkMuted,
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
+            ),
           ],
         ],
       ),

@@ -12,8 +12,11 @@ import '../../purchases/services/purchase_service.dart';
 import '../../sales/services/sales_service.dart';
 import '../../tasks/services/task_service.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
+import '../config/ai_assistant_runtime_config.dart';
+import '../models/ai_assistant_destination.dart';
 import '../models/ai_assistant_session_state.dart';
 import '../models/ai_agent_tool.dart';
+import 'gateway_ai_assistant_turn_engine.dart';
 import 'ai_assistant_turn_engine.dart';
 import 'ai_service.dart';
 
@@ -55,6 +58,9 @@ const int _maxTranscriptBytes = 256 * 1024;
 const String _oversizedMessageNotice =
     'Ese mensaje es demasiado largo para procesarlo de forma segura. Divídelo '
     'en partes más pequeñas (máximo 8 KB por mensaje).';
+const String _approvalFailureNotice =
+    'No pude confirmar este cambio. Puedes intentarlo nuevamente; el asistente '
+    'reutilizará la misma operación si el resultado anterior quedó incierto.';
 
 /// Owns the assistant session: the visible transcript, the authority it is
 /// bound to, the generation that invalidates in-flight turns, and the engine.
@@ -69,6 +75,24 @@ class AIAssistantSessionService extends ChangeNotifier {
   }) : _engineFactory = engineFactory ?? _defaultEngineFactory;
 
   static AIAssistantTurnEngine _defaultEngineFactory() {
+    return buildEngineForRuntime(
+      gatewayEnabled: AIAssistantRuntimeConfig.serverGatewayEnabled,
+    );
+  }
+
+  /// One runtime is selected when an authority first sends a turn. There is no
+  /// per-turn fallback: replaying a request in another runtime can duplicate a
+  /// future write and would split the canonical conversation.
+  @visibleForTesting
+  static AIAssistantTurnEngine buildEngineForRuntime({
+    required bool gatewayEnabled,
+    AIAssistantTurnEngine Function()? gatewayFactory,
+    AIAssistantTurnEngine Function()? legacyFactory,
+  }) {
+    if (gatewayEnabled) {
+      return (gatewayFactory ?? () => GatewayAIAssistantTurnEngine())();
+    }
+    if (legacyFactory != null) return legacyFactory();
     final engine = AIAssistantService();
     engine.initialize();
     return engine;
@@ -86,6 +110,9 @@ class AIAssistantSessionService extends ChangeNotifier {
   Set<String> _authorityPermissions = const <String>{};
   AIAssistantSessionStatus _status = AIAssistantSessionStatus.signedOut;
   bool _isSending = false;
+  String? _approvalInFlightId;
+  AIAssistantApprovalDecision? _approvalDecisionInFlight;
+  final Map<String, String> _approvalErrors = <String, String>{};
   final List<AIAssistantTranscriptEntry> _transcript =
       <AIAssistantTranscriptEntry>[];
 
@@ -99,12 +126,30 @@ class AIAssistantSessionService extends ChangeNotifier {
 
   bool get isSending => _isSending;
 
+  String? get approvalInFlightId => _approvalInFlightId;
+
+  AIAssistantApprovalDecision? get approvalDecisionInFlight =>
+      _approvalDecisionInFlight;
+
+  String? approvalErrorFor(String approvalId) => _approvalErrors[approvalId];
+
   /// Fail-closed: only a fully resolved authority with no turn in flight may
   /// send. Callers must gate the composer on this.
   bool get canSend =>
       _status == AIAssistantSessionStatus.ready &&
       !_isSending &&
       _scope.key != null;
+
+  bool canResolveApproval(AIAssistantActionCard card) {
+    final approval = card.approvalRef;
+    return canSend &&
+        approval != null &&
+        approval.action == AIAssistantApprovalAction.createTask &&
+        approval.state == AIAssistantApprovalState.pending &&
+        card.kind == 'task_preview' &&
+        card.destination == AIAssistantDestination.tasks &&
+        _containsExactApprovalCard(card);
+  }
 
   /// Tenant of the current authority, or null when there is none.
   String? get authorityTenantId => _scope.key?.tenantId;
@@ -224,6 +269,9 @@ class AIAssistantSessionService extends ChangeNotifier {
     _authorityPermissions = _toolPermissionsFor(profile);
     _engine = null;
     _isSending = false;
+    _approvalInFlightId = null;
+    _approvalDecisionInFlight = null;
+    _approvalErrors.clear();
     _transcript
       ..clear()
       ..add(
@@ -346,10 +394,9 @@ class AIAssistantSessionService extends ChangeNotifier {
     }
     notifyListeners();
 
-    final engine = _engine ??= _engineFactory();
-
     AIAssistantResponse response;
     try {
+      final engine = _engine ??= _engineFactory();
       response = await engine.sendMessage(
         text,
         jobs: jobsContext.jobs,
@@ -399,6 +446,132 @@ class AIAssistantSessionService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Resolves one exact server-frozen task preview without sending another
+  /// prompt or navigating. The gateway runtime is the only engine allowed to
+  /// implement this optional command boundary.
+  Future<void> resolveTaskApproval(
+    AIAssistantActionCard card,
+    AIAssistantApprovalDecision decision,
+  ) async {
+    if (!canResolveApproval(card)) return;
+    final approval = card.approvalRef!;
+    final lease = _scope.capture();
+    final activeEngine = _engine;
+    final AIAssistantApprovalTurnEngine? approvalEngine =
+        activeEngine is AIAssistantApprovalTurnEngine
+            ? activeEngine as AIAssistantApprovalTurnEngine
+            : null;
+    if (lease == null) {
+      _approvalErrors[approval.id] = _approvalFailureNotice;
+      notifyListeners();
+      return;
+    }
+    if (approvalEngine == null) {
+      _approvalErrors[approval.id] = _approvalFailureNotice;
+      notifyListeners();
+      return;
+    }
+
+    _isSending = true;
+    _approvalInFlightId = approval.id;
+    _approvalDecisionInFlight = decision;
+    _approvalErrors.remove(approval.id);
+    notifyListeners();
+
+    try {
+      final resolution = await approvalEngine.resolveApproval(
+        approval,
+        decision,
+        authority: AIAssistantTurnAuthority(
+          lease.scope,
+          role: _authorityRole,
+          permissions: _authorityPermissions,
+        ),
+      );
+      if (!_scope.owns(lease)) return;
+      if (!_isValidApprovalResolution(approval, resolution)) {
+        throw StateError('Invalid approval resolution');
+      }
+      final replacement = resolution.state == AIAssistantApprovalState.approved
+          ? resolution.cards.single
+          : card.withApprovalState(resolution.state);
+      if (!_replaceApprovalCard(approval.id, replacement)) {
+        return;
+      }
+      _approvalErrors.remove(approval.id);
+      _appendTranscript(
+        AIAssistantTranscriptEntry.notice(resolution.text),
+      );
+    } catch (_) {
+      if (!_scope.owns(lease)) return;
+      _approvalErrors[approval.id] = _approvalFailureNotice;
+      if (!kReleaseMode) {
+        debugPrint('[AIAssistantSession] Approval action failed.');
+      }
+    } finally {
+      if (_scope.owns(lease) && _approvalInFlightId == approval.id) {
+        _approvalInFlightId = null;
+        _approvalDecisionInFlight = null;
+        _isSending = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  bool _isValidApprovalResolution(
+    AIAssistantApprovalRef approval,
+    AIAssistantApprovalResolution resolution,
+  ) {
+    if (resolution.approvalId != approval.id || !resolution.state.isTerminal) {
+      return false;
+    }
+    if (resolution.state == AIAssistantApprovalState.approved) {
+      return resolution.cards.length == 1 &&
+          resolution.cards.single.kind == 'task' &&
+          resolution.cards.single.destination == AIAssistantDestination.tasks &&
+          resolution.cards.single.approvalRef == null &&
+          resolution.cards.single.entityRef == null;
+    }
+    return resolution.cards.isEmpty;
+  }
+
+  bool _containsExactApprovalCard(AIAssistantActionCard target) {
+    var matches = 0;
+    for (final entry in _transcript) {
+      for (final candidate in entry.cards) {
+        if (identical(candidate, target)) matches++;
+      }
+    }
+    return matches == 1;
+  }
+
+  bool _replaceApprovalCard(
+    String approvalId,
+    AIAssistantActionCard replacement,
+  ) {
+    var matchEntry = -1;
+    var matchCard = -1;
+    for (var entryIndex = 0; entryIndex < _transcript.length; entryIndex++) {
+      final cards = _transcript[entryIndex].cards;
+      for (var cardIndex = 0; cardIndex < cards.length; cardIndex++) {
+        if (cards[cardIndex].approvalRef?.id != approvalId) continue;
+        if (matchEntry != -1) return false;
+        matchEntry = entryIndex;
+        matchCard = cardIndex;
+      }
+    }
+    if (matchEntry == -1) return false;
+    final entry = _transcript[matchEntry];
+    final cards = List<AIAssistantActionCard>.of(entry.cards);
+    cards[matchCard] = replacement;
+    _transcript[matchEntry] = AIAssistantTranscriptEntry(
+      role: entry.role,
+      text: entry.text,
+      cards: List<AIAssistantActionCard>.unmodifiable(cards),
+    );
+    return true;
+  }
+
   void _appendTranscript(AIAssistantTranscriptEntry entry) {
     _transcript.add(entry);
     while (_transcript.length > _maxTranscriptEntries ||
@@ -419,6 +592,10 @@ class AIAssistantSessionService extends ChangeNotifier {
           card.subtitle,
           card.description,
           ...card.chips,
+          card.approvalRef?.id,
+          card.approvalRef?.action.name,
+          card.approvalRef?.state.name,
+          card.approvalRef?.expiresAt.toIso8601String(),
         ]) {
           if (value != null) total += utf8.encode(value).length;
         }
@@ -440,6 +617,9 @@ class AIAssistantSessionService extends ChangeNotifier {
     _authorityPermissions = const <String>{};
     _transcript.clear();
     _isSending = false;
+    _approvalInFlightId = null;
+    _approvalDecisionInFlight = null;
+    _approvalErrors.clear();
     _status = status;
     notifyListeners();
   }
@@ -459,6 +639,9 @@ class AIAssistantSessionService extends ChangeNotifier {
     _engine = null;
     _transcript.clear();
     _isSending = false;
+    _approvalInFlightId = null;
+    _approvalDecisionInFlight = null;
+    _approvalErrors.clear();
     super.dispose();
   }
 }

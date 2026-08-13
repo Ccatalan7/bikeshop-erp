@@ -23,7 +23,6 @@ void main() {
     'draft_quote',
     'prepare_purchase_order',
     'prepare_task',
-    'create_task',
     'update_job_status',
   };
   const outcomes = <String>{
@@ -38,6 +37,7 @@ void main() {
   };
   const mutations = <String>{'none', 'draft', 'reversible', 'sensitive'};
   const navigation = <String>{'none', 'cardOnly'};
+  const dispatches = <String>{'model', 'approvalEndpoint'};
 
   test('agent evaluation dataset is fixed, closed and representative', () {
     final file = File('test/fixtures/ai_assistant_agent_eval_cases.json');
@@ -45,7 +45,7 @@ void main() {
     expect(decoded, isA<List<Object?>>());
     final cases = (decoded as List<Object?>).cast<Map<String, Object?>>();
 
-    expect(cases, hasLength(50));
+    expect(cases, hasLength(51));
     expect(cases.map((item) => item['id']).toSet(), hasLength(cases.length));
 
     final categories = <String>{};
@@ -83,17 +83,28 @@ void main() {
 
       final contract = expected! as Map<String, Object?>;
       final tools = (contract['tools']! as List<Object?>).cast<String>();
+      final dispatch = contract['dispatch'] ?? 'model';
       expect(
         tools.where((tool) => !plannedTools.contains(tool)),
         isEmpty,
         reason: '$id references an undeclared tool',
       );
       expect(outcomes, contains(contract['outcome']), reason: '$id outcome');
-      expect(
-        contract['modelAllowed'],
-        isA<bool>(),
-        reason: '$id model policy',
-      );
+      expect(dispatches, contains(dispatch), reason: '$id dispatch');
+      if (dispatch == 'model') {
+        expect(
+          contract['modelAllowed'],
+          isTrue,
+          reason:
+              '$id must stay model-first; deterministic intent handlers are not production dispatch',
+        );
+      } else {
+        expect(id, 'reliability-004', reason: '$id direct dispatch is closed');
+        expect(contract['modelAllowed'], isFalse,
+            reason: '$id post-click action must bypass the model');
+        expect(tools, isEmpty,
+            reason: '$id direct approval replay cannot invoke provider tools');
+      }
       expect(
         mutations,
         contains(contract['mutation']),
@@ -141,5 +152,57 @@ void main() {
       ),
       hasLength(greaterThanOrEqualTo(6)),
     );
+  });
+
+  test('general named-source web research stays model-first', () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final reddit = decoded.cast<Map<String, Object?>>().singleWhere(
+          (item) => item['id'] == 'browser-007',
+        );
+    expect(
+      reddit['prompt'],
+      'segun reddit, cual es la mejor forma de evitar pinchazos de rueda?',
+    );
+    final expected = reddit['expected']! as Map<String, Object?>;
+    expect(expected['tools'], <String>['research_public_web']);
+    expect(expected['citations'], isTrue);
+    expect(expected['modelAllowed'], isTrue);
+    expect(expected.containsKey('dispatch'), isFalse,
+        reason: 'natural forum research cannot introduce phrase dispatch');
+  });
+
+  test('task commit stays outside the model tool surface', () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+    final task = cases['tasks-004']!['expected']! as Map<String, Object?>;
+    expect(task['tools'], <String>['prepare_task']);
+    expect(task['outcome'], 'approvalRequired');
+    expect(task['mutation'], 'draft');
+    expect(task['navigation'], 'cardOnly');
+
+    final retry =
+        cases['reliability-004']!['expected']! as Map<String, Object?>;
+    expect(retry['dispatch'], 'approvalEndpoint');
+    expect(retry['modelAllowed'], isFalse);
+    expect(retry['tools'], isEmpty);
+    expect(retry['outcome'], 'answer');
+    expect(retry['mutation'], 'reversible');
+    expect(retry['navigation'], 'cardOnly');
+
+    for (final value in decoded) {
+      final expected =
+          (value as Map<String, Object?>)['expected']! as Map<String, Object?>;
+      expect(expected['tools'], isNot(contains('create_task')),
+          reason: '${value['id']} must not expose create_task to the model');
+    }
   });
 }

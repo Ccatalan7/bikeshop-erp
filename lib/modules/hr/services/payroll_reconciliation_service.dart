@@ -1295,12 +1295,10 @@ class PayrollReconciliationService {
         'document_observed': row.documentNumber,
         'fingerprint': draft.rowFingerprintsBySourceRowId[row.sourceRowId],
         'warnings': <String>[
-          ...row.parseWarningCodes,
+          ...row.parseWarningCodes.where(
+            (code) => code != 'out_of_statement_range',
+          ),
           if (!row.hasCompleteStructuredEvidence) 'incomplete_evidence',
-          if (row.bookingDate != null &&
-              draft.documentDate != null &&
-              row.bookingDate!.compareTo(draft.documentDate!) > 0)
-            'out_of_statement_range',
         ],
       });
     }

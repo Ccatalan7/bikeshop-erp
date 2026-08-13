@@ -65,7 +65,7 @@ class PayrollWeekCardVM {
   final String range; // "07 – 13 jul"
   final String amountLabel; // "$267.875"
   final String amountCaption; // "por pagar" | "acumulado"
-  final String statusLabel; // "ABIERTA" | "EN COLA" | "EN CURSO"
+  final String statusLabel; // "SIN CONFIRMAR" | "CONFIRMADA" | "PAGADA"
 
   /// Cuánto de la semana ya está saldado, 0..1. El monto solo dice cuánto
   /// falta; la barra dice si eso es el final de un tramo o el principio.
@@ -250,7 +250,7 @@ class PayrollWeekTotalsVM {
   final bool showCommitAction;
   final bool canConfirm;
   final String blockedReason;
-  final String nextActionLabel; // "Pagar a Lucas"
+  final String nextActionLabel; // "Continuar pagos"
 }
 
 // ── Superficie ──────────────────────────────────────────────────────────────
@@ -500,15 +500,11 @@ class _WeekCard extends StatelessWidget {
                         )
                       else
                         const Spacer(),
-                      if (dense)
-                        Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                                color: tone.fg, shape: BoxShape.circle))
-                      else
-                        _StatusPill(
-                            label: vm.statusLabel, tone: tone, fontSize: 8.5),
+                      _StatusPill(
+                        label: vm.statusLabel,
+                        tone: tone,
+                        fontSize: dense ? 8 : 8.5,
+                      ),
                     ],
                   ),
                   SizedBox(height: dense ? 5 : 6),
@@ -1649,52 +1645,12 @@ class _DirectRowAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
-    final bool primary = vm.status == PayrollRowStatus.pendingTransfer;
-    final bool outline = vm.status == PayrollRowStatus.pendingCash;
-
-    if (primary) {
-      // Accent-filled interaction is owned by the canonical action so fill,
-      // foreground and overlays stay one contract.
-      return _DecisionFocusRing(
-        child: ConstrainedBox(
-          // `5m`: en tablet el control mide **200** de ancho. Fuera de esa
-          // banda sigue siendo intrínseco al verbo, que es lo que pide 5a.
-          constraints: BoxConstraints(
-            minWidth: tablet ? tabletDecisionWidth : 0,
-            // `5n`: `maxWidth 186/168/200`. Es TOPE, no piso.
-            maxWidth: decisionMaxWidth,
-          ),
-          child: IntrinsicWidth(
-            child: Semantics(
-              label: '${vm.statusLabel}.',
-              child: KeyedSubtree(
-                key: ValueKey<String>('payroll-row-action-${vm.name}'),
-                child: PayrollAccentAction(
-                  actionKey:
-                      ValueKey<String>('payroll-row-action-tap-${vm.name}'),
-                  label: vm.actionLabel,
-                  onTap: vm.onAction,
-                  // `5m`: en tablet el MISMO control crece a 44 —el objetivo
-                  // táctil que ya publica `PayrollTokens.touchMin`— sin cambiar
-                  // de forma ni de verbo. Fuera de ahí, el 28 de `7a`.
-                  minHeight:
-                      tablet ? PayrollTokens.touchMin : decisionCellHeight,
-                  // `5b` es explícito: a 1116 «las etiquetas largas se truncan
-                  // con elipsis», no se encogen. El rótulo no cambia de tamaño
-                  // entre bandas; lo que cambia es cuánto cabe.
-                  fontSize: decisionLabelSize,
-                  horizontalPadding: tablet ? 14 : decisionCellPadH,
-                  verticalPadding: 5,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    final fill = outline ? visual.surface : Colors.transparent;
-    final border = outline ? visual.borderStrong : Colors.transparent;
+    // La tesorería cambia dentro del flujo, no en la jerarquía de esta tabla.
+    // Transferencia y efectivo son la misma intención pendiente y por eso
+    // comparten exactamente el mismo control secundario. El único primario de
+    // la superficie vive en la barra monetaria.
+    final fill = vm.isPending ? visual.surface : Colors.transparent;
+    final border = vm.isPending ? visual.borderStrong : Colors.transparent;
     final foreground = vm.isPending ? visual.inkMuted : visual.inkFaint;
 
     return _DecisionFocusRing(
@@ -1717,6 +1673,7 @@ class _DirectRowAction extends StatelessWidget {
               ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
+                key: ValueKey<String>('payroll-row-action-tap-${vm.name}'),
                 onTap: vm.onAction,
                 mouseCursor: SystemMouseCursors.click,
                 hoverColor: visual.accentSoft,
@@ -2635,22 +2592,19 @@ class _MoneyBar extends StatelessWidget {
                   ),
                 ] else ...<Widget>[
                   const SizedBox(width: 12),
-                  if (totals.canConfirm) const Spacer(),
+                  const Spacer(),
                 ],
                 if (!totals.canConfirm) ...<Widget>[
-                  Flexible(
-                    fit: FlexFit.loose,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: dense ? 220 : 300),
-                      child: Text(
-                        totals.blockedReason,
-                        maxLines: dense ? 2 : 3,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: visual.bodyS.copyWith(
-                          fontSize: dense ? 9.5 : 10.5,
-                          color: visual.warningFg,
-                        ),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: dense ? 220 : 300),
+                    child: Text(
+                      totals.blockedReason,
+                      maxLines: dense ? 2 : 3,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: visual.bodyS.copyWith(
+                        fontSize: dense ? 9.5 : 10.5,
+                        color: visual.warningFg,
                       ),
                     ),
                   ),

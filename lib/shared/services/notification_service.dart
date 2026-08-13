@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/notification_digest.dart';
 import 'chat_notification_gate.dart';
 import 'erp_employee_directory_service.dart';
 import 'erp_notification_gate.dart';
@@ -719,7 +720,7 @@ class NotificationService {
   final ValueNotifier<List<Map<String, dynamic>>> notificationsFeed =
       ValueNotifier<List<Map<String, dynamic>>>(const []);
 
-  /// Unread ERP alerts created during the current local business day.
+  /// Unread ERP alerts recorded during the current Chile business day.
   ///
   /// The right-toolbar badge is a prompt for today's attention, not a lifetime
   /// inbox counter. Older unread rows remain available through the briefing's
@@ -731,6 +732,7 @@ class NotificationService {
   String? _notificationScopeKey;
   String? _notificationScopeTenantId;
   int _notificationScopeGeneration = 0;
+  int _todayUnreadCountRequestEpoch = 0;
   static const int _historicalNotificationPageSize = 500;
 
   /// Clears process-wide notification projections when the authenticated
@@ -773,19 +775,46 @@ class NotificationService {
   }
 
   void _recomputeUnreadCount() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
+    final today = NotificationDigestWindow.resolve(
+      period: NotificationDigestPeriod.today,
+    );
     final unread = notificationsFeed.value.where((row) {
       if (row['read_at'] != null) return false;
       final createdAt = DateTime.tryParse(
         row['created_at']?.toString() ?? '',
-      )?.toLocal();
-      return createdAt != null &&
-          !createdAt.isBefore(today) &&
-          createdAt.isBefore(tomorrow);
+      );
+      return createdAt != null && today.contains(createdAt);
     }).length;
     unreadNotificationsCount.value = unread;
+  }
+
+  Future<void> _refreshTodayUnreadCount(String tenantId) async {
+    final generation = _notificationScopeGeneration;
+    final requestEpoch = ++_todayUnreadCountRequestEpoch;
+    final window = NotificationDigestWindow.resolve(
+      period: NotificationDigestPeriod.today,
+    );
+    try {
+      final response = await _supabase
+          .from('erp_notifications')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .gte('created_at', window.startsAt.toIso8601String())
+          .lt('created_at', window.endsAt.toIso8601String())
+          .isFilter('read_at', null);
+      if (_notificationScopeGeneration == generation &&
+          _notificationScopeTenantId == tenantId &&
+          _todayUnreadCountRequestEpoch == requestEpoch) {
+        unreadNotificationsCount.value = (response as List<dynamic>).length;
+      }
+    } catch (error) {
+      debugPrint('⚠️ Could not count today notifications: $error');
+      if (_notificationScopeGeneration == generation &&
+          _notificationScopeTenantId == tenantId &&
+          _todayUnreadCountRequestEpoch == requestEpoch) {
+        _recomputeUnreadCount();
+      }
+    }
   }
 
   /// Load the latest notifications for the notifications center.
@@ -799,7 +828,7 @@ class NotificationService {
       final response = await _supabase
           .from('erp_notifications')
           .select(
-              'id,type,title,body,route,entity_type,entity_id,severity,data,read_at,created_at')
+              'id,type,title,body,route,entity_type,entity_id,severity,data,read_at,created_at,occurred_at')
           .eq('tenant_id', tenantId)
           .order('created_at', ascending: false)
           .limit(100);
@@ -813,6 +842,7 @@ class NotificationService {
       }
       notificationsFeed.value = rows;
       _recomputeUnreadCount();
+      unawaited(_refreshTodayUnreadCount(tenantId));
       return rows;
     } catch (e) {
       debugPrint('⚠️ Could not load notifications: $e');
@@ -820,7 +850,7 @@ class NotificationService {
     }
   }
 
-  /// Loads every notification created within [startsAt, endsAt).
+  /// Loads every notification recorded or economically effective in the range.
   ///
   /// This historical projection is tenant/scope safe and intentionally does
   /// not publish into [notificationsFeed], which remains the latest realtime
@@ -842,19 +872,20 @@ class NotificationService {
     final tenantId = _notificationScopeTenantId;
     if (tenantId == null || tenantId.isEmpty) return const [];
     final generation = _notificationScopeGeneration;
-    final rows = <Map<String, dynamic>>[];
-    var offset = 0;
+    const fields =
+        'id,type,title,body,route,entity_type,entity_id,severity,data,read_at,created_at,occurred_at';
 
-    try {
+    Future<List<Map<String, dynamic>>> loadBy(String timestamp) async {
+      final rows = <Map<String, dynamic>>[];
+      var offset = 0;
       while (true) {
         final response = await _supabase
             .from('erp_notifications')
-            .select(
-                'id,type,title,body,route,entity_type,entity_id,severity,data,read_at,created_at')
+            .select(fields)
             .eq('tenant_id', tenantId)
-            .gte('created_at', startUtc.toIso8601String())
-            .lt('created_at', endUtc.toIso8601String())
-            .order('created_at', ascending: false)
+            .gte(timestamp, startUtc.toIso8601String())
+            .lt(timestamp, endUtc.toIso8601String())
+            .order(timestamp, ascending: false)
             .order('id', ascending: false)
             .range(
               offset,
@@ -874,6 +905,35 @@ class NotificationService {
         offset += _historicalNotificationPageSize;
       }
       return rows;
+    }
+
+    try {
+      final pages = await Future.wait([
+        loadBy('created_at'),
+        loadBy('occurred_at'),
+      ]);
+      if (generation != _notificationScopeGeneration ||
+          _notificationScopeTenantId != tenantId) {
+        return const [];
+      }
+      final byId = <String, Map<String, dynamic>>{};
+      for (final row in pages.expand((page) => page)) {
+        final id = row['id']?.toString();
+        if (id != null && id.isNotEmpty) byId[id] = row;
+      }
+      final rows = byId.values.toList(growable: false)
+        ..sort((left, right) {
+          final leftAt = DateTime.tryParse(
+                left['created_at']?.toString() ?? '',
+              ) ??
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+          final rightAt = DateTime.tryParse(
+                right['created_at']?.toString() ?? '',
+              ) ??
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+          return rightAt.compareTo(leftAt);
+        });
+      return rows;
     } catch (e) {
       debugPrint('⚠️ Could not load historical notifications: $e');
       rethrow;
@@ -886,6 +946,8 @@ class NotificationService {
     final tenantId = notification['tenant_id']?.toString();
     if (id == null ||
         id.isEmpty ||
+        tenantId == null ||
+        tenantId.isEmpty ||
         _notificationScopeTenantId == null ||
         tenantId != _notificationScopeTenantId) {
       return;
@@ -902,6 +964,7 @@ class NotificationService {
     }
     notificationsFeed.value = current;
     _recomputeUnreadCount();
+    unawaited(_refreshTodayUnreadCount(tenantId));
   }
 
   /// Mark a single notification as read (local + database).
@@ -927,6 +990,7 @@ class NotificationService {
           .eq('tenant_id', tenantId)
           .eq('id', id)
           .isFilter('read_at', null);
+      await _refreshTodayUnreadCount(tenantId);
     } catch (e) {
       debugPrint('⚠️ Could not mark notification read: $e');
     }
@@ -981,6 +1045,7 @@ class NotificationService {
           .gte('created_at', startUtc.toIso8601String())
           .lt('created_at', endUtc.toIso8601String())
           .isFilter('read_at', null);
+      await _refreshTodayUnreadCount(tenantId);
     } catch (e) {
       debugPrint('⚠️ Could not mark historical notifications read: $e');
     }
@@ -1007,6 +1072,7 @@ class NotificationService {
           .update({'read_at': nowIso})
           .eq('tenant_id', tenantId)
           .isFilter('read_at', null);
+      await _refreshTodayUnreadCount(tenantId);
     } catch (e) {
       debugPrint('⚠️ Could not mark all notifications read: $e');
     }

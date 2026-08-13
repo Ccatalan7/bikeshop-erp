@@ -1,7 +1,7 @@
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -108,6 +108,32 @@ void main() {
       );
 
       expect(find.text('PG-00492 · Claudia Arcos'), findsOneWidget);
+    });
+
+    testWidgets(
+        'a backdated payment stays in recent activity and names its date',
+        (tester) async {
+      final row = _paymentRow(body: 'FV-00918 · \$72.000');
+      final recorded = _fixtureCreatedAt();
+      final occurred = recorded.subtract(const Duration(days: 4));
+      row
+        ..['created_at'] = recorded.toUtc().toIso8601String()
+        ..['occurred_at'] = occurred.toUtc().toIso8601String();
+
+      await _pumpBriefing(tester, rows: [row]);
+
+      final occurredChile = _chileDayOf(occurred);
+      expect(find.text('Nuevo pago recibido'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Registrado hoy · pago del ${occurredChile.day}',
+        ),
+        findsOneWidget,
+      );
+      final movementTotal = tester
+          .element(find.text('movimientos'))
+          .findAncestorWidgetOfExactType<Column>();
+      expect((movementTotal!.children.first as Text).data, '0');
     });
   });
 
@@ -620,9 +646,16 @@ void main() {
       // The toolbar panel itself is 272 wide on a 320px phone once the 48px
       // rail is gone. The viewport stays 320 — panel width and viewport class
       // are two different inputs and must not be conflated.
+      final payment = _paymentRow();
+      final recorded = _fixtureCreatedAt();
+      final occurred = recorded.subtract(const Duration(days: 4));
+      payment
+        ..['created_at'] = recorded.toUtc().toIso8601String()
+        ..['occurred_at'] = occurred.toUtc().toIso8601String();
+
       await _pumpBriefing(
         tester,
-        rows: [_paymentRow(), _jobRow()],
+        rows: [payment, _jobRow()],
         surfaceSize: const Size(320, 900),
         panelWidth: 272,
       );
@@ -640,6 +673,24 @@ void main() {
       expect(subtitle.data, endsWith(' · Transferencia'));
       expect(subtitle.maxLines, 2);
       expect(subtitle.overflow, TextOverflow.ellipsis);
+      final occurredChile = _chileDayOf(occurred);
+      final dateHint = tester.widget<Text>(
+        find.textContaining(
+          'Registrado hoy · pago del ${occurredChile.day}',
+        ),
+      );
+      expect(dateHint.maxLines, 2);
+      expect(
+        tester
+            .renderObject<RenderParagraph>(
+              find.textContaining(
+                'Registrado hoy · pago del ${occurredChile.day}',
+              ),
+            )
+            .didExceedMaxLines,
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
 
       await _revealRow(tester, 'Nuevo trabajo');
       await tester.tap(find.text('Nuevo trabajo'));
@@ -911,9 +962,18 @@ double _activityRowHeight(WidgetTester tester, String title) {
 // Row builders (shapes mirror the production `erp_notifications` payloads)
 // ---------------------------------------------------------------------------
 
-/// One fixed instant, recent enough to fall inside `Hoy` in Chile.
-DateTime _fixtureCreatedAt() =>
-    DateTime.now().subtract(const Duration(minutes: 2));
+/// One deterministic instant inside the current Chilean business day.
+///
+/// `now - 2 minutes` crosses midnight in Santiago during a real release gate
+/// and turns every activity fixture into "yesterday" at once. Midnight at the
+/// start of the already-current Chilean day is always inside `Hoy` and never
+/// lies after the digest's live upper bound.
+DateTime _fixtureCreatedAt() {
+  tzdata.initializeTimeZones();
+  final location = tz.getLocation('America/Santiago');
+  final now = tz.TZDateTime.now(location);
+  return tz.TZDateTime(location, now.year, now.month, now.day).toUtc();
+}
 
 tz.TZDateTime _chileDayOf(DateTime instant) {
   tzdata.initializeTimeZones();

@@ -1,3 +1,27 @@
+class _RawPackEvidence {
+  final int? count;
+  final String? unitToken;
+  final bool mentionsPackUnit;
+
+  const _RawPackEvidence(
+    this.count,
+    this.unitToken, {
+    this.mentionsPackUnit = true,
+  });
+
+  const _RawPackEvidence.none()
+      : count = null,
+        unitToken = null,
+        mentionsPackUnit = false;
+
+  const _RawPackEvidence.invalid()
+      : count = null,
+        unitToken = null,
+        mentionsPackUnit = true;
+
+  bool get hasEvidence => count != null && unitToken != null;
+}
+
 class AliExpressDailyInvoiceService {
   const AliExpressDailyInvoiceService._();
 
@@ -275,16 +299,15 @@ class AliExpressDailyInvoiceService {
       item['sourcePurchaseQuantity'] ?? item['quantity'],
       fallback: 1,
     );
-    final unitsPerPurchase = _number(
-      item['unitsPerPurchase'],
-      fallback: _inferUnitsPerPurchase(description),
-    );
     final safePurchaseQuantity =
         sourcePurchaseQuantity <= 0 ? 1.0 : sourcePurchaseQuantity;
-    final safeUnitsPerPurchase = unitsPerPurchase <= 0 ? 1.0 : unitsPerPurchase;
-    final quantity = _roundQuantity(
-      safePurchaseQuantity * safeUnitsPerPurchase,
-    );
+    final packEvidence = item['rawPackEvidenceConflict'] == true
+        ? const _RawPackEvidence.invalid()
+        : _rawPackEvidence(item, description);
+    // The catalog product owns the meaning of its inventory unit. Before it is
+    // resolved, AliExpress quantity is only the number of supplier purchases;
+    // `2 x 4 pairs` therefore remains quantity 2 plus raw pack evidence 4/pairs.
+    final quantity = _roundQuantity(safePurchaseQuantity);
     final rawUnitPrice = _number(item['unitPrice']);
     final sourceTotal = _nullableNumber(item['sourceTotal']) ??
         _nullableNumber(item['total']) ??
@@ -299,8 +322,12 @@ class AliExpressDailyInvoiceService {
       'sku': _text(item['sku']),
       'description': description,
       'sourcePurchaseQuantity': safePurchaseQuantity,
-      'unitsPerPurchase': safeUnitsPerPurchase,
-      'inventoryUnit': safeUnitsPerPurchase > 1 ? 'par' : '',
+      'rawPackCount': packEvidence.count,
+      'rawUnitToken': packEvidence.unitToken,
+      // Deprecated applied-unit fields remain neutral so old consumers cannot
+      // accidentally multiply an unresolved supplier line.
+      'unitsPerPurchase': 1.0,
+      'inventoryUnit': '',
       'quantity': quantity,
       'sourcePurchaseUnitPrice': sourcePurchaseUnitPrice,
       'sourceUnitPrice': sourceUnitPrice,
@@ -432,12 +459,39 @@ class AliExpressDailyInvoiceService {
         continue;
       }
       final existing = result[duplicateIndex];
+      final existingPackCount = _nullablePositiveInt(existing['rawPackCount']);
+      final incomingPackCount = _nullablePositiveInt(item['rawPackCount']);
+      final existingUnitToken = _normalizedUnitToken(existing['rawUnitToken']);
+      final incomingUnitToken = _normalizedUnitToken(item['rawUnitToken']);
+      final packEvidenceConflicts =
+          (existing['rawPackEvidenceConflict'] == true) ||
+              (item['rawPackEvidenceConflict'] == true) ||
+              (existingPackCount != null &&
+                  incomingPackCount != null &&
+                  existingPackCount != incomingPackCount) ||
+              (existingUnitToken.isNotEmpty &&
+                  incomingUnitToken.isNotEmpty &&
+                  existingUnitToken != incomingUnitToken);
       result[duplicateIndex] = <String, dynamic>{
         ...existing,
         if (_text(existing['imageUrl']).isEmpty) 'imageUrl': item['imageUrl'],
         if (_text(existing['productUrl']).isEmpty)
           'productUrl': item['productUrl'],
         if (_text(existing['itemId']).isEmpty) 'itemId': item['itemId'],
+        if (_text(existing['variantKey']).isEmpty)
+          'variantKey': item['variantKey'],
+        if (_text(existing['variant']).isEmpty) 'variant': item['variant'],
+        'rawPackCount': packEvidenceConflicts
+            ? null
+            : existingPackCount ?? incomingPackCount,
+        'rawUnitToken': packEvidenceConflicts
+            ? null
+            : (existingUnitToken.isNotEmpty
+                ? existingUnitToken
+                : incomingUnitToken.isEmpty
+                    ? null
+                    : incomingUnitToken),
+        'rawPackEvidenceConflict': packEvidenceConflicts,
       };
     }
     return result;
@@ -447,7 +501,24 @@ class AliExpressDailyInvoiceService {
     Map<String, dynamic> first,
     Map<String, dynamic> second,
   ) {
+    final firstApiLine = _nullablePositiveInt(first['sourceApiLineOrdinal']);
+    final secondApiLine = _nullablePositiveInt(second['sourceApiLineOrdinal']);
+    if (firstApiLine != null || secondApiLine != null) {
+      // Distinct upstream API lines are distinct purchases unless the browser
+      // bridge already joined them under one immutable variant key. Treating
+      // identical weak-label rows as duplicate DOM observations loses units.
+      return firstApiLine != null &&
+          secondApiLine != null &&
+          firstApiLine == secondApiLine;
+    }
     if (_orderItemIdentity(first) == _orderItemIdentity(second)) return true;
+    final firstVariantKey = _text(first['variantKey']).toLowerCase();
+    final secondVariantKey = _text(second['variantKey']).toLowerCase();
+    if (firstVariantKey.isNotEmpty &&
+        secondVariantKey.isNotEmpty &&
+        firstVariantKey != secondVariantKey) {
+      return false;
+    }
     final firstId = _supplierProductId(first);
     final secondId = _supplierProductId(second);
     if (firstId.isNotEmpty && secondId.isNotEmpty && firstId != secondId) {
@@ -462,8 +533,6 @@ class AliExpressDailyInvoiceService {
             _identityText(second['description']) &&
         _number(first['sourcePurchaseQuantity']) ==
             _number(second['sourcePurchaseQuantity']) &&
-        _number(first['unitsPerPurchase']) ==
-            _number(second['unitsPerPurchase']) &&
         _number(first['sourceTotal']) == _number(second['sourceTotal']);
   }
 
@@ -472,6 +541,11 @@ class AliExpressDailyInvoiceService {
   ) {
     final result = <Map<String, dynamic>>[];
     for (final item in items) {
+      if (!_hasStableSupplierItemIdentity(item)) {
+        // Without a listing/SKU identity there is no safe cross-order merge.
+        result.add(Map<String, dynamic>.from(item));
+        continue;
+      }
       final key = _dailyItemIdentity(item);
       final index = result.indexWhere(
         (existing) => _dailyItemIdentity(existing) == key,
@@ -514,6 +588,19 @@ class AliExpressDailyInvoiceService {
         ..._list(existing['sourceOrderNumbers']).map(_text),
         ..._list(item['sourceOrderNumbers']).map(_text),
       }..removeWhere((value) => value.isEmpty);
+      final existingPackCount = _nullablePositiveInt(existing['rawPackCount']);
+      final incomingPackCount = _nullablePositiveInt(item['rawPackCount']);
+      final existingUnitToken = _text(existing['rawUnitToken']).toLowerCase();
+      final incomingUnitToken = _text(item['rawUnitToken']).toLowerCase();
+      final packEvidenceConflicts =
+          (existing['rawPackEvidenceConflict'] == true) ||
+              (item['rawPackEvidenceConflict'] == true) ||
+              (existingPackCount != null &&
+                  incomingPackCount != null &&
+                  existingPackCount != incomingPackCount) ||
+              (existingUnitToken.isNotEmpty &&
+                  incomingUnitToken.isNotEmpty &&
+                  existingUnitToken != incomingUnitToken);
       result[index] = <String, dynamic>{
         ...existing,
         'quantity': quantity,
@@ -531,7 +618,18 @@ class AliExpressDailyInvoiceService {
         'allocatedAdjustment': _roundMoney(adjustmentTotal / quantity),
         'unitPrice': _roundMoney(total / quantity),
         'total': total,
-        'sourceOrderNumbers': orderNumbers.toList(),
+        'sourceOrderNumbers': orderNumbers.toList()..sort(),
+        'rawPackCount': packEvidenceConflicts
+            ? null
+            : existingPackCount ?? incomingPackCount,
+        'rawUnitToken': packEvidenceConflicts
+            ? null
+            : (existingUnitToken.isNotEmpty
+                ? existingUnitToken
+                : incomingUnitToken.isEmpty
+                    ? null
+                    : incomingUnitToken),
+        'rawPackEvidenceConflict': packEvidenceConflicts,
         if (_text(existing['imageUrl']).isEmpty) 'imageUrl': item['imageUrl'],
       };
     }
@@ -602,22 +700,34 @@ class AliExpressDailyInvoiceService {
 
   static String _orderItemIdentity(Map<String, dynamic> item) => [
         _supplierItemIdentity(item),
-        _identityText(item['description']),
         _number(item['sourcePurchaseQuantity']),
-        _number(item['unitsPerPurchase']),
         _number(item['sourceTotal']),
       ].join('|');
 
+  /// Stable supplier identity v3: human labels and pack evidence are payload,
+  /// never row identity. Different immutable variants or commercial source
+  /// prices remain separate; translated/cleaned title drift still aggregates.
   static String _dailyItemIdentity(Map<String, dynamic> item) => [
         _supplierItemIdentity(item),
-        _identityText(item['description']),
-        _number(item['unitsPerPurchase']),
+        'price:${_number(item['sourcePurchaseUnitPrice'])}',
       ].join('|');
 
   static String _supplierItemIdentity(Map<String, dynamic> item) {
+    final variantKey = _text(item['variantKey']).toLowerCase();
+    final variantIdentity = variantKey.isEmpty ? 'default' : variantKey;
     final productId = _supplierProductId(item);
-    if (productId.isNotEmpty) return 'id:$productId';
-    return 'sku:${_text(item['sku'])}';
+    if (productId.isNotEmpty) {
+      return 'id:$productId|variant:$variantIdentity';
+    }
+    return 'sku:${_text(item['sku'])}|variant:$variantIdentity';
+  }
+
+  static bool _hasStableSupplierItemIdentity(Map<String, dynamic> item) {
+    final variantKey = _text(item['variantKey']).toLowerCase();
+    final immutableVariant =
+        RegExp(r'^(?:sku|props):[a-z0-9:|._-]+$').hasMatch(variantKey);
+    return immutableVariant &&
+        (_supplierProductId(item).isNotEmpty || _text(item['sku']).isNotEmpty);
   }
 
   static String _supplierProductId(Map<String, dynamic> item) {
@@ -635,19 +745,93 @@ class AliExpressDailyInvoiceService {
       .replaceAll(RegExp(r'[^a-z0-9áéíóúñ]+'), ' ')
       .trim();
 
-  static double _inferUnitsPerPurchase(String description) {
-    final matches = RegExp(
-      r'\b(\d{1,2})\s*(?:pares?|pairs?)\b',
-      caseSensitive: false,
-    )
-        .allMatches(description)
-        .map((match) {
-          return double.tryParse(match.group(1) ?? '') ?? 1;
-        })
-        .where((value) => value > 1 && value <= 50)
-        .toSet();
-    return matches.length == 1 ? matches.single : 1;
+  static _RawPackEvidence _rawPackEvidence(
+    Map<String, dynamic> item,
+    String description,
+  ) {
+    final selectedVariant = _firstText([
+      item['selectedVariant'],
+      item['variant'],
+      item['variantLabel'],
+    ]);
+    final selected = _parseRawPackEvidence(selectedVariant);
+    if (selected.hasEvidence || selected.mentionsPackUnit) return selected;
+
+    final explicitCount = _nullablePositiveInt(item['rawPackCount']);
+    final explicitToken = _normalizedUnitToken(item['rawUnitToken']);
+    if (explicitCount != null && explicitToken.isNotEmpty) {
+      return _RawPackEvidence(explicitCount, explicitToken);
+    }
+
+    final lineTitle = _firstText([
+      item['lineTitle'],
+      item['originalDescription'],
+    ]);
+    final fromLineTitle = _parseRawPackEvidence(lineTitle);
+    if (fromLineTitle.hasEvidence || fromLineTitle.mentionsPackUnit) {
+      return fromLineTitle;
+    }
+
+    // Backward compatibility is evidence-only. Old payloads that had already
+    // inferred `4 pairs` may supply the factor explicitly; it is never applied
+    // to quantity again.
+    final legacyCount = _nullablePositiveInt(item['unitsPerPurchase']);
+    final legacyToken = _normalizedUnitToken(item['inventoryUnit']);
+    if (legacyCount != null && legacyCount > 1 && legacyToken.isNotEmpty) {
+      return _RawPackEvidence(legacyCount, legacyToken);
+    }
+
+    return _parseRawPackEvidence(description);
   }
+
+  static _RawPackEvidence _parseRawPackEvidence(String text) {
+    if (text.isEmpty) return const _RawPackEvidence.none();
+    const units =
+        r'(?:pairs?|pares?|pcs?|pieces?|piezas?|pzs?|unidades?|units?|sets?|packs?)';
+    final mentionsUnit = RegExp(units, caseSensitive: false).hasMatch(text);
+    if (!mentionsUnit) return const _RawPackEvidence.none();
+
+    // A range or option menu is listing vocabulary, not the purchased option.
+    final range = RegExp(
+      '\\b\\d{1,5}\\s*(?:-|–|—|~|\\bto\\b|\\ba\\b)\\s*\\d{1,5}\\s*$units\\b',
+      caseSensitive: false,
+    );
+    final menu = RegExp(
+      '(?:\\b\\d{1,5}\\s*[/,]\\s*)+\\d{1,5}\\s*$units\\b',
+      caseSensitive: false,
+    );
+    if (range.hasMatch(text) || menu.hasMatch(text)) {
+      return const _RawPackEvidence.invalid();
+    }
+
+    final matches = RegExp(
+      '\\b(\\d{1,5})\\s*($units)\\b',
+      caseSensitive: false,
+    ).allMatches(text).toList();
+    final candidates = <String, _RawPackEvidence>{};
+    for (final match in matches) {
+      final count = int.tryParse(match.group(1) ?? '');
+      final token = _normalizedUnitToken(match.group(2));
+      if (count == null || count <= 0 || token.isEmpty) continue;
+      final evidence = _RawPackEvidence(count, token);
+      candidates['$count|$token'] = evidence;
+    }
+    if (candidates.length != 1) {
+      return _RawPackEvidence(null, null, mentionsPackUnit: mentionsUnit);
+    }
+    return candidates.values.single;
+  }
+
+  static int? _nullablePositiveInt(dynamic value) {
+    final number = _nullableNumber(value);
+    if (number == null || number <= 0 || number != number.roundToDouble()) {
+      return null;
+    }
+    return number.toInt();
+  }
+
+  static String _normalizedUnitToken(dynamic value) =>
+      _text(value).toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   static double _roundQuantity(double value) =>
       (value * 10000).roundToDouble() / 10000;

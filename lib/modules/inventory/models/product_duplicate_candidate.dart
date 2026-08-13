@@ -60,6 +60,9 @@ class ProductDuplicateCandidate {
     required this.variantMismatch,
     required this.hasProductImage,
     this.matchedModelCodes = const <String>{},
+    this.isReviewOnlyFamilyScope = false,
+    this.lineConfidence,
+    this.variantAgreement = false,
   });
 
   final Product product;
@@ -87,6 +90,17 @@ class ProductDuplicateCandidate {
 
   /// Manufacturer model codes shared with the invoice line.
   final Set<String> matchedModelCodes;
+
+  /// The catalog row had no product family of its own and was admitted only
+  /// because it occupies the exact active category leaf selected for the
+  /// invoice row. It is manual recall, never automatic identity evidence.
+  final bool isReviewOnlyFamilyScope;
+
+  /// Product-line ordering strength before a selected-option tie-break.
+  final double? lineConfidence;
+
+  /// Whether the selected supplier option explicitly agrees with this row.
+  final bool variantAgreement;
 
   bool get isExactIdentity => matchTier == ProductDuplicateMatchTier.exact;
 

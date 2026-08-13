@@ -258,6 +258,47 @@ void main() {
       expect(digest.contains(DateTime.utc(2026, 7, 26, 3, 59)), isTrue);
       expect(digest.contains(DateTime.utc(2026, 7, 26, 4)), isFalse);
     });
+
+    test('financial totals use occurred_at while unread uses created_at', () {
+      final rows = [
+        _row(
+          'sales_payment_received',
+          DateTime.utc(2026, 7, 25, 13),
+          occurredAt: DateTime.utc(2026, 7, 24, 13),
+          amount: 72000,
+        ),
+        _row(
+          'expense_recorded',
+          DateTime.utc(2026, 7, 25, 14),
+          occurredAt: DateTime.utc(2026, 7, 24, 14),
+          totalAmount: 52000,
+        ),
+      ];
+
+      final today = NotificationDigestSnapshot.fromRows(
+        period: NotificationDigestPeriod.today,
+        now: DateTime.utc(2026, 7, 25, 16),
+        notifications: rows,
+      );
+      final economicDay = NotificationDigestSnapshot.fromRows(
+        period: NotificationDigestPeriod.custom,
+        now: DateTime.utc(2026, 7, 25, 16),
+        customStartDate: DateTime(2026, 7, 24),
+        customEndDate: DateTime(2026, 7, 24),
+        notifications: rows,
+      );
+
+      expect(today.paymentCount, 0);
+      expect(today.paymentTotal, 0);
+      expect(today.expenseCount, 0);
+      expect(today.expenseTotal, 0);
+      expect(today.unreadAlertCount, 2);
+      expect(economicDay.paymentCount, 1);
+      expect(economicDay.paymentTotal, 72000);
+      expect(economicDay.expenseCount, 1);
+      expect(economicDay.expenseTotal, 52000);
+      expect(economicDay.unreadAlertCount, 0);
+    });
   });
 }
 
@@ -273,6 +314,7 @@ void _expectDates(
 Map<String, dynamic> _row(
   String type,
   DateTime createdAt, {
+  DateTime? occurredAt,
   num? amount,
   num? totalAmount,
   bool read = false,
@@ -280,6 +322,7 @@ Map<String, dynamic> _row(
   return {
     'type': type,
     'created_at': createdAt.toIso8601String(),
+    'occurred_at': (occurredAt ?? createdAt).toIso8601String(),
     'read_at': read
         ? createdAt.add(const Duration(minutes: 1)).toIso8601String()
         : null,

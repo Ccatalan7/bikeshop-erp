@@ -292,7 +292,10 @@ bash scripts/db/production_validation.sh prepare \
 catalog fingerprint, migration head, and PostgreSQL version. It reuses the
 matching immutable local template and downloads a new schema-only capture only
 on an exact cache miss. Captures exclude production rows and validate the
-archive contents before use.
+archive contents before use. The capture fingerprints and restores both
+`public` and dependency-only `private` definitions because managed Storage/Auth
+policies can reference private helpers; their post-data is deferred until both
+schemas exist.
 
 Run and rerun focused pgTAP without a production/network call:
 

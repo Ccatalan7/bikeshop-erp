@@ -222,8 +222,15 @@ String payrollCandidateReasonLabel(PayrollCandidateReason reason) {
     PayrollCandidateReason.primaryNameMatched => 'El nombre coincide',
     PayrollCandidateReason.configuredAliasMatched =>
       'Coincide con un alias configurado',
+    // Se dice lo que de verdad pasó, no «el nombre coincide»: el banco imprimió
+    // una parte del nombre registrado, y esa diferencia es justo lo que el
+    // operador tiene que mirar antes de aceptar el pago.
+    PayrollCandidateReason.shortNameMatched =>
+      'El banco imprime una forma corta del nombre registrado',
     PayrollCandidateReason.paymentMethodIsTransfer =>
       'La persona cobra por transferencia',
+    PayrollCandidateReason.paymentMethodDiffersFromPreference =>
+      'El movimiento puede ser pago aunque difiera del método habitual',
     PayrollCandidateReason.dateWithinWindow =>
       'La fecha cae dentro de la ventana de pago',
     PayrollCandidateReason.dateMissing => 'El movimiento no trae fecha',
@@ -239,8 +246,18 @@ String payrollCandidateReasonLabel(PayrollCandidateReason reason) {
     PayrollCandidateReason.nonZeroVariance => 'Hay diferencia de monto',
     PayrollCandidateReason.multipleTransactionsForLine =>
       'Varios movimientos podrían ser este pago',
+    // **Decía «con más de una persona», y era falso.** Lo normal es que las
+    // otras candidatas sean OTRAS SEMANAS DE LA MISMA PERSONA —sueldo semanal
+    // plano, dos semanas cuya ventana se solapa—, y leer «más de una persona»
+    // ahí no describe nada de lo que está pasando. Corregido el 2026-08-10
+    // sobre la cartola real, donde las tres semanas de $35.000 de un mismo
+    // trabajador se explicaban con esa frase.
     PayrollCandidateReason.transactionMatchesMultipleLines =>
+      'Este movimiento podría pagar más de una semana',
+    PayrollCandidateReason.transactionMatchesMultipleEmployees =>
       'Este movimiento calza con más de una persona',
+    PayrollCandidateReason.assignedByWeekOrder =>
+      'Hay pagos iguales: se asignó el más antiguo a la semana más antigua',
   };
 }
 
@@ -263,7 +280,13 @@ String payrollLineReasonLabel(PayrollLineMatchReason reason) {
     PayrollLineMatchReason.multipleTransactionsForLine =>
       'Varios movimientos podrían ser este pago',
     PayrollLineMatchReason.transactionMatchesMultipleLines =>
+      'El movimiento podría pagar más de una semana',
+    PayrollLineMatchReason.transactionMatchesMultipleEmployees =>
       'El movimiento calza con más de una persona',
+    PayrollLineMatchReason.assignedByWeekOrder =>
+      'Hay pagos iguales: se asignó el más antiguo a la semana más antigua',
+    PayrollLineMatchReason.transactionsTakenByOlderWeeks =>
+      'Los pagos que calzaban se asignaron a semanas anteriores',
   };
 }
 
@@ -311,17 +334,63 @@ extension PayrollRowDispositionPresentation on PayrollRowDisposition {
       };
 }
 
-/// One reviewable item, rendered as a single decision.
+/// Las respuestas posibles para una fila, en el orden en que se ofrecen.
 ///
-/// The proposal, its reasons and the difference are shown; the row never
-/// applies anything by itself and never offers to change hours or rate to make
-/// a difference disappear.
-class PayrollReconciliationRow extends StatefulWidget {
-  const PayrollReconciliationRow({
+/// Vive fuera del widget porque la tabla de la etapa 3 monta la misma lista en
+/// un `S-05`: una sola fuente para «qué se puede contestar acá», de modo que el
+/// selector de la tabla y el detalle de la fila nunca ofrezcan cosas distintas.
+List<PayrollRowDisposition> payrollDispositionOptionsFor(
+  PayrollDecisionRowData data,
+) {
+  if (data.canConfirm) {
+    return const [
+      PayrollRowDisposition.confirm,
+      PayrollRowDisposition.hold,
+      PayrollRowDisposition.notPayroll,
+      PayrollRowDisposition.ignore,
+    ];
+  }
+  return switch (data.kind) {
+    PayrollDecisionRowKind.suggested => const [
+        PayrollRowDisposition.hold,
+        PayrollRowDisposition.notPayroll,
+        PayrollRowDisposition.ignore,
+      ],
+    PayrollDecisionRowKind.unmatchedMovement => const [
+        PayrollRowDisposition.notPayroll,
+        PayrollRowDisposition.hold,
+        PayrollRowDisposition.ignore,
+      ],
+    PayrollDecisionRowKind.ineligibleLine => const [
+        PayrollRowDisposition.notPaid,
+      ],
+    PayrollDecisionRowKind.alreadyResolvedMovement => const [
+        PayrollRowDisposition.alreadyResolved,
+      ],
+    PayrollDecisionRowKind.incompleteEvidence => const [
+        PayrollRowDisposition.hold,
+        PayrollRowDisposition.notPayroll,
+        PayrollRowDisposition.ignore,
+      ],
+  };
+}
+
+/// El detalle de una fila revisable: por qué calza, a quién vincularla, qué
+/// pasa con la diferencia y la razón de auditoría.
+///
+/// Se abre desde la fila de la tabla de propuestas, que ya muestra identidad,
+/// los dos montos y la disposición. **Este widget dejó de dibujar todo eso el
+/// 2026-08-10**: repetirlo era exactamente el bloque que el dueño rechazó al
+/// usar la etapa («infinite huge fucking blocks everywhere») — la misma
+/// información dos veces, con dos gramáticas, multiplicada por cada fila.
+///
+/// Nunca aplica nada por sí mismo y nunca ofrece cambiar horas o tarifa para
+/// hacer desaparecer una diferencia.
+class PayrollReconciliationRowDetail extends StatefulWidget {
+  const PayrollReconciliationRowDetail({
     super.key,
     required this.data,
     required this.disposition,
-    required this.onDisposition,
     required this.varianceDisposition,
     required this.onVarianceDisposition,
     this.reviewReason = '',
@@ -329,15 +398,11 @@ class PayrollReconciliationRow extends StatefulWidget {
     this.onManualMatchChanged,
     this.learnBeneficiaryAlias = false,
     this.onLearnBeneficiaryAliasChanged,
-    this.isFirst = false,
     this.enabled = true,
   });
 
-  static const double stackWidth = 600;
-
   final PayrollDecisionRowData data;
   final PayrollRowDisposition disposition;
-  final ValueChanged<PayrollRowDisposition> onDisposition;
   final PayrollVarianceDisposition varianceDisposition;
   final ValueChanged<PayrollVarianceDisposition> onVarianceDisposition;
   final String reviewReason;
@@ -346,23 +411,21 @@ class PayrollReconciliationRow extends StatefulWidget {
   final bool learnBeneficiaryAlias;
   final ValueChanged<bool>? onLearnBeneficiaryAliasChanged;
 
-  final bool isFirst;
   final bool enabled;
 
   @override
-  State<PayrollReconciliationRow> createState() =>
-      _PayrollReconciliationRowState();
+  State<PayrollReconciliationRowDetail> createState() =>
+      _PayrollReconciliationRowDetailState();
 }
 
-class _PayrollReconciliationRowState extends State<PayrollReconciliationRow> {
+class _PayrollReconciliationRowDetailState
+    extends State<PayrollReconciliationRowDetail> {
   late final TextEditingController _reasonController =
       TextEditingController(text: widget.reviewReason);
 
   PayrollDecisionRowData get data => widget.data;
   PayrollRowDisposition get disposition => widget.disposition;
   bool get enabled => widget.enabled;
-  bool get isFirst => widget.isFirst;
-  ValueChanged<PayrollRowDisposition> get onDisposition => widget.onDisposition;
   PayrollVarianceDisposition get varianceDisposition =>
       widget.varianceDisposition;
   ValueChanged<PayrollVarianceDisposition> get onVarianceDisposition =>
@@ -386,7 +449,7 @@ class _PayrollReconciliationRowState extends State<PayrollReconciliationRow> {
   }
 
   @override
-  void didUpdateWidget(covariant PayrollReconciliationRow oldWidget) {
+  void didUpdateWidget(covariant PayrollReconciliationRowDetail oldWidget) {
     super.didUpdateWidget(oldWidget);
     // The audit reason can be set from outside (quick rounding accept). Keep
     // the controller authoritative while typing: only push a text that is
@@ -405,197 +468,44 @@ class _PayrollReconciliationRowState extends State<PayrollReconciliationRow> {
     super.dispose();
   }
 
-  List<PayrollRowDisposition> get _options {
-    return switch (data.kind) {
-      PayrollDecisionRowKind.suggested => const [
-          PayrollRowDisposition.hold,
-          PayrollRowDisposition.notPayroll,
-          PayrollRowDisposition.ignore,
-        ],
-      PayrollDecisionRowKind.unmatchedMovement => const [
-          PayrollRowDisposition.notPayroll,
-          PayrollRowDisposition.hold,
-          PayrollRowDisposition.ignore,
-        ],
-      PayrollDecisionRowKind.ineligibleLine => const [
-          PayrollRowDisposition.notPaid,
-        ],
-      PayrollDecisionRowKind.alreadyResolvedMovement => const [
-          PayrollRowDisposition.alreadyResolved,
-        ],
-      PayrollDecisionRowKind.incompleteEvidence => const [
-          PayrollRowDisposition.hold,
-          PayrollRowDisposition.notPayroll,
-          PayrollRowDisposition.ignore,
-        ],
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
     final needsAnswer = data.requiresDisposition &&
         disposition == PayrollRowDisposition.pending;
-    final options = data.canConfirm
-        ? const [
-            PayrollRowDisposition.confirm,
-            PayrollRowDisposition.hold,
-            PayrollRowDisposition.notPayroll,
-            PayrollRowDisposition.ignore,
-          ]
-        : _options;
 
-    final identity = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          data.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: visual.cardTitle.copyWith(fontSize: 13),
+    // Las señales que la fila de la tabla NO puede decir con un solo tag de
+    // estado. Fecha, confianza y montos ya viven en sus columnas, así que no se
+    // repiten acá: sólo lo que cambia la lectura de la evidencia.
+    final flags = <Widget>[
+      if (data.isPartialPayment)
+        const _MetaChip(label: 'Pago parcial', emphasis: true),
+      if (data.isAutomaticallyClassified)
+        const _MetaChip(label: 'Clasificado automáticamente'),
+      if (needsAnswer)
+        const _MetaChip(label: 'Necesita respuesta', emphasis: true),
+      if (!data.canConfirm &&
+          data.kind == PayrollDecisionRowKind.alreadyResolvedMovement)
+        const _MetaChip(
+          label: 'Protegido contra pago duplicado',
+          emphasis: true,
         ),
-        if (data.subtitle.isNotEmpty) ...[
-          const SizedBox(height: 2),
-          Text(
-            data.subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: visual.bodyS.copyWith(
-              fontSize: 11,
-              color: visual.inkMuted,
-            ),
-          ),
-        ],
-        if (data.bankDescription.isNotEmpty) ...[
-          const SizedBox(height: 5),
-          Text(
-            data.bankDescription,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: visual.monoM.copyWith(
-              fontSize: 11.5,
-              color: visual.inkMuted,
-              height: 1.35,
-            ),
-          ),
-        ],
-        const SizedBox(height: 7),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            if (data.date != null) _MetaChip(label: _formatDate(data.date!)),
-            if (data.confidence != null)
-              _MetaChip(label: payrollConfidenceLabel(data.confidence!)),
-            if (data.isPartialPayment)
-              const _MetaChip(
-                label: 'Pago parcial',
-                emphasis: true,
-              ),
-            if (data.isAutomaticallyClassified)
-              const _MetaChip(label: 'Clasificado automáticamente'),
-            if (needsAnswer)
-              const _MetaChip(
-                label: 'Necesita respuesta',
-                emphasis: true,
-              ),
-            if (data.warningCodes.contains('out_of_statement_range'))
-              const _MetaChip(
-                label: 'Fecha posterior al cierre declarado',
-                emphasis: true,
-              ),
-            if (!data.canConfirm &&
-                data.kind == PayrollDecisionRowKind.alreadyResolvedMovement)
-              const _MetaChip(
-                label: 'Protegido contra pago duplicado',
-                emphasis: true,
-              ),
-          ],
-        ),
-      ],
-    );
+    ];
 
-    final amounts = Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: data.isPartialPayment
-          ? [
-              _AmountLine(
-                label: 'Saldo antes',
-                value: formatPayrollClp(data.expectedAmountClp!),
-              ),
-              _AmountLine(
-                label: 'Pago aplicado',
-                value: formatPayrollClp(data.appliedAmountClp!),
-                emphasis: true,
-              ),
-              _AmountLine(
-                label: 'Saldo después',
-                value: formatPayrollClp(data.remainingAmountClp!),
-                attention: true,
-              ),
-            ]
-          : [
-              if (data.bankAmountClp != null)
-                _AmountLine(
-                  label: 'Banco',
-                  value: formatPayrollClp(data.bankAmountClp!),
-                  emphasis: true,
-                ),
-              if (data.expectedAmountClp != null)
-                _AmountLine(
-                  label: 'Esperado',
-                  value: formatPayrollClp(data.expectedAmountClp!),
-                ),
-              if (data.hasVariance)
-                _AmountLine(
-                  label: 'Diferencia',
-                  value: formatPayrollClpSigned(data.varianceClp!),
-                  attention: true,
-                ),
-            ],
-    );
-
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          top: isFirst ? BorderSide.none : BorderSide(color: visual.border),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 13),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final stacked =
-              constraints.maxWidth < PayrollReconciliationRow.stackWidth;
-          final head = stacked
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    identity,
-                    const SizedBox(height: 9),
-                    Align(alignment: Alignment.centerLeft, child: amounts),
-                  ],
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 6, child: identity),
-                    const SizedBox(width: 14),
-                    Expanded(flex: 3, child: amounts),
-                  ],
-                );
-
+    return Padding(
+      padding: const EdgeInsets.only(top: 9, bottom: 13),
+      child: Builder(
+        builder: (context) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              head,
-              if (data.explanations.isNotEmpty) ...[
+              if (flags.isNotEmpty) ...[
+                Wrap(spacing: 6, runSpacing: 6, children: flags),
                 const SizedBox(height: 9),
-                _Explanations(explanations: data.explanations),
               ],
+              if (data.explanations.isNotEmpty)
+                _Explanations(explanations: data.explanations),
               if (data.manualMatchOptions.isNotEmpty) ...[
                 const SizedBox(height: 11),
                 DropdownButtonFormField<String>(
@@ -649,23 +559,11 @@ class _PayrollReconciliationRowState extends State<PayrollReconciliationRow> {
                   ),
                 ),
               ],
-              if (options.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text('QUÉ ES ESTE MOVIMIENTO', style: visual.overline),
-                const SizedBox(height: 8),
-                _DecisionOptionGrid(
-                  movementId: data.id,
-                  options: options,
-                  kind: data.kind,
-                  disposition: disposition,
-                  enabled: enabled,
-                  onDisposition: onDisposition,
-                ),
-              ],
               if (data.hasVariance &&
                   disposition == PayrollRowDisposition.confirm) ...[
                 const SizedBox(height: 12),
                 _VarianceDisposition(
+                  movementId: data.id,
                   varianceClp: data.varianceClp!,
                   appliedAmountClp: data.appliedAmountClp,
                   value: varianceDisposition,
@@ -712,91 +610,11 @@ class _PayrollReconciliationRowState extends State<PayrollReconciliationRow> {
       ),
     );
   }
-
-  static String _formatDate(PayrollCivilDate date) {
-    const months = [
-      'ene',
-      'feb',
-      'mar',
-      'abr',
-      'may',
-      'jun',
-      'jul',
-      'ago',
-      'sep',
-      'oct',
-      'nov',
-      'dic',
-    ];
-    return '${date.day} ${months[date.month - 1]}';
-  }
-}
-
-/// Equal-width 2c option cards on wide layouts; a stacked full-width list on
-/// compact ones. Geometry adapts, the graphic language does not.
-class _DecisionOptionGrid extends StatelessWidget {
-  const _DecisionOptionGrid({
-    required this.movementId,
-    required this.options,
-    required this.kind,
-    required this.disposition,
-    required this.enabled,
-    required this.onDisposition,
-  });
-
-  final String movementId;
-  final List<PayrollRowDisposition> options;
-  final PayrollDecisionRowKind kind;
-  final PayrollRowDisposition disposition;
-  final bool enabled;
-  final ValueChanged<PayrollRowDisposition> onDisposition;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = PayrollVisualTokens.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 640 && options.length > 1;
-        final cards = <Widget>[
-          for (final option in options)
-            PayrollDecisionOptionCard(
-              movementId: movementId,
-              optionName: option.name,
-              title: option.label,
-              description: option.describe(kind),
-              tag: option.consequenceTag,
-              tone: option.toneOf(visual),
-              selected: disposition == option,
-              onSelect: enabled ? () => onDisposition(option) : null,
-            ),
-        ];
-        if (!wide) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              for (var index = 0; index < cards.length; index++) ...<Widget>[
-                if (index != 0) const SizedBox(height: 8),
-                cards[index],
-              ],
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            for (var index = 0; index < cards.length; index++) ...<Widget>[
-              if (index != 0) const SizedBox(width: 10),
-              Expanded(child: cards[index]),
-            ],
-          ],
-        );
-      },
-    );
-  }
 }
 
 class _VarianceDisposition extends StatelessWidget {
   const _VarianceDisposition({
+    required this.movementId,
     required this.varianceClp,
     required this.appliedAmountClp,
     required this.value,
@@ -805,6 +623,12 @@ class _VarianceDisposition extends StatelessWidget {
     this.onAcceptRounding,
   });
 
+  /// Identidad del movimiento al que pertenece esta diferencia.
+  ///
+  /// Varias filas pueden tener su detalle abierto a la vez, y entonces hay
+  /// varios «Dejar sin conciliar» idénticos en pantalla: sin id, quien resuelve
+  /// por identidad —VoiceOver, una prueba— sólo alcanza el primero.
+  final String movementId;
   final int varianceClp;
   final int? appliedAmountClp;
   final PayrollVarianceDisposition value;
@@ -889,6 +713,8 @@ class _VarianceDisposition extends StatelessWidget {
               runSpacing: 8,
               children: [
                 PayrollDecisionOptionCard(
+                  movementId: movementId,
+                  optionName: 'varianceUnresolved',
                   title: 'Dejar sin conciliar',
                   description: 'La diferencia queda registrada y visible; '
                       'nadie la absorbe en silencio.',
@@ -969,50 +795,6 @@ class _Explanations extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _AmountLine extends StatelessWidget {
-  const _AmountLine({
-    required this.label,
-    required this.value,
-    this.emphasis = false,
-    this.attention = false,
-  });
-
-  final String label;
-  final String value;
-  final bool emphasis;
-  final bool attention;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = PayrollVisualTokens.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: visual.bodyS.copyWith(
-              fontSize: 10,
-              color: visual.inkFaint,
-            ),
-          ),
-          const SizedBox(width: 7),
-          Text(
-            value,
-            style: payrollMoneyTextStyle(context, emphasis: emphasis).copyWith(
-              fontSize: emphasis ? 15 : 13.5,
-              // The warning foreground is the attention role of the mounted
-              // palette; it stays legible over the plain row surface.
-              color: attention ? visual.warningFg : visual.ink,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

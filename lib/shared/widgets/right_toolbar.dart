@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -214,13 +215,9 @@ class _RightToolbarState extends State<RightToolbar> {
       case ToolbarTool.aiAssistant:
         final aiContext = context.watch<AIAssistantContextService>();
         final useJobsContext = aiContext.hasVisibleJobsContext;
-        debugPrint(
-          '[AI_CTX][RightToolbar.aiPanel] contextId=${identityHashCode(aiContext)} '
-          'hasContext=${aiContext.hasVisibleJobsContext} '
-          'useJobsContext=$useJobsContext count=${aiContext.visibleJobs.length} '
-          'scope="${aiContext.visibleJobsScopeLabel}" '
-          'jobs=[${aiContext.visibleJobs.take(12).map((job) => job.jobNumber ?? job.id ?? 'sin-numero').join(', ')}]',
-        );
+        if (kDebugMode) {
+          debugPrint('[AI_CTX] Assistant panel context resolved.');
+        }
         return AIChatPanel(
           jobs: useJobsContext ? aiContext.visibleJobs : const [],
           embedded: true,

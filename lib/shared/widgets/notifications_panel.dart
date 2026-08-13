@@ -689,7 +689,14 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       final createdAt = DateTime.tryParse(
         row['created_at']?.toString() ?? '',
       )?.toLocal();
-      if (createdAt == null || !digest.contains(createdAt)) continue;
+      final occurredAt = DateTime.tryParse(
+        row['occurred_at']?.toString() ?? '',
+      )?.toLocal();
+      if (createdAt == null ||
+          (!digest.contains(createdAt) &&
+              (occurredAt == null || !digest.contains(occurredAt)))) {
+        continue;
+      }
       final type = row['type']?.toString() ?? '';
       final platformKey = _platformKeyForNotificationType(type);
       final route = resolveErpNotificationRoute(row);
@@ -697,11 +704,18 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
       // The payload already travelled with the row (`data` is part of both the
       // period read and the realtime projection), so enrichment costs no query.
       final data = _notificationPayload(row);
+      final economicDateContext = _economicDateContext(
+        createdAt: createdAt,
+        occurredAt: occurredAt,
+        type: type,
+      );
       items.add(
         _BriefingActivityItem(
           title: row['title']?.toString() ?? 'Actividad',
           subtitle: _erpActivitySubtitle(type, body, data),
           createdAt: createdAt,
+          occurredAt: occurredAt,
+          economicDateContext: economicDateContext,
           route: route,
           icon: _iconForNotificationType(type),
           accent: _accentForNotificationType(type),
@@ -835,7 +849,8 @@ String _erpActivitySubtitle(
     case 'sales_payment_received':
     case 'expense_recorded':
       return _joinActivitySegments(
-          [body, _payloadText(data, 'payment_method')]);
+        [body, _payloadText(data, 'payment_method')],
+      );
     case 'online_order_created':
       final deliveryType = _payloadText(data, 'delivery_type');
       return _joinActivitySegments([
@@ -852,6 +867,39 @@ String _erpActivitySubtitle(
     default:
       return body;
   }
+}
+
+String _economicDateContext({
+  required DateTime createdAt,
+  required String type,
+  DateTime? occurredAt,
+}) {
+  if (occurredAt == null) return '';
+  final recorded = _chileBriefingTime(createdAt);
+  final occurred = _chileBriefingTime(occurredAt);
+  if (recorded.year == occurred.year &&
+      recorded.month == occurred.month &&
+      recorded.day == occurred.day) {
+    return '';
+  }
+  final today = tz.TZDateTime.now(_chileBriefingLocation());
+  final recordedLabel = recorded.year == today.year &&
+          recorded.month == today.month &&
+          recorded.day == today.day
+      ? 'Registrado hoy'
+      : 'Registrado el ${recorded.day} '
+          '${_briefingMonthShort[recorded.month - 1]}';
+  final economicNoun = switch (type) {
+    'sales_payment_received' => 'pago',
+    'expense_recorded' => 'gasto',
+    _ => 'corresponde',
+  };
+  final occurrenceLabel =
+      economicNoun == 'corresponde' ? 'corresponde al' : '$economicNoun del';
+  final includeYear = recorded.year != occurred.year;
+  return '$recordedLabel · $occurrenceLabel ${occurred.day} '
+      '${_briefingMonthShort[occurred.month - 1]}'
+      '${includeYear ? ' ${occurred.year}' : ''}';
 }
 
 /// Second line of a conversation row.
@@ -1951,7 +1999,7 @@ class _BriefingHero extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${items.length}',
+                '${items.where((item) => digest.contains(item.metricAt)).length}',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   color: accent,
                   fontWeight: FontWeight.w700,
@@ -3494,6 +3542,18 @@ class _ActivityRow extends StatelessWidget {
                           ],
                         ),
                       ],
+                      if (item.economicDateContext.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          item.economicDateContext,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: item.accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -4021,7 +4081,8 @@ List<_ActivityPulseBucket> _activityPulseBuckets(
   if (digest.period == NotificationDigestPeriod.today) {
     final counts = List<int>.filled(6, 0);
     for (final item in items) {
-      final chile = _chileBriefingTime(item.createdAt);
+      if (!digest.contains(item.metricAt)) continue;
+      final chile = _chileBriefingTime(item.metricAt);
       counts[(chile.hour ~/ 4).clamp(0, 5)]++;
     }
     const labels = ['00', '04', '08', '12', '16', '20'];
@@ -4040,7 +4101,8 @@ List<_ActivityPulseBucket> _activityPulseBuckets(
     final bucketCount = totalMonths.clamp(1, 12);
     final counts = List<int>.filled(bucketCount, 0);
     for (final item in items) {
-      final chile = _chileBriefingTime(item.createdAt);
+      if (!digest.contains(item.metricAt)) continue;
+      final chile = _chileBriefingTime(item.metricAt);
       final monthOffset =
           ((chile.year - start.year) * 12) + chile.month - start.month;
       if (monthOffset < 0 || monthOffset >= totalMonths) continue;
@@ -4063,7 +4125,8 @@ List<_ActivityPulseBucket> _activityPulseBuckets(
   final bucketCount = totalDays.clamp(1, 7);
   final counts = List<int>.filled(bucketCount, 0);
   for (final item in items) {
-    final chile = _chileBriefingTime(item.createdAt);
+    if (!digest.contains(item.metricAt)) continue;
+    final chile = _chileBriefingTime(item.metricAt);
     final day = DateTime(chile.year, chile.month, chile.day);
     final dayOffset = day.difference(start).inDays;
     if (dayOffset < 0 || dayOffset >= totalDays) continue;
@@ -4095,6 +4158,8 @@ class _BriefingActivityItem {
     required this.kind,
     required this.unread,
     this.notificationId,
+    this.occurredAt,
+    this.economicDateContext = '',
     this.platformKey,
     this.detail,
   });
@@ -4102,6 +4167,8 @@ class _BriefingActivityItem {
   final String title;
   final String subtitle;
   final DateTime createdAt;
+  final DateTime? occurredAt;
+  final String economicDateContext;
   final String route;
   final IconData icon;
   final Color accent;
@@ -4114,6 +4181,13 @@ class _BriefingActivityItem {
   /// worth hiding. Only rows carrying a notification id can expand, because the
   /// list owner tracks the open row by that id.
   final _ActivityDetail? detail;
+
+  DateTime get metricAt => switch (kind) {
+        _BriefingActivityKind.payment ||
+        _BriefingActivityKind.expense =>
+          occurredAt ?? createdAt,
+        _ => createdAt,
+      };
 
   bool get isExpandable => detail != null && notificationId != null;
 }

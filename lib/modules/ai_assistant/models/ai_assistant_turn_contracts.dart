@@ -72,10 +72,59 @@ class AIAssistantTurnAuthority {
   }
 }
 
+/// The only write intent currently admitted by an assistant approval card.
+///
+/// It names a server-owned command, never model-authored arguments. The exact
+/// task preview is already frozen behind [AIAssistantApprovalRef.id].
+enum AIAssistantApprovalAction {
+  createTask,
+}
+
+/// The operator decision sent to the approval endpoint.
+enum AIAssistantApprovalDecision {
+  approve,
+  discard,
+}
+
+/// Server-owned lifecycle of one exact approval preview.
+enum AIAssistantApprovalState {
+  pending,
+  approved,
+  discarded,
+  expired;
+
+  bool get isTerminal => this != AIAssistantApprovalState.pending;
+}
+
+/// Opaque approval identity attached only to a governed preview card.
+@immutable
+class AIAssistantApprovalRef {
+  const AIAssistantApprovalRef({
+    required this.id,
+    required this.action,
+    required this.expiresAt,
+    required this.state,
+  });
+
+  final String id;
+  final AIAssistantApprovalAction action;
+  final DateTime expiresAt;
+  final AIAssistantApprovalState state;
+
+  AIAssistantApprovalRef withState(AIAssistantApprovalState nextState) =>
+      AIAssistantApprovalRef(
+        id: id,
+        action: action,
+        expiresAt: expiresAt,
+        state: nextState,
+      );
+}
+
 /// A card the assistant offers after answering.
 ///
-/// The card carries a closed [destination], never a model-authored route or
-/// record id. The application remains the owner of every possible click.
+/// The card carries a closed [destination] and may carry one verified,
+/// server-owned [entityRef]. It never carries a model-authored route. The
+/// application remains the owner of every possible click.
 @immutable
 class AIAssistantActionCard {
   const AIAssistantActionCard({
@@ -86,6 +135,8 @@ class AIAssistantActionCard {
     this.subtitle,
     this.description,
     this.chips = const <String>[],
+    this.entityRef,
+    this.approvalRef,
   });
 
   final String kind;
@@ -95,8 +146,28 @@ class AIAssistantActionCard {
   final String? subtitle;
   final String? description;
   final List<String> chips;
+  final AIAssistantEntityRef? entityRef;
+  final AIAssistantApprovalRef? approvalRef;
 
-  String get ctaLabel => destination.ctaLabel;
+  String get ctaLabel => entityRef?.detailCtaLabel ?? destination.ctaLabel;
+
+  AIAssistantActionCard withApprovalState(
+    AIAssistantApprovalState state,
+  ) {
+    final approval = approvalRef;
+    if (approval == null) return this;
+    return AIAssistantActionCard(
+      kind: kind,
+      title: title,
+      destination: destination,
+      eyebrow: eyebrow,
+      subtitle: subtitle,
+      description: description,
+      chips: chips,
+      entityRef: entityRef,
+      approvalRef: approval.withState(state),
+    );
+  }
 }
 
 @immutable
@@ -106,6 +177,24 @@ class AIAssistantResponse {
     this.cards = const <AIAssistantActionCard>[],
   });
 
+  final String text;
+  final List<AIAssistantActionCard> cards;
+}
+
+/// Deterministic result of approve/discard. No model turn participates.
+@immutable
+class AIAssistantApprovalResolution {
+  const AIAssistantApprovalResolution({
+    required this.approvalId,
+    required this.clientActionId,
+    required this.state,
+    required this.text,
+    required this.cards,
+  });
+
+  final String approvalId;
+  final String clientActionId;
+  final AIAssistantApprovalState state;
   final String text;
   final List<AIAssistantActionCard> cards;
 }

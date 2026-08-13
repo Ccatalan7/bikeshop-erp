@@ -233,6 +233,103 @@ void main() {
       expect(find.byKey(const Key('ocr-review-new-l1')), findsOneWidget);
     });
 
+    testWidgets('una abstención nunca se convierte en crear nuevo',
+        (tester) async {
+      await _pump(
+        tester,
+        size: const Size(1440, 900),
+        lines: <OcrProductReviewLine>[
+          _line(id: 'l1', status: OcrProductReviewStatus.abstained),
+        ],
+      );
+
+      expect(find.text('La evidencia no alcanza para decidir'), findsOneWidget);
+      expect(find.byKey(const Key('ocr-review-new-l1')), findsNothing);
+      expect(
+        find.byKey(const Key('ocr-review-alternatives-l1')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('una propuesta composite exige revisión y nunca auto-vincula',
+        (tester) async {
+      await _pump(
+        tester,
+        size: const Size(1440, 900),
+        lines: <OcrProductReviewLine>[
+          _line(
+            id: 'l1',
+            status: OcrProductReviewStatus.abstained,
+            aiCompositeProposal:
+                'La IA propone 2 productos del catálogo. Requiere confirmación.',
+          ),
+        ],
+      );
+
+      expect(
+        find.text(
+          'La IA propone 2 productos del catálogo. Requiere confirmación.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('ocr-review-link-l1')), findsNothing);
+      expect(find.byKey(const Key('ocr-review-new-l1')), findsNothing);
+      expect(
+        find.byKey(const Key('ocr-review-alternatives-l1')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('cuenta viables, descartados y otra categoría por separado',
+        (tester) async {
+      await _pump(
+        tester,
+        size: const Size(1440, 900),
+        lines: <OcrProductReviewLine>[
+          _line(
+            id: 'l1',
+            status: OcrProductReviewStatus.abstained,
+            viableCandidateCount: 1,
+            discardedCandidateCount: 6,
+            categoryConflictCount: 1,
+          ),
+        ],
+      );
+
+      expect(
+        find.text(
+          'La evidencia no alcanza · 1 viable · 6 descartados · 1 en otra categoría',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('8 opciones'), findsNothing);
+      expect(find.textContaining('8 parecidos'), findsNothing);
+      expect(find.byKey(const Key('ocr-review-new-l1')), findsNothing);
+      expect(
+        find.byKey(const Key('ocr-review-alternatives-l1')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('usa singular honesto cuando sólo hay un descartado',
+        (tester) async {
+      await _pump(
+        tester,
+        size: const Size(1440, 900),
+        lines: <OcrProductReviewLine>[
+          _line(
+            id: 'l1',
+            status: OcrProductReviewStatus.noCandidates,
+            discardedCandidateCount: 1,
+          ),
+        ],
+      );
+
+      expect(find.text('1 descartado'), findsOneWidget);
+      expect(find.textContaining('1 opción'), findsNothing);
+      expect(find.textContaining('1 parecido'), findsNothing);
+    });
+
     testWidgets('ningún porcentaje aparece junto a un producto',
         (tester) async {
       await _pump(
@@ -631,6 +728,10 @@ OcrProductReviewLine _line({
   bool isReservingSku = false,
   bool skuIsReadOnly = false,
   String? skuErrorMessage,
+  int viableCandidateCount = 0,
+  int discardedCandidateCount = 0,
+  int categoryConflictCount = 0,
+  String? aiCompositeProposal,
 }) {
   return OcrProductReviewLine(
     id: id,
@@ -648,6 +749,10 @@ OcrProductReviewLine _line({
     candidates: candidates.isEmpty && status == OcrProductReviewStatus.ready
         ? _candidates(1)
         : candidates,
+    viableCandidateCount: viableCandidateCount,
+    discardedCandidateCount: discardedCandidateCount,
+    categoryConflictCount: categoryConflictCount,
+    aiCompositeProposal: aiCompositeProposal,
     categories: categories ?? _categories,
     brands: _brands,
     category: categoryValidationMessage != null

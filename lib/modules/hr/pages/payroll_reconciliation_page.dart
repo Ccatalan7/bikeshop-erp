@@ -11,10 +11,15 @@ import '../../../shared/services/return_navigation.dart';
 import '../models/payroll_statement_reconciliation.dart';
 import '../models/payroll_voucher.dart';
 import '../payroll/surfaces/payroll_accent_action.dart';
+import '../payroll/payment_workspace/payroll_payment_workspace_adapter.dart';
+import '../payroll/payment_workspace/payroll_payment_workspace.dart';
+import '../payroll/payment_workspace/payroll_payment_workspace_controller.dart';
+import '../payroll/payment_workspace/payroll_payment_workspace_models.dart';
 import '../payroll/surfaces/payroll_reconciliation_surface.dart';
 import '../payroll/surfaces/payroll_transfer_review_surface.dart';
 import '../payroll/theme/payroll_tokens.dart';
 import '../services/payroll_reconciliation_service.dart';
+import '../services/payroll_payment_workspace_service.dart';
 import '../../../shared/utils/responsive_breakpoints.dart';
 import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/vb_short_select.dart';
@@ -104,7 +109,7 @@ PayrollPickedStatement? payrollPickedStatementFromPlatformFile(
   );
 }
 
-/// The three service operations this page is allowed to issue.
+/// Service operations owned by the statement flow and its final payment step.
 @immutable
 class PayrollReconciliationActions {
   const PayrollReconciliationActions({
@@ -114,6 +119,9 @@ class PayrollReconciliationActions {
     this.prepareWithProgress,
     this.learnBeneficiaryAlias,
     this.refresh,
+    this.settlePaymentBatch,
+    this.approvePaymentWeeks,
+    this.loadAdditionalExpenseAccounts,
     this.isImageOcrSupported = false,
     this.isCameraCaptureSupported = false,
     this.versionedCommandsProbe,
@@ -150,6 +158,19 @@ class PayrollReconciliationActions {
     PayrollStatementPreparedDraft draft,
   )? refresh;
 
+  /// Final OCR step writer. The entire prepared list is one atomic payment
+  /// workspace operation; the importer never loops over individual payments.
+  final Future<void> Function({
+    required List<PayrollPaymentTargetSaveCommand> commands,
+    required String operationKey,
+    PayrollOcrStatementSource? ocrSource,
+  })? settlePaymentBatch;
+
+  final PayrollPaymentWeekApprover? approvePaymentWeeks;
+
+  final Future<List<PayrollExpenseAccountOption>> Function()?
+      loadAdditionalExpenseAccounts;
+
   /// Whether an image can be read without leaving the device.
   final bool isImageOcrSupported;
   final bool isCameraCaptureSupported;
@@ -176,8 +197,8 @@ extension _StageCopy on PayrollReconciliationStage {
   String get label => switch (this) {
         PayrollReconciliationStage.file => 'Cargar cartola',
         PayrollReconciliationStage.extract => 'Lectura',
-        PayrollReconciliationStage.review => 'Propuestas',
-        PayrollReconciliationStage.apply => 'Aplicar',
+        PayrollReconciliationStage.review => 'Preparar pagos',
+        PayrollReconciliationStage.apply => 'Completar pagos',
       };
 }
 
@@ -362,12 +383,11 @@ class _AliasLearningIntent {
   final String alias;
 }
 
-/// Bank statement reconciliation, staged so nothing is applied by accident.
+/// Statement-assisted payroll payment flow, staged so OCR never writes money.
 ///
-/// The page owns no matching logic: proposals, reasons, tolerance and variance
-/// all come from `PayrollStatementMatcher` through the prepared draft. Every
-/// outgoing movement needs an explicit human disposition, and the batch is
-/// committed once through `createImport` followed by a single `apply`.
+/// Matching remains service-owned. The page reads evidence, lets the operator
+/// select direct proposals, then keeps the full batch workspace mounted as its
+/// fourth step. Only that workspace can register the atomic payment command.
 class PayrollReconciliationPage extends StatefulWidget {
   const PayrollReconciliationPage({
     super.key,
@@ -376,6 +396,7 @@ class PayrollReconciliationPage extends StatefulWidget {
     this.pickCamera,
     this.pickGallery,
     this.onConfigureEmployeePaymentMethod,
+    this.onPaymentHandoff,
     this.fallbackRoute = '/hr/payroll',
   });
 
@@ -385,6 +406,8 @@ class PayrollReconciliationPage extends StatefulWidget {
   final PayrollStatementPicker? pickGallery;
   final Future<void> Function(String employeeId)?
       onConfigureEmployeePaymentMethod;
+  final Future<void> Function(PayrollPaymentWorkspaceRequest request)?
+      onPaymentHandoff;
   final String fallbackRoute;
 
   @override
@@ -411,33 +434,24 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
   final Map<String, _CashAnswer> _cashAnswers = {};
   String? _selectedErpAccountId;
 
-  /// Review groups open in stage 2. "Pendientes de decisión" starts open;
-  /// batch suggestions and informational movements start collapsed.
-  // Suggestions and real questions open by default: mandatory work is never
-  // born hidden. Automatic classifications and informational movements stay
-  // collapsed as auditable evidence.
+  /// Selección que OCR entregará al compositor de pagos. La cartola sólo
+  /// propone evidencia: elegir una fila acá no registra dinero, no confirma
+  /// semanas y no obliga a resolver los demás movimientos.
+  final Set<String> _selectedPaymentTargetIds = <String>{};
+  final Map<String, Set<String>> _selectedEvidenceIdsByTargetId =
+      <String, Set<String>>{};
 
-  /// Secciones plegables de la etapa de revisión. Nacen CERRADAS: la carga
-  /// humana la lidera la tarjeta de una pregunta a la vez, y todo lo demás es
-  /// evidencia auditable que no debe competir por la atención.
-  final Set<String> _openReviewGroups = <String>{};
-
-  /// Pregunta mostrada en la tarjeta que encabeza la etapa. Avanza sólo por
-  /// gesto explícito: responder no salta sola a la siguiente, porque el
-  /// operador suele querer confirmar lo que acaba de decidir.
-  int _pendingQuestionIndex = 0;
-
-  /// Fila traída a la tarjeta desde un grupo plegado con «Ver». Manda sobre el
-  /// índice: si el operador pidió mirar ese movimiento, ése es el que se
-  /// muestra hasta que avance a mano.
-  String? _stagedQuestionRowId;
-
-  /// Filas que ya se contestaron pero SIGUEN mostrándose como pregunta. Una
-  /// respuesta suele venir en dos tiempos —elegir, y después completar la
-  /// diferencia, la razón de auditoría o el alias—, así que la fila no puede
-  /// desaparecer al primer clic: se iría justo cuando falta la mitad del
-  /// trabajo, y sin dejar verificar lo recién decidido.
-  final Set<String> _answeredInPlaceRowIds = <String>{};
+  /// Filas de la tabla de propuestas abiertas en su detalle.
+  ///
+  /// **Reemplaza a la composición de «una pregunta a la vez» (2026-08-10.)**
+  /// Esa versión ponía cada decisión abierta como un bloque de pantalla
+  /// completa con cuatro tarjetas de opción, apilados uno tras otro: con 18
+  /// decisiones y 26 movimientos ajenos la etapa era ilegible y el dueño no
+  /// podía contrastar lo que pagó el banco contra lo que debe la nómina sin
+  /// recorrer la lista entera. Ahora la etapa es UNA tabla —la misma gramática
+  /// que la lectura del paso 2, que sí funcionaba— y esto guarda sólo qué
+  /// filas tienen su evidencia desplegada.
+  final Set<String> _expandedReviewRowIds = <String>{};
 
   /// The cash person currently being answered. Advancing to the next person
   /// is always an explicit tap, never automatic.
@@ -457,8 +471,12 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
   int _learnedAliasCount = 0;
   bool _isLearningAliases = false;
   String? _aliasLearningError;
+  bool _handoffReturned = false;
+  PayrollPaymentWorkspaceController? _paymentWorkspaceController;
+  List<PayrollExpenseAccountOption> _paymentExpenseAccounts = const [];
 
-  bool get _hasUnappliedDraft => _draft != null && _appliedMessage == null;
+  bool get _hasUnappliedDraft =>
+      _draft != null && _appliedMessage == null && !_handoffReturned;
 
   /// Once the evidence import exists, the reviewed payload must stay byte-for-
   /// byte stable across a retry with the same idempotency key.
@@ -472,9 +490,13 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
 
   PayrollReconciliationActions _providerActions() {
     final payrollService = context.read<PayrollVoucherService>();
+    final database = context.read<DatabaseService>();
     final service = PayrollReconciliationService(
-      database: context.read<DatabaseService>(),
+      database: database,
       payrollService: payrollService,
+    );
+    final paymentWorkspaceService = PayrollPaymentWorkspaceService(
+      database: database,
     );
     final captureCapabilities = payrollStatementCaptureCapabilities(
       isWeb: kIsWeb,
@@ -504,11 +526,45 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       apply: service.apply,
       learnBeneficiaryAlias: service.learnBeneficiaryAlias,
       refresh: service.refreshPreparedDraft,
+      settlePaymentBatch: ({
+        required commands,
+        required operationKey,
+        ocrSource,
+      }) async {
+        await paymentWorkspaceService.applyTargets(
+          commands: commands,
+          operationKey: operationKey,
+          ocrSource: ocrSource,
+        );
+        payrollService.invalidateVouchersCache();
+      },
+      approvePaymentWeeks: (requests, operationKey) async {
+        final results = await paymentWorkspaceService.approveWeeks(
+          requests: requests,
+          operationKey: operationKey,
+        );
+        payrollService.invalidateVouchersCache();
+        return results;
+      },
+      loadAdditionalExpenseAccounts: () async {
+        final rows = await payrollService.getPayrollAdditionalExpenseAccounts();
+        return rows
+            .map(PayrollExpenseAccountOption.fromMap)
+            .where((account) =>
+                account.accountId.isNotEmpty && account.label.isNotEmpty)
+            .toList(growable: false);
+      },
       isImageOcrSupported: captureCapabilities.supportsImages,
       isCameraCaptureSupported: captureCapabilities.supportsCamera,
       versionedCommandsProbe: () =>
           payrollService.versionedPayrollCommandsProbe,
     );
+  }
+
+  @override
+  void dispose() {
+    _paymentWorkspaceController?.dispose();
+    super.dispose();
   }
 
   /// Confirmed-absent versioned backend. Unknown (`null`) keeps the full
@@ -606,6 +662,23 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         _manualLineBySourceRowId.clear();
         _learnAliasSourceRowIds.clear();
         _cashAnswers.clear();
+        _selectedPaymentTargetIds.clear();
+        _selectedEvidenceIdsByTargetId.clear();
+        for (final result in draft.reconciliation.lineResults) {
+          final proposal = result.proposedMatch;
+          if (proposal == null ||
+              proposal.amountVarianceClp != 0 ||
+              proposal.confidence != PayrollMatchConfidence.high ||
+              !proposal.statementRow.hasCompleteStructuredEvidence ||
+              _warningCodesFor(proposal.statementRow).isNotEmpty) {
+            continue;
+          }
+          final targetId = result.voucherLine.lineId;
+          _selectedPaymentTargetIds.add(targetId);
+          _selectedEvidenceIdsByTargetId[targetId] = <String>{
+            proposal.statementRow.sourceRowId,
+          };
+        }
         _selectedErpAccountId = null;
         _appliedReceipt = null;
         _appliedDecisions = const [];
@@ -935,18 +1008,15 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     return compact.substring(compact.length - 6);
   }
 
-  bool _isAfterDocumentClose(PayrollCivilDate? date) {
-    final documentDate = _draft?.documentDate;
-    return date != null &&
-        documentDate != null &&
-        date.compareTo(documentDate) > 0;
-  }
-
   List<String> _warningCodesFor(PayrollStatementRow row) {
     return <String>[
-      ...row.parseWarningCodes,
+      // Bancos pueden publicar movimientos con fecha posterior al cierre
+      // impreso de la cartola. Ese desfase es normal y no exige una decisión
+      // del operador; se ignora también al reabrir evidencia antigua.
+      ...row.parseWarningCodes.where(
+        (code) => code != 'out_of_statement_range',
+      ),
       if (!row.hasCompleteStructuredEvidence) 'incomplete_evidence',
-      if (_isAfterDocumentClose(row.bookingDate)) 'out_of_statement_range',
     ];
   }
 
@@ -954,8 +1024,6 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     return _warningCodesFor(row)
         .map(
           (code) => switch (code) {
-            'out_of_statement_range' =>
-              'La fecha queda después del cierre declarado por la cartola',
             'incomplete_evidence' =>
               'El OCR no recuperó toda la fecha, dirección o monto',
             _ => 'La fila trae una advertencia de lectura: $code',
@@ -982,13 +1050,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
           line.pendingAmountClp <= 0) {
         continue;
       }
-      final daysAfterStart = line.periodStart.daysUntil(date);
       final daysAfterClose = line.periodEnd.daysUntil(date);
-      final overpayment = amount - line.pendingAmountClp;
-      if (daysAfterStart < 0 ||
+      final amountDifference = amount - line.pendingAmountClp;
+      if (daysAfterClose < 0 ||
           daysAfterClose > config.paymentWindowDays ||
-          (overpayment > 0 &&
-              overpayment > config.toleranceFor(line.pendingAmountClp))) {
+          amountDifference.abs() > config.toleranceFor(line.pendingAmountClp)) {
         continue;
       }
       final isPartial = amount < line.pendingAmountClp;
@@ -1163,6 +1229,14 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         PayrollDecisionRowData(
           id: 'line:${result.voucherLine.lineId}',
           kind: PayrollDecisionRowKind.ineligibleLine,
+          // **No hay movimiento que confirmar, así que no se ofrece
+          // confirmarlo** (2026-08-10). `canConfirm` venía por omisión en
+          // `true` y el selector de una obligación sin movimiento ofrecía «Es
+          // este pago», «No es nómina» y «Error o duplicado»: las tres hablan
+          // de un movimiento del banco que acá no existe, y la primera habría
+          // emitido un pago bancario **sin fila de cartola que lo respalde**.
+          // La única respuesta con sentido —«Todavía no pagado»— no aparecía.
+          canConfirm: false,
           title: employeeName,
           subtitle: '${_periodLabelFor(result.voucherLine.voucherId)} · '
               '${switch (result.status) {
@@ -1298,16 +1372,167 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     return rows;
   }
 
-  /// Voucher lines whose person is paid in cash.
+  /// Cash lines in a week this statement is already going to confirm.
+  ///
+  /// A cash preference is not evidence that this bank statement touched the
+  /// obligation. Showing every open cash line forced the operator to answer
+  /// "Todavía no pagado" for unrelated weeks, and that answer then authorized
+  /// their draft voucher for confirmation. Cash remains explicit, but only as
+  /// required coverage for a voucher that a confirmed bank decision already
+  /// brought into this reconciliation. Untouched cash obligations stay in the
+  /// payroll payment terminal.
   List<PayrollReconciliationLineResult> get _cashLines {
     final draft = _draft;
     if (draft == null) return const [];
+    final touchedVoucherIds = _touchedVoucherIdsFrom(_transferRows);
     return draft.reconciliation.lineResults
         .where(
-          (result) => result.reasons
-              .contains(PayrollLineMatchReason.paymentMethodIsCash),
+          (result) =>
+              touchedVoucherIds.contains(result.voucherLine.voucherId) &&
+              result.reasons
+                  .contains(PayrollLineMatchReason.paymentMethodIsCash),
         )
         .toList(growable: false);
+  }
+
+  /// La única fila bancaria que el matcher asignó a esta obligación.
+  ///
+  /// `evaluatedCandidates` contiene la misma transferencia repetida contra
+  /// varias semanas de una persona para que el matcher pueda resolverlas por
+  /// orden. Pintar esa lista cruda acá duplicaría el mismo dinero en varias
+  /// nóminas y permitiría seleccionarlo dos veces. La propuesta ya es el
+  /// resultado uno-a-uno del matcher; lo no asignado queda en Otros egresos.
+  PayrollReconciliationCandidate? _paymentCandidateFor(
+    PayrollReconciliationLineResult result,
+  ) {
+    final priorRows =
+        _draft?.priorDecisionIdsBySourceRowId.keys.toSet() ?? const <String>{};
+    final proposal = result.proposedMatch;
+    if (proposal == null) return null;
+    final row = proposal.statementRow;
+    final daysAfterClose = row.bookingDate == null
+        ? null
+        : result.voucherLine.periodEnd.daysUntil(row.bookingDate!);
+    const config = PayrollReconciliationConfig();
+    if (!row.isOutgoingCandidate ||
+        !row.hasCompleteStructuredEvidence ||
+        priorRows.contains(row.sourceRowId) ||
+        daysAfterClose == null ||
+        daysAfterClose < 0 ||
+        daysAfterClose > config.paymentWindowDays ||
+        proposal.amountVarianceClp.abs() > config.maximumToleranceClp) {
+      return null;
+    }
+    return proposal;
+  }
+
+  List<PayrollReconciliationLineResult> get _paymentTargets {
+    final draft = _draft;
+    if (draft == null) return const [];
+    final targets = draft.reconciliation.lineResults
+        .where((result) =>
+            result.voucherLine.isPending &&
+            result.voucherLine.pendingAmountClp > 0)
+        .toList(growable: false)
+      ..sort((left, right) {
+        final byClose =
+            right.voucherLine.periodEnd.compareTo(left.voucherLine.periodEnd);
+        if (byClose != 0) return byClose;
+        final byStart = right.voucherLine.periodStart
+            .compareTo(left.voucherLine.periodStart);
+        if (byStart != 0) return byStart;
+        final leftName = left.employee?.displayName ??
+            _employeeNameFor(left.voucherLine.employeeId);
+        final rightName = right.employee?.displayName ??
+            _employeeNameFor(right.voucherLine.employeeId);
+        return leftName.compareTo(rightName);
+      });
+    return List<PayrollReconciliationLineResult>.unmodifiable(targets);
+  }
+
+  Set<String> get _candidateSourceRowIds => <String>{
+        for (final target in _paymentTargets)
+          if (_paymentCandidateFor(target) case final candidate?)
+            candidate.statementRow.sourceRowId,
+      };
+
+  List<PayrollStatementRow> get _otherOutgoingRows {
+    final draft = _draft;
+    if (draft == null) return const [];
+    final candidateIds = _candidateSourceRowIds;
+    return List<PayrollStatementRow>.unmodifiable(
+      draft.parseResult.rows.where(
+        (row) =>
+            row.isOutgoingCandidate &&
+            !candidateIds.contains(row.sourceRowId) &&
+            !draft.priorDecisionIdsBySourceRowId.containsKey(row.sourceRowId),
+      ),
+    );
+  }
+
+  int get _selectedPayrollBalanceClp => _paymentTargets.fold<int>(
+        0,
+        (sum, target) => sum + target.voucherLine.pendingAmountClp,
+      );
+
+  int get _selectedStatementAmountClp {
+    final selectedIds = <String>{
+      for (final targetId in _selectedPaymentTargetIds)
+        ...?_selectedEvidenceIdsByTargetId[targetId],
+    };
+    final rowsById = <String, PayrollStatementRow>{
+      for (final row
+          in _draft?.parseResult.rows ?? const <PayrollStatementRow>[])
+        row.sourceRowId: row,
+    };
+    return selectedIds.fold<int>(
+      0,
+      (sum, sourceRowId) =>
+          sum + (rowsById[sourceRowId]?.outgoingAmountClp ?? 0),
+    );
+  }
+
+  /// Las semanas que **esta cartola está tocando**: aquellas donde el operador
+  /// confirmó al menos un pago del extracto.
+  ///
+  /// Aplicar confirma exactamente esas semanas borrador, y ninguna más.
+  Set<String> _touchedVoucherIdsFrom(List<PayrollDecisionRowData> rows) {
+    return <String>{
+      for (final row in rows)
+        if (_dispositionFor(row) == PayrollRowDisposition.confirm)
+          if (row.voucherId case final voucherId?) voucherId,
+    };
+  }
+
+  /// Si esta fila **frena la aplicación** hasta que el operador la conteste.
+  ///
+  /// **Corrección del dueño, 2026-08-10.** Antes lo frenaba todo: con nueve
+  /// pagos confirmados de la cartola, seguían bloqueando cinco obligaciones que
+  /// **no aparecen en este extracto**, y la única respuesta que ofrecían era
+  /// «Todavía no pagado». Eso no era una decisión —era una formalidad de un
+  /// solo camino— y encima **arrastraba consecuencia**: contestarla marca su
+  /// semana como tocada, y aplicar confirma toda semana tocada. O sea, para
+  /// registrar lo que sí dice la cartola había que declarar impagas —y de paso
+  /// confirmar— semanas ajenas a ella. El dueño lo dijo directo: *«the rest I'd
+  /// want to set how they were paid on the payroll payment terminal»*.
+  ///
+  /// La regla queda en lo que de verdad protege la contabilidad:
+  ///
+  /// - **Todo movimiento del banco exige respuesta, siempre.** Salió plata de
+  ///   la cuenta: nada del extracto puede desaparecer en silencio.
+  /// - **Una obligación sin movimiento en esta cartola sólo exige respuesta si
+  ///   su semana igual va a quedar confirmada por esta cartola.** Ahí sí es una
+  ///   decisión real —se congela esa semana y hay que decir qué pasa con ese
+  ///   sueldo—. Si la semana no se toca, la cartola no afirma nada sobre ella y
+  ///   se paga donde corresponde: en el terminal de pagos de nómina.
+  bool _requiresAnswer(
+    PayrollDecisionRowData row,
+    Set<String> touchedVoucherIds,
+  ) {
+    if (!row.requiresDisposition) return false;
+    if (row.kind != PayrollDecisionRowKind.ineligibleLine) return true;
+    final voucherId = row.voucherId;
+    return voucherId != null && touchedVoucherIds.contains(voucherId);
   }
 
   PayrollRowDisposition _dispositionFor(PayrollDecisionRowData row) =>
@@ -1325,18 +1550,15 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     PayrollDecisionRowData row,
     PayrollRowDisposition value,
   ) {
-    // Se mide ANTES de escribir la disposición: `_suggestionIsBatchSafe` exige
-    // que la fila siga pendiente, así que preguntarlo después siempre daba
-    // `false` y un calce de un solo toque quedaba abierto como pregunta en vez
-    // de pasar a «Ya respondidos».
-    final wasBatchSafe = _suggestionIsBatchSafe(row);
     setState(() {
       _dispositions[row.id] = value;
-      // Answering does not make the question vanish: the row stays in place so
-      // the operator can finish the variance/reason/alias it may still need,
-      // and can see what was just decided. It leaves only on "next question".
-      if (row.requiresDisposition && !wasBatchSafe) {
-        _answeredInPlaceRowIds.add(row.id);
+      // **Contestar puede no ser terminar.** Confirmar una fila con diferencia,
+      // o una que exige razón de auditoría, deja trabajo abierto que vive en el
+      // detalle: se abre solo, porque si no el operador cree haber respondido y
+      // el paso 4 lo frena sin que se vea dónde.
+      if (value == PayrollRowDisposition.confirm &&
+          (row.hasVariance || row.needsReviewReason)) {
+        _expandedReviewRowIds.add(row.id);
       }
       if (value == PayrollRowDisposition.confirm && row.isPartialPayment) {
         // A debit below the obligation has only one truthful money outcome:
@@ -1369,8 +1591,12 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       )?['account_id']
           ?.toString();
 
-  /// `07 – 13 jul · a pagar $179.375`, la segunda línea de la persona en la
-  /// tabla de coincidencias (5j paso 3).
+  /// `07 – 13 jul`, la semana bajo el nombre de la persona.
+  ///
+  /// **Ya no lleva el monto esperado** (2026-08-10): ese número pasó a ser una
+  /// columna propia junto al monto de la cartola, que es donde se puede
+  /// comparar. Escondido acá dentro obligaba a leer una línea de texto para
+  /// saber si el banco pagó de más o de menos.
   ///
   /// Nulo cuando la fila no apunta a ninguna semana: un cargo ajeno no tiene
   /// obligación contra la cual contrastar, y rellenarlo con un guion sólo
@@ -1378,10 +1604,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
   String? _rowPersonDetail(PayrollDecisionRowData row) {
     final voucherId = row.voucherId;
     if (voucherId == null || voucherId.isEmpty) return null;
-    final period = _periodLabelFor(voucherId);
-    final expected = row.expectedAmountClp;
-    if (expected == null) return period;
-    return '$period · a pagar ${formatPayrollClp(expected)}';
+    return _periodLabelFor(voucherId);
   }
 
   String _periodLabelFor(String voucherId) {
@@ -1472,9 +1695,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       blockers.add('Falta elegir la cuenta ERP correspondiente a la cartola.');
     }
 
-    final pendingRows = _transferRows
+    final blockerRows = _transferRows;
+    final blockerTouchedVoucherIds = _touchedVoucherIdsFrom(blockerRows);
+    final pendingRows = blockerRows
         .where((row) =>
-            row.requiresDisposition &&
+            _requiresAnswer(row, blockerTouchedVoucherIds) &&
             _dispositionFor(row) == PayrollRowDisposition.pending)
         .length;
     if (pendingRows > 0) {
@@ -2030,6 +2255,94 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     ReturnNavigation.close(context, fallbackRoute: widget.fallbackRoute);
   }
 
+  Future<void> _continueToPaymentWorkspace() async {
+    final draft = _draft;
+    if (draft == null || _paymentTargets.isEmpty || _isBusy) return;
+    setState(() {
+      _isBusy = true;
+      _error = null;
+    });
+    try {
+      final request = payrollPaymentWorkspaceRequestFromStatement(
+        draft: draft,
+        selectedTargetIds: Set<String>.unmodifiable(
+          _selectedPaymentTargetIds,
+        ),
+        selectedEvidenceIdsByTargetId: <String, Set<String>>{
+          for (final entry in _selectedEvidenceIdsByTargetId.entries)
+            entry.key: Set<String>.unmodifiable(entry.value),
+        },
+        suggestedErpAccountId: _selectedErpAccountId,
+      );
+      final injected = widget.onPaymentHandoff;
+      if (injected != null) {
+        await injected(request);
+      }
+      if (!mounted) return;
+
+      var expenseAccounts = const <PayrollExpenseAccountOption>[];
+      final accountLoader = _actions().loadAdditionalExpenseAccounts;
+      if (accountLoader != null) {
+        try {
+          expenseAccounts = await accountLoader();
+        } catch (_) {
+          // Salary settlement remains available. The advanced editor explains
+          // that concepts need an account if the operator opens that section.
+        }
+      }
+      if (!mounted) return;
+
+      final oldController = _paymentWorkspaceController;
+      final batchWriter = _actions().settlePaymentBatch;
+      final controller = PayrollPaymentWorkspaceController(
+        request: request,
+        additionalConceptsSupported: batchWriter != null,
+        onApproveWeeks: _actions().approvePaymentWeeks,
+        onSaveBatch: batchWriter == null
+            ? null
+            : (commands, operationKey) => batchWriter(
+                  commands: commands,
+                  operationKey: operationKey,
+                  ocrSource: request.ocrSource,
+                ),
+      );
+      setState(() {
+        _paymentWorkspaceController = controller;
+        _paymentExpenseAccounts = expenseAccounts;
+        _stage = PayrollReconciliationStage.apply;
+        _isBusy = false;
+      });
+      oldController?.dispose();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isBusy = false;
+        _error = 'No pudimos preparar el panel de pago. La cartola y tu '
+            'selección siguen abiertas para reintentar.';
+      });
+      _logFailure('Falla al preparar handoff de pagos', error);
+    }
+  }
+
+  void _returnToPaymentProposals() {
+    final controller = _paymentWorkspaceController;
+    setState(() {
+      _stage = PayrollReconciliationStage.review;
+      _paymentWorkspaceController = null;
+      _paymentExpenseAccounts = const [];
+      _error = null;
+    });
+    controller?.dispose();
+  }
+
+  void _completePaymentWorkspace() {
+    _handoffReturned = true;
+    ReturnNavigation.close(
+      context,
+      fallbackRoute: widget.fallbackRoute,
+    );
+  }
+
   Future<void> _requestClose() async {
     if (_isBusy) return;
     if (!_hasUnappliedDraft) {
@@ -2042,7 +2355,8 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         title: const Text('¿Salir de la conciliación?'),
         content: Text(
           _importReceipt == null
-              ? 'Se perderán las decisiones que aún no has aplicado.'
+              ? 'Se perderá la selección local de pagos que preparaste. La '
+                  'cartola no ha registrado ni modificado dinero.'
               : 'La evidencia ya fue importada, pero la conciliación no tiene '
                   'confirmación final. Si el último intento falló, recarga las '
                   'nóminas antes de volver a intentarlo.',
@@ -2086,7 +2400,10 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         busy: _isBusy,
         onClose: _requestClose,
         body: _buildStage(),
-        footer: _buildBar(),
+        footer: _stage == PayrollReconciliationStage.apply &&
+                _paymentWorkspaceController != null
+            ? const SizedBox.shrink()
+            : _buildBar(),
       ),
     );
   }
@@ -2096,8 +2413,8 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     return switch (_stage) {
       PayrollReconciliationStage.file => 'Cargar cartola',
       PayrollReconciliationStage.extract => 'Lectura de la cartola',
-      PayrollReconciliationStage.review => 'Propuestas de pago',
-      PayrollReconciliationStage.apply => 'Aplicar conciliación',
+      PayrollReconciliationStage.review => 'Preparar pagos',
+      PayrollReconciliationStage.apply => 'Completar pagos',
     };
   }
 
@@ -2114,47 +2431,45 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
   }
 
   List<ReconStep> get _surfaceSteps {
-    final currentIndex = PayrollReconciliationStage.values.indexOf(_stage);
+    const visibleStages = <PayrollReconciliationStage>[
+      PayrollReconciliationStage.file,
+      PayrollReconciliationStage.extract,
+      PayrollReconciliationStage.review,
+      PayrollReconciliationStage.apply,
+    ];
+    final currentIndex = visibleStages.indexOf(_stage);
     final hasDraft = _draft != null;
     final enabled = !_isBusy && _appliedMessage == null;
     final completed = <bool>[
       hasDraft,
       hasDraft,
-      _transferStageIsComplete,
-      _appliedMessage != null,
+      _paymentWorkspaceController != null,
+      _paymentWorkspaceController?.isBatchSaved ?? false,
     ];
     const compactNames = <String>[
       'Cargar',
       'Lectura',
-      'Propuestas',
-      'Aplicar',
+      'Preparar',
+      'Pagos',
     ];
-    // The transfer counter reports the human workload: suggestions and real
-    // questions. Automatically classified and informational rows are
-    // evidence, not pending work, and must not inflate the denominator.
-    final humanReviewRows = _transferRows
-        .where((row) => row.requiresDisposition)
-        .toList(growable: false);
     final movementCount = _draft?.parseResult.rows.length ?? 0;
     final metadata = <String>[
       hasDraft ? 'lista' : '',
       hasDraft
           ? '$movementCount ${movementCount == 1 ? 'movimiento' : 'movimientos'}'
           : '',
-      humanReviewRows.isEmpty
+      _selectedPaymentTargetIds.isEmpty
           ? ''
-          : '${_answeredCount(humanReviewRows)}/${humanReviewRows.length}',
-      _cashLines.isEmpty
+          : '${_selectedPaymentTargetIds.length} preparados',
+      _paymentWorkspaceController == null
           ? ''
-          : '${_cashLines.where((line) => _cashAnswers[line.voucherLine.lineId]?.isAnswered ?? false).length}/${_cashLines.length} efectivo',
+          : '${_paymentWorkspaceController!.request.targets.length} pagos',
     ];
 
     return <ReconStep>[
-      for (var index = 0;
-          index < PayrollReconciliationStage.values.length;
-          index++)
+      for (var index = 0; index < visibleStages.length; index++)
         ReconStep(
-          name: PayrollReconciliationStage.values[index].label,
+          name: visibleStages[index].label,
           compactName: compactNames[index],
           meta: metadata[index],
           state: index == currentIndex
@@ -2163,10 +2478,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                   ? ReconStepState.done
                   : ReconStepState.next,
           onTap: !enabled ||
-                  !_canEnterStage(PayrollReconciliationStage.values[index])
+                  !_canEnterStage(visibleStages[index]) ||
+                  _paymentWorkspaceController?.hasDirtyTargets == true
               ? null
               : () => setState(
-                    () => _stage = PayrollReconciliationStage.values[index],
+                    () => _stage = visibleStages[index],
                   ),
         ),
     ];
@@ -2177,7 +2493,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       PayrollReconciliationStage.file => true,
       PayrollReconciliationStage.extract => _draft != null,
       PayrollReconciliationStage.review => _draft != null,
-      PayrollReconciliationStage.apply => _transferStageIsComplete,
+      PayrollReconciliationStage.apply => _paymentWorkspaceController != null,
     };
   }
 
@@ -2221,10 +2537,12 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         _draft!.missingCanonicalPaymentMethodEmployeeIds.isNotEmpty) {
       return false;
     }
+    final rows = _transferRows;
+    final touchedVoucherIds = _touchedVoucherIdsFrom(rows);
     final confirmedLineIds = <String>[];
-    for (final row in _transferRows) {
+    for (final row in rows) {
       final disposition = _dispositionFor(row);
-      if (row.requiresDisposition &&
+      if (_requiresAnswer(row, touchedVoucherIds) &&
           disposition == PayrollRowDisposition.pending) {
         return false;
       }
@@ -2305,7 +2623,14 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       PayrollReconciliationStage.file => _buildFileStage(),
       PayrollReconciliationStage.extract => _buildExtractStage(),
       PayrollReconciliationStage.review => _buildTransfersStage(),
-      PayrollReconciliationStage.apply => _buildApplyStage(),
+      PayrollReconciliationStage.apply => _paymentWorkspaceController == null
+          ? _buildApplyStage()
+          : PayrollPaymentWorkspace(
+              controller: _paymentWorkspaceController!,
+              expenseAccounts: _paymentExpenseAccounts,
+              onClose: _returnToPaymentProposals,
+              onBatchComplete: _completePaymentWorkspace,
+            ),
     };
   }
 
@@ -3122,8 +3447,9 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                     // El límite lo publica el extractor, no el frame: `5j` dibuja
                     // «hasta 20 MB» y el código rechaza sobre **12**. Decirlo
                     // antes ahorra elegir un archivo que va a fallar.
-                    'Hasta 12 MB. Al aplicar se guarda evidencia estructurada; '
-                    'no se conserva la imagen ni el texto OCR completo.',
+                    'Hasta 12 MB. Al registrar un pago se guarda sólo la '
+                    'evidencia estructurada usada; no se conserva la imagen '
+                    'ni el texto OCR completo.',
                     textAlign: TextAlign.center,
                     style: visual.bodyS.copyWith(
                       color: visual.inkFaint,
@@ -3231,15 +3557,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     );
   }
 
-  Widget _reviewRow(PayrollDecisionRowData row, {required bool isFirst}) {
-    return PayrollReconciliationRow(
+  Widget _reviewRow(PayrollDecisionRowData row) {
+    return PayrollReconciliationRowDetail(
       data: row,
-      isFirst: isFirst,
       enabled: !_isReviewLocked,
       disposition: _dispositionFor(row),
-      onDisposition: (value) {
-        _setRowDisposition(row, value);
-      },
       varianceDisposition: _varianceFor(row),
       onVarianceDisposition: (value) => setState(() {
         _varianceDispositions[row.id] = value;
@@ -3276,11 +3598,17 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     );
   }
 
-  int _answeredCount(List<PayrollDecisionRowData> rows) => rows
-      .where((row) =>
-          !row.requiresDisposition ||
-          _dispositionFor(row) != PayrollRowDisposition.pending)
-      .length;
+  // Legacy apply receipt still reads the old decision model when replaying an
+  // already-applied import. New OCR handoffs never enter that route.
+  // ignore: unused_element
+  int _answeredCount(List<PayrollDecisionRowData> rows) {
+    final touchedVoucherIds = _touchedVoucherIdsFrom(rows);
+    return rows
+        .where((row) =>
+            !_requiresAnswer(row, touchedVoucherIds) ||
+            _dispositionFor(row) != PayrollRowDisposition.pending)
+        .length;
+  }
 
   // ── Paso 2 — revisión de transferencias (Design 2c) ──────────────────────
 
@@ -3313,6 +3641,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
   bool _suggestionIsBatchSafe(PayrollDecisionRowData row) =>
       row.kind == PayrollDecisionRowKind.suggested &&
       _dispositionFor(row) == PayrollRowDisposition.pending &&
+      row.confidence == PayrollMatchConfidence.high &&
       row.canConfirm &&
       !row.hasVariance &&
       row.warningCodes.isEmpty &&
@@ -3336,7 +3665,12 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       return ('LECTURA INCOMPLETA', visual.danger);
     }
     if (row.kind == PayrollDecisionRowKind.ineligibleLine) {
-      return ('SIN MOVIMIENTO', visual.warning);
+      // Una semana que esta cartola ni siquiera toca no está «pendiente»: está
+      // fuera del alcance del documento, y decirlo en tono de aviso mandaba a
+      // buscar un problema donde no lo hay.
+      return _requiresAnswer(row, _touchedVoucherIdsFrom(_transferRows))
+          ? ('SIN MOVIMIENTO', visual.warning)
+          : ('FUERA DE ESTA CARTOLA', visual.neutral);
     }
     if (row.isPartialPayment) return ('PAGO PARCIAL', visual.warning);
     if (row.isAutomaticallyClassified) {
@@ -3351,12 +3685,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       if (row.warningCodes.isNotEmpty) {
         return ('REVISAR LECTURA', visual.warning);
       }
-      if (row.hasVariance) {
-        return (
-          'TOLERANCIA ${formatPayrollClpSigned(row.varianceClp!)}',
-          visual.warning,
-        );
-      }
+      // **El tag ya no repite el número.** La diferencia con signo vive bajo el
+      // monto que la nómina espera, que es donde se puede restar contra el de
+      // la cartola; escribirla otra vez acá era el mismo dato dos veces en la
+      // misma fila, y el tag existe para decir el PORQUÉ, no la cifra.
+      if (row.hasVariance) return ('MONTO DISTINTO', visual.warning);
       return ('CALCE EXACTO', visual.success);
     }
     return ('DECIDE UNA PERSONA', visual.warning);
@@ -3364,6 +3697,11 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
 
   /// Una línea honesta de por qué calza (o no). Se lee antes de decidir.
   String _rowWhy(PayrollDecisionRowData row) {
+    if (row.kind == PayrollDecisionRowKind.ineligibleLine &&
+        !_requiresAnswer(row, _touchedVoucherIdsFrom(_transferRows))) {
+      return 'Esta semana no aparece en la cartola. Págala desde el terminal '
+          'de nómina; acá no te frena.';
+    }
     if (row.explanations.isNotEmpty) return row.explanations.first;
     return switch (row.kind) {
       PayrollDecisionRowKind.ineligibleLine =>
@@ -3374,185 +3712,120 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     };
   }
 
-  /// Acción principal de la fila, con la palabra exacta de su consecuencia.
-  /// Which open question the leading card is currently showing, so the list
-  /// below never renders it twice.
-  bool _isLeadingQuestion(List<PayrollDecisionRowData> pending, int index) {
-    if (pending.isEmpty) return false;
-    final stagedIndex = _stagedQuestionRowId == null
-        ? -1
-        : pending.indexWhere((r) => r.id == _stagedQuestionRowId);
-    final leading = stagedIndex >= 0
-        ? stagedIndex
-        : _pendingQuestionIndex.clamp(0, pending.length - 1);
-    return index == leading;
-  }
-
-  void _toggleReviewGroup(String id) {
-    setState(() {
-      if (!_openReviewGroups.remove(id)) _openReviewGroups.add(id);
-    });
-  }
-
-  /// The card that leads the step: one open question at a time, with its full
-  /// evidence in place. When nothing is pending the card does not vanish — it
-  /// says so, because an empty area reads as "the screen failed to load".
-  Widget _buildPendingQuestion(List<PayrollDecisionRowData> pending) {
-    // A row staged with "Ver" is shown even when it is not one of the open
-    // questions — otherwise asking to look at a resolved movement would
-    // silently do nothing.
-    final staged = _stagedQuestionRowId == null
-        ? null
-        : _transferRows.where((r) => r.id == _stagedQuestionRowId).firstOrNull;
-    if (staged != null && !pending.any((r) => r.id == staged.id)) {
-      return PayrollPendingDecisionCard(
-        key: const ValueKey('payroll-pending-decision-card'),
-        counterLabel: 'REVISANDO',
-        explainer: _rowWhy(staged),
-        onNext: pending.isEmpty
-            ? null
-            : () => setState(() => _stagedQuestionRowId = null),
-        child: _reviewRow(staged, isFirst: true),
-      );
-    }
-    if (pending.isEmpty) {
-      // Same slot, same key: the step always has a leading card. A slot that
-      // disappears when the work is done reads as a screen that failed to
-      // load, and it makes "where do I decide?" a different question on every
-      // visit.
-      return const PayrollNoPendingDecisionsCard(
-        key: ValueKey('payroll-pending-decision-card'),
-        message: 'No queda nada por decidir en esta cartola. Revisa los '
-            'grupos de abajo si quieres cambiar algo antes de aplicar.',
-      );
-    }
-    final stagedIndex =
-        staged == null ? -1 : pending.indexWhere((r) => r.id == staged.id);
-    final index = stagedIndex >= 0
-        ? stagedIndex
-        : _pendingQuestionIndex.clamp(0, pending.length - 1);
-    final row = pending[index];
-    return PayrollPendingDecisionCard(
-      key: const ValueKey('payroll-pending-decision-card'),
-      counterLabel: '${index + 1} DE ${pending.length}',
-      explainer: _rowWhy(row),
-      onPrevious: index > 0 ? () => _moveQuestion(pending, index, -1) : null,
-      // **`Siguiente` sigue activo en la última pregunta si ésta ya quedó
-      // resuelta**, porque ahí lo que hace es soltarla. Con el guard anterior
-      // (`index < pending.length - 1`) el operador quedaba clavado en la
-      // última tarjeta respondida, sin forma de sacarla de la pila.
-      onNext: index < pending.length - 1 || _releasesOnAdvance(row)
-          ? () => _moveQuestion(pending, index, 1)
-          : null,
-      child: _reviewRow(row, isFirst: true),
+  /// El selector de decisión de la fila: el `S-05` canónico con las respuestas
+  /// que esa fila admite.
+  ///
+  /// **Sustituye a la rejilla de cuatro tarjetas de opción (2026-08-10).** Esa
+  /// gramática se diseñó para UNA pregunta a pantalla completa; repetida por
+  /// fila convertía la etapa en un muro donde no se distinguía una decisión de
+  /// la siguiente. La descripción honesta y la consecuencia de cada respuesta
+  /// no se pierden: se publican **una vez** al pie de la tabla, en vez de
+  /// reimprimirse en cada una de las decenas de filas.
+  Widget _rowDecisionSelect(PayrollDecisionRowData row) {
+    final options = payrollDispositionOptionsFor(row);
+    if (options.isEmpty) return const SizedBox.shrink();
+    return VbShortSelect<PayrollRowDisposition>(
+      key: ValueKey<String>('payroll-row-decision-${row.id}'),
+      value: _dispositionFor(row),
+      // `pending` nunca es una opción elegible: es el estado del que hay que
+      // salir. Como no está en la lista, S-05 muestra su marcador de vacío.
+      placeholder: PayrollRowDisposition.pending.label,
+      sheetTitle: 'Qué es este movimiento',
+      // El rótulo hablado nombra el movimiento. Con veinte filas seguidas, un
+      // «Qué hacer» idéntico deja al rotor de VoiceOver sin forma de saber
+      // cuál es cuál — el mismo defecto que ya se corrigió en las tarjetas.
+      semanticLabel: 'Qué hacer con ${row.title} · ${_ledgerDate(row.date)}',
+      options: <VbShortSelectOption<PayrollRowDisposition>>[
+        for (final option in options)
+          VbShortSelectOption<PayrollRowDisposition>(
+            value: option,
+            label: option.label,
+          ),
+      ],
+      onChanged:
+          _isReviewLocked ? null : (value) => _setRowDisposition(row, value),
     );
   }
 
-  /// Una fila respondida «en el sitio» que ya no le debe nada a nadie: tiene
-  /// disposición y, si trae diferencia o exige razón de auditoría, las dos
-  /// están resueltas. Mientras le falte algo se queda en la pregunta abierta
-  /// **a propósito**, que es lo que el comentario de `_setDisposition` promete.
-  bool _releasesOnAdvance(PayrollDecisionRowData row) {
-    if (!_answeredInPlaceRowIds.contains(row.id)) return false;
-    final disposition = _dispositionFor(row);
-    if (disposition == PayrollRowDisposition.pending) return false;
-    if (disposition != PayrollRowDisposition.confirm) return true;
-    if (row.hasVariance &&
-        _varianceFor(row) == PayrollVarianceDisposition.none) {
-      return false;
-    }
-    if (row.needsReviewReason && _reviewReasonFor(row).isEmpty) return false;
-    return true;
-  }
-
-  /// Mueve la pregunta abierta **soltando la que se deja atrás**.
+  /// El detalle de una fila: la evidencia completa y el trabajo fino.
   ///
-  /// El contrato lo escribió el propio código al responder: *«Answering does
-  /// not make the question vanish… It leaves only on "next question".»* Pero
-  /// esto sólo hacía `_pendingQuestionIndex += delta` y **nunca sacaba la fila
-  /// de `_answeredInPlaceRowIds`**, así que la promesa no se cumplía: la
-  /// tarjeta ya respondida seguía rotulada «Pendiente de decisión», el contador
-  /// no bajaba nunca de `N DE 10`, y para llegar a una sin responder había que
-  /// recorrer la lista entera — y al topar con la última, caminar hacia atrás.
-  /// Medido recorriendo las 10 decisiones en la app viva el 2026-08-01.
-  void _moveQuestion(
-    List<PayrollDecisionRowData> pending,
-    int index,
-    int delta,
-  ) {
-    setState(() {
-      final leaving =
-          index >= 0 && index < pending.length ? pending[index] : null;
-      // **El id «en revisión» se limpia en TODA navegación**, no sólo cuando
-      // la fila se suelta. `_stagedQuestionRowId` manda sobre el índice al
-      // elegir qué tarjeta encabeza la etapa, así que dejarlo puesto hacía que
-      // la flecha moviera el índice y la pantalla siguiera mostrando la misma
-      // tarjeta: para el operador, la flecha no hacía nada.
-      if (leaving != null && _stagedQuestionRowId == leaving.id) {
-        _stagedQuestionRowId = null;
-      }
-      // **Sólo `Siguiente` suelta la fila.** El contrato dice «It leaves only
-      // on "next question"», y `Anterior` existe justamente para volver a
-      // mirar lo que se acaba de decidir: si retroceder también la sacara de
-      // la pila, volver sería imposible.
-      final releases =
-          delta > 0 && leaving != null && _releasesOnAdvance(leaving);
-      if (releases) {
-        _answeredInPlaceRowIds.remove(leaving.id);
-        // La lista se acorta justo en esta posición y la siguiente ocupa el
-        // hueco, así que el índice se queda donde está.
-        _pendingQuestionIndex = index;
-      } else {
-        // **`index + delta`, no `+= delta`.** El índice que llega es el
-        // EFECTIVO —el que la tarjeta está mostrando— y puede venir de
-        // `stagedIndex`, que no tiene por qué coincidir con
-        // `_pendingQuestionIndex`. Sumar sobre el guardado saltaba a una fila
-        // distinta de la que el operador tenía delante.
-        _pendingQuestionIndex = index + delta;
-      }
-      final remaining = releases ? pending.length - 1 : pending.length;
-      _pendingQuestionIndex =
-          remaining <= 0 ? 0 : _pendingQuestionIndex.clamp(0, remaining - 1);
-    });
+  /// Nace plegado y se abre con el caret de la propia fila. Contiene lo que no
+  /// cabe —ni debe competir— en una tabla: el texto íntegro de la cartola, la
+  /// confianza del matcher, por qué calza, a quién vincularla a mano, qué pasa
+  /// con la diferencia y la razón de auditoría.
+  Widget _reviewRowDetail(PayrollDecisionRowData row) {
+    final visual = PayrollVisualTokens.of(context);
+    final answered = _dispositionFor(row) != PayrollRowDisposition.pending;
+    return Container(
+      width: double.infinity,
+      color: visual.surfaceSunken,
+      padding: const EdgeInsets.fromLTRB(reviewRowPadH, 12, reviewRowPadH, 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text('TEXTO COMPLETO EN LA CARTOLA', style: visual.overline),
+          const SizedBox(height: 4),
+          Text(
+            row.bankDescription.isEmpty
+                ? 'Esta obligación no tiene ningún movimiento en la cartola.'
+                : row.bankDescription,
+            style: visual.monoM.copyWith(
+              fontSize: 11.5,
+              color: visual.ink,
+              height: 1.35,
+            ),
+          ),
+          if (!answered && !_isReviewLocked) ...<Widget>[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: PayrollConfidencePill(
+                score: row.confidenceScore,
+                manual: row.manualCertainty,
+              ),
+            ),
+          ],
+          _reviewRow(row),
+        ],
+      ),
+    );
   }
 
-  /// A dense, auditable line inside a collapsed group. It carries the row's own
-  /// key so a test — and a human reading a bug report — can point at exactly
-  /// one movement.
-  Widget _ledgerRowFor(
+  /// Una fila de la tabla de propuestas.
+  ///
+  /// Las dos columnas de dinero son la comparación que la etapa existe para
+  /// resolver: **lo que pagó la cartola** contra **lo que debe la nómina**, con
+  /// la diferencia bajo la segunda. El monto del banco ya no se rellena con el
+  /// esperado cuando falta: una obligación sin movimiento muestra `—` en la
+  /// cartola, que es la verdad de esa fila.
+  Widget _reviewTableRow(
     PayrollDecisionRowData row, {
     required bool isFirst,
-    // The verb names what the tap DOES in this group, which is not the same
-    // thing everywhere: a suggestion is inspected, an automatic verdict is
-    // audited, an answered row is amended. One generic "Ver" would hide that.
-    String reopenLabel = 'Ver',
   }) {
     final visual = PayrollVisualTokens.of(context);
     final disposition = _dispositionFor(row);
     final answered = disposition != PayrollRowDisposition.pending;
-    // La tabla de coincidencias de 5j paso 3 es la composición de Design para
-    // esta etapa: fecha · movimiento · monto · persona y semana · por qué
-    // calza · confianza · decisión. Antes se montaba un ledger denso —una
-    // composición que otro turno improvisó y que funcionaba— mientras
-    // `PayrollReviewTableRow`, que es la de Design, quedaba escrita y sin
-    // instanciar. La regla del dueño es explícita: manda el diseño de Design
-    // aunque lo otro funcione bien.
+    final expanded = _expandedReviewRowIds.contains(row.id);
     return PayrollReviewTableRow(
-      key: ValueKey('payroll-ledger-${row.id}'),
+      key: ValueKey<String>('payroll-ledger-${row.id}'),
       isFirst: isFirst,
       settled: answered,
       date: _ledgerDate(row.date),
       description: row.bankDescription.isEmpty
           ? 'Obligación sin movimiento en la cartola'
           : row.bankDescription,
-      amount: switch (row.bankAmountClp ?? row.expectedAmountClp) {
+      amount: switch (row.bankAmountClp) {
         final amount? => formatPayrollClp(amount),
         null => '—',
       },
+      expectedAmount: switch (row.expectedAmountClp) {
+        final amount? => formatPayrollClp(amount),
+        null => '—',
+      },
+      varianceNote:
+          row.hasVariance ? formatPayrollClpSigned(row.varianceClp!) : null,
       person: row.title.isEmpty ? null : row.title,
-      // 5j paso 3 pide «persona Y semana»: sin la semana y el monto que esa
-      // semana espera, dos filas del mismo trabajador son indistinguibles y
-      // no hay contra qué contrastar el monto de la cartola.
       personDetail: _rowPersonDetail(row),
       initials: _initialsOf(row.title),
       avatarColor: _reconAvatarFor(row.employeeId ?? row.title, visual),
@@ -3561,86 +3834,310 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       // found, in words. Both are the reason — never a bare score.
       stateTag: answered ? _statusLabelFor(disposition) : _rowStateTag(row).$1,
       stateTone: answered ? disposition.toneOf(visual) : _rowStateTag(row).$2,
-      confidence: answered || _isReviewLocked
-          ? const SizedBox.shrink()
-          : PayrollConfidencePill(
-              score: row.confidenceScore,
-              manual: row.manualCertainty,
-            ),
-      decision: _isReviewLocked
-          ? const SizedBox.shrink()
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                // 5j paso 3: la celda de decisión lleva UN verbo y un `⋯`,
-                // no dos botones. La confianza ya vive en su propia columna,
-                // y dos verbos lado a lado no caben en los 150 px que la
-                // tabla le reserva —desbordaba 39 px—. El verbo es el que
-                // mueve el trabajo; el `⋯` abre el camino largo.
-                final batchSafe = !answered && _suggestionIsBatchSafe(row);
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Flexible(
-                      child: PayrollSoftAction(
-                        label: batchSafe ? 'Confirmar' : reopenLabel,
-                        onTap: batchSafe
-                            ? () => _setRowDisposition(
-                                row, PayrollRowDisposition.confirm)
-                            : () => _stageRowAsQuestion(row),
-                        height: 28,
-                      ),
-                    ),
-                    if (batchSafe) ...[
-                      const SizedBox(width: 6),
-                      Tooltip(
-                        message: reopenLabel,
-                        child: Semantics(
-                          button: true,
-                          label: '$reopenLabel esta coincidencia',
-                          child: InkWell(
-                            key: ValueKey('payroll-row-more-${row.id}'),
-                            onTap: () => _stageRowAsQuestion(row),
-                            borderRadius: BorderRadius.circular(
-                              PayrollTokens.rField,
-                            ),
-                            child: Container(
-                              width: 28,
-                              height: 28,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(
-                                  PayrollTokens.rField,
-                                ),
-                                border: Border.all(color: visual.border),
-                              ),
-                              child: Icon(
-                                Icons.more_horiz_rounded,
-                                size: 15,
-                                color: visual.inkMuted,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
+      decision: _rowDecisionSelect(row),
+      expanded: expanded,
+      onToggleExpanded: () => setState(() {
+        if (!_expandedReviewRowIds.remove(row.id)) {
+          _expandedReviewRowIds.add(row.id);
+        }
+      }),
+      expansion: expanded ? _reviewRowDetail(row) : null,
     );
   }
 
-  /// Brings a row up into the leading card instead of expanding it in place:
-  /// the card is the single surface where a decision is made, so evidence never
-  /// appears in two shapes at once.
-  void _stageRowAsQuestion(PayrollDecisionRowData row) {
+  /// Confirma de una vez los calces que no piden criterio: monto exacto, sin
+  /// avisos de lectura y con una única propuesta. Nada que exija juicio entra
+  /// acá — [_suggestionIsBatchSafe] es quien lo decide.
+  void _confirmBatchSafeSuggestions() {
+    final safe =
+        _transferRows.where(_suggestionIsBatchSafe).toList(growable: false);
+    if (safe.isEmpty) return;
     setState(() {
-      _stagedQuestionRowId = row.id;
+      for (final row in safe) {
+        _dispositions[row.id] = PayrollRowDisposition.confirm;
+      }
     });
   }
 
-  Widget _buildTransfersStage() {
+  Widget _buildTransfersStage() => _buildPaymentAssistStage();
+
+  Widget _buildPaymentAssistStage() {
+    final visual = PayrollVisualTokens.of(context);
+    final targets = _paymentTargets;
+    final groups = <String, List<PayrollReconciliationLineResult>>{};
+    for (final target in targets) {
+      groups.putIfAbsent(target.voucherLine.voucherId, () => []).add(target);
+    }
+    final safeTargets = <PayrollReconciliationLineResult>[
+      for (final target in targets)
+        if (target.proposedMatch case final proposal?
+            when proposal.amountVarianceClp == 0 &&
+                proposal.confidence == PayrollMatchConfidence.high &&
+                proposal.statementRow.hasCompleteStructuredEvidence &&
+                _warningCodesFor(proposal.statementRow).isEmpty)
+          target,
+    ];
+    final unselectedSafe = safeTargets.where((target) {
+      final selected =
+          _selectedEvidenceIdsByTargetId[target.voucherLine.lineId] ??
+              const <String>{};
+      return !selected.contains(target.proposedMatch!.statementRow.sourceRowId);
+    }).toList(growable: false);
+
+    return ListView(
+      key: const PageStorageKey<String>('payroll-payment-assist'),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+      children: [
+        Text(
+          'Nóminas abiertas',
+          style: visual.sectionTitle,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'La cartola sólo propone evidencia para precargar pagos. Aquí no '
+          'se confirma ninguna semana ni se registra dinero.',
+          style: visual.bodyS.copyWith(color: visual.inkFaint),
+        ),
+        if (unselectedSafe.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PayrollSoftAction(
+              label: unselectedSafe.length == 1
+                  ? 'Preparar la coincidencia clara'
+                  : 'Preparar ${unselectedSafe.length} coincidencias claras',
+              onTap: () => setState(() {
+                for (final target in unselectedSafe) {
+                  final targetId = target.voucherLine.lineId;
+                  _selectedPaymentTargetIds.add(targetId);
+                  _selectedEvidenceIdsByTargetId
+                      .putIfAbsent(targetId, () => <String>{})
+                      .add(target.proposedMatch!.statementRow.sourceRowId);
+                }
+              }),
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        if (groups.isEmpty)
+          const VbNotice(
+            tone: VbNoticeTone.neutral,
+            title: 'No hay sueldos pendientes en las semanas abiertas',
+          )
+        else
+          for (final entry in groups.entries) ...[
+            _paymentWeekCard(
+              voucherId: entry.key,
+              targets: entry.value,
+            ),
+            const SizedBox(height: 12),
+          ],
+        _otherStatementMovementsCard(),
+      ],
+    );
+  }
+
+  Widget _paymentWeekCard({
+    required String voucherId,
+    required List<PayrollReconciliationLineResult> targets,
+  }) {
+    final visual = PayrollVisualTokens.of(context);
+    final voucher = _draft?.vouchersById[voucherId];
+    final total = targets.fold<int>(
+      0,
+      (sum, target) => sum + target.voucherLine.pendingAmountClp,
+    );
+    final selected = targets
+        .where(
+          (target) =>
+              _selectedPaymentTargetIds.contains(target.voucherLine.lineId),
+        )
+        .length;
+    return Container(
+      key: ValueKey<String>('payroll-assist-week-$voucherId'),
+      decoration: BoxDecoration(
+        color: visual.surface,
+        borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
+        border: Border.all(color: visual.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: visual.surfaceSunken,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        voucher == null
+                            ? 'Semana sin identificar'
+                            : 'Semana ${payrollIsoWeekNumber(voucher.periodStart)} · '
+                                '${formatPayrollWeekRange(voucher.periodStart, voucher.periodEnd)}',
+                        style: visual.labelStrong,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${targets.length} '
+                        '${targets.length == 1 ? 'trabajador' : 'trabajadores'} · '
+                        '${selected == 0 ? 'ninguno preparado' : '$selected preparados'}',
+                        style: visual.bodyS.copyWith(color: visual.inkFaint),
+                      ),
+                    ],
+                  ),
+                ),
+                VbMoneyText(total),
+              ],
+            ),
+          ),
+          const PayrollReviewColumnHeader(),
+          for (var index = 0; index < targets.length; index++)
+            _paymentTargetComparisonRow(
+              targets[index],
+              candidate: _paymentCandidateFor(targets[index]),
+              isFirst: index == 0,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _paymentTargetComparisonRow(
+    PayrollReconciliationLineResult result, {
+    required PayrollReconciliationCandidate? candidate,
+    required bool isFirst,
+  }) {
+    final visual = PayrollVisualTokens.of(context);
+    final targetId = result.voucherLine.lineId;
+    final selectedEvidence =
+        _selectedEvidenceIdsByTargetId[targetId] ?? const <String>{};
+    final employeeName = result.employee?.displayName ??
+        _employeeNameFor(result.voucherLine.employeeId);
+    final statementRow = candidate?.statementRow;
+    final sourceRowId = statementRow?.sourceRowId;
+    final evidenceSelected =
+        sourceRowId != null && selectedEvidence.contains(sourceRowId);
+
+    void toggleSelection() {
+      setState(() {
+        if (sourceRowId == null) return;
+
+        final selectedIds = _selectedEvidenceIdsByTargetId.putIfAbsent(
+          targetId,
+          () => <String>{},
+        );
+        if (!selectedIds.remove(sourceRowId)) {
+          selectedIds.add(sourceRowId);
+          _selectedPaymentTargetIds.add(targetId);
+        } else if (selectedIds.isEmpty) {
+          _selectedEvidenceIdsByTargetId.remove(targetId);
+          _selectedPaymentTargetIds.remove(targetId);
+        }
+      });
+    }
+
+    final variance = candidate?.amountVarianceClp;
+    final stateLabel = candidate == null
+        ? 'SIN MOVIMIENTO'
+        : variance == 0
+            ? 'CALCE EXACTO'
+            : 'MONTO DISTINTO';
+    final stateTone = candidate == null
+        ? visual.neutral
+        : variance == 0
+            ? visual.success
+            : visual.warning;
+    final why = candidate == null
+        ? 'La cartola no propone un movimiento directo para este sueldo.'
+        : candidate.reasons.map(payrollCandidateReasonLabel).join(' · ');
+
+    return PayrollReviewTableRow(
+      key: ValueKey<String>(
+        sourceRowId == null
+            ? 'payroll-assist-target-$targetId'
+            : 'payroll-assist-candidate-$targetId-$sourceRowId',
+      ),
+      isFirst: isFirst,
+      settled: evidenceSelected,
+      date: statementRow?.bookingDate == null
+          ? '—'
+          : _ledgerDate(statementRow!.bookingDate),
+      description: statementRow?.description ??
+          'Sin movimiento directo encontrado en la cartola',
+      amount: switch (statementRow?.outgoingAmountClp) {
+        final amount? => formatPayrollClp(amount),
+        null => '—',
+      },
+      expectedAmount: formatPayrollClp(
+        result.voucherLine.pendingAmountClp,
+      ),
+      varianceNote: variance == null || variance == 0
+          ? null
+          : formatPayrollClpSigned(variance),
+      person: employeeName,
+      personDetail: _periodLabelFor(result.voucherLine.voucherId),
+      initials: _initialsOf(employeeName),
+      avatarColor: _reconAvatarFor(result.voucherLine.employeeId, visual),
+      why: why.isEmpty ? 'Candidato encontrado por la cartola.' : why,
+      stateTag: stateLabel,
+      stateTone: stateTone,
+      decision: PayrollSoftAction(
+        label: candidate == null
+            ? 'Se completa en pagos'
+            : evidenceSelected
+                ? 'Incluido'
+                : 'Usar en pago',
+        onTap: _isReviewLocked || candidate == null ? null : toggleSelection,
+      ),
+    );
+  }
+
+  Widget _otherStatementMovementsCard() {
+    final visual = PayrollVisualTokens.of(context);
+    final rows = _otherOutgoingRows;
+    return Container(
+      key: const ValueKey<String>('payroll-assist-other-movements'),
+      decoration: BoxDecoration(
+        color: visual.surface,
+        borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
+        border: Border.all(color: visual.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: const PageStorageKey<String>(
+          'payroll-assist-other-movements-tile',
+        ),
+        title: Text('Otros egresos de la cartola', style: visual.labelStrong),
+        subtitle: Text(
+          rows.isEmpty
+              ? 'No hay otros egresos sin candidato directo'
+              : '${rows.length} movimientos · no bloquean continuar',
+          style: visual.bodyS.copyWith(color: visual.inkFaint),
+        ),
+        children: [
+          for (final row in rows)
+            PayrollStatementLedgerRow(
+              date: row.bookingDate == null
+                  ? '—'
+                  : _civilDateLabel(row.bookingDate!),
+              description: row.description,
+              amount: formatPayrollClp(row.outgoingAmountClp ?? 0),
+              statusLabel: 'SIN VÍNCULO DIRECTO',
+              statusTone: visual.neutral,
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Kept only while old imported receipts remain reopenable; it is not part of
+  // the new statement-to-workspace route.
+  // ignore: unused_element
+  Widget _buildLegacyTransfersStage() {
     final visual = PayrollVisualTokens.of(context);
     final rows = _transferRows;
     final missingMethods = [
@@ -3649,52 +4146,40 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
               const <String>{})
         (id: employeeId, name: _employeeNameFor(employeeId)),
     ]..sort((left, right) => left.name.compareTo(right.name));
-    // Static grouping by origin, so a row never jumps between groups while
-    // the operator answers it. The pending-decision card leads the step;
-    // suggestions are batchable evidence; clearly unrelated movements stay
-    // collapsed, auditable and reversible.
-    final automaticallyClassifiedRows = rows
-        .where((row) => row.isAutomaticallyClassified)
-        .toList(growable: false);
+
+    final touchedVoucherIds = _touchedVoucherIdsFrom(rows);
+
+    // **Arriba lo que te frena, después lo informativo.** El orden no depende
+    // de lo que ya contestaste —una fila que salta de sitio al responderla hace
+    // perder el lugar en una tabla larga—, pero sí de si la fila bloquea:
+    // confirmar un pago de una semana pone sus otras obligaciones en juego, y
+    // ahí suben.
+    int rank(PayrollDecisionRowData row) {
+      if (row.isAutomaticallyClassified) return 2;
+      return _requiresAnswer(row, touchedVoucherIds) ? 0 : 1;
+    }
+
+    // Partición, no `sort`: `List.sort` no garantiza estabilidad, y acá el
+    // orden dentro de cada grupo es el de la cartola.
+    final ordered = <PayrollDecisionRowData>[
+      for (var bucket = 0; bucket <= 2; bucket++)
+        ...rows.where((row) => rank(row) == bucket),
+    ];
+
     final pendingCount = rows
         .where((row) =>
-            row.requiresDisposition &&
+            _requiresAnswer(row, touchedVoucherIds) &&
             _dispositionFor(row) == PayrollRowDisposition.pending)
         .length;
     final readyCount = rows
         .where((row) =>
-            row.requiresDisposition &&
+            _requiresAnswer(row, touchedVoucherIds) &&
             _dispositionFor(row) != PayrollRowDisposition.pending)
         .length;
-    final automaticCount = automaticallyClassifiedRows.length;
-    // Las tres pilas de la 2c. Una fila pertenece a exactamente una: la
-    // pregunta abierta, el calce que se puede aprobar en lote, o la evidencia
-    // ya resuelta/clasificada.
-    final pendingRows = rows
-        .where((row) =>
-            !row.isAutomaticallyClassified &&
-            row.requiresDisposition &&
-            (_dispositionFor(row) == PayrollRowDisposition.pending ||
-                _answeredInPlaceRowIds.contains(row.id)) &&
-            !_suggestionIsBatchSafe(row))
-        .toList(growable: false);
-    final suggestedRows = rows
-        .where((row) =>
-            !row.isAutomaticallyClassified &&
-            row.requiresDisposition &&
-            _dispositionFor(row) == PayrollRowDisposition.pending &&
-            _suggestionIsBatchSafe(row))
-        .toList(growable: false);
-    final resolvedRows = rows
-        .where((row) =>
-            !row.isAutomaticallyClassified &&
-            !_answeredInPlaceRowIds.contains(row.id) &&
-            (!row.requiresDisposition ||
-                _dispositionFor(row) != PayrollRowDisposition.pending))
-        .toList(growable: false);
-    // Orden estable: primero lo que exige criterio, luego lo resuelto y al
-    // final la evidencia clasificada. Una fila nunca salta de lugar por
-    // responderla: se recalcula sólo al recomponer la etapa.
+    final automaticCount =
+        rows.where((row) => row.isAutomaticallyClassified).length;
+    final batchSafeCount = rows.where(_suggestionIsBatchSafe).length;
+
     return ListView(
       key: const PageStorageKey<String>('payroll-reconciliation-transfers'),
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
@@ -3759,15 +4244,9 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         if (rows.isEmpty)
           const _Notice(message: 'La cartola no trae movimientos revisables.')
         else ...[
-          // Composición 2c: UNA pregunta lidera la etapa. La tabla completa
-          // ponía las 40 filas al mismo nivel, así que el operador tenía que
-          // encontrar el trabajo real entre la evidencia. Acá la carga humana
-          // va arriba, de a una, y lo demás nace plegado —visible y reabrible,
-          // nunca oculto.
           // Three long bucket labels in one row need ~450 px; a phone gives
-          // 354. Below that the strip is dropped rather than squeezed: each
-          // section already carries its own count, so nothing is lost, and
-          // 5l asks for one decision per screen instead of a summary band.
+          // 354. Below that the strip is dropped rather than squeezed: la
+          // tabla ya dice el estado fila por fila.
           LayoutBuilder(
             builder: (context, constraints) {
               if (constraints.maxWidth < 600) return const SizedBox.shrink();
@@ -3785,80 +4264,50 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
               );
             },
           ),
-          _buildPendingQuestion(pendingRows),
-          // The card leads with one question, but the remaining open ones are
-          // NOT hidden behind it: mandatory work is never born collapsed, and
-          // an operator scanning for "what is still stopping me" must see all
-          // of it without clicking. Evidence and answered rows are what
-          // collapse, further down.
-          for (var i = 0; i < pendingRows.length; i++)
-            if (!_isLeadingQuestion(pendingRows, i))
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: _reviewRow(pendingRows[i], isFirst: true),
+          if (batchSafeCount > 0 && !_isReviewLocked) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: PayrollSoftAction(
+                key: const ValueKey<String>('payroll-confirm-exact-matches'),
+                label: batchSafeCount == 1
+                    ? 'Confirmar el calce exacto'
+                    : 'Confirmar los $batchSafeCount calces exactos',
+                onTap: _confirmBatchSafeSuggestions,
               ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          // **UNA tabla, como la lectura del paso 2.** Toda fila revisable vive
+          // acá con su decisión a la vista: nada obligatorio nace plegado, y lo
+          // único que se despliega es la evidencia de la fila que se quiera
+          // mirar de cerca.
+          Container(
+            decoration: BoxDecoration(
+              color: visual.surface,
+              borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
+              border: Border.all(color: visual.border),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const PayrollReviewColumnHeader(),
+                for (var index = 0; index < ordered.length; index++)
+                  _reviewTableRow(ordered[index], isFirst: index == 0),
+              ],
+            ),
+          ),
           const SizedBox(height: 12),
-          if (suggestedRows.isNotEmpty) ...[
-            PayrollReviewSection(
-              key: const ValueKey('review-group-suggested'),
-              dotColor: visual.success.fg,
-              title: 'Calces sugeridos',
-              subtitle: '${suggestedRows.length} sin diferencias',
-              open: _openReviewGroups.contains('suggested'),
-              onToggle: () => _toggleReviewGroup('suggested'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // `7c` encabeza la tabla con sus rótulos de columna. Va sobre
-                  // el grupo de calces, que es el que la tabla dibuja.
-                  const PayrollReviewColumnHeader(),
-                  for (var i = 0; i < suggestedRows.length; i++)
-                    _ledgerRowFor(suggestedRows[i], isFirst: i == 0),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-          if (automaticallyClassifiedRows.isNotEmpty) ...[
-            PayrollReviewSection(
-              key: const ValueKey('review-group-automatic'),
-              dotColor: visual.neutral.fg,
-              title: 'Fuera del lote de nómina',
-              subtitle: '${automaticallyClassifiedRows.length} '
-                  'clasificados solos',
-              open: _openReviewGroups.contains('automatic'),
-              onToggle: () => _toggleReviewGroup('automatic'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var i = 0; i < automaticallyClassifiedRows.length; i++)
-                    _ledgerRowFor(automaticallyClassifiedRows[i],
-                        isFirst: i == 0, reopenLabel: 'Revisar'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-          if (resolvedRows.isNotEmpty) ...[
-            PayrollReviewSection(
-              key: const ValueKey('review-group-resolved'),
-              dotColor: visual.success.fg,
-              title: 'Ya respondidos',
-              subtitle: '${resolvedRows.length} ya respondidos',
-              open: _openReviewGroups.contains('resolved'),
-              onToggle: () => _toggleReviewGroup('resolved'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var i = 0; i < resolvedRows.length; i++)
-                    _ledgerRowFor(resolvedRows[i],
-                        isFirst: i == 0, reopenLabel: 'Cambiar'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-          const SizedBox(height: 2),
+          const _DecisionLegend(
+            options: <PayrollRowDisposition>[
+              PayrollRowDisposition.confirm,
+              PayrollRowDisposition.hold,
+              PayrollRowDisposition.notPayroll,
+              PayrollRowDisposition.ignore,
+              PayrollRowDisposition.notPaid,
+            ],
+          ),
+          const SizedBox(height: 10),
           // Las tres lecturas que el operador necesita para confiar en la
           // tabla: por qué Vicente sigue abierto, qué significa corregir a
           // mano y qué pasó con lo que no calza con nadie.
@@ -3875,7 +4324,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                 _ReviewNote(
                   tone: visual.info,
                   title: 'Corregir a mano cambia quién responde',
-                  body: 'Persona, semana y monto se editan en la misma fila. '
+                  body: 'Persona, semana y monto se editan abriendo la fila. '
                       'Al corregir, la confianza pasa a MANUAL 100%: la '
                       'responsabilidad es de quien decidió, no del algoritmo.',
                 ),
@@ -3885,6 +4334,14 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                   body: 'Lo que no coincide con ninguna persona se clasifica '
                       'fuera de nómina y queda visible acá mismo. Puedes '
                       'reabrirlo cuando quieras; nada se borra.',
+                ),
+                _ReviewNote(
+                  tone: visual.success,
+                  title: 'Una semana ajena a esta cartola no te frena',
+                  body: 'Sólo te detienen los movimientos del banco y las '
+                      'semanas que esta cartola va a confirmar. Una semana que '
+                      'no aparece acá se queda como está: la pagas desde el '
+                      'terminal de nómina, con su método y su fecha.',
                 ),
               ];
               if (constraints.maxWidth < ResponsiveBreakpoints.desktopMin) {
@@ -4256,9 +4713,8 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         : _warningCodesFor(row).isNotEmpty
             ? 1
             : 2;
-    // `needsReview`, no `needsReading`: el conjunto incluye
-    // `out_of_statement_range`, que pide **revisión** —la fecha cae tras el
-    // cierre declarado— y no releer el OCR. El rótulo tiene que decir lo mismo.
+    // `needsReview`, no `needsReading`: el conjunto incluye cualquier aviso
+    // real del parser, además de filas con evidencia incompleta.
     final needsReview = rows.where((row) => rank(row) < 2).length;
     final dates = rows
         .map((row) => row.bookingDate)
@@ -4278,39 +4734,12 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         .where((voucher) => voucher.id != null)
         .toList()
       ..sort((a, b) => a.periodStart.compareTo(b.periodStart));
-    final openPayrollLabels = <String>[
-      for (final voucher in openPayrollVouchers) _periodLabelFor(voucher.id!),
-    ];
-    final ordered = [...rows]..sort((a, b) => rank(a).compareTo(rank(b)));
-    // **Qué se ve, y por qué.** La versión anterior mostraba «las que piden
-    // atención, o todas si no hay ninguna», y eso **escondía todos los abonos
-    // en cuanto aparecía una sola fila incompleta** — justo mientras la nota de
-    // abajo prometía que los abonos quedan acá. Contradicción funcional.
-    //
-    // Obligatorias, siempre: (a) las que piden atención y (b) **todos los
-    // abonos**, porque de ellos se afirma explícitamente que se muestran uno a
-    // uno. Después se completa con egresos limpios, en orden, hasta las
-    // **cuatro filas** que `frames[5j]` publica en su copy —el único número de
-    // filas visibles con fuente en Design—. Si las obligatorias ya pasan de
-    // cuatro, se muestran todas.
-    const publishedPreviewRows = 4;
-    final mandatory = ordered
-        .where(
-          (row) =>
-              rank(row) < 2 ||
-              row.direction == PayrollStatementMovementDirection.incoming,
-        )
-        .toList();
-    final fillers = ordered.where((row) => !mandatory.contains(row));
-    final visible = <PayrollStatementRow>[
-      ...mandatory,
-      ...fillers.take(
-        (publishedPreviewRows - mandatory.length).clamp(0, rows.length),
-      ),
-    ];
-    // Lo resumido sólo puede ser egreso limpio: es lo único de lo que el pie
-    // puede afirmar algo sin mentir.
-    final hidden = rows.length - visible.length;
+    // Lectura no es una muestra: muestra cada movimiento detectado en el orden
+    // del documento. La versión anterior priorizaba avisos y abonos y luego
+    // completaba un cupo de cuatro; al dejar de considerar una fecha normal
+    // como aviso, la primera transferencia desaparecía dentro de un resumen.
+    // Cambiar la clasificación de una fila nunca puede ocultarla ni moverla.
+    final visible = rows;
 
     // El estado lo pinta `PayrollStatementLedgerRow` con su propio
     // `statusLabel`/`statusTone`: duplicarlo acá con un `Container` de
@@ -4328,10 +4757,6 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
         label = 'CAMPOS INCOMPLETOS';
       } else if (rank(row) == 1) {
         tone = visual.warning;
-        // **No dice `LECTURA DUDOSA`.** Uno de los avisos posibles es
-        // `out_of_statement_range` —la fecha cae después del cierre declarado—,
-        // que no tiene nada que ver con la calidad de la lectura. Llamarlo
-        // lectura dudosa era falso para esa fila.
         label = 'REVISAR';
       } else {
         tone = visual.success;
@@ -4348,28 +4773,16 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       return (label: label, tone: tone);
     }
 
-    Widget factRow(String label, String value, {PayrollStateTone? tone}) {
+    Widget summaryRow(String label, String value, {PayrollStateTone? tone}) {
       return Container(
+        color: tone?.soft,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: tone?.soft ?? visual.surface,
-          borderRadius: BorderRadius.circular(PayrollTokens.rField),
-          border: Border.all(color: tone?.border ?? visual.border),
-        ),
-        // El valor **envuelve**: con cinco nóminas abiertas —un taller con
-        // semanas acumuladas, que es el caso normal— este `Row` desbordaba
-        // **404 px** a la derecha. El `Text` del valor no tenía ni `Flexible`
-        // ni `softWrap`, así que crecía sin límite dentro de un panel de 320.
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Text(
                 label,
-                style: visual.bodyS.copyWith(
-                  fontSize: 10.5,
-                  color: tone?.fg ?? visual.inkMuted,
-                ),
+                style: visual.label.copyWith(color: tone?.fg),
               ),
             ),
             const SizedBox(width: PayrollTokens.gapCards),
@@ -4377,9 +4790,7 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
               child: Text(
                 value,
                 textAlign: TextAlign.right,
-                softWrap: true,
                 style: visual.monoM.copyWith(
-                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: tone?.fg ?? visual.ink,
                 ),
@@ -4390,7 +4801,83 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       );
     }
 
+    Widget openPayrollFact() {
+      return Container(
+        key: const ValueKey<String>('payroll-open-vouchers-list'),
+        decoration: BoxDecoration(
+          color: visual.surface,
+          borderRadius: BorderRadius.circular(PayrollTokens.rField),
+          border: Border.all(color: visual.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              color: visual.surfaceSunken,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              child: Semantics(
+                label:
+                    '${openPayrollVouchers.length} nóminas abiertas a comparar',
+                excludeSemantics: true,
+                child: Text(
+                  'NÓMINAS ABIERTAS · ${openPayrollVouchers.length}',
+                  style: visual.overline,
+                ),
+              ),
+            ),
+            Divider(height: 1, color: visual.border),
+            if (openPayrollVouchers.isEmpty)
+              summaryRow('Sin nóminas abiertas', '—')
+            else
+              for (var index = 0; index < openPayrollVouchers.length; index++)
+                Container(
+                  key: ValueKey<String>(
+                    'payroll-open-voucher-${openPayrollVouchers[index].id}',
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: index < openPayrollVouchers.length - 1
+                      ? BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: visual.border),
+                          ),
+                        )
+                      : null,
+                  child: Semantics(
+                    label: 'Semana '
+                        '${payrollIsoWeekNumber(openPayrollVouchers[index].periodStart)}, '
+                        '${formatPayrollWeekRange(openPayrollVouchers[index].periodStart, openPayrollVouchers[index].periodEnd)}',
+                    excludeSemantics: true,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Semana '
+                            '${payrollIsoWeekNumber(openPayrollVouchers[index].periodStart)}',
+                            style: visual.labelStrong,
+                          ),
+                        ),
+                        const SizedBox(width: PayrollTokens.gapCards),
+                        Text(
+                          formatPayrollWeekRange(
+                            openPayrollVouchers[index].periodStart,
+                            openPayrollVouchers[index].periodEnd,
+                          ),
+                          textAlign: TextAlign.right,
+                          style: visual.monoM.copyWith(color: visual.ink),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+          ],
+        ),
+      );
+    }
+
     final table = Container(
+      key: const ValueKey<String>('payroll-extract-ledger'),
       decoration: BoxDecoration(
         color: visual.surface,
         borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
@@ -4435,24 +4922,46 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
               statusLabel: readingStatus(visible[index]).label,
               statusTone: readingStatus(visible[index]).tone,
             ),
-          if (hidden > 0)
-            Container(
-              padding: const EdgeInsets.fromLTRB(17, 9, 17, 11),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: visual.border)),
-              ),
-              child: Text(
-                // Sólo se resumen egresos limpios, y el pie no promete que
-                // «todos quedan en la revisión»: no todos los movimientos
-                // alimentan `_buildTransferRows`.
-                '… $hidden ${hidden == 1 ? 'egreso más' : 'egresos más'} '
-                'con todos sus campos reconocidos y sin avisos.',
-                style: visual.bodyS.copyWith(
-                  fontSize: 10.5,
-                  color: visual.inkFaint,
-                ),
-              ),
+        ],
+      ),
+    );
+
+    final statementRange = dates.isEmpty
+        ? '—'
+        : dates.first.compareTo(dates.last) == 0
+            ? _ledgerDate(dates.first)
+            : '${_ledgerDate(dates.first)} – ${_ledgerDate(dates.last)}';
+
+    final statementSummary = Container(
+      key: const ValueKey<String>('payroll-statement-summary'),
+      decoration: BoxDecoration(
+        color: visual.surface,
+        borderRadius: BorderRadius.circular(PayrollTokens.rField),
+        border: Border.all(color: visual.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: visual.surfaceSunken,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            child: Text('RESUMEN DE LA CARTOLA', style: visual.overline),
+          ),
+          Divider(height: 1, color: visual.border),
+          summaryRow('Rango', statementRange),
+          Divider(height: 1, color: visual.border),
+          summaryRow('Movimientos', '${rows.length}'),
+          Divider(height: 1, color: visual.border),
+          summaryRow('Egresos', '$outgoing'),
+          if (needsReview > 0) ...[
+            Divider(height: 1, color: visual.warning.border),
+            summaryRow(
+              'Por revisar',
+              '$needsReview ${needsReview == 1 ? 'línea' : 'líneas'}',
+              tone: visual.warning,
             ),
+          ],
         ],
       ),
     );
@@ -4460,53 +4969,13 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
     final facts = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('LO QUE LA EXTRACCIÓN AFIRMA', style: visual.overline),
-        const SizedBox(height: 9),
-        factRow(
-          'Rango de fechas',
-          dates.isEmpty
-              ? '—'
-              : '${_ledgerDate(dates.first)} – ${_ledgerDate(dates.last)}',
-        ),
-        const SizedBox(height: 7),
-        factRow(
-          'Nóminas abiertas que se compararán',
-          openPayrollLabels.isEmpty ? '—' : openPayrollLabels.join(' · '),
-        ),
-        const SizedBox(height: 7),
-        // `detectados`, no `leídos`: es un conteo de filas clasificadas como
-        // egreso, no una medida de cobertura de lectura.
-        factRow('Egresos detectados', '$outgoing de ${rows.length}'),
-        if (needsReview > 0) ...[
-          const SizedBox(height: 7),
-          factRow(
-            'Requieren revisión',
-            '$needsReview ${needsReview == 1 ? 'línea' : 'líneas'}',
-            tone: visual.warning,
-          ),
-        ],
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(
-            color: visual.accentSoft,
-            borderRadius: BorderRadius.circular(PayrollTokens.rField),
-            border: Border.all(color: visual.accentBorder),
-          ),
-          child: Text(
-            // **«Otros movimientos» no existe en este flujo.** `_buildTransferRows`
-            // arma la revisión con los egresos sin calzar y las filas de campos
-            // incompletos; un abono completo no entra ahí. Prometer una sección
-            // que no se construye es inventar el consumidor.
-            'Los abonos no pasan a las coincidencias: un sueldo siempre es '
-            'egreso. Se muestran uno a uno en esta lectura para que nadie '
-            'sospeche que se perdió algo.',
-            style: visual.bodyS.copyWith(
-              fontSize: 10.5,
-              height: 1.45,
-              color: visual.accent,
-            ),
-          ),
+        statementSummary,
+        const SizedBox(height: PayrollTokens.gapCards),
+        openPayrollFact(),
+        const SizedBox(height: PayrollTokens.gapCards),
+        const VbNotice(
+          title: 'Sólo los egresos se comparan con nóminas',
+          body: 'Los abonos siguen visibles en la cartola.',
         ),
       ],
     );
@@ -4687,6 +5156,43 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
       );
     }
 
+    if (_stage == PayrollReconciliationStage.review) {
+      final paymentCount = _paymentTargets.length;
+      final preparedCount = _selectedPaymentTargetIds.length;
+      return PayrollMoneyBar(
+        figures: [
+          PayrollMoneyFigure(
+            label: 'Sueldos a pagar',
+            amount: _selectedPayrollBalanceClp,
+            emphasis: true,
+            isPrimary: true,
+          ),
+          PayrollMoneyFigure(
+            label: 'Cartola seleccionada',
+            amount: _selectedStatementAmountClp,
+          ),
+        ],
+        primaryAction: PayrollPrimaryAction(
+          label: 'Continuar con $paymentCount '
+              '${paymentCount == 1 ? 'pago' : 'pagos'}',
+          icon: Icons.arrow_forward_rounded,
+          busy: _isBusy,
+          onPressed:
+              paymentCount == 0 || _isBusy ? null : _continueToPaymentWorkspace,
+        ),
+        secondaryAction: PayrollSecondaryAction(
+          label: 'Cancelar',
+          icon: Icons.close_rounded,
+          onPressed: _isBusy ? null : _requestClose,
+        ),
+        note: preparedCount == 0
+            ? 'Todos los sueldos abiertos pasan al panel. La cartola no '
+                'encontró ningún calce directo para precargar.'
+            : '$preparedCount ${preparedCount == 1 ? 'calce directo pasa' : 'calces directos pasan'} '
+                'precargados; los demás trabajadores también quedan visibles.',
+      );
+    }
+
     final draft = _draft;
     final blockers = _blockers;
     final decisions = draft == null
@@ -4735,18 +5241,15 @@ class _PayrollReconciliationPageState extends State<PayrollReconciliationPage> {
                     : () => _enterStage(PayrollReconciliationStage.extract),
           ),
         PayrollReconciliationStage.extract => PayrollPrimaryAction(
-            label: 'Ver propuestas de pago',
+            label: 'Ver pagos encontrados',
             onPressed:
                 _isBusy || !_canEnterStage(PayrollReconciliationStage.review)
                     ? null
                     : () => _enterStage(PayrollReconciliationStage.review),
           ),
-        PayrollReconciliationStage.review => PayrollPrimaryAction(
-            label: 'Ir a aplicar',
-            onPressed:
-                _isBusy || !_canEnterStage(PayrollReconciliationStage.apply)
-                    ? null
-                    : () => _enterStage(PayrollReconciliationStage.apply),
+        PayrollReconciliationStage.review => const PayrollPrimaryAction(
+            label: 'Continuar al panel de pago',
+            onPressed: null,
           ),
         PayrollReconciliationStage.apply => PayrollPrimaryAction(
             label: draftVouchersToCommit.isEmpty
@@ -5470,9 +5973,80 @@ class _CashPersonTile extends StatelessWidget {
   }
 }
 
-/// Collapsible review group of stage 2 with an answered/total counter. The
-/// grouping is presentation only: every row keeps its own individual
-/// decision, and named obligations never receive a mass action.
+/// Qué hace cada respuesta del selector de la fila, **publicado una sola vez**.
+///
+/// Antes esta misma información era una tarjeta por opción **dentro de cada
+/// fila abierta**: con veinte decisiones, el mismo párrafo aparecía veinte
+/// veces y enterraba la tabla. El texto no se perdió —es el que hace honesta la
+/// decisión—, cambió de sitio: se lee una vez, al pie, y la fila queda con su
+/// selector.
+class _DecisionLegend extends StatelessWidget {
+  const _DecisionLegend({required this.options});
+
+  final List<PayrollRowDisposition> options;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: visual.surface,
+        borderRadius: BorderRadius.circular(PayrollTokens.rField),
+        border: Border.all(color: visual.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text('QUÉ HACE CADA RESPUESTA', style: visual.overline),
+          const SizedBox(height: 8),
+          for (final option in options)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: <Widget>[
+                  Text(
+                    option.label,
+                    style: visual.labelStrong.copyWith(fontSize: 11),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: option.toneOf(visual).soft,
+                      borderRadius: BorderRadius.circular(PayrollTokens.rTag),
+                      border: Border.all(color: option.toneOf(visual).border),
+                    ),
+                    child: Text(
+                      option.consequenceTag,
+                      style: visual.monoS.copyWith(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        color: option.toneOf(visual).fg,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    option.describe(PayrollDecisionRowKind.suggested),
+                    style: visual.bodyS.copyWith(
+                      fontSize: 10.5,
+                      height: 1.45,
+                      color: visual.inkMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Nota de lectura bajo la tabla de revisión (Design t5 · 5j paso 3): explica
 /// el criterio, no repite la fila.
 class _ReviewNote extends StatelessWidget {

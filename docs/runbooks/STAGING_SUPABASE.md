@@ -80,6 +80,13 @@ live rows or every provider-managed behavior. Never describe it as fully
 representative; pair it with live read-only evidence and post-deployment
 verification.
 
+The production-derived capture includes the `public` schema plus the
+dependency-only `private` schema, both schema-only. Supabase-managed `auth` or
+`storage` policies can reference helper functions in `private`; restoring those
+policies before their helpers produces a false compatibility failure. The
+capture guard rejects table/blob data, so adding this dependency schema does
+not copy production rows.
+
 ## Reuse of a production-derived snapshot
 
 “Fresh” means that the snapshot has known provenance and still matches the

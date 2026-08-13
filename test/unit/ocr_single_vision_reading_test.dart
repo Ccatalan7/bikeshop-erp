@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -7,6 +6,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/ai_assistant/services/ai_service.dart';
 import 'package:vinabike_erp/modules/inventory/services/product_identity/product_visual_reading.dart';
 import 'package:vinabike_erp/shared/services/gemini_proxy_service.dart';
+
+const _visionLeaves = <AIProductCategoryLeaf>[
+  AIProductCategoryLeaf(
+    id: 'leaf-rim-brake-arms',
+    path: 'Componentes / Frenos / Herraduras',
+  ),
+];
 
 /// One image, one model call.
 ///
@@ -22,7 +28,8 @@ void main() {
     final proxy = _VisionAwareProxy();
     final service = AIAssistantService(geminiProxy: proxy);
 
-    final result = await service.cleanProductTitleFromImage(
+    final result = await _readStrict(
+      service,
       rawTitle: 'HERRADURA FRENO V-BRAKE ALUMINIO HJ-612AD7',
       imageBytes: Uint8List.fromList(List<int>.generate(64, (i) => i)),
     );
@@ -35,18 +42,20 @@ void main() {
     service.dispose();
   });
 
-  test('sin foto no se acepta una lectura visual inventada', () async {
+  test('sin foto la investigación primaria falla antes de llamar al modelo',
+      () async {
     // With no picture the model can only be paraphrasing the title, and the
     // whole value of this evidence is that it is independent of the words.
     final proxy = _VisionAwareProxy();
     final service = AIAssistantService(geminiProxy: proxy);
 
-    final result = await service.cleanProductTitleFromImage(
+    final result = await _readStrict(
+      service,
       rawTitle: 'HERRADURA FRENO V-BRAKE ALUMINIO',
     );
 
-    expect(proxy.calls, 1);
-    expect(result?.visualAnalysis, isNull);
+    expect(proxy.calls, 0);
+    expect(result, isNull);
     service.dispose();
   });
 
@@ -54,7 +63,8 @@ void main() {
     final proxy = _VisionAwareProxy(visionConfidence: 0);
     final service = AIAssistantService(geminiProxy: proxy);
 
-    final result = await service.cleanProductTitleFromImage(
+    final result = await _readStrict(
+      service,
       rawTitle: 'Producto borroso',
       imageBytes: Uint8List.fromList(List<int>.generate(64, (i) => i)),
     );
@@ -141,6 +151,21 @@ void main() {
   });
 }
 
+Future<AICleanedProductName?> _readStrict(
+  AIAssistantService service, {
+  required String rawTitle,
+  Uint8List? imageBytes,
+}) =>
+    service.cleanProductTitleFromImage(
+      rawTitle: rawTitle,
+      imageBytes: imageBytes,
+      rowRevision: '1',
+      categoryTreeKey: 'tree-vision-test',
+      catalogKey: 'catalog-vision-test',
+      activeLeafCategories: _visionLeaves,
+      requireLeafAuthority: true,
+    );
+
 class _VisionAwareProxy extends GeminiProxyService {
   _VisionAwareProxy({this.visionConfidence = 0.88})
       : super(
@@ -164,15 +189,63 @@ class _VisionAwareProxy extends GeminiProxyService {
     calls++;
     return GeminiProxyGenerateResult(
       text: jsonEncode({
+        'schema_version': AIAssistantService.productIdentitySchemaVersion,
+        'prompt_version': AIAssistantService.productIdentityPromptKey,
+        'model_id': model,
         'cleaned_name': 'Herradura V-Brake Aluminio',
-        'component_type': 'herradura',
-        'category_name': 'Herraduras',
-        'confidence': 0.9,
+        'identity': {
+          'object': {
+            'label': 'herradura v-brake',
+            'confidence': 0.9,
+          },
+          'manufacturer': {
+            'value': null,
+            'asserted': false,
+            'evidence': 'none',
+          },
+          'models': <Map<String, Object?>>[],
+          'specs': <Map<String, Object?>>[
+            {
+              'key': 'sistema',
+              'value': 'V-Brake',
+              'unit': null,
+              'source': 'name',
+              'exclusive': true,
+            },
+          ],
+          'fitment': <String>[],
+          'composition': {
+            'kind': 'single',
+            'components': <Map<String, Object?>>[
+              {
+                'label': 'herradura v-brake',
+                'role': 'primary',
+                'qty': 1,
+              },
+            ],
+          },
+          'packaging': {
+            'count': 1,
+            'unit_token': 'pieza',
+            'source': 'name',
+          },
+          'leaf_proposals': <Map<String, Object?>>[
+            {
+              'category_id': 'L001',
+              'confidence': 0.9,
+              'basis': <String>['object', 'image'],
+            },
+          ],
+          'evidence_used': <String>['photo', 'original_supplier_title'],
+          'abstain_reason': null,
+          'reason': 'La forma muestra una herradura V-Brake.',
+        },
         'vision': {
           'primary_type': 'herradura v-brake',
           'catalog_terms': ['herradura', 'v-brake', 'aluminio'],
           'excluded_terms': ['rotor', 'pastilla'],
           'confidence': visionConfidence,
+          'visual_summary': 'Herradura de aluminio para freno V-Brake.',
         },
       }),
       functionCalls: const [],

@@ -7,147 +7,102 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const allowedGenerateModels = new Set([
-  "gemini-2.5-flash-lite",
-  "gemini-2.5-flash",
-]);
+const allowedGenerateModels = new Set(["gemini-2.5-flash-lite", "gemini-2.5-flash"]);
+const allowedEmbeddingModels = new Set(["gemini-embedding-001"]);
 
-const allowedEmbeddingModels = new Set([
-  "gemini-embedding-001",
-]);
-
-class GeminiApiError extends Error {
-  readonly status: number;
-  readonly upstreamStatusText?: string;
-  readonly upstreamCode?: number;
-  readonly upstreamDetails?: Record<string, unknown>;
-
+class ProxyError extends Error {
   constructor(
-    status: number,
-    message: string,
-    options: {
-      upstreamStatusText?: string;
-      upstreamCode?: number;
-      upstreamDetails?: Record<string, unknown>;
-    } = {},
+    readonly status: number,
+    readonly code: string,
+    readonly publicMessage: string,
+    readonly metadata: Record<string, unknown> = {},
   ) {
-    super(message);
-    this.name = "GeminiApiError";
-    this.status = status;
-    this.upstreamStatusText = options.upstreamStatusText;
-    this.upstreamCode = options.upstreamCode;
-    this.upstreamDetails = options.upstreamDetails;
+    super(publicMessage);
+    this.name = "ProxyError";
   }
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
+    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
 
+function errorResponse(
+  status: number,
+  code: string,
+  message: string,
+  metadata: Record<string, unknown> = {},
+): Response {
+  return jsonResponse({ error: message, code, ...metadata }, status);
+}
+
 function requireEnv(name: string): string {
-  const value = Deno.env.get(name) ?? "";
-  if (!value) {
-    throw new Error(`${name} not configured`);
-  }
+  const value = Deno.env.get(name)?.trim();
+  if (!value) throw new ProxyError(500, "proxy_not_configured", "AI service is unavailable");
   return value;
 }
 
-function objectValue(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null
-    ? value as Record<string, unknown>
-    : undefined;
-}
-
-async function requireAuthenticatedUser(req: Request) {
-  const authorization = req.headers.get("Authorization");
+async function requireAuthenticatedUser(request: Request): Promise<void> {
+  const authorization = request.headers.get("Authorization");
   if (!authorization) {
-    throw new Error("Missing authentication");
+    throw new ProxyError(401, "invalid_session", "Authentication required");
   }
-
   const authClient = createClient(
     requireEnv("SUPABASE_URL"),
     requireEnv("SUPABASE_ANON_KEY"),
-    {
-      global: {
-        headers: { Authorization: authorization },
-      },
-    },
+    { global: { headers: { Authorization: authorization } } },
   );
-
   const { data, error } = await authClient.auth.getUser();
   if (error || !data.user) {
-    throw new Error("Missing authentication");
+    throw new ProxyError(401, "invalid_session", "Authentication required");
   }
-
-  return data.user;
 }
 
 async function callGemini(path: string, payload: Record<string, unknown>) {
-  const apiKey = requireEnv("GEMINI_API_KEY");
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/${path}?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/${path}?key=${requireEnv("GEMINI_API_KEY")}`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     },
   );
-
-  const rawText = await response.text();
-  let parsed: Record<string, unknown> = { raw: rawText };
-  try {
-    parsed = JSON.parse(rawText);
-  } catch (_) {
-    // Keep raw wrapper for non-JSON responses.
-  }
-
   if (!response.ok) {
-    const errorDetails = objectValue(parsed.error);
-    const upstreamMessageValue = errorDetails?.message;
-    const upstreamStatusValue = errorDetails?.status;
-    const upstreamCodeValue = errorDetails?.code;
-    const upstreamMessage = typeof upstreamMessageValue === "string"
-      ? upstreamMessageValue
-      : rawText;
-    const upstreamStatusText = typeof upstreamStatusValue === "string"
-      ? upstreamStatusValue
-      : undefined;
-    const upstreamCode = typeof upstreamCodeValue === "number"
-      ? upstreamCodeValue
-      : response.status;
-
-    throw new GeminiApiError(response.status, upstreamMessage, {
-      upstreamStatusText,
-      upstreamCode,
-      upstreamDetails: errorDetails ?? parsed,
-    });
+    const providerFailure = await safeProviderFailure(response);
+    const status = response.status === 400 ? 400 : response.status === 429 ? 429 : 502;
+    throw new ProxyError(
+      status,
+      response.status === 400 ? "provider_rejected_request" : "provider_unavailable",
+      response.status === 400 ? "AI provider rejected the request" : "AI provider is unavailable",
+      providerFailure,
+    );
   }
-
-  return parsed;
+  try {
+    const parsed = await response.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    return parsed as Record<string, unknown>;
+  } catch (_) {
+    throw new ProxyError(
+      502,
+      "provider_invalid_response",
+      "AI provider response is invalid",
+    );
+  }
 }
 
-function normalizeGenerateResponse(data: Record<string, unknown>) {
+export function normalizeGenerateResponse(data: Record<string, unknown>) {
   const candidates = Array.isArray(data.candidates) ? data.candidates : [];
   const firstCandidate = candidates[0] as Record<string, unknown> | undefined;
   const content = firstCandidate?.content as Record<string, unknown> | undefined;
-  const parts = Array.isArray(content?.parts) ? content?.parts as Array<Record<string, unknown>> : [];
-
+  const parts = Array.isArray(content?.parts)
+    ? content.parts as Array<Record<string, unknown>>
+    : [];
   let text = "";
   const functionCalls: Array<Record<string, unknown>> = [];
-
   for (const part of parts) {
-    if (typeof part.text === "string") {
-      text += part.text;
-    }
-
+    if (typeof part.text === "string") text += part.text;
     if (typeof part.functionCall === "object" && part.functionCall !== null) {
       const functionCall = part.functionCall as Record<string, unknown>;
       functionCalls.push({
@@ -158,112 +113,136 @@ function normalizeGenerateResponse(data: Record<string, unknown>) {
       });
     }
   }
-
+  const rawFinishReason = firstCandidate?.finishReason;
+  const finishReason = typeof rawFinishReason === "string" &&
+      /^[A-Z][A-Z0-9_]{0,63}$/.test(rawFinishReason)
+    ? rawFinishReason
+    : null;
   return {
     text: text.trim(),
     functionCalls,
+    finishReason,
+    candidateCount: candidates.length,
   };
 }
 
-serve(async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
+/// Redacts an upstream error to stable provider status/code/field pointers.
+/// Provider messages and descriptions are deliberately discarded because they
+/// may echo request content or schema values.
+export async function safeProviderFailure(
+  response: Response,
+): Promise<Record<string, unknown>> {
+  let payload: unknown;
   try {
-    if (req.method !== "POST") {
-      return jsonResponse({ error: "Method not allowed" }, 405);
+    payload = await response.json();
+  } catch (_) {
+    payload = null;
+  }
+  const root = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : {};
+  const error = root.error && typeof root.error === "object" && !Array.isArray(root.error)
+    ? root.error as Record<string, unknown>
+    : {};
+  const providerStatus = typeof error.status === "string" &&
+      /^[A-Z][A-Z0-9_]{0,63}$/.test(error.status)
+    ? error.status
+    : null;
+  const providerCode = typeof error.code === "number" && Number.isFinite(error.code)
+    ? Math.trunc(error.code)
+    : response.status;
+  const fieldPaths: string[] = [];
+  const details = Array.isArray(error.details) ? error.details : [];
+  for (const detail of details) {
+    if (!detail || typeof detail !== "object" || Array.isArray(detail)) continue;
+    const violations = Array.isArray((detail as Record<string, unknown>).fieldViolations)
+      ? (detail as Record<string, unknown>).fieldViolations as unknown[]
+      : [];
+    for (const violation of violations) {
+      if (!violation || typeof violation !== "object" || Array.isArray(violation)) continue;
+      const field = (violation as Record<string, unknown>).field;
+      if (
+        typeof field === "string" &&
+        field.length <= 160 &&
+        /^[A-Za-z0-9_.\[\]-]+$/.test(field) &&
+        !fieldPaths.includes(field)
+      ) {
+        fieldPaths.push(field);
+      }
+      if (fieldPaths.length >= 10) break;
     }
+    if (fieldPaths.length >= 10) break;
+  }
+  return {
+    upstreamStatus: response.status,
+    upstreamStatusText: providerStatus,
+    upstreamCode: providerCode,
+    providerFieldPaths: fieldPaths,
+  };
+}
 
-    const user = await requireAuthenticatedUser(req);
-    const body = await req.json() as Record<string, unknown>;
+export async function handler(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  try {
+    if (request.method !== "POST") {
+      return errorResponse(405, "method_not_allowed", "Method not allowed");
+    }
+    await requireAuthenticatedUser(request);
+    const body = await request.json() as Record<string, unknown>;
     const action = (body.action ?? "").toString();
-
     if (action === "generate-content") {
       const model = (body.model ?? "").toString();
       if (!allowedGenerateModels.has(model)) {
-        return jsonResponse({ error: `Model not allowed: ${model}` }, 400);
+        return errorResponse(400, "model_not_allowed", "Model not allowed");
       }
-
       const contents = Array.isArray(body.contents) ? body.contents : [];
-      if (contents.length === 0) {
-        return jsonResponse({ error: "Missing contents" }, 400);
-      }
-
-      const payload: Record<string, unknown> = {
-        contents,
-      };
-
+      if (!contents.length) return errorResponse(400, "invalid_request", "Invalid request");
+      const payload: Record<string, unknown> = { contents };
       if (typeof body.systemInstruction === "object" && body.systemInstruction !== null) {
         payload.systemInstruction = body.systemInstruction;
       }
-      if (Array.isArray(body.tools) && body.tools.length > 0) {
-        payload.tools = body.tools;
-      }
+      if (Array.isArray(body.tools) && body.tools.length) payload.tools = body.tools;
       if (typeof body.generationConfig === "object" && body.generationConfig !== null) {
         payload.generationConfig = body.generationConfig;
       }
-
-      console.log(`[gemini-proxy] user=${user.id} action=generate-content model=${model}`);
       const data = await callGemini(`models/${model}:generateContent`, payload);
       return jsonResponse(normalizeGenerateResponse(data));
     }
-
     if (action === "embed-text") {
       const model = (body.model ?? "").toString();
       if (!allowedEmbeddingModels.has(model)) {
-        return jsonResponse({ error: `Embedding model not allowed: ${model}` }, 400);
+        return errorResponse(400, "model_not_allowed", "Model not allowed");
       }
-
       const text = (body.text ?? "").toString().trim();
-      if (!text) {
-        return jsonResponse({ error: "Missing text" }, 400);
-      }
-
-      const payload: Record<string, unknown> = {
-        content: {
-          parts: [{ text }],
-        },
-      };
-
+      if (!text) return errorResponse(400, "invalid_request", "Invalid request");
+      const payload: Record<string, unknown> = { content: { parts: [{ text }] } };
       const outputDimensionality = Number(body.outputDimensionality ?? 0);
       if (Number.isFinite(outputDimensionality) && outputDimensionality > 0) {
         payload.outputDimensionality = outputDimensionality;
       }
-
-      console.log(`[gemini-proxy] user=${user.id} action=embed-text model=${model}`);
       const data = await callGemini(`models/${model}:embedContent`, payload);
       const embedding = (data.embedding as Record<string, unknown> | undefined)?.values;
       if (!Array.isArray(embedding)) {
-        return jsonResponse({ error: "Invalid embedding response" }, 502);
+        return errorResponse(
+          502,
+          "provider_invalid_response",
+          "AI provider response is invalid",
+        );
       }
-
       return jsonResponse({ embedding });
     }
-
-    return jsonResponse({ error: "Invalid action" }, 400);
+    return errorResponse(400, "invalid_action", "Invalid action");
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (error instanceof GeminiApiError) {
-      console.warn(
-        `[gemini-proxy] upstream error status=${error.status} apiStatus=${error.upstreamStatusText ?? "unknown"}: ${message}`,
+    if (error instanceof ProxyError) {
+      return errorResponse(
+        error.status,
+        error.code,
+        error.publicMessage,
+        error.metadata,
       );
-      return jsonResponse({
-        error: message,
-        upstreamStatus: error.status,
-        upstreamStatusText: error.upstreamStatusText,
-        upstreamCode: error.upstreamCode,
-        upstreamDetails: error.upstreamDetails,
-      }, error.status);
     }
-
-    const status = message === "Missing authentication"
-      ? 401
-      : message.endsWith("not configured")
-      ? 500
-      : 400;
-    console.error("[gemini-proxy] unexpected error", error);
-    return jsonResponse({ error: message }, status);
+    return errorResponse(400, "invalid_request", "Invalid request");
   }
-});
+}
+
+if (import.meta.main) serve(handler);

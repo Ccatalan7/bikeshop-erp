@@ -2,7 +2,7 @@
   'use strict';
 
   const SOURCE = 'AliExpress';
-  const CONTENT_VERSION = '0.9.5';
+  const CONTENT_VERSION = '0.9.9';
   const DEBUG_PREFIX = `[AE-DEBUG][content][v${CONTENT_VERSION}]`;
 
   function aeDebug(event, details = {}, level = 'log') {
@@ -197,6 +197,7 @@
     ordersApiProbeInstall,
     ordersApiProbeRead,
     ordersApiShapeProbe,
+    ordersApiScopeProbe,
     ordersApiCollect,
     visibleProductImageRects: getVisibleProductImageRects,
     getPageMetrics,
@@ -215,6 +216,10 @@
       parseApiOrderDate,
       parseApiMoney,
       mapApiOrder,
+      ordersApiParamsForPage,
+      ordersApiTemplateSummary,
+      ordersApiResponseSummary,
+      ordersApiScopeProbe,
     },
   };
 
@@ -671,9 +676,264 @@
   //
   // El cuerpo de la petición no se inventa: se toma el de una llamada real de
   // esta misma sesión (los ids de módulo varían por cuenta y versión) y sólo
-  // se le cambia `pageIndex`.
+  // se le cambia el único campo JSON `pageIndex`. Una plantilla ambigua se
+  // rechaza; una expresión regular podría cambiar por accidente otro número.
   const ORDERS_API = 'mtop.aliexpress.trade.buyer.order.list';
   let ordersApiTemplateParams = null;
+
+  function parseOrdersApiTemplateParams() {
+    if (!ordersApiTemplateParams) return null;
+    try {
+      const parsed = JSON.parse(ordersApiTemplateParams);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed
+        : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function parsedEmbeddedJson(value) {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function findPageIndexSlots(value, slots = [], path = '', depth = 0) {
+    if (depth > 8) return slots;
+    const embedded = parsedEmbeddedJson(value);
+    if (embedded) {
+      findPageIndexSlots(embedded, slots, `${path}.$json`, depth + 1);
+      return slots;
+    }
+    if (!value || typeof value !== 'object') return slots;
+    for (const key of Object.keys(value)) {
+      if (String(key).toLowerCase() === 'pageindex') {
+        slots.push({ path: path ? `${path}.${key}` : key });
+        continue;
+      }
+      findPageIndexSlots(
+        value[key],
+        slots,
+        path ? `${path}.${key}` : key,
+        depth + 1,
+      );
+    }
+    return slots;
+  }
+
+  function rewriteStructuredPageIndexes(value, pageIndex, depth = 0) {
+    if (depth > 8) return { value, count: 0 };
+    const embedded = parsedEmbeddedJson(value);
+    if (embedded) {
+      const rewritten = rewriteStructuredPageIndexes(
+        embedded,
+        pageIndex,
+        depth + 1,
+      );
+      return {
+        value: rewritten.count > 0 ? JSON.stringify(rewritten.value) : value,
+        count: rewritten.count,
+      };
+    }
+    if (!value || typeof value !== 'object') return { value, count: 0 };
+    const clone = Array.isArray(value) ? [] : {};
+    let count = 0;
+    for (const key of Object.keys(value)) {
+      const original = value[key];
+      if (String(key).toLowerCase() === 'pageindex' &&
+          (typeof original === 'number' || typeof original === 'string')) {
+        clone[key] = typeof original === 'string'
+          ? String(pageIndex)
+          : Number(pageIndex);
+        count += 1;
+        continue;
+      }
+      const child = rewriteStructuredPageIndexes(original, pageIndex, depth + 1);
+      clone[key] = child.value;
+      count += child.count;
+    }
+    return { value: clone, count };
+  }
+
+  function expandEmbeddedJson(value, depth = 0) {
+    if (depth > 8) return value;
+    const embedded = parsedEmbeddedJson(value);
+    if (embedded) return expandEmbeddedJson(embedded, depth + 1);
+    if (Array.isArray(value)) {
+      return value.map((entry) => expandEmbeddedJson(entry, depth + 1));
+    }
+    if (!value || typeof value !== 'object') return value;
+    const expanded = {};
+    for (const key of Object.keys(value)) {
+      expanded[key] = expandEmbeddedJson(value[key], depth + 1);
+    }
+    return expanded;
+  }
+
+  function isSafeDiagnosticKey(key) {
+    const normalized = String(key || '')
+      .replace(/[^a-z0-9]/gi, '')
+      .toLowerCase();
+    if (!normalized) return false;
+    return ![
+      'token', 'cookie', 'auth', 'signature', 'password', 'secret',
+      'session', 'credential', 'csrf', 'accesskey', 'refreshkey',
+    ].some((sensitive) => normalized.includes(sensitive));
+  }
+
+  function isOrderPayloadKey(key) {
+    const text = String(key || '');
+    return /^pc_om_list_order_\d+$/.test(text) ||
+      /^(order|orders|orderList|orderLines|items|products)$/i.test(text);
+  }
+
+  function diagnosticKeyPaths(
+    value,
+    { prefix = '', depth = 0, skipOrderPayload = false, out = [] } = {},
+  ) {
+    if (!value || typeof value !== 'object' || depth > 6 || out.length >= 160) {
+      return out;
+    }
+    const source = Array.isArray(value) ? value.slice(0, 1) : value;
+    for (const rawKey of Object.keys(source).slice(0, 80)) {
+      const key = Array.isArray(source) ? '[]' : rawKey;
+      if (!Array.isArray(source) && !isSafeDiagnosticKey(key)) continue;
+      if (!Array.isArray(source) && skipOrderPayload && isOrderPayloadKey(key)) {
+        continue;
+      }
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (!out.includes(path)) out.push(path);
+      diagnosticKeyPaths(source[rawKey], {
+        prefix: path,
+        depth: depth + 1,
+        skipOrderPayload,
+        out,
+      });
+      if (out.length >= 160) break;
+    }
+    return out;
+  }
+
+  const DIAGNOSTIC_TEMPLATE_FIELDS = new Set([
+    'pageindex', 'pagesize', 'pageno', 'currentpage', 'startdate',
+    'enddate', 'fromdate', 'todate', 'daterange', 'year', 'status',
+    'orderstatus', 'filter', 'tab', 'timerange', 'statustab', 'timeoption',
+    'searchoption', 'searchinput', 'hasmore',
+  ]);
+  const DIAGNOSTIC_PAGINATION_FIELDS = new Set([
+    'hasnext', 'totalpage', 'totalpages', 'totalcount', 'pagesize',
+    'totalnum', 'currentpage', 'pageindex', 'nextpage', 'pagecount',
+    'hasmore', 'hasmoretext',
+  ]);
+
+  function diagnosticScalarFields(
+    value,
+    allowedFields,
+    { prefix = '', depth = 0, skipOrderPayload = false, out = {} } = {},
+  ) {
+    if (!value || typeof value !== 'object' ||
+        depth > 6 || Object.keys(out).length >= 80) {
+      return out;
+    }
+    for (const key of Object.keys(value).slice(0, 80)) {
+      if (!isSafeDiagnosticKey(key)) continue;
+      if (skipOrderPayload && isOrderPayloadKey(key)) continue;
+      const path = prefix ? `${prefix}.${key}` : key;
+      const field = String(key).replace(/[^a-z0-9]/gi, '').toLowerCase();
+      const candidate = value[key];
+      if (allowedFields.has(field) &&
+          (typeof candidate === 'string' ||
+            typeof candidate === 'number' ||
+            typeof candidate === 'boolean' ||
+            candidate === null)) {
+        out[path] = typeof candidate === 'string'
+          ? candidate.slice(0, 80)
+          : candidate;
+      }
+      diagnosticScalarFields(candidate, allowedFields, {
+        prefix: path,
+        depth: depth + 1,
+        skipOrderPayload,
+        out,
+      });
+    }
+    return out;
+  }
+
+  function ordersApiTemplateSummary() {
+    const parsed = parseOrdersApiTemplateParams();
+    if (!parsed) return { available: false, keyPaths: [], fields: {} };
+    const expanded = expandEmbeddedJson(parsed);
+    return {
+      available: true,
+      keyPaths: diagnosticKeyPaths(expanded),
+      fields: diagnosticScalarFields(expanded, DIAGNOSTIC_TEMPLATE_FIELDS),
+      pageIndexSlots: findPageIndexSlots(parsed).length,
+    };
+  }
+
+  function ordersApiResponseSummary(response) {
+    const modules = (response && response.data && response.data.data) || {};
+    return {
+      keyPaths: diagnosticKeyPaths(response, { skipOrderPayload: true }),
+      pagination: diagnosticScalarFields(
+        response,
+        DIAGNOSTIC_PAGINATION_FIELDS,
+        { skipOrderPayload: true },
+      ),
+      filters: diagnosticScalarFields(
+        response,
+        DIAGNOSTIC_TEMPLATE_FIELDS,
+        { skipOrderPayload: true },
+      ),
+      filterOptions: ordersApiFilterOptions(modules),
+      orderModuleCount: Object.keys(modules)
+        .filter((key) => /^pc_om_list_order_\d+$/.test(key)).length,
+    };
+  }
+
+  function safeFilterOptions(value, textKeys) {
+    if (!Array.isArray(value)) return [];
+    return value.slice(0, 30).map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const code = entry.code;
+      if (typeof code !== 'string' && typeof code !== 'number') return null;
+      const result = { code: String(code).slice(0, 40) };
+      for (const key of textKeys) {
+        if (typeof entry[key] === 'string') {
+          result[key] = entry[key].slice(0, 80);
+          break;
+        }
+      }
+      return result;
+    }).filter(Boolean);
+  }
+
+  function ordersApiFilterOptions(modules) {
+    const time = [];
+    const status = [];
+    for (const key of Object.keys(modules || {})) {
+      if (!/^pc_om_list_header(?:_|$)/.test(key)) continue;
+      const fields = modules[key] && modules[key].fields;
+      if (!fields || typeof fields !== 'object') continue;
+      time.push(...safeFilterOptions(fields.searchTimeOptions, ['text', 'title']));
+      status.push(...safeFilterOptions(fields.statusTabList, ['title', 'text']));
+      if (fields.tailStatusTab && typeof fields.tailStatusTab === 'object') {
+        status.push(...safeFilterOptions([fields.tailStatusTab], ['title', 'text']));
+      }
+    }
+    const unique = (options) => options.filter(
+      (entry, index) => options.findIndex((other) => other.code === entry.code) === index,
+    );
+    return { time: unique(time), status: unique(status) };
+  }
 
   function captureOrdersApiTemplate() {
     if (ordersApiTemplateParams) return true;
@@ -692,12 +952,62 @@
     return false;
   }
 
-  function ordersApiParamsForPage(pageIndex) {
-    if (!ordersApiTemplateParams) return null;
-    return ordersApiTemplateParams.replace(
-      /(pageIndex[^0-9]{0,12})(\d+)/,
-      (_match, prefix) => `${prefix}${pageIndex}`,
-    );
+  function rewriteStructuredScalar(value, fieldName, replacement, depth = 0) {
+    if (depth > 8) return { value, count: 0 };
+    const embedded = parsedEmbeddedJson(value);
+    if (embedded) {
+      const rewritten = rewriteStructuredScalar(
+        embedded,
+        fieldName,
+        replacement,
+        depth + 1,
+      );
+      return {
+        value: rewritten.count > 0 ? JSON.stringify(rewritten.value) : value,
+        count: rewritten.count,
+      };
+    }
+    if (!value || typeof value !== 'object') return { value, count: 0 };
+    const clone = Array.isArray(value) ? [] : {};
+    let count = 0;
+    for (const key of Object.keys(value)) {
+      const original = value[key];
+      if (String(key).toLowerCase() === String(fieldName).toLowerCase() &&
+          (typeof original === 'number' || typeof original === 'string' ||
+            typeof original === 'boolean')) {
+        if (typeof original === 'number') clone[key] = Number(replacement);
+        else if (typeof original === 'boolean') clone[key] = Boolean(replacement);
+        else clone[key] = String(replacement);
+        count += 1;
+        continue;
+      }
+      const child = rewriteStructuredScalar(
+        original,
+        fieldName,
+        replacement,
+        depth + 1,
+      );
+      clone[key] = child.value;
+      count += child.count;
+    }
+    return { value: clone, count };
+  }
+
+  function ordersApiParamsForPage(pageIndex, overrides = {}) {
+    const parsed = parseOrdersApiTemplateParams();
+    if (!parsed) return null;
+    let rewritten = rewriteStructuredPageIndexes(parsed, pageIndex);
+    if (rewritten.count !== 1) return null;
+    for (const fieldName of ['statusTab', 'timeOption']) {
+      if (!Object.prototype.hasOwnProperty.call(overrides, fieldName)) continue;
+      rewritten = rewriteStructuredScalar(
+        rewritten.value,
+        fieldName,
+        overrides[fieldName],
+      );
+      if (rewritten.count !== 1) return null;
+    }
+    return JSON.stringify(rewritten.value);
   }
 
   function ordersApiAvailable() {
@@ -705,11 +1015,16 @@
     return Boolean(mtop && typeof mtop.request === 'function');
   }
 
-  function ordersApiFetchPage(pageIndex) {
+  function ordersApiFetchPage(pageIndex, overrides = {}) {
     const mtop = window.lib && window.lib.mtop;
-    const params = ordersApiParamsForPage(pageIndex);
-    if (!mtop || !params) {
+    const params = ordersApiParamsForPage(pageIndex, overrides);
+    if (!mtop) {
       return Promise.reject(new Error('API de pedidos no disponible.'));
+    }
+    if (!params) {
+      return Promise.reject(
+        new Error('La plantilla de pedidos no tiene un pageIndex único.'),
+      );
     }
     return mtop.request({
       api: ORDERS_API,
@@ -777,7 +1092,7 @@
     // unitario que llegaba al inventario (2026-08-06).
     const aggregated = new Map();
     const items = [];
-    for (const line of lines) {
+    for (const [lineIndex, line] of lines.entries()) {
       if (!line) continue;
       const quantity = Number(line.quantity) || 1;
       const unitPrice = parseApiMoney(line.formatPriceInfo);
@@ -788,12 +1103,20 @@
             .join(', ')
         : '';
       const title = String(line.itemTitle || '').trim();
+      const immutableVariantKey = immutableVariantKeyFromApiLine(line);
       const item = {
         sku: line.productId ? `AE-${String(line.productId).slice(-8)}` : '',
         itemId: line.productId ? String(line.productId) : '',
+        lineTitle: title || null,
         description: variant ? `${title} (${variant})` : title,
         variant,
-        variantKey: supplierVariantKey(variant) || 'default',
+        // Only a supplier-owned SKU/property identifier may later become an
+        // exact ERP alias. The human label remains useful for display and
+        // row grouping, but is not durable identity across translations.
+        variantKey: immutableVariantKey
+          || supplierVariantKey(variant)
+          || 'default',
+        sourceApiLineOrdinal: lineIndex + 1,
         quantity,
         unitPrice,
         total: unitPrice === null ? null : roundMoney(unitPrice * quantity),
@@ -802,7 +1125,9 @@
       };
       // Mismo producto, misma variante y mismo precio: es la misma compra
       // partida en líneas, así que se suman las unidades.
-      const key = `${item.itemId}|${item.description}|${item.unitPrice}`;
+      const key = immutableVariantKey
+        ? `${item.itemId}|${immutableVariantKey}|${item.unitPrice}`
+        : `unresolved-line:${lineIndex}`;
       const existing = aggregated.get(key);
       if (existing) {
         existing.quantity += item.quantity;
@@ -850,6 +1175,512 @@
     return '';
   }
 
+  function scalarFieldByLeaf(fields, leafName) {
+    const normalizedLeaf = String(leafName).toLowerCase();
+    const matches = Object.entries(fields || {}).filter(
+      ([path]) => String(path).split('.').pop().toLowerCase() === normalizedLeaf,
+    );
+    return {
+      count: matches.length,
+      value: matches.length === 1 ? matches[0][1] : null,
+    };
+  }
+
+  function ordersApiTemplateScope(overrides = {}) {
+    const summary = ordersApiTemplateSummary();
+    if (!summary.available || summary.pageIndexSlots !== 1) {
+      return { ok: false, reason: 'invalid-page-template' };
+    }
+    const pageSize = scalarFieldByLeaf(summary.fields, 'pageSize');
+    const statusTab = scalarFieldByLeaf(summary.fields, 'statusTab');
+    const timeOption = scalarFieldByLeaf(summary.fields, 'timeOption');
+    const searchOption = scalarFieldByLeaf(summary.fields, 'searchOption');
+    const searchInput = scalarFieldByLeaf(summary.fields, 'searchInput');
+    if (pageSize.count !== 1 || !Number.isInteger(Number(pageSize.value)) ||
+        Number(pageSize.value) <= 0) {
+      return { ok: false, reason: 'invalid-page-size-template' };
+    }
+    if (statusTab.count !== 1 || timeOption.count !== 1 ||
+        searchOption.count !== 1) {
+      return { ok: false, reason: 'unproven-filter-template' };
+    }
+    if (String(statusTab.value) !== 'all' || String(timeOption.value) !== 'all' ||
+        String(searchOption.value) !== 'order' ||
+        (searchInput.count === 1 && String(searchInput.value).trim())) {
+      return { ok: false, reason: 'restrictive-filter-template' };
+    }
+    const scope = {
+      statusTab: Object.prototype.hasOwnProperty.call(overrides, 'statusTab')
+        ? String(overrides.statusTab)
+        : 'all',
+      timeOption: Object.prototype.hasOwnProperty.call(overrides, 'timeOption')
+        ? String(overrides.timeOption)
+        : 'all',
+      searchOption: 'order',
+      searchInput: '',
+      pageSize: Number(pageSize.value),
+    };
+    if (!ordersApiParamsForPage(1, overrides)) {
+      return { ok: false, reason: 'ambiguous-filter-rewrite' };
+    }
+    return { ok: true, scope };
+  }
+
+  function ordersApiResponseState(response, expectedScope, requestedPage) {
+    const modules = response && response.data && response.data.data;
+    if (!modules || typeof modules !== 'object' || Array.isArray(modules)) {
+      return { ok: false, reason: 'invalid-response-envelope' };
+    }
+    const bodyKeys = Object.keys(modules)
+      .filter((key) => /^pc_om_list_body(?:_|$)/.test(key));
+    if (bodyKeys.length !== 1) {
+      return { ok: false, reason: 'ambiguous-pagination-response' };
+    }
+    const bodyFields = modules[bodyKeys[0]] && modules[bodyKeys[0]].fields;
+    if (!bodyFields || typeof bodyFields !== 'object') {
+      return { ok: false, reason: 'missing-pagination-response' };
+    }
+    const pageIndex = Number(bodyFields.pageIndex);
+    const pageSize = Number(bodyFields.pageSize);
+    const hasMore = bodyFields.hasMore;
+    if (!Number.isInteger(pageIndex) || pageIndex !== requestedPage) {
+      return { ok: false, reason: 'unexpected-response-page' };
+    }
+    if (!Number.isInteger(pageSize) || pageSize !== expectedScope.pageSize) {
+      return { ok: false, reason: 'inconsistent-page-size' };
+    }
+    if (typeof hasMore !== 'boolean') {
+      return { ok: false, reason: 'missing-has-more' };
+    }
+
+    const actionKeys = Object.keys(modules)
+      .filter((key) => /^pc_om_list_header_action(?:_|$)/.test(key));
+    let filterEcho = 'absent';
+    if (actionKeys.length > 1) {
+      return { ok: false, reason: 'ambiguous-filter-response' };
+    }
+    if (actionKeys.length === 1) {
+      const fields = modules[actionKeys[0]] && modules[actionKeys[0]].fields;
+      if (!fields || typeof fields !== 'object') {
+        return { ok: false, reason: 'invalid-filter-response' };
+      }
+      const echoed = {
+        statusTab: String(fields.statusTab || ''),
+        timeOption: String(fields.timeOption || ''),
+        searchOption: String(fields.searchOption || ''),
+        searchInput: String(fields.searchInput || ''),
+      };
+      if (echoed.statusTab !== expectedScope.statusTab ||
+          echoed.timeOption !== expectedScope.timeOption ||
+          echoed.searchOption !== expectedScope.searchOption ||
+          echoed.searchInput.trim()) {
+        return { ok: false, reason: 'filter-coerced' };
+      }
+      filterEcho = 'verified';
+    }
+
+    const orderKeys = Object.keys(modules)
+      .filter((key) => /^pc_om_list_order_\d+$/.test(key));
+    return {
+      ok: true,
+      modules,
+      orderKeys,
+      pageIndex,
+      pageSize,
+      hasMore,
+      filterEcho,
+    };
+  }
+
+  function stableEvidenceHash(value) {
+    return (hashText(String(value)) >>> 0).toString(16).padStart(8, '0');
+  }
+
+  function canonicalApiOrderEvidence(order) {
+    const items = (order.items || []).map((item) => ({
+      itemId: String(item.itemId || ''),
+      variantKey: String(item.variantKey || ''),
+      variant: String(item.variant || ''),
+      quantity: Number(item.quantity || 0),
+      unitPrice: Number(item.unitPrice || 0),
+      total: Number(item.total || 0),
+    })).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    return {
+      orderNumber: String(order.orderNumber || ''),
+      orderDate: String(order.orderDate || ''),
+      total: Number(order.total || 0),
+      items,
+    };
+  }
+
+  async function runOrdersApiCertifiedPass({
+    exactDate,
+    maxPages,
+    scope,
+    overrides = {},
+  }) {
+    const seenIds = new Set();
+    const datesWithOrders = new Set();
+    const targetOrders = new Map();
+    const pageIdSets = [];
+    const globalIdentity = [];
+    let oldestObservedDate = '';
+    let newestObservedDate = '';
+    let previousCount = null;
+    let filterEcho = 'absent';
+
+    for (let page = 1; page <= maxPages; page += 1) {
+      let response;
+      try {
+        response = await ordersApiFetchPage(page, overrides);
+      } catch (error) {
+        return {
+          ok: false,
+          reason: 'api-error',
+          detail: `error en página ${page}: ${error && error.message ? error.message : error}`,
+          pagesRead: page - 1,
+          partialTargetCount: targetOrders.size,
+        };
+      }
+      const state = ordersApiResponseState(response, scope, page);
+      if (!state.ok) {
+        return {
+          ok: false,
+          reason: state.reason,
+          pagesRead: page,
+          partialTargetCount: targetOrders.size,
+        };
+      }
+      if (state.filterEcho === 'verified') filterEcho = 'verified';
+      if (state.hasMore && state.orderKeys.length !== scope.pageSize) {
+        return {
+          ok: false,
+          reason: 'inconsistent-page-size',
+          pagesRead: page,
+          partialTargetCount: targetOrders.size,
+        };
+      }
+
+      const pageIds = [];
+      for (const key of state.orderKeys) {
+        const fields = state.modules[key] && state.modules[key].fields;
+        const orderId = String(fields && fields.orderId || '').trim();
+        const orderDate = parseApiOrderDate(fields && fields.orderDateText);
+        if (!orderId || !orderDate) {
+          return {
+            ok: false,
+            reason: 'invalid-order-identity',
+            pagesRead: page,
+            partialTargetCount: targetOrders.size,
+          };
+        }
+        if (seenIds.has(orderId)) {
+          return {
+            ok: false,
+            reason: 'feed-shifted',
+            pagesRead: page,
+            partialTargetCount: targetOrders.size,
+          };
+        }
+        const order = mapApiOrder(fields);
+        if (!order) {
+          return {
+            ok: false,
+            reason: 'invalid-order-payload',
+            pagesRead: page,
+            partialTargetCount: targetOrders.size,
+          };
+        }
+        seenIds.add(orderId);
+        pageIds.push(orderId);
+        globalIdentity.push(`${orderId}|${orderDate}`);
+        datesWithOrders.add(orderDate);
+        if (!oldestObservedDate || orderDate < oldestObservedDate) {
+          oldestObservedDate = orderDate;
+        }
+        if (!newestObservedDate || orderDate > newestObservedDate) {
+          newestObservedDate = orderDate;
+        }
+        if (orderDate === exactDate) targetOrders.set(orderId, order);
+      }
+      pageIdSets.push(pageIds.sort());
+
+      if (!state.hasMore) {
+        if (page === 1 && state.orderKeys.length === 0) {
+          return {
+            ok: false,
+            reason: 'unavailable-empty-first-page',
+            pagesRead: page,
+            partialTargetCount: targetOrders.size,
+          };
+        }
+        if (state.orderKeys.length === 0 && previousCount !== scope.pageSize) {
+          return {
+            ok: false,
+            reason: 'inconsistent-empty-terminal',
+            pagesRead: page,
+            partialTargetCount: targetOrders.size,
+          };
+        }
+        const targetEvidence = Array.from(targetOrders.values())
+          .map(canonicalApiOrderEvidence)
+          .sort((left, right) => left.orderNumber.localeCompare(right.orderNumber));
+        return {
+          ok: true,
+          reason: 'has-more-false',
+          pagesRead: page,
+          terminalPage: page,
+          targetOrders,
+          datesWithOrders,
+          oldestObservedDate,
+          newestObservedDate,
+          filterEcho,
+          pageIdSets,
+          globalIdentity: globalIdentity.sort(),
+          targetEvidence,
+        };
+      }
+      previousCount = state.orderKeys.length;
+    }
+
+    return {
+      ok: false,
+      reason: 'max-pages',
+      pagesRead: maxPages,
+      partialTargetCount: targetOrders.size,
+    };
+  }
+
+  function certifiedPassEvidence(pass) {
+    const pageIdSetHashes = pass.pageIdSets.map(
+      (ids) => stableEvidenceHash(JSON.stringify(ids)),
+    );
+    return {
+      pagesRead: pass.pagesRead,
+      terminalPage: pass.terminalPage,
+      uniqueOrderCount: pass.globalIdentity.length,
+      targetOrderCount: pass.targetEvidence.length,
+      filterEcho: pass.filterEcho,
+      pageIdSetHashes,
+      globalIdSetHash: stableEvidenceHash(JSON.stringify(pass.globalIdentity)),
+      targetPayloadHash: stableEvidenceHash(JSON.stringify(pass.targetEvidence)),
+    };
+  }
+
+  function certifiedPassesMatch(first, second) {
+    return first.terminalPage === second.terminalPage &&
+      JSON.stringify(first.pageIdSets) === JSON.stringify(second.pageIdSets) &&
+      JSON.stringify(first.globalIdentity) === JSON.stringify(second.globalIdentity) &&
+      JSON.stringify(first.targetEvidence) === JSON.stringify(second.targetEvidence);
+  }
+
+  async function collectCertifiedExactDate({ exactDate, maxPages }) {
+    const scopeResult = ordersApiTemplateScope();
+    const capturedAt = new Date().toISOString();
+    if (!scopeResult.ok) {
+      const reason = scopeResult.reason;
+      const coverage = ordersApiCoverage({
+        datesOnly: false,
+        exactDate,
+        maxPages,
+        pagesRead: 0,
+        reason,
+      });
+      coverage.mode = 'two-pass-v1';
+      coverage.certified = false;
+      coverage.scope = { capturedAt };
+      coverage.targetDateComplete = false;
+      return certifiedFailureResult({ exactDate, maxPages, coverage, reason });
+    }
+    const scope = scopeResult.scope;
+    const first = await runOrdersApiCertifiedPass({ exactDate, maxPages, scope });
+    if (!first.ok) {
+      return certifiedFailureFromPass({ exactDate, maxPages, scope, capturedAt, pass: first });
+    }
+    const second = await runOrdersApiCertifiedPass({ exactDate, maxPages, scope });
+    if (!second.ok) {
+      return certifiedFailureFromPass({ exactDate, maxPages, scope, capturedAt, pass: second });
+    }
+    if (!certifiedPassesMatch(first, second)) {
+      return certifiedFailureFromPass({
+        exactDate,
+        maxPages,
+        scope,
+        capturedAt,
+        pass: {
+          ok: false,
+          reason: 'pass-drift',
+          pagesRead: first.pagesRead + second.pagesRead,
+          partialTargetCount: Math.max(
+            first.targetEvidence.length,
+            second.targetEvidence.length,
+          ),
+        },
+        passes: [first, second],
+      });
+    }
+    const scopeEvidence = {
+      statusTab: scope.statusTab,
+      timeOption: scope.timeOption,
+      searchOption: scope.searchOption,
+      capturedAt,
+    };
+    const termination = {
+      kind: 'certified-has-more-false',
+      reason: 'dos recorridos estables hasta hasMore=false',
+      naturalExhaustion: true,
+      hitPageLimit: false,
+      pagesRead: first.pagesRead + second.pagesRead,
+      pageLimit: maxPages,
+      terminalPage: second.terminalPage,
+    };
+    const coverage = {
+      mode: 'two-pass-v1',
+      complete: true,
+      partial: false,
+      certified: true,
+      targetDateComplete: true,
+      pageLimit: maxPages,
+      pagesRead: termination.pagesRead,
+      observedFromDate: second.oldestObservedDate,
+      observedToDate: second.newestObservedDate,
+      stopReason: termination.kind,
+      scope: scopeEvidence,
+      termination,
+    };
+    const orders = Array.from(second.targetOrders.values());
+    return {
+      ok: true,
+      orders,
+      datesWithOrders: Array.from(second.datesWithOrders).sort(),
+      pagesRead: termination.pagesRead,
+      reason: termination.reason,
+      warnings: [],
+      partialOrderCount: 0,
+      coverageComplete: true,
+      coveragePartial: false,
+      termination,
+      coverage,
+      certification: {
+        certified: true,
+        mode: 'two-pass-v1',
+        scope: scopeEvidence,
+        passCount: 2,
+        passes: [certifiedPassEvidence(first), certifiedPassEvidence(second)],
+        mismatchCodes: [],
+      },
+    };
+  }
+
+  function certifiedFailureFromPass({
+    exactDate,
+    maxPages,
+    scope,
+    capturedAt,
+    pass,
+    passes = [],
+  }) {
+    const reason = pass.detail || pass.reason;
+    const coverage = ordersApiCoverage({
+      datesOnly: false,
+      exactDate,
+      maxPages,
+      pagesRead: pass.pagesRead || 0,
+      reason: pass.reason,
+    });
+    coverage.mode = 'two-pass-v1';
+    coverage.certified = false;
+    coverage.scope = {
+      statusTab: scope.statusTab,
+      timeOption: scope.timeOption,
+      searchOption: scope.searchOption,
+      capturedAt,
+    };
+    coverage.targetDateComplete = false;
+    return certifiedFailureResult({
+      exactDate,
+      maxPages,
+      coverage,
+      reason,
+      partialTargetCount: pass.partialTargetCount || 0,
+      passes,
+      mismatchCode: pass.reason,
+    });
+  }
+
+  function certifiedFailureResult({
+    exactDate,
+    maxPages,
+    coverage,
+    reason,
+    partialTargetCount = 0,
+    passes = [],
+    mismatchCode = reason,
+  }) {
+    const warning = incompleteExactDateWarning(exactDate, {
+      ...coverage,
+      stopReason: reason || coverage.stopReason,
+    });
+    return {
+      ok: false,
+      orders: [],
+      datesWithOrders: [],
+      pagesRead: coverage.pagesRead || 0,
+      reason,
+      warnings: warning ? [warning] : [],
+      partialOrderCount: partialTargetCount,
+      coverageComplete: false,
+      coveragePartial: true,
+      termination: coverage.termination,
+      coverage,
+      certification: {
+        certified: false,
+        mode: 'two-pass-v1',
+        scope: coverage.scope || {},
+        passCount: passes.length,
+        passes: passes.map(certifiedPassEvidence),
+        mismatchCodes: mismatchCode ? [mismatchCode] : [],
+      },
+    };
+  }
+
+  async function ordersApiScopeProbe(options = {}) {
+    const exactDate = String(options.exactDate || '').trim();
+    const statusTab = String(options.statusTab || '').trim();
+    const maxPages = Math.min(60, Math.max(1, Number(options.maxPages) || 60));
+    if (!exactDate || !['recycle'].includes(statusTab) ||
+        !captureOrdersApiTemplate() || !ordersApiAvailable()) {
+      return { ok: false, reason: 'invalid-scope-probe' };
+    }
+    const overrides = { statusTab };
+    const scopeResult = ordersApiTemplateScope(overrides);
+    if (!scopeResult.ok) return { ok: false, reason: scopeResult.reason };
+    const pass = await runOrdersApiCertifiedPass({
+      exactDate,
+      maxPages,
+      scope: scopeResult.scope,
+      overrides,
+    });
+    return {
+      ok: pass.ok,
+      reason: pass.reason,
+      pagesRead: pass.pagesRead,
+      targetDateCount: pass.ok
+        ? pass.targetEvidence.length
+        : (pass.partialTargetCount || 0),
+      observedFromDate: pass.oldestObservedDate || '',
+      observedToDate: pass.newestObservedDate || '',
+      terminalPage: pass.terminalPage || null,
+      filterEcho: pass.filterEcho || 'absent',
+      scope: {
+        statusTab: scopeResult.scope.statusTab,
+        timeOption: scopeResult.scope.timeOption,
+        searchOption: scopeResult.scope.searchOption,
+        capturedAt: new Date().toISOString(),
+      },
+    };
+  }
+
   function ordersApiCoverage({
     datesOnly,
     exactDate,
@@ -859,23 +1690,51 @@
     oldestObservedDate = '',
     newestObservedDate = '',
   }) {
-    // Sólo llegar al final natural prueba que el índice cubre todo el
-    // historial disponible. `día superado` cierra una fecha exacta, pero no
-    // autoriza a presentar como vacíos los meses más antiguos que no leímos.
-    const historyComplete = reason === 'sin más pedidos';
+    // La API no es monotónica por fecha: sólo una página sin pedidos prueba
+    // el final natural. Una o varias páginas antiguas no cierran una fecha
+    // exacta porque AliExpress puede volver a entregar ese día más adelante.
+    const termination = ordersApiTermination({ reason, pagesRead, maxPages });
+    const historyComplete = termination.naturalExhaustion;
     return {
       mode: datesOnly ? 'dates-only' : (exactDate ? 'exact-date' : 'all-orders'),
       complete: historyComplete,
       partial: !historyComplete,
-      targetDateComplete: exactDate
-        ? historyComplete || reason === 'día superado'
-        : null,
+      targetDateComplete: exactDate ? historyComplete : null,
       pageLimit: maxPages,
       pagesRead,
       observedFromDate: oldestObservedDate,
       observedToDate: newestObservedDate,
       stopReason: reason,
+      termination,
     };
+  }
+
+  function ordersApiTermination({ reason, pagesRead, maxPages }) {
+    const naturalExhaustion = reason === 'sin más pedidos';
+    const hitPageLimit = reason === 'max-pages';
+    const kind = naturalExhaustion
+      ? 'natural-exhaustion'
+      : hitPageLimit
+        ? 'max-pages'
+        : reason === 'api-error' || String(reason || '').startsWith('error en página ')
+          ? 'error'
+          : 'unavailable';
+    return {
+      kind,
+      reason,
+      naturalExhaustion,
+      hitPageLimit,
+      pagesRead,
+      pageLimit: maxPages,
+    };
+  }
+
+  function incompleteExactDateWarning(exactDate, coverage) {
+    if (!exactDate || coverage.targetDateComplete === true) return '';
+    return `Cobertura incompleta para ${exactDate}: AliExpress terminó por `
+      + `${coverage.stopReason || 'una causa desconocida'} tras `
+      + `${coverage.pagesRead} de hasta ${coverage.pageLimit} páginas. `
+      + 'No se generó una factura parcial.';
   }
 
   /// Recolecta pedidos página por página desde la API.
@@ -889,7 +1748,12 @@
   async function ordersApiCollect(options = {}) {
     const exactDate = String(options.exactDate || '').trim();
     const datesOnly = options.datesOnly === true;
-    const maxPages = Math.min(60, Math.max(1, Number(options.maxPages) || 30));
+    const evaluationOnly = options.evaluationOnly === true;
+    const defaultMaxPages = exactDate ? 60 : 30;
+    const maxPages = Math.min(
+      60,
+      Math.max(1, Number(options.maxPages) || defaultMaxPages),
+    );
     if (!captureOrdersApiTemplate()) {
       const reason = 'sin plantilla de petición capturada';
       const coverage = ordersApiCoverage({
@@ -899,14 +1763,18 @@
         pagesRead: 0,
         reason,
       });
+      const warning = incompleteExactDateWarning(exactDate, coverage);
       return {
         ok: false,
         orders: [],
         datesWithOrders: [],
         pagesRead: 0,
         reason,
+        warnings: warning ? [warning] : [],
+        partialOrderCount: 0,
         coverageComplete: coverage.complete,
         coveragePartial: coverage.partial,
+        termination: coverage.termination,
         coverage,
       };
     }
@@ -919,25 +1787,33 @@
         pagesRead: 0,
         reason,
       });
+      const warning = incompleteExactDateWarning(exactDate, coverage);
       return {
         ok: false,
         orders: [],
         datesWithOrders: [],
         pagesRead: 0,
         reason,
+        warnings: warning ? [warning] : [],
+        partialOrderCount: 0,
         coverageComplete: coverage.complete,
         coveragePartial: coverage.partial,
+        termination: coverage.termination,
         coverage,
       };
+    }
+
+    if (exactDate && !datesOnly && !evaluationOnly) {
+      return collectCertifiedExactDate({ exactDate, maxPages });
     }
 
     const collected = new Map();
     const datesWithOrders = new Set();
     let pagesRead = 0;
-    let pagesPastTargetDate = 0;
     let reason = 'max-pages';
     let oldestObservedDate = '';
     let newestObservedDate = '';
+    let discoveryOlderFrontierPages = 0;
 
     for (let page = 1; page <= maxPages; page += 1) {
       let response;
@@ -956,7 +1832,7 @@
         break;
       }
 
-      let newestOnPage = '';
+      const pageDates = [];
       for (const key of orderKeys) {
         const fields = modules[key] && modules[key].fields;
         if (!fields || !fields.orderId) continue;
@@ -968,10 +1844,8 @@
           : (order && order.orderDate) || '';
         if (!datesOnly && !order) continue;
         if (orderDate) {
+          pageDates.push(orderDate);
           datesWithOrders.add(orderDate);
-          if (!newestOnPage || orderDate > newestOnPage) {
-            newestOnPage = orderDate;
-          }
           if (!oldestObservedDate || orderDate < oldestObservedDate) {
             oldestObservedDate = orderDate;
           }
@@ -984,21 +1858,21 @@
         }
       }
 
-      // Corte por confirmación, no por primera señal.
-      //
-      // La lista no viene estrictamente ordenada por fecha de compra, así que
-      // ver una página «vieja» no prueba que el día se haya terminado: cortar
-      // ahí devolvía conjuntos distintos entre corridas del mismo día (6 y
-      // luego 8 pedidos del 2026-04-06). Se exigen dos páginas seguidas
-      // enteramente anteriores al día antes de dar la búsqueda por cerrada.
-      if (exactDate && newestOnPage && newestOnPage < exactDate) {
-        pagesPastTargetDate += 1;
-        if (pagesPastTargetDate >= 2) {
-          reason = 'día superado';
+      // A discovery run is deliberately not a completeness proof. Once it
+      // has observed the requested day, five wholly older pages are enough to
+      // stop paying the latency of walking years of an unstable offset feed.
+      // Missing rows remain possible and the result stays non-certified; this
+      // shortcut is never used by the production invoice path above.
+      if (evaluationOnly && exactDate && collected.size > 0) {
+        const whollyOlder = pageDates.length > 0 &&
+          pageDates.every((value) => value < exactDate);
+        discoveryOlderFrontierPages = whollyOlder
+          ? discoveryOlderFrontierPages + 1
+          : 0;
+        if (discoveryOlderFrontierPages >= 5) {
+          reason = 'discovery-frontier';
           break;
         }
-      } else {
-        pagesPastTargetDate = 0;
       }
     }
 
@@ -1011,16 +1885,37 @@
       oldestObservedDate,
       newestObservedDate,
     });
+    const collectedOrders = Array.from(collected.values());
+    let warning = incompleteExactDateWarning(exactDate, coverage);
+    const exactDateUsable = !exactDate || coverage.targetDateComplete === true;
+    const discoveryUsable = evaluationOnly && Boolean(exactDate) &&
+      collectedOrders.length > 0;
+    if (discoveryUsable) {
+      coverage.mode = 'discovery-read-only';
+      coverage.certified = false;
+      coverage.evaluationOnly = true;
+      coverage.targetDateComplete = false;
+      warning = `Lectura de diagnóstico incompleta para ${exactDate}: puede `
+        + 'omitir pedidos y no autoriza guardar, vincular ni crear productos.';
+    }
     return {
-      ok: true,
-      orders: Array.from(collected.values()),
+      ok: exactDateUsable || discoveryUsable,
+      // Una fecha parcial se conserva sólo como conteo diagnóstico. No se
+      // expone como factura utilizable. En debug, `evaluationOnly` habilita
+      // únicamente la superficie OCR de lectura para medir filas observadas;
+      // la cobertura sigue falsa y producción nunca solicita este modo.
+      orders: exactDateUsable || discoveryUsable ? collectedOrders : [],
       datesWithOrders: Array.from(datesWithOrders).sort(),
       pagesRead,
       reason,
+      warnings: warning ? [warning] : [],
+      partialOrderCount: exactDateUsable ? 0 : collectedOrders.length,
+      evaluationOnly: discoveryUsable,
       // Alias planos para hosts que sólo necesitan decidir si una ausencia
       // es concluyente; `coverage` conserva la evidencia detallada.
       coverageComplete: coverage.complete,
       coveragePartial: coverage.partial,
+      termination: coverage.termination,
       coverage,
     };
   }
@@ -1033,7 +1928,6 @@
         ok: false,
         reason: 'sin plantilla de petición capturada',
         observedCalls: observedOrderApiCalls.length,
-        observedUrls: observedOrderApiCalls.map((call) => call.url.slice(0, 90)),
         probeInstalled: orderApiProbeInstalled,
       };
     }
@@ -1042,37 +1936,17 @@
     }
     try {
       const response = await ordersApiFetchPage(1);
-      const describe = (value, depth) => {
-        if (value === null || value === undefined) return typeof value;
-        if (Array.isArray(value)) {
-          return depth <= 0
-            ? `array(${value.length})`
-            : { array: value.length, first: describe(value[0], depth - 1) };
-        }
-        if (typeof value === 'object') {
-          if (depth <= 0) return `object(${Object.keys(value).length})`;
-          const out = {};
-          for (const key of Object.keys(value).slice(0, 25)) {
-            out[key] = describe(value[key], depth - 1);
-          }
-          return out;
-        }
-        const text = String(value);
-        return text.length > 60 ? `${typeof value}:${text.slice(0, 60)}…` : text;
-      };
-      const modules = (response && response.data && response.data.data) || {};
-      const orderKey = Object.keys(modules)
-        .find((key) => /^pc_om_list_order_\d+$/.test(key));
-      const sampleFields = orderKey ? modules[orderKey].fields : null;
       return {
         ok: true,
-        orderKeys: Object.keys(modules)
-          .filter((key) => /^pc_om_list_order_\d+$/.test(key)).length,
-        sampleOrderKey: orderKey || null,
-        sampleFields: sampleFields ? describe(sampleFields, 3) : null,
+        template: ordersApiTemplateSummary(),
+        response: ordersApiResponseSummary(response),
       };
     } catch (error) {
-      return { ok: false, reason: String(error && error.message ? error.message : error) };
+      return {
+        ok: false,
+        reason: String(error && error.message ? error.message : error),
+        template: ordersApiTemplateSummary(),
+      };
     }
   }
 
@@ -1654,7 +2528,9 @@
       ? items
       : [{
           sku: orderNumber ? `AE-${lastDigits(orderNumber, 8)}` : 'AE-ORDER',
+          lineTitle: orderNumber ? `AliExpress order ${orderNumber}` : 'AliExpress order',
           description: orderNumber ? `AliExpress order ${orderNumber}` : 'AliExpress order',
+          variant: '',
           quantity: 1,
           unitPrice: totals.total || 0,
           total: totals.total || 0,
@@ -2267,7 +3143,9 @@
     const unitPrice = money ? money.amount : 0;
     return {
       sku: itemId ? `AE-${lastDigits(itemId, 8)}` : `AE-${String(Math.abs(hashText(description))).slice(0, 8)}`,
+      lineTitle: title,
       description,
+      variant,
       quantity: quantity || 1,
       unitPrice,
       total: roundMoney(unitPrice * (quantity || 1)),
@@ -2299,7 +3177,9 @@
     const total = totalMoney ? totalMoney.amount : 0;
     return {
       sku: `AE-${lastDigits(orderNumber, 8)}`,
+      lineTitle: title,
       description: title,
+      variant: '',
       quantity: 1,
       unitPrice: total,
       total,
@@ -2912,7 +3792,9 @@
       seenRows.add(rowKey);
       items.push({
         sku,
+        lineTitle: title,
         description,
+        variant,
         quantity,
         unitPrice: priceInfo.unitPrice || priceInfo.total || 0,
         total: priceInfo.total || roundMoney((priceInfo.unitPrice || 0) * quantity),
@@ -3015,7 +3897,9 @@
       usedRows.add(row);
       items.push({
         sku,
+        lineTitle: title,
         description,
+        variant,
         quantity,
         unitPrice: priceInfo.unitPrice || priceInfo.total || 0,
         total: priceInfo.total || roundMoney((priceInfo.unitPrice || 0) * quantity),
@@ -3138,7 +4022,9 @@
 
       items.push({
         sku,
+        lineTitle: title,
         description,
+        variant,
         quantity,
         unitPrice: priceInfo.unitPrice || priceInfo.total || 0,
         total: priceInfo.total || roundMoney((priceInfo.unitPrice || 0) * quantity),
@@ -3621,7 +4507,9 @@
 
       items.push({
         sku,
+        lineTitle: title,
         description,
+        variant: context.variant || '',
         quantity: row.priceQuantity.quantity,
         unitPrice: row.priceQuantity.unitPrice,
         total: roundMoney(row.priceQuantity.unitPrice * row.priceQuantity.quantity),
@@ -3824,7 +4712,9 @@
 
     return {
       sku,
+      lineTitle: title,
       description,
+      variant: context.variant || '',
       quantity: priceQuantity.quantity,
       unitPrice: priceQuantity.unitPrice,
       total: roundMoney(priceQuantity.unitPrice * priceQuantity.quantity),
@@ -3873,7 +4763,9 @@
 
       items.push({
         sku,
+        lineTitle: context.title,
         description,
+        variant: context.variant || '',
         quantity: priceQuantity.quantity,
         unitPrice: priceQuantity.unitPrice,
         total: roundMoney(priceQuantity.unitPrice * priceQuantity.quantity),
@@ -4434,11 +5326,19 @@
   function withSupplierVariantIdentity(item) {
     if (!item) return item;
     const explicit = cleanTitle(item.variant || '');
-    const parenthetical = cleanTitle(item.description || '')
+    const description = cleanTitle(item.description || '');
+    const parenthetical = description
       .match(/\(([^()]{1,120})\)\s*$/);
     const variant = explicit || (parenthetical ? parenthetical[1] : '');
+    const explicitLineTitle = cleanTitle(item.lineTitle || '');
+    const inferredLineTitle = parenthetical && variant === parenthetical[1]
+      ? cleanTitle(description.slice(0, parenthetical.index))
+      : description;
+    const lineTitle = explicitLineTitle || inferredLineTitle;
     const suppliedVariantKey = String(item.variantKey || '').trim();
-    const variantKey = (suppliedVariantKey && (suppliedVariantKey !== 'default' || !variant)
+    const immutableVariantKey = immutableSupplierVariantKey(suppliedVariantKey);
+    const variantKey = immutableVariantKey
+      || (suppliedVariantKey && (suppliedVariantKey !== 'default' || !variant)
       ? suppliedVariantKey
       : '')
       || supplierVariantKey(variant)
@@ -4448,9 +5348,49 @@
       || 'default';
     return {
       ...item,
+      lineTitle: lineTitle || null,
       variant,
       variantKey,
     };
+  }
+
+  function immutableSupplierVariantKey(value) {
+    const match = String(value || '').trim().toLowerCase()
+      .match(/^(sku|props):([a-z0-9:|._-]+)$/);
+    if (!match || !match[2]) return '';
+    return `${match[1]}:${match[2]}`.slice(0, 240);
+  }
+
+  function immutableVariantKeyFromApiLine(line) {
+    if (!line) return '';
+    const direct = [
+      line.skuId,
+      line.sku_id,
+      line.orderLineSkuId,
+      line.selectedSkuId,
+    ].map((value) => String(value || '').trim())
+      .find((value) => /^[a-z0-9._-]{2,180}$/i.test(value));
+    if (direct) return `sku:${direct.toLowerCase()}`;
+
+    const attributes = Array.isArray(line.skuAttrs) ? line.skuAttrs : [];
+    const tuples = attributes.map((attribute) => {
+      const propertyId = String((attribute && (
+        attribute.propertyId
+        || attribute.skuPropertyId
+        || attribute.pid
+      )) || '').trim();
+      const valueId = String((attribute && (
+        attribute.valueId
+        || attribute.propertyValueId
+        || attribute.skuPropertyValueId
+        || attribute.vid
+      )) || '').trim();
+      if (!/^[a-z0-9._-]+$/i.test(propertyId)
+          || !/^[a-z0-9._-]+$/i.test(valueId)) return '';
+      return `${propertyId.toLowerCase()}:${valueId.toLowerCase()}`;
+    }).filter(Boolean).sort();
+    if (!tuples.length || tuples.length !== attributes.length) return '';
+    return `props:${tuples.join('|')}`.slice(0, 240);
   }
 
   function supplierVariantKey(value) {

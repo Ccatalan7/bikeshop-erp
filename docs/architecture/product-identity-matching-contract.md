@@ -4,11 +4,16 @@ Status: canonical. Owner of «¿este producto ya existe en mi catálogo?» for O
 invoice reconciliation, bulk product creation, and any future surface that asks
 the same question.
 
-Implementation: `lib/modules/inventory/services/product_identity/` plus
-`ProductDuplicateMatcherService`. Regressions:
+Implementation: `AIAssistantService`, `ProductIdentityReviewCoordinator`,
+`ProductDuplicateMatcherService` and
+`lib/modules/inventory/services/product_identity/`. Regressions:
 `test/unit/ocr_product_identity_matcher_test.dart` (production-derived fixture
 `test/fixtures/ocr/production_catalog_subset.json`) and
 `test/unit/product_duplicate_matcher_service_test.dart`.
+
+Live evidence: [2026-08-11 historical AliExpress audit](product-identity-matching-live-audit-2026-08-11.md).
+That end-to-end run is authoritative over isolated harness output when the two
+disagree.
 
 ## Why this document exists
 
@@ -17,26 +22,42 @@ production catalog (1555 active, non-service products). Three lines returned
 **no candidate at all** while the correct product sat in the catalog; a fourth
 returned **six different hubs, every one of them labelled equally strong**; and
 each line cost **550–700 ms of pure CPU** on the UI isolate before any network
-call. After the rebuild the same seven lines resolve **first, every time**, at
-**p50 2 ms / p95 7 ms**, with the catalog analysed once per session instead of
-once per line.
+call. After the rebuild the original focused harness resolved its configured
+probes first at **p50 2 ms / p95 7 ms**, with the catalog analysed once per
+session instead of once per line. That was a deterministic engine measurement,
+not an end-to-end claim: it disabled the production visual/adjudication path and
+did not exercise the AliExpress JSON-to-review boundary.
 
 The failures were not tuning. Each had a structural cause, and each cause is
 now a rule below. If a future change makes one of these tests fail, the rule is
 what has to be re-argued — not the assertion.
 
-## Eliminate, then rank
+## Authority, investigate, validate, then adjudicate
 
 The old engine ranked everything and used thresholds to bury mismatches. That
 is why one line could offer six equally "strong" hubs: nothing had *refused*
-any of them. The order is now fixed and non-negotiable:
+any of them. The canonical AliExpress review order is now fixed:
 
-1. **Gates.** A candidate that fails one is eliminated and never displayed.
-2. **Ranking.** Only survivors are ordered.
-3. **Shortlist policy.** Only useful survivors are shown; a top-k is never
-   padded. An empty list is an honest answer.
+1. **Confirmed authority.** An active immutable supplier-variant resolution is
+   applied before AI. A lookup error or malformed authority fails closed.
+2. **Primary multimodal investigation.** One model call receives the source
+   photo, original supplier title, selected variant, line context and the real
+   active leaf list. It returns one structured identity receipt and proposed
+   leaf IDs from that offered list. Missing, timed-out, malformed or unoffered
+   output abstains; the deterministic engine is not a fallback identity owner.
+3. **Complete catalog evaluation.** Every active non-service product is
+   evaluated. Exact leaf membership defines the normal pool; plausible identity
+   matches outside that exact leaf remain visible as catalog conflicts.
+4. **Contradiction gates.** Deterministic extraction may corroborate evidence
+   or eliminate a proved family, manufacturer or exclusive-spec conflict. An
+   unknown word cannot erase a candidate or become the only identity source.
+5. **Grounded adjudication.** A second multimodal pass compares the source with
+   every viable normal/conflict candidate and their real images. It returns
+   `same`, `different`, `composite` or `insufficient` with typed evidence.
+6. **Human review.** AI output is a cached recommendation, never an automatic
+   link or a write. Only confirmed authority can bypass review.
 
-Gates, in order:
+The contradiction gates are:
 
 | Gate | Eliminates when |
 |---|---|
@@ -106,7 +127,7 @@ the matcher from finding its product. `IXF` had no brand row while
 `AE0093 Volante IXF` sat in the catalog. Missing brand and missing product are
 independent problems, and the review says so in words.
 
-## The photo is evidence, and text cannot silence it
+## The photo is primary evidence, not exact variant identity
 
 Vision used to run only when the text named no family at all. That gate was the
 defect: a *wrong but non-null* family is the ordinary output of a relational
@@ -115,22 +136,33 @@ a rim-brake arm whose title names the system it serves; the head-noun reader
 answered `freno`, the gate saw a non-null answer, and the only evidence that
 could have corrected it was never consulted.
 
-The photo is now read for every product that has one, and reconciled against
-the words at **family** level — `Calipers` and `Herraduras` are both braking and
-are different shelves, so agreeing on the physical class proves nothing. Three
-bands, in `ProductIdentityProfile`:
+The source photo is read in the primary structured investigation for every row
+that has one. Candidate photos are supplied only to the grounded second pass.
+They are reconciled with identity-bearing words and typed variant evidence —
+`Calipers` and `Herraduras` are both braking and are different shelves, so
+agreeing on the physical class proves nothing.
 
-| Visual confidence | What happens |
-|---|---|
-| below 0.35 | the photo is not evidence; the words stand |
-| 0.35 – 0.6 | a contradiction sends the row to review |
-| 0.6 and above | the photo overrules the head noun |
+2026-08-11 correction: a high-confidence visual family must not replace the
+only textual family before retrieval. Text and photo create provenance-bearing
+hypotheses; retrieval takes their union and any disagreement blocks automatic
+linking until resolved. Likewise, an identical URL, byte hash or perceptual
+photo is a retrieval channel, not an `exact` verdict. AliExpress commonly reuses
+one listing photo across variants, and the live app labelled a 22.2x300 seatpost
+as the same product as a front axle. Family/manufacturer/exclusive-spec gates
+therefore run before image identity can authorize a match.
 
 ## A category is a place for an object, not for a word
 
-`ProductCategoryResolver` runs before any hint. It establishes the object, maps
-it to the leaves that family may occupy, and matches those against the tenant's
-real tree. Two rules do the work, and neither names a product:
+The primary investigation receives compact `{id, path}` records for real active
+leaf categories and may propose only those exact IDs. The client verifies that
+every proposed ID was offered and that its path/version still match the row
+receipt. A free-form label, fuzzy leaf name, parent node, inactive node or
+invented ID has no authority and makes the investigation insufficient.
+
+The deterministic `ProductCategoryResolver` remains a validator and diagnostic
+trace. It can object to a proved contradiction but cannot originate the only
+category or force an unknown object into a familiar vocabulary. Two validator
+rules remain important, and neither names a product:
 
 - **A relational word is not an identity.** The `freno` in `Herradura de freno`
   is the system served. It reaches the profile as a descriptor and can never
@@ -139,12 +171,12 @@ real tree. Two rules do the work, and neither names a product:
   children, so it organises a system; it is not a thing on a shelf. That missing
   rule — not a missing synonym — is how a Herradura was filed as Frenos.
 
-When the object is unknown, the evidence conflicts, the family has no leaf in
-this tenant, or two unrelated branches answer to the same leaf name, the
-resolver **refuses in words** and the row goes to review. A plausible wrong leaf
-is the outcome it exists to prevent. `Adaptadores` living under three parents is
-refused for exactly this reason, and only then does the catalog semantic
-resolver get to answer.
+If the AI investigation is missing or invalid, the row abstains even when the
+deterministic resolver could guess a familiar category. If a valid exact leaf is
+proposed, products assigned to that same `category_id` form the ordinary list.
+A plausible identity match assigned elsewhere or missing a category is not
+admitted into that list and is not lost: it is shown separately as a catalog
+conflict for hygiene/review.
 
 ## A gate eliminates from the recommendation, never from the view
 
@@ -180,17 +212,79 @@ later option cannot quietly become the answer.
 `speeds` is an exclusive specification for the same reason spoke count is: a
 9-speed link does not close an 11-speed chain.
 
-## A family that is missing is a family that cannot eliminate
+## Supplier aliases require immutable variant identity
 
-`Missinglink` and `Sticker protector` were not in the taxonomy. Neither side of
-the comparison had a family, so the family gate never fired, and a chain
-*sticker* that shared the brand and the word `cadena` became the top candidate
-for a master link. The gap was not in the ranking; the object simply had no
-name. Adding a family is therefore a correctness fix, not a convenience, and a
-head noun the shop actually writes belongs in `BikePartTaxonomy` before anything
-downstream can reason about it.
+An active, confirmed alias keyed by tenant + supplier + listing + immutable
+supplier SKU/option ID or ordered property-ID tuple may resolve directly after
+checking that the catalog product remains active. Translated labels, image
+filenames and `default` are soft retrieval evidence only; absence of an
+extracted option is not proof that a listing has one variant.
 
-## Words the shop actually writes
+Corrections are append-only revisions with active/superseded/revoked state and
+a negative edge. A model recommendation cannot recursively become authority
+without a later confirmed business outcome.
+
+## One source line may resolve to a product set
+
+`one invoice line -> one product` is not an identity invariant. A Shimano
+ST-EF500 3x7 set resolves to left and right catalog components; a BUCKLOS
+front+rear caliper set does the same. The resolver may return an ordered product
+set with quantities, or abstain when package decomposition is uncertain. It
+must not choose one component and silently discard the rest.
+
+Composition and packaging are separate decisions. A primary product shipped
+with a subordinate accessory (for example, a hub with its quick release) is
+still one catalog identity. A set contains two or more independently stocked
+identities and may expand to ordered component quantities. A homogeneous pack
+contains repeated units of one catalog identity and may multiply inventory
+quantity only after the immutable supplier variant and catalog selling unit
+prove the conversion. Supplier quantity alone, listing-menu text and a photo
+never authorize either expansion; uncertainty must remain review-only.
+
+The document is resolved as a joint assignment rather than independent row
+argmaxes. Distinct immutable supplier variants cannot collapse onto one catalog
+row without authoritative evidence, while real repeated purchases of the same
+product remain valid. This constraint is evidence-aware, not global uniqueness.
+
+## AI investigates first and adjudicates a grounded universe
+
+The first multimodal call owns the row identity used by the canonical review
+path. Its strict receipt includes schema/prompt/model versions, row revision,
+catalog/tree versions and listing/variant/image identity. The row and picker use
+that same immutable snapshot; opening the picker performs no model call, vision
+read or catalog reload. Any identity-bearing edit increments the row revision
+and produces one new receipt.
+
+After full-catalog evaluation and contradiction validation, the second call
+receives the source image/identity plus all viable normal and catalog-conflict
+candidates, their real images and explicit differences. It is not restricted
+to a deterministic score band. Its strict result is one of `same`, `different`,
+`composite` or `insufficient`; every pick/rejection uses only offered product IDs
+and typed basis values (`model`, `spec`, `manufacturer`, `image`, `name`,
+`history`). A missing field, invented ID, invalid basis, inconsistent cardinality,
+timeout, malformed response or candidate-budget overflow becomes
+`insufficient` without silent truncation or heuristic fallback.
+
+The model's self-reported confidence is descriptive and is never a linking
+threshold. The complete evidence path must be calibrated on a locked holdout.
+
+The automatic-link policy accepts only an active confirmed immutable supplier
+resolution or an equivalently proven catalog/SKU identity. AI `same` is still a
+review recommendation. AI `composite` displays component IDs and quantities but
+offers no single-product/link/apply action. A failure remains retryable and
+`abstained`; it never implies `Crear nuevo`.
+
+## A missing deterministic family cannot own or erase identity
+
+`Missinglink` and `Sticker protector` once demonstrated why descriptor overlap
+cannot stand in for object identity. In the canonical path, an unresolved
+deterministic family does not trigger an early return and does not require a new
+synonym before the row can be understood: the structured multimodal identity
+still reaches complete catalog evaluation. The missing family merely withholds
+that validator gate. If the AI identity is itself insufficient, the row abstains
+and manual catalog search remains available.
+
+## Deterministic validator regressions
 
 - **Compound heads split.** `Cortacadena RIDERACE` and `Corta cadena RiderAce
   Negro` are the same tool; without splitting they shared exactly one token and
@@ -215,37 +309,96 @@ downstream can reason about it.
 - **Every regular expression is compiled once.** Building them inside the
   extraction call recompiled roughly two hundred patterns per product per line,
   which was most of the 550–700 ms.
-- **Retrieval is bounded.** A line is scored against a shortlist selected by
-  shared evidence — supplier code, listing id, image identity, model code,
-  family combined with brand or a decisive measurement — capped at 120, never
-  against the whole catalog. Deterministic evidence enters unconditionally, so a
-  shared SKU or the same photo reaches the matcher even when the two titles have
-  no word in common.
-- **The photo is read once per image, not once per candidate and not twice per
-  row.** Comparing the invoice image against each catalog image cost one model
-  call and one download per candidate per line — up to twenty-one vision calls
-  and over a hundred downloads for one invoice, all between the operator and
-  their first decision. One structured reading per distinct image, cached by
-  canonical image identity, replaces it. The title cleaner already sends that
-  same photo, so it returns the object reading in the *same* call and hands it
-  over (`primeVisualReading`); asking a second time doubled latency and quota
-  for an answer already paid for.
+- **At current scale, retrieval is the full catalog.** The active non-service
+  catalog has about 1,555 products and cached deterministic profiles score in
+  milliseconds. After an authoritative alias/code fast path, every profile
+  reaches the gates; the index may order the picker but cannot omit the gold.
+  If measured scale later breaks the latency gate, replace this with a
+  recall-asserted union of supplier/listing history, lexical/embedding,
+  family+spec and image channels plus a broad fallback before `Crear nuevo`.
+  Neither an exact nor perceptual photo bypasses the gates.
+- **The source photo is investigated once per row revision.** Comparing it
+  independently against each catalog row spent one model call per candidate.
+  The primary call now returns display cleanup and structured identity together;
+  the add-on's `AI_CLEANED` marker is only a display hint and never an identity
+  receipt. The grounded second pass receives candidate images in one bounded
+  request. Reopening the picker reuses the cached receipt and adjudication.
 
 ## Measured gate
 
-`test/unit/ocr_product_identity_matcher_test.dart` asserts, against real
-catalog rows: top-1 and top-3 on all seven lines, **zero** candidates from a
-different physical class, p95 under 150 ms per line without network (measured
-~7 ms), and zero AI calls when visual reading is not needed.
+The executable production-derived gate is now
+`test/unit/product_identity_live_audit_corpus_test.dart`, backed by 48 diagnosed
+regression rows, the current 1,555-product catalog snapshot and the real
+134-node production category tree. On 2026-08-12 it admitted every clear gold
+to a normal or explicit catalog-conflict scope, retained all three acceptable
+ambiguous candidate sets, abstained on both explicit no-catalog rows and exposed
+both SKUs for the product-set row. The deterministic text-only track measured
+37/42 clear top-1 while vision, immutable aliases and AI were deliberately off;
+that gap is evidence for runtime verification, not permission to inject the
+gold category or relabel image/listing-dependent rows as text matches.
+
+This is a deterministic regression gate, not proof that unmeasured invoices or
+live AI are perfect. The original 40-row version passed immediately before the
+first unseen date classified a seatpost shim as a saddle; the next opened date
+then exposed fitment/content/subcomponent confusion across six more rows. Once
+an unseen row is opened to add vocabulary, category mappings or specs, it
+becomes regression data and its entire listing/variant group must be replaced
+by another sealed holdout group. A listing-group holdout and live AI off/on
+calibration are still required before any non-authoritative auto-link policy can
+be enabled.
+
+The holdout must execute the production stages rather than inject the expected
+product's category, reuse the observed AI category as truth, or disable visual
+and adjudication paths. Report normal recommendation, catalog-conflict and
+abstention metrics separately; their union is recall diagnostics, not top-1
+accuracy.
+
+Selected variant evidence is ordered after product-line evidence. An explicit
+colour mismatch is an exclusive gate between sold variants; an agreeing colour
+may break a true line-evidence tie but cannot outweigh model, supplier title,
+typed material or publication-photo corroboration. A shared listing/photo is
+never exact. Document-level listing consistency may expose a contradiction by
+abstaining and reordering manual choices, but cannot create a recommendation or
+alias without immutable confirmed provenance. Negative controls must include
+listings that legitimately map different options to different catalog rows.
+
+Before the live holdout, run catalog taxonomy closure over every active
+non-service AliExpress product: a product on a known leaf must resolve to a
+family or an explicit reviewed exception, and every `negativeHead` must be
+claimed by another positive family or covered by a refusal regression. This
+would have caught `adaptador de tija`: `seatpost` rejected the phrase while no
+family owned the resulting object.
+
+`test/unit/ocr_product_identity_matcher_test.dart` asserts focused behavior
+against a production-derived subset. The full-catalog harness currently has
+nine configured probes, no outcome assertions, and disables production visual
+reading/adjudication; a green harness is latency and diagnostic evidence, not an
+end-to-end accuracy gate.
 
 `test/unit/product_category_resolver_test.dart` holds the cross-family
 regressions: rotor, pastilla, a hub that says «compatible con freno de disco»,
-an extractor, a rim tape and the herradura. They are a family of cases on
+an extractor, a rim tape, the herradura and the seatpost shim. They are a family of cases on
 purpose — a single herradura exception would have proved nothing about the rule.
 
-`test/unit/ocr_single_vision_reading_test.dart` asserts the AI budget: one call
-carries both the name and the object reading, a reading obtained without a photo
-is refused, and a primed reading costs zero model calls.
+`test/unit/seatpost_adapter_identity_regression_test.dart` replays the exact
+2024-12-17 row against all 1,555 identity-only fixture products. The committed
+catalog uses synthetic record/tenant IDs, omits supplier and image fields, and
+zeroes money while retaining the adversarial catalog-scale identity surface.
+With corrected catalog placement it
+requires `AE0274` top-1, eliminates `AE0266` by its diameter pair and allows no
+saddle in normal/operator choices; with the frozen historical placement it
+requires `AE0274` to remain visible only as an explicit catalog conflict.
+The canonical macOS replay measured the same effective result: dedicated
+`Adaptadores de tija` placement, `AE0274` as the sole normal candidate,
+`AE0266` explicitly discarded by the `27.2|30` versus `27.2|28.6` pair, and
+zero saddle candidates. This closes the diagnosed regression only; it does not
+replace the required sealed listing-group holdout.
+
+`test/unit/ai_first_product_identity_coordinator_test.dart` asserts authority
+ordering, offered-leaf validation, full-catalog admission, prompt-injection
+isolation, typed adjudication, ablation and fail-closed behavior. Widget gates
+assert that row and picker render the same cached decision and that an AI
+composite exposes no single-product action.
 
 `test/unit/aliexpress_sku_reservation_key_test.dart` drives the reservation
 authority against a fake sequence with `Completer`s: two byte-identical rows get
@@ -253,7 +406,14 @@ different SKUs, a same-row retry spends no call, concurrent rows serialise, and
 a number that reappears is refused rather than shown.
 
 `test/harness/ocr_identity_engine_probe.dart` and
-`test/harness/ocr_matcher_baseline.dart` run the same seven lines against a
-full production-derived catalog dump; they are not part of the automatic suite
-because they need that dump, and they are how a future change is re-measured
-rather than re-argued.
+`test/harness/ocr_matcher_baseline.dart` run against a full production-derived
+catalog dump; they are not part of the automatic suite because they need that
+dump. They must gain assertions and production-like visual/adjudication inputs
+before they can guard correctness.
+
+The release gate must also replay the real AliExpress JSON -> ERP parser -> review ->
+picker path on dates split by listing/variant group, with aliases both enabled
+and masked. It records candidate recall@K separately from top-1, product-set
+accuracy, exact category ID, false-new, false-link, abstention, AI calls/cost and
+stage latency. Known-existing rows require 100% gold retrieval and zero wrong
+automatic links; an honest abstention is valid, an invented duplicate is not.

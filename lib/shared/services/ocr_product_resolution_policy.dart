@@ -5,6 +5,10 @@ enum OcrProductResolutionState {
   unsearched,
   searching,
   reviewRequired,
+
+  /// Matching stopped safely because identity evidence conflicted or AI could
+  /// not decide. This is not evidence that the product is new.
+  abstained,
   noCandidates,
   newProduct,
   failed,

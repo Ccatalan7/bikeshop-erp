@@ -1,5 +1,6 @@
 import '../models/brand_models.dart';
 import '../models/category_models.dart';
+import 'product_identity/product_identity_extractor.dart';
 
 /// Evidence used to explain a deterministic catalog semantic resolution.
 enum ProductCatalogSemanticEvidenceKind {
@@ -124,13 +125,6 @@ class ProductCatalogSemanticResolver {
     cranksetFamily: 'Componentes / Transmisión / Volantes / Volante',
     valveAdapterFamily: 'Accesorios / Adaptadores',
     tubelessValveFamily: 'Componentes / Ruedas / Tubeless / Válvula Tubeless',
-  };
-
-  // IXF is intentionally recognized even when the local brand table is
-  // missing it. That produces an explicit review instead of accepting a
-  // conflicting image/AI guess such as Shimano.
-  static const Map<String, String> _knownExternalBrandAliases = {
-    'ixf': 'IXF',
   };
 
   ProductCatalogSemanticResolution resolve(
@@ -469,28 +463,26 @@ class ProductCatalogSemanticResolver {
   }
 
   String? _explicitBrandName(String rawText) {
-    final withoutCompatibility = _stripCompatibilityClaims(rawText);
-    final aliases = <String, String>{
-      for (final brand in _brands)
-        if (brand.name.trim().isNotEmpty) _normalize(brand.name): brand.name,
-      ..._knownExternalBrandAliases,
-    };
-    final normalized = ' ${_normalize(withoutCompatibility)} ';
-    final matches = aliases.entries
-        .where((entry) => normalized.contains(' ${entry.key} '))
-        .toList(growable: false)
-      ..sort((left, right) => right.key.length.compareTo(left.key.length));
-    return matches.isEmpty ? null : matches.first.value;
-  }
-
-  String _stripCompatibilityClaims(String value) {
-    return value.replaceAll(
-      RegExp(
-        r'\b(?:compatible(?:\s+con)?|compatibility\s+with|works\s+with|para|for)\b[^,;|()]*',
-        caseSensitive: false,
+    // The identity extractor owns maker-vs-fitment-vs-object semantics. A
+    // second free-text grammar here used to contradict it: `Squirt` inside
+    // `squirt container` became a maker after the matcher had correctly spent
+    // the same word as the product's taxonomy head.
+    final asserted = ProductIdentityExtractor.extract(
+      ProductIdentityInput(
+        name: rawText,
+        sourceTitle: rawText,
+        knownBrands: _brands.map((brand) => brand.name),
       ),
-      ' ',
-    );
+    ).assertedBrand;
+    if (asserted == null) return null;
+
+    for (final brand in _brands) {
+      if (_normalize(brand.name) == asserted) return brand.name;
+    }
+    for (final maker in ProductIdentityExtractor.externalManufacturers) {
+      if (_normalize(maker) == asserted) return maker.toUpperCase();
+    }
+    return asserted;
   }
 
   bool _categoryHintMatches(String hint, Category category) {

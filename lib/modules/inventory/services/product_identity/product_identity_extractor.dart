@@ -42,6 +42,7 @@ class ProductIdentityInput {
     this.description,
     this.rawText,
     this.sourceTitle,
+    this.variantText,
     this.brandHint,
     this.brandIsAsserted = false,
     this.modelHint,
@@ -63,6 +64,13 @@ class ProductIdentityInput {
   /// families the original wins. Left null for a catalog row, whose `name` is
   /// already the shop's own statement.
   final String? sourceTitle;
+
+  /// The exact supplier option selected for this purchased row.
+  ///
+  /// It is deliberately separate from [name]: a selected colour can reject a
+  /// different sold variant or break a true line-evidence tie, but it cannot
+  /// inflate the product-line identity score.
+  final String? variantText;
 
   /// A brand the caller believes applies. It is a *hint*: it is promoted to an
   /// assertion only when the identity text confirms it. An AI reading
@@ -138,6 +146,8 @@ class ProductIdentityExtractor {
     'zoom',
     'wellgo',
     'stronglight',
+    'avid',
+    'enlee',
   };
 
   /// Words that introduce what a product *fits*, not what it *is*.
@@ -153,7 +163,8 @@ class ProductIdentityExtractor {
   /// crankset, and reading `Motor` as its family deleted the only correct
   /// candidate in the catalog.
   static final RegExp _inclusionMarker = RegExp(
-    r'\b(?:incluye|incluido(?:s)?|con\s+su|mas|plus)\b|\+',
+    r'\b(?:incluye(?:n)?|incluido(?:s|as)?|contiene|contenido(?:s|as)?'
+    r'|viene\s+con|acompanado(?:s|as)?\s+de|con|with|mas|plus)\b|\+',
   );
 
   static const Set<String> _stopWords = <String>{
@@ -230,6 +241,18 @@ class ProductIdentityExtractor {
     'sku',
     'ae',
     'color',
+    'aluminio',
+    'aluminum',
+    'aluminium',
+    'aleacion',
+    'alloy',
+    'plastico',
+    'plastic',
+    'carbon',
+    'carbono',
+    'fibra',
+    'acero',
+    'steel',
     'size',
     'talla',
   };
@@ -276,6 +299,17 @@ class ProductIdentityExtractor {
     'celeste': 'celeste',
     'titanio': 'titanio',
     'titanium': 'titanio',
+    // AliExpress's K1105 variant calls the grey finish `Ti-Color`; the tenant
+    // catalog stores the same selected finish as `Gris`.
+    'ti color': 'gris',
+  };
+
+  /// Two-character codes are usually noise or measurements. These two are
+  /// real model/series codes only inside the measured families that use them.
+  static const Map<String, Set<String>> _shortModelCodesByFamily =
+      <String, Set<String>>{
+    'light': <String>{'t6'},
+    'brake_rotor': <String>{'g3'},
   };
 
   /// Families whose dimensions in `NNxNN` form describe an axle.
@@ -320,6 +354,7 @@ class ProductIdentityExtractor {
       RegExp(r'\b(?:bcd\s*(\d{2,3})|(\d{2,3})\s*bcd)\b');
   static final RegExp _speeds =
       RegExp(r'\b(\d{1,2})\s*(?:v|vel|velocidades|speed|speeds)\b');
+  static final RegExp _speedS = RegExp(r'\b([6-9]|1[0-3])s\b');
   static final RegExp _rotorDiameter =
       RegExp(r'\b(140|160|180|200|203|220)mm\b');
   static final RegExp _sixBolt =
@@ -328,6 +363,18 @@ class ProductIdentityExtractor {
   static final RegExp _clampDiameter = RegExp(r'\b(25\.4|31\.8|35)mm\b');
   static final RegExp _postDiameter =
       RegExp(r'\b(25\.4|27\.2|28\.6|30\.9|31\.6|34\.9)mm\b');
+  static final RegExp _postAdapterDiameterPair = RegExp(
+    // Normalization removes punctuation, so `27.2-30.0` reaches this reader
+    // as `27.2 30.0`. A bare-space separator is safe here because this pattern
+    // only runs after the object has been established as a seatpost shim.
+    r'\b(22\.2|25\.4|27\.2|28\.6|30(?:\.0)?|30\.4|30\.9|31\.6|31\.8|33\.9|34\.9|36)(?:\s*(?:-|a|to|x)\s*|\s+)'
+    r'(22\.2|25\.4|27\.2|28\.6|30(?:\.0)?|30\.4|30\.9|31\.6|31\.8|33\.9|34\.9|36)(?:mm)?\b',
+  );
+  static final RegExp _spacerThickness =
+      RegExp(r'\b(2|3|5|10|15|20|25|30|35|40)(?:\.0)?mm\b');
+  static final RegExp _steeringSpacerText = RegExp(
+    r'\b(?:espaciador(?:es)?|spacer(?:s)?)\b',
+  );
   static final RegExp _crankLength =
       RegExp(r'\b(150|155|160|165|170|172\.5|175|180)mm\b');
   static final RegExp _shellBsa = RegExp(r'\bbsa\b');
@@ -354,14 +401,57 @@ class ProductIdentityExtractor {
       RegExp(r'\b(?:delantera?o?|delanteras?|front)\b');
   static final RegExp _rear =
       RegExp(r'\b(?:trasera?o?|traseras?|rear|posterior)\b');
-  static final RegExp _packCount =
-      RegExp(r'\b(\d{1,3})\s*(?:pcs|un|uds|unidades|pares)\b');
+  static final RegExp _packCount = RegExp(
+    r'\b(\d{1,3})\s*(?:pcs|pzs|piezas|un|uds|unidades|pares|pair|pairs)\b',
+  );
+  static final RegExp _packOptionList = RegExp(
+    // `/` and `-` are punctuation and reach the canonical reader as spaces.
+    // Requiring at least two counts keeps a selected `500PCS` distinct from
+    // the listing menu `100-500 piezas`.
+    r'\b\d{1,3}(?:\s+(?:\d{1,3}))+\s*'
+    r'(?:pcs|pzs|piezas|un|uds|unidades|pares|pair|pairs)\b',
+  );
+  static final RegExp _cableHousingDiameter = RegExp(r'\b(4|5)(?:\.0)?mm\b');
+  static final RegExp _cableShiftSystem =
+      RegExp(r'\b(?:cambio|cambios|shift|shifter|derailleur)\b');
+  static final RegExp _cableBrakeSystem = RegExp(r'\b(?:freno|frenos|brake)\b');
+  static final RegExp _innerCableTip = RegExp(
+    r'\b(?:inner cable tips?|cable tips?|cable crimps?|punta(?:s)? de piola|terminal(?:es)? de piola interior)\b',
+  );
+  static final RegExp _housingFerrule = RegExp(
+    r'\b(?:housing ferrules?|cable ferrules?|cable end caps?|'
+    r'topes? de funda|capuchones? de piola|tapas? para cable|'
+    r'tapas? de (?:los )?extremos? de cable exterior|'
+    r'carcasas? de punta de cable)\b',
+  );
+  static final RegExp _applicatorCapacity =
+      RegExp(r'\b(\d{1,4})(?:\.0)?\s*ml\b');
   static final RegExp _valveLength = RegExp(r'\b(\d{2,3})mm\b');
+  static final RegExp _ergonomicGrip = RegExp(r'\bergonomic(?:o|a|os|as)?\b');
+  static final RegExp _roadLever = RegExp(r'\b(?:ruta|road|carretera)\b');
+  static final RegExp _flatBarLever =
+      RegExp(r'\b(?:mtb|mountain|flat\s*bar|manillar\s+recto)\b');
+  static final RegExp _traditionalBell = RegExp(r'\btradicional\b');
+  static final RegExp _metalBell = RegExp(r'\b(?:metal|aleacion)\b');
+  static final RegExp _electronicBell =
+      RegExp(r'\b(?:electronic(?:o|a)?|electric(?:o|a)?|recargable|usb)\b');
+  static final Map<String, RegExp> _constructionMaterials = <String, RegExp>{
+    'aluminum': RegExp(
+      r'\b(?:aluminio|aluminum|aluminium|aleacion\s+de\s+aluminio|aluminum\s+alloy|aluminium\s+alloy)\b',
+    ),
+    // Polycarbonate is a thermoplastic body material. Keeping it untyped let
+    // a transparent plastic spacer outrank the purchased aluminium variant.
+    'plastic': RegExp(
+      r'\b(?:plastico|plastic|policarbonato|polycarbonato|polycarbonate)\b',
+    ),
+    'carbon': RegExp(r'\b(?:fibra\s+de\s+carbono|carbono|carbon)\b'),
+    'steel': RegExp(r'\b(?:acero|steel)\b'),
+  };
   static final RegExp _hasLetter = RegExp('[a-z]');
   static final RegExp _hasDigit = RegExp('[0-9]');
   static final RegExp _nonAlphanumeric = RegExp(r'[^a-z0-9]');
   static final RegExp _bareMeasurement =
-      RegExp(r'^\d+(?:mm|cm|t|h|v|w|c|pcs|psi|mah|wh)$');
+      RegExp(r'^\d+(?:mm|cm|ml|t|h|v|w|c|pcs|psi|mah|wh)$');
   static final RegExp _bcdToken = RegExp(r'^(?:\d{2,3}bcd|bcd\d{2,3})$');
   static final RegExp _onlyLetters = RegExp(r'^[a-z]+$');
   static final RegExp _onlyDigits = RegExp(r'^\d+$');
@@ -392,6 +482,7 @@ class ProductIdentityExtractor {
     final normalizedName = _normalize(input.name);
     final normalizedDescription = _normalize(input.description ?? '');
     final normalizedRaw = _normalize(input.rawText ?? '');
+    final normalizedVariant = _normalize(input.variantText ?? '');
     final fullText = <String>[
       normalizedName,
       normalizedDescription,
@@ -406,34 +497,92 @@ class ProductIdentityExtractor {
 
     // The supplier's own words decide the object before the rewrite does.
     final normalizedSource = _normalize(input.sourceTitle ?? '');
-    var heads = normalizedSource.isEmpty
-        ? _detectHeads(identityText)
+    final sourceIdentityText =
+        normalizedSource.isEmpty ? '' : _segment(normalizedSource).identity;
+    // Brand reading must see the same taxonomy evidence as family reading,
+    // including object phrases that a relational marker moved to fitment.
+    // Marketplace copy such as `Squeeze Bottle for Sauce Plastic Squirt
+    // Container` names the object with `squirt container` after `for`;
+    // `Squirt` is therefore spent as part of that object phrase, not available
+    // to be re-read as either its maker or a compatibility brand.
+    final sourceAllHeads = normalizedSource.isEmpty
+        ? const _HeadDetection(winner: null, candidates: <String>{})
+        : _detectHeads(normalizedSource);
+    final sourceHeads = normalizedSource.isEmpty
+        ? const _HeadDetection(winner: null, candidates: <String>{})
         : _detectHeads(_segment(normalizedSource).identity);
-    if (heads.winner == null) heads = _detectHeads(identityText);
-    if (heads.winner == null && fitmentText.isNotEmpty) {
-      // Segmentation must never leave the identity without a head noun.
-      //
-      // `para` usually introduces fitment (`Tee para bicicleta`), but it also
-      // introduces the object itself (`Repuesto para caliper de freno`). When
-      // the cut removes the only head noun in the title, the cut was wrong:
-      // fall back to the whole clause rather than declare the object unknown.
-      // Brands and model codes keep their own segments, so a compatibility
-      // claim still cannot become identity.
-      heads = _detectHeads('$identityText $fitmentText');
-    }
+    final firstSourceIdentityClause = normalizedSource
+        .split(_clauseSplit)
+        .map((clause) => _segment(clause).identity.trim())
+        .firstWhere((clause) => clause.isNotEmpty, orElse: () => '');
+    final firstSourceClauseHeads = firstSourceIdentityClause.isEmpty
+        ? const _HeadDetection(winner: null, candidates: <String>{})
+        : _detectHeads(firstSourceIdentityClause);
+    final supplierTitleFamilyIsAuthoritative = sourceHeads.winner != null &&
+        sourceHeads.candidates.length == 1 &&
+        firstSourceClauseHeads.candidates.contains(sourceHeads.winner);
+    final cleanedHeads = _detectHeads(identityText);
+    // A marketplace title naming several objects is an SEO/option list, not
+    // an authority. Let the curated readable name vote in that case; without
+    // this, `... shifter ... derailleur ... inner cable tips ...` silenced the
+    // exact cleaned object `Terminal de piola aluminio`.
+    // A translated marketplace title can start with generic fluff and name
+    // the sold object only in the next clause. If that first clause contains
+    // no typed object, keep the first object the supplier actually names as a
+    // non-authoritative hypothesis. Later SEO objects still make the profile
+    // reviewable; this merely prevents a wrong rewrite from replacing all raw
+    // evidence (the live cable-cap title otherwise became a derailleur).
+    final useLeadingSourceHypothesis =
+        sourceHeads.winner != null && firstSourceClauseHeads.candidates.isEmpty;
+    var heads = supplierTitleFamilyIsAuthoritative || useLeadingSourceHypothesis
+        ? sourceHeads
+        : cleanedHeads;
+    if (heads.winner == null) heads = sourceHeads;
+    // Deliberately do not recover a head from [fitmentText]. `Repuesto para
+    // caliper`, `kit con manguera` and `compatible con Shimano` describe what
+    // the sold object fits or contains, not what it is. If the identity side
+    // has no head, vision/category/manual review may add evidence; promoting a
+    // relational object here would manufacture a false identity.
     final familyId = heads.winner;
 
     final consumed = _Consumption(fullText);
-    final specs = _extractSpecs(
+    final lineSpecs = _extractSpecs(
       fullText,
       familyId,
       consumed,
       nameLength: normalizedName.length,
+      materialText:
+          sourceIdentityText.isNotEmpty ? sourceIdentityText : identityText,
+    );
+    final variantConsumed = _Consumption(normalizedVariant);
+    final variantSpecs = normalizedVariant.isEmpty
+        ? const <PartSpecKind, String>{}
+        : _extractSpecs(
+            normalizedVariant,
+            familyId,
+            variantConsumed,
+            nameLength: normalizedVariant.length,
+            materialText: _segment(normalizedVariant).identity,
+          );
+    final specs = Map<PartSpecKind, String>.unmodifiable(
+      <PartSpecKind, String>{...lineSpecs, ...variantSpecs},
     );
 
     final brands = _detectBrands(
       identityText: identityText,
       fitmentText: fitmentText,
+      // `Doble` inside `pinzas de doble pivote` is part of what the object is.
+      // The tenant happens to have a brand row spelled the same way, and the
+      // free-text reader asserted it as the manufacturer — so the invoice line
+      // claimed to be made by «Doble», the brand gate compared that against
+      // `Ztto`, and the one correct product in the catalog was eliminated.
+      // A word already explained as the head noun is not available to anything
+      // else, exactly as a character consumed by a typed extractor can never be
+      // re-read as a model code.
+      reservedWords: _wordsOf(<String>{
+        ...heads.matchedPhrases,
+        ...sourceAllHeads.matchedPhrases,
+      }),
       knownBrands: input.knownBrands,
       brandHint: input.brandHint,
       brandIsAsserted: input.brandIsAsserted,
@@ -444,21 +593,36 @@ class ProductIdentityExtractor {
       consumed: consumed,
       modelHint: input.modelHint,
       specs: specs,
+      familyId: familyId,
       identityText: identityText,
       nameText: normalizedName,
     );
+    final selectedOptionModels = normalizedVariant.isEmpty
+        ? const _ModelCodes.empty()
+        : _extractModelCodes(
+            consumed: variantConsumed,
+            modelHint: null,
+            specs: variantSpecs,
+            familyId: familyId,
+            identityText: normalizedVariant,
+            nameText: normalizedVariant,
+          );
 
     return ProductIdentityProfile(
       identityText: identityText,
       fitmentText: fitmentText,
       familyId: familyId,
       familyCandidates: heads.candidates,
+      supplierTitleFamilyIsAuthoritative: supplierTitleFamilyIsAuthoritative,
       assertedBrand: brands.asserted,
       compatibilityBrands: brands.compatibility,
       modelCodes: models.identity,
       primaryModelCodes: models.primary,
+      selectedOptionModelCodes: selectedOptionModels.primary,
       compatibilityModelCodes: models.compatibility,
       specs: specs,
+      lineSpecs: lineSpecs,
+      variantSpecs: variantSpecs,
       descriptorTokens: _descriptorTokens(consumed.remainingText),
       categoryPath: _categoryPath(input.categoryPath),
     );
@@ -516,13 +680,28 @@ class ProductIdentityExtractor {
     final tokens = text.split(' ');
     var changed = false;
     for (var index = 0; index < tokens.length; index++) {
-      final expansion = BikePartTaxonomy.compoundExpansions[tokens[index]];
+      final token = tokens[index];
+      final expansion = switch (token) {
+        // Catalog imports often join the material and manufacturing method.
+        // `AluminioCNC` still states an aluminum body; leaving it joined made
+        // the exact CR-2 catalog row appear to have no material while generic
+        // aluminum pedals received a stronger identity score.
+        'aluminiocnc' => 'aluminio cnc',
+        'aluminumcnc' => 'aluminum cnc',
+        'aluminiumcnc' => 'aluminium cnc',
+        _ => BikePartTaxonomy.compoundExpansions[token],
+      };
       if (expansion != null) {
         tokens[index] = expansion;
         changed = true;
       }
     }
     return changed ? tokens.join(' ') : text;
+  }
+
+  static String _canonicalDecimal(double value) {
+    if (value == value.truncateToDouble()) return value.toInt().toString();
+    return value.toString();
   }
 
   // ── Identity vs fitment ───────────────────────────────────────────────
@@ -535,7 +714,18 @@ class ProductIdentityExtractor {
       if (trimmed.isEmpty) continue;
       var head = trimmed;
       var tail = '';
-      final fitmentMatch = _fitmentMarker.firstMatch(trimmed);
+      // Some compound object heads legitimately contain a relational word:
+      // `extensión para postiza` is the sold extender, while `repuesto para
+      // caliper` merely states fitment. Claim the complete typed head before
+      // cutting at `para`, so role semantics do not destroy an object the
+      // taxonomy can name precisely.
+      final wholeClauseHead = _detectHeads(trimmed);
+      final hasCompleteTypedHead = wholeClauseHead.winner != null &&
+          wholeClauseHead.matchedPhrases.any(
+            (phrase) => phrase.contains(' para ') || phrase.contains(' for '),
+          );
+      final fitmentMatch =
+          hasCompleteTypedHead ? null : _fitmentMarker.firstMatch(trimmed);
       final inclusionMatch = _inclusionMarker.firstMatch(trimmed);
       final cut = <int>[
         if (fitmentMatch != null) fitmentMatch.start,
@@ -575,6 +765,9 @@ class ProductIdentityExtractor {
     final taken = List<bool>.filled(haystack.length, false);
     final positions = <String, int>{};
     final lengths = <String, int>{};
+    final matchedPhrases = <String>{};
+    final familiesWithGenericMatches = <String>{};
+    final familiesWithSpecificMatches = <String>{};
 
     for (final head in BikePartTaxonomy.orderedHeads) {
       if (head.requiresContext && !_hasFamilyContext(head.familyId, haystack)) {
@@ -599,6 +792,12 @@ class ProductIdentityExtractor {
         if (free) {
           for (var i = bodyStart; i < bodyEnd; i++) {
             taken[i] = true;
+          }
+          matchedPhrases.add(head.phrase);
+          if (head.isGenericWithinClass) {
+            familiesWithGenericMatches.add(head.familyId);
+          } else {
+            familiesWithSpecificMatches.add(head.familyId);
           }
           final existing = positions[head.familyId];
           if (existing == null || bodyStart < existing) {
@@ -637,6 +836,33 @@ class ProductIdentityExtractor {
       }
     }
 
+    // A catch-all noun is semantically dominated by a concrete object in the
+    // same physical class. `Extractor de núcleo de válvula ... herramienta`
+    // is one valve-core tool, while a marketplace SEO title that independently
+    // names shifter + derailleur + cable tips remains genuinely ambiguous.
+    // A family that also matched one of its specific heads is never collapsed.
+    for (final familyId in positions.keys.toList()) {
+      if (!familiesWithGenericMatches.contains(familyId) ||
+          familiesWithSpecificMatches.contains(familyId)) {
+        continue;
+      }
+      final family = BikePartTaxonomy.byId(familyId);
+      if (family == null) continue;
+      final hasConcretePeer = positions.keys.any((otherId) {
+        if (otherId == familyId) return false;
+        final other = BikePartTaxonomy.byId(otherId);
+        if (other == null || other.physicalClass != family.physicalClass) {
+          return false;
+        }
+        return !familiesWithGenericMatches.contains(otherId) ||
+            familiesWithSpecificMatches.contains(otherId);
+      });
+      if (hasConcretePeer) {
+        positions.remove(familyId);
+        lengths.remove(familyId);
+      }
+    }
+
     if (positions.isEmpty) {
       return const _HeadDetection(winner: null, candidates: <String>{});
     }
@@ -652,6 +878,7 @@ class ProductIdentityExtractor {
 
     return _HeadDetection(
       winner: ranked.first,
+      matchedPhrases: Set<String>.unmodifiable(matchedPhrases),
       candidates: Set<String>.unmodifiable(ranked),
     );
   }
@@ -663,6 +890,7 @@ class ProductIdentityExtractor {
     String? familyId,
     _Consumption consumed, {
     int nameLength = 0,
+    String? materialText,
   }) {
     final specs = <PartSpecKind, String>{};
     final fromName = <PartSpecKind>{};
@@ -745,6 +973,12 @@ class ProductIdentityExtractor {
     for (final match in _speeds.allMatches(text)) {
       putUnique(PartSpecKind.speeds, match.group(1)!, match);
     }
+    // AliExpress writes selected chain/drivetrain options as `11S`. A leading
+    // zero is deliberately refused: in `DS-06S` the suffix belongs to the
+    // manufacturer's model code, not a six-speed specification.
+    for (final match in _speedS.allMatches(text)) {
+      putUnique(PartSpecKind.speeds, match.group(1)!, match);
+    }
 
     if (physicalClass == PartPhysicalClass.braking || familyId == 'brake_pad') {
       for (final match in _rotorDiameter.allMatches(text)) {
@@ -770,6 +1004,77 @@ class ProductIdentityExtractor {
     if (familyId == 'seatpost' || familyId == 'seat_clamp') {
       for (final match in _postDiameter.allMatches(text)) {
         putUnique(PartSpecKind.postDiameterMm, match.group(1)!, match);
+      }
+    }
+
+    if (familyId == 'seatpost_shim') {
+      // The selected variant and the catalog often reverse inner/outer order
+      // (`27.2-30.0` vs `30-27.2`). Identity is the unordered pair.
+      for (final match in _postAdapterDiameterPair.allMatches(text)) {
+        final pair = <double>[
+          double.parse(match.group(1)!),
+          double.parse(match.group(2)!),
+        ]..sort();
+        putUnique(
+          PartSpecKind.postAdapterDiameterPair,
+          '${_canonicalDecimal(pair.first)}|${_canonicalDecimal(pair.last)}',
+          match,
+        );
+      }
+    }
+
+    // Legacy catalog names often say only `Espaciador Genérico 5mm`. The
+    // category may later contextualize that otherwise ambiguous noun as a
+    // steering spacer, so retain its typed thickness without prematurely
+    // claiming a family. A listing menu such as 5/10/20 remains unknown;
+    // the structured selected option is extracted separately and wins.
+    if (familyId == 'stem_spacer' || _steeringSpacerText.hasMatch(text)) {
+      for (final match in _spacerThickness.allMatches(text)) {
+        putUnique(PartSpecKind.spacerThicknessMm, match.group(1)!, match);
+      }
+    }
+
+    if (familyId == 'cable_end_cap') {
+      final identityScope = materialText ?? text;
+      final explicitInnerTip = _innerCableTip.firstMatch(identityScope);
+      final explicitHousingFerrule = _housingFerrule.firstMatch(identityScope);
+      if (explicitInnerTip != null) {
+        // [materialText] may be the supplier title, while [consumed] indexes
+        // [text]. Their offsets are unrelated, so never consume one with the
+        // other's match coordinates. The phrase contains no useful model code
+        // and only establishes the sold object's typed role.
+        specs[PartSpecKind.cableEndKind] = 'inner_cable_tip';
+      } else if (explicitHousingFerrule != null) {
+        specs[PartSpecKind.cableEndKind] = 'housing_ferrule';
+      }
+      for (final match in _cableHousingDiameter.allMatches(text)) {
+        putUnique(
+          PartSpecKind.cableHousingDiameterMm,
+          match.group(1)!,
+          match,
+        );
+      }
+      if (specs.containsKey(PartSpecKind.cableHousingDiameterMm) &&
+          explicitInnerTip == null) {
+        specs[PartSpecKind.cableEndKind] = 'housing_ferrule';
+      }
+
+      // The selected/curated name is first in [text]. It wins over a later
+      // listing menu that mentions both systems, just like speeds and sides.
+      final systems = <MapEntry<RegExpMatch, String>>[
+        for (final match in _cableShiftSystem.allMatches(text))
+          MapEntry(match, 'shift'),
+        for (final match in _cableBrakeSystem.allMatches(text))
+          MapEntry(match, 'brake'),
+      ]..sort((left, right) => left.key.start.compareTo(right.key.start));
+      for (final system in systems) {
+        putUnique(PartSpecKind.cableSystem, system.value, system.key);
+      }
+    }
+
+    if (familyId == 'applicator_bottle' || familyId == 'bottle') {
+      for (final match in _applicatorCapacity.allMatches(text)) {
+        putUnique(PartSpecKind.capacityMl, match.group(1)!, match);
       }
     }
 
@@ -838,17 +1143,30 @@ class ProductIdentityExtractor {
       }
     }
 
-    // Front / rear. A hub, wheel, rotor, derailleur or fender that states its
-    // end is not interchangeable with the other one.
-    final hasFront = _front.hasMatch(text);
-    final hasRear = _rear.hasMatch(text);
-    if (hasFront != hasRear) {
-      specs[PartSpecKind.position] = hasFront ? 'front' : 'rear';
+    // Front / rear. Evidence is processed in source order because [text]
+    // starts with the product's selected/readable name. [putUnique] therefore
+    // keeps `MT200 Right Rear` while ignoring the later listing menu that says
+    // front and rear; without selected/name provenance the same menu cancels
+    // itself and remains unknown.
+    final positionEvidence = <MapEntry<RegExpMatch, String>>[
+      for (final match in _front.allMatches(text)) MapEntry(match, 'front'),
+      for (final match in _rear.allMatches(text)) MapEntry(match, 'rear'),
+    ]..sort((left, right) => left.key.start.compareTo(right.key.start));
+    for (final evidence in positionEvidence) {
+      putUnique(PartSpecKind.position, evidence.value, evidence.key);
     }
 
     // Package size, kept out of the model-code pool.
+    final packMenus = _packOptionList.allMatches(text).toList(growable: false);
     for (final match in _packCount.allMatches(text)) {
-      put(PartSpecKind.packCount, match.group(1)!, match);
+      final isMenuChoice = packMenus.any(
+        (menu) => match.start >= menu.start && match.end <= menu.end,
+      );
+      if (isMenuChoice) {
+        consumed.take(match.start, match.end);
+        continue;
+      }
+      putUnique(PartSpecKind.packCount, match.group(1)!, match);
     }
 
     // Free length: only after every scoped dimension had its chance.
@@ -858,21 +1176,97 @@ class ProductIdentityExtractor {
       }
     }
 
-    for (final entry in _colorPatterns) {
-      if (entry.key.hasMatch(text)) {
-        specs.putIfAbsent(PartSpecKind.colorVariant, () => entry.value);
-        break;
+    if (familyId == 'grip') {
+      final ergonomic = _ergonomicGrip.firstMatch(text);
+      if (ergonomic != null) {
+        put(PartSpecKind.gripStyle, 'ergonomic', ergonomic);
       }
+    }
+
+    if (familyId == 'brake_lever') {
+      final roadMatches = _roadLever.allMatches(text).toList(growable: false);
+      final flatMatches =
+          _flatBarLever.allMatches(text).toList(growable: false);
+      final roadInName = roadMatches.where((match) => match.start < nameLength);
+      final flatInName = flatMatches.where((match) => match.start < nameLength);
+      if (roadInName.isNotEmpty && flatInName.isEmpty) {
+        put(
+          PartSpecKind.brakeLeverFitment,
+          'road',
+          roadInName.first,
+        );
+      } else if (flatInName.isNotEmpty && roadInName.isEmpty) {
+        put(
+          PartSpecKind.brakeLeverFitment,
+          'flatbar',
+          flatInName.first,
+        );
+      } else if (roadMatches.isNotEmpty && flatMatches.isEmpty) {
+        put(PartSpecKind.brakeLeverFitment, 'road', roadMatches.first);
+      } else if (flatMatches.isNotEmpty && roadMatches.isEmpty) {
+        put(
+          PartSpecKind.brakeLeverFitment,
+          'flatbar',
+          flatMatches.first,
+        );
+      }
+    }
+
+    if (familyId == 'bell') {
+      final traditional = _traditionalBell.firstMatch(text);
+      final metal = _metalBell.firstMatch(text);
+      final electronic = _electronicBell.firstMatch(text);
+      if (traditional != null) {
+        put(PartSpecKind.bellStyle, 'traditional', traditional);
+      } else if (metal != null && electronic == null) {
+        // A metal/alloy claxon with no electrical/charging evidence is the
+        // ordinary mechanical bell sold as `Campanilla Tradicional`.
+        put(PartSpecKind.bellStyle, 'traditional', metal);
+      }
+    }
+
+    final constructionMaterial = _constructionMaterialOf(
+      materialText ?? text,
+    );
+    if (constructionMaterial != null) {
+      specs[PartSpecKind.constructionMaterial] = constructionMaterial;
+    }
+
+    final colorEvidence = <MapEntry<RegExpMatch, String>>[
+      for (final entry in _colorPatterns)
+        for (final match in entry.key.allMatches(text))
+          MapEntry(match, entry.value),
+    ]..sort((left, right) => left.key.start.compareTo(right.key.start));
+    for (final evidence in colorEvidence) {
+      putUnique(PartSpecKind.colorVariant, evidence.value, evidence.key);
     }
 
     return Map<PartSpecKind, String>.unmodifiable(specs);
   }
 
+  /// Reads material only from the identity segment selected by the caller.
+  /// Multiple stated materials are an option list or a composite, not one
+  /// authoritative construction value.
+  static String? _constructionMaterialOf(String identityText) {
+    if (identityText.isEmpty) return null;
+    final values = <String>{};
+    for (final entry in _constructionMaterials.entries) {
+      if (entry.value.hasMatch(identityText)) values.add(entry.key);
+    }
+    return values.length == 1 ? values.single : null;
+  }
+
   // ── Brands ────────────────────────────────────────────────────────────
+
+  /// Every word that belongs to a head phrase the text actually used.
+  static Set<String> _wordsOf(Set<String> phrases) => <String>{
+        for (final phrase in phrases) ...phrase.split(' '),
+      }..removeWhere((word) => word.isEmpty);
 
   static _BrandDetection _detectBrands({
     required String identityText,
     required String fitmentText,
+    Set<String> reservedWords = const <String>{},
     required Iterable<String> knownBrands,
     required String? brandHint,
     required bool brandIsAsserted,
@@ -886,7 +1280,9 @@ class ProductIdentityExtractor {
       ..removeWhere((alias) => alias.length < 2)
       // A marketplace or a placeholder in the brand column is not a
       // manufacturer to be matched; it is the absence of one.
-      ..removeWhere(nonManufacturerBrandWords.contains);
+      ..removeWhere(nonManufacturerBrandWords.contains)
+      // Nor is a word the object's own name already spent.
+      ..removeWhere(reservedWords.contains);
 
     final ordered = aliases.toList()
       ..sort((left, right) => right.length.compareTo(left.length));
@@ -913,7 +1309,8 @@ class ProductIdentityExtractor {
     final normalizedHint = brandHint == null ? '' : _normalize(brandHint);
     if (asserted == null &&
         normalizedHint.isNotEmpty &&
-        !nonManufacturerBrandWords.contains(normalizedHint)) {
+        !nonManufacturerBrandWords.contains(normalizedHint) &&
+        !reservedWords.contains(normalizedHint)) {
       if (brandIsAsserted || identityHay.contains(' $normalizedHint ')) {
         asserted = normalizedHint;
       } else {
@@ -944,6 +1341,7 @@ class ProductIdentityExtractor {
     required _Consumption consumed,
     required String? modelHint,
     required Map<PartSpecKind, String> specs,
+    required String? familyId,
     required String identityText,
     required String nameText,
   }) {
@@ -951,7 +1349,11 @@ class ProductIdentityExtractor {
 
     void consider(String token) {
       final canonical = token.replaceAll(_nonAlphanumeric, '');
-      if (canonical.length < 3 || canonical.length > 24) return;
+      final allowedShort =
+          _shortModelCodesByFamily[familyId]?.contains(canonical) ?? false;
+      if ((canonical.length < 3 && !allowedShort) || canonical.length > 24) {
+        return;
+      }
       if (!_hasLetter.hasMatch(canonical)) return;
       if (!_hasDigit.hasMatch(canonical)) return;
       // A bare measurement is never a model. Anything with a unit suffix was
@@ -1073,10 +1475,18 @@ class _Segments {
 }
 
 class _HeadDetection {
-  const _HeadDetection({required this.winner, required this.candidates});
+  const _HeadDetection({
+    required this.winner,
+    required this.candidates,
+    this.matchedPhrases = const <String>{},
+  });
 
   final String? winner;
   final Set<String> candidates;
+
+  /// The head phrases that actually matched the text. Their words are already
+  /// explained as the object, so nothing else may re-read them.
+  final Set<String> matchedPhrases;
 }
 
 class _BrandDetection {
@@ -1127,6 +1537,11 @@ class _ModelCodes {
     required this.identity,
     required this.compatibility,
   });
+
+  const _ModelCodes.empty()
+      : primary = const <String>{},
+        identity = const <String>{},
+        compatibility = const <String>{};
 
   final Set<String> primary;
   final Set<String> identity;

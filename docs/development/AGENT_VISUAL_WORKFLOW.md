@@ -498,6 +498,31 @@ versión de `HEAD` con `git show HEAD:<ruta> > <ruta>`, formatéala y **compára
 con la copia**. Si son idénticas, el único cambio era tu formato y revertir es
 correcto; si difieren, había trabajo ajeno y se restituye la copia intacta.
 
+### En widget test, arrastrar desde el CENTRO de la lista lo come el TextField
+
+`scrollUntilVisible` / `dragUntilVisible` arrastran desde el **centro** del
+`Scrollable` que se les pasa. Si en ese centro hay un campo de texto —el de
+«Razón de confirmación» de una fila desplegada, por ejemplo— el gesto lo consume
+la selección de texto, la lista **no se mueve**, y al agotar las iteraciones el
+error que sale es `Bad state: No element` **sobre el objetivo**, no sobre el
+campo: parece que el widget buscado no existe cuando en realidad nunca se llegó
+a él. Costó una ronda el 2026-08-10.
+
+La forma que sí funciona es arrastrar desde un punto propio, pegado al borde:
+
+```dart
+final list = find.byType(ListView).first;
+final origin = tester.getTopLeft(list) + const Offset(12, 40);
+for (var i = 0; i < 20 && objetivo.evaluate().isEmpty; i++) {
+  await tester.dragFrom(origin, const Offset(0, 400));  // + baja: sube la vista
+  await tester.pump();
+}
+await tester.ensureVisible(objetivo);
+```
+
+Un `drag` sobre ese punto no dispara el `onTap` de la fila que haya debajo: son
+gestos distintos.
+
 ### Generar las capturas de HARNESS de una etapa inalcanzable en vivo
 
 Cuando una superficie sólo existe tras una precondición prohibida —subir un

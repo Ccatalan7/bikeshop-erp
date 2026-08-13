@@ -678,6 +678,18 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         Uri.tryParse(_currentUrl),
       );
 
+  bool get _isAliExpressOrderDetailPage {
+    if (!kDebugMode) return false;
+    final uri = Uri.tryParse(_currentUrl);
+    if (!AliExpressDailyInvoiceService.isTrustedUri(uri) || uri == null) {
+      return false;
+    }
+    final path = uri.path.toLowerCase();
+    final orderId = uri.queryParameters['orderId']?.trim() ?? '';
+    return path.contains('/p/order/detail.html') &&
+        RegExp(r'^\d{8,}$').hasMatch(orderId);
+  }
+
   /// Días en los que esta cuenta tiene pedidos, aprendidos de la última
   /// consulta a la API. Alimentan la marca del calendario para no elegir a
   /// ciegas un día sin compras.
@@ -1226,6 +1238,127 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
   }
 
+  /// Debug-only one-row bridge used to prove the real AliExpress -> OCR -> AI
+  /// contract without spending calls on every order from a day. It is generic:
+  /// the currently open order must contain exactly one supplier line, and the
+  /// resulting document remains read-only (`evaluationOnly`).
+  Future<void> _startAliExpressCurrentOrderCanary() async {
+    if (!kDebugMode || _isAliExpressImportRunning) return;
+    final controller = _controller;
+    final sourceUri = Uri.tryParse(_currentUrl);
+    if (controller == null ||
+        sourceUri == null ||
+        !_isAliExpressOrderDetailPage) {
+      _showBrowserSnack(
+        'Abre el detalle de un pedido AliExpress antes de ejecutar el canario.',
+      );
+      return;
+    }
+
+    setState(() => _isAliExpressImportRunning = true);
+    try {
+      await _installAliExpressBridge(controller);
+      final detail = await _runAliExpressBridge(
+        controller,
+        method: 'extractOrder',
+      );
+      if (!mounted ||
+          !identical(controller, _controller) ||
+          sourceUri.toString() != _currentUrl) {
+        throw StateError(
+          'La pagina cambio mientras se extraia el pedido canario.',
+        );
+      }
+
+      final rawItems = detail['items'];
+      final itemCount = rawItems is List ? rawItems.length : 0;
+      if (itemCount != 1) {
+        throw StateError(
+          'El canario exige exactamente una linea; AliExpress entrego '
+          '$itemCount.',
+        );
+      }
+      final rawItem = rawItems!.single;
+      if (rawItem is! Map) {
+        throw StateError('AliExpress entrego una linea con formato invalido.');
+      }
+      final item = Map<String, dynamic>.from(rawItem);
+      final declaredVariantKey = item['variantKey']?.toString().trim() ?? '';
+      final hasImmutableVariantKey = RegExp(
+        r'^(?:sku|props):[a-z0-9:|._-]+$',
+        caseSensitive: false,
+      ).hasMatch(declaredVariantKey);
+      if (!hasImmutableVariantKey) {
+        // The detail-page bridge may derive a display identity from the human
+        // option label or image. That evidence remains in `variant`, but it
+        // must not be presented to the resolution graph as immutable supplier
+        // authority. The certified list API already emits sku:/props: keys and
+        // those pass through unchanged.
+        item.remove('variantKey');
+      }
+      final canonicalDetail = <String, dynamic>{
+        ...detail,
+        'items': <Map<String, dynamic>>[item],
+      };
+      final urlOrderId = sourceUri.queryParameters['orderId']!.trim();
+      final extractedOrderId =
+          canonicalDetail['orderNumber']?.toString().trim() ?? '';
+      if (extractedOrderId.isNotEmpty && extractedOrderId != urlOrderId) {
+        throw StateError(
+          'El pedido extraido no coincide con la pagina abierta.',
+        );
+      }
+
+      final extractedDate = DateTime.tryParse(
+        canonicalDetail['orderDate']?.toString().trim() ?? '',
+      );
+      if (extractedDate == null) {
+        throw StateError('AliExpress no entrego una fecha valida del pedido.');
+      }
+      final invoice = AliExpressDailyInvoiceService.buildDailyInvoice(
+        date: extractedDate,
+        orders: <Map<String, dynamic>>[canonicalDetail],
+        sourcePageUrl: sourceUri.toString(),
+      )
+        ..['evaluationOnly'] = true
+        ..['coverage'] = <String, dynamic>{
+          'certified': false,
+          'targetDateComplete': false,
+          'scope': 'single_order_canary',
+        };
+      final fileName = 'aliexpress-canary-$urlOrderId.pdf';
+      final bytes = await _buildAliExpressInvoicePdf(invoice);
+      if (!mounted) return;
+
+      final workspaceManager = context.read<WorkspaceManager>();
+      if (workspaceManager.workspaces.length >=
+          WorkspaceManager.maxWorkspaces) {
+        throw StateError(
+          'No hay espacio para abrir el canario OCR. Cierra una pestana del ERP.',
+        );
+      }
+      workspaceManager.addWorkspace(
+        title: 'Canario AliExpress',
+        initialRoute: '/purchases/new',
+      );
+      context.read<OcrFileHandoffService>().queue(
+            target: OcrFileHandoffTarget.purchaseInvoice,
+            fileName: fileName,
+            mimeType: 'application/pdf',
+            bytes: bytes,
+            extension: 'pdf',
+            sourceLabel: 'Navegador ERP · AliExpress · canario de un pedido',
+            sourceSupplierName: 'AliExpress Marketplace',
+            sourceSupplierWebsite: 'https://www.aliexpress.com',
+            structuredInvoiceData: invoice,
+          );
+    } catch (error) {
+      _showBrowserSnack(_friendlyAliExpressImportError(error));
+    } finally {
+      if (mounted) setState(() => _isAliExpressImportRunning = false);
+    }
+  }
+
   Future<bool> _showAliExpressInvoicePreview({
     required Uint8List bytes,
     required String fileName,
@@ -1272,6 +1405,16 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       dateText: dateText,
       onProgress: onProgress,
     );
+    final listCoverage = listResult['coverage'] is Map
+        ? Map<String, dynamic>.from(listResult['coverage'] as Map)
+        : <String, dynamic>{};
+    final listTermination = listResult['termination'] is Map
+        ? Map<String, dynamic>.from(listResult['termination'] as Map)
+        : <String, dynamic>{};
+    final listWarnings = <String>[
+      for (final warning in (listResult['warnings'] as List? ?? const []))
+        if (warning.toString().trim().isNotEmpty) warning.toString().trim(),
+    ];
     final rawOrders = listResult['orders'];
     final orders = <Map<String, dynamic>>[
       if (rawOrders is List)
@@ -1285,13 +1428,32 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       'duplicateOrderNumbers': _aliExpressDuplicateOrderNumbers(orders),
       'warnings': listResult['warnings'],
       'preload': listResult['preload'],
+      'coverage': listCoverage,
+      'termination': listTermination,
       'orders': orders.map(_aliExpressOrderDebugSummary).toList(),
     });
+    final targetDateComplete = listCoverage['targetDateComplete'] == true &&
+        listTermination['naturalExhaustion'] == true &&
+        listCoverage['certified'] == true;
+    final discoveryEvaluation =
+        kDebugMode && listResult['evaluationOnly'] == true;
+    if (!targetDateComplete && !discoveryEvaluation) {
+      final reason = listTermination['reason']?.toString().trim() ?? '';
+      final message = listWarnings.isNotEmpty
+          ? listWarnings.join(' ')
+          : 'AliExpress no pudo confirmar que leyó todos los pedidos del '
+              '$dateText${reason.isEmpty ? '' : ' ($reason)'}. '
+              'No se generó una factura parcial.';
+      _aliExpressDebug('list.coverage.rejected', <String, dynamic>{
+        'date': dateText,
+        'message': message,
+        'coverage': listCoverage,
+        'termination': listTermination,
+      });
+      throw StateError(message);
+    }
     if (orders.isEmpty) {
-      final warnings = (listResult['warnings'] as List? ?? const [])
-          .map((value) => value.toString())
-          .where((value) => value.isNotEmpty)
-          .join(' ');
+      final warnings = listWarnings.join(' ');
       throw StateError(
         warnings.isEmpty
             ? 'No encontré pedidos para $dateText. Verifica la sesión y la fecha.'
@@ -1358,6 +1520,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       orders: enriched,
       sourcePageUrl: listResult['pageUrl']?.toString(),
     );
+    if (discoveryEvaluation) {
+      // This document exists only to exercise categorization and matching in
+      // a debug build. The offset feed did not prove completeness, so carry a
+      // durable guard into OCR instead of relying on the operator remembering
+      // which progress warning they saw several screens ago.
+      invoice['evaluationOnly'] = true;
+      invoice['coverage'] = listCoverage;
+    }
     _aliExpressDebug('invoice.combined', <String, dynamic>{
       'inputOrderCount': enriched.length,
       'duplicateOrderNumbers': _aliExpressDuplicateOrderNumbers(enriched),
@@ -1441,6 +1611,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         'quantity': item['quantity'],
         'sourcePurchaseQuantity': item['sourcePurchaseQuantity'],
         'unitsPerPurchase': item['unitsPerPurchase'],
+        'rawPackCount': item['rawPackCount'],
+        'rawUnitToken': item['rawUnitToken'],
+        'rawPackEvidenceConflict': item['rawPackEvidenceConflict'] == true,
         'sourceTotal': item['sourceTotal'],
         'total': item['total'],
         'hasImage': (item['imageUrl']?.toString().isNotEmpty ?? false),
@@ -1480,8 +1653,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   /// línea con su imagen tal como los tiene AliExpress, pagina por número de
   /// página y no depende del scroll, de la lista virtualizada, del rótulo del
   /// botón «View orders» ni del carrusel de recomendaciones. El recorrido del
-  /// DOM queda sólo como respaldo para cuando la página no exponga su cliente
-  /// de API.
+  /// DOM conserva valor diagnóstico, pero no puede probar cobertura completa
+  /// de una fecha y por eso nunca autoriza una factura exacta.
   Future<Map<String, dynamic>?> _collectAliExpressOrdersViaApi(
     InAppWebViewController controller, {
     required String dateText,
@@ -1497,20 +1670,137 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         controller,
         method: 'ordersListClickLoadMore',
       );
-      if (clicked['clicked'] != true) return null;
-      await Future<void>.delayed(const Duration(seconds: 6));
+      if (clicked['clicked'] == true) {
+        await Future<void>.delayed(const Duration(seconds: 6));
+      }
+
+      // La plantilla firmada y la metadata de paginación sólo existen dentro
+      // del WebView. En debug se toma una única muestra sanitizada antes del
+      // recorrido: nombres de campos y contadores, nunca cuerpo, token, cookie
+      // ni datos de pedidos. No participa en la decisión de completitud hasta
+      // que su forma real tenga un contrato probado.
+      if (kDebugMode) {
+        try {
+          final shape = await _runAliExpressBridge(
+            controller,
+            method: 'ordersApiShapeProbe',
+          );
+          final template = shape['template'] is Map
+              ? Map<String, dynamic>.from(shape['template'] as Map)
+              : <String, dynamic>{};
+          final templateFields = template['fields'] is Map
+              ? Map<String, dynamic>.from(template['fields'] as Map)
+              : <String, dynamic>{};
+          final response = shape['response'] is Map
+              ? Map<String, dynamic>.from(shape['response'] as Map)
+              : <String, dynamic>{};
+          final responsePagination = response['pagination'] is Map
+              ? Map<String, dynamic>.from(response['pagination'] as Map)
+              : <String, dynamic>{};
+          final responseFilters = response['filters'] is Map
+              ? Map<String, dynamic>.from(response['filters'] as Map)
+              : <String, dynamic>{};
+          Object? scalarByLeaf(Map<String, dynamic> fields, String leaf) {
+            final normalizedLeaf = leaf.toLowerCase();
+            for (final entry in fields.entries) {
+              if (entry.key.split('.').last.toLowerCase() == normalizedLeaf) {
+                return entry.value;
+              }
+            }
+            return null;
+          }
+
+          _aliExpressDebug(
+            'orders.api.shape',
+            <String, dynamic>{
+              'ok': shape['ok'],
+              'reason': shape['reason'],
+              'template': <String, dynamic>{
+                'pageIndexSlots': template['pageIndexSlots'],
+                'pageIndex': scalarByLeaf(templateFields, 'pageIndex'),
+                'pageSize': scalarByLeaf(templateFields, 'pageSize'),
+                'hasMore': scalarByLeaf(templateFields, 'hasMore'),
+                'statusTab': scalarByLeaf(templateFields, 'statusTab'),
+                'timeOption': scalarByLeaf(templateFields, 'timeOption'),
+                'searchOption': scalarByLeaf(templateFields, 'searchOption'),
+              },
+              'response': <String, dynamic>{
+                'pageIndex': scalarByLeaf(responsePagination, 'pageIndex'),
+                'pageSize': scalarByLeaf(responsePagination, 'pageSize'),
+                'hasMore': scalarByLeaf(responsePagination, 'hasMore'),
+                'statusTab': scalarByLeaf(responseFilters, 'statusTab'),
+                'timeOption': scalarByLeaf(responseFilters, 'timeOption'),
+                'searchOption': scalarByLeaf(responseFilters, 'searchOption'),
+                'filterOptions': response['filterOptions'],
+                'orderModuleCount': response['orderModuleCount'],
+              },
+            },
+          );
+        } catch (error) {
+          _aliExpressDebug('orders.api.shape.failed', <String, dynamic>{
+            'error': error.toString(),
+          });
+        }
+      }
 
       onProgress('Consultando pedidos del $dateText en AliExpress...');
       final result = await _runAliExpressBridge(
         controller,
         method: 'ordersApiCollect',
         arguments: <String, dynamic>{
-          'filters': <String, dynamic>{'exactDate': dateText, 'maxPages': 30},
+          'filters': <String, dynamic>{
+            'exactDate': dateText,
+            'maxPages': 60,
+            'evaluationOnly': kDebugMode,
+          },
         },
       );
-      if (result['ok'] != true) {
-        _aliExpressDebug('orders.api.unavailable', result);
-        return null;
+      final coverage = result['coverage'] is Map
+          ? Map<String, dynamic>.from(result['coverage'] as Map)
+          : <String, dynamic>{};
+      final termination = result['termination'] is Map
+          ? Map<String, dynamic>.from(result['termination'] as Map)
+          : <String, dynamic>{};
+      final certification = result['certification'] is Map
+          ? Map<String, dynamic>.from(result['certification'] as Map)
+          : <String, dynamic>{};
+      final warnings = <String>[
+        for (final warning in (result['warnings'] as List? ?? const []))
+          if (warning.toString().trim().isNotEmpty) warning.toString().trim(),
+      ];
+      final targetDateComplete = result['ok'] == true &&
+          coverage['targetDateComplete'] == true &&
+          termination['naturalExhaustion'] == true &&
+          certification['certified'] == true;
+      final discoveryEvaluation =
+          kDebugMode && result['evaluationOnly'] == true;
+      _aliExpressDebug(
+        targetDateComplete
+            ? 'orders.api.complete'
+            : discoveryEvaluation
+                ? 'orders.api.discovery'
+                : 'orders.api.rejected',
+        <String, dynamic>{
+          'date': dateText,
+          'orderCount': (result['orders'] as List?)?.length ?? 0,
+          'partialOrderCount': result['partialOrderCount'],
+          'pagesRead': result['pagesRead'],
+          'reason': result['reason'],
+          'warnings': warnings,
+          'coverage': coverage,
+          'termination': termination,
+          'certification': certification,
+        },
+      );
+      if (!targetDateComplete && !discoveryEvaluation) {
+        final reason = termination['reason']?.toString().trim() ?? '';
+        throw StateError(
+          warnings.isNotEmpty
+              ? warnings.join(' ')
+              : 'AliExpress no pudo confirmar todos los pedidos del '
+                  '$dateText${reason.isEmpty ? '' : ' ($reason)'}. '
+                  'No se generó una factura parcial.',
+        );
       }
 
       final orders = <Map<String, dynamic>>[
@@ -1524,30 +1814,29 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       if (datesWithOrders.isNotEmpty) {
         _rememberAliExpressOrderDates(datesWithOrders);
       }
-      _aliExpressDebug('orders.api.collected', <String, dynamic>{
-        'date': dateText,
-        'orderCount': orders.length,
-        'pagesRead': result['pagesRead'],
-        'reason': result['reason'],
-        'datesWithOrders': datesWithOrders.length,
-      });
-
       return <String, dynamic>{
         'orders': orders,
         'scannedCount': orders.length,
         'pageUrl': _currentUrl,
-        'warnings': const <String>[],
+        'warnings': warnings,
+        'coverage': coverage,
+        'termination': termination,
+        'certification': certification,
+        'evaluationOnly': discoveryEvaluation,
         'preload': <String, dynamic>{
           'source': 'api',
           'pagesRead': result['pagesRead'],
           'terminationReason': result['reason'],
+          'coverage': coverage,
+          'termination': termination,
+          'certification': certification,
         },
       };
     } catch (error) {
       _aliExpressDebug('orders.api.failed', <String, dynamic>{
         'error': error.toString(),
       });
-      return null;
+      rethrow;
     }
   }
 
@@ -1676,19 +1965,48 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final matchingOrders = harvestedOrders
         .where((order) => order['orderDate']?.toString() == dateText)
         .toList();
+    final fallbackReason = 'dom-fallback-$terminationReason';
+    final fallbackWarning =
+        'AliExpress no pudo confirmar por API todos los pedidos del '
+        '$dateText. El recorrido visual terminó por $terminationReason y se '
+        'conservó sólo como diagnóstico; no se generó una factura parcial.';
+    final termination = <String, dynamic>{
+      'kind': 'dom-diagnostic',
+      'reason': fallbackReason,
+      'naturalExhaustion': false,
+      'hitPageLimit': terminationReason == 'max-passes',
+      'pagesRead': null,
+      'pageLimit': null,
+    };
+    final coverage = <String, dynamic>{
+      'mode': 'exact-date',
+      'complete': false,
+      'partial': true,
+      'targetDateComplete': false,
+      'pageLimit': null,
+      'pagesRead': null,
+      'observedFromDate': null,
+      'observedToDate': null,
+      'stopReason': fallbackReason,
+      'termination': termination,
+    };
 
     return <String, dynamic>{
       'orders': matchingOrders,
       'scannedCount': harvestedOrders.length,
       'pageUrl': _currentUrl,
-      'warnings': matchingOrders.isEmpty && harvestedOrders.isNotEmpty
-          ? <String>[
-              'Recorrí ${harvestedOrders.length} pedidos y ninguno es del $dateText.',
-            ]
-          : const <String>[],
+      'warnings': <String>[
+        fallbackWarning,
+        if (matchingOrders.isEmpty && harvestedOrders.isNotEmpty)
+          'Recorrí ${harvestedOrders.length} pedidos y ninguno es del $dateText.',
+      ],
+      'coverage': coverage,
+      'termination': termination,
       'preload': <String, dynamic>{
         'terminationReason': terminationReason,
         'loadMoreClicks': loadMoreClicks,
+        'coverage': coverage,
+        'termination': termination,
       },
     };
   }
@@ -1752,6 +2070,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       'ordersApiProbeInstall',
       'ordersApiProbeRead',
       'ordersApiShapeProbe',
+      'ordersApiScopeProbe',
       'ordersApiCollect',
       'ordersListDebugTail',
       'ordersListScrollTo',
@@ -1766,9 +2085,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     // reemplazado) dejaba este await colgado PARA SIEMPRE con el diálogo de
     // progreso girando (2026-08-05). El recorrido largo de la lista puede
     // tardar minutos legítimos; el detalle de un pedido, no.
-    final bridgeTimeout = method == 'extractOrdersList'
-        ? const Duration(minutes: 8)
-        : const Duration(seconds: 60);
+    final bridgeTimeout =
+        method == 'extractOrdersList' || method == 'ordersApiCollect'
+            ? const Duration(minutes: 8)
+            : const Duration(seconds: 60);
     final result = await controller.callAsyncJavaScript(
       functionBody: '''
         const bridge = globalThis.__ALIEXPRESS_INVOICE_BRIDGE__;
@@ -5130,6 +5450,25 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                       ),
                     ),
                     const SizedBox(width: 6),
+                  ],
+                  if (_isAliExpressOrderDetailPage) ...[
+                    IconButton(
+                      key: const ValueKey(
+                        'browser-aliexpress-current-order-canary',
+                      ),
+                      onPressed: canUseWebView && !_isAliExpressImportRunning
+                          ? _startAliExpressCurrentOrderCanary
+                          : null,
+                      icon: const Icon(Icons.science_outlined, size: 20),
+                      color: theme.colorScheme.primary,
+                      tooltip: 'Canario OCR: pedido actual',
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints(
+                        minWidth: compactBrowserChrome ? 48 : 36,
+                        minHeight: compactBrowserChrome ? 48 : 36,
+                      ),
+                    ),
+                    if (!compactBrowserChrome) const SizedBox(width: 6),
                   ],
                   // En compacto sólo sobrevive «Atrás»: es el control que se
                   // usa a cada rato y el único que no tiene equivalente obvio

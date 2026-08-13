@@ -58,6 +58,20 @@ scripts/dev/native_session.sh status
 scripts/dev/native_session.sh stop
 ```
 
+Para una sesión nueva del rollout del agente IA, el owner acepta sólo los dos
+defines cerrados; no acepta un fragmento arbitrario de shell. La clave pública
+se resuelve en el proceso que lanza la sesión y no se escribe en el repositorio
+ni en el log:
+
+```bash
+NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED=true \
+NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY="$PUBLIC_KEY" \
+  scripts/dev/native_session.sh start
+```
+
+Un hot reload no puede cambiar un `dart-define`: para activar o revertir este
+rollout se reemplaza deliberadamente la sesión completa.
+
 The session lives in a detached `screen` named `payroll`. The owner can take
 it over at any time with **`screen -x payroll`** (`Ctrl+A`, then `D` to
 detach). Both sides share the same terminal, so nobody has to hand over.

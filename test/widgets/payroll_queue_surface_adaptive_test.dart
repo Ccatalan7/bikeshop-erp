@@ -20,8 +20,8 @@ void main() {
         range: '07 – 13 jul',
         amountLabel: r'$267.875',
         amountCaption: 'por pagar',
-        statusLabel: 'ABIERTA',
-        tone: PayrollStateTone.warning,
+        statusLabel: 'CONFIRMADA',
+        tone: PayrollStateTone.neutral,
         selected: true,
         onTap: () {},
       );
@@ -75,7 +75,7 @@ void main() {
     canConfirm: false,
     blockedReason:
         'S28 pasa a Pagada automáticamente cuando sus saldos lleguen a \$0.',
-    nextActionLabel: 'Pagar a Lucas',
+    nextActionLabel: 'Continuar pagos',
   );
 
   Future<void> pumpQueue(
@@ -307,7 +307,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('week card is one semantic InkWell action', (tester) async {
+  testWidgets('2026-08-11: week card keeps its explicit status in dense mode',
+      (tester) async {
     await pumpQueue(
       tester,
       width: 1116,
@@ -322,6 +323,7 @@ void main() {
     expect(inkWell.mouseCursor, SystemMouseCursors.click);
     expect(inkWell.hoverColor, isNotNull);
     expect(inkWell.focusColor, isNotNull);
+    expect(find.text('CONFIRMADA'), findsOneWidget);
   });
 
   testWidgets('many workers use one bounded vertical scroll without overflow',
@@ -708,6 +710,29 @@ void main() {
   // ── `5c` · gramática de decisión ─────────────────────────────────────────
   Finder decisionOf(String name) =>
       find.byKey(ValueKey<String>('payroll-row-actions-$name'));
+
+  testWidgets(
+      '2026-08-11: efectivo y transferencia comparten una acción secundaria',
+      (tester) async {
+    await pumpQueue(
+      tester,
+      width: 1360,
+      height: 620,
+      dense: false,
+      rows: <PayrollPersonRowVM>[
+        row(1),
+        row(2, status: PayrollRowStatus.pendingCash),
+      ],
+    );
+
+    Material actionFor(String name) => tester.widget<Material>(
+          find.byKey(ValueKey<String>('payroll-row-action-$name')),
+        );
+    final transfer = actionFor('Persona de prueba 1');
+    final cash = actionFor('Persona de prueba 2');
+    expect(transfer.color, cash.color);
+    expect(transfer.shape, cash.shape);
+  });
 
   PayrollPersonRowVM blockedRow(
     int index, {
@@ -1162,10 +1187,33 @@ void main() {
     equation: '',
     remaining: r'$225.000',
     showCommitAction: false,
-    canConfirm: true,
-    blockedReason: '',
-    nextActionLabel: 'Pagar a Lucas',
+    canConfirm: false,
+    blockedReason:
+        r'S27 pasa a Pagada automáticamente cuando sus saldos lleguen a $0.',
+    nextActionLabel: 'Continuar pagos',
   );
+
+  testWidgets(
+      '2026-08-11: la acción siguiente queda al borde derecho en modo denso',
+      (tester) async {
+    await pumpQueue(
+      tester,
+      width: 1116,
+      height: 700,
+      dense: true,
+      rows: <PayrollPersonRowVM>[row(0)],
+      value: soloSiguiente,
+    );
+
+    expect(find.text('Continuar pagos'), findsOneWidget);
+    final bar = tester.getRect(
+      find.byKey(const ValueKey<String>('payroll-money-bar')),
+    );
+    final action = tester.getRect(
+      find.byKey(const ValueKey<String>('payroll-next-week-action')),
+    );
+    expect(bar.right - action.right, closeTo(16, 0.01));
+  });
 
   testWidgets(
       'Editar borrador aparece e invoca sólo con callback y semana borrador',

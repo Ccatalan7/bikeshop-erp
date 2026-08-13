@@ -70,7 +70,7 @@ void main() {
     });
 
     test(
-      'keeps civil evidence and +250 proposal while gating legacy and cash',
+      'keeps civil evidence and review proposals across payment preferences',
       () async {
         final harness = _Harness();
         addTearDown(harness.dispose);
@@ -109,11 +109,15 @@ void main() {
         final cashResult = draft.reconciliation.lineResults.singleWhere(
           (result) => result.voucherLine.lineId == _cashLineId,
         );
-        expect(cashResult.status, PayrollLineMatchStatus.ineligible);
-        expect(cashResult.proposedMatch, isNull);
+        expect(cashResult.status, PayrollLineMatchStatus.suggested);
+        expect(cashResult.proposedMatch, isNotNull);
         expect(
-          cashResult.reasons,
-          [PayrollLineMatchReason.paymentMethodIsCash],
+          cashResult.proposedMatch!.statementRow.debitAmountClp,
+          38000,
+        );
+        expect(
+          cashResult.proposedMatch!.reasons,
+          contains(PayrollCandidateReason.paymentMethodDiffersFromPreference),
         );
         expect(draft.openAdvances, hasLength(1));
         expect(draft.openAdvances.single.id, _cashAdvanceId);
@@ -716,7 +720,7 @@ void main() {
     });
 
     test(
-      'createImport preserves a row after the declared close as review evidence',
+      '2026-08-11 createImport client does not send normal bank dates as review warnings',
       () async {
         final harness = _Harness();
         addTearDown(harness.dispose);
@@ -741,7 +745,7 @@ void main() {
             as List<dynamic>;
         expect(
           rows.cast<Map<String, dynamic>>().every(
-                (row) => (row['warnings'] as List<dynamic>)
+                (row) => !(row['warnings'] as List<dynamic>)
                     .contains('out_of_statement_range'),
               ),
           isTrue,
@@ -857,7 +861,9 @@ void main() {
         addTearDown(harness.dispose);
         final draft = await harness.prepare();
         final importReceipt = _importReceipt(draft);
-        final proposal = draft.reconciliation.proposedMatches.single;
+        final proposal = draft.reconciliation.proposedMatches.singleWhere(
+          (candidate) => candidate.voucherLine.lineId == _transferLineId,
+        );
         final ack = Completer<Object?>();
         harness.database.sensitiveRpcHandler = (functionName, params) {
           expect(functionName, 'apply_payroll_statement_reconciliation');
@@ -1157,7 +1163,9 @@ void main() {
       addTearDown(harness.dispose);
       final draft = await harness.prepare();
       final originalOperationKey = draft.operationKey;
-      final originalProposal = draft.reconciliation.proposedMatches.single;
+      final originalProposal = draft.reconciliation.proposedMatches.singleWhere(
+        (candidate) => candidate.voucherLine.lineId == _transferLineId,
+      );
       final failure = StateError('synthetic RPC failure');
       harness.database.sensitiveRpcHandler =
           (functionName, params) => throw failure;
@@ -1178,7 +1186,9 @@ void main() {
       expect(harness.payrollService.cacheInvalidationCount, 0);
       expect(draft.operationKey, originalOperationKey);
       expect(
-        draft.reconciliation.proposedMatches.single,
+        draft.reconciliation.proposedMatches.singleWhere(
+          (candidate) => candidate.voucherLine.lineId == _transferLineId,
+        ),
         same(originalProposal),
       );
       expect(originalProposal.amountVarianceClp, 250);

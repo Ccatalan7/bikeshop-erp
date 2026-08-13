@@ -89,6 +89,17 @@ system clipboard read-back. Intercept `SystemChannels.platform` with
 call and assert its payload instead. This verifies the actual app boundary
 without depending on host clipboard state or adding an unbounded pump/wait.
 
+### HTTP mock responses: declare UTF-8 before testing byte limits
+
+**2026-08-11 — one focused AI transport run exposed this trap.**
+`package:http` encodes `MockClient` string responses as Latin-1 when the mock
+omits a JSON/UTF-8 content type. A payload containing emoji can therefore fail
+inside the mock before the application reads a single response byte, turning a
+real `response_too_large` regression into an unrelated transport error. Tests
+for raw UTF-8 limits must use `Response.bytes` or set
+`content-type: application/json; charset=utf-8`; then assert the application
+boundary rather than the mock encoder.
+
 # Agent Autonomy And End-To-End Ownership (CRITICAL)
 
 Agents own the complete technical outcome of an implementation. A finished task
@@ -359,6 +370,11 @@ The durable rules are:
   validation session uses `scripts/db/production_validation.sh` to reuse one
   provenance-recorded dump while the live migration head/fingerprint is
   unchanged; never redump merely to rerun tests.
+- A production-derived clone must fingerprint and restore every schema needed
+  by provider-managed policy definitions. The canonical manager captures
+  schema-only `public` plus dependency-only `private`, rejects all row/blob
+  data, and restores managed post-data only after both exist. Capturing only
+  `public` can make current Storage policies fail before candidate SQL runs.
 - Every schema change has a unique idempotent forward migration and the same
   final objects/logic mirrored in idempotent
   `supabase/sql/core_schema.sql`.

@@ -39,6 +39,7 @@ void main() {
         knownBrands: _knownBrands,
         categoryAncestry: ancestry,
         enableVisualReading: false,
+        requireAIPrimaryInvestigation: false,
         persistComputedImageFingerprints: false,
       );
 
@@ -46,6 +47,15 @@ void main() {
     ProductDuplicateProbe probe,
   ) =>
       matcher().findCandidates(probe: probe, products: catalog);
+
+  Future<List<ProductDuplicateCandidate>> resolveForOperator(
+    ProductDuplicateProbe probe,
+  ) =>
+      matcher().findCandidates(
+        probe: probe,
+        products: catalog,
+        scope: ProductDuplicateShortlistScope.operatorChoice,
+      );
 
   group('lo que la factura AE160326 tiene que encontrar', () {
     test('el buje trasero Novatec resuelve al D042SB y a nada más', () async {
@@ -140,8 +150,9 @@ void main() {
     });
 
     test('WAKE rojo y morado resuelven cada uno a su variante', () async {
-      final red = await resolve(_wakeStemProbe('Red', 'rojo'));
-      final purple = await resolve(_wakeStemProbe('Purple', 'morada'));
+      final red = await resolveForOperator(_wakeStemProbe('Red', 'rojo'));
+      final purple =
+          await resolveForOperator(_wakeStemProbe('Purple', 'morada'));
 
       expect(red.first.product.sku, 'AE0137');
       expect(purple.first.product.sku, 'AE0138');
@@ -308,7 +319,7 @@ void main() {
         'derailleur_hanger_extender',
       );
       expect(
-        ProductIdentityMatcher()
+        const ProductIdentityMatcher()
             .evaluate(
               probe: of('Postiza ZTTO 001'),
               candidate: of('Extensión para Postiza ZTTO'),
@@ -396,6 +407,96 @@ void main() {
     });
   });
 
+  group('un adaptador de tija tiene identidad y variante propias', () {
+    ProductIdentityProfile of(
+      String name, {
+      String? sourceTitle,
+      String? brandHint,
+    }) =>
+        ProductIdentityExtractor.extract(
+          ProductIdentityInput(
+            name: name,
+            sourceTitle: sourceTitle,
+            brandHint: brandHint,
+            brandIsAsserted: brandHint != null,
+            knownBrands: const <String>['MUQZI'],
+          ),
+        );
+
+    test('la cabeza compuesta gana a «sillín» y preserva la fuente', () {
+      final profile = of(
+        'Adaptador tija MUQZI 27.2-30.0 100mm',
+        sourceTitle: 'MUQZI-Cuña de sillín de 100mm de largo, adaptador de '
+            'tubo de poste de asiento (27.2-30.0)',
+        brandHint: 'MUQZI',
+      );
+
+      expect(profile.familyId, 'seatpost_shim');
+      expect(profile.supplierTitleFamilyIsAuthoritative, isTrue);
+      expect(profile.familyCandidates, isNot(contains('saddle')));
+      expect(
+        profile.specs[PartSpecKind.postAdapterDiameterPair],
+        '27.2|30',
+      );
+    });
+
+    test('el orden textual del par no cambia la variante', () {
+      final invoice = of('Adaptador tija MUQZI 27.2-30.0 100mm');
+      final gold = of(
+        'Adaptador de Tija de Asiento 30-27.2mm MUQZI',
+        brandHint: 'MUQZI',
+      );
+
+      expect(invoice.specs[PartSpecKind.postAdapterDiameterPair], '27.2|30');
+      expect(gold.specs[PartSpecKind.postAdapterDiameterPair], '27.2|30');
+      expect(
+        const ProductIdentityMatcher()
+            .evaluate(probe: invoice, candidate: gold)
+            .isRejected,
+        isFalse,
+      );
+    });
+
+    test(
+        'un título con muchos diámetros no inventa el par si el nombre no lo conserva',
+        () {
+      final profile = of(
+        'Adaptador de tija MUQZI 100mm',
+        sourceTitle: 'MUQZI-Cuña de sillín de 100mm de largo, adaptador de '
+            'tubo de poste de asiento, 22,2, 25,4, 27,2, 31,8, 33,9, 28,6, '
+            '30,4 a 30,9, 30, 31,6, 31,8, 33,9, 34,9, 36',
+        brandHint: 'MUQZI',
+      );
+
+      expect(profile.familyId, 'seatpost_shim');
+      expect(
+        profile.specs[PartSpecKind.postAdapterDiameterPair],
+        isNull,
+        reason: 'sin una variante seleccionada inequívoca debe abstenerse de '
+            'comparar diámetros, no tomar el primer par del título ruidoso',
+      );
+    });
+
+    test('28.6↔27.2 queda eliminado para una compra 30↔27.2', () {
+      final invoice = of('Adaptador tija MUQZI 27.2-30.0 100mm');
+      final sibling = of(
+        'Adaptador de Tija de Asiento 28.6-27.2mm MUQZI',
+        brandHint: 'MUQZI',
+      );
+      final verdict = const ProductIdentityMatcher().evaluate(
+        probe: invoice,
+        candidate: sibling,
+      );
+
+      expect(sibling.specs[PartSpecKind.postAdapterDiameterPair], '27.2|28.6');
+      expect(verdict.isRejected, isTrue);
+      expect(
+        verdict.objections.join(' ').toLowerCase(),
+        contains('diámetros'),
+      );
+    });
+  });
+
   group('un color en plural es el mismo color', () {
     ProductIdentityProfile of(String name, {String? description}) =>
         ProductIdentityExtractor.extract(
@@ -416,7 +517,7 @@ void main() {
     });
 
     test('y por eso el par morado deja de empatar con el negro', () {
-      final matcher = ProductIdentityMatcher();
+      const matcher = ProductIdentityMatcher();
       final probe = of('Puños ODI con bloqueo',
           description: 'ODI-empuñadura de manillar (UPGRADE-Black)');
       final black = matcher.evaluate(
@@ -430,6 +531,59 @@ void main() {
       expect(black.variantMismatch, isFalse);
       expect(purple.variantMismatch, isTrue);
       expect(black.score, greaterThan(purple.score));
+    });
+  });
+
+  group('una palabra del nombre del objeto no es su fabricante', () {
+    // El catálogo del arrendatario tiene una marca escrita «Doble». El lector
+    // de texto libre la encontró dentro de `pinzas de doble pivote` y declaró
+    // que la línea la fabricaba «Doble»; la compuerta comparó eso contra
+    // `Ztto` y eliminó el único producto correcto del catálogo
+    // —`Herradura de Tiro Lateral ZTTO ASA 2.5D`, medido el 2026-08-10—.
+    test('«doble» de «doble pivote» no puede ser la marca', () {
+      final profile = ProductIdentityExtractor.extract(
+        const ProductIdentityInput(
+          name: 'Freno herradura ZTTO ASA-2.5D',
+          sourceTitle: 'Pinzas de doble pivote para bicicleta ZTTO, frenos C',
+          knownBrands: <String>['ZTTO', 'Doble'],
+        ),
+      );
+      expect(profile.assertedBrand, isNot('doble'));
+    });
+
+    test('y el producto correcto deja de ser eliminado por marca', () {
+      const known = <String>['ZTTO', 'Doble'];
+      final probe = ProductIdentityExtractor.extract(
+        const ProductIdentityInput(
+          name: 'Freno herradura ZTTO ASA-2.5D',
+          sourceTitle: 'Pinzas de doble pivote para bicicleta ZTTO, frenos C',
+          knownBrands: known,
+        ),
+      );
+      final answer = ProductIdentityExtractor.extract(
+        const ProductIdentityInput(
+          name: 'Herradura de Tiro Lateral ZTTO ASA 2.5D [JUEGO]',
+          brandHint: 'ZTTO',
+          brandIsAsserted: true,
+          knownBrands: known,
+        ),
+      );
+      expect(
+        const ProductIdentityMatcher()
+            .evaluate(probe: probe, candidate: answer)
+            .isRejected,
+        isFalse,
+      );
+    });
+
+    test('una marca de verdad en el título sigue detectándose', () {
+      final profile = ProductIdentityExtractor.extract(
+        const ProductIdentityInput(
+          name: 'Pastillas de freno ZTTO semimetálicas',
+          knownBrands: <String>['ZTTO'],
+        ),
+      );
+      expect(profile.assertedBrand, 'ztto');
     });
   });
 
@@ -463,7 +617,7 @@ void main() {
     }
 
     test('y por eso ya no contradice a un fabricante real', () {
-      final matcher = ProductIdentityMatcher();
+      const matcher = ProductIdentityMatcher();
       final probe = profileOf('Postiza ZTTO 001', brandHint: 'ZTTO');
       final catalogRow = profileOf('Postiza AE 001', brandHint: 'Aliexpress');
       final match = matcher.evaluate(probe: probe, candidate: catalogRow);
@@ -475,7 +629,7 @@ void main() {
     });
 
     test('un fabricante real sí sigue contradiciendo a otro', () {
-      final matcher = ProductIdentityMatcher();
+      const matcher = ProductIdentityMatcher();
       final probe = profileOf('Postiza ZTTO 001', brandHint: 'ZTTO');
       final other = ProductIdentityExtractor.extract(
         const ProductIdentityInput(
@@ -597,7 +751,7 @@ void main() {
     });
 
     test('un eslabón de otra velocidad queda eliminado, no rankeado', () {
-      final matcher = ProductIdentityMatcher();
+      const matcher = ProductIdentityMatcher();
       final probe = profileOf(
         'Eslabón rápido RISK 9v',
         'conector de enlace rápido para cadena, 6 7 8 9 10 11 12 velocidades',
@@ -621,7 +775,7 @@ void main() {
     // rápido porque ninguna de las dos piezas tenía familia: sin familia no hay
     // compuerta, y compartir la marca y la palabra «cadena» bastaba.
     test('un eslabón rápido y un sticker de cadena son cosas distintas', () {
-      final matcher = ProductIdentityMatcher();
+      const matcher = ProductIdentityMatcher();
       final probe = ProductIdentityExtractor.extract(
         const ProductIdentityInput(
           name: 'Eslabón rápido RISK 9v',

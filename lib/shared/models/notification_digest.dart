@@ -212,20 +212,29 @@ class NotificationDigestSnapshot {
     var unreadAlertCount = 0;
 
     for (final row in notifications) {
+      final type = row['type']?.toString() ?? '';
       final createdAt = DateTime.tryParse(
         row['created_at']?.toString() ?? '',
       );
-      if (createdAt == null || !window.contains(createdAt)) {
-        continue;
-      }
+      final occurredAt = DateTime.tryParse(
+            row['occurred_at']?.toString() ?? '',
+          ) ??
+          createdAt;
+      final wasRecordedInWindow =
+          createdAt != null && window.contains(createdAt);
+      final occurredInWindow =
+          occurredAt != null && window.contains(occurredAt);
 
-      if (row['read_at'] == null) unreadAlertCount++;
+      // Attention belongs to when the durable alert reached the operator.
+      // Financial metrics belong to the date of the underlying transaction.
+      if (wasRecordedInWindow && row['read_at'] == null) unreadAlertCount++;
 
-      switch (row['type']?.toString()) {
+      switch (type) {
         case 'mechanic_job_created':
-          jobCount++;
+          if (wasRecordedInWindow) jobCount++;
           break;
         case 'sales_payment_received':
+          if (!occurredInWindow) break;
           paymentCount++;
           final data = row['data'];
           if (data is Map && data['amount'] is num) {
@@ -233,6 +242,7 @@ class NotificationDigestSnapshot {
           }
           break;
         case 'expense_recorded':
+          if (!occurredInWindow) break;
           expenseCount++;
           final data = row['data'];
           if (data is Map && data['total_amount'] is num) {
@@ -240,10 +250,10 @@ class NotificationDigestSnapshot {
           }
           break;
         case 'online_order_created':
-          onlineOrderCount++;
+          if (wasRecordedInWindow) onlineOrderCount++;
           break;
         case 'whatsapp_catalog_approved':
-          catalogApprovalCount++;
+          if (wasRecordedInWindow) catalogApprovalCount++;
           break;
       }
     }

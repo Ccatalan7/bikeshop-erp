@@ -269,7 +269,7 @@ String getRouteTitle(String path) {
     '/hr/kiosk': 'Modo Kiosko',
     '/hr/medical-leaves': 'Licencias Médicas',
     '/hr/payroll': 'Nóminas',
-    '/hr/payroll/reconcile': 'Conciliar nóminas',
+    '/hr/payroll/reconcile': 'Importar cartola',
 
     // Website
     '/website': 'Sitio Web',

@@ -1,0 +1,585 @@
+{
+  "schema_version": 2,
+  "corpus": "aliexpress-live-audit-2026-08-11",
+  "description": "Regression labels for the 40 rows inspected in the read-only AliExpress OCR identity audit plus all rows promoted from the unseen 2024-12-17 and 2024-12-20 days. This file is not a holdout after a row is opened for diagnosis.",
+  "evidence": {
+    "audit_report": "docs/architecture/product-identity-matching-live-audit-2026-08-11.md",
+    "row_captures": ".tmp/ocr-match-audit-2026-08-10",
+    "captured_parsed_invoice_log": ".tmp/native-session/run.log",
+    "catalog_snapshot": ".tmp/ocr-redesign-evidence/catalog.json",
+    "gold_policy": "Only identities established by captured source rows plus catalog, image, variant, or position evidence are labelled catalog_match. Private invoice quantities and monetary values remain in ignored local evidence. Unresolved catalog duplication stays ambiguous, and operational supplies with no catalog product stay no_exists."
+  },
+  "label_counts": {
+    "catalog_match": 43,
+    "ambiguous": 3,
+    "no_exists": 2
+  },
+  "rows": [
+    {
+      "id": "2024-12-17#01",
+      "date": "2024-12-17",
+      "source_row": 1,
+      "source_title": "MUQZI-Cuña de sillín de 100mm de largo, adaptador de tubo de poste de asiento, 22,2, 25,4, 27,2, 31,8, 33,9, 28,6, 30,4 a 30,9, 30, 31,6, 31,8, 33,9, 34,9, 36 (27.2-30.0)",
+      "observed": {
+        "cleaned_name": "Adaptador tija MUQZI 27.2-30.0 100mm",
+        "category_name": "Asiento",
+        "brand_name": "MUQZI"
+      },
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0274"]
+      }
+    },
+    {
+      "id": "2024-12-20#01",
+      "date": "2024-12-20",
+      "source_row": 1,
+      "listing_id": "1005007065001282",
+      "variant_key": "sku:12000039290217159",
+      "selected_variant": "Black A",
+      "source_title": "Soporte de teléfono para bicicleta, accesorio de aleación de aluminio con rotación de 360 °, GPS, para manillar de motocicleta y Scooter (Black A)",
+      "observed": {"cleaned_name": "Soporte celular BENGGU BD-F", "category_name": null, "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0241"],
+        "evidence": "The source object, aluminum construction, 360-degree mechanism, black variant, visual BENGGU reading and catalog image identify the existing BENGGUO aluminum 360-degree holder. The handlebar wording is fitment, not product identity."
+      }
+    },
+    {
+      "id": "2024-12-20#02",
+      "date": "2024-12-20",
+      "source_row": 2,
+      "listing_id": "1005006941079004",
+      "variant_key": "sku:12000038801289704",
+      "selected_variant": "Black",
+      "source_title": "WEST BIKING-soporte de botella de agua para bicicleta, soporte de botella de agua ultraligero para ciclismo de montaña y carretera, gradiente de colores (Black)",
+      "observed": {"cleaned_name": "Portabotella WEST BIKING", "category_name": "Porta Caramagiola", "brand_name": "West Biking"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0258"],
+        "evidence": "AE0258 is the only active WEST BIKING bottle cage in the catalog. Bottle is the contained object, not the product family."
+      }
+    },
+    {
+      "id": "2024-12-20#03",
+      "date": "2024-12-20",
+      "source_row": 3,
+      "listing_id": "1005006010538615",
+      "variant_key": "sku:12000035308530839",
+      "selected_variant": "BLUE",
+      "source_title": "ZTTO MTB ultraligero de aleación de aluminio portabotellas para bicicleta de montaña y carretera portabotellas accesorios para bicicleta (BLUE)",
+      "observed": {"cleaned_name": "Portabotellas ZTTO", "category_name": "Porta Caramagiola", "brand_name": "ZTTO"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0275"],
+        "evidence": "BLUE, RED and BLACK are immutable variants of one listing, and AE0275 is the catalog's ZTTO W216 color-variant product."
+      }
+    },
+    {
+      "id": "2024-12-20#04",
+      "date": "2024-12-20",
+      "source_row": 4,
+      "listing_id": "1005006010538615",
+      "variant_key": "sku:12000035308530836",
+      "selected_variant": "RED",
+      "source_title": "ZTTO MTB ultraligero de aleación de aluminio portabotellas para bicicleta de montaña y carretera portabotellas accesorios para bicicleta (RED)",
+      "observed": {"cleaned_name": "Portabotellas ZTTO ultraligero", "category_name": "Porta Caramagiola", "brand_name": "ZTTO"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0275"],
+        "evidence": "BLUE, RED and BLACK are immutable variants of one listing, and AE0275 is the catalog's ZTTO W216 color-variant product."
+      }
+    },
+    {
+      "id": "2024-12-20#05",
+      "date": "2024-12-20",
+      "source_row": 5,
+      "listing_id": "1005006010538615",
+      "variant_key": "sku:12000035308530837",
+      "selected_variant": "BLACK",
+      "source_title": "ZTTO MTB ultraligero de aleación de aluminio portabotellas para bicicleta de montaña y carretera portabotellas accesorios para bicicleta (BLACK)",
+      "observed": {"cleaned_name": "Portabotella ZTTO Aluminio", "category_name": "Porta Caramagiola", "brand_name": "ZTTO"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0275"],
+        "evidence": "The black row shares the exact listing with the BLUE and RED variants. AE0123 is an older different product and must not split this immutable listing family."
+      }
+    },
+    {
+      "id": "2024-12-20#06",
+      "date": "2024-12-20",
+      "source_row": 6,
+      "listing_id": "1005007543587578",
+      "variant_key": "sku:12000041229825710",
+      "selected_variant": "CR-2 black, CHINA",
+      "source_title": "ENLEE-Pedal de bicicleta de una pieza CNC, aleación de aluminio, sello ultraligero Du Bearing BMX Mtb, accesorios para pedales de bicicleta (CR-2 black, CHINA)",
+      "observed": {"cleaned_name": "Pedal ENLEE CNC", "category_name": "Pedales", "brand_name": "China"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0276"],
+        "evidence": "The immutable CR-2 black option, ENLEE model wording and black catalog image identify AE0276. CHINA is fulfillment origin, not the product manufacturer."
+      }
+    },
+    {
+      "id": "2024-12-20#07",
+      "date": "2024-12-20",
+      "source_row": 7,
+      "listing_id": "1005007857622345",
+      "variant_key": "sku:12000044215367819",
+      "selected_variant": "MT200 Right Rear",
+      "source_title": "Shimano MT200 parte de freno de bicicleta, solo trasero, delantero, lado derecho, lado izquierdo, freno de disco hidráulico para bicicleta de montaña (MT200 Right Rear)",
+      "observed": {"cleaned_name": "Freno disco hidráulico Shimano MT200 Trasero", "category_name": "Calipers", "brand_name": "Shimano"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0010"],
+        "evidence": "The selected variant says Right Rear. Rear selects AE0010 and eliminates front AE0009; front/rear menu text in the listing body cannot override the selected option. The product is a complete hydraulic brake assembly, not only the pictured caliper."
+      }
+    },
+    {
+      "id": "2024-12-26#01",
+      "date": "2024-12-26",
+      "source_row": 1,
+      "source_title": "Juego de espaciadores de vástago de manillar y auriculares de bicicleta, aleación de aluminio, 5 piezas, 5MM,10MM,20MM, Ajuste de 1 1/8\" (5mm 5pcs)",
+      "selected_variant": "5mm 5pcs",
+      "observed": {"cleaned_name": "Espaciadores de tee aluminio 1 1/8", "category_name": "Tee", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0041"]
+      }
+    },
+    {
+      "id": "2024-12-26#02",
+      "date": "2024-12-26",
+      "source_row": 2,
+      "source_title": "Shimano-palanca de cambios ST-EF500 para bicicleta de montaña, freno de 21 velocidades, 24 velocidades, con ventana, 3s, 7s, 8s, EZ FIRE PLUS (EF500 3x7 speed, CHINA)",
+      "observed": {"cleaned_name": "Manillas de cambio y freno Shimano EF500 3x7v", "category_name": "Manillas", "brand_name": "Shimano"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0031", "AE0034"],
+        "cardinality": "product_set"
+      }
+    },
+    {
+      "id": "2024-12-26#03",
+      "date": "2024-12-26",
+      "source_row": 3,
+      "source_title": "Sillín de Gel para bicicleta de montaña y carretera para hombre y mujer, asiento de silicona de cuero PU, cómodo y suave, cojín a prueba de golpes (black)",
+      "observed": {"cleaned_name": "Sillín GEL", "category_name": "Asiento", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0154"]
+      }
+    },
+    {
+      "id": "2024-12-26#04",
+      "date": "2024-12-26",
+      "source_row": 4,
+      "source_title": "RISK-Tapas básicas para Cable de bicicleta de piezas, cubierta para Cable de freno de 4mm, 5mm, 20 piezas, a prueba de polvo, piezas (100pcs 4mm Shift Cap)",
+      "observed": {"cleaned_name": "Tope de piola cambio RISK Basic 4mm", "category_name": "Cambios", "brand_name": "Risk"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0360"]
+      }
+    },
+    {
+      "id": "2024-12-26#05",
+      "date": "2024-12-26",
+      "source_row": 5,
+      "source_title": "BK02 Luz de bicicleta USB recargable T6 luces LED de bicicleta 6 modos MTB linterna de bicicleta faro para ciclismo lámpara delantera (BK02)",
+      "observed": {"cleaned_name": "Luz delantera recargable 1000 lumen BK02", "category_name": "Luces", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0151"]
+      }
+    },
+    {
+      "id": "2024-12-26#06",
+      "date": "2024-12-26",
+      "source_row": 6,
+      "source_title": "Asiento de bicicleta grueso y suave 3D, funda de asiento de sillín de bicicleta transpirable, asiento de espuma cómodo, funda de cojín para bicicleta de montaña (Black)",
+      "observed": {"cleaned_name": "Funda de sillín acolchada", "category_name": "Fundas", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0113"]
+      }
+    },
+    {
+      "id": "2024-12-26#07",
+      "date": "2024-12-26",
+      "source_row": 7,
+      "source_title": "Luz LED frontal para bicicleta de montaña, linterna recargable tipo C, resistente al agua, para exteriores, accesorios de ciclismo nocturno, T6 (WHITE)",
+      "observed": {"cleaned_name": "Luz frontal AT T6", "category_name": "Luces", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0151"]
+      }
+    },
+    {
+      "id": "2024-12-26#08",
+      "date": "2024-12-26",
+      "source_row": 8,
+      "source_title": "BK02-Luz LED T6 para bicicleta, lámpara delantera recargable por USB, 6 modos, MTB (BK02)",
+      "observed": {"cleaned_name": "Luz delantera BK02 T6", "category_name": "Luces", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0151"]
+      }
+    },
+    {
+      "id": "2024-12-26#09",
+      "date": "2024-12-26",
+      "source_row": 9,
+      "source_title": "Herramienta de reparación de bicicletas sin cámara Original, herramienta de reparación de neumáticos, punción de taladro para pegamento urgente, reparación gratuita, raya de goma opcional (Black)",
+      "observed": {"cleaned_name": "Herramienta reparación tubeless negra", "category_name": "Herramientas", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0047"]
+      }
+    },
+    {
+      "id": "2024-12-26#10",
+      "date": "2024-12-26",
+      "source_row": 10,
+      "source_title": "ODI-empuñadura de manillar para bicicleta, empuñaduras antideslizantes de goma, absorción de impacto, empuñaduras de bicicleta de montaña, piezas de bicicleta (510185-black)",
+      "observed": {"cleaned_name": "Puños ODI 510185", "category_name": "Puños", "brand_name": "ODI"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0101"]
+      }
+    },
+    {
+      "id": "2024-12-26#11",
+      "date": "2024-12-26",
+      "source_row": 11,
+      "source_title": "ODI-empuñaduras de Gel de sílice suave para bicicleta de montaña, puños ergonómicos, resistentes al agua, manijas de bloqueo (Black)",
+      "observed": {"cleaned_name": "Puños ODI ergonómicos lock-on", "category_name": "Puños", "brand_name": "ODI"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0257"]
+      }
+    },
+    {
+      "id": "2025-01-01#01",
+      "date": "2025-01-01",
+      "source_row": 1,
+      "source_title": "ZTTO-Guía para cadena de bicicleta de montaña CG02, soporte de abrazadera ajustable para bici de grava, disco único, sistema 1X, 31,8, 34,9 (ZTTO CG-02S Black)",
+      "observed": {"cleaned_name": "Guía de cadena ZTTO CG-02S", "category_name": "Guías de cadena", "brand_name": "ZTTO"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0278"]
+      }
+    },
+    {
+      "id": "2025-01-02#01",
+      "date": "2025-01-02",
+      "source_row": 1,
+      "source_title": "Self-locking plastic nylon tie 100PCS/bag  black Zip wraps strap nylon cable tie set  fastening ring  Loop Wire Wrap (2.6x200(black))",
+      "observed": {"cleaned_name": "Amarra plástica 200mm negra", "category_name": null, "brand_name": null},
+      "expected": {
+        "outcome": "no_exists",
+        "evidence": "No corresponding inventory product was found; the audit classifies this as an operational supply."
+      }
+    },
+    {
+      "id": "2025-01-02#02",
+      "date": "2025-01-02",
+      "source_row": 2,
+      "source_title": "TOOPRE FR5 Aluminum Alloy Bicycle Brake Handle Grips For MTB Road Bike Colorful Brake Levers Kids Brake Levers Universal (Black)",
+      "observed": {"cleaned_name": "Manillas de freno TOOPRE FR5", "category_name": "Manillas", "brand_name": "Toopre"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0279"]
+      }
+    },
+    {
+      "id": "2025-01-02#03",
+      "date": "2025-01-02",
+      "source_row": 3,
+      "source_title": "Self-locking plastic nylon tie 100PCS/bag  black Zip wraps strap nylon cable tie set  fastening ring  Loop Wire Wrap (3.5x200(black))",
+      "observed": {"cleaned_name": "Amarra plástica 3.5x200mm negra", "category_name": null, "brand_name": null},
+      "expected": {
+        "outcome": "no_exists",
+        "evidence": "No corresponding inventory product was found; the audit classifies this as an operational supply."
+      }
+    },
+    {
+      "id": "2025-01-02#04",
+      "date": "2025-01-02",
+      "source_row": 4,
+      "source_title": "1 Pair Bicycle Parts Aluminum Alloy Brake Lever MTB Mountain Road Bike Handlebar Bicycle Universal Brake Handle Bike Accessories (black)",
+      "observed": {"cleaned_name": "Manilla de freno aluminio ruta", "category_name": "Manillas", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0280"]
+      }
+    },
+    {
+      "id": "2025-01-06#01",
+      "date": "2025-01-06",
+      "source_row": 1,
+      "source_title": "Tija de sillín de acero para bicicleta de montaña, 22,2x300mm, tubo de sillín de aluminio con absorción de impacto y amortiguación para bicicleta de equilibrio para niños (black, CHINA)",
+      "observed": {"cleaned_name": "Tija de sillín 22.2x300mm", "category_name": "Tija", "brand_name": "China"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0282"]
+      }
+    },
+    {
+      "id": "2025-01-06#02",
+      "date": "2025-01-06",
+      "source_row": 2,
+      "source_title": "Pastillas de freno de bicicleta RISK, pastilla de freno de disco hidráulico para bicicleta de montaña, pieza de ciclismo para SHIMANO XT XTR M315 SRAM Avid BB5 BB7 E1 E3 (1Pair DS-06)",
+      "observed": {"cleaned_name": "Pastillas de freno DUST DS-06S", "category_name": "Pastillas", "brand_name": "Andes Industrial"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0020"]
+      }
+    },
+    {
+      "id": "2025-01-06#03",
+      "date": "2025-01-06",
+      "source_row": 3,
+      "source_title": "10/2pcs M8 M10 M12 304 Stainless Steel Bushing Lengthen Washer Sleeve Unthreaded Hollow Casing Round Column Joint Length 2-30mm (8mm (5pcs), M10x14 ( IDxOD ))",
+      "selected_variant": "8mm (5pcs), M10x14 ( IDxOD )",
+      "observed": {"cleaned_name": "Buje acero inoxidable M8-M12", "category_name": "Maza", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0281"]
+      }
+    },
+    {
+      "id": "2025-01-10#01",
+      "date": "2025-01-10",
+      "source_row": 1,
+      "source_title": "GOLDIX-plato de manivela para bicicleta de montaña 104BCD, manivela de aleación de aluminio con parte inferior de 170mm, placa negra 32T, 34T, 36T, 38T (Crank BB Round 34T, 175mm)",
+      "observed": {"cleaned_name": "Juego de Bielas GOLDIX 104BCD 34T con Motor", "category_name": "Volante", "brand_name": "Goldix"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0283"]
+      }
+    },
+    {
+      "id": "2025-01-10#02",
+      "date": "2025-01-10",
+      "source_row": 2,
+      "source_title": "SHIMANO-Rotor de freno de disco SM RT56, disco de freno hidráulico para bicicleta de montaña y carretera, SM-RT56, 160/180mm (RT56-160-2pcs)",
+      "observed": {"cleaned_name": "Disco de freno Shimano RT56 160mm", "category_name": "Rotores", "brand_name": "Shimano"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0155"]
+      }
+    },
+    {
+      "id": "2025-01-10#03",
+      "date": "2025-01-10",
+      "source_row": 3,
+      "source_title": "ENLEE-Pedal de bicicleta de una pieza CNC, aleación de aluminio, sello ultraligero Du Bearing BMX Mtb, accesorios para pedales de bicicleta (CR-2 black, CHINA)",
+      "observed": {"cleaned_name": "Pedal ENLEE CR-2", "category_name": "Pedales", "brand_name": "China"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0276"]
+      }
+    },
+    {
+      "id": "2025-01-10#04",
+      "date": "2025-01-10",
+      "source_row": 4,
+      "source_title": "IXF-bielas huecas para bicicleta de montaña, manivela integrada, disco único modificado, 104BCD, 32, 34, 36, 38, 40, 42T (Black crank BB 34T, 170mm)",
+      "observed": {"cleaned_name": "Biela IXF 104BCD 34T 170mm", "category_name": "Volante", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0093"]
+      }
+    },
+    {
+      "id": "2025-01-15#01",
+      "date": "2025-01-15",
+      "source_row": 1,
+      "source_title": "Adapter for Valve Mountain Bike Motorbike Cycling Inflated Lends To Schrader Small Golden Big Wheel Bike Accessories (10PCS)",
+      "observed": {"cleaned_name": "Adaptador de válvula", "category_name": "Bombines", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0001"]
+      }
+    },
+    {
+      "id": "2025-01-21#01",
+      "date": "2025-01-21",
+      "source_row": 1,
+      "source_title": "Luz trasera de freno inteligente para bicicleta, señal de parada de encendido/apagado automático, luz trasera LED para bicicleta de carretera, carga tipo C, lámpara Flash de seguridad para ciclismo de montaña (GL-09, 100-300 Lumen, < 1000 Mah)",
+      "observed": {"cleaned_name": "Luz trasera inteligente GIYO GL-09", "category_name": "Luces", "brand_name": "Giyo"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0288"]
+      }
+    },
+    {
+      "id": "2025-01-21#02",
+      "date": "2025-01-21",
+      "source_row": 2,
+      "source_title": "Juego de pastillas de freno para patinete eléctrico KUGOO, piezas de repuesto para patinete eléctrico de 10 pulgadas, 1-5 unidades (4 pairs)",
+      "observed": {"cleaned_name": "Pastillas freno disco resina", "category_name": "Pastillas", "brand_name": null},
+      "expected": {
+        "outcome": "ambiguous",
+        "candidate_catalog_skus": ["AE0284", "AE0285"],
+        "evidence": "The catalog contains two separately created scooter-pad products, but retained evidence does not establish which image/model owns this KUGOO row."
+      }
+    },
+    {
+      "id": "2025-01-21#03",
+      "date": "2025-01-21",
+      "source_row": 3,
+      "source_title": "RISK-pastillas de freno de disco hidráulico para bicicleta de montaña, pieza de ciclismo para SHIMANO XT XTR M315 SRAM Avid BB5 BB7 E1 E3 (1Pair-2 piece DS-01)",
+      "observed": {"cleaned_name": "Pastillas de freno DUST DS-01S", "category_name": "Pastillas", "brand_name": "Andes Industrial"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0016"]
+      }
+    },
+    {
+      "id": "2025-01-21#04",
+      "date": "2025-01-21",
+      "source_row": 4,
+      "source_title": "Pastillas de freno de disco para patinete eléctrico Xiaomi M365 Pro, pieza de repuesto, placa de fricción, accesorios para patinete eléctrico, 1-5 pares (8Pcs)",
+      "observed": {"cleaned_name": "Pastillas freno para Xiaomi M365 Pro", "category_name": "Pastillas", "brand_name": "Pro"},
+      "expected": {
+        "outcome": "ambiguous",
+        "candidate_catalog_skus": ["AE0284", "AE0285"],
+        "evidence": "The catalog contains two separately created scooter-pad products, but retained evidence does not establish which image/model owns this Xiaomi row."
+      }
+    },
+    {
+      "id": "2025-01-21#05",
+      "date": "2025-01-21",
+      "source_row": 5,
+      "source_title": "Extractor de núcleo de válvula de varilla de extensión de bicicleta multifunción, herramienta de desmontaje de llave de válvula de aire antideslizante para MTB y carretera (Blue with Logo)",
+      "observed": {"cleaned_name": "Extractor válvula TOOPRE", "category_name": "Herramientas", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0286"]
+      }
+    },
+    {
+      "id": "2025-01-21#06",
+      "date": "2025-01-21",
+      "source_row": 6,
+      "source_title": "Deemount-válvula Presta de 2 uds para bicicleta, vástago de aleación de latón opcional, 40/60/80/100/120mm con tapa de aleación y herramienta (40mm Alloy BK FB2)",
+      "observed": {"cleaned_name": "Válvula Tubeless Presta Deemount 40mm", "category_name": "Válvula Tubeless", "brand_name": "Deemount"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0287"]
+      }
+    },
+    {
+      "id": "2025-01-24#01",
+      "date": "2025-01-24",
+      "source_row": 1,
+      "source_title": "Luz brillante para bicicleta T6 LED frontal USB recargable MTB lámpara para bicicleta de montaña 1000LM linterna para bicicleta ciclismo Scooter (Bike light)",
+      "observed": {"cleaned_name": "Luz delantera T6 1000LM USB", "category_name": "Luces", "brand_name": null},
+      "expected": {
+        "outcome": "ambiguous",
+        "candidate_catalog_skus": ["AE0322", "AE0151"],
+        "evidence": "Both catalog rows are near-duplicate T6 1000lm front lights, and the retained provenance does not establish a unique catalog identity."
+      }
+    },
+    {
+      "id": "2025-01-27#01",
+      "date": "2025-01-27",
+      "source_row": 1,
+      "source_title": "GOLDIX-Pedal de bicicleta de montaña de alta resistencia, rodamiento sellado, Triperin, aumento de Pedal antideslizante para MTB y bicicleta de carretera (K1105 Ti-Color)",
+      "observed": {"cleaned_name": "Pedal SRUDEC MATCH", "category_name": "Pedales", "brand_name": "Goldix"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0289"]
+      }
+    },
+    {
+      "id": "2025-01-27#02",
+      "date": "2025-01-27",
+      "source_row": 2,
+      "source_title": "ENLEE-Pedal de bicicleta de una pieza CNC, aleación de aluminio, sello ultraligero Du Bearing BMX Mtb, accesorios para pedales de bicicleta (CR-2 black, CHINA)",
+      "observed": {"cleaned_name": "Pedal ENLEE CR-2 MTB", "category_name": "Pedales", "brand_name": "China"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0276"]
+      }
+    },
+    {
+      "id": "2025-01-27#03",
+      "date": "2025-01-27",
+      "source_row": 3,
+      "source_title": "SHIMANO DEORE SM-RT56 Rotor de freno de disco de 6 pernos 180MM 160MM rotores de freno de disco para bicicleta de montaña piezas originales de bicicleta (RT56-180MM-2PCS, CHINA)",
+      "observed": {"cleaned_name": "Rotor de freno Shimano RT56 180mm 6 pernos", "category_name": "Rotores", "brand_name": "Shimano"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0160"]
+      }
+    },
+    {
+      "id": "2025-01-27#04",
+      "date": "2025-01-27",
+      "source_row": 4,
+      "source_title": "Rotor de freno de disco de bicicleta G3 HS1, rotores de freno hidráulico de acero inoxidable de alta resistencia, pieza de bicicleta MTB, 160/180/203mm, 2 uds. (G3 160-160mm)",
+      "observed": {"cleaned_name": "Rotor freno disco G3 HS1 160mm", "category_name": "Rotores", "brand_name": null},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0212"]
+      }
+    },
+    {
+      "id": "2025-01-27#05",
+      "date": "2025-01-27",
+      "source_row": 5,
+      "source_title": "Claxon de aleación para bicicleta de montaña y carretera, alarma de sonido para manillar de Ciclismo de seguridad, accesorio de llamada de Metal para bicicleta, Q4j6 (Black, China)",
+      "observed": {"cleaned_name": "Campanilla bicicleta", "category_name": "Campanillas", "brand_name": "China"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0290"]
+      }
+    },
+    {
+      "id": "2025-01-30#01",
+      "date": "2025-01-30",
+      "source_row": 1,
+      "source_title": "SHIMANO SM RT56 Disc Brake Rotor 160/180mm SM-RT56 Bicycle Brake Disc MTB Hydraulic Brake Disc Rotor Road Mountain Bike Parts (RT56-160-2pcs)",
+      "observed": {"cleaned_name": "Rotor de freno Shimano RT56 160mm", "category_name": "Rotores", "brand_name": "Shimano"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0155"]
+      }
+    },
+    {
+      "id": "2025-01-30#02",
+      "date": "2025-01-30",
+      "source_row": 2,
+      "source_title": "5 Pair Bicycle Chain Quick Link Connector Joints Magic Buttons Mountain Road Bike Chain missing link for 6/7/8/ 9 10 11 12 Speed (5pair 11S)",
+      "observed": {"cleaned_name": "Eslabón rápido RISK 11v", "category_name": "Missinglink", "brand_name": "Risk"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0099"]
+      }
+    },
+    {
+      "id": "2025-01-30#03",
+      "date": "2025-01-30",
+      "source_row": 3,
+      "source_title": "5 Pair Bicycle Chain Quick Link Connector Joints Magic Buttons Mountain Road Bike Chain missing link for 6/7/8/ 9 10 11 12 Speed (5pair 12S)",
+      "observed": {"cleaned_name": "Eslabón rápido RISK 12v", "category_name": "Missinglink", "brand_name": "Risk"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0100"]
+      }
+    },
+    {
+      "id": "2025-01-30#04",
+      "date": "2025-01-30",
+      "source_row": 4,
+      "source_title": "5 Pair Bicycle Chain Quick Link Connector Joints Magic Buttons Mountain Road Bike Chain missing link for 6/7/8/ 9 10 11 12 Speed (5pair 10S)",
+      "observed": {"cleaned_name": "Eslabón rápido RISK 10v", "category_name": "Missinglink", "brand_name": "Risk"},
+      "expected": {
+        "outcome": "catalog_match",
+        "catalog_skus": ["AE0098"]
+      }
+    }
+  ]
+}

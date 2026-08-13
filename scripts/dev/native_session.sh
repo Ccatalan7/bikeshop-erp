@@ -36,6 +36,27 @@ FLUTTER="$REPO_ROOT/.fvm/flutter_sdk/bin/flutter"
 TARGET="${NATIVE_SESSION_TARGET:-lib/main.dart}"
 DEBUG_APP_GLOB="build/macos/Build/Products/Debug/vinabike_erp.app/Contents/MacOS/vinabike_erp"
 
+# Optional compile-time rollout inputs. They are intentionally explicit instead
+# of accepting a free-form shell fragment: the canonical owner must preserve
+# argument boundaries and must never eval caller-controlled text. The modern
+# Supabase key is public, but it is still kept out of this script and its logs.
+FLUTTER_ROLLOUT_ARGS=()
+case "${NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED:-false}" in
+  true) FLUTTER_ROLLOUT_ARGS+=(--dart-define=AI_AGENT_GATEWAY_ENABLED=true) ;;
+  false|'') ;;
+  *) echo "NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED debe ser true o false" >&2; exit 64 ;;
+esac
+if [ -n "${NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY:-}" ]; then
+  case "$NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY" in
+    sb_publishable_*)
+      FLUTTER_ROLLOUT_ARGS+=(
+        "--dart-define=SUPABASE_PUBLISHABLE_KEY=$NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY"
+      )
+      ;;
+    *) echo "NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY no es una publishable key válida" >&2; exit 64 ;;
+  esac
+fi
+
 app_pid() { pgrep -f "$DEBUG_APP_GLOB" | head -1; }
 # `screen -ls` exits 1 even when sessions exist, so under `set -o pipefail` a
 # direct `screen -ls | grep -q` pipeline always reports "no session" — which
@@ -92,7 +113,14 @@ case "${1:-}" in
     : > "$LOG"
     # screen 4.x (el de macOS) no acepta -Logfile: el destino se declara aquí.
     printf 'logfile %s\nlogfile flush 1\ndeflog on\n' "$LOG" > "$SCREENRC"
-    screen -c "$SCREENRC" -dmS "$SESSION" "$FLUTTER" run -d macos -t "$TARGET"
+    if [ "${#FLUTTER_ROLLOUT_ARGS[@]}" -gt 0 ]; then
+      screen -c "$SCREENRC" -dmS "$SESSION" "$FLUTTER" run -d macos -t "$TARGET" \
+        "${FLUTTER_ROLLOUT_ARGS[@]}"
+    else
+      # Bash 3.2 treats an empty-array expansion as an unbound variable under
+      # `set -u`, so keep the no-rollout launch path argument-free.
+      screen -c "$SCREENRC" -dmS "$SESSION" "$FLUTTER" run -d macos -t "$TARGET"
+    fi
     echo "compilando… (primer arranque ~1-2 min, luego los reload son de segundos)"
     if wait_for "Flutter run key commands" 900; then
       echo "app arriba · pid $(app_pid) · VM $(vm_uri)"

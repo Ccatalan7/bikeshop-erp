@@ -9,7 +9,7 @@ readonly PRODUCTION_VALIDATION_PROJECT_REF="xzdvtzdqjeyqxnkqprtf"
 readonly PRODUCTION_VALIDATION_DIRECT_HOST="db.${PRODUCTION_VALIDATION_PROJECT_REF}.supabase.co"
 readonly PRODUCTION_VALIDATION_DIRECT_PORT="5432"
 readonly PRODUCTION_VALIDATION_CONNECT_TIMEOUT_SECONDS="10"
-readonly PRODUCTION_VALIDATION_CACHE_FORMAT="3-direct-ipv6-public-acl"
+readonly PRODUCTION_VALIDATION_CACHE_FORMAT="4-direct-ipv6-public-private-acl"
 readonly PRODUCTION_VALIDATION_CATALOG_SQL="$DB_ROOT/scripts/db/production_validation_catalog.sql"
 readonly PRODUCTION_VALIDATION_ACL_ROLES_SQL="$DB_ROOT/scripts/db/production_validation_acl_roles.sql"
 readonly PRODUCTION_VALIDATION_ROOT="${VINABIKE_PROD_VALIDATION_ROOT:-$DB_CACHE_DIR/production-validation}"
@@ -531,7 +531,7 @@ production_validation_verify_schema_only_toc() {
 production_validation_verify_acl_toc() {
   local toc_file="$1"
   grep -Eq '[[:space:]](ACL|DEFAULT ACL)[[:space:]]' "$toc_file" ||
-    die "Production archive contains no public-schema ACL entries"
+    die "Production archive contains no public/private-schema ACL entries"
 }
 
 production_validation_prepare_acl_roles() {
@@ -595,7 +595,7 @@ production_validation_split_managed_post_data() {
         if (statement == "") {
           return
         }
-        if (statement ~ /public\./) {
+        if (statement ~ /(public|private)\./) {
           printf "%s", statement >> late_file
         } else {
           printf "%s", statement >> early_file
@@ -708,7 +708,7 @@ SQL
       -f "$capture_dir/production-public-restore.sql" \
       >>"$restore_log" 2>&1; then
     tail -60 "$restore_log" >&2
-    die "Production public-schema restore failed; full log: $restore_log"
+    die "Production public/private-schema restore failed; full log: $restore_log"
   fi
   if [[ -s "$capture_dir/production-public-admin-default-acl.sql" ]] &&
     ! PGOPTIONS="-c check_function_bodies=off" \
@@ -767,6 +767,7 @@ production_validation_create_capture() {
     --schema-only \
     --no-owner \
     --schema=public \
+    --schema=private \
     --file="$work_dir/production-public.dump" \
     "dbname=postgres"
   [[ -s "$work_dir/production-public.dump" ]] ||
@@ -786,7 +787,8 @@ production_validation_create_capture() {
   [[ -s "$work_dir/production-public.sql" ]] ||
     die "Production schema archive did not render to SQL"
   sed \
-    's/^CREATE SCHEMA public;$/CREATE SCHEMA IF NOT EXISTS public;/' \
+    -e 's/^CREATE SCHEMA public;$/CREATE SCHEMA IF NOT EXISTS public;/' \
+    -e 's/^CREATE SCHEMA private;$/CREATE SCHEMA IF NOT EXISTS private;/' \
     "$work_dir/production-public.sql" \
     >"$work_dir/production-public-normalized.sql"
   grep -Ev \
@@ -820,8 +822,8 @@ production_validation_create_capture() {
     "cache_format=$PRODUCTION_VALIDATION_CACHE_FORMAT" \
     "project_ref=$PRODUCTION_VALIDATION_PROJECT_REF" \
     "dump_utc=$dump_utc" \
-    "scope=schema-only-public-no-production-rows" \
-    "acl_scope=production-public-acls-restored" \
+    "scope=schema-only-public-private-no-production-rows" \
+    "acl_scope=production-public-private-acls-restored" \
     "default_acl_scope=postgres-and-supabase-admin-restored" \
     "owner_scope=object-owners-omitted" \
     "archive_sha256=$archive_sha" \
@@ -864,9 +866,13 @@ production_validation_load_capture() {
   )" == "$PRODUCTION_VALIDATION_CACHE_FORMAT" ]] ||
     die "Cached production capture format is obsolete; run prepare"
   [[ "$(
+    production_validation_metadata_value "$capture_dir/metadata" scope
+  )" == "schema-only-public-private-no-production-rows" ]] ||
+    die "Cached production capture scope is incomplete; run prepare"
+  [[ "$(
     production_validation_metadata_value "$capture_dir/metadata" acl_scope
-  )" == "production-public-acls-restored" ]] ||
-    die "Cached production capture does not preserve public ACLs; run prepare"
+  )" == "production-public-private-acls-restored" ]] ||
+    die "Cached production capture does not preserve public/private ACLs; run prepare"
 
   archive_sha="$(production_validation_metadata_value "$capture_dir/metadata" archive_sha256)"
   [[ "$archive_sha" =~ ^[0-9a-f]{64}$ ]] ||
@@ -1328,7 +1334,7 @@ production_validation_prepare_command() {
 
   if [[ "$force_refresh" == true ||
     ! -s "$baseline_dir/current-capture" ]]; then
-    echo "Capturing the production public schema only; no production rows are requested."
+    echo "Capturing the production public/private schemas only; no production rows are requested."
     production_validation_create_capture "$baseline_dir"
   else
     production_validation_clear_remote_connection

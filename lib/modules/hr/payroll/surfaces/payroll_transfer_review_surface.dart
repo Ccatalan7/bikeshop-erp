@@ -2,328 +2,28 @@ import 'package:flutter/material.dart';
 
 import '../theme/payroll_tokens.dart';
 
-/// Claude Design 2c — building blocks of the transfer-review step.
+/// Building blocks of the transfer-review step.
 ///
-/// Source: `ERP Bikeshop UI Mockups`, page `Nóminas - Rediseño`, frame 2c and
-/// the exact Flutter handoff bundle (`payroll_reconciliation_surface.dart`,
-/// section "Paso 2"). The concept's composition is: ONE pending decision per
-/// viewport leading the step, dense 46px statement ledger rows inside
-/// collapsible evidence sections (suggestions with a batch approval, foreign
-/// movements and incoming credits collapsed), and the persistent impact
-/// footer owned by the page.
+/// Visual grammar from `ERP Bikeshop UI Mockups`, page `Nóminas - Rediseño`
+/// (frames 2c y 7c): fila densa, tag de estado que nombra el PORQUÉ, acción
+/// suave con borde acentuado, y el pie de impacto que posee la página.
+///
+/// **La composición de la etapa cambió el 2026-08-10 por instrucción del
+/// dueño**, después de usarla con una cartola real de 96 movimientos: la
+/// versión anterior —UNA decisión por pantalla, en tarjeta, con las demás
+/// apiladas debajo como bloques de página completa y tres grupos plegables—
+/// era ilegible («I literally don't understand anything on what the fuck is
+/// going on there»). Ahora la etapa es **una tabla**, con la misma gramática
+/// que la lectura del paso 2, dos columnas de dinero enfrentadas —lo que pagó
+/// la cartola contra lo que debe la nómina— y la decisión en un `S-05` por
+/// fila. Por eso ya no existen aquí una tarjeta de pregunta abierta, su
+/// contador `i DE n`, ni las secciones plegables.
 ///
 /// These widgets are presentation-only: every decision, idempotency and
 /// navigation contract stays in `PayrollReconciliationPage`.
 
-/// Leading card of the step: one question at a time with a `i DE n` counter.
-class PayrollPendingDecisionCard extends StatelessWidget {
-  const PayrollPendingDecisionCard({
-    super.key,
-    required this.counterLabel,
-    required this.explainer,
-    required this.child,
-    this.onPrevious,
-    this.onNext,
-  });
-
-  final String counterLabel;
-  final String explainer;
-  final Widget child;
-  final VoidCallback? onPrevious;
-  final VoidCallback? onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = PayrollVisualTokens.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: visual.surface,
-        borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
-        border: Border.all(color: visual.borderStrong),
-        boxShadow: visual.raised,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Container(
-            constraints: const BoxConstraints(minHeight: 44),
-            padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: visual.border)),
-            ),
-            child: Row(
-              children: <Widget>[
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: visual.warningFg,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    'Pendiente de decisión',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: visual.sectionTitle.copyWith(fontSize: 13),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    explainer,
-                    style: visual.bodyS.copyWith(
-                      fontSize: 11,
-                      color: visual.inkFaint,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (onPrevious != null || onNext != null) ...<Widget>[
-                  _CounterArrow(
-                    icon: Icons.chevron_left_rounded,
-                    onTap: onPrevious,
-                    semanticsLabel: 'Pregunta anterior',
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: visual.warningSoft,
-                    borderRadius: BorderRadius.circular(PayrollTokens.rPill),
-                    border: Border.all(color: visual.warningBorder),
-                  ),
-                  child: Text(
-                    counterLabel,
-                    style: visual.labelStrong.copyWith(
-                      fontSize: 9.5,
-                      color: visual.warningFg,
-                    ),
-                  ),
-                ),
-                if (onPrevious != null || onNext != null) ...<Widget>[
-                  const SizedBox(width: 4),
-                  _CounterArrow(
-                    icon: Icons.chevron_right_rounded,
-                    onTap: onNext,
-                    semanticsLabel: 'Siguiente pregunta',
-                  ),
-                ],
-              ],
-            ),
-          ),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _CounterArrow extends StatelessWidget {
-  const _CounterArrow({
-    required this.icon,
-    required this.onTap,
-    required this.semanticsLabel,
-  });
-
-  final IconData icon;
-  final VoidCallback? onTap;
-  final String semanticsLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = PayrollVisualTokens.of(context);
-    return Semantics(
-      button: true,
-      label: semanticsLabel,
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            width: 28,
-            height: 28,
-            child: Icon(
-              icon,
-              size: 18,
-              color: onTap == null ? visual.inkDisabled : visual.inkMuted,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Quiet confirmation shown when the pending queue is empty: the step never
-/// leaves a large void where the leading card was.
-class PayrollNoPendingDecisionsCard extends StatelessWidget {
-  const PayrollNoPendingDecisionsCard({super.key, required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = PayrollVisualTokens.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 13),
-      decoration: BoxDecoration(
-        color: visual.surface,
-        borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
-        border: Border.all(color: visual.border),
-      ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(
-              color: visual.successFg,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              'Sin ambigüedades pendientes',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: visual.sectionTitle.copyWith(fontSize: 13),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: visual.bodyS.copyWith(
-                fontSize: 11,
-                color: visual.inkFaint,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Collapsible 2c evidence section: disclosure arrow, semantic dot, title,
-/// subtitle and an optional trailing action on a 44px header.
-class PayrollReviewSection extends StatelessWidget {
-  const PayrollReviewSection({
-    super.key,
-    required this.dotColor,
-    required this.title,
-    required this.subtitle,
-    required this.open,
-    required this.onToggle,
-    required this.child,
-    this.trailing,
-  });
-
-  final Color dotColor;
-  final String title;
-  final String subtitle;
-  final bool open;
-  final VoidCallback onToggle;
-  final Widget child;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = PayrollVisualTokens.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: visual.surface,
-        borderRadius: BorderRadius.circular(PayrollTokens.rPanel),
-        border: Border.all(color: visual.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Semantics(
-            button: true,
-            expanded: open,
-            label: '$title. $subtitle',
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onToggle,
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  child: Row(
-                    children: <Widget>[
-                      Icon(
-                        open
-                            ? Icons.arrow_drop_down_rounded
-                            : Icons.arrow_right_rounded,
-                        size: 18,
-                        color: visual.inkFaint,
-                      ),
-                      const SizedBox(width: 5),
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: dotColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: visual.sectionTitle.copyWith(fontSize: 13),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          subtitle,
-                          style: visual.bodyS.copyWith(
-                            fontSize: 11,
-                            color: visual.inkFaint,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (trailing != null) ...<Widget>[
-                        const SizedBox(width: 10),
-                        trailing!,
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          if (open) ...<Widget>[
-            Divider(height: 1, color: visual.border),
-            child,
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Soft (accent-tinted, bordered) action from the 2c handoff — batch approval
-/// and per-row `Confirmar`/`Revisar`/`Cambiar` links.
+/// Soft (accent-tinted, bordered) action from the 2c handoff — la aprobación en
+/// lote de los calces exactos y el «Aceptar como redondeo» de una diferencia.
 class PayrollSoftAction extends StatelessWidget {
   const PayrollSoftAction({
     super.key,
@@ -498,8 +198,15 @@ class PayrollStatementLedgerRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(child: _personCell(visual)),
-          if (statusLabel != null) ...<Widget>[
+          Expanded(
+            child: person == null && statusLabel != null
+                ? Align(
+                    alignment: Alignment.centerRight,
+                    child: _statusTag(visual),
+                  )
+                : _personCell(visual),
+          ),
+          if (statusLabel != null && person != null) ...<Widget>[
             const SizedBox(width: 12),
             _statusTag(visual),
           ],
@@ -817,7 +524,7 @@ class PayrollConfidencePill extends StatelessWidget {
   /// anyone can decide with.
   ///
   /// What the operator actually needs is next to this pill already: the reason
-  /// tag that names WHY (`CALCE EXACTO`, `TOLERANCIA +$250`,
+  /// tag that names WHY (`CALCE EXACTO`, `MONTO DISTINTO`,
   /// `SIN PERSONA DE NÓMINA`). This pill therefore states only what the system
   /// honestly knows, in words.
   @override
@@ -859,7 +566,7 @@ class PayrollConfidencePill extends StatelessWidget {
 }
 
 /// Small state tag that names WHY a row looks the way it does
-/// (`CALCE EXACTO`, `TOLERANCIA +$250`, `SIN PERSONA DE NÓMINA`…).
+/// (`CALCE EXACTO`, `MONTO DISTINTO`, `SIN PERSONA DE NÓMINA`…).
 class PayrollRowStateTag extends StatelessWidget {
   const PayrollRowStateTag({
     super.key,
@@ -963,14 +670,27 @@ class PayrollReviewTableHeader extends StatelessWidget {
 const double reviewColCaret = 26;
 const double reviewColDate = 76;
 const double reviewColAmount = 118;
-const double reviewColConfidence = 148;
 const double reviewColGap = 10;
 const double reviewRowPadH = 16;
 
+/// La pista que 7c reserva para `CONFIANZA` la ocupa acá el **monto que la
+/// nómina espera**, con el mismo ancho de dinero que publica 7c (118).
+///
+/// **Corrección del dueño, 2026-08-10** (revisando la etapa en la app viva):
+/// *«where is really easy to identify the vs, between what was on the cartola
+/// vs what have to be paid on payrolls»*. Esa comparación es la decisión de la
+/// etapa y no tenía columna: el monto esperado vivía escondido como segunda
+/// línea de la celda de persona, y la columna que sí existía —confianza— no
+/// mueve ninguna decisión. La confianza baja al detalle de la fila, donde
+/// sigue siendo auditable; el contraste sube a columna.
+const double reviewColExpected = 118;
+
 /// 7c pone 84 para su enlace `Cambiar`. Acá la pista lleva el control de
-/// decisión de la gramática 2c —verbo + `⋯`—, que necesita más: se declara la
-/// diferencia en vez de recortar un control canónico para calzar un ancho.
-const double reviewColDecision = 150;
+/// decisión —`S-05` con las cuatro respuestas posibles—, cuya etiqueta más
+/// larga («Retener como excepción», 12px) más el relleno y el caret del
+/// componente no cabe en 84: se declara la diferencia en vez de recortar un
+/// control canónico para calzar un ancho.
+const double reviewColDecision = 190;
 
 /// La fila de RÓTULOS DE COLUMNA de `7c`.
 ///
@@ -1019,8 +739,10 @@ class PayrollReviewColumnHeader extends StatelessWidget {
               SizedBox(
                 width: reviewColAmount,
                 child: Text(
-                  'MONTO',
+                  'CARTOLA',
                   textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: visual.overline,
                 ),
               ),
@@ -1028,7 +750,7 @@ class PayrollReviewColumnHeader extends StatelessWidget {
               Expanded(
                 flex: 11,
                 child: Text(
-                  'PERSONA Y RAZÓN',
+                  'PERSONA Y SEMANA',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: visual.overline,
@@ -1036,11 +758,20 @@ class PayrollReviewColumnHeader extends StatelessWidget {
               ),
               const SizedBox(width: reviewColGap),
               SizedBox(
-                width: reviewColConfidence,
-                child: Text('CONFIANZA', style: visual.overline),
+                width: reviewColExpected,
+                child: Text(
+                  'NÓMINA',
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: visual.overline,
+                ),
               ),
               const SizedBox(width: reviewColGap),
-              const SizedBox(width: reviewColDecision),
+              SizedBox(
+                width: reviewColDecision,
+                child: Text('QUÉ HACER', style: visual.overline),
+              ),
             ],
           ),
         );
@@ -1058,8 +789,9 @@ class PayrollReviewTableRow extends StatelessWidget {
     required this.stateTag,
     required this.stateTone,
     required this.why,
-    required this.confidence,
     required this.decision,
+    this.expectedAmount = '—',
+    this.varianceNote,
     this.person,
     this.personDetail,
     this.initials,
@@ -1073,11 +805,21 @@ class PayrollReviewTableRow extends StatelessWidget {
 
   final String date;
   final String description;
+
+  /// Lo que se movió en el banco. Es un hecho de la cartola.
   final String amount;
+
+  /// Lo que la semana de nómina espera para esta persona. `—` cuando la fila no
+  /// apunta a ninguna obligación: un cargo ajeno no tiene contra qué contrastar
+  /// y un cero inventado ahí sería una afirmación falsa.
+  final String expectedAmount;
+
+  /// La diferencia con signo, sólo cuando existe. Va bajo el monto esperado
+  /// porque es la resta de las dos columnas de dinero, no un dato aparte.
+  final String? varianceNote;
   final String stateTag;
   final PayrollStateTone stateTone;
   final String why;
-  final Widget confidence;
   final Widget decision;
   final String? person;
   final String? personDetail;
@@ -1157,7 +899,7 @@ class PayrollReviewTableRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: visual.monoS.copyWith(fontSize: 9.5),
                       ),
-                    // `7c`: la razón es la segunda línea de PERSONA Y RAZÓN.
+                    // `7c`: la razón es la segunda línea de la celda de persona.
                     Text(
                       why,
                       maxLines: 1,
@@ -1172,6 +914,39 @@ class PayrollReviewTableRow extends StatelessWidget {
               ),
             ],
           );
+
+    // Las dos columnas de dinero se leen como una comparación: mismo estilo
+    // numérico, misma alineación derecha, y la diferencia debajo de lo que la
+    // nómina espera. Sin ese contraste la etapa obliga a abrir cada fila para
+    // saber si el banco pagó de más o de menos.
+    final expectedCell = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          expectedAmount,
+          textAlign: TextAlign.right,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: visual.numRow.copyWith(
+            fontSize: 13,
+            color: settled ? visual.inkMuted : visual.ink,
+          ),
+        ),
+        if (varianceNote != null)
+          Text(
+            varianceNote!,
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: visual.monoS.copyWith(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: visual.warningFg,
+            ),
+          ),
+      ],
+    );
 
     final whyText = Text(
       why,
@@ -1214,19 +989,23 @@ class PayrollReviewTableRow extends StatelessWidget {
                       // 148px 84px`, gap 10. La primera lleva el caret —el
                       // mismo rol que en 7a—, y la RAZÓN baja bajo la persona,
                       // que es donde 7c la dibuja: como segunda línea, no como
-                      // columna propia.
+                      // columna propia. La sexta pista pasa de confianza a
+                      // monto esperado (ver [reviewColExpected]) y la séptima
+                      // se ensancha para el `S-05` de decisión.
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: <Widget>[
                           SizedBox(
                             width: reviewColCaret,
-                            child: Icon(
-                              expanded
-                                  ? Icons.keyboard_arrow_down_rounded
-                                  : Icons.chevron_right_rounded,
-                              size: 18,
-                              color: visual.inkFaint,
-                            ),
+                            child: onToggleExpanded == null
+                                ? null
+                                : Icon(
+                                    expanded
+                                        ? Icons.keyboard_arrow_down_rounded
+                                        : Icons.chevron_right_rounded,
+                                    size: 18,
+                                    color: visual.inkFaint,
+                                  ),
                           ),
                           const SizedBox(width: reviewColGap),
                           SizedBox(
@@ -1261,23 +1040,23 @@ class PayrollReviewTableRow extends StatelessWidget {
                           Expanded(flex: 11, child: personCell),
                           const SizedBox(width: reviewColGap),
                           SizedBox(
-                            width: reviewColConfidence,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: confidence,
-                            ),
+                            width: reviewColExpected,
+                            child: expectedCell,
                           ),
                           const SizedBox(width: reviewColGap),
                           // 7c dibuja acá un enlace (`Cambiar` / `Asignar`) de
-                          // 84. Este ERP resuelve la fila con un control de
-                          // decisión —verbo + `⋯`—, que es la gramática 2c ya
-                          // aprobada y no se cambia por una diferencia de
-                          // ancho: la pista se ensancha lo que ese control
-                          // necesita, y queda declarado.
+                          // 84. Este ERP resuelve la fila con el selector
+                          // canónico `S-05`, que necesita más: la pista se
+                          // ensancha lo que ese control pide, y queda
+                          // declarado en [reviewColDecision].
                           SizedBox(width: reviewColDecision, child: decision),
                         ],
                       );
                     }
+                    // Compacto: la misma comparación, apilada. Cada monto lleva
+                    // su rótulo porque acá no hay encabezado de columna que lo
+                    // diga, y sin él «$35.000 / $133.000» no se sabe cuál es
+                    // cuál — que es justo la lectura que la etapa necesita.
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -1290,25 +1069,32 @@ class PayrollReviewTableRow extends StatelessWidget {
                             ),
                             const SizedBox(width: 10),
                             Expanded(child: movement),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Expanded(
+                              child: _CompactMoney(
+                                label: 'CARTOLA',
+                                value: amount,
+                                settled: settled,
+                              ),
+                            ),
                             const SizedBox(width: 10),
-                            Text(
-                              amount,
-                              style: visual.monoM.copyWith(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: settled ? visual.inkMuted : visual.ink,
+                            Expanded(
+                              child: _CompactMoney(
+                                label: 'NÓMINA',
+                                value: expectedAmount,
+                                note: varianceNote,
+                                settled: settled,
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          children: <Widget>[
-                            Expanded(child: personCell),
-                            const SizedBox(width: 10),
-                            confidence,
-                          ],
-                        ),
+                        personCell,
                         const SizedBox(height: 7),
                         whyText,
                         const SizedBox(height: 9),
@@ -1326,6 +1112,57 @@ class PayrollReviewTableRow extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Un monto con su rótulo, para el ancho compacto de [PayrollReviewTableRow].
+class _CompactMoney extends StatelessWidget {
+  const _CompactMoney({
+    required this.label,
+    required this.value,
+    required this.settled,
+    this.note,
+  });
+
+  final String label;
+  final String value;
+  final String? note;
+  final bool settled;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: visual.overline),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: visual.numRow.copyWith(
+            fontSize: 13,
+            color: settled ? visual.inkMuted : visual.ink,
+          ),
+        ),
+        if (note != null)
+          Text(
+            note!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: visual.monoS.copyWith(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: visual.warningFg,
+            ),
+          ),
+      ],
     );
   }
 }

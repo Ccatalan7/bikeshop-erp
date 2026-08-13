@@ -5,16 +5,14 @@ import type {
   JsonValue,
   StrictJsonSchema,
 } from "./contracts.ts";
+import { validatePublicResearchArguments } from "./public_research.ts";
 
 const operationalRead = "ai.read.operational";
 const salesRead = "ai.read.sales";
 const purchasesRead = "ai.read.purchases";
+const accountingRead = "ai.read.accounting";
 const publicResearchToolName = "research_public_web";
-
-// Arbitrary text cannot be proven free of tenant data or PII by heuristics.
-// Keep public research unexecutable until an isolated worker can resolve
-// server-owned public identifiers without receiving ERP records.
-const toolsAwaitingIsolatedExecution = new Set([publicResearchToolName]);
+const prepareTaskToolName = "prepare_task";
 
 export class ToolRegistryError extends Error {
   constructor(
@@ -35,7 +33,11 @@ export class ToolRegistryError extends Error {
 export class AgentToolRegistry {
   readonly #tools: ReadonlyMap<string, AgentToolDefinition>;
 
-  constructor(definitions: readonly AgentToolDefinition[]) {
+  constructor(
+    definitions: readonly AgentToolDefinition[],
+    options: { activatedTools?: readonly string[] } = {},
+  ) {
+    const activatedTools = new Set(options.activatedTools ?? []);
     const tools = new Map<string, AgentToolDefinition>();
     for (const definition of definitions) {
       if (!/^[a-z][a-z0-9_]{1,63}$/.test(definition.name)) {
@@ -43,6 +45,9 @@ export class AgentToolRegistry {
       }
       if (tools.has(definition.name)) throw invalidSchema("Duplicate tool definition");
       validateStrictSchema(definition.parameters);
+      if (definition.name === publicResearchToolName && !activatedTools.has(definition.name)) {
+        continue;
+      }
       tools.set(definition.name, freezeDefinition(definition));
     }
     this.#tools = tools;
@@ -51,7 +56,6 @@ export class AgentToolRegistry {
   advertisedFor(authority: AgentAuthority): readonly AgentToolDefinition[] {
     const capabilities = effectiveCapabilities(authority);
     return [...this.#tools.values()].filter((definition) =>
-      !toolsAwaitingIsolatedExecution.has(definition.name) &&
       definition.requiredPermissions.every((permission) => capabilities.has(permission))
     );
   }
@@ -69,8 +73,15 @@ export class AgentToolRegistry {
         throw new ToolRegistryError(502, "invalid_tool_arguments", "AI tool call is invalid");
       }
       ids.add(call.id);
-      this.#validateCall(call, authority, 502);
+      this.validateProviderCall(call, authority);
     }
+  }
+
+  validateProviderCall(call: AgentToolCall, authority: AgentAuthority): void {
+    if (!call.id || call.id.length > 256) {
+      throw new ToolRegistryError(502, "invalid_tool_arguments", "AI tool call is invalid");
+    }
+    this.#validateCall(call, authority, 502);
   }
 
   #validateCall(call: AgentToolCall, authority: AgentAuthority, status: 400 | 502): void {
@@ -85,12 +96,8 @@ export class AgentToolRegistry {
     if (call.name === publicResearchToolName) {
       validatePublicResearchProjection(call.arguments, status);
     }
-    if (toolsAwaitingIsolatedExecution.has(call.name)) {
-      throw new ToolRegistryError(
-        status,
-        "tool_not_activated",
-        "AI tool is not available",
-      );
+    if (call.name === prepareTaskToolName) {
+      validatePrepareTaskProjection(call.arguments, status);
     }
   }
 
@@ -142,10 +149,10 @@ const boundedSearchSchema: StrictJsonSchema = {
       description: "Texto breve y específico para filtrar datos autorizados.",
     },
     limit: {
-      type: ["integer", "null"],
+      type: "integer",
       minimum: 1,
       maximum: 10,
-      description: "Máximo de resultados; null usa el límite seguro del servidor.",
+      description: "Máximo seguro de resultados.",
     },
   },
   required: ["query", "limit"],
@@ -165,47 +172,188 @@ const attentionItemsSchema: StrictJsonSchema = {
   additionalProperties: false,
 };
 
-const publicResearchProjectionSchema: StrictJsonSchema = {
+const businessSnapshotSchema: StrictJsonSchema = {
   type: "object",
   properties: {
-    intent: {
+    horizon: {
       type: "string",
-      enum: [
-        "product_specification",
-        "component_compatibility",
-        "maintenance_procedure",
-        "public_regulation",
-      ],
-      description: "Tipo público de investigación; nunca una instrucción libre.",
-    },
-    publicIdentifiers: {
-      type: "array",
-      minItems: 1,
-      maxItems: 3,
-      items: {
-        type: "string",
-        minLength: 2,
-        maxLength: 64,
-        description: "Identificador público normalizado de marca, modelo, componente o norma.",
-      },
-      description: "Referencias públicas; el servidor construye la consulta externa.",
-    },
-    locale: {
-      type: "string",
-      enum: ["es-CL", "en-US"],
-      description: "Idioma público permitido para la investigación.",
+      enum: ["today", "tomorrow", "next_7_days"],
+      description: "Horizonte operacional cerrado para resumir taller, tareas e inventario.",
     },
   },
-  required: ["intent", "publicIdentifiers", "locale"],
+  required: ["horizon"],
   additionalProperties: false,
 };
 
-export function createDefaultAgentToolRegistry(): AgentToolRegistry {
+const inventoryRisksSchema: StrictJsonSchema = closedSearchSchema({
+  risk: ["any", "low_stock", "out_of_stock"],
+});
+
+const recentExpensesSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    query: optionalQueryProperty(),
+    days: integerProperty(1, 365, "Ventana histórica en días."),
+    postingStatus: enumProperty(["any", "draft", "posted", "void"], "Estado contable."),
+    paymentStatus: enumProperty(
+      ["any", "pending", "scheduled", "partial", "paid", "void"],
+      "Estado de pago.",
+    ),
+    approvalStatus: enumProperty(
+      ["any", "pending", "approved", "rejected"],
+      "Estado de aprobación.",
+    ),
+    limit: integerProperty(1, 10, "Máximo seguro de resultados."),
+  },
+  required: [
+    "query",
+    "days",
+    "postingStatus",
+    "paymentStatus",
+    "approvalStatus",
+    "limit",
+  ],
+  additionalProperties: false,
+};
+
+const cashAndReceivablesSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    horizon: enumProperty(
+      ["today", "next_7_days", "next_30_days"],
+      "Horizonte para cuentas por cobrar.",
+    ),
+    limit: integerProperty(1, 8, "Máximo de facturas por cobrar."),
+  },
+  required: ["horizon", "limit"],
+  additionalProperties: false,
+};
+
+const conversationsSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    query: optionalQueryProperty(),
+    channel: enumProperty(
+      ["any", "internal", "website_portal", "whatsapp", "instagram", "facebook_messenger"],
+      "Canal cerrado de conversación.",
+    ),
+    status: enumProperty(
+      ["any", "pending", "active", "resolved", "rejected"],
+      "Estado de la conversación.",
+    ),
+    contextType: enumProperty(
+      [
+        "any",
+        "job",
+        "invoice",
+        "order",
+        "purchase_invoice",
+        "supplier",
+        "customer",
+        "product",
+        "bike",
+      ],
+      "Tipo de registro relacionado.",
+    ),
+    unreadOnly: { type: "boolean", description: "Limita a conversaciones no leídas." },
+    needsReplyOnly: {
+      type: "boolean",
+      description: "Limita a conversaciones que requieren respuesta.",
+    },
+    days: integerProperty(1, 365, "Ventana histórica en días."),
+    limit: integerProperty(1, 10, "Máximo seguro de resultados."),
+  },
+  required: [
+    "query",
+    "channel",
+    "status",
+    "contextType",
+    "unreadOnly",
+    "needsReplyOnly",
+    "days",
+    "limit",
+  ],
+  additionalProperties: false,
+};
+
+const workshopQuerySchema: StrictJsonSchema = filteredSearchSchema({
+  status: ["any", "open", "completed", "delivered", "cancelled"],
+  includeAssignee: false,
+});
+
+const taskQuerySchema: StrictJsonSchema = filteredSearchSchema({
+  status: ["any", "pending", "in_progress", "completed", "cancelled"],
+  includeAssignee: true,
+});
+
+const publicResearchProjectionSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {},
+  required: [],
+  additionalProperties: false,
+};
+
+const prepareTaskSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    title: {
+      type: "string",
+      minLength: 1,
+      maxLength: 160,
+      description: "Título concreto de la tarea que el operador podrá confirmar.",
+    },
+    description: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 2000,
+      description: "Detalle opcional de la tarea; null cuando no hace falta.",
+    },
+    priority: {
+      type: "string",
+      enum: ["low", "normal", "high", "urgent"],
+      description: "Prioridad operacional cerrada.",
+    },
+    dueAt: {
+      type: ["string", "null"],
+      minLength: 20,
+      maxLength: 40,
+      description: "Fecha y hora ISO 8601 con zona, o null si no hay vencimiento.",
+    },
+    assigneeMode: {
+      type: "string",
+      enum: ["me", "unassigned", "name"],
+      description: "Asignación a quien opera, sin asignar o por nombre autorizado.",
+    },
+    assigneeName: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 160,
+      description: "Nombre exacto sólo cuando assigneeMode es name; en otro caso null.",
+    },
+  },
+  required: [
+    "title",
+    "description",
+    "priority",
+    "dueAt",
+    "assigneeMode",
+    "assigneeName",
+  ],
+  additionalProperties: false,
+};
+
+export function createDefaultAgentToolRegistry(options: { publicResearch?: boolean } = {}) {
   return new AgentToolRegistry([
     readTool(
       "search_inventory",
       "Busca productos, precio y stock en el inventario autorizado del taller.",
       querySchema,
+      operationalRead,
+    ),
+    readTool(
+      "find_inventory_risks",
+      "Detecta productos con stock bajo o agotado usando filtros autorizados de inventario.",
+      inventoryRisksSchema,
       operationalRead,
     ),
     readTool(
@@ -215,15 +363,21 @@ export function createDefaultAgentToolRegistry(): AgentToolRegistry {
       operationalRead,
     ),
     readTool(
+      "get_business_snapshot",
+      "Resume métricas operacionales de taller, tareas e inventario para hoy, mañana o los próximos siete días.",
+      businessSnapshotSchema,
+      operationalRead,
+    ),
+    readTool(
       "search_workshop_jobs",
-      "Busca trabajos autorizados por folio, cliente, bicicleta o estado.",
-      boundedSearchSchema,
+      "Consulta trabajos autorizados combinando texto opcional, horizonte, estado y prioridad.",
+      workshopQuerySchema,
       operationalRead,
     ),
     readTool(
       "search_tasks",
-      "Busca tareas autorizadas por texto, responsable o estado.",
-      boundedSearchSchema,
+      "Consulta tareas autorizadas combinando texto opcional, horizonte, estado, prioridad y asignación.",
+      taskQuerySchema,
       operationalRead,
     ),
     readTool(
@@ -251,42 +405,152 @@ export function createDefaultAgentToolRegistry(): AgentToolRegistry {
       purchasesRead,
     ),
     readTool(
+      "list_recent_expenses",
+      "Consulta gastos recientes por estado contable, de pago y aprobación, sin exponer proveedores ni contactos.",
+      recentExpensesSchema,
+      accountingRead,
+    ),
+    readTool(
+      "analyze_cash_and_receivables",
+      "Analiza el saldo contable de cuentas configuradas y facturas por cobrar en un horizonte cerrado; no representa saldo bancario, conciliado ni disponible.",
+      cashAndReceivablesSchema,
+      accountingRead,
+    ),
+    readTool(
+      "search_conversations",
+      "Busca conversaciones autorizadas por canal, estado y contexto sin leer contenido, nombres ni contactos.",
+      conversationsSchema,
+      operationalRead,
+    ),
+    readTool(
+      prepareTaskToolName,
+      "Prepara una tarea exacta y durable para revisión. Nunca la crea: la escritura sólo ocurre después de una confirmación explícita en la tarjeta.",
+      prepareTaskSchema,
+      operationalRead,
+    ),
+    readTool(
       publicResearchToolName,
-      "Propone investigación pública mediante identificadores normalizados; requiere un worker aislado.",
+      "Investiga el mensaje actual del operador en la web pública, incluidos sitios o foros nombrados, mediante un adaptador aislado y fuentes HTTPS citadas. No acepta texto ni destinos: el servidor deriva la tarea sólo del mensaje actual.",
       publicResearchProjectionSchema,
       operationalRead,
     ),
-  ]);
+  ], {
+    activatedTools: options.publicResearch ? [publicResearchToolName] : [],
+  });
+}
+
+function optionalQueryProperty(): StrictJsonSchema {
+  return {
+    type: ["string", "null"],
+    minLength: 1,
+    maxLength: 240,
+    description: "Texto opcional; null permite usar sólo filtros estructurados.",
+  };
+}
+
+function enumProperty(values: readonly string[], description: string): StrictJsonSchema {
+  return { type: "string", enum: values, description };
+}
+
+function integerProperty(minimum: number, maximum: number, description: string): StrictJsonSchema {
+  return { type: "integer", minimum, maximum, description };
+}
+
+function closedSearchSchema(extra: Readonly<Record<string, readonly string[]>>): StrictJsonSchema {
+  const properties: Record<string, StrictJsonSchema> = { query: optionalQueryProperty() };
+  for (const [name, values] of Object.entries(extra)) {
+    properties[name] = enumProperty(values, `Filtro cerrado ${name}.`);
+  }
+  properties.limit = integerProperty(1, 10, "Máximo seguro de resultados.");
+  return {
+    type: "object",
+    properties,
+    required: Object.keys(properties),
+    additionalProperties: false,
+  };
+}
+
+function filteredSearchSchema(options: {
+  status: readonly string[];
+  includeAssignee: boolean;
+}): StrictJsonSchema {
+  const properties: Record<string, StrictJsonSchema> = {
+    query: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 240,
+      description: "Texto opcional; null permite filtrar sólo por campos estructurados.",
+    },
+    horizon: {
+      type: "string",
+      enum: ["any", "today", "tomorrow", "week", "overdue"],
+      description: "Horizonte temporal cerrado.",
+    },
+    status: {
+      type: "string",
+      enum: options.status,
+      description: "Estado cerrado del registro.",
+    },
+    priority: {
+      type: "string",
+      enum: ["any", "urgent", "high", "normal", "low"],
+      description: "Prioridad cerrada del registro.",
+    },
+    limit: {
+      type: "integer",
+      minimum: 1,
+      maximum: 10,
+      description: "Máximo seguro de resultados.",
+    },
+  };
+  if (options.includeAssignee) {
+    properties.assignee = {
+      type: "string",
+      enum: ["any", "me", "unassigned"],
+      description: "Asignación cerrada de tareas.",
+    };
+  }
+  return {
+    type: "object",
+    properties,
+    required: Object.keys(properties),
+    additionalProperties: false,
+  };
 }
 
 function validatePublicResearchProjection(
   argumentsValue: Readonly<Record<string, JsonValue>>,
   status: 400 | 502,
 ): void {
-  const identifiers = argumentsValue.publicIdentifiers;
-  if (!Array.isArray(identifiers)) {
+  try {
+    validatePublicResearchArguments(argumentsValue);
+  } catch (_) {
     throw invalidPublicResearchArguments(status);
-  }
-  for (const identifier of identifiers) {
-    if (typeof identifier !== "string" || !isSafePublicIdentifier(identifier)) {
-      throw invalidPublicResearchArguments(status);
-    }
   }
 }
 
-function isSafePublicIdentifier(value: string): boolean {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._+\/-]*$/.test(value)) return false;
+function validatePrepareTaskProjection(
+  argumentsValue: Readonly<Record<string, JsonValue>>,
+  status: 400 | 502,
+): void {
+  const mode = argumentsValue.assigneeMode;
+  const name = argumentsValue.assigneeName;
+  const dueAt = argumentsValue.dueAt;
+  if (
+    (mode === "name") !== (typeof name === "string") ||
+    (typeof dueAt === "string" && !isIsoInstant(dueAt))
+  ) {
+    throw new ToolRegistryError(
+      status,
+      "invalid_tool_arguments",
+      "AI tool arguments are invalid",
+    );
+  }
+}
 
-  const normalized = value.toLowerCase();
-  const sensitivePatterns = [
-    /(?:^|[-_.])(?:api[-_.]?key|bearer|password|secret|token)(?:$|[-_.])/,
-    /(?:^|[-_.])(?:address|cliente|correo|customer|direccion|email|factura|folio|invoice|pedido|phone|rut|telefono|whatsapp)(?:$|[-_.])/,
-    /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/,
-    /(?:^|[-_.])(?:fv|oc|ot|pg)[-_.]?[0-9]{3,}(?:$|[-_.])/,
-    /(?:^|[-_.])[0-9]{1,2}[-_.]?[0-9]{3}[-_.]?[0-9]{3}[-_.]?[0-9k](?:$|[-_.])/,
-    /[0-9]{7,}/,
-  ];
-  return !sensitivePatterns.some((pattern) => pattern.test(normalized));
+function isIsoInstant(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
+    Number.isFinite(Date.parse(value));
 }
 
 function invalidPublicResearchArguments(status: 400 | 502): ToolRegistryError {
@@ -325,8 +589,9 @@ export function matchesSchema(value: JsonValue, schema: StrictJsonSchema): boole
   if (schema.enum && !schema.enum.some((candidate) => candidate === value)) return false;
 
   if (typeof value === "string") {
-    if (schema.minLength !== undefined && value.length < schema.minLength) return false;
-    if (schema.maxLength !== undefined && value.length > schema.maxLength) return false;
+    const byteLength = new TextEncoder().encode(value).byteLength;
+    if (schema.minLength !== undefined && byteLength < schema.minLength) return false;
+    if (schema.maxLength !== undefined && byteLength > schema.maxLength) return false;
   }
   if (typeof value === "number") {
     if (schema.minimum !== undefined && value < schema.minimum) return false;
@@ -398,36 +663,8 @@ function readTool(
   };
 }
 
-const operationalRoles = new Set([
-  "owner",
-  "admin",
-  "manager",
-  "cashier",
-  "mechanic",
-  "accountant",
-]);
-const salesRoles = new Set(["owner", "admin", "manager", "cashier", "accountant"]);
-const purchasesRoles = new Set(["owner", "admin", "manager", "accountant"]);
-
 function effectiveCapabilities(authority: AgentAuthority): ReadonlySet<string> {
-  const capabilities = new Set(
-    Object.entries(authority.permissions)
-      .filter((entry) => entry[1] === true)
-      .map((entry) => entry[0]),
-  );
-  if (operationalRoles.has(authority.role)) capabilities.add(operationalRead);
-  if (
-    salesRoles.has(authority.role) || authority.permissions.create_invoices === true ||
-    authority.permissions.access_accounting === true
-  ) {
-    capabilities.add(salesRead);
-  }
-  if (
-    purchasesRoles.has(authority.role) || authority.permissions.access_accounting === true
-  ) {
-    capabilities.add(purchasesRead);
-  }
-  return capabilities;
+  return new Set(authority.capabilities);
 }
 
 function invalidSchema(message: string): ToolRegistryError {

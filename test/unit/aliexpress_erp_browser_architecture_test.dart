@@ -137,4 +137,137 @@ void main() {
     expect(extractor, contains("mode: datesOnly ? 'dates-only'"));
     expect(extractor, contains('coverageComplete: coverage.complete'));
   });
+
+  test('exact-date invoices fail closed unless API coverage ends naturally',
+      () {
+    final browser =
+        File('lib/shared/widgets/webview_module_page.dart').readAsStringSync();
+    final extractor = File(
+      'tools/chrome-extensions/aliexpress-invoice-generator/content.js',
+    ).readAsStringSync();
+
+    final apiStart = browser.indexOf(
+      'Future<Map<String, dynamic>?> _collectAliExpressOrdersViaApi(',
+    );
+    final apiEnd = browser.indexOf(
+      'Future<Map<String, dynamic>> _collectAliExpressOrdersList(',
+      apiStart,
+    );
+    expect(apiStart, greaterThan(-1));
+    expect(apiEnd, greaterThan(apiStart));
+    final apiCollection = browser.substring(apiStart, apiEnd);
+
+    expect(apiCollection, contains("'maxPages': 60"));
+    expect(apiCollection, contains('if (kDebugMode)'));
+    expect(apiCollection, contains("'orders.api.shape'"));
+    expect(apiCollection, contains("method: 'ordersApiShapeProbe'"));
+    expect(apiCollection, contains('scalarByLeaf'));
+    expect(apiCollection, contains("'filterOptions': response['filterOptions']"));
+    expect(apiCollection, isNot(contains("'keyPaths':")));
+    expect(
+      apiCollection.indexOf("method: 'ordersApiShapeProbe'"),
+      lessThan(apiCollection.indexOf("method: 'ordersApiCollect'")),
+    );
+    expect(apiCollection, contains("coverage['targetDateComplete'] == true"));
+    expect(apiCollection, contains("certification['certified'] == true"));
+    expect(apiCollection, contains("'evaluationOnly': kDebugMode"));
+    expect(apiCollection, contains('kDebugMode && result[\'evaluationOnly\'] == true'));
+    expect(
+      apiCollection,
+      contains("termination['naturalExhaustion'] == true"),
+    );
+    expect(apiCollection, contains("'orders.api.rejected'"));
+    expect(apiCollection, contains("'coverage': coverage"));
+    expect(apiCollection, contains("'termination': termination"));
+    expect(apiCollection, contains('No se generó una factura parcial.'));
+    expect(apiCollection, contains('rethrow;'));
+    expect(
+      apiCollection,
+      isNot(contains(
+        "_aliExpressDebug('orders.api.failed'"
+        "\n      return null;",
+      )),
+    );
+    expect(
+      browser,
+      contains("method == 'extractOrdersList' || method == 'ordersApiCollect'"),
+    );
+    expect(browser, contains('? const Duration(minutes: 8)'));
+
+    final dailyStart = browser.indexOf(
+      'Future<Map<String, dynamic>> _collectAliExpressDailyInvoice(',
+    );
+    final dailyEnd = browser.indexOf(
+      'void _aliExpressDebug(',
+      dailyStart,
+    );
+    final dailyCollection = browser.substring(dailyStart, dailyEnd);
+    expect(
+      dailyCollection,
+      contains("listCoverage['targetDateComplete'] == true"),
+    );
+    expect(dailyCollection, contains("listCoverage['certified'] == true"));
+    expect(
+      dailyCollection,
+      contains("kDebugMode && listResult['evaluationOnly'] == true"),
+    );
+    expect(
+      dailyCollection,
+      contains("listTermination['naturalExhaustion'] == true"),
+    );
+    expect(dailyCollection, contains("'list.coverage.rejected'"));
+
+    expect(extractor, contains('const defaultMaxPages = exactDate ? 60 : 30'));
+    expect(
+      extractor,
+      contains('targetDateComplete: exactDate ? historyComplete : null'),
+    );
+    expect(extractor, contains("? 'natural-exhaustion'"));
+    expect(extractor, contains('partialOrderCount'));
+    expect(extractor, contains('No se generó una factura parcial.'));
+    expect(extractor, contains('parseOrdersApiTemplateParams'));
+    expect(extractor, contains('findPageIndexSlots(parsed)'));
+    expect(extractor, contains('ordersApiTemplateSummary'));
+    expect(extractor, contains('ordersApiResponseSummary'));
+    expect(extractor, contains('isSafeDiagnosticKey'));
+    expect(extractor, isNot(contains('sampleFields')));
+    expect(extractor, isNot(contains('pagesPastTargetDate')));
+    expect(extractor, isNot(contains("reason = 'día superado'")));
+  });
+
+  test('debug discovery reaches OCR with every mutation path disabled', () {
+    final browser =
+        File('lib/shared/widgets/webview_module_page.dart').readAsStringSync();
+    final ocr =
+        File('lib/shared/widgets/ocr_upload_widget.dart').readAsStringSync();
+
+    expect(browser, contains("invoice['evaluationOnly'] = true"));
+    expect(
+      browser,
+      contains("kDebugMode && listResult['evaluationOnly'] == true"),
+    );
+    expect(
+      ocr,
+      contains(
+        "_isReadOnlyEvaluation = "
+        "structuredInvoiceData?['evaluationOnly'] == true",
+      ),
+    );
+    expect(ocr, contains('if (_isReadOnlyEvaluation) return false;'));
+    expect(ocr, contains('if (_isReadOnlyEvaluation) return;'));
+    expect(
+      ocr,
+      contains(
+        'if (_isReadOnlyEvaluation || !mounted || _bulkRowBusy(entry)) return;',
+      ),
+    );
+    expect(
+      ocr,
+      contains("'Revisar \$unresolved producto\${unresolved == 1 ? '' : 's'} · solo lectura'"),
+    );
+    expect(
+      ocr,
+      contains('readOnly: _creatingProducts || _isReadOnlyEvaluation'),
+    );
+  });
 }

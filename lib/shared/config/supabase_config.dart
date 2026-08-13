@@ -18,6 +18,13 @@ class SupabaseConfig {
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6ZHZ0emRxamV5cXhua3FwcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjQyMzUsImV4cCI6MjA3NTY0MDIzNX0.q5OswWMx6C00dbSHlFSOKlv6BA6GKx36VtVSy8ohxAM',
   );
 
+  /// Modern public API key. New server boundaries use this value and never
+  /// require the legacy anon JWT. Launches that have not migrated yet keep the
+  /// legacy public key for existing services, while the gateway stays disabled.
+  static const String publishableKey = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+  );
+
   /// Indicates whether both URL and anon key look configured.
   static bool get isConfigured => url.isNotEmpty && anonKey.isNotEmpty;
 }

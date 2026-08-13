@@ -174,6 +174,54 @@ Deno.test("Anthropic keeps model routing, effort, strict tools, and abort owners
   assertEquals(turn.finishReason, "stop", "end_turn is normalized");
 });
 
+Deno.test("Anthropic protocol-forces one named tool with adaptive thinking", async () => {
+  const payloads: Array<Record<string, unknown>> = [];
+  const provider = createAnthropicMessagesProvider({
+    apiKey: "anthropic-test-key",
+    fetchImpl: (_input, init) => {
+      payloads.push(JSON.parse(String(init?.body)));
+      return Promise.resolve(anthropicResponse({
+        content: [{
+          type: "tool_use",
+          id: "toolu_required",
+          name: "search_inventory",
+          input: { query: "cadena" },
+        }],
+        stopReason: "tool_use",
+      }));
+    },
+  });
+  const base = request([{ role: "user", text: "Busca" }], {
+    tools: [inventoryTool],
+  });
+
+  await provider.generate(
+    { ...base, requiredToolName: "search_inventory" },
+    new AbortController().signal,
+  );
+
+  assertEquals(payloads[0].tool_choice, {
+    type: "tool",
+    name: "search_inventory",
+    disable_parallel_tool_use: true,
+  }, "Anthropic receives an exact server-owned required tool");
+  assertEquals(
+    payloads[0].thinking,
+    { type: "adaptive", display: "omitted" },
+    "forced dispatch preserves supported adaptive thinking",
+  );
+
+  await assertProviderError(
+    provider.generate(
+      { ...base, requiredToolName: "missing_tool" },
+      new AbortController().signal,
+    ),
+    "provider_invalid_response",
+    "Anthropic rejects a required tool outside the advertised set",
+  );
+  assertEquals(payloads.length, 1, "invalid required tools fail before network egress");
+});
+
 Deno.test("Anthropic replays exact thinking, signatures, redactions, calls, and results across three rounds", async () => {
   const firstBlocks = [
     { type: "thinking", thinking: "", signature: "signature-round-1" },
@@ -615,7 +663,7 @@ Deno.test("Anthropic turns aborted fetches into a fixed sanitized provider failu
 
   assert(seenSignal === controller.signal, "timeout cancellation reaches the exact fetch signal");
   assertEquals(error.message, "AI provider request failed", "upstream details never escape");
-  assertEquals(error.retryable, true, "aborted transport is retry-classified without details");
+  assertEquals(error.retryable, false, "aborted transport is never retryable");
 });
 
 Deno.test("Anthropic discards upstream rejection bodies and exposes only fixed metadata", async () => {

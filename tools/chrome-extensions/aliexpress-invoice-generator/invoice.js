@@ -73,7 +73,7 @@
           <div class="article-copy">
             <strong>${escapeHtml(item.description || 'AliExpress item')}</strong>
             <div class="muted">SKU: ${escapeHtml(item.sku || 'AE-ITEM')}</div>
-            ${item.unitsPerPurchase > 1 ? `<div class="muted">Compra AliExpress: ${formatQuantity(item.sourcePurchaseQuantity)} × ${formatQuantity(item.unitsPerPurchase)} pares = ${formatQuantity(item.quantity)} pares</div>` : ''}
+            ${item.rawPackCount ? `<div class="muted">Evidencia proveedor: ${formatQuantity(item.sourcePurchaseQuantity)} compra(s) × opción ${formatQuantity(item.rawPackCount)} ${escapeHtml(item.rawUnitToken || '')}; conversión pendiente del producto</div>` : ''}
             <span class="machine-metadata">${buildMachineMetadata(item)}</span>
           </div>
         </td>
@@ -213,6 +213,7 @@
       lines.push(`$ ${formatDecimalComma(item.allocatedAdjustment || 0)}`);
       lines.push(`$ ${formatDecimalComma(item.unitPrice || 0)}`);
       lines.push(`$ ${formatDecimalComma(item.total || 0)}`);
+      lines.push(...buildMachineMetadataLines(item));
     });
 
     lines.push(`Total neto $ ${formatDecimalComma(invoice.subtotal || sumSourceItems(invoice.items) || sumItems(invoice.items))}`);
@@ -225,54 +226,124 @@
   }
 
   function buildMachineMetadata(item) {
+    return escapeHtml(buildMachineMetadataLines(item).join('\n'));
+  }
+
+  function buildMachineMetadataLines(item) {
     const lines = [];
+    if (item.lineTitle) lines.push(`LINE_TITLE: ${item.lineTitle}`);
+    if (item.variant) lines.push(`VARIANT: ${item.variant}`);
+    if (item.variantKey) lines.push(`VARIANT_KEY: ${item.variantKey}`);
     if (item.productUrl) lines.push(`PRODUCT_URL: ${item.productUrl}`);
     if (item.imageUrl) lines.push(`IMAGE_URL: ${item.imageUrl}`);
-    if (item.unitsPerPurchase > 1) {
-      lines.push(`SOURCE_PURCHASE_QUANTITY: ${item.sourcePurchaseQuantity}`);
-      lines.push(`UNITS_PER_PURCHASE: ${item.unitsPerPurchase}`);
-      lines.push(`INVENTORY_UNIT: ${item.inventoryUnit || 'unit'}`);
+    lines.push(`SOURCE_PURCHASE_QUANTITY: ${item.sourcePurchaseQuantity}`);
+    if (item.sourcePurchaseUnitPrice != null) {
+      lines.push(`SOURCE_PURCHASE_UNIT_PRICE: ${item.sourcePurchaseUnitPrice}`);
+    }
+    if (item.rawPackCount && item.rawUnitToken) {
+      lines.push(`RAW_PACK_COUNT: ${item.rawPackCount}`);
+      lines.push(`RAW_UNIT_TOKEN: ${item.rawUnitToken}`);
+    }
+    if (item.rawPackEvidenceConflict) {
+      lines.push('RAW_PACK_EVIDENCE_CONFLICT: true');
     }
     if (item.sourceOrderNumbers.length) {
       lines.push(`SOURCE_ORDERS: ${item.sourceOrderNumbers.join(',')}`);
     }
-    return escapeHtml(lines.join('\n'));
+    return lines;
   }
 
   function normalizeInvoice(invoice) {
     const items = (invoice.items || []).map((item, index) => {
-      const quantity = toNumber(item.quantity) || 1;
-      const unitPrice = toNumber(item.unitPrice);
-      const total = toNumber(item.total) || roundMoney(quantity * unitPrice);
-      const sourceUnitPrice = toNullableNumber(item.sourceUnitPrice) ?? unitPrice;
-      const allocatedDiscountTotal = toNullableNumber(item.allocatedDiscountTotal);
-      const allocatedShippingTotal = toNullableNumber(item.allocatedShippingTotal);
-      const allocatedTaxTotal = toNullableNumber(item.allocatedTaxTotal);
-      const allocatedAdjustmentTotal = toNullableNumber(item.allocatedAdjustmentTotal);
+      const legacyAppliedQuantity = toNumber(item.quantity) || 1;
+      const sourcePurchaseQuantity = toNumber(item.sourcePurchaseQuantity)
+        || legacyAppliedQuantity;
+      const quantity = sourcePurchaseQuantity;
+      const inputUnitPrice = toNumber(item.unitPrice);
+      const explicitTotal = toNullableNumber(item.total);
+      const total = explicitTotal ?? roundMoney(quantity * inputUnitPrice);
       const allocationGranularity = item.allocationGranularity === 'unit' ? 'unit' : '';
-      const sourceDescription = String(item.originalDescription || item.description || 'AliExpress item').trim();
-      const cleanedDescription = smartProductName(sourceDescription, item);
-      const currentDescription = cleanVisibleProductName(item.description);
-      const description = cleanedDescription || currentDescription || 'AliExpress item';
-      const originalDescription = sourceDescription && sourceDescription !== description
-        ? sourceDescription
-        : String(item.originalDescription || '').trim();
+      const selectedVariant = String(item.variant || '').trim();
+      const displaySource = String(item.description || 'AliExpress item').trim();
+      const legacyOriginal = String(item.originalDescription || '').trim();
+      const lineTitle = String(
+        item.lineTitle
+        || legacyOriginal
+        || withoutSelectedVariant(displaySource, selectedVariant)
+        || 'AliExpress item',
+      ).trim();
+      const cleanedLineTitle = smartProductName(lineTitle, item);
+      const visibleBase = cleanedLineTitle
+        || cleanVisibleProductName(lineTitle)
+        || 'AliExpress item';
+      const description = selectedVariant
+        ? `${visibleBase} (${selectedVariant})`
+        : visibleBase;
+      const originalDescription = lineTitle && lineTitle !== description
+        ? lineTitle
+        : legacyOriginal;
+      const packEvidence = item.rawPackEvidenceConflict === true
+        ? { rawPackCount: null, rawUnitToken: null }
+        : rawPackEvidenceForItem(
+          item,
+          selectedVariant,
+          lineTitle,
+          displaySource,
+        );
+      const sourcePurchaseUnitPrice = toNullableNumber(item.sourcePurchaseUnitPrice);
+      const legacySourceUnitPrice = toNullableNumber(item.sourceUnitPrice);
+      const sourceTotal = toNullableNumber(item.sourceTotal)
+        ?? (sourcePurchaseUnitPrice === null
+          ? (legacySourceUnitPrice === null
+            ? roundMoney(quantity * inputUnitPrice)
+            : roundMoney(legacySourceUnitPrice * legacyAppliedQuantity))
+          : roundMoney(sourcePurchaseUnitPrice * quantity));
+      const sourceUnitPrice = roundMoney(sourceTotal / quantity);
+      const unitPrice = roundMoney(total / quantity);
+      const allocatedDiscountTotal = allocationTotal(
+        item.allocatedDiscount,
+        item.allocatedDiscountTotal,
+        legacyAppliedQuantity,
+        allocationGranularity,
+      );
+      const allocatedShippingTotal = allocationTotal(
+        item.allocatedShipping,
+        item.allocatedShippingTotal,
+        legacyAppliedQuantity,
+        allocationGranularity,
+      );
+      const allocatedTaxTotal = allocationTotal(
+        item.allocatedTax,
+        item.allocatedTaxTotal,
+        legacyAppliedQuantity,
+        allocationGranularity,
+      );
+      const allocatedAdjustmentTotal = allocationTotal(
+        item.allocatedAdjustment,
+        item.allocatedAdjustmentTotal,
+        legacyAppliedQuantity,
+        allocationGranularity,
+      );
       return {
         sku: String(item.sku || `AE-${String(index + 1).padStart(3, '0')}`).trim(),
         description,
+        lineTitle: lineTitle || null,
         originalDescription,
-        variant: String(item.variant || '').trim(),
+        variant: selectedVariant,
         variantKey: String(item.variantKey || '').trim(),
         quantity,
         unitPrice,
         total,
-        sourcePurchaseQuantity: toNumber(item.sourcePurchaseQuantity) || quantity,
-        unitsPerPurchase: toNumber(item.unitsPerPurchase) || 1,
-        inventoryUnit: item.inventoryUnit || '',
-        sourcePurchaseUnitPrice: toNullableNumber(item.sourcePurchaseUnitPrice),
+        sourcePurchaseQuantity,
+        rawPackCount: packEvidence.rawPackCount,
+        rawUnitToken: packEvidence.rawUnitToken,
+        rawPackEvidenceConflict: item.rawPackEvidenceConflict === true,
+        unitsPerPurchase: 1,
+        inventoryUnit: '',
+        sourcePurchaseUnitPrice: sourceUnitPrice,
         sourceOrderNumbers: Array.isArray(item.sourceOrderNumbers) ? item.sourceOrderNumbers : [],
         sourceUnitPrice,
-        sourceTotal: toNullableNumber(item.sourceTotal) ?? roundMoney(sourceUnitPrice * quantity),
+        sourceTotal,
         allocatedDiscount: normalizeAllocationUnit(item.allocatedDiscount, allocatedDiscountTotal, quantity, allocationGranularity),
         allocatedDiscountTotal,
         allocatedShipping: normalizeAllocationUnit(item.allocatedShipping, allocatedShippingTotal, quantity, allocationGranularity),
@@ -308,6 +379,91 @@
     };
   }
 
+  function withoutSelectedVariant(description, variant) {
+    const value = cleanVisibleProductName(description);
+    if (!value || !variant) return value;
+    const suffix = new RegExp(`\\s*\\(${escapeRegExp(variant)}\\)\\s*$`, 'i');
+    return value.replace(suffix, '').trim();
+  }
+
+  function rawPackEvidenceForItem(item, selectedVariant, lineTitle, description) {
+    const selected = extractRawPackEvidence(selectedVariant);
+    if (selected.hasEvidence || selected.mentionsPackUnit) return selected;
+
+    const explicitCount = positiveInteger(item.rawPackCount);
+    const explicitToken = normalizedRawUnitToken(item.rawUnitToken);
+    if (explicitCount && explicitToken) {
+      return { rawPackCount: explicitCount, rawUnitToken: explicitToken };
+    }
+
+    const curated = extractRawPackEvidence(lineTitle);
+    if (curated.hasEvidence || curated.mentionsPackUnit) return curated;
+
+    const legacyCount = positiveInteger(item.unitsPerPurchase);
+    const legacyToken = normalizedRawUnitToken(item.inventoryUnit);
+    if (legacyCount > 1 && legacyToken) {
+      return {
+        rawPackCount: legacyCount,
+        rawUnitToken: legacyToken,
+        hasEvidence: true,
+        mentionsPackUnit: true,
+      };
+    }
+    return extractRawPackEvidence(description);
+  }
+
+  function extractRawPackEvidence(value) {
+    const text = String(value || '').trim();
+    const empty = {
+      rawPackCount: null,
+      rawUnitToken: null,
+      hasEvidence: false,
+      mentionsPackUnit: false,
+    };
+    if (!text) return empty;
+    const units = '(?:pairs?|pares?|pcs?|pieces?|piezas?|pzs?|unidades?|units?|sets?|packs?)';
+    const mentionsPackUnit = new RegExp(units, 'i').test(text);
+    if (!mentionsPackUnit) return empty;
+    const range = new RegExp(`\\b\\d{1,5}\\s*(?:-|–|—|~|\\bto\\b|\\ba\\b)\\s*\\d{1,5}\\s*${units}\\b`, 'i');
+    const menu = new RegExp(`(?:\\b\\d{1,5}\\s*[/,]\\s*)+\\d{1,5}\\s*${units}\\b`, 'i');
+    if (range.test(text) || menu.test(text)) {
+      return { ...empty, mentionsPackUnit: true };
+    }
+
+    const candidates = new Map();
+    for (const match of text.matchAll(new RegExp(`\\b(\\d{1,5})\\s*(${units})\\b`, 'gi'))) {
+      const count = positiveInteger(match[1]);
+      const token = normalizedRawUnitToken(match[2]);
+      if (!count || !token) continue;
+      candidates.set(`${count}|${token}`, { rawPackCount: count, rawUnitToken: token });
+    }
+    if (candidates.size !== 1) return { ...empty, mentionsPackUnit: true };
+    return {
+      ...candidates.values().next().value,
+      hasEvidence: true,
+      mentionsPackUnit: true,
+    };
+  }
+
+  function positiveInteger(value) {
+    const parsed = Number(String(value ?? '').replace(',', '.'));
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  function normalizedRawUnitToken(value) {
+    return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function allocationTotal(unitValue, totalValue, legacyQuantity, granularity) {
+    const total = toNullableNumber(totalValue);
+    if (total !== null) return total;
+    const unit = toNullableNumber(unitValue);
+    if (unit === null) return null;
+    return granularity === 'unit'
+      ? roundMoney(unit * (legacyQuantity || 1))
+      : unit;
+  }
+
   function normalizeAllocationUnit(unitValue, totalValue, quantity, granularity) {
     const total = toNullableNumber(totalValue);
     if (total !== null) return roundMoney(total / (quantity || 1));
@@ -330,7 +486,6 @@
         'Pastillas de freno',
         brand,
         brakePadModelLabel(base),
-        '(par)',
       ]);
     }
 
@@ -621,6 +776,8 @@
 
   const testing = Object.freeze({
     normalizeInvoice,
+    extractRawPackEvidence,
+    buildOcrText,
     smartProductName,
     buildInvoiceMarkup,
     formatMoney,

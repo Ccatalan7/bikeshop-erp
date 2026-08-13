@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -30,8 +30,9 @@ void main() {
 
   test('elige uno de los candidatos y dice por qué', () async {
     final proxy = _ScriptedProxy(
-      '{"id":"AE0145","reason":"es el caliper delantero Bucklos, misma marca y '
-      'mismo lado","confidence":0.9}',
+      '{"decision":"same","product_id":"AE0145","components":[],'
+      '"reason":"es el caliper delantero Bucklos, misma marca y mismo lado",'
+      '"confidence":0.9}',
     );
     final service = AIAssistantService(geminiProxy: proxy);
 
@@ -41,6 +42,7 @@ void main() {
     );
 
     expect(decision!.productId, 'AE0145');
+    expect(decision.decision, AIProductMatchDecisionKind.same);
     expect(decision.reason, contains('caliper'));
     expect(proxy.calls, 1);
     service.dispose();
@@ -51,7 +53,8 @@ void main() {
     // not chosen one. Repairing that guess is how an invented code reaches the
     // catalog.
     final proxy = _ScriptedProxy(
-      '{"id":"AE9999","reason":"inventado","confidence":0.99}',
+      '{"decision":"same","product_id":"AE9999","components":[],'
+      '"reason":"inventado","confidence":0.99}',
     );
     final service = AIAssistantService(geminiProxy: proxy);
 
@@ -61,12 +64,14 @@ void main() {
     );
 
     expect(decision!.hasChoice, isFalse);
+    expect(decision.invalidProductId, isTrue);
     service.dispose();
   });
 
   test('«ninguno» es una respuesta válida, no un fallo', () async {
     final proxy = _ScriptedProxy(
-      '{"id":null,"reason":"ninguno es la misma pieza","confidence":0.2}',
+      '{"decision":"different","product_id":null,"components":[],'
+      '"reason":"ninguno es la misma pieza","confidence":0.2}',
     );
     final service = AIAssistantService(geminiProxy: proxy);
 
@@ -77,12 +82,17 @@ void main() {
 
     expect(decision, isNotNull);
     expect(decision!.hasChoice, isFalse);
+    expect(decision.decision, AIProductMatchDecisionKind.different);
+    expect(decision.invalidProductId, isFalse);
     expect(decision.reason, isNotNull);
     service.dispose();
   });
 
   test('sin candidatos no se gasta una llamada', () async {
-    final proxy = _ScriptedProxy('{"id":null}');
+    final proxy = _ScriptedProxy(
+      '{"decision":"insufficient","product_id":null,"components":[],'
+      '"reason":"sin evidencia","confidence":0}',
+    );
     final service = AIAssistantService(geminiProxy: proxy);
 
     final decision = await service.adjudicateProductMatch(
@@ -95,25 +105,259 @@ void main() {
     service.dispose();
   });
 
-  test('la lista que ve el modelo está acotada', () async {
-    final proxy = _ScriptedProxy('{"id":null,"confidence":0}');
+  test('un empate que supera el límite se rechaza sin truncarlo', () async {
+    final proxy = _ScriptedProxy(
+      '{"decision":"insufficient","product_id":null,"components":[],'
+      '"reason":"sin evidencia","confidence":0}',
+    );
     final service = AIAssistantService(geminiProxy: proxy);
 
     await service.adjudicateProductMatch(
       invoiceTitle: 'Rotor',
       options: <AIProductMatchOption>[
-        for (var index = 0; index < 40; index++)
+        for (var index = 0;
+            index <= AIAssistantService.maxAdjudicationCandidates;
+            index++)
           AIProductMatchOption(id: 'SKU$index', name: 'Rotor $index'),
       ],
     );
 
-    final sent = proxy.lastPrompt;
-    expect(sent, contains('SKU0'));
-    expect(
-      sent,
-      isNot(contains('SKU${AIAssistantService.maxAdjudicationCandidates}')),
-      reason: 'una lista sin techo es una cuenta sin techo',
+    expect(proxy.calls, 0);
+    expect(proxy.lastPrompt, isEmpty);
+    service.dispose();
+  });
+
+  test('envía evidencia tipada e imágenes etiquetadas por candidato', () async {
+    final proxy = _ScriptedProxy(
+      '{"decision":"same","product_id":"AE0145","components":[],'
+      '"reason":"misma pinza Bucklos","confidence":0.92}',
     );
+    final service = AIAssistantService(geminiProxy: proxy);
+    final image = Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF, 0xD9]);
+
+    final decision = await service.adjudicateProductMatch(
+      invoiceTitle: 'Pinza Bucklos delantera 160 mm (Negro)',
+      invoiceBrand: 'Bucklos',
+      invoiceFamily: 'disc_brake_caliper',
+      invoiceModelCodes: const <String>{'bk02'},
+      invoiceSpecifications: const <String, String>{
+        'posición': 'delantera',
+        'rotor': '160 mm',
+      },
+      selectedVariant: 'Negro',
+      quantity: 2,
+      lineContext: 'segunda de seis líneas del mismo pedido',
+      imageBytes: image,
+      options: <AIProductMatchOption>[
+        AIProductMatchOption(
+          id: 'AE0145',
+          name: 'Caliper Freno Delantero Mecánico Bucklos AE',
+          brand: 'Bucklos',
+          family: 'disc_brake_caliper',
+          model: 'BK02',
+          variant: 'Negro',
+          specifications: const <String, String>{'rotor': '160 mm'},
+          imageBytes: image,
+        ),
+        AIProductMatchOption(
+          id: 'NNV128',
+          name: 'Pinzas Industriales Precisión',
+          family: 'tool_pliers',
+          imageBytes: image,
+        ),
+      ],
+    );
+
+    expect(decision!.productId, 'AE0145');
+    expect(proxy.lastPrompt, contains('"invoice_family":"disc_brake_caliper"'));
+    expect(proxy.lastPrompt, contains('"invoice_model_codes":["bk02"]'));
+    expect(proxy.lastPrompt, contains('"selected_variant":"Negro"'));
+    expect(proxy.lastPrompt, contains('"quantity":2'));
+    expect(proxy.lastPrompt, contains('BEGIN_UNTRUSTED_CATALOG_DATA_JSON'));
+    expect(
+      proxy.lastPrompt,
+      contains('Incluye como máximo 5'),
+      reason: 'todos los candidatos se comparan, pero no se narran 40 rechazos',
+    );
+    expect(
+      proxy.lastPrompt,
+      contains('rotor: coincide (160 mm)'),
+    );
+    expect(
+      proxy.lastPrompt,
+      contains('posición: fuente=delantera, candidato sin dato'),
+    );
+    expect(
+      proxy.textParts,
+      containsAll(<String>[
+        'IMAGEN DE LA LÍNEA DE FACTURA:',
+        'IMAGEN COMPARTIDA POR LOS CANDIDATOS ids=C001,C002:',
+      ]),
+    );
+    expect(proxy.inlineDataParts, 2);
+    service.dispose();
+  });
+
+  test('la evidencia de rechazo queda acotada sin perder la elección',
+      () async {
+    final rejected = <String>[
+      for (var index = 2; index <= 7; index++)
+        '{"product_id":"C00$index","reason":"diferencia $index",'
+            '"basis":["spec"]}',
+    ].join(',');
+    final proxy = _ScriptedProxy(
+      '{"decision":"same","picks":['
+      '{"product_id":"C001","qty":1,"basis":["model","image"]}],'
+      '"rejected":[$rejected],"confidence":0.96,'
+      '"prompt_version":"${AIAssistantService.productMatchPromptKey}",'
+      '"model_id":"gemini-2.5-flash"}',
+    );
+    final service = AIAssistantService(geminiProxy: proxy);
+
+    final decision = await service.adjudicateProductMatch(
+      invoiceTitle: 'Maza trasera exacta',
+      imageBytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF, 0xD9]),
+      requireTypedBasis: true,
+      options: <AIProductMatchOption>[
+        for (var index = 1; index <= 7; index++)
+          AIProductMatchOption(
+            id: 'product-$index',
+            name: 'Maza candidata $index',
+          ),
+      ],
+    );
+
+    expect(decision, isNotNull);
+    expect(decision!.productId, 'product-1');
+    expect(
+      decision.rejected.map((item) => item.productId),
+      <String>[
+        'product-2',
+        'product-3',
+        'product-4',
+        'product-5',
+        'product-6',
+      ],
+    );
+    service.dispose();
+  });
+
+  test('propone un conjunto sólo con ids ofrecidos y cantidades positivas',
+      () async {
+    final proxy = _ScriptedProxy(
+      '{"decision":"composite","product_id":null,"components":['
+      '{"product_id":"LEFT","quantity":1},'
+      '{"product_id":"RIGHT","quantity":1}],'
+      '"reason":"el set trae manilla izquierda y derecha",'
+      '"confidence":0.87}',
+    );
+    final service = AIAssistantService(geminiProxy: proxy);
+
+    final decision = await service.adjudicateProductMatch(
+      invoiceTitle: 'Shimano ST-EF500 3x7 pair',
+      options: const <AIProductMatchOption>[
+        AIProductMatchOption(id: 'LEFT', name: 'Manilla ST-EF500 izquierda'),
+        AIProductMatchOption(id: 'RIGHT', name: 'Manilla ST-EF500 derecha'),
+      ],
+    );
+
+    expect(decision, isNotNull);
+    expect(decision!.decision, AIProductMatchDecisionKind.composite);
+    expect(decision.productId, isNull);
+    expect(decision.hasChoice, isFalse);
+    expect(
+      decision.components
+          .map((component) => '${component.productId}:${component.quantity}'),
+      <String>['LEFT:1', 'RIGHT:1'],
+    );
+    service.dispose();
+  });
+
+  test('un id inventado dentro del conjunto falla cerrado y queda marcado',
+      () async {
+    final proxy = _ScriptedProxy(
+      '{"decision":"composite","product_id":null,"components":['
+      '{"product_id":"LEFT","quantity":1},'
+      '{"product_id":"INVENTED","quantity":1}],'
+      '"reason":"parece un par","confidence":0.9}',
+    );
+    final service = AIAssistantService(geminiProxy: proxy);
+
+    final decision = await service.adjudicateProductMatch(
+      invoiceTitle: 'Par de manillas',
+      options: const <AIProductMatchOption>[
+        AIProductMatchOption(id: 'LEFT', name: 'Manilla izquierda'),
+        AIProductMatchOption(id: 'RIGHT', name: 'Manilla derecha'),
+      ],
+    );
+
+    expect(decision, isNotNull);
+    expect(decision!.decision, AIProductMatchDecisionKind.insufficient);
+    expect(decision.invalidProductId, isTrue);
+    expect(decision.components, isEmpty);
+    service.dispose();
+  });
+
+  test('una cantidad compuesta no positiva o fraccionaria es salida inválida',
+      () async {
+    for (final quantity in <num>[0, -1, 1.5]) {
+      final proxy = _ScriptedProxy(
+        '{"decision":"composite","product_id":null,"components":['
+        '{"product_id":"LEFT","quantity":$quantity}],'
+        '"reason":"set","confidence":0.8}',
+      );
+      final service = AIAssistantService(geminiProxy: proxy);
+
+      final decision = await service.adjudicateProductMatch(
+        invoiceTitle: 'Set',
+        options: const <AIProductMatchOption>[
+          AIProductMatchOption(id: 'LEFT', name: 'Manilla izquierda'),
+        ],
+      );
+
+      expect(decision, isNull, reason: 'quantity=$quantity');
+      service.dispose();
+    }
+  });
+
+  test('different e insufficient son decisiones distintas y cerradas',
+      () async {
+    for (final kind in <String>['different', 'insufficient']) {
+      final proxy = _ScriptedProxy(
+        '{"decision":"$kind","product_id":null,"components":[],'
+        '"reason":"evidencia declarada","confidence":0.4}',
+      );
+      final service = AIAssistantService(geminiProxy: proxy);
+      final decision = await service.adjudicateProductMatch(
+        invoiceTitle: 'Producto',
+        options: options,
+      );
+
+      expect(decision, isNotNull);
+      expect(
+        decision!.decision,
+        kind == 'different'
+            ? AIProductMatchDecisionKind.different
+            : AIProductMatchDecisionKind.insufficient,
+      );
+      expect(decision.hasChoice, isFalse);
+      service.dispose();
+    }
+  });
+
+  test('una forma de decisión contradictoria no se repara', () async {
+    final proxy = _ScriptedProxy(
+      '{"decision":"different","product_id":"AE0145","components":[],'
+      '"reason":"contradictorio","confidence":0.9}',
+    );
+    final service = AIAssistantService(geminiProxy: proxy);
+
+    final decision = await service.adjudicateProductMatch(
+      invoiceTitle: 'Producto',
+      options: options,
+    );
+
+    expect(decision, isNull);
     service.dispose();
   });
 
@@ -154,6 +398,8 @@ class _ScriptedProxy extends GeminiProxyService {
   final String reply;
   int calls = 0;
   String lastPrompt = '';
+  final List<String> textParts = <String>[];
+  int inlineDataParts = 0;
 
   @override
   Future<GeminiProxyGenerateResult> generateContent({
@@ -169,7 +415,12 @@ class _ScriptedProxy extends GeminiProxyService {
       if (parts is! List) continue;
       for (final part in parts) {
         if (part is Map && part['text'] is String) {
-          lastPrompt = part['text'] as String;
+          final text = part['text'] as String;
+          lastPrompt = lastPrompt.isEmpty ? text : '$lastPrompt\n$text';
+          textParts.add(text);
+        }
+        if (part is Map && part['inlineData'] is Map) {
+          inlineDataParts++;
         }
       }
     }

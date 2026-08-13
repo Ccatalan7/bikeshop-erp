@@ -6,11 +6,22 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 
+export const agentCapabilities = [
+  "ai.read.operational",
+  "ai.read.sales",
+  "ai.read.purchases",
+  "ai.read.accounting",
+] as const;
+
+export type AgentCapability = (typeof agentCapabilities)[number];
+
 export interface AgentAuthority {
   userId: string;
   tenantId: string;
   role: string;
   permissions: Readonly<Record<string, boolean>>;
+  capabilities: readonly AgentCapability[];
+  authorityFingerprint: string;
 }
 
 export interface AgentToolCall {
@@ -72,6 +83,7 @@ export interface AgentProviderRequest {
   systemInstruction: string;
   messages: readonly AgentMessage[];
   tools: readonly AgentToolDefinition[];
+  requiredToolName?: string;
   maxOutputTokens: number;
   continuationToken?: string;
 }
@@ -85,8 +97,112 @@ export interface AgentProviderTurn {
 }
 
 export interface AgentGatewayRequest {
+  version: 1;
+  clientRequestId: string;
+  threadId: string | null;
   modelRole: LogicalModelRole;
-  messages: readonly AgentMessage[];
+  message: string;
+  viewContext: AgentViewContext;
+}
+
+export type AgentViewContext =
+  | { kind: "none" | "rejected"; jobIds: readonly []; truncated: false }
+  | { kind: "workshop_jobs"; jobIds: readonly string[]; truncated: boolean };
+
+export const agentCardDestinations = [
+  "customers",
+  "suppliers",
+  "workshop_jobs",
+  "sales_invoices",
+  "purchases",
+  "inventory_products",
+  "tasks",
+  "expenses",
+  "conversations",
+] as const;
+
+export type AgentCardDestination = (typeof agentCardDestinations)[number];
+
+export type AgentEntityKind =
+  | "workshopJob"
+  | "customer"
+  | "salesInvoice"
+  | "supplier"
+  | "purchaseInvoice"
+  | "product"
+  | "expense"
+  | "conversation";
+
+export interface AgentEntityRef {
+  kind: AgentEntityKind;
+  id: string;
+}
+
+export interface AgentActionCard {
+  kind: string;
+  title: string;
+  destination: AgentCardDestination;
+  eyebrow?: string;
+  subtitle?: string;
+  description?: string;
+  chips: readonly string[];
+  entityRef?: AgentEntityRef;
+  approvalRef?: AgentApprovalRef;
+}
+
+export const agentApprovalStates = [
+  "pending",
+  "approved",
+  "discarded",
+  "expired",
+] as const;
+
+export type AgentApprovalState = (typeof agentApprovalStates)[number];
+
+export interface AgentApprovalRef {
+  id: string;
+  action: "create_task";
+  state: AgentApprovalState;
+  expiresAt: string;
+}
+
+export interface AgentApprovalActionRequest {
+  version: 1;
+  operation: "approval_action";
+  approvalId: string;
+  approvalAction: "approve" | "discard";
+  clientActionId: string;
+}
+
+export interface AgentApprovalActionResponse {
+  version: 1;
+  operation: "approval_action";
+  approvalId: string;
+  clientActionId: string;
+  approvalState: Exclude<AgentApprovalState, "pending">;
+  text: string;
+  cards: readonly AgentActionCard[];
+  status: "completed";
+}
+
+export interface AgentGatewayResponse {
+  version: 1;
+  threadId: string;
+  runId: string;
+  text: string;
+  cards: readonly AgentActionCard[];
+  status: "completed";
+}
+
+export type AgentToolResultStatus = "success" | "verifiedEmpty" | "partial" | "unavailable";
+
+export interface AgentToolResultEnvelope {
+  authorityTenantId: string;
+  asOf: string;
+  status: AgentToolResultStatus;
+  items: readonly JsonObject[];
+  resultCount: number;
+  hasMore: boolean;
 }
 
 export function isLogicalModelRole(value: unknown): value is LogicalModelRole {

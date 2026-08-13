@@ -5,11 +5,13 @@ import 'dart:convert';
 
 import 'dart:async';
 import 'package:flutter/foundation.dart'
-    show kDebugMode, kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kDebugMode, kIsWeb, defaultTargetPlatform, TargetPlatform, listEquals;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:uuid/uuid.dart';
 
 import '../services/ocr_service.dart';
 import '../services/ocr_file_handoff_service.dart';
@@ -21,6 +23,8 @@ import '../services/veryfi_adapter.dart';
 import '../services/inventory_service.dart';
 import '../services/image_service.dart';
 import '../models/product.dart' show Product, PurchaseTreatment;
+import '../models/supplier_variant_resolution.dart';
+import '../services/supplier_variant_resolution_service.dart';
 import '../services/database_service.dart';
 import '../services/tenant_service.dart';
 import '../../modules/inventory/services/category_service.dart';
@@ -31,7 +35,9 @@ import '../../modules/inventory/models/product_duplicate_candidate.dart';
 import '../../modules/inventory/services/aliexpress_sku_reservation.dart';
 import '../../modules/inventory/services/brand_service.dart';
 import '../../modules/inventory/services/product_catalog_semantic_resolver.dart';
+import '../../modules/inventory/services/product_duplicate_listing_group_resolver.dart';
 import '../../modules/inventory/services/product_duplicate_matcher_service.dart';
+import '../../modules/inventory/services/product_identity_review_coordinator.dart';
 import '../../modules/inventory/services/product_identity/product_catalog_identity_index.dart';
 import '../../modules/inventory/services/product_identity/product_category_resolver.dart';
 import '../../modules/inventory/services/product_identity/product_identity_extractor.dart';
@@ -40,6 +46,7 @@ import '../../modules/inventory/services/product_image_fingerprint_service.dart'
 import 'package:desktop_drop/desktop_drop.dart';
 import '../../modules/inventory/models/brand_models.dart' show ProductBrand;
 import '../../modules/ai_assistant/services/ai_service.dart';
+import '../../modules/ai_assistant/services/product_identity_trace.dart';
 import '../models/supplier_ocr_template.dart';
 import '../themes/vinabike_theme_roles.dart';
 import '../utils/chilean_utils.dart';
@@ -188,6 +195,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   // Bulk product creation state
   bool _showBulkCreate = false;
+  // A partial AliExpress discovery may exercise the read-only matcher in a
+  // debug build, but it must never reserve a SKU, learn an alias, create a
+  // product or apply a purchase draft.
+  bool _isReadOnlyEvaluation = false;
   // True when the costs coming from OCR/JSON already include IVA (19%).
   // Auto-detected from the parsed invoice (e.g. AliExpress allocates IVA into
   // each unit price). Used to compute the suggested selling price correctly
@@ -221,6 +232,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   final AIAssistantService _aiAssistantService = AIAssistantService();
   final Map<String, Uint8List> _ocrProductImageBytesCache = {};
   final Map<String, Future<Uint8List?>> _ocrProductImageLoads = {};
+  final Map<String, Timer> _identityRecomputeTimers = <String, Timer>{};
+  List<inv_models.Product>? _productReviewCatalogSnapshot;
+  ProductDuplicateMatcherService? _productReviewDuplicateMatcher;
+  int? _productReviewCatalogGeneration;
 
   @override
   void initState() {
@@ -371,12 +386,19 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   void _discardProductReviewDraft({bool advanceDocumentEpoch = false}) {
     _bulkReviewGeneration++;
+    for (final timer in _identityRecomputeTimers.values) {
+      timer.cancel();
+    }
+    _identityRecomputeTimers.clear();
     for (final entry in _newProductEntries) {
       entry.dispose();
     }
     _newProductEntries.clear();
     _ocrProductImageBytesCache.clear();
     _ocrProductImageLoads.clear();
+    _productReviewCatalogSnapshot = null;
+    _productReviewDuplicateMatcher = null;
+    _productReviewCatalogGeneration = null;
     _productReviewDraftEpoch = null;
     _skuReservationAuthority = null;
     _showBulkCreate = false;
@@ -635,9 +657,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     final unresolved = widget.showLineItemReview
         ? data.lineItems
             .where(
-              (item) =>
-                  item.matchedProductId == null ||
-                  item.matchedProductId!.trim().isEmpty,
+              (item) => !_isParsedLineResolved(item),
             )
             .length
         : 0;
@@ -713,7 +733,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
 
     Widget productRow(ParsedLineItem item, int index) {
-      final resolved = item.matchedProductId?.trim().isNotEmpty == true;
+      final resolved = _isParsedLineResolved(item);
       final code = item.sku?.trim();
       final imageUrl = item.imageUrl?.trim();
       final rowDiagnostics = _getRowDiagnostics(item);
@@ -966,7 +986,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
 
     DataRow previewDataRow(ParsedLineItem item, int index) {
-      final resolved = item.matchedProductId?.trim().isNotEmpty == true;
+      final resolved = _isParsedLineResolved(item);
       final code = item.sku?.trim();
       final imageUrl = item.imageUrl?.trim();
       final unitPrice = item.unitPrice;
@@ -1141,22 +1161,32 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       );
     }
 
-    final primaryLabel = _isApplyingResult
-        ? 'Aplicando factura…'
-        : !hasResolvedSupplier
-            ? 'Seleccionar proveedor'
-            : widget.showLineItemReview && unresolved > 0
-                ? 'Revisar $unresolved producto${unresolved == 1 ? '' : 's'}'
-                : 'Usar esta factura';
-    final primaryAction = _isApplyingResult
-        ? null
-        : !hasResolvedSupplier
-            ? _showSupplierSelectionDialog
-            : widget.showLineItemReview && unresolved > 0
-                ? _isOpeningBulkCreate
-                    ? null
-                    : _openBulkCreateScreen
-                : () => _handleUseParsedData(data);
+    final primaryLabel = _isReadOnlyEvaluation
+        ? widget.showLineItemReview && unresolved > 0
+            ? 'Revisar $unresolved producto${unresolved == 1 ? '' : 's'} · solo lectura'
+            : 'Evaluación completada'
+        : _isApplyingResult
+            ? 'Aplicando factura…'
+            : !hasResolvedSupplier
+                ? 'Seleccionar proveedor'
+                : widget.showLineItemReview && unresolved > 0
+                    ? 'Revisar $unresolved producto${unresolved == 1 ? '' : 's'}'
+                    : 'Usar esta factura';
+    final primaryAction = _isReadOnlyEvaluation
+        ? widget.showLineItemReview && unresolved > 0
+            ? _isOpeningBulkCreate
+                ? null
+                : _openBulkCreateScreen
+            : null
+        : _isApplyingResult
+            ? null
+            : !hasResolvedSupplier
+                ? _showSupplierSelectionDialog
+                : widget.showLineItemReview && unresolved > 0
+                    ? _isOpeningBulkCreate
+                        ? null
+                        : _openBulkCreateScreen
+                    : () => _handleUseParsedData(data);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1508,6 +1538,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     ParsedLineItem item, {
     String? supplierId,
     bool allowNameFallback = true,
+    bool allowCatalogCodeLookup = true,
   }) async {
     final inventoryService =
         Provider.of<InventoryService>(context, listen: false);
@@ -1515,7 +1546,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     Product? matchedProduct;
 
     // PRIORITY 1: Try to find by SKU (if available)
-    if (item.sku != null && item.sku!.trim().isNotEmpty) {
+    if (allowCatalogCodeLookup &&
+        item.sku != null &&
+        item.sku!.trim().isNotEmpty) {
       try {
         matchedProduct =
             await inventoryService.getProductBySku(item.sku!.trim());
@@ -1525,7 +1558,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
 
     // PRIORITY 2: Try to find by Supplier Code
-    if (matchedProduct == null &&
+    if (allowCatalogCodeLookup &&
+        matchedProduct == null &&
         item.sku != null &&
         item.sku!.trim().isNotEmpty) {
       final cleanSku = item.sku!.trim();
@@ -1585,10 +1619,19 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   ParsedLineItem _clearProductResolution(ParsedLineItem item) {
     return ParsedLineItem(
       description: item.description,
+      lineTitle: item.lineTitle,
+      variantLabel: item.variantLabel,
+      variantKey: item.variantKey,
       sku: item.sku,
       rawRowText: item.rawRowText,
       imageUrl: item.imageUrl,
       productUrl: item.productUrl,
+      sourcePurchaseQuantity: item.sourcePurchaseQuantity,
+      sourcePurchaseUnitPrice: item.sourcePurchaseUnitPrice,
+      rawPackCount: item.rawPackCount,
+      rawUnitToken: item.rawUnitToken,
+      rawPackEvidenceConflict: item.rawPackEvidenceConflict,
+      sourceOrderNumbers: item.sourceOrderNumbers,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       total: item.total,
@@ -1705,6 +1748,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       }
       _ocrProductImageBytesCache.clear();
       _ocrProductImageLoads.clear();
+      _productReviewCatalogSnapshot = null;
+      _productReviewDuplicateMatcher = null;
+      _productReviewCatalogGeneration = null;
       _newProductEntries = nextEntries;
       _productReviewDraftEpoch = _parsedInvoiceEpoch;
 
@@ -1749,6 +1795,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     if (!entry.isSelected ||
         !entry.requiresDuplicateReview ||
         entry.linkedProduct != null ||
+        entry.hasSupplierResolution ||
         entry.isAICleaningName ||
         entry.isCheckingSimilar ||
         entry.isLinkingExisting ||
@@ -1762,10 +1809,30 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   List<_NewProductEntry> _pendingSimilaritySearchEntries() =>
       _newProductEntries.where(_needsSimilaritySearch).toList(growable: false);
 
-  /// Runs independent listing groups through clean → canonical semantics →
-  /// duplicate matching. A slow product no longer delays useful results for
-  /// unrelated rows, while variants from the same listing still share one
-  /// semantic decision boundary.
+  void _scheduleAIIdentityRecompute(_NewProductEntry entry) {
+    _identityRecomputeTimers.remove(entry.reviewId)?.cancel();
+    _identityRecomputeTimers[entry.reviewId] = Timer(
+      const Duration(milliseconds: 450),
+      () {
+        _identityRecomputeTimers.remove(entry.reviewId);
+        if (!mounted ||
+            !_newProductEntries.contains(entry) ||
+            !_ownsBulkReview(_bulkReviewGeneration) ||
+            !_needsSimilaritySearch(entry)) {
+          return;
+        }
+        unawaited(_checkSimilarProductsForNewEntries(
+          entry: entry,
+          reviewGeneration: _bulkReviewGeneration,
+        ));
+      },
+    );
+  }
+
+  /// Runs independent listing groups through authority → primary multimodal
+  /// investigation → full-catalog matching. A slow product no longer delays
+  /// useful results for unrelated rows, while variants from the same listing
+  /// still share one semantic decision boundary.
   Future<void> _runAliExpressProductAnalysis(int reviewGeneration) async {
     if (!_ownsBulkReview(reviewGeneration)) return;
     final inventoryService = context.read<inv_service.InventoryService>();
@@ -1793,14 +1860,13 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       while (iterator.moveNext()) {
         if (!_ownsBulkReview(reviewGeneration)) return;
         final group = iterator.current;
-        await _aiCleanProductNamesForEntries(
-          reviewGeneration: reviewGeneration,
-          concurrency: math.min(2, group.length),
-          targetEntries: group,
-        );
-        if (!_ownsBulkReview(reviewGeneration)) return;
         try {
           final products = await productsFuture;
+          if (_ownsBulkReview(reviewGeneration)) {
+            _productReviewCatalogSnapshot = products;
+            _productReviewDuplicateMatcher = matcher;
+            _productReviewCatalogGeneration = reviewGeneration;
+          }
           await _checkSimilarProductsForNewEntries(
             targetEntries:
                 group.where(_needsSimilaritySearch).toList(growable: false),
@@ -2077,6 +2143,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       entry.imageFileName = picked.name;
       entry.invalidateDuplicateResolution();
     });
+    _scheduleAIIdentityRecompute(entry);
   }
 
   /// Build the bulk product creation screen
@@ -2088,12 +2155,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         .where((entry) =>
             entry.isSelected &&
             entry.linkedProduct == null &&
+            !entry.hasSupplierResolution &&
             entry.resolutionState == OcrProductResolutionState.newProduct)
         .length;
     final undecidedCount = _newProductEntries
         .where((entry) =>
             entry.isSelected &&
             entry.linkedProduct == null &&
+            !entry.hasSupplierResolution &&
             entry.requiresDuplicateReview &&
             entry.resolutionState != OcrProductResolutionState.newProduct)
         .length;
@@ -2133,6 +2202,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         onRetryLine: (lineId) {
           final entry = _newProductEntryForReviewId(lineId);
           if (entry == null || _bulkRowBusy(entry)) return;
+          entry.retryDuplicateResolution();
           unawaited(_checkSimilarProductsForNewEntries(
             entry: entry,
             reviewGeneration: _bulkReviewGeneration,
@@ -2158,10 +2228,13 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           final entry = _newProductEntryForReviewId(lineId);
           if (entry == null || _creatingProducts) return;
           setState(entry.invalidateDuplicateResolution);
+          _scheduleAIIdentityRecompute(entry);
         },
         onNameChanged: (lineId, _) {
-          if (_newProductEntryForReviewId(lineId) != null && mounted) {
+          final entry = _newProductEntryForReviewId(lineId);
+          if (entry != null && mounted) {
             setState(() {});
+            _scheduleAIIdentityRecompute(entry);
           }
         },
         onCategoryChanged: (lineId, category) {
@@ -2173,6 +2246,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             entry.aiSuggestedCategoryName = category?.fullPath;
             entry.invalidateDuplicateResolution();
           });
+          _scheduleAIIdentityRecompute(entry);
         },
         onBrandChanged: (lineId, brand) {
           final entry = _newProductEntryForReviewId(lineId);
@@ -2183,6 +2257,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             entry.aiSuggestedBrandName = brand?.name;
             entry.invalidateDuplicateResolution();
           });
+          _scheduleAIIdentityRecompute(entry);
         },
         onCostChanged: (lineId, _) {
           if (_newProductEntryForReviewId(lineId) != null && mounted) {
@@ -2211,6 +2286,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             entry.brandUserEdited = true;
             entry.invalidateDuplicateResolution();
           });
+          _scheduleAIIdentityRecompute(entry);
         },
         onReplaceImage: (lineId) {
           final entry = _newProductEntryForReviewId(lineId);
@@ -2230,6 +2306,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             entry.imageFileName = null;
             entry.invalidateDuplicateResolution();
           });
+          _scheduleAIIdentityRecompute(entry);
         },
         onChangeDecision: (lineId) {
           final entry = _newProductEntryForReviewId(lineId);
@@ -2260,7 +2337,12 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       primaryEnabled: _canCreateBulkProducts(),
       primaryBlockingReason: _bulkCreateBlockingMessage(),
       costIncludesVat: _costsIncludeIva,
-      readOnly: _creatingProducts,
+      readOnly: _creatingProducts || _isReadOnlyEvaluation,
+      readOnlyReason: _creatingProducts
+          ? 'Creando productos. Espera a que termine antes de volver.'
+          : _isReadOnlyEvaluation
+              ? 'Evaluación de solo lectura: no se vinculará, creará ni guardará ningún producto.'
+              : null,
     );
   }
 
@@ -2298,6 +2380,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         .where((entry) =>
             entry.isSelected &&
             entry.linkedProduct == null &&
+            !entry.hasSupplierResolution &&
             !(isAliExpress ? entry.isValidWithoutSku : entry.isValid))
         .length;
   }
@@ -2310,8 +2393,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   /// database-owned and idempotent per row, so asking for it at the moment of
   /// the decision costs one call and makes the row immediately true.
   Future<void> _confirmNewProductForEntry(_NewProductEntry entry) async {
-    if (!mounted || _bulkRowBusy(entry)) return;
+    if (_isReadOnlyEvaluation || !mounted || _bulkRowBusy(entry)) return;
     setState(entry.markNewProduct);
+    _reconcileListingGroupResults();
     await _ensureReservedSkuForEntry(entry);
   }
 
@@ -2324,7 +2408,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   /// dropped rather than displayed — while the spinner still clears, because a
   /// stuck spinner blocks Create and Back forever.
   Future<void> _ensureReservedSkuForEntry(_NewProductEntry entry) async {
-    if (!mounted) return;
+    if (_isReadOnlyEvaluation || !mounted) return;
     if (!entry.requiresDuplicateReview) return;
     if (!_newProductEntries.contains(entry)) return;
     if (entry.isReservingSku) return;
@@ -2390,13 +2474,31 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   Future<void> _openCandidatePicker(_NewProductEntry entry) async {
     final reviewGeneration = _bulkReviewGeneration;
     final inventoryService = context.read<inv_service.InventoryService>();
+    final traceId = _productIdentityTraceId(entry, entry.resolutionRevision);
+    ProductIdentityTrace.emit(
+      traceId: traceId,
+      event: 'picker.open_cached',
+      data: <String, Object?>{
+        'recommendation_count':
+            entry.duplicateResult?.recommendations.length ?? 0,
+        'operator_choice_count':
+            entry.duplicateResult?.operatorChoices.length ??
+                entry.similarCandidates.length,
+        'category_conflict_count':
+            entry.duplicateResult?.categoryConflicts.length ?? 0,
+        'adjudication_state': entry.duplicateResult?.adjudicationState.name,
+        'has_composite_proposal':
+            entry.duplicateResult?.aiCompositeProposal != null,
+        'new_model_calls': 0,
+      },
+    );
     final decision = await OcrCandidatePicker.show(
       context,
       line: OcrCandidateLineContext(
         title: entry.nameController.text.trim().isEmpty
             ? entry.originalItem.description
             : entry.nameController.text.trim(),
-        originalTitle: entry.originalNoisyTitle,
+        originalTitle: entry.supplierIdentityTitle,
         supplierCode: entry.supplierCode.isEmpty
             ? entry.originalItem.sku
             : entry.supplierCode,
@@ -2406,19 +2508,36 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         categoryLabel: entry.selectedCategory?.name,
         brandLabel: entry.selectedBrand?.name,
       ),
-      candidates: entry.similarCandidates,
+      candidates:
+          entry.duplicateResult?.operatorChoices ?? entry.similarCandidates,
+      categoryConflicts: entry.duplicateResult?.categoryConflicts ?? const [],
+      aiCompositeProposal: entry.duplicateResult?.aiCompositeProposal,
+      allowCreateNew: entry.duplicateResult?.adjudicationState !=
+          ProductDuplicateAdjudicationState.failed,
+      inspectionOnly: _isReadOnlyEvaluation,
       isLoading: entry.isCheckingSimilar,
-      // Opening this overlay is the operator saying the row's one answer was
-      // not enough. It therefore asks the wider question — every product of
-      // the same kind, ruled-out ones included with their reason — instead of
-      // re-showing the row's conservative shortlist.
-      onLoadOptions: () => _loadCandidateOptions(entry, inventoryService),
       onSearch: (query) => inventoryService.searchProductPreviews(
         query,
         limit: 25,
       ),
     );
     if (!mounted || !_ownsBulkReview(reviewGeneration)) return;
+    ProductIdentityTrace.emit(
+      traceId: traceId,
+      event: 'picker.decision',
+      data: <String, Object?>{
+        'decision': switch (decision) {
+          OcrCandidateLink() => 'link',
+          OcrCandidateCreateNew() => 'create_new',
+          null => 'dismissed',
+        },
+        if (decision
+            case OcrCandidateLink(product: final product)) ...<String, Object?>{
+          'product_id': product.id,
+          'sku': product.sku,
+        },
+      },
+    );
     switch (decision) {
       case OcrCandidateLink(product: final product):
         await _useExistingProductForEntry(
@@ -2442,11 +2561,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   ProductDuplicateProbe _duplicateProbeFor(_NewProductEntry entry) {
     return ProductDuplicateProbe(
       name: entry.nameController.text,
-      description: entry.originalItem.description,
-      // The invoice line as the supplier wrote it. `originalNoisyTitle` is a
-      // working copy that the cleaner may already have replaced; the parsed
-      // line item is the document itself.
-      sourceTitle: entry.originalItem.description,
+      description: _aiLineContextWithoutVariant(entry),
+      // The immutable supplier wording, before the AI/editor rewrites the
+      // display name. Every identity consumer must answer the same question.
+      sourceTitle: entry.supplierIdentityTitle,
       sku: _costsIncludeIva && entry.supplierCode.isNotEmpty
           ? entry.supplierCode
           : entry.skuController.text.trim().isNotEmpty
@@ -2455,42 +2573,36 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       model: entry.aiSuggestedModel,
       rawText: entry.originalItem.rawRowText,
       categoryName: _duplicateMatcherCategoryName(entry),
+      categoryId: entry.selectedCategory?.id,
       brandName: _duplicateMatcherBrandName(entry),
       supplierId: _supplierIdForNewProducts ?? widget.supplierId,
       supplierName: _ocrSupplierName ?? widget.supplierName,
       supplierListingId: _aliExpressItemIdForLine(entry.originalItem),
+      selectedVariant: _aliExpressVariantLabelForLine(entry.originalItem),
+      immutableVariantKey:
+          _aliExpressImmutableVariantKeyForLine(entry.originalItem),
+      investigation: entry.aiInvestigation,
+      traceId: _productIdentityTraceId(entry, entry.resolutionRevision),
       imageUrl: entry.imageUrl,
       imageBytes: entry.imageBytes,
       imageFileName: entry.imageFileName,
       price: entry.price,
       cost: entry.cost,
+      sourcePurchaseUnitCost: entry.originalItem.sourcePurchaseUnitPrice,
     );
   }
 
-  /// Everything the catalog offers for one line, for the operator to choose.
-  Future<List<ProductDuplicateCandidate>> _loadCandidateOptions(
-    _NewProductEntry entry,
-    inv_service.InventoryService inventoryService,
-  ) async {
-    final products = await inventoryService.getProducts();
-    final matcher = _buildDuplicateMatcher(inventoryService);
-    final analysis = entry.aiVisualAnalysis;
-    if (analysis != null) {
-      matcher.primeVisualReading(
-        imageUrl: entry.imageUrl,
-        imageBytes: entry.imageBytes,
-        analysis: analysis,
+  String _productIdentityTraceId(_NewProductEntry entry, int revision) =>
+      ProductIdentityTrace.idFor(
+        scope: 'ocr-product-review',
+        rowKey: entry.reviewId,
+        revision: '$revision',
       );
-    }
-    return matcher.findCandidates(
-      probe: _duplicateProbeFor(entry),
-      products: products,
-      scope: ProductDuplicateShortlistScope.operatorChoice,
-    );
-  }
 
   OcrProductReviewLine _buildProductReviewLine(_NewProductEntry entry) {
     final sibling = _semanticSiblingFor(entry);
+    final cachedChoices =
+        entry.duplicateResult?.operatorChoices ?? entry.similarCandidates;
     final sku = entry.displaySku.isNotEmpty
         ? entry.displaySku
         : entry.requiresDuplicateReview
@@ -2502,11 +2614,12 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
               ProductCatalogSemanticEvidenceKind.rejectedBrandHint ||
           evidence.kind == ProductCatalogSemanticEvidenceKind.unresolvedBrand,
     );
+    final currentSemanticSummary = _currentSemanticReviewSummary(entry);
     return OcrProductReviewLine(
       id: entry.reviewId,
       sku: sku,
       supplierCode: entry.supplierCode.isEmpty ? null : entry.supplierCode,
-      originalTitle: entry.originalNoisyTitle ?? entry.originalItem.description,
+      originalTitle: entry.supplierIdentityTitle,
       sourceQuantity: entry.originalItem.quantity,
       sourceLineTotal: _getRowDiagnostics(entry.originalItem).displayedTotal,
       imageUrl: entry.imageUrlOptimized ?? entry.imageUrl,
@@ -2527,6 +2640,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           ? null
           : 'No se pudo reservar el SKU. Reintenta.',
       candidates: entry.similarCandidates,
+      viableCandidateCount: cachedChoices
+          .where((candidate) =>
+              !candidate.isRuledOut && !candidate.isReviewOnlyFamilyScope)
+          .length,
+      discardedCandidateCount:
+          cachedChoices.where((candidate) => candidate.isRuledOut).length,
+      categoryConflictCount:
+          entry.duplicateResult?.categoryConflicts.length ?? 0,
       categories: _categories,
       brands: _brands,
       category: entry.selectedCategory,
@@ -2545,28 +2666,61 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       isSold: !entry.isWorkshopConsumable,
       evidenceDegraded:
           entry.imageBytes == null && (entry.imageUrl?.isEmpty ?? true),
-      errorMessage: entry.creationError ?? entry.resolutionError,
-      searchSummary: entry.semanticReviewReason,
+      errorMessage: entry.creationError ??
+          entry.resolutionError ??
+          entry.aiInvestigationError,
+      searchSummary: currentSemanticSummary,
+      aiCompositeProposal: entry.duplicateResult?.aiCompositeProposal,
       categoryValidationMessage: entry.selectedCategory == null
           ? entry.categoryReviewReason ??
               'Falta elegir la familia correcta para este producto.'
           : null,
       brandWarning: rejectedBrand && entry.selectedBrand == null
-          ? entry.semanticReviewReason ??
-              'La marca sugerida no tiene evidencia de fabricante.'
+          ? 'La marca sugerida no tiene evidencia de fabricante.'
           : null,
       siblingSuggestion: sibling == null
           ? null
           : 'La línea “${sibling.nameController.text}” comparte esta publicación. Puedes reutilizar familia y marca sin fusionar la variante.',
       siblingLineId: sibling?.reviewId,
-      resolvedProductName: entry.linkedProduct?.name,
-      resolvedProductSku: entry.linkedProduct?.sku,
+      resolvedProductName: entry.linkedProduct?.name ??
+          (entry.supplierResolutionProducts.isEmpty
+              ? null
+              : entry.supplierResolutionProducts
+                  .map((product) => product.name)
+                  .join(' + ')),
+      resolvedProductSku: entry.linkedProduct?.sku ??
+          (entry.supplierResolutionProducts.isEmpty
+              ? null
+              : entry.supplierResolutionProducts
+                  .map((product) => product.sku)
+                  .join(' + ')),
       isSelected: entry.isSelected,
+      inspectionOnly: _isReadOnlyEvaluation,
     );
   }
 
+  String? _currentSemanticReviewSummary(_NewProductEntry entry) {
+    var summary = <String>{
+      if (entry.duplicateResult?.reason?.trim().isNotEmpty == true)
+        entry.duplicateResult!.reason!.trim(),
+      if (entry.semanticReviewReason?.trim().isNotEmpty == true)
+        entry.semanticReviewReason!.trim(),
+    }.join(' · ');
+    if (summary.isEmpty) return null;
+    if (entry.duplicateResult?.probeIdentity.hasResolvedFamily == true) {
+      // The legacy semantic helper recognizes only a handful of families.
+      // Once the canonical identity matcher has resolved the object, its old
+      // generic failure is stale. Remove only that clause so unresolved brand,
+      // mixed-listing and category-conflict evidence remains visible.
+      summary = summary
+          .replaceFirst('No se pudo determinar la familia del producto.', '')
+          .trim();
+    }
+    return summary.isEmpty ? null : summary;
+  }
+
   OcrProductReviewStatus _productReviewStatus(_NewProductEntry entry) {
-    if (entry.linkedProduct != null) {
+    if (entry.linkedProduct != null || entry.hasSupplierResolution) {
       return OcrProductReviewStatus.linked;
     }
     if (entry.isAICleaningName ||
@@ -2576,11 +2730,16 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       return OcrProductReviewStatus.searching;
     }
     if (entry.creationError != null ||
+        (entry.aiInvestigation == null &&
+            entry.aiInvestigationError?.trim().isNotEmpty == true) ||
+        entry.duplicateResult?.adjudicationState ==
+            ProductDuplicateAdjudicationState.failed ||
         entry.resolutionState == OcrProductResolutionState.failed) {
       return OcrProductReviewStatus.failed;
     }
     return switch (entry.resolutionState) {
       OcrProductResolutionState.reviewRequired => OcrProductReviewStatus.ready,
+      OcrProductResolutionState.abstained => OcrProductReviewStatus.abstained,
       OcrProductResolutionState.noCandidates =>
         OcrProductReviewStatus.noCandidates,
       OcrProductResolutionState.newProduct =>
@@ -2612,17 +2771,28 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   bool _canCreateBulkProducts() {
+    if (_isReadOnlyEvaluation) return false;
     final isAliExpress =
         _parsedData != null && _looksLikeAliExpressInvoice(_parsedData!);
     final selected =
         _newProductEntries.where((entry) => entry.isSelected).toList();
     if (selected.isEmpty) return false;
-    final pendingCreation =
-        selected.where((entry) => entry.linkedProduct == null).toList();
+    final pendingCreation = selected
+        .where((entry) =>
+            entry.linkedProduct == null && !entry.hasSupplierResolution)
+        .toList();
     if (pendingCreation.isEmpty) {
       return !_isOpeningBulkCreate &&
           !_creatingProducts &&
           !_anyRowReservingSku;
+    }
+    if (pendingCreation
+        .any((entry) => SupplierOptionEvidence.requiresExplicitCompositionFor(
+              packCount: entry.originalItem.rawPackCount,
+              rawUnitToken: entry.originalItem.rawUnitToken,
+              packEvidenceConflict: entry.originalItem.rawPackEvidenceConflict,
+            ))) {
+      return false;
     }
     // A confirmed «Nuevo» row without its reserved code is not creatable: the
     // code is the database's to give, and creating without it is how a product
@@ -2673,6 +2843,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       return;
     }
     _bulkReviewGeneration++;
+    for (final timer in _identityRecomputeTimers.values) {
+      timer.cancel();
+    }
+    _identityRecomputeTimers.clear();
     setState(() {
       _showBulkCreate = false;
       _isOpeningBulkCreate = false;
@@ -2736,7 +2910,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   String? _bulkCreateBlockingMessage() {
     final selected = _newProductEntries
-        .where((entry) => entry.isSelected && entry.linkedProduct == null)
+        .where((entry) =>
+            entry.isSelected &&
+            entry.linkedProduct == null &&
+            !entry.hasSupplierResolution)
         .toList();
     if (_creatingProducts) return null;
     if (selected.any((entry) => entry.isReservingSku)) {
@@ -2758,6 +2935,17 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     if (withoutReservedSku > 0) {
       return 'Falta el SKU reservado en $withoutReservedSku '
           'fila${withoutReservedSku == 1 ? '' : 's'}. Reintenta la reserva.';
+    }
+    final unresolvedPacks = selected
+        .where((entry) => SupplierOptionEvidence.requiresExplicitCompositionFor(
+              packCount: entry.originalItem.rawPackCount,
+              rawUnitToken: entry.originalItem.rawUnitToken,
+              packEvidenceConflict: entry.originalItem.rawPackEvidenceConflict,
+            ))
+        .length;
+    if (unresolvedPacks > 0) {
+      return 'Falta confirmar la unidad o composición de $unresolvedPacks '
+          'pack${unresolvedPacks == 1 ? '' : 's'} antes de crear productos.';
     }
     final unresolved = selected
         .where(
@@ -2781,10 +2969,260 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     return null;
   }
 
+  List<AIProductCategoryLeaf> _activeAIProductLeaves() {
+    final parentIds = <String>{
+      for (final category in _categories)
+        if (category.parentId?.trim().isNotEmpty == true)
+          category.parentId!.trim(),
+    };
+    final leaves = <AIProductCategoryLeaf>[
+      for (final category in _categories)
+        if (category.isActive &&
+            category.id?.trim().isNotEmpty == true &&
+            category.fullPath.trim().isNotEmpty &&
+            !parentIds.contains(category.id!.trim()))
+          AIProductCategoryLeaf(
+            id: category.id!.trim(),
+            path: category.fullPath.trim(),
+          ),
+    ]..sort((left, right) {
+        final byPath = left.path.compareTo(right.path);
+        return byPath != 0 ? byPath : left.id.compareTo(right.id);
+      });
+    return List<AIProductCategoryLeaf>.unmodifiable(leaves);
+  }
+
+  String _aiCategoryTreeVersion(List<AIProductCategoryLeaf> leaves) =>
+      crypto.sha256
+          .convert(utf8.encode(jsonEncode(<Object?>[
+            for (final leaf in leaves) <String>[leaf.id, leaf.path],
+          ])))
+          .toString();
+
+  String _aiCatalogVersion(List<inv_models.Product> products) {
+    final eligible = products
+        .where((product) => product.isActive && !product.isService)
+        .map((product) => <String?>[
+              product.id,
+              product.sku,
+              product.name,
+              product.categoryId,
+              product.brand,
+              product.model,
+              product.imageUrlOptimized ?? product.imageUrl,
+            ])
+        .toList()
+      ..sort((left, right) => (left.first ?? '').compareTo(right.first ?? ''));
+    return crypto.sha256.convert(utf8.encode(jsonEncode(eligible))).toString();
+  }
+
+  String? _aiLineContextWithoutVariant(_NewProductEntry entry) {
+    final selectedVariant =
+        _aliExpressVariantLabelForLine(entry.originalItem)?.trim() ?? '';
+    final kept = <String>[];
+    for (final rawLine
+        in (entry.originalItem.rawRowText ?? '').split(RegExp(r'[\r\n]+'))) {
+      var line = rawLine.trim();
+      if (line.isEmpty ||
+          RegExp(
+            r'^(?:AI_[A-Z_]+|ORIGINAL_TITLE|LINE_TITLE|VARIANT(?:_KEY)?|ITEM_ID|PRODUCT_URL|IMAGE_URL|SOURCE_[A-Z_]+|RAW_[A-Z_]+|UNITS_PER_PURCHASE|INVENTORY_UNIT|SOURCE_ORDERS|SKU):',
+            caseSensitive: false,
+          ).hasMatch(line) ||
+          RegExp(r'^https?://', caseSensitive: false).hasMatch(line)) {
+        continue;
+      }
+      if (selectedVariant.isNotEmpty &&
+          _normalizeSimilarityText(line) ==
+              _normalizeSimilarityText(selectedVariant)) {
+        continue;
+      }
+      if (line == entry.supplierIdentityTitle || kept.contains(line)) continue;
+      kept.add(line);
+    }
+    // Explicit operator edits are new row evidence and therefore belong to a
+    // new receipt revision. They remain delimited as untrusted source data in
+    // the prompt and never replace the immutable supplier title or variant.
+    if (entry.nameUserEdited && entry.nameController.text.trim().isNotEmpty) {
+      kept.add('OPERATOR_NAME_HINT: ${entry.nameController.text.trim()}');
+    }
+    final selectedCategory = entry.selectedCategory;
+    if (entry.categoryUserEdited && selectedCategory?.id != null) {
+      kept.add(
+        'OPERATOR_CATEGORY_HINT: ${selectedCategory!.id!.trim()} | '
+        '${selectedCategory.fullPath.trim()}',
+      );
+    }
+    if (entry.brandUserEdited &&
+        entry.selectedBrand?.name.trim().isNotEmpty == true) {
+      kept.add('OPERATOR_BRAND_HINT: ${entry.selectedBrand!.name.trim()}');
+    }
+    return kept.isEmpty ? null : kept.join('\n');
+  }
+
+  /// Canonical first pass: one multimodal identity receipt for one row
+  /// revision. It never writes catalog state and never falls back to the
+  /// legacy synonym cleaner when the model fails.
+  Future<void> _investigateProductEntriesAIPrimary({
+    required int reviewGeneration,
+    required int concurrency,
+    required List<_NewProductEntry> targetEntries,
+    required List<inv_models.Product> catalogProducts,
+  }) async {
+    if (!_ownsBulkReview(reviewGeneration)) return;
+    final leaves = _activeAIProductLeaves();
+    final treeVersion = _aiCategoryTreeVersion(leaves);
+    final catalogVersion = _aiCatalogVersion(catalogProducts);
+    final supplierName = _ocrSupplierName ?? widget.supplierName;
+    final pending = targetEntries
+        .where(_newProductEntries.contains)
+        .where((entry) =>
+            !entry.ownsInvestigationForRevision(entry.resolutionRevision))
+        .toList(growable: false);
+    for (final entry in pending) {
+      entry.isAICleaningName = true;
+    }
+    if (pending.isNotEmpty && _ownsBulkReview(reviewGeneration)) {
+      setState(() {});
+    }
+
+    Future<void> investigate(_NewProductEntry entry) async {
+      final revision = entry.resolutionRevision;
+      final sourceImageUrl = entry.imageUrl;
+      AICleanedProductName? result;
+      AIProductIdentityFailure? identityFailure;
+      Object? failure;
+      try {
+        await _ensureEntryImageBytes(entry);
+        if (!_ownsNewProductResolution(
+              entry,
+              revision,
+              reviewGeneration: reviewGeneration,
+            ) ||
+            entry.imageUrl != sourceImageUrl) {
+          return;
+        }
+        result = await _aiAssistantService.cleanProductTitleFromImage(
+          rawTitle: entry.supplierIdentityTitle,
+          imageBytes: entry.imageBytes,
+          imageUrl: entry.imageUrl,
+          supplierName: supplierName,
+          selectedVariant: _aliExpressVariantLabelForLine(entry.originalItem),
+          immutableVariantKey:
+              _aliExpressImmutableVariantKeyForLine(entry.originalItem),
+          supplierListingId: _aliExpressItemIdForLine(entry.originalItem),
+          supplierCode: entry.supplierCode.isEmpty
+              ? entry.originalItem.sku
+              : entry.supplierCode,
+          quantity: entry.originalItem.quantity,
+          lineContext: _aiLineContextWithoutVariant(entry),
+          cacheContext: entry.reviewId,
+          cacheRevision: '$revision',
+          rowRevision: '$revision',
+          traceId: _productIdentityTraceId(entry, revision),
+          categoryTreeKey: treeVersion,
+          catalogKey: catalogVersion,
+          activeLeafCategories: leaves,
+          requireLeafAuthority: true,
+          onFailure: (reported) => identityFailure = reported,
+        );
+        if (result == null) {
+          failure = StateError(
+            identityFailure?.operatorMessage ??
+                'Falló la investigación IA antes de producir un recibo válido. '
+                    'La fila se mantuvo sin recomendación y se puede reintentar.',
+          );
+        }
+      } on Object catch (error) {
+        failure = error;
+      }
+      if (!_ownsNewProductResolution(
+            entry,
+            revision,
+            reviewGeneration: reviewGeneration,
+          ) ||
+          entry.imageUrl != sourceImageUrl) {
+        return;
+      }
+
+      entry.aiInvestigationRevision = revision;
+      entry.aiInvestigation = result?.identityInvestigation;
+      entry.aiInvestigationError =
+          identityFailure?.operatorMessage ?? failure?.toString();
+      if (result != null) {
+        entry.aiVisualAnalysis = result.visualAnalysis;
+        entry.aiSuggestedComponentType = result.componentType;
+        entry.aiSuggestedCategoryName = result.categoryName;
+        entry.aiSuggestedBrandName = result.brand;
+        entry.aiSuggestedModel = result.model;
+        entry.aiSuggestionConfidence = result.confidence;
+        if (!entry.nameUserEdited) {
+          entry.applyAICleanedName(result.cleanedName);
+        }
+        final proposals = result.identityInvestigation?.leafProposals ??
+            const <AIProductLeafProposal>[];
+        if (!entry.categoryUserEdited && proposals.isNotEmpty) {
+          final leafId = proposals.first.categoryId;
+          for (final category in _categories) {
+            if (category.id?.trim() == leafId) {
+              entry.selectedCategory = category;
+              entry.categoryReviewReason = null;
+              entry.categoryEvidence = <String>[
+                'Hoja activa propuesta por la investigación multimodal',
+              ];
+              break;
+            }
+          }
+        }
+        if (!entry.brandUserEdited) {
+          final manufacturer = result.identityInvestigation?.manufacturer;
+          final manufacturerName = manufacturer?.value?.trim();
+          ProductBrand? resolvedBrand;
+          if (manufacturer?.asserted == true &&
+              manufacturerName?.isNotEmpty == true) {
+            final wanted = _normalizeSimilarityText(manufacturerName!);
+            for (final brand in _brands) {
+              if (_normalizeSimilarityText(brand.name) == wanted) {
+                resolvedBrand = brand;
+                break;
+              }
+            }
+          }
+          entry.selectedBrand = resolvedBrand;
+          ProductIdentityTrace.emit(
+            traceId: _productIdentityTraceId(entry, revision),
+            event: 'investigation.catalog_brand_resolution',
+            data: <String, Object?>{
+              'asserted_manufacturer': manufacturerName,
+              'asserted': manufacturer?.asserted,
+              'matched_brand_id': resolvedBrand?.id,
+              'matched_brand_name': resolvedBrand?.name,
+            },
+          );
+        }
+      }
+      entry.isAICleaningName = false;
+      if (failure != null) {
+        debugPrint('⚠️ [OCR] AI-first investigation failed: $failure');
+      }
+      if (_ownsBulkReview(reviewGeneration)) setState(() {});
+    }
+
+    final iterator = pending.iterator;
+    await Future.wait(
+        List.generate(math.min(concurrency, pending.length), (_) async {
+      while (iterator.moveNext()) {
+        if (!_ownsBulkReview(reviewGeneration)) return;
+        await investigate(iterator.current);
+      }
+    }));
+  }
+
   /// Run the AI cleaner over noisy supplier titles (e.g. AliExpress) and
   /// rewrite each row's name field with a short, shop-friendly title plus
   /// suggested category/brand. Skips rows the user has already edited.
   /// Concurrency is capped to avoid hammering the Gemini proxy.
+  // Legacy deterministic cleaner retained only for regression diagnostics.
+  // ignore: unused_element
   Future<void> _aiCleanProductNamesForEntries({
     required int reviewGeneration,
     int concurrency = 3,
@@ -2971,40 +3409,6 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       return null;
     }
 
-    ProductBrand? resolveBrand(String? suggested) {
-      if (suggested == null) return null;
-      final target = norm(suggested);
-      if (target.isEmpty) return null;
-      for (final b in _brands) {
-        if (norm(b.name) == target) return b;
-      }
-      for (final b in _brands) {
-        final bn = norm(b.name);
-        if (bn.isEmpty) continue;
-        if (bn.contains(target) || target.contains(bn)) return b;
-      }
-      return null;
-    }
-
-    // Last-resort fallback: scan the product NAME (cleaned name first, then
-    // original noisy title) for any local brand whose normalized form
-    // appears as a whole token. So "Pedal ENLEE CR-2 aluminio" will pick up
-    // local brand "ENLEE" even when the AI didn't fill the brand field.
-    ProductBrand? scanBrandInName(String? name) {
-      if (name == null) return null;
-      final hay = ' ${norm(name)} ';
-      if (hay.trim().isEmpty) return null;
-      ProductBrand? best;
-      for (final b in _brands) {
-        final bn = norm(b.name);
-        if (bn.length < 2) continue;
-        if (hay.contains(' $bn ')) {
-          if (best == null || bn.length > norm(best.name).length) best = b;
-        }
-      }
-      return best;
-    }
-
     // Same idea for category: keyword map from product-name token -> local
     // category name. Used only when the AI's suggested category didn't
     // resolve to any local row. Conservative on purpose.
@@ -3097,25 +3501,15 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       if (addonBrand != null) entry.aiSuggestedBrandName = addonBrand;
       if (addonModel != null) entry.aiSuggestedModel = addonModel;
       entry.nameWasAICleaned = true;
-      if (!entry.brandUserEdited &&
-          entry.selectedBrand == null &&
-          addonBrand != null) {
-        final match = resolveBrand(addonBrand);
-        if (match != null) entry.selectedBrand = match;
-      }
       if (!entry.categoryUserEdited &&
           entry.selectedCategory == null &&
           addonCategory != null) {
         final match = resolveCategory(addonCategory);
         if (match != null) entry.selectedCategory = match;
       }
-      // Name-scan fallbacks: if the AI didn't fill or we couldn't resolve,
-      // try to extract brand and category directly from the cleaned name.
-      if (!entry.brandUserEdited && entry.selectedBrand == null) {
-        final viaName = scanBrandInName(entry.nameController.text) ??
-            scanBrandInName(entry.originalNoisyTitle);
-        if (viaName != null) entry.selectedBrand = viaName;
-      }
+      // Category may use the legacy name fallback. Brand cannot: the add-on
+      // value and the cleaned title are evidence inputs only, reconciled once
+      // by the canonical identity semantics below.
       if (!entry.categoryUserEdited && entry.selectedCategory == null) {
         final viaName = scanCategoryInName(entry.nameController.text) ??
             scanCategoryInName(entry.originalNoisyTitle);
@@ -3187,22 +3581,11 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           entry.aiSuggestedModel = result.model;
           entry.aiSuggestionConfidence = result.confidence;
           entry.applyAICleanedName(result.cleanedName);
-          if (!entry.brandUserEdited &&
-              entry.selectedBrand == null &&
-              result.brand != null) {
-            final match = resolveBrand(result.brand);
-            if (match != null) entry.selectedBrand = match;
-          }
           if (!entry.categoryUserEdited &&
               entry.selectedCategory == null &&
               result.categoryName != null) {
             final match = resolveCategory(result.categoryName);
             if (match != null) entry.selectedCategory = match;
-          }
-          if (!entry.brandUserEdited && entry.selectedBrand == null) {
-            final viaName = scanBrandInName(entry.nameController.text) ??
-                scanBrandInName(entry.originalNoisyTitle);
-            if (viaName != null) entry.selectedBrand = viaName;
           }
           if (!entry.categoryUserEdited && entry.selectedCategory == null) {
             final viaName = scanCategoryInName(entry.nameController.text) ??
@@ -3295,6 +3678,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       // longer be filed under `Frenos`. It only steps aside where it has
       // nothing to say, and there the catalog resolver still answers.
       final objectCategory = _resolveObjectFirstCategory(entry, objectResolver);
+      var categoryOutcomeHandled = false;
       if (!entry.categoryUserEdited && objectCategory != null) {
         entry.categoryReviewReason = objectCategory.reviewReason;
         if (objectCategory.isResolved) {
@@ -3302,7 +3686,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           entry.aiSuggestedCategoryName = objectCategory.category?.fullPath;
           entry.categoryEvidence =
               List<String>.unmodifiable(objectCategory.evidence);
-          continue;
+          categoryOutcomeHandled = true;
         }
         if (objectCategory.refusal ==
             ProductCategoryRefusal.conflictingEvidence) {
@@ -3312,10 +3696,11 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           entry.aiSuggestedCategoryName = null;
           entry.categoryEvidence =
               List<String>.unmodifiable(objectCategory.evidence);
-          continue;
+          categoryOutcomeHandled = true;
         }
       }
-      if (!entry.categoryUserEdited &&
+      if (!categoryOutcomeHandled &&
+          !entry.categoryUserEdited &&
           (resolution.category != null ||
               hasDeterministicFamily ||
               rejectedCategoryHint)) {
@@ -3324,23 +3709,11 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         // resolver has accepted or rejected it.
         entry.aiSuggestedCategoryName = resolution.category?.fullPath;
       }
-      final hasExplicitBrandEvidence = resolution.evidence.any(
-        (item) => item.kind == ProductCatalogSemanticEvidenceKind.explicitBrand,
-      );
-      final rejectedBrandHint = resolution.evidence.any(
-        (item) =>
-            item.kind == ProductCatalogSemanticEvidenceKind.rejectedBrandHint ||
-            item.kind == ProductCatalogSemanticEvidenceKind.unresolvedBrand,
-      );
-      if (!entry.brandUserEdited &&
-          (resolution.brand != null ||
-              hasExplicitBrandEvidence ||
-              rejectedBrandHint)) {
-        // A missing explicit brand (for example IXF not yet present in the
-        // tenant catalog) is a review state, never permission to keep a
-        // conflicting compatibility hint such as Shimano.
+      if (!entry.brandUserEdited) {
+        // This is the sole non-user write to selectedBrand. A missing or
+        // rejected canonical assertion explicitly clears stale add-on/AI
+        // guesses, so matcher display and creation payload cannot diverge.
         entry.selectedBrand = resolution.brand;
-        entry.aiSuggestedBrandName = resolution.brand?.name;
       }
 
       if (!entry.nameUserEdited &&
@@ -3366,8 +3739,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   ) {
     if (_categories.isEmpty) return null;
     final title = entry.nameController.text.trim();
-    final noisyTitle = entry.originalNoisyTitle?.trim() ?? '';
-    final sourceTitle = entry.originalItem.description.trim();
+    final sourceTitle = entry.supplierIdentityTitle;
+    final noisyTitle = sourceTitle;
     final name = title.isNotEmpty ? title : sourceTitle;
     if (name.isEmpty) return null;
 
@@ -3378,7 +3751,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         // Same rule as the matcher: the supplier's own words decide the
         // object, so a mislabelled AI name cannot file the row under the
         // wrong shelf either.
-        sourceTitle: entry.originalItem.description,
+        sourceTitle: sourceTitle,
         knownBrands: _brands.map((brand) => brand.name),
       ),
     );
@@ -3411,9 +3784,11 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   String? _duplicateMatcherBrandName(_NewProductEntry entry) {
-    final selected = entry.selectedBrand;
-    if (selected != null) return selected.name;
-    if (entry.brandUserEdited) return null;
+    // Only the operator or the supplier's own title may assert a maker. The
+    // multimodal cleaner's brand is a hint for semantic reconciliation;
+    // asserting it made a hallucinated `Alligator` eliminate the existing T6
+    // light and poisoned the grounded AI tie-break prompt.
+    if (entry.brandUserEdited) return entry.selectedBrand?.name;
 
     // Explicit source evidence (for example IXF printed in the title) may be
     // useful to the matcher even when that brand has not yet been added to the
@@ -3424,13 +3799,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         if (explicit.isNotEmpty) return explicit;
       }
     }
-    final hintWasRejected = entry.semanticEvidence.any(
-      (evidence) =>
-          evidence.kind ==
-              ProductCatalogSemanticEvidenceKind.rejectedBrandHint ||
-          evidence.kind == ProductCatalogSemanticEvidenceKind.unresolvedBrand,
-    );
-    return hintWasRejected ? null : entry.aiSuggestedBrandName;
+    return null;
   }
 
   /// One matcher per review session, holding the catalog identity index.
@@ -3450,12 +3819,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       inventoryService: inventoryService,
       aiAssistantService: _aiAssistantService,
       knownBrands: _brands.map((brand) => brand.name),
+      categories: _categories,
       categoryAncestry:
           ProductCatalogIdentityIndex.buildCategoryAncestry(_categories),
       // Product review is a read path. Missing catalog fingerprints can be
       // backfilled by their maintenance owner; an operator waiting on one
       // invoice must not pay for hidden product writes.
       persistComputedImageFingerprints: false,
+      requireAIPrimaryInvestigation: true,
     );
   }
 
@@ -3488,15 +3859,57 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     try {
       final inventoryService = preparedInventoryService ??
           context.read<inv_service.InventoryService>();
-      final allProducts =
-          preparedProducts ?? await inventoryService.getProducts();
+      final hasCurrentCatalogSnapshot =
+          _productReviewCatalogGeneration == reviewGeneration &&
+              _productReviewCatalogSnapshot != null;
+      // A review must compare every retry against one stable catalog version.
+      // InventoryService intentionally expires its normal five-minute cache,
+      // but the already hydrated rows remain the exact snapshot this open
+      // review used. Reuse them instead of making an operator retry depend on
+      // another 1,600-row database query that can time out midway.
+      final inheritedInventorySnapshot = !hasCurrentCatalogSnapshot &&
+              inventoryService.hasProductsCache &&
+              inventoryService.cachedProducts.isNotEmpty
+          ? inventoryService.cachedProducts
+          : null;
+      final allProducts = preparedProducts ??
+          (hasCurrentCatalogSnapshot
+              ? _productReviewCatalogSnapshot!
+              : inheritedInventorySnapshot ??
+                  await inventoryService.getProducts());
       if (!_ownsBulkReview(reviewGeneration)) return;
-      final duplicateMatcher =
-          preparedMatcher ?? _buildDuplicateMatcher(inventoryService);
+      final duplicateMatcher = preparedMatcher ??
+          (hasCurrentCatalogSnapshot && _productReviewDuplicateMatcher != null
+              ? _productReviewDuplicateMatcher!
+              : _buildDuplicateMatcher(inventoryService));
+      _productReviewCatalogSnapshot = allProducts;
+      _productReviewDuplicateMatcher = duplicateMatcher;
+      _productReviewCatalogGeneration = reviewGeneration;
+      ProductIdentityTrace.emit(
+        traceId: _productIdentityTraceId(
+          entries.first,
+          entries.first.resolutionRevision,
+        ),
+        event: 'catalog_snapshot.resolved',
+        data: <String, Object?>{
+          'product_count': allProducts.length,
+          'source': preparedProducts != null
+              ? 'prepared_initial_load'
+              : hasCurrentCatalogSnapshot
+                  ? 'review_memory_cache'
+                  : inheritedInventorySnapshot != null
+                      ? 'inventory_hydrated_snapshot'
+                      : 'database_retry_load',
+          'matcher_reused': preparedMatcher != null ||
+              (hasCurrentCatalogSnapshot &&
+                  _productReviewDuplicateMatcher != null),
+          'review_generation': reviewGeneration,
+        },
+      );
 
-      // The title cleaner already sent this photo to the model and asked, in
-      // the same call, what object it shows. Handing that reading over is the
-      // difference between one vision call per image and two.
+      // The primary investigation already sent this photo to the model and
+      // recorded what object it shows. Handing that same reading to the
+      // validator prevents a second vision request for the row.
       for (final current in entries) {
         final analysis = current.aiVisualAnalysis;
         if (analysis == null) continue;
@@ -3510,7 +3923,66 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       Future<void> processOne(_NewProductEntry current) async {
         final revision = current.resolutionRevision;
         try {
-          await _ensureEntryImageBytes(current);
+          final coordination = await const ProductIdentityReviewCoordinator<
+                  SupplierVariantResolution, ProductDuplicateSearchResult>()
+              .resolve(
+            lookupAuthority: () async {
+              final traceId = _productIdentityTraceId(current, revision);
+              ProductIdentityTrace.emit(
+                traceId: traceId,
+                event: 'authority.lookup_start',
+                data: <String, Object?>{
+                  'listing_present':
+                      _aliExpressItemIdForLine(current.originalItem) != null,
+                  'immutable_variant_present':
+                      _aliExpressImmutableVariantKeyForLine(
+                            current.originalItem,
+                          ) !=
+                          null,
+                },
+              );
+              try {
+                final authority =
+                    await _resolveSupplierVariantResolution(current);
+                ProductIdentityTrace.emit(
+                  traceId: traceId,
+                  event: 'authority.lookup_complete',
+                  data: <String, Object?>{
+                    'found': authority != null,
+                    'authoritative': authority?.isResolved,
+                    'revision_id': authority?.revisionId,
+                    'resolution_kind': authority?.kind?.name,
+                    'edge_count': authority?.edges.length ?? 0,
+                  },
+                );
+                return authority;
+              } on Object catch (error) {
+                ProductIdentityTrace.emit(
+                  traceId: traceId,
+                  event: 'authority.lookup_failed',
+                  data: <String, Object?>{
+                    'error_type': error.runtimeType.toString(),
+                  },
+                );
+                rethrow;
+              }
+            },
+            investigate: () async {
+              if (!current.ownsInvestigationForRevision(revision)) {
+                await _investigateProductEntriesAIPrimary(
+                  reviewGeneration: reviewGeneration,
+                  concurrency: 1,
+                  targetEntries: <_NewProductEntry>[current],
+                  catalogProducts: allProducts,
+                );
+              }
+              return current.aiInvestigation;
+            },
+            match: (_) => duplicateMatcher.resolveCandidates(
+              probe: _duplicateProbeFor(current),
+              products: allProducts,
+            ),
+          );
           if (!_ownsNewProductResolution(
             current,
             revision,
@@ -3518,47 +3990,30 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           )) {
             return;
           }
-          inv_models.Product? remembered;
-          try {
-            remembered = await _resolveRememberedProductAlias(
+          if (coordination is ProductIdentityAuthorityCoordination<
+              SupplierVariantResolution, ProductDuplicateSearchResult>) {
+            final applied = await _useSupplierVariantResolutionForEntry(
               current,
+              coordination.authority,
               inventoryService: inventoryService,
               products: allProducts,
-            );
-          } catch (aliasError) {
-            // Learning is an optimization. A missing/transient alias service
-            // must never prevent the current invoice from being reviewed.
-            debugPrint(
-                'Could not resolve remembered supplier alias: $aliasError');
-          }
-          if (!_ownsNewProductResolution(
-            current,
-            revision,
-            reviewGeneration: reviewGeneration,
-          )) {
-            return;
-          }
-          if (remembered != null) {
-            final linked = await _useExistingProductForEntry(
-              current,
-              remembered,
               expectedRevision: revision,
               reviewGeneration: reviewGeneration,
-              persistAlias: false,
             );
-            if (linked) return;
-            if (!_ownsNewProductResolution(
-              current,
-              revision,
-              reviewGeneration: reviewGeneration,
-            )) {
-              return;
+            if (!applied) {
+              throw StateError(
+                'La autoridad inmutable no pudo materializarse en la fila.',
+              );
             }
+            return;
           }
-          final candidates = await duplicateMatcher.findCandidates(
-            probe: _duplicateProbeFor(current),
-            products: allProducts,
-          );
+          if (coordination is ProductIdentityFailedCoordination<
+              SupplierVariantResolution, ProductDuplicateSearchResult>) {
+            throw coordination.failure;
+          }
+          final result = (coordination as ProductIdentityMatchedCoordination<
+                  SupplierVariantResolution, ProductDuplicateSearchResult>)
+              .result;
           // Ignore a stale response if the worker edited identity fields while
           // the matcher was running. The row returns to "Buscar" instead.
           if (!_ownsNewProductResolution(
@@ -3568,11 +4023,21 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           )) {
             return;
           }
-          if (candidates.isEmpty) {
-            current.markNoCandidates();
-          } else {
-            current.markNeedsReview(candidates);
-          }
+          current.markSearchResult(result);
+          ProductIdentityTrace.emit(
+            traceId: _productIdentityTraceId(current, revision),
+            event: 'row.final_decision',
+            data: <String, Object?>{
+              'kind': result.kind.name,
+              'adjudication_state': result.adjudicationState.name,
+              'recommendation_ids': result.recommendations
+                  .map((candidate) => candidate.product.id)
+                  .toList(growable: false),
+              'operator_choice_count': result.operatorChoices.length,
+              'category_conflict_count': result.categoryConflicts.length,
+              'reason': result.reason,
+            },
+          );
         } catch (error) {
           if (_ownsNewProductResolution(
             current,
@@ -3581,6 +4046,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           )) {
             current.markResolutionFailed(error);
           }
+          ProductIdentityTrace.emit(
+            traceId: _productIdentityTraceId(current, revision),
+            event: 'row.failed',
+            data: <String, Object?>{
+              'error_type': error.runtimeType.toString(),
+              'error': error.toString(),
+            },
+          );
           debugPrint('Error checking OCR row for duplicates: $error');
         }
         if (_ownsBulkReview(reviewGeneration)) setState(() {});
@@ -3597,6 +4070,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           await processOne(iterator.current);
         }
       }));
+      if (!_ownsBulkReview(reviewGeneration)) return;
+      _reconcileListingGroupResults();
+      _traceDuplicateSearchResults(entries);
     } catch (e) {
       debugPrint('Error checking OCR similar products: $e');
       if (!_ownsBulkReview(reviewGeneration)) return;
@@ -3611,6 +4087,142 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       });
     }
   }
+
+  /// Applies the document-level constraint only after every row in this
+  /// listing group has independently passed the normal hard gates.
+  ///
+  /// The resolver can only downgrade a dissenting row to abstention and put a
+  /// common viable option first for manual review. It never revives a
+  /// discarded product, creates a recommendation, or assumes one listing is
+  /// one product; front/rear and measured variants therefore remain separate.
+  void _reconcileListingGroupResults() {
+    final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+    final rows = <ProductDuplicateListingGroupRow>[
+      for (final entry in _newProductEntries)
+        if (entry.independentDuplicateResult != null)
+          if (entry.linkedProduct == null &&
+              !entry.hasSupplierResolution &&
+              entry.resolutionState != OcrProductResolutionState.newProduct)
+            ProductDuplicateListingGroupRow(
+              rowId: entry.reviewId,
+              supplierId: supplierId,
+              supplierListingId: _aliExpressItemIdForLine(entry.originalItem),
+              immutableVariantKey:
+                  _aliExpressImmutableVariantKeyForLine(entry.originalItem),
+              deterministicTopCandidate:
+                  entry.independentDuplicateResult!.deterministicTopCandidate,
+              result: entry.independentDuplicateResult!,
+            ),
+    ];
+    final reconciled = const ProductDuplicateListingGroupResolver().resolve(
+      rows,
+    );
+    if (!mounted) return;
+    setState(() {
+      for (final entry in _newProductEntries) {
+        final independent = entry.independentDuplicateResult;
+        if (independent == null) continue;
+        final groupResult = reconciled[entry.reviewId];
+        final finalResult = groupResult ?? independent;
+        if (kDebugMode) {
+          debugPrint('[OCR_AI_TRACE] ${jsonEncode(<String, Object?>{
+                'event': 'listing_group.decision',
+                'reviewId': entry.reviewId,
+                'listingId': _aliExpressItemIdForLine(entry.originalItem),
+                'variantKey': _aliExpressImmutableVariantKeyForLine(
+                  entry.originalItem,
+                ),
+                'deterministicTopSku':
+                    independent.deterministicTopCandidate?.product.sku,
+                'independentKind': independent.kind.name,
+                'independentTopSku': independent.recommendations.isEmpty
+                    ? null
+                    : independent.recommendations.first.product.sku,
+                'adjudicationState': independent.adjudicationState.name,
+                'aiDecision': independent.adjudication?.decision.name,
+                'groupOverride': groupResult != null,
+                'finalKind': finalResult.kind.name,
+                'finalTopSku': finalResult.recommendations.isEmpty
+                    ? null
+                    : finalResult.recommendations.first.product.sku,
+                'finalReason': finalResult.reason,
+              })}');
+        }
+        entry.applyReconciledSearchResult(finalResult);
+      }
+    });
+  }
+
+  /// Durable, structured evidence for real-invoice audits. The compact UI and
+  /// picker intentionally hide numeric ranking values; the debug trace keeps
+  /// the exact candidate/gate/adjudication decision inspectable without
+  /// recomputing the matcher or mutating the invoice.
+  void _traceDuplicateSearchResults(List<_NewProductEntry> entries) {
+    if (!kDebugMode) return;
+    for (final entry in entries) {
+      final result = entry.duplicateResult;
+      if (result == null) continue;
+      debugPrint('[OCR-MATCH] ${jsonEncode(<String, Object?>{
+            'reviewId': entry.reviewId,
+            'sourceRowIndex': entry.sourceRowIndex,
+            'listingId': _aliExpressItemIdForLine(entry.originalItem),
+            'variantKey':
+                _aliExpressImmutableVariantKeyForLine(entry.originalItem),
+            'selectedVariant':
+                _aliExpressVariantLabelForLine(entry.originalItem),
+            'family': result.probeIdentity.resolvedFamilyId,
+            'category': result.probeIdentity.category?.label,
+            'kind': result.kind.name,
+            'adjudication': result.adjudicationState.name,
+            'aiDecision': result.adjudication?.decision.name,
+            'aiLeafIds': result.investigation?.leafProposals
+                .map((proposal) => proposal.categoryId)
+                .toList(growable: false),
+            'aiComposition': result.investigation?.composition.kind.name,
+            'reason': result.reason,
+            'recommendations': [
+              for (final candidate in result.recommendations)
+                _duplicateTraceCandidate(candidate),
+            ],
+            'normalCandidates': [
+              for (final candidate in result.normalCandidates)
+                _duplicateTraceCandidate(candidate),
+            ],
+            'operatorChoices': [
+              for (final candidate in result.operatorChoices)
+                _duplicateTraceCandidate(candidate),
+            ],
+            'categoryConflicts': [
+              for (final candidate in result.categoryConflicts)
+                _duplicateTraceCandidate(candidate),
+            ],
+          })}');
+    }
+  }
+
+  Map<String, Object?> _duplicateTraceCandidate(
+    ProductDuplicateCandidate candidate,
+  ) =>
+      <String, Object?>{
+        'id': candidate.product.id,
+        'sku': candidate.product.sku,
+        'tier': candidate.matchTier.name,
+        'score': candidate.confidence,
+        'lineScore': candidate.lineConfidence,
+        'variantAgreement': candidate.variantAgreement,
+        'ruledOut': candidate.isRuledOut,
+        'reviewOnlyFamilyScope': candidate.isReviewOnlyFamilyScope,
+        'reasons': candidate.reasons,
+        'objections': candidate.objections,
+        'failedGates': [
+          for (final gate in candidate.gates)
+            if (gate.failed)
+              <String, Object?>{
+                'id': gate.id,
+                'detail': gate.detail,
+              },
+        ],
+      };
 
   bool _ownsNewProductResolution(
     _NewProductEntry entry,
@@ -3638,47 +4250,13 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         .trim();
   }
 
-  Future<inv_models.Product?> _resolveRememberedProductAlias(
-    _NewProductEntry entry, {
-    required inv_service.InventoryService inventoryService,
-    required List<inv_models.Product> products,
-  }) async {
-    if (!entry.requiresDuplicateReview) return null;
-    final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
-    final productUrl = entry.originalItem.productUrl?.trim();
-    final itemId = _aliExpressItemIdForLine(entry.originalItem);
-    final variantKey = _aliExpressVariantKeyForLine(entry.originalItem);
-    if (supplierId == null ||
-        supplierId.isEmpty ||
-        itemId == null ||
-        itemId.isEmpty ||
-        variantKey == null ||
-        variantKey.isEmpty) {
-      return null;
-    }
-
-    final remembered =
-        await context.read<InventoryService>().resolveSupplierProductAlias(
-              supplierId: supplierId,
-              productUrl: productUrl,
-              itemId: itemId,
-              variantKey: variantKey,
-            );
-    if (remembered == null) return null;
-
-    for (final product in products) {
-      if (product.id == remembered.id) return product;
-    }
-    return inventoryService.getProductById(remembered.id);
-  }
-
   Future<bool> _useExistingProductForEntry(
     _NewProductEntry entry,
     inv_models.Product product, {
     int? expectedRevision,
     int? reviewGeneration,
-    bool persistAlias = true,
   }) async {
+    if (_isReadOnlyEvaluation) return false;
     final revision = expectedRevision ?? entry.resolutionRevision;
     final productId = product.id;
     if (productId == null ||
@@ -3691,42 +4269,28 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       return false;
     }
 
-    // 2026-08-05: aprender SIEMPRE, no sólo tras una revisión de duplicados.
-    // Con la condición anterior, la primera creación/vínculo de cada producto
-    // jamás guardaba su listing y la tabla de aliases llevaba 0 filas tras
-    // ~10 facturas: cada re-importación volvía a adivinar desde cero. El
-    // helper ya se autoprotege: sin itemId y variante reales no persiste.
-    if (persistAlias) {
-      setState(() => entry.isLinkingExisting = true);
-      try {
-        await _rememberAliExpressAlias(entry, productId: productId);
-      } catch (error) {
-        debugPrint('Error remembering AliExpress product alias: $error');
-        if (_ownsNewProductResolution(
-          entry,
-          revision,
-          reviewGeneration: reviewGeneration,
-        )) {
-          if (!mounted) return false;
-          setState(() => entry.isLinkingExisting = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Producto vinculado para esta factura, pero no se pudo guardar la publicación para el próximo ingreso. ($error)'),
-              backgroundColor: VinabikeThemeRoles.of(context).warning.accent,
-            ),
-          );
-        }
-      }
-      if (!_ownsNewProductResolution(
-        entry,
-        revision,
-        reviewGeneration: reviewGeneration,
-      )) {
-        return false;
-      }
-      setState(() => entry.isLinkingExisting = false);
+    if (SupplierOptionEvidence.requiresExplicitCompositionFor(
+      packCount: entry.originalItem.rawPackCount,
+      rawUnitToken: entry.originalItem.rawUnitToken,
+      packEvidenceConflict: entry.originalItem.rawPackEvidenceConflict,
+    )) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Esta variante declara un pack o conjunto. Confirma primero '
+            'cuántas unidades de catálogo contiene; no se vinculó como un '
+            'producto simple.',
+          ),
+          backgroundColor: VinabikeThemeRoles.of(context).warning.accent,
+        ),
+      );
+      return false;
     }
+
+    // A picker decision applies only to this invoice draft. Persisting it here
+    // made a later correction diverge from durable supplier authority. New
+    // product creation and the dedicated graph flow remain the only writers.
 
     final oldItem = entry.originalItem;
     final existingSku = product.sku.trim();
@@ -3737,6 +4301,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       matchedProductName: product.name,
       currentStock: product.inventoryQty,
       sku: existingSku.isNotEmpty ? existingSku : oldItem.sku,
+      supplierResolution: null,
+      clearSupplierResolution: true,
     );
 
     if (!_ownsNewProductResolution(
@@ -3779,17 +4345,22 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       // the same number without spending another one.
       entry.syncSkuField();
     });
+    _reconcileListingGroupResults();
     return true;
   }
 
   void _changeProductDecision(_NewProductEntry entry) {
     if (!mounted || _parsedData == null) return;
     if (entry.isReservingSku) return;
+    if (entry.hasSupplierResolution) return;
     if (entry.linkedProduct == null) {
       if (entry.resolutionState != OcrProductResolutionState.newProduct) return;
       setState(() {
         entry.resolutionState = entry.similarCandidates.isEmpty
-            ? OcrProductResolutionState.noCandidates
+            ? entry.duplicateResult?.kind ==
+                    ProductDuplicateDecisionKind.abstained
+                ? OcrProductResolutionState.abstained
+                : OcrProductResolutionState.noCandidates
             : OcrProductResolutionState.reviewRequired;
       });
       return;
@@ -3817,6 +4388,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       // got one, and no RPC is spent to recover it.
       entry.syncSkuField();
     });
+    _reconcileListingGroupResults();
   }
 
   String? _aliExpressItemIdForLine(ParsedLineItem item) {
@@ -3827,6 +4399,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   String? _aliExpressVariantKeyForLine(ParsedLineItem item) {
+    final structured = item.variantKey?.trim();
+    if (structured != null && structured.isNotEmpty) {
+      return _normalizeSimilarityText(structured).replaceAll(' ', '-');
+    }
     final raw = item.rawRowText ?? '';
     for (final marker in ['VARIANT_KEY', 'VARIANT']) {
       final value = RegExp(
@@ -3858,7 +4434,28 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     return 'default';
   }
 
+  /// Exact alias authority is intentionally narrower than display/grouping
+  /// identity. A translated label, image filename or `default` can help keep
+  /// invoice rows together, but cannot prove which sold listing variant maps
+  /// to a catalog product.
+  String? _aliExpressImmutableVariantKeyForLine(ParsedLineItem item) {
+    final raw = item.rawRowText ?? '';
+    final value = (item.variantKey?.trim().isNotEmpty == true
+            ? item.variantKey!.trim()
+            : RegExp(
+                r'^VARIANT_KEY:\s*(.+)$',
+                caseSensitive: false,
+                multiLine: true,
+              ).firstMatch(raw)?.group(1)?.trim())
+        ?.toLowerCase();
+    if (value == null || value.isEmpty) return null;
+    if (!value.startsWith('sku:') && !value.startsWith('props:')) return null;
+    return value;
+  }
+
   String? _aliExpressVariantLabelForLine(ParsedLineItem item) {
+    final structured = item.variantLabel?.trim();
+    if (structured != null && structured.isNotEmpty) return structured;
     final raw = item.rawRowText ?? '';
     final value = RegExp(
       r'^VARIANT:\s*(.+)$',
@@ -3873,46 +4470,284 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     return legacyLabel == null || legacyLabel.isEmpty ? null : legacyLabel;
   }
 
-  Future<bool> _rememberAliExpressAlias(
+  SupplierOptionEvidence? _supplierOptionEvidenceForLine(
+    ParsedLineItem item,
+  ) {
+    final variantKey = _aliExpressImmutableVariantKeyForLine(item);
+    if (variantKey == null) return null;
+    try {
+      return SupplierOptionEvidence(
+        variantKey: variantKey,
+        packCount: item.rawPackCount,
+        rawUnitToken: item.rawPackCount == null ? null : item.rawUnitToken,
+        packEvidenceConflict: item.rawPackEvidenceConflict,
+      );
+    } on ArgumentError catch (error) {
+      debugPrint('Supplier option evidence is contradictory: $error');
+      return null;
+    } on FormatException catch (error) {
+      debugPrint('Supplier option evidence is not immutable: $error');
+      return null;
+    }
+  }
+
+  Future<SupplierVariantResolution?> _resolveSupplierVariantResolution(
+    _NewProductEntry entry,
+  ) async {
+    if (!entry.requiresDuplicateReview) return null;
+    final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
+    final itemId = _aliExpressItemIdForLine(entry.originalItem);
+    final rawRowText = entry.originalItem.rawRowText ?? '';
+    final declaredVariantKey =
+        (entry.originalItem.variantKey?.trim().isNotEmpty == true
+                ? entry.originalItem.variantKey!.trim()
+                : RegExp(
+                    r'^VARIANT_KEY:\s*(.+)$',
+                    caseSensitive: false,
+                    multiLine: true,
+                  ).firstMatch(rawRowText)?.group(1)?.trim()) ??
+            '';
+    final immutableVariantKey =
+        _aliExpressImmutableVariantKeyForLine(entry.originalItem);
+    if (supplierId == null || supplierId.isEmpty) {
+      throw StateError(
+        'No se pudo comprobar la autoridad del proveedor: falta supplierId.',
+      );
+    }
+    if (itemId == null || itemId.isEmpty) {
+      throw StateError(
+        'No se pudo comprobar la autoridad del proveedor: falta listingId.',
+      );
+    }
+    // A listing with no immutable option key has no exact graph address and
+    // may continue to investigation. A key that exists but cannot be parsed
+    // is malformed authority input and must fail closed before any AI call.
+    if (immutableVariantKey == null) {
+      if (declaredVariantKey.isNotEmpty) {
+        throw StateError(
+          'La clave de variante declarada no es inmutable; no se consultó IA.',
+        );
+      }
+      return null;
+    }
+    final evidence = _supplierOptionEvidenceForLine(entry.originalItem);
+    if (evidence == null) {
+      throw StateError(
+        'La evidencia de variante inmutable es inválida; no se consultó IA.',
+      );
+    }
+    final result = await SupplierVariantResolutionService(
+      database: context.read<DatabaseService>(),
+    ).resolve(
+      supplierId: supplierId,
+      itemId: itemId,
+      productUrl: entry.originalItem.productUrl?.trim() ?? '',
+      optionEvidence: evidence,
+    );
+    if (result.isResolved) return result;
+    if (result.status == SupplierVariantResolutionStatus.notFound) return null;
+    throw StateError(
+      result.failureReason?.trim().isNotEmpty == true
+          ? result.failureReason!.trim()
+          : 'La resolución inmutable del proveedor no pudo comprobarse '
+              '(${result.status.databaseValue}).',
+    );
+  }
+
+  Future<bool> _useSupplierVariantResolutionForEntry(
+    _NewProductEntry entry,
+    SupplierVariantResolution resolution, {
+    required inv_service.InventoryService inventoryService,
+    required List<inv_models.Product> products,
+    required int expectedRevision,
+    required int reviewGeneration,
+  }) async {
+    if (!resolution.isResolved || resolution.edges.isEmpty) return false;
+    final byId = <String, inv_models.Product>{
+      for (final product in products)
+        if (product.id != null) product.id!: product,
+    };
+    for (final edge in resolution.edges) {
+      if (byId.containsKey(edge.productId)) continue;
+      final product = await inventoryService.getProductById(edge.productId);
+      if (product != null) byId[edge.productId] = product;
+    }
+    if (!_ownsNewProductResolution(
+      entry,
+      expectedRevision,
+      reviewGeneration: reviewGeneration,
+    )) {
+      return false;
+    }
+    final resolvedProducts = <inv_models.Product>[];
+    for (final edge in resolution.edges) {
+      final product = byId[edge.productId];
+      if (product == null || !product.isActive || product.isService) {
+        throw StateError(
+          'La resolución del proveedor apunta a un producto no utilizable.',
+        );
+      }
+      resolvedProducts.add(product);
+    }
+
+    final parsed = _parsedData;
+    if (parsed == null) return false;
+    final oldItem = entry.originalItem;
+    final rowIndex = parsed.lineItems.indexOf(oldItem);
+    if (rowIndex < 0) return false;
+    final singleProduct =
+        resolvedProducts.length == 1 ? resolvedProducts.single : null;
+    final resolvedName = resolvedProducts.map((product) => product.name).join(
+          ' + ',
+        );
+    final resolvedSku = resolvedProducts.map((product) => product.sku).join(
+          ' + ',
+        );
+    final updatedItem = oldItem.copyWith(
+      supplierResolution: resolution,
+      existsInDatabase: true,
+      matchedProductId: singleProduct?.id,
+      matchedProductName: resolvedName,
+      currentStock: singleProduct?.inventoryQty,
+      sku: singleProduct == null ? oldItem.sku : resolvedSku,
+    );
+    final updatedItems = List<ParsedLineItem>.from(parsed.lineItems)
+      ..[rowIndex] = updatedItem;
+    List<ParsedLineItem>? baseItems;
+    if (_baseParsedData != null &&
+        rowIndex < _baseParsedData!.lineItems.length) {
+      baseItems = List<ParsedLineItem>.from(_baseParsedData!.lineItems)
+        ..[rowIndex] = updatedItem;
+    }
+    if (!_ownsNewProductResolution(
+      entry,
+      expectedRevision,
+      reviewGeneration: reviewGeneration,
+    )) {
+      return false;
+    }
+    setState(() {
+      _parsedData = parsed.copyWith(lineItems: updatedItems);
+      if (_baseParsedData != null && baseItems != null) {
+        _baseParsedData = _baseParsedData!.copyWith(lineItems: baseItems);
+      }
+      entry.markSupplierResolution(resolution, resolvedProducts);
+    });
+    if (kDebugMode) {
+      debugPrint('[OCR-SUPPLIER-RESOLUTION] ${jsonEncode(<String, Object?>{
+            'reviewId': entry.reviewId,
+            'sourceRowIndex': entry.sourceRowIndex,
+            'listingId': resolution.listingId,
+            'variantKey': resolution.variantKey?.value,
+            'revisionId': resolution.revisionId,
+            'kind': resolution.kind?.name,
+            'products': [
+              for (var index = 0; index < resolution.edges.length; index++)
+                <String, Object?>{
+                  'sku': resolvedProducts[index].sku,
+                  'productId': resolution.edges[index].productId,
+                  'units': resolution.edges[index].catalogUnitsPerPurchase,
+                  'role': resolution.edges[index].componentRole,
+                },
+            ],
+          })}');
+    }
+    return true;
+  }
+
+  Future<SupplierVariantResolution?> _rememberAliExpressResolution(
     _NewProductEntry entry, {
     required String productId,
   }) async {
+    if (_isReadOnlyEvaluation) return null;
     final supplierId = (_supplierIdForNewProducts ?? widget.supplierId)?.trim();
     if (supplierId == null || supplierId.isEmpty) {
       throw StateError('Falta resolver el proveedor AliExpress.');
     }
 
     final itemId = _aliExpressItemIdForLine(entry.originalItem);
-    final variantKey = _aliExpressVariantKeyForLine(entry.originalItem);
+    final evidence = _supplierOptionEvidenceForLine(entry.originalItem);
     final productUrl = entry.originalItem.productUrl?.trim();
     // Order-message URLs are not product identities. Persist only when a real
     // AliExpress item ID was extracted from the item URL/markers; otherwise
     // the current manual link still applies without pretending it was learned.
-    if (itemId == null ||
-        itemId.isEmpty ||
-        variantKey == null ||
-        variantKey.isEmpty) {
-      return false;
+    if (itemId == null || itemId.isEmpty || evidence == null) {
+      return null;
     }
 
-    await _ensureEntryImageBytes(entry);
-    if (!mounted) return false;
-    final imageHash = entry.imageBytes == null
-        ? null
-        : ProductImageFingerprintService.contentDigest(entry.imageBytes!);
-    await context.read<InventoryService>().rememberSupplierProductAlias(
-          supplierId: supplierId,
+    // A product click proves which catalog row the source means. It does not
+    // prove whether `2PCS` means two inventory units or one catalog pack. Pack
+    // and composite authority therefore needs the dedicated resolution UI or
+    // a previously confirmed graph; never collapse it into a single alias.
+    if (evidence.requiresExplicitComposition) {
+      return null;
+    }
+    final invoice = _parsedData;
+    final sourceDate = invoice?.date;
+    final currencyCode = invoice?.currencyCode?.trim().toUpperCase();
+    final sourceQuantity = entry.originalItem.sourcePurchaseQuantity ??
+        entry.originalItem.quantity;
+    final sourceTotal = entry.originalItem.total ??
+        ((entry.originalItem.unitPrice ?? 0) * (sourceQuantity ?? 0));
+    if (sourceDate == null ||
+        currencyCode == null ||
+        currencyCode != 'CLP' ||
+        sourceQuantity == null ||
+        sourceQuantity <= 0 ||
+        sourceTotal < 0 ||
+        entry.originalItem.sourceOrderNumbers.isEmpty) {
+      return null;
+    }
+    final sourceLineKey = SupplierVariantResolutionService.buildSourceLineKey(
+      supplierId: supplierId,
+      sourceDate: sourceDate,
+      sourceOrderNumbers: entry.originalItem.sourceOrderNumbers,
+      listingId: itemId,
+      variantKey: evidence.variantKey,
+      commercialSplitKey: entry.originalItem.sourcePurchaseUnitPrice == null
+          ? null
+          : 'source-price:${entry.originalItem.sourcePurchaseUnitPrice}',
+    );
+    final operationId =
+        entry.supplierResolutionOperationId ??= const Uuid().v4();
+    return SupplierVariantResolutionService(
+      database: context.read<DatabaseService>(),
+    ).remember(
+      operationId: operationId,
+      supplierId: supplierId,
+      itemId: itemId,
+      productUrl: productUrl ?? '',
+      optionEvidence: evidence,
+      action: SupplierVariantResolutionAction.activate,
+      kind: SupplierVariantResolutionKind.single,
+      edges: <SupplierVariantResolutionEdge>[
+        SupplierVariantResolutionEdge(
+          position: 1,
           productId: productId,
-          productUrl: productUrl,
-          itemId: itemId,
-          variantKey: variantKey,
-          originalTitle:
-              entry.originalNoisyTitle ?? entry.originalItem.description,
-          model: entry.aiSuggestedModel,
-          imageUrl: imageHash == null ? entry.imageUrl : null,
-          imageContentHash: imageHash,
-        );
-    return true;
+          catalogUnitsPerPurchase: 1,
+          allocationRatio: 1,
+          componentRole: 'catalog_product',
+        ),
+      ],
+      decisionSource: SupplierVariantResolutionDecisionSource.operatorConfirmed,
+      decisionEvidence: <String, dynamic>{
+        'source_line_key': sourceLineKey,
+        'source_document_date': sourceDate.toIso8601String().substring(0, 10),
+        'supplier_order_numbers': entry.originalItem.sourceOrderNumbers,
+        'source_purchase_quantity': sourceQuantity,
+        'persisted_quantity': sourceQuantity,
+        'source_total_minor': sourceTotal.round(),
+        'persisted_total_minor': sourceTotal.round(),
+        'currency_code': currencyCode,
+        'confirmation_surface': 'purchase_invoice_ocr_product_review',
+        'product_id': productId,
+        'listing_id': itemId,
+        'variant_key': evidence.variantKey.value,
+        'source_title': entry.supplierIdentityTitle,
+        if (_aliExpressVariantLabelForLine(entry.originalItem) != null)
+          'selected_option': _aliExpressVariantLabelForLine(entry.originalItem),
+      },
+    );
   }
 
   Future<void> _uploadSelectedEntryImageForCreation(
@@ -3940,8 +4775,12 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   /// Create products from the bulk creation form
   Future<void> _createBulkProducts() async {
+    if (_isReadOnlyEvaluation) return;
     final selectedEntries = _newProductEntries
-        .where((entry) => entry.isSelected && entry.linkedProduct == null)
+        .where((entry) =>
+            entry.isSelected &&
+            entry.linkedProduct == null &&
+            !entry.hasSupplierResolution)
         .toList();
     if (!_canCreateBulkProducts() || selectedEntries.isEmpty) return;
 
@@ -3954,6 +4793,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           inv_service.InventoryService(dbService, tenantService);
       final sharedInventoryService = context.read<InventoryService>();
       final createdProducts = <_NewProductEntry, inv_models.Product>{};
+      final learnedResolutions =
+          <_NewProductEntry, SupplierVariantResolution>{};
       var failed = 0;
       var aliasWarnings = 0;
 
@@ -4084,7 +4925,11 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
           continue;
         }
         try {
-          await _rememberAliExpressAlias(entry, productId: productId);
+          final learned = await _rememberAliExpressResolution(
+            entry,
+            productId: productId,
+          );
+          if (learned != null) learnedResolutions[entry] = learned;
         } catch (error) {
           aliasWarnings++;
           unreconciled.add(entry);
@@ -4115,6 +4960,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
                 matchedProductId: savedProduct.id,
                 matchedProductName: savedProduct.name,
                 currentStock: savedProduct.inventoryQty,
+                supplierResolution: learnedResolutions[createdEntry],
               );
               parsedItems[rowIndex] = resolvedItem;
               if (baseItems != null && rowIndex < baseItems.length) {
@@ -4140,7 +4986,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             _baseParsedData = _baseParsedData!.copyWith(lineItems: baseItems);
           }
           _showBulkCreate = _newProductEntries.any(
-            (entry) => entry.isSelected && entry.linkedProduct == null,
+            (entry) =>
+                entry.isSelected &&
+                entry.linkedProduct == null &&
+                !entry.hasSupplierResolution,
           );
           if (!_showBulkCreate) {
             _removeOmittedLinesFromInvoice();
@@ -4491,6 +5340,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.date,
       total: invoice.total,
+      netAmount: invoice.netAmount,
+      taxAmount: invoice.taxAmount,
+      currencyCode: invoice.currencyCode,
       supplierName: supplier?.name,
       lineItems: invoice.lineItems,
       rawText: invoice.rawText,
@@ -4773,6 +5625,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     }
   }
 
+  bool _isParsedLineResolved(ParsedLineItem item) =>
+      item.matchedProductId?.trim().isNotEmpty == true ||
+      item.hasAuthoritativeCatalogResolution;
+
   double _resolveParsedLineDiscountAmount(ParsedLineItem item) {
     if (item.discount != null && item.discount! > 0) {
       return item.discount!;
@@ -4873,6 +5729,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
   }
 
   Future<void> _handleUseParsedData(ParsedInvoice data) async {
+    if (_isReadOnlyEvaluation) return;
     if (widget.showLineItemReview) {
       if (_ocrSupplier == null) {
         if (mounted) {
@@ -4885,11 +5742,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         }
         return;
       }
-      final unresolved = data.lineItems
-          .where((item) =>
-              item.matchedProductId == null ||
-              item.matchedProductId!.trim().isEmpty)
-          .length;
+      final unresolved =
+          data.lineItems.where((item) => !_isParsedLineResolved(item)).length;
       if (data.lineItems.isEmpty || unresolved > 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -5146,6 +6000,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     String? sourceSupplierWebsite,
     Map<String, dynamic>? structuredInvoiceData,
   }) async {
+    _isReadOnlyEvaluation = structuredInvoiceData?['evaluationOnly'] == true;
     ParsedInvoice? parsedData;
     ParsedInvoice? directPdfParsedData;
     var readSource = structuredInvoiceData == null
@@ -5404,22 +6259,65 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     var items = rawItems.map((raw) {
       final item = Map<String, dynamic>.from(raw);
       final description = item['description']?.toString().trim();
+      final variantLabel = item['variant']?.toString().trim();
+      final variantKey = item['variantKey']?.toString().trim();
+      final sourcePurchaseQuantity = parseNumber(
+        item['sourcePurchaseQuantity'] ?? item['quantity'],
+      );
+      final sourcePurchaseUnitPrice = parseNumber(
+        item['sourcePurchaseUnitPrice'],
+      );
+      final rawPackCountValue = parseNumber(item['rawPackCount']);
+      final rawPackCount = rawPackCountValue != null &&
+              rawPackCountValue > 0 &&
+              rawPackCountValue == rawPackCountValue.roundToDouble()
+          ? rawPackCountValue.toInt()
+          : null;
+      final rawUnitToken = item['rawUnitToken']?.toString().trim();
+      final rawPackEvidenceConflict = item['rawPackEvidenceConflict'] == true;
+      final sourceOrderNumbers = (item['sourceOrderNumbers'] is Iterable
+              ? item['sourceOrderNumbers'] as Iterable
+              : const <dynamic>[])
+          .map((value) => value?.toString().trim() ?? '')
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+      final explicitLineTitle = _firstNonEmpty(
+        item['lineTitle']?.toString(),
+        item['originalDescription']?.toString(),
+      );
+      final lineTitle = explicitLineTitle ??
+          _withoutAliExpressSelectedVariant(description, variantLabel);
       return ParsedLineItem(
         description: description == null || description.isEmpty
             ? 'AliExpress item'
             : description,
+        lineTitle: lineTitle,
+        variantLabel:
+            variantLabel == null || variantLabel.isEmpty ? null : variantLabel,
+        variantKey:
+            variantKey == null || variantKey.isEmpty ? null : variantKey,
         sku: item['sku']?.toString().trim(),
         rawRowText: [
           item['description'],
-          item['originalDescription'] == null
+          lineTitle == null ? null : 'ORIGINAL_TITLE: $lineTitle',
+          (variantLabel?.isNotEmpty ?? false) ? 'VARIANT: $variantLabel' : null,
+          (variantKey?.isNotEmpty ?? false) ? 'VARIANT_KEY: $variantKey' : null,
+          sourcePurchaseQuantity == null
               ? null
-              : 'ORIGINAL_TITLE: ${item['originalDescription']}',
-          (item['variant']?.toString().trim().isNotEmpty ?? false)
-              ? 'VARIANT: ${item['variant'].toString().trim()}'
+              : 'SOURCE_PURCHASE_QUANTITY: $sourcePurchaseQuantity',
+          sourcePurchaseUnitPrice == null
+              ? null
+              : 'SOURCE_PURCHASE_UNIT_PRICE: $sourcePurchaseUnitPrice',
+          rawPackCount == null ? null : 'RAW_PACK_COUNT: $rawPackCount',
+          (rawUnitToken?.isNotEmpty ?? false)
+              ? 'RAW_UNIT_TOKEN: $rawUnitToken'
               : null,
-          (item['variantKey']?.toString().trim().isNotEmpty ?? false)
-              ? 'VARIANT_KEY: ${item['variantKey'].toString().trim()}'
-              : null,
+          rawPackEvidenceConflict ? 'RAW_PACK_EVIDENCE_CONFLICT: true' : null,
+          sourceOrderNumbers.isEmpty
+              ? null
+              : 'SOURCE_ORDERS: ${sourceOrderNumbers.join(',')}',
           item['aiCleaned'] == true ? 'AI_CLEANED: true' : null,
           (item['aiCategory'] is String &&
                   (item['aiCategory'] as String).trim().isNotEmpty)
@@ -5441,7 +6339,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         ].whereType<Object>().join('\n'),
         imageUrl: item['imageUrl']?.toString().trim(),
         productUrl: item['productUrl']?.toString().trim(),
-        quantity: parseNumber(item['quantity']),
+        sourcePurchaseQuantity: sourcePurchaseQuantity,
+        sourcePurchaseUnitPrice: sourcePurchaseUnitPrice,
+        rawPackCount: rawPackCount,
+        rawUnitToken:
+            rawUnitToken == null || rawUnitToken.isEmpty ? null : rawUnitToken,
+        rawPackEvidenceConflict: rawPackEvidenceConflict,
+        sourceOrderNumbers: sourceOrderNumbers,
+        quantity: sourcePurchaseQuantity ?? parseNumber(item['quantity']),
         unitPrice: parseNumber(item['unitPrice']),
         total: parseNumber(item['total']),
       );
@@ -5454,10 +6359,13 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     );
 
     final supplierName = invoice['supplierName']?.toString().trim();
+    final currencyCode = invoice['currency']?.toString().trim().toUpperCase();
     return ParsedInvoice(
       invoiceNumber: invoice['orderNumber']?.toString().trim(),
       date: parseDate(invoice['orderDate']),
       total: parseNumber(invoice['total']),
+      currencyCode:
+          currencyCode == null || currencyCode.isEmpty ? null : currencyCode,
       supplierName: supplierName == null || supplierName.isEmpty
           ? 'AliExpress Marketplace'
           : supplierName,
@@ -5557,8 +6465,69 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       );
       final originalDescription = _firstTextIn(
         row,
-        RegExp(r'ORIGINAL_TITLE:\s*([^<]+)', caseSensitive: false),
+        RegExp(r'ORIGINAL_TITLE:\s*([^\n<]+)', caseSensitive: false),
       );
+      final lineTitle = _firstTextIn(
+            row,
+            RegExp(r'LINE_TITLE:\s*([^\n<]+)', caseSensitive: false),
+          ) ??
+          originalDescription;
+      final variantLabel = _firstTextIn(
+        row,
+        RegExp(r'VARIANT:\s*([^\n<]+)', caseSensitive: false),
+      );
+      final variantKey = _firstTextIn(
+        row,
+        RegExp(r'VARIANT_KEY:\s*([^\n<]+)', caseSensitive: false),
+      );
+      final sourcePurchaseQuantity = parseMoney(
+        _firstTextIn(
+          row,
+          RegExp(
+            r'SOURCE_PURCHASE_QUANTITY:\s*([^\n<]+)',
+            caseSensitive: false,
+          ),
+        ),
+      );
+      final sourcePurchaseUnitPrice = parseMoney(
+        _firstTextIn(
+          row,
+          RegExp(
+            r'SOURCE_PURCHASE_UNIT_PRICE:\s*([^\n<]+)',
+            caseSensitive: false,
+          ),
+        ),
+      );
+      final rawPackCountValue = parseMoney(
+        _firstTextIn(
+          row,
+          RegExp(r'RAW_PACK_COUNT:\s*([^\n<]+)', caseSensitive: false),
+        ),
+      );
+      final rawPackCount = rawPackCountValue != null &&
+              rawPackCountValue > 0 &&
+              rawPackCountValue == rawPackCountValue.roundToDouble()
+          ? rawPackCountValue.toInt()
+          : null;
+      final rawUnitToken = _firstTextIn(
+        row,
+        RegExp(r'RAW_UNIT_TOKEN:\s*([^\n<]+)', caseSensitive: false),
+      );
+      final rawPackEvidenceConflict = RegExp(
+        r'RAW_PACK_EVIDENCE_CONFLICT:\s*true',
+        caseSensitive: false,
+      ).hasMatch(row);
+      final sourceOrderNumbers = (_firstTextIn(
+                row,
+                RegExp(r'SOURCE_ORDERS:\s*([^\n<]+)', caseSensitive: false),
+              ) ??
+              '')
+          .split(',')
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
       final productUrl =
           RegExp(r'PRODUCT_URL:\s*(https?://[^<\s]+)', caseSensitive: false)
               .firstMatch(row)
@@ -5572,18 +6541,41 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       if ((description ?? '').isEmpty) continue;
       items.add(ParsedLineItem(
         description: description!,
+        lineTitle: lineTitle ??
+            _withoutAliExpressSelectedVariant(description, variantLabel),
+        variantLabel: variantLabel,
+        variantKey: variantKey,
         sku: sku,
         rawRowText: [
           description,
-          originalDescription == null
+          lineTitle == null ? null : 'ORIGINAL_TITLE: $lineTitle',
+          variantLabel == null ? null : 'VARIANT: $variantLabel',
+          variantKey == null ? null : 'VARIANT_KEY: $variantKey',
+          sourcePurchaseQuantity == null
               ? null
-              : 'ORIGINAL_TITLE: $originalDescription',
+              : 'SOURCE_PURCHASE_QUANTITY: $sourcePurchaseQuantity',
+          sourcePurchaseUnitPrice == null
+              ? null
+              : 'SOURCE_PURCHASE_UNIT_PRICE: $sourcePurchaseUnitPrice',
+          rawPackCount == null ? null : 'RAW_PACK_COUNT: $rawPackCount',
+          rawUnitToken == null ? null : 'RAW_UNIT_TOKEN: $rawUnitToken',
+          rawPackEvidenceConflict ? 'RAW_PACK_EVIDENCE_CONFLICT: true' : null,
+          sourceOrderNumbers.isEmpty
+              ? null
+              : 'SOURCE_ORDERS: ${sourceOrderNumbers.join(',')}',
           productUrl,
           imageUrl == null ? null : 'IMAGE_URL: $imageUrl',
         ].whereType<Object>().join('\n'),
         imageUrl: imageUrl == null ? null : _decodeHtmlEntities(imageUrl),
         productUrl: productUrl == null ? null : _decodeHtmlEntities(productUrl),
-        quantity: cells.isNotEmpty ? parseMoney(cells[0]) : null,
+        sourcePurchaseQuantity: sourcePurchaseQuantity,
+        sourcePurchaseUnitPrice: sourcePurchaseUnitPrice,
+        rawPackCount: rawPackCount,
+        rawUnitToken: rawUnitToken,
+        rawPackEvidenceConflict: rawPackEvidenceConflict,
+        sourceOrderNumbers: sourceOrderNumbers,
+        quantity: sourcePurchaseQuantity ??
+            (cells.isNotEmpty ? parseMoney(cells[0]) : null),
         unitPrice: cells.length > 1 ? parseMoney(cells[1]) : null,
         total: cells.length > 2 ? parseMoney(cells[2]) : null,
       ));
@@ -5596,6 +6588,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         dotAll: true,
       )),
       supplierName: 'AliExpress Marketplace',
+      currencyCode: 'CLP',
       lineItems: items,
       rawText: _stripHtml(html),
     );
@@ -5622,15 +6615,60 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
       final imageUrl = _firstNonEmpty(item.imageUrl, source.imageUrl);
       final productUrl = _firstNonEmpty(item.productUrl, source.productUrl);
+      final lineTitle = _firstNonEmpty(item.lineTitle, source.lineTitle);
+      final variantLabel =
+          _firstNonEmpty(item.variantLabel, source.variantLabel);
+      final variantKey = _firstNonEmpty(item.variantKey, source.variantKey);
+      final sourcePurchaseQuantity =
+          item.sourcePurchaseQuantity ?? source.sourcePurchaseQuantity;
+      final sourcePurchaseUnitPrice =
+          item.sourcePurchaseUnitPrice ?? source.sourcePurchaseUnitPrice;
+      final rawPackCount = item.rawPackCount ?? source.rawPackCount;
+      final rawUnitToken = _firstNonEmpty(
+        item.rawUnitToken,
+        source.rawUnitToken,
+      );
+      final rawPackEvidenceConflict = item.rawPackEvidenceConflict ||
+          source.rawPackEvidenceConflict ||
+          (item.rawPackCount != null &&
+              source.rawPackCount != null &&
+              item.rawPackCount != source.rawPackCount) ||
+          (item.rawUnitToken?.trim().isNotEmpty == true &&
+              source.rawUnitToken?.trim().isNotEmpty == true &&
+              item.rawUnitToken!.trim().toLowerCase() !=
+                  source.rawUnitToken!.trim().toLowerCase());
+      final sourceOrderNumbers = <String>{
+        ...item.sourceOrderNumbers,
+        ...source.sourceOrderNumbers,
+      }.toList()
+        ..sort();
       final rawRowText = _mergeRawRowText(item.rawRowText, source.rawRowText);
       final itemChanged = imageUrl != item.imageUrl ||
           productUrl != item.productUrl ||
+          lineTitle != item.lineTitle ||
+          variantLabel != item.variantLabel ||
+          variantKey != item.variantKey ||
+          sourcePurchaseQuantity != item.sourcePurchaseQuantity ||
+          sourcePurchaseUnitPrice != item.sourcePurchaseUnitPrice ||
+          rawPackCount != item.rawPackCount ||
+          rawUnitToken != item.rawUnitToken ||
+          rawPackEvidenceConflict != item.rawPackEvidenceConflict ||
+          !listEquals(sourceOrderNumbers, item.sourceOrderNumbers) ||
           rawRowText != item.rawRowText;
 
       updatedItems.add(itemChanged
           ? item.copyWith(
               imageUrl: imageUrl,
               productUrl: productUrl,
+              lineTitle: lineTitle,
+              variantLabel: variantLabel,
+              variantKey: variantKey,
+              sourcePurchaseQuantity: sourcePurchaseQuantity,
+              sourcePurchaseUnitPrice: sourcePurchaseUnitPrice,
+              rawPackCount: rawPackCount,
+              rawUnitToken: rawUnitToken,
+              rawPackEvidenceConflict: rawPackEvidenceConflict,
+              sourceOrderNumbers: sourceOrderNumbers,
               rawRowText: rawRowText,
             )
           : item);
@@ -5686,6 +6724,23 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     final fallbackText = fallback?.trim();
     if (fallbackText != null && fallbackText.isNotEmpty) return fallbackText;
     return null;
+  }
+
+  String? _withoutAliExpressSelectedVariant(
+    String? description,
+    String? variantLabel,
+  ) {
+    final value = description?.trim();
+    final variant = variantLabel?.trim();
+    if (value == null || value.isEmpty || variant == null || variant.isEmpty) {
+      return null;
+    }
+    final suffix = RegExp(
+      '\\s*\\(${RegExp.escape(variant)}\\)\\s*\$',
+      caseSensitive: false,
+    );
+    final withoutVariant = value.replaceFirst(suffix, '').trim();
+    return withoutVariant.isEmpty ? null : withoutVariant;
   }
 
   String? _mergeRawRowText(String? first, String? second) {
@@ -5754,7 +6809,8 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         '🔍 Verifying ${invoice.lineItems.length} products in database...');
 
     final sourceItems = invoice.lineItems;
-    final allowNameFallback = !_looksLikeAliExpressInvoice(invoice);
+    final isAliExpress = _looksLikeAliExpressInvoice(invoice);
+    final allowNameFallback = !isAliExpress;
     final verifiedItems = List<ParsedLineItem?>.filled(
       sourceItems.length,
       null,
@@ -5771,6 +6827,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
             item,
             supplierId: supplierId,
             allowNameFallback: allowNameFallback,
+            // AliExpress `sku` is a supplier option code, never an internal
+            // catalog SKU. Its immutable graph must be checked in review first.
+            allowCatalogCodeLookup: !isAliExpress,
           ).timeout(
             const Duration(seconds: 12),
             onTimeout: () {
@@ -5801,6 +6860,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.date,
       total: invoice.total,
+      netAmount: invoice.netAmount,
+      taxAmount: invoice.taxAmount,
+      currencyCode: invoice.currencyCode,
       supplierName: invoice.supplierName,
       lineItems: completedItems,
       rawText: invoice.rawText,
@@ -5848,6 +6910,10 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   @override
   void dispose() {
+    for (final timer in _identityRecomputeTimers.values) {
+      timer.cancel();
+    }
+    _identityRecomputeTimers.clear();
     for (final entry in _newProductEntries) {
       entry.dispose();
     }
@@ -5950,10 +7016,22 @@ class _NewProductEntry {
 
   bool get hasReservedAliExpressSku => (reservedSku ?? '').isNotEmpty;
   List<ProductDuplicateCandidate> similarCandidates = [];
+  ProductDuplicateSearchResult? independentDuplicateResult;
+  ProductDuplicateSearchResult? duplicateResult;
+  SupplierVariantResolution? supplierResolution;
+  List<inv_models.Product> supplierResolutionProducts = const [];
+  String? supplierResolutionOperationId;
   OcrProductResolutionState resolutionState;
   String? resolutionError;
   String? creationError;
   int resolutionRevision = 0;
+
+  /// The primary identity receipt and its exact row revision. A failed
+  /// attempt is cached too, so opening the picker or rebuilding the row cannot
+  /// spend another model call for unchanged evidence.
+  AIProductIdentityInvestigation? aiInvestigation;
+  int? aiInvestigationRevision;
+  String? aiInvestigationError;
 
   /// AI-cleanup state for AliExpress (and other noisy supplier) titles.
   /// When true, the row name field is being rewritten by the AI cleaner.
@@ -6009,6 +7087,18 @@ class _NewProductEntry {
   /// the long AliExpress text doesn't get lost when the name is cleaned.
   String? originalNoisyTitle;
 
+  /// Supplier-authored title used as immutable identity evidence. The clean
+  /// name is presentation; it must never rewrite what the invoice asserted.
+  String get supplierIdentityTitle {
+    final structured = originalItem.lineTitle?.trim();
+    if (structured != null && structured.isNotEmpty) return structured;
+    final preserved = originalNoisyTitle?.trim();
+    if (preserved != null && preserved.isNotEmpty) return preserved;
+    final parsed = originalItem.description.trim();
+    if (parsed.isNotEmpty) return parsed;
+    return nameController.text.trim();
+  }
+
   /// True when the cost in [costController] already includes 19% IVA (e.g.
   /// AliExpress unit prices, where shipping/tax/discount have been allocated
   /// into each unit). Drives the suggested-price formula:
@@ -6044,7 +7134,9 @@ class _NewProductEntry {
       imageUrlOptimized = sourceImageUrl;
       imageFileName = _imageFileNameFromUrl(sourceImageUrl);
     }
-    originalNoisyTitle = nameController.text;
+    originalNoisyTitle = originalItem.lineTitle?.trim().isNotEmpty == true
+        ? originalItem.lineTitle!.trim()
+        : originalItem.description.trim();
     // Track manual edits so the AI cleaner never overwrites the user.
     nameController.addListener(() {
       if (_suppressNameEditTracking) return;
@@ -6056,30 +7148,94 @@ class _NewProductEntry {
   void invalidateDuplicateResolution() {
     if (!requiresDuplicateReview) return;
     resolutionRevision++;
+    aiInvestigation = null;
+    aiInvestigationRevision = null;
+    aiInvestigationError = null;
+    aiVisualAnalysis = null;
+    isAICleaningName = false;
     isCheckingSimilar = false;
     isLinkingExisting = false;
     similarCandidates = [];
+    independentDuplicateResult = null;
+    duplicateResult = null;
+    resolutionError = null;
+    resolutionState = OcrProductResolutionState.unsearched;
+  }
+
+  /// Retries the model/matcher without pretending the operator edited the
+  /// source identity. A valid primary receipt is reused; a failed/null primary
+  /// receipt or one produced by an older contract is cleared so the first pass
+  /// runs again. This keeps a transient adjudication formatting failure from
+  /// paying for the source image twice without ever reusing stale semantics
+  /// after a prompt/schema upgrade.
+  void retryDuplicateResolution() {
+    if (!requiresDuplicateReview) return;
+    final investigation = aiInvestigation;
+    final primaryReceiptIsCurrent = investigation != null &&
+        investigation.schemaVersion ==
+            AIAssistantService.productIdentitySchemaVersion &&
+        investigation.promptVersion ==
+            AIAssistantService.productIdentityPromptKey &&
+        investigation.receipt.promptVersion ==
+            AIAssistantService.productIdentityPromptKey;
+    if (!primaryReceiptIsCurrent) {
+      aiInvestigation = null;
+      aiInvestigationRevision = null;
+      aiInvestigationError = null;
+      aiVisualAnalysis = null;
+    }
+    isAICleaningName = false;
+    isCheckingSimilar = false;
+    isLinkingExisting = false;
+    similarCandidates = [];
+    independentDuplicateResult = null;
+    duplicateResult = null;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.unsearched;
   }
 
   void markSearching() {
-    resolutionRevision++;
     isCheckingSimilar = true;
+    independentDuplicateResult = null;
+    duplicateResult = null;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.searching;
   }
 
+  bool ownsInvestigationForRevision(int revision) =>
+      aiInvestigationRevision == revision;
+
   void markNeedsReview(List<ProductDuplicateCandidate> candidates) {
     isCheckingSimilar = false;
+    independentDuplicateResult = null;
+    duplicateResult = null;
     similarCandidates = candidates;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.reviewRequired;
   }
 
+  void markSearchResult(ProductDuplicateSearchResult result) {
+    independentDuplicateResult = result;
+    applyReconciledSearchResult(result);
+  }
+
+  void applyReconciledSearchResult(ProductDuplicateSearchResult result) {
+    isCheckingSimilar = false;
+    duplicateResult = result;
+    similarCandidates = result.recommendations;
+    resolutionError = null;
+    resolutionState = result.recommendations.isEmpty
+        ? result.kind == ProductDuplicateDecisionKind.abstained
+            ? OcrProductResolutionState.abstained
+            : OcrProductResolutionState.noCandidates
+        : OcrProductResolutionState.reviewRequired;
+  }
+
   void markNoCandidates() {
     isCheckingSimilar = false;
     similarCandidates = [];
+    independentDuplicateResult = null;
+    duplicateResult = null;
     resolutionError = null;
     resolutionState = OcrProductResolutionState.noCandidates;
   }
@@ -6089,6 +7245,24 @@ class _NewProductEntry {
     resolutionError = null;
     resolutionState = OcrProductResolutionState.newProduct;
   }
+
+  void markSupplierResolution(
+    SupplierVariantResolution resolution,
+    List<inv_models.Product> products,
+  ) {
+    isCheckingSimilar = false;
+    isLinkingExisting = false;
+    resolutionError = null;
+    supplierResolution = resolution;
+    supplierResolutionProducts = List<inv_models.Product>.unmodifiable(
+      products,
+    );
+    independentDuplicateResult = null;
+    duplicateResult = null;
+    similarCandidates = const [];
+  }
+
+  bool get hasSupplierResolution => supplierResolution?.isResolved == true;
 
   void markLinkedProduct(inv_models.Product product) {
     isCheckingSimilar = false;
@@ -6100,7 +7274,9 @@ class _NewProductEntry {
   void clearLinkedProduct() {
     linkedProduct = null;
     resolutionState = similarCandidates.isEmpty
-        ? OcrProductResolutionState.unsearched
+        ? duplicateResult?.kind == ProductDuplicateDecisionKind.abstained
+            ? OcrProductResolutionState.abstained
+            : OcrProductResolutionState.unsearched
         : OcrProductResolutionState.reviewRequired;
   }
 

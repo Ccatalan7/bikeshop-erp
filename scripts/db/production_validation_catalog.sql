@@ -25,7 +25,7 @@ with catalog_entries(kind, identity, definition) as (
       'acl', coalesce(namespace.nspacl::text, '')
     )::text
   from pg_namespace namespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
 
   union all
 
@@ -65,7 +65,7 @@ with catalog_entries(kind, identity, definition) as (
     )::text
   from pg_class relation
   join pg_namespace namespace on namespace.oid = relation.relnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
     and relation.relkind in ('r', 'p', 'v', 'm', 'S', 'f')
 
   union all
@@ -101,7 +101,7 @@ with catalog_entries(kind, identity, definition) as (
   left join pg_attrdef default_value
     on default_value.adrelid = attribute.attrelid
    and default_value.adnum = attribute.attnum
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
     and relation.relkind in ('r', 'p', 'v', 'm', 'S', 'f')
     and attribute.attnum > 0
     and not attribute.attisdropped
@@ -127,7 +127,7 @@ with catalog_entries(kind, identity, definition) as (
   from pg_constraint constraint_row
   join pg_class relation on relation.oid = constraint_row.conrelid
   join pg_namespace namespace on namespace.oid = relation.relnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
 
   union all
 
@@ -150,7 +150,7 @@ with catalog_entries(kind, identity, definition) as (
   join pg_class relation on relation.oid = index_row.indrelid
   join pg_class index_relation on index_relation.oid = index_row.indexrelid
   join pg_namespace namespace on namespace.oid = relation.relnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
 
   union all
 
@@ -186,7 +186,7 @@ with catalog_entries(kind, identity, definition) as (
     )::text
   from pg_proc procedure
   join pg_namespace namespace on namespace.oid = procedure.pronamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
 
   union all
 
@@ -205,7 +205,7 @@ with catalog_entries(kind, identity, definition) as (
   from pg_trigger trigger_row
   join pg_class relation on relation.oid = trigger_row.tgrelid
   join pg_namespace namespace on namespace.oid = relation.relnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
     and not trigger_row.tgisinternal
 
   union all
@@ -228,7 +228,7 @@ with catalog_entries(kind, identity, definition) as (
   from pg_policy policy
   join pg_class relation on relation.oid = policy.polrelid
   join pg_namespace namespace on namespace.oid = relation.relnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
 
   union all
 
@@ -244,7 +244,7 @@ with catalog_entries(kind, identity, definition) as (
   from pg_rewrite rewrite_rule
   join pg_class relation on relation.oid = rewrite_rule.ev_class
   join pg_namespace namespace on namespace.oid = relation.relnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
     and rewrite_rule.rulename <> '_RETURN'
 
   union all
@@ -262,7 +262,7 @@ with catalog_entries(kind, identity, definition) as (
     )::text
   from pg_type type_row
   join pg_namespace namespace on namespace.oid = type_row.typnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
     and type_row.typtype in ('b', 'c', 'd', 'e', 'r', 'm')
 
   union all
@@ -279,7 +279,7 @@ with catalog_entries(kind, identity, definition) as (
   from pg_enum enum_row
   join pg_type type_row on type_row.oid = enum_row.enumtypid
   join pg_namespace namespace on namespace.oid = type_row.typnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
 
   union all
 
@@ -298,7 +298,7 @@ with catalog_entries(kind, identity, definition) as (
   from pg_sequence sequence_row
   join pg_class relation on relation.oid = sequence_row.seqrelid
   join pg_namespace namespace on namespace.oid = relation.relnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
 
   union all
 
@@ -313,7 +313,7 @@ with catalog_entries(kind, identity, definition) as (
     default_acl.defaclacl::text
   from pg_default_acl default_acl
   left join pg_namespace namespace on namespace.oid = default_acl.defaclnamespace
-  where namespace.nspname = 'public'
+  where namespace.nspname in ('public', 'private')
      or default_acl.defaclnamespace = 0
 
   union all
@@ -328,7 +328,7 @@ with catalog_entries(kind, identity, definition) as (
     ),
     coalesce(publication_tables.attnames::text, '')
   from pg_publication_tables publication_tables
-  where publication_tables.schemaname = 'public'
+  where publication_tables.schemaname in ('public', 'private')
 
   union all
 

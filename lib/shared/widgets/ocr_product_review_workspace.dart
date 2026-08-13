@@ -14,6 +14,7 @@ enum OcrProductReviewStatus {
   needsSearch,
   searching,
   ready,
+  abstained,
   noCandidates,
   failed,
   linked,
@@ -60,6 +61,9 @@ class OcrProductReviewLine {
     this.imageUrl,
     this.imageBytes,
     this.candidates = const [],
+    this.viableCandidateCount = 0,
+    this.discardedCandidateCount = 0,
+    this.categoryConflictCount = 0,
     this.categories = const [],
     this.brands = const [],
     this.category,
@@ -78,6 +82,7 @@ class OcrProductReviewLine {
     this.skuErrorMessage,
     this.errorMessage,
     this.searchSummary,
+    this.aiCompositeProposal,
     this.categoryValidationMessage,
     this.brandValidationMessage,
     this.brandWarning,
@@ -86,6 +91,7 @@ class OcrProductReviewLine {
     this.resolvedProductName,
     this.resolvedProductSku,
     this.isSelected = true,
+    this.inspectionOnly = false,
   });
 
   final String id;
@@ -99,6 +105,19 @@ class OcrProductReviewLine {
   final OcrProductDraftControllers controllers;
   final OcrProductReviewStatus status;
   final List<ProductDuplicateCandidate> candidates;
+
+  /// Cached same-category products that survived the identity gates. This may
+  /// include viable rows below the recommendation floor; it never includes a
+  /// product that the matcher discarded.
+  final int viableCandidateCount;
+
+  /// Cached same-family products that an identity gate discarded. They remain
+  /// inspectable in the picker, but are never described as suggestions.
+  final int discardedCandidateCount;
+
+  /// Same-family products found outside the row's authoritative category.
+  /// They require an explicit catalog-conflict review and never rank normally.
+  final int categoryConflictCount;
   final List<Category> categories;
   final List<ProductBrand> brands;
   final Category? category;
@@ -127,6 +146,12 @@ class OcrProductReviewLine {
 
   final String? errorMessage;
   final String? searchSummary;
+
+  /// Cached, review-only proposal that this supplier line represents more
+  /// than one existing catalog product. It is evidence for the operator, not
+  /// an applied link: only the supplier-resolution graph may authoritatively
+  /// resolve a composite without this row's confirmation.
+  final String? aiCompositeProposal;
   final String? categoryValidationMessage;
   final String? brandValidationMessage;
   final String? brandWarning;
@@ -135,6 +160,7 @@ class OcrProductReviewLine {
   final String? resolvedProductName;
   final String? resolvedProductSku;
   final bool isSelected;
+  final bool inspectionOnly;
 
   bool get isResolved => switch (status) {
         OcrProductReviewStatus.linked ||
@@ -146,6 +172,20 @@ class OcrProductReviewLine {
 
   ProductDuplicateCandidate? get bestCandidate =>
       candidates.isEmpty ? null : candidates.first;
+}
+
+String _catalogReviewSummary(OcrProductReviewLine line) {
+  final parts = <String>[
+    if (line.viableCandidateCount > 0)
+      '${line.viableCandidateCount} '
+          '${line.viableCandidateCount == 1 ? 'viable' : 'viables'}',
+    if (line.discardedCandidateCount > 0)
+      '${line.discardedCandidateCount} '
+          '${line.discardedCandidateCount == 1 ? 'descartado' : 'descartados'}',
+    if (line.categoryConflictCount > 0)
+      '${line.categoryConflictCount} en otra categoría',
+  ];
+  return parts.join(' · ');
 }
 
 @immutable
@@ -293,6 +333,7 @@ class OcrProductReviewWorkspace extends StatefulWidget {
     this.primaryBlockingReason,
     this.costIncludesVat = true,
     this.readOnly = false,
+    this.readOnlyReason,
   });
 
   final List<OcrProductReviewLine> lines;
@@ -304,6 +345,7 @@ class OcrProductReviewWorkspace extends StatefulWidget {
   final String? primaryBlockingReason;
   final bool costIncludesVat;
   final bool readOnly;
+  final String? readOnlyReason;
 
   /// Below this the shell itself is compact and every target is 48 px.
   static const double touchBreakpoint = 900;
@@ -371,6 +413,7 @@ class _OcrProductReviewWorkspaceState extends State<OcrProductReviewWorkspace> {
                       widget.readOnly ? null : widget.callbacks.onPrimary,
                   touch: touch,
                   readOnly: widget.readOnly,
+                  readOnlyReason: widget.readOnlyReason,
                 ),
               ],
             ),
@@ -1396,6 +1439,7 @@ class _DecisionCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
+    final canInspect = enabled || line.inspectionOnly;
 
     switch (line.status) {
       case OcrProductReviewStatus.searching:
@@ -1427,7 +1471,7 @@ class _DecisionCell extends StatelessWidget {
           tone: roles.danger,
           primaryLabel: 'Reintentar',
           primaryKey: Key('ocr-review-retry-${line.id}'),
-          onPrimary: enabled && callbacks.onRetryLine != null
+          onPrimary: canInspect && callbacks.onRetryLine != null
               ? () => callbacks.onRetryLine!(line.id)
               : null,
         );
@@ -1438,7 +1482,7 @@ class _DecisionCell extends StatelessWidget {
           tone: roles.neutral,
           primaryLabel: 'Buscar',
           primaryKey: Key('ocr-review-search-${line.id}'),
-          onPrimary: enabled && callbacks.onRetryLine != null
+          onPrimary: canInspect && callbacks.onRetryLine != null
               ? () => callbacks.onRetryLine!(line.id)
               : null,
         );
@@ -1475,6 +1519,23 @@ class _DecisionCell extends StatelessWidget {
         );
 
       case OcrProductReviewStatus.noCandidates:
+        final reviewSummary = _catalogReviewSummary(line);
+        if (reviewSummary.isNotEmpty) {
+          return _DecisionActions(
+            message: reviewSummary,
+            tone: roles.warning,
+            primaryLabel: 'Revisar catálogo',
+            primaryKey: Key('ocr-review-alternatives-${line.id}'),
+            onPrimary: canInspect && callbacks.onOpenCandidates != null
+                ? () => callbacks.onOpenCandidates!(line.id)
+                : null,
+            secondaryLabel: 'Crear nuevo',
+            secondaryKey: Key('ocr-review-new-${line.id}'),
+            onSecondary: enabled && callbacks.onConfirmNewProduct != null
+                ? () => callbacks.onConfirmNewProduct!(line.id)
+                : null,
+          );
+        }
         return _DecisionActions(
           message: 'Sin coincidencia fiable',
           tone: roles.neutral,
@@ -1485,8 +1546,34 @@ class _DecisionCell extends StatelessWidget {
               : null,
           secondaryLabel: 'Buscar',
           secondaryKey: Key('ocr-review-alternatives-${line.id}'),
-          onSecondary: enabled && callbacks.onOpenCandidates != null
+          onSecondary: canInspect && callbacks.onOpenCandidates != null
               ? () => callbacks.onOpenCandidates!(line.id)
+              : null,
+        );
+
+      case OcrProductReviewStatus.abstained:
+        final reviewSummary = _catalogReviewSummary(line);
+        final hasCatalogRows = reviewSummary.isNotEmpty;
+        final compositeProposal = line.aiCompositeProposal?.trim();
+        final hasCompositeProposal = compositeProposal?.isNotEmpty == true;
+        return _DecisionActions(
+          message: hasCompositeProposal
+              ? compositeProposal!
+              : hasCatalogRows
+                  ? 'La evidencia no alcanza · $reviewSummary'
+                  : 'La evidencia no alcanza para decidir',
+          tone: roles.warning,
+          primaryLabel: hasCompositeProposal || hasCatalogRows
+              ? 'Revisar catálogo'
+              : 'Buscar en catálogo',
+          primaryKey: Key('ocr-review-alternatives-${line.id}'),
+          onPrimary: canInspect && callbacks.onOpenCandidates != null
+              ? () => callbacks.onOpenCandidates!(line.id)
+              : null,
+          secondaryLabel: 'Reintentar IA',
+          secondaryKey: Key('ocr-review-retry-${line.id}'),
+          onSecondary: canInspect && callbacks.onRetryLine != null
+              ? () => callbacks.onRetryLine!(line.id)
               : null,
         );
 
@@ -1573,12 +1660,12 @@ class _DecisionCell extends StatelessWidget {
                 const SizedBox(width: _OcrProductReviewWorkspaceState.space1),
                 IconButton(
                   key: Key('ocr-review-alternatives-${line.id}'),
-                  onPressed: enabled && callbacks.onOpenCandidates != null
+                  onPressed: canInspect && callbacks.onOpenCandidates != null
                       ? () => callbacks.onOpenCandidates!(line.id)
                       : null,
-                  tooltip: line.candidates.length > 1
-                      ? 'Ver los ${line.candidates.length} parecidos'
-                      : 'Ver el parecido y buscar otro',
+                  tooltip: _catalogReviewSummary(line).isEmpty
+                      ? 'Buscar otro producto en el catálogo'
+                      : 'Revisar catálogo: ${_catalogReviewSummary(line)}',
                   iconSize: 16,
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
@@ -1588,6 +1675,20 @@ class _DecisionCell extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.more_horiz),
                 ),
+                if (line.inspectionOnly && callbacks.onRetryLine != null)
+                  IconButton(
+                    key: Key('ocr-review-retry-${line.id}'),
+                    onPressed: () => callbacks.onRetryLine!(line.id),
+                    tooltip: 'Reintentar investigación IA',
+                    iconSize: 16,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 26,
+                      minHeight: 26,
+                    ),
+                    icon: const Icon(Icons.refresh),
+                  ),
               ],
             ),
           ],
@@ -1626,7 +1727,7 @@ class _DecisionActions extends StatelessWidget {
       children: [
         Text(
           message,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelSmall?.copyWith(color: tone.accent),
         ),
@@ -2014,6 +2115,7 @@ class _WorkspaceFooter extends StatelessWidget {
     required this.onPrimary,
     required this.touch,
     required this.readOnly,
+    this.readOnlyReason,
   });
 
   final String primaryLabel;
@@ -2027,13 +2129,16 @@ class _WorkspaceFooter extends StatelessWidget {
   final VoidCallback? onPrimary;
   final bool touch;
   final bool readOnly;
+  final String? readOnlyReason;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
     final reason = readOnly
-        ? 'Creando productos. Espera a que termine antes de volver.'
+        ? (readOnlyReason?.trim().isNotEmpty == true
+            ? readOnlyReason!.trim()
+            : 'Operación en curso. Espera a que termine antes de volver.')
         : !primaryEnabled
             ? (primaryBlockingReason ?? progress.nextStep)
             : progress.nextStep;
@@ -2366,6 +2471,8 @@ class _StatusPresentation {
         const _StatusPresentation('Buscando', VbStatusTone.info),
       OcrProductReviewStatus.ready =>
         const _StatusPresentation('Por decidir', VbStatusTone.warning),
+      OcrProductReviewStatus.abstained =>
+        const _StatusPresentation('Revisión necesaria', VbStatusTone.warning),
       OcrProductReviewStatus.noCandidates =>
         const _StatusPresentation('Sin coincidencia', VbStatusTone.info),
       OcrProductReviewStatus.failed =>

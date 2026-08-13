@@ -10,13 +10,13 @@ import {
   type JsonValue,
   type LogicalModelRole,
 } from "../contracts.ts";
-import { type AgentModelProvider, ProviderError } from "./provider.ts";
+import { type AgentModelProvider, ProviderError, requiredToolNameFor } from "./provider.ts";
 import { discardProviderBody, readProviderJson } from "./http.ts";
 
 const defaultModels: Readonly<Record<LogicalModelRole, string>> = {
-  fast: "gemini-2.5-flash-lite",
-  deep: "gemini-2.5-flash",
-  vision: "gemini-2.5-flash",
+  fast: "gemini-3.6-flash",
+  deep: "gemini-3.1-pro-preview",
+  vision: "gemini-3.6-flash",
 };
 
 export interface GeminiAgentProviderConfig {
@@ -48,16 +48,18 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
   );
   const modelByRole = config.modelByRole ?? defaultModels;
   const allowedModels = new Set(
-    config.allowedModels ?? ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    config.allowedModels ?? ["gemini-3.6-flash", "gemini-3.1-pro-preview"],
   );
   assertServerModelConfiguration(modelByRole, allowedModels);
 
   return {
     id: "gemini",
+    modelFor: (role) => modelByRole[role],
     async generate(request, signal) {
       const model = modelByRole[request.modelRole];
       const endpoint = new URL(`models/${encodeURIComponent(model)}:generateContent`, endpointBase);
       const continuation = decodeGeminiContinuation(request.continuationToken);
+      const requiredToolName = requiredToolNameFor(request);
       const payload = {
         systemInstruction: { parts: [{ text: request.systemInstruction }] },
         contents: geminiContents(request.messages, continuation.groups),
@@ -68,6 +70,14 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
             parametersJsonSchema: tool.parameters,
           })),
         }],
+        toolConfig: requiredToolName
+          ? {
+            functionCallingConfig: {
+              mode: "ANY",
+              allowedFunctionNames: [requiredToolName],
+            },
+          }
+          : undefined,
         generationConfig: { maxOutputTokens: request.maxOutputTokens },
       };
 
@@ -83,7 +93,7 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
           signal,
         });
       } catch (_) {
-        throw new ProviderError("provider_unavailable", 503, true);
+        throw new ProviderError("provider_unavailable", 503, !signal.aborted);
       }
 
       if (!response.ok) {
@@ -241,12 +251,31 @@ function normalizeGeminiResponse(
 function parseGeminiUsage(value: unknown): AgentUsage {
   if (!value || typeof value !== "object" || Array.isArray(value)) return emptyUsage();
   const usage = value as Record<string, unknown>;
-  const inputTokens = safeTokenCount(usage.promptTokenCount);
-  const outputTokens = safeTokenCount(usage.candidatesTokenCount);
+  // Gemini reports tool-schema/tool-use prompt tokens separately from the
+  // ordinary prompt and thinking tokens separately from visible candidates.
+  // Both are billable: tool-use prompt tokens are input, while thinking tokens
+  // are output. Keep the ledger decomposition exact so pricing and quota
+  // checks do not reject a perfectly valid thinking-model response.
+  const inputTokens = safeTokenSum(
+    safeTokenCount(usage.promptTokenCount),
+    safeTokenCount(usage.toolUsePromptTokenCount),
+  );
+  let outputTokens = safeTokenSum(
+    safeTokenCount(usage.candidatesTokenCount),
+    safeTokenCount(usage.thoughtsTokenCount),
+  );
+  const reportedTotal = safeTokenCount(usage.totalTokenCount);
+  const componentTotal = safeTokenSum(inputTokens, outputTokens);
+  // A future Gemini metadata revision may expose another internal token class
+  // before this adapter knows its name. Preserve total billed usage and charge
+  // any positive residual at the more conservative output rate.
+  if (reportedTotal > componentTotal) {
+    outputTokens = safeTokenSum(outputTokens, reportedTotal - componentTotal);
+  }
   return {
     inputTokens,
     outputTokens,
-    totalTokens: safeTokenCount(usage.totalTokenCount) || inputTokens + outputTokens,
+    totalTokens: safeTokenSum(inputTokens, outputTokens),
   };
 }
 
@@ -292,6 +321,14 @@ function requireValue(value: string, label: string): string {
 
 function safeTokenCount(value: unknown): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+function safeTokenSum(left: number, right: number): number {
+  const total = left + right;
+  if (!Number.isSafeInteger(total) || total < 0) {
+    throw new ProviderError("provider_invalid_response", 502, false);
+  }
+  return total;
 }
 
 function encodeContinuation(value: GeminiContinuationState): string {

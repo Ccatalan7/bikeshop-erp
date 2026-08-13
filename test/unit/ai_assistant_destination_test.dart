@@ -4,12 +4,10 @@ import 'package:vinabike_erp/shared/services/right_toolbar_service.dart';
 
 void main() {
   group('AIAssistantDestination registry', () {
-    test('every registered workspace route is an aggregate surface', () {
-      // The assistant used to deep-link into editors: a card labelled "Abrir
-      // trabajo" dropped the operator into the job form, and "Abrir producto"
-      // into the product form, on an application that runs against
-      // production. No registered route may end in an editor segment or carry
-      // a record id.
+    test('the aggregate registry remains free of record identifiers', () {
+      // Bare destinations stay aggregate. Exact record navigation lives in a
+      // separate closed registry and never turns a model-authored string into
+      // a route.
       for (final route
           in AIAssistantDestinationResolver.registeredWorkspaceRoutes) {
         expect(route, startsWith('/'));
@@ -31,7 +29,7 @@ void main() {
       }
     });
 
-    test('the six card surfaces plus Tareas are the whole reachable set', () {
+    test('the eight card surfaces plus Tareas are the whole reachable set', () {
       expect(
         AIAssistantDestinationResolver.registeredWorkspaceRoutes,
         <String>{
@@ -41,6 +39,8 @@ void main() {
           '/sales/invoices',
           '/purchases',
           '/inventory/products',
+          '/accounting/expenses',
+          '/chat',
         },
       );
       expect(
@@ -110,6 +110,113 @@ void main() {
               'effects',
         );
       }
+    });
+
+    test('verified entity references derive only canonical detail routes', () {
+      const ids = <AIAssistantEntityKind, String>{
+        AIAssistantEntityKind.workshopJob:
+            '11111111-1111-4111-8111-111111111111',
+        AIAssistantEntityKind.customer: '22222222-2222-4222-8222-222222222222',
+        AIAssistantEntityKind.salesInvoice:
+            '33333333-3333-4333-8333-333333333333',
+        AIAssistantEntityKind.supplier: '44444444-4444-4444-8444-444444444444',
+        AIAssistantEntityKind.purchaseInvoice:
+            '55555555-5555-4555-8555-555555555555',
+        AIAssistantEntityKind.expense: '66666666-6666-4666-8666-666666666666',
+        AIAssistantEntityKind.conversation:
+            '77777777-7777-4777-8777-777777777777',
+      };
+      const expectedRoutes = <AIAssistantEntityKind, String>{
+        AIAssistantEntityKind.workshopJob:
+            '/taller/pegas/11111111-1111-4111-8111-111111111111',
+        AIAssistantEntityKind.customer:
+            '/clientes/22222222-2222-4222-8222-222222222222',
+        AIAssistantEntityKind.salesInvoice:
+            '/sales/invoices/33333333-3333-4333-8333-333333333333',
+        AIAssistantEntityKind.supplier:
+            '/purchases/suppliers/44444444-4444-4444-8444-444444444444',
+        AIAssistantEntityKind.purchaseInvoice:
+            '/purchases/55555555-5555-4555-8555-555555555555',
+        AIAssistantEntityKind.expense:
+            '/accounting/expenses/66666666-6666-4666-8666-666666666666',
+        AIAssistantEntityKind.conversation:
+            '/chat?conversation=77777777-7777-4777-8777-777777777777',
+      };
+
+      for (final entry in ids.entries) {
+        final routes = <String>[];
+        final tools = <ToolbarTool>[];
+        final ref = AIAssistantEntityRef.verified(
+          kind: entry.key,
+          id: entry.value.toUpperCase(),
+        );
+        final resolver = AIAssistantDestinationResolver(
+          navigateWorkspace: routes.add,
+          openToolbarTool: tools.add,
+        );
+
+        expect(
+          resolver.dispatch(ref.destination, entityRef: ref),
+          isTrue,
+        );
+        expect(routes, <String>[expectedRoutes[entry.key]!]);
+        expect(tools, isEmpty);
+      }
+    });
+
+    test('a product reference preserves the safe aggregate fallback', () {
+      final routes = <String>[];
+      final resolver = AIAssistantDestinationResolver(
+        navigateWorkspace: routes.add,
+        openToolbarTool: (_) => fail('must not open a toolbar tool'),
+      );
+      final ref = AIAssistantEntityRef.verified(
+        kind: AIAssistantEntityKind.product,
+        id: '66666666-6666-4666-8666-666666666666',
+      );
+
+      expect(
+        resolver.dispatch(
+          AIAssistantDestination.inventoryProducts,
+          entityRef: ref,
+        ),
+        isTrue,
+      );
+      expect(routes, <String>['/inventory/products']);
+      expect(ref.detailWorkspaceRoute, isNull);
+    });
+
+    test('mismatched references fail closed without aggregate fallback', () {
+      final routes = <String>[];
+      final tools = <ToolbarTool>[];
+      final resolver = AIAssistantDestinationResolver(
+        navigateWorkspace: routes.add,
+        openToolbarTool: tools.add,
+      );
+      final ref = AIAssistantEntityRef.verified(
+        kind: AIAssistantEntityKind.customer,
+        id: '77777777-7777-4777-8777-777777777777',
+      );
+
+      expect(
+        resolver.dispatch(
+          AIAssistantDestination.workshopJobs,
+          entityRef: ref,
+        ),
+        isFalse,
+      );
+      expect(routes, isEmpty);
+      expect(tools, isEmpty);
+    });
+
+    test('non-UUID entity identifiers cannot enter the card contract', () {
+      expect(
+        () => AIAssistantEntityRef.verified(
+          kind: AIAssistantEntityKind.customer,
+          id: '../../admin',
+        ),
+        throwsArgumentError,
+      );
     });
   });
 }

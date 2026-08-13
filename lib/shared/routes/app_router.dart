@@ -11,6 +11,7 @@ import '../pages/auth_callback_page.dart';
 import '../pages/app_link_landing_page.dart';
 import '../../modules/mail/pages/mail_inbox_page.dart' as mail;
 import '../../modules/storage/pages/storage_page.dart' as storage;
+import '../../modules/hr/payroll/payment_workspace/payroll_payment_workspace_models.dart';
 import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../../public_store/widgets/storefront_navigation_guard_scope.dart';
 import '../services/auth_service.dart';
@@ -2756,8 +2757,13 @@ class AppRouter {
                   // A deferred class cannot participate in a const expression.
                   // ignore: prefer_const_constructors
                   MainLayout(
-                title: 'Conciliar nóminas',
-                child: erp.PayrollReconciliationPage(),
+                title: 'Importar cartola',
+                child: erp.PayrollReconciliationPage(
+                  onPaymentHandoff:
+                      state.extra is PayrollPaymentWorkspaceHandoff
+                          ? state.extra as PayrollPaymentWorkspaceHandoff
+                          : null,
+                ),
               ),
             ),
           ),

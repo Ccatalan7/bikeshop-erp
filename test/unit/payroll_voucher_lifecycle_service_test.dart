@@ -178,6 +178,57 @@ void main() {
     expect(service.supportsVersionedPayrollCommands, isTrue);
   });
 
+  test('additional concepts exclude the complete salary account branch',
+      () async {
+    final database = _LifecycleDatabaseService()
+      ..expenseAccountRows.addAll(<Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'salary-root',
+          'code': '6101',
+          'name': 'Sueldos',
+          'type': 'expense',
+          'parent_id': null,
+          'is_active': true,
+        },
+        <String, dynamic>{
+          'id': 'salary-person',
+          'code': '6101-01',
+          'name': 'Salario individual',
+          'type': 'expense',
+          'parent_id': 'salary-root',
+          'is_active': true,
+        },
+        <String, dynamic>{
+          'id': 'salary-sibling',
+          'code': '6101-02',
+          'name': 'Otro salario',
+          'type': 'expense',
+          'parent_id': 'salary-root',
+          'is_active': true,
+        },
+        <String, dynamic>{
+          'id': 'workshop-supplies',
+          'code': '5101',
+          'name': 'Consumibles de taller',
+          'type': 'expense',
+          'parent_id': null,
+          'is_active': true,
+        },
+      ])
+      ..employeeSalaryAccountRows.add(
+        <String, dynamic>{'salary_account_id': 'salary-person'},
+      );
+    final service = PayrollVoucherService(database);
+    addTearDown(() {
+      service.dispose();
+      database.dispose();
+    });
+
+    final accounts = await service.getPayrollAdditionalExpenseAccounts();
+
+    expect(accounts.map((row) => row['id']), <String>['workshop-supplies']);
+  });
+
   test('open-week reader filters archive states at the database boundary',
       () async {
     final database = _LifecycleDatabaseService()
@@ -827,6 +878,12 @@ class _LifecycleDatabaseService extends DatabaseService {
       <Map<String, dynamic>>[];
   final List<Map<String, dynamic>> employeeAdvanceRows =
       <Map<String, dynamic>>[];
+  final List<Map<String, dynamic>> expenseAccountRows =
+      <Map<String, dynamic>>[];
+  final List<Map<String, dynamic>> employeeSalaryAccountRows =
+      <Map<String, dynamic>>[];
+  final List<Map<String, dynamic>> lineSalaryAccountRows =
+      <Map<String, dynamic>>[];
   bool returnMalformedResult = false;
   bool rejectReconciliationVersionColumn = false;
   bool omitReconciliationVersion = false;
@@ -873,7 +930,21 @@ class _LifecycleDatabaseService extends DatabaseService {
     }
     if (table == 'payroll_voucher_lines') {
       lineSelectCalls.add(table);
-      return const <Map<String, dynamic>>[];
+      return selectColumns == 'salary_account_id'
+          ? lineSalaryAccountRows
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList(growable: false)
+          : const <Map<String, dynamic>>[];
+    }
+    if (table == 'accounts') {
+      return expenseAccountRows
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+    }
+    if (table == 'employees') {
+      return employeeSalaryAccountRows
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
     }
     if (table == 'expense_payments') {
       return expensePaymentRows

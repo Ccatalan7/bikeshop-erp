@@ -1,0 +1,1088 @@
+{
+  "source": "sanitized_category_identity_regression_fixture",
+  "privacy": {
+    "synthetic_tenant_id": true
+  },
+  "categories": [
+    {
+      "id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "parent_id": null,
+      "level": 0,
+      "name": "Accesorios",
+      "full_path": "Accesorios",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "f4bbf969-a871-4e49-80ce-7d50420c95d2",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Adaptadores",
+      "full_path": "Accesorios / Adaptadores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "7f348bb9-047f-481f-a90b-9b07bebbbd58",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Asientos",
+      "full_path": "Accesorios / Asientos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "47b4e4e2-df85-481e-b4a8-f362c4912630",
+      "parent_id": "7f348bb9-047f-481f-a90b-9b07bebbbd58",
+      "level": 2,
+      "name": "Adaptadores de tija",
+      "full_path": "Accesorios / Asientos / Adaptadores de tija",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "8cc6a550-6784-4fb3-8392-b7ac9c68b8ad",
+      "parent_id": "7f348bb9-047f-481f-a90b-9b07bebbbd58",
+      "level": 2,
+      "name": "Asiento",
+      "full_path": "Accesorios / Asientos / Asiento",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "b5342d08-78b3-452c-8d70-032c07691de6",
+      "parent_id": "7f348bb9-047f-481f-a90b-9b07bebbbd58",
+      "level": 2,
+      "name": "Collerín",
+      "full_path": "Accesorios / Asientos / Collerín",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "38bd93bf-0539-41e7-b576-17c1d582cae9",
+      "parent_id": "7f348bb9-047f-481f-a90b-9b07bebbbd58",
+      "level": 2,
+      "name": "Cubre Asientos",
+      "full_path": "Accesorios / Asientos / Cubre Asientos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "9a055a2e-25cc-46a3-b30a-7311936914e6",
+      "parent_id": "7f348bb9-047f-481f-a90b-9b07bebbbd58",
+      "level": 2,
+      "name": "Tija",
+      "full_path": "Accesorios / Asientos / Tija",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "7ed7105d-fbcb-4bb0-bbb7-d299b12c70fd",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Audífonos",
+      "full_path": "Accesorios / Audífonos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "1a0b6b0a-bbc4-4646-82b7-11c162133508",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Bombines",
+      "full_path": "Accesorios / Bombines",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "a83d50dc-8b64-402f-ae6b-7f775e6b6493",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Botella de Agua",
+      "full_path": "Accesorios / Botella de Agua",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "8a4b2c89-b47f-472d-936d-933243e7d92b",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Campanillas",
+      "full_path": "Accesorios / Campanillas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "7a5d8a59-00e8-4020-99a6-00beb826ba74",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Canastos",
+      "full_path": "Accesorios / Canastos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "883223fb-4f80-4999-9459-33e8880e1fda",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Candados",
+      "full_path": "Accesorios / Candados",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "b7cfa231-a149-4fca-89d2-d6c179cb1c44",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Cascos",
+      "full_path": "Accesorios / Cascos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "3b631aaa-3c0e-4e49-8390-0dc68c2cc695",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Ciclocomputadores",
+      "full_path": "Accesorios / Ciclocomputadores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "8c5d15a3-df4b-4bc9-85ec-caa68c512252",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Cinta Manillar",
+      "full_path": "Accesorios / Cinta Manillar",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "e3396e97-16b3-4918-bbcd-381b5704fdba",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Cuerdas",
+      "full_path": "Accesorios / Cuerdas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "d37ad820-19d5-45a7-a790-d054c255a51c",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Fundas",
+      "full_path": "Accesorios / Fundas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "abdf8d61-59e5-4323-8847-08d76eca2e03",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Guantes",
+      "full_path": "Accesorios / Guantes",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "0d065d6a-b6c1-41ab-b5e0-3d30e9b810d6",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Indumentaria",
+      "full_path": "Accesorios / Indumentaria",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "a6d3ff0c-0b6d-4092-a9d8-b82a2e2a082d",
+      "parent_id": "0d065d6a-b6c1-41ab-b5e0-3d30e9b810d6",
+      "level": 2,
+      "name": "Jerseys",
+      "full_path": "Accesorios / Indumentaria / Jerseys",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "c48253d3-b480-4775-89c1-ffb42580c573",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Lentes",
+      "full_path": "Accesorios / Lentes",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "181bae77-c4d8-4bca-bc92-c00543ef7653",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Luces",
+      "full_path": "Accesorios / Luces",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "dda209b1-75a7-4e28-ab71-2fb370284b95",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Mochilas",
+      "full_path": "Accesorios / Mochilas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "239b75ba-0722-4b21-81b1-f9fdb17caa5e",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Pedales",
+      "full_path": "Accesorios / Pedales",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "15f7dc25-4376-4198-befb-5420be328405",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Poleras",
+      "full_path": "Accesorios / Poleras",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "060885f4-653e-4cdc-9b82-f1b223221439",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Porta Caramagiola",
+      "full_path": "Accesorios / Porta Caramagiola",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "f62b3ad7-38a8-4807-8d09-92be3ffe4e3e",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Protectores",
+      "full_path": "Accesorios / Protectores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "c5c50c6d-6fb0-4e29-a0ec-3cfb026cb487",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Puños",
+      "full_path": "Accesorios / Puños",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "f47bb8f9-edb9-486e-a41c-a86fd304627d",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Seguridad",
+      "full_path": "Accesorios / Seguridad",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "88b9a8f1-ac99-47e2-a093-3be6dea676e6",
+      "parent_id": "f47bb8f9-edb9-486e-a41c-a86fd304627d",
+      "level": 2,
+      "name": "Reflectantes",
+      "full_path": "Accesorios / Seguridad / Reflectantes",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "c098b3b0-5e7b-4dee-935a-6fe809b169ae",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Soporte Celular",
+      "full_path": "Accesorios / Soporte Celular",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "ec840c98-11a5-454e-8083-494a1e91b613",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Souvenirs",
+      "full_path": "Accesorios / Souvenirs",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "4455f7bd-ff4b-4846-bb0e-ef0a2e9614ee",
+      "parent_id": "164e46a9-3bfc-47d9-85ff-e911d96adacd",
+      "level": 1,
+      "name": "Tapabarros",
+      "full_path": "Accesorios / Tapabarros",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "ea268320-69c6-48c2-977d-20b5255907dd",
+      "parent_id": null,
+      "level": 0,
+      "name": "BMX",
+      "full_path": "BMX",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "eb399038-eede-45f2-ba5d-2e8f2b53b20e",
+      "parent_id": "ea268320-69c6-48c2-977d-20b5255907dd",
+      "level": 1,
+      "name": "Pedalines",
+      "full_path": "BMX / Pedalines",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "parent_id": null,
+      "level": 0,
+      "name": "Componentes",
+      "full_path": "Componentes",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "46a51a87-aa3a-430c-a6e1-af48c8d74541",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Cambios",
+      "full_path": "Componentes / Cambios",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "3542eecc-7026-41b7-ac6a-f441525108db",
+      "parent_id": "46a51a87-aa3a-430c-a6e1-af48c8d74541",
+      "level": 2,
+      "name": "Desviadores",
+      "full_path": "Componentes / Cambios / Desviadores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "b9d588a3-a0ea-43ad-acf1-b9713fcd1cb6",
+      "parent_id": "3542eecc-7026-41b7-ac6a-f441525108db",
+      "level": 3,
+      "name": "Desviador Trasero",
+      "full_path": "Componentes / Cambios / Desviadores / Desviador Trasero",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "bcb31c9c-1e42-4386-badb-2890dccd17ce",
+      "parent_id": "3542eecc-7026-41b7-ac6a-f441525108db",
+      "level": 3,
+      "name": "Desviadores delanteros",
+      "full_path": "Componentes / Cambios / Desviadores / Desviadores delanteros",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "505cd451-9ad4-44a0-b743-98c2df35577f",
+      "parent_id": "46a51a87-aa3a-430c-a6e1-af48c8d74541",
+      "level": 2,
+      "name": "Postiza",
+      "full_path": "Componentes / Cambios / Postiza",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "27e9a552-a10e-44d4-b03a-9fad3b610999",
+      "parent_id": "46a51a87-aa3a-430c-a6e1-af48c8d74541",
+      "level": 2,
+      "name": "Regulador tensión",
+      "full_path": "Componentes / Cambios / Regulador tensión",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "3162c140-e420-4865-b14f-f72ef1efdbf6",
+      "parent_id": "46a51a87-aa3a-430c-a6e1-af48c8d74541",
+      "level": 2,
+      "name": "Roldanas",
+      "full_path": "Componentes / Cambios / Roldanas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "ab30e4e2-a03f-42b3-9a32-22d6ec8495ce",
+      "parent_id": "46a51a87-aa3a-430c-a6e1-af48c8d74541",
+      "level": 2,
+      "name": "Shifters",
+      "full_path": "Componentes / Cambios / Shifters",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "896bf644-b14d-4e10-954b-4307d2aaff56",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Dirección",
+      "full_path": "Componentes / Dirección",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "fb83ce92-93cf-446a-96cf-0c84c2546803",
+      "parent_id": "896bf644-b14d-4e10-954b-4307d2aaff56",
+      "level": 2,
+      "name": "Araña",
+      "full_path": "Componentes / Dirección / Araña",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "8b14df46-db7a-4ea9-a43b-881e3c889990",
+      "parent_id": "896bf644-b14d-4e10-954b-4307d2aaff56",
+      "level": 2,
+      "name": "Espaciadores",
+      "full_path": "Componentes / Dirección / Espaciadores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "85c21c7e-3791-4795-9aba-ef30f9b5a236",
+      "parent_id": "896bf644-b14d-4e10-954b-4307d2aaff56",
+      "level": 2,
+      "name": "Horquillas",
+      "full_path": "Componentes / Dirección / Horquillas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "eea4e61b-4038-407f-a715-9f11ba477c13",
+      "parent_id": "896bf644-b14d-4e10-954b-4307d2aaff56",
+      "level": 2,
+      "name": "Juego de dirección",
+      "full_path": "Componentes / Dirección / Juego de dirección",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "226f1f3e-8fe6-4dbd-bf89-6c85b8111e73",
+      "parent_id": "896bf644-b14d-4e10-954b-4307d2aaff56",
+      "level": 2,
+      "name": "Manubrios",
+      "full_path": "Componentes / Dirección / Manubrios",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "67d3ea45-aa2a-4137-8178-e73a853f76da",
+      "parent_id": "896bf644-b14d-4e10-954b-4307d2aaff56",
+      "level": 2,
+      "name": "Rodamientos",
+      "full_path": "Componentes / Dirección / Rodamientos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "9403da23-f3e7-4790-8f28-443dc4c3a40d",
+      "parent_id": "896bf644-b14d-4e10-954b-4307d2aaff56",
+      "level": 2,
+      "name": "Tee",
+      "full_path": "Componentes / Dirección / Tee",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Frenos",
+      "full_path": "Componentes / Frenos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "3ca390bc-41e7-464e-91f6-06902ff6afdf",
+      "parent_id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "level": 2,
+      "name": "Adaptadores",
+      "full_path": "Componentes / Frenos / Adaptadores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "095e20f5-3036-4673-ad94-148ec93fa267",
+      "parent_id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "level": 2,
+      "name": "Calipers",
+      "full_path": "Componentes / Frenos / Calipers",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "2feb2f2e-5cd4-478b-8883-6c0dfa1cea02",
+      "parent_id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "level": 2,
+      "name": "Frenos Hidráulicos",
+      "full_path": "Componentes / Frenos / Frenos Hidráulicos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "3add5641-731a-430d-8af0-28ccbc9b5c0d",
+      "parent_id": "2feb2f2e-5cd4-478b-8883-6c0dfa1cea02",
+      "level": 3,
+      "name": "Fittings Hidráulicos",
+      "full_path": "Componentes / Frenos / Frenos Hidráulicos / Fittings Hidráulicos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "cf9a2a0d-2048-4534-82a2-fea581c01cfb",
+      "parent_id": "2feb2f2e-5cd4-478b-8883-6c0dfa1cea02",
+      "level": 3,
+      "name": "Frenos hidráulicos completos",
+      "full_path": "Componentes / Frenos / Frenos Hidráulicos / Frenos hidráulicos completos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "43e44882-0e88-494d-8878-b30103570a17",
+      "parent_id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "level": 2,
+      "name": "Manillas",
+      "full_path": "Componentes / Frenos / Manillas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "7c580490-496d-4c12-b0ce-1239466b9359",
+      "parent_id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "level": 2,
+      "name": "Pastillas",
+      "full_path": "Componentes / Frenos / Pastillas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "96b6ece2-f40a-4919-b79c-a5939db65b3d",
+      "parent_id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "level": 2,
+      "name": "Regulador tensión frenos",
+      "full_path": "Componentes / Frenos / Regulador tensión frenos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "85db0f6c-b296-401f-9e9b-ec028eefa6bf",
+      "parent_id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "level": 2,
+      "name": "Rotor BMX",
+      "full_path": "Componentes / Frenos / Rotor BMX",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "5bbe2944-5355-40a5-a581-70790a525579",
+      "parent_id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "level": 2,
+      "name": "Rotores",
+      "full_path": "Componentes / Frenos / Rotores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "2fa3355b-d06d-429b-81cd-6537ed1267d7",
+      "parent_id": "5ef32804-4d13-44d6-955d-70d6ff27a85e",
+      "level": 2,
+      "name": "V-Brake",
+      "full_path": "Componentes / Frenos / V-Brake",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "406eb822-e49c-43d2-b4f1-df92cc50fbaf",
+      "parent_id": "2fa3355b-d06d-429b-81cd-6537ed1267d7",
+      "level": 3,
+      "name": "Gomas V-Brake",
+      "full_path": "Componentes / Frenos / V-Brake / Gomas V-Brake",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "a3a26955-9fd2-475f-a60e-c7578eb9ea40",
+      "parent_id": "2fa3355b-d06d-429b-81cd-6537ed1267d7",
+      "level": 3,
+      "name": "Herraduras",
+      "full_path": "Componentes / Frenos / V-Brake / Herraduras",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "c8f1d7e1-7f53-41b4-8065-e3778ec04696",
+      "parent_id": "2fa3355b-d06d-429b-81cd-6537ed1267d7",
+      "level": 3,
+      "name": "Noodles",
+      "full_path": "Componentes / Frenos / V-Brake / Noodles",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "d86c7842-3a45-47f6-9118-b33072c408b0",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Fundas y piolas",
+      "full_path": "Componentes / Fundas y piolas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "d965fdf6-f1e5-4664-92ba-487ad6622af9",
+      "parent_id": "d86c7842-3a45-47f6-9118-b33072c408b0",
+      "level": 2,
+      "name": "Terminales y topes",
+      "full_path": "Componentes / Fundas y piolas / Terminales y topes",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "ef796c68-07dc-4197-b0ab-4f82b2621101",
+      "parent_id": "d86c7842-3a45-47f6-9118-b33072c408b0",
+      "level": 2,
+      "name": "Cambios",
+      "full_path": "Componentes / Fundas y piolas / Cambios",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "956f36cb-cae2-445c-854a-9c70179070b1",
+      "parent_id": "d86c7842-3a45-47f6-9118-b33072c408b0",
+      "level": 2,
+      "name": "Frenos",
+      "full_path": "Componentes / Fundas y piolas / Frenos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "2ec18220-2401-48c8-96bc-7454f11cda3e",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Groupset",
+      "full_path": "Componentes / Groupset",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "298cf77a-7bc2-4716-979b-eff6ad1cc54b",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Pernos/Tornillos/Otros",
+      "full_path": "Componentes / Pernos/Tornillos/Otros",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "94e459ec-6124-466b-9bce-79679e1f4a05",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Rueda Estabilizadora",
+      "full_path": "Componentes / Rueda Estabilizadora",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Ruedas",
+      "full_path": "Componentes / Ruedas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "12f49722-e490-4577-83b6-c99f5c6347b4",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Agujas",
+      "full_path": "Componentes / Ruedas / Agujas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "f8f5bf86-0ec9-47e7-9c8c-d05a28ba36a4",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Cámaras",
+      "full_path": "Componentes / Ruedas / Cámaras",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "e2660380-1cb6-4a13-9c20-452039dfa0b8",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Cámaras Anti-Pinchazo",
+      "full_path": "Componentes / Ruedas / Cámaras Anti-Pinchazo",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "aa02fb21-d0f0-4bdd-a334-d18dbcff82f6",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Cubre Cámara",
+      "full_path": "Componentes / Ruedas / Cubre Cámara",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "072f9bc7-d5c7-4c31-8ec9-965099aefbab",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Llantas",
+      "full_path": "Componentes / Ruedas / Llantas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "164a2269-4d0b-419b-af48-0098f0aae9d3",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Mazas",
+      "full_path": "Componentes / Ruedas / Mazas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "3e618617-bbc1-4cf5-8220-4258f1e83981",
+      "parent_id": "164a2269-4d0b-419b-af48-0098f0aae9d3",
+      "level": 3,
+      "name": "Ejes",
+      "full_path": "Componentes / Ruedas / Mazas / Ejes",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "612afca0-c8e4-48e2-b81c-87d4f8cf3560",
+      "parent_id": "3e618617-bbc1-4cf5-8220-4258f1e83981",
+      "level": 4,
+      "name": "Conos",
+      "full_path": "Componentes / Ruedas / Mazas / Ejes / Conos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "7ac84878-c86e-4ae2-964e-533d7a021a9c",
+      "parent_id": "3e618617-bbc1-4cf5-8220-4258f1e83981",
+      "level": 4,
+      "name": "Contratuerca",
+      "full_path": "Componentes / Ruedas / Mazas / Ejes / Contratuerca",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "6f8d526a-11cb-46af-9860-96ab9d8839c6",
+      "parent_id": "164a2269-4d0b-419b-af48-0098f0aae9d3",
+      "level": 3,
+      "name": "Maza",
+      "full_path": "Componentes / Ruedas / Mazas / Maza",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "8897ffbe-beb0-400a-a751-5c08d8d6718a",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Neumáticos",
+      "full_path": "Componentes / Ruedas / Neumáticos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "504ecf6d-ef37-4333-84cd-e9ddc1815187",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Niples",
+      "full_path": "Componentes / Ruedas / Niples",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "0e365f76-54a5-4224-8551-cb5d1d8dc539",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Rayos",
+      "full_path": "Componentes / Ruedas / Rayos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "407c429d-4e24-4744-8189-441cf865dc05",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Rodamientos",
+      "full_path": "Componentes / Ruedas / Rodamientos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "365fb7c6-7fca-4dcb-814b-b3fa96b493fc",
+      "parent_id": "046e8394-4f23-4cd3-b5bd-816a06168b87",
+      "level": 2,
+      "name": "Tubeless",
+      "full_path": "Componentes / Ruedas / Tubeless",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "e2014395-26a3-4fa0-8b1b-e2d049c6a0df",
+      "parent_id": "365fb7c6-7fca-4dcb-814b-b3fa96b493fc",
+      "level": 3,
+      "name": "Líquido Tubeless",
+      "full_path": "Componentes / Ruedas / Tubeless / Líquido Tubeless",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "85b6823c-f892-4541-be22-016c10e25768",
+      "parent_id": "365fb7c6-7fca-4dcb-814b-b3fa96b493fc",
+      "level": 3,
+      "name": "O'rings",
+      "full_path": "Componentes / Ruedas / Tubeless / O'rings",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "63d78177-44b6-4373-9784-65e66d06de6f",
+      "parent_id": "365fb7c6-7fca-4dcb-814b-b3fa96b493fc",
+      "level": 3,
+      "name": "Tripas Tubeless",
+      "full_path": "Componentes / Ruedas / Tubeless / Tripas Tubeless",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "14d2d632-1f5f-406c-9a7c-16f55a5fc1ae",
+      "parent_id": "365fb7c6-7fca-4dcb-814b-b3fa96b493fc",
+      "level": 3,
+      "name": "Válvula Tubeless",
+      "full_path": "Componentes / Ruedas / Tubeless / Válvula Tubeless",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "f95fd651-d602-47a7-8fb3-c6a931a2930b",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Shock",
+      "full_path": "Componentes / Shock",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "d5d3b289-5c93-4871-a260-df6b572444ed",
+      "parent_id": "5b73715d-cbf1-4c23-9bd6-8eb903028b84",
+      "level": 1,
+      "name": "Transmisión",
+      "full_path": "Componentes / Transmisión",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "06f6e6d9-7c0e-40a6-a29e-1c59d94124f8",
+      "parent_id": "d5d3b289-5c93-4871-a260-df6b572444ed",
+      "level": 2,
+      "name": "Cadenas",
+      "full_path": "Componentes / Transmisión / Cadenas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "e3f64b07-4aa5-4905-9407-333b5bc01828",
+      "parent_id": "06f6e6d9-7c0e-40a6-a29e-1c59d94124f8",
+      "level": 3,
+      "name": "Guias de cadena",
+      "full_path": "Componentes / Transmisión / Cadenas / Guias de cadena",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "9307b385-e9f7-46d2-8906-e5da8ab15ad6",
+      "parent_id": "d5d3b289-5c93-4871-a260-df6b572444ed",
+      "level": 2,
+      "name": "Kits",
+      "full_path": "Componentes / Transmisión / Kits",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "7e136690-d37d-431b-b4ac-78ad42c4a28b",
+      "parent_id": "d5d3b289-5c93-4871-a260-df6b572444ed",
+      "level": 2,
+      "name": "Missinglink",
+      "full_path": "Componentes / Transmisión / Missinglink",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "b2dac9ee-db29-496e-9bd5-580bedd10418",
+      "parent_id": "d5d3b289-5c93-4871-a260-df6b572444ed",
+      "level": 2,
+      "name": "Motores",
+      "full_path": "Componentes / Transmisión / Motores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "fb1a9cab-d3cf-4536-be0c-4d33a54de21d",
+      "parent_id": "b2dac9ee-db29-496e-9bd5-580bedd10418",
+      "level": 3,
+      "name": "Cubetas",
+      "full_path": "Componentes / Transmisión / Motores / Cubetas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "73556edd-24ab-4403-8c50-6810fbf60cd9",
+      "parent_id": "b2dac9ee-db29-496e-9bd5-580bedd10418",
+      "level": 3,
+      "name": "Ejes de motor",
+      "full_path": "Componentes / Transmisión / Motores / Ejes de motor",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "52bd08ee-7cbc-4193-b363-c11960e7efbe",
+      "parent_id": "b2dac9ee-db29-496e-9bd5-580bedd10418",
+      "level": 3,
+      "name": "Motor",
+      "full_path": "Componentes / Transmisión / Motores / Motor",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "08384ffb-ab73-4b0f-80dc-7840f0552450",
+      "parent_id": "b2dac9ee-db29-496e-9bd5-580bedd10418",
+      "level": 3,
+      "name": "Rodamientos Motor",
+      "full_path": "Componentes / Transmisión / Motores / Rodamientos Motor",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+      "parent_id": "d5d3b289-5c93-4871-a260-df6b572444ed",
+      "level": 2,
+      "name": "Piñones",
+      "full_path": "Componentes / Transmisión / Piñones",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "2dbe4efb-6c8b-4037-99d9-469f219d1faa",
+      "parent_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+      "level": 3,
+      "name": "Cassette",
+      "full_path": "Componentes / Transmisión / Piñones / Cassette",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "39f15dd9-8c60-4b08-b67c-2e3316f8364e",
+      "parent_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+      "level": 3,
+      "name": "Espaciadores de Cassette",
+      "full_path": "Componentes / Transmisión / Piñones / Espaciadores de Cassette",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "38abee93-669d-431c-8cda-f84fd0fbbf99",
+      "parent_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+      "level": 3,
+      "name": "Fixie",
+      "full_path": "Componentes / Transmisión / Piñones / Fixie",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "b55d0c2b-f8ce-4e28-9db5-23b1bc76c0ed",
+      "parent_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+      "level": 3,
+      "name": "Freewheel",
+      "full_path": "Componentes / Transmisión / Piñones / Freewheel",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "14887542-ea3a-4c46-a660-4af72d1a1f83",
+      "parent_id": "d5d3b289-5c93-4871-a260-df6b572444ed",
+      "level": 2,
+      "name": "Volantes",
+      "full_path": "Componentes / Transmisión / Volantes",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "0aff4553-fd57-47de-ae81-b1d95a651fb3",
+      "parent_id": "14887542-ea3a-4c46-a660-4af72d1a1f83",
+      "level": 3,
+      "name": "Biela Americana",
+      "full_path": "Componentes / Transmisión / Volantes / Biela Americana",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "e4946fa9-7fdd-4be2-a5f8-86036c1a1249",
+      "parent_id": "14887542-ea3a-4c46-a660-4af72d1a1f83",
+      "level": 3,
+      "name": "Biela Izquierda",
+      "full_path": "Componentes / Transmisión / Volantes / Biela Izquierda",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "8348f729-5c61-4865-bd2a-cd7297999f02",
+      "parent_id": "14887542-ea3a-4c46-a660-4af72d1a1f83",
+      "level": 3,
+      "name": "Catalina",
+      "full_path": "Componentes / Transmisión / Volantes / Catalina",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "b6b33522-88bd-4f3a-95ec-9bba245d94e4",
+      "parent_id": "14887542-ea3a-4c46-a660-4af72d1a1f83",
+      "level": 3,
+      "name": "Coronas",
+      "full_path": "Componentes / Transmisión / Volantes / Coronas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "ef2583be-cde9-42d9-a48e-03263bdb6711",
+      "parent_id": "14887542-ea3a-4c46-a660-4af72d1a1f83",
+      "level": 3,
+      "name": "Volante",
+      "full_path": "Componentes / Transmisión / Volantes / Volante",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "5795d566-85ca-47fc-9983-6b611eab3c56",
+      "parent_id": null,
+      "level": 0,
+      "name": "Herramientas",
+      "full_path": "Herramientas",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "0930fe1b-9895-45c0-a648-a3c40d1d2b53",
+      "parent_id": "5795d566-85ca-47fc-9983-6b611eab3c56",
+      "level": 1,
+      "name": "Corta Cadena",
+      "full_path": "Herramientas / Corta Cadena",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "e7d8825a-a5a6-484c-a25c-8c47af54aad6",
+      "parent_id": null,
+      "level": 0,
+      "name": "Mantenimiento",
+      "full_path": "Mantenimiento",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "1f5e2a2b-77bd-4b78-856f-f0b722463c47",
+      "parent_id": "e7d8825a-a5a6-484c-a25c-8c47af54aad6",
+      "level": 1,
+      "name": "Abrillantadores/Renovadores",
+      "full_path": "Mantenimiento / Abrillantadores/Renovadores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "3c4ec160-de0e-4d90-ba79-cb07cd4a03a5",
+      "parent_id": "e7d8825a-a5a6-484c-a25c-8c47af54aad6",
+      "level": 1,
+      "name": "Desengrasantes",
+      "full_path": "Mantenimiento / Desengrasantes",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "c237112a-0210-4814-87e9-578e91837a6b",
+      "parent_id": "e7d8825a-a5a6-484c-a25c-8c47af54aad6",
+      "level": 1,
+      "name": "Grasa",
+      "full_path": "Mantenimiento / Grasa",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "6154337f-1da2-43af-9fd3-9c3095c42faf",
+      "parent_id": "e7d8825a-a5a6-484c-a25c-8c47af54aad6",
+      "level": 1,
+      "name": "Líquido Frenos",
+      "full_path": "Mantenimiento / Líquido Frenos",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "205eb322-110c-49d2-85b6-8ace086c75a1",
+      "parent_id": "e7d8825a-a5a6-484c-a25c-8c47af54aad6",
+      "level": 1,
+      "name": "Lubricantes",
+      "full_path": "Mantenimiento / Lubricantes",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "97cce4b6-a9bc-45cd-836a-bd73f183c4e8",
+      "parent_id": "e7d8825a-a5a6-484c-a25c-8c47af54aad6",
+      "level": 1,
+      "name": "Parches",
+      "full_path": "Mantenimiento / Parches",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "65567b1a-466c-4930-8d33-220c34078dac",
+      "parent_id": "e7d8825a-a5a6-484c-a25c-8c47af54aad6",
+      "level": 1,
+      "name": "Pegamento parches",
+      "full_path": "Mantenimiento / Pegamento parches",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "d76af655-1729-44c5-ab44-d075ae32935e",
+      "parent_id": "e7d8825a-a5a6-484c-a25c-8c47af54aad6",
+      "level": 1,
+      "name": "Silicona",
+      "full_path": "Mantenimiento / Silicona",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "4309f2fe-594b-4b7e-87e8-1a0952ffda3c",
+      "parent_id": null,
+      "level": 0,
+      "name": "Otros",
+      "full_path": "Otros",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "266b99d3-f0b4-4deb-b156-c192ec024ee0",
+      "parent_id": null,
+      "level": 0,
+      "name": "Servicio",
+      "full_path": "Servicio",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "e350300c-8a72-4cb6-8ec5-a82703f7ab6e",
+      "parent_id": null,
+      "level": 0,
+      "name": "Viñabike",
+      "full_path": "Viñabike",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "554d97c6-98fd-4602-8cdd-06174530f9dd",
+      "parent_id": "e350300c-8a72-4cb6-8ec5-a82703f7ab6e",
+      "level": 1,
+      "name": "Adaptadores",
+      "full_path": "Viñabike / Adaptadores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "e413b6fa-5a21-4757-aa7e-14e64e5a112b",
+      "parent_id": "e350300c-8a72-4cb6-8ec5-a82703f7ab6e",
+      "level": 1,
+      "name": "Grasa/Aceites/Soluciones/Limpiadores",
+      "full_path": "Viñabike / Grasa/Aceites/Soluciones/Limpiadores",
+      "tenant_id": "fixture-tenant"
+    },
+    {
+      "id": "aad94ff5-5d30-4627-b6eb-895c3cbf2e76",
+      "parent_id": "e350300c-8a72-4cb6-8ec5-a82703f7ab6e",
+      "level": 1,
+      "name": "Herramientas",
+      "full_path": "Viñabike / Herramientas",
+      "tenant_id": "fixture-tenant"
+    }
+  ]
+}

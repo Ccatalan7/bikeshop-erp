@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:vinabike_erp/modules/hr/models/payroll_voucher.dart';
+import 'package:vinabike_erp/modules/hr/payroll/payment_workspace/payroll_payment_workspace.dart';
 import 'package:vinabike_erp/modules/hr/payroll/payroll_redesign_page.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
@@ -222,16 +223,18 @@ void main() {
             reason: '$cell fila pendiente visible');
         expect(find.textContaining('Pagar'), findsWidgets,
             reason: '$cell alguna acción Pagar visible');
-        // Overlays are part of the dark-completeness gate: exercise the
-        // real transfer composer, cash confirmation and payment evidence
-        // through their canonical entry points while the initial Semanas
-        // scope is active.
+        // Overlays are part of the dark-completeness gate: transfer and cash
+        // must open the exact same canonical payment workspace.
         await tester.tap(find.text('Pagar').first);
         await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull, reason: '$cell composer');
-        assertNoDarkRegression('composer');
+        expect(find.byType(PayrollPaymentWorkspace), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: '$cell workspace');
+        assertNoDarkRegression('workspace');
         await tester.tap(
-          find.byKey(const ValueKey<String>('payroll-composer-close')),
+          find.descendant(
+            of: find.byType(PayrollPaymentWorkspace),
+            matching: find.byTooltip('Cerrar'),
+          ),
         );
         await tester.pumpAndSettle();
 
@@ -243,10 +246,14 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        expect(find.byType(PayrollPaymentWorkspace), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '$cell efectivo');
         assertNoDarkRegression('efectivo');
         await tester.tap(
-          find.byKey(const ValueKey<String>('payroll-cash-close')),
+          find.descendant(
+            of: find.byType(PayrollPaymentWorkspace),
+            matching: find.byTooltip('Cerrar'),
+          ),
         );
         await tester.pumpAndSettle();
 

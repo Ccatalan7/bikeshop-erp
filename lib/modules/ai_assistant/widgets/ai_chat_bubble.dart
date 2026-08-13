@@ -90,27 +90,31 @@ class _AIChatPanelState extends State<AIChatPanel> {
   // failure loop the operator never asked for. Backfilling is catalog
   // maintenance, not a side effect of looking at a panel.
 
-  /// Performs the effect registered for a card's destination.
+  /// Performs the effect registered for a verified card.
   ///
   /// The card supplies an identifier from a closed set; the resolver owns the
   /// route table and the toolbar table. An unregistered identifier produces no
   /// effect at all rather than a guessed route.
-  void _handleDestination(AIAssistantDestination destination) {
+  void _handleCard(AIAssistantActionCard card) {
     final workspaceManager = context.read<WorkspaceManager>();
     final toolbar = context.read<RightToolbarService>();
     final resolver = AIAssistantDestinationResolver(
       navigateWorkspace: (route) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          workspaceManager.navigateActiveWorkspace(route);
+          workspaceManager.openRouteInWorkspace(route);
         });
       },
       openToolbarTool: toolbar.openTool,
     );
 
-    final dispatched = resolver.dispatch(destination);
+    final dispatched = resolver.dispatch(
+      card.destination,
+      entityRef: card.entityRef,
+    );
     if (!dispatched && !kReleaseMode) {
       debugPrint(
-        '🧭 [AIChatPanel] Destination $destination has no registered effect; '
+        '🧭 [AIChatPanel] Card destination ${card.destination} has no '
+        'compatible registered effect; '
         'ignored.',
       );
     }
@@ -472,7 +476,13 @@ class _AIChatPanelState extends State<AIChatPanel> {
                           )
                         : _AssistantMessageBody(
                             message: msg,
-                            onDestination: _handleDestination,
+                            onCard: _handleCard,
+                            canResolveApproval: session.canResolveApproval,
+                            approvalInFlightId: session.approvalInFlightId,
+                            approvalDecisionInFlight:
+                                session.approvalDecisionInFlight,
+                            approvalErrorFor: session.approvalErrorFor,
+                            onApproval: session.resolveTaskApproval,
                           ),
                   ),
                 );
@@ -607,11 +617,36 @@ class _AIChatPanelState extends State<AIChatPanel> {
 class _AssistantMessageBody extends StatelessWidget {
   const _AssistantMessageBody({
     required this.message,
-    required this.onDestination,
+    required this.onCard,
+    required this.canResolveApproval,
+    required this.approvalInFlightId,
+    required this.approvalDecisionInFlight,
+    required this.approvalErrorFor,
+    required this.onApproval,
   });
 
   final AIAssistantTranscriptEntry message;
-  final void Function(AIAssistantDestination destination) onDestination;
+  final void Function(AIAssistantActionCard card) onCard;
+  final bool Function(AIAssistantActionCard card) canResolveApproval;
+  final String? approvalInFlightId;
+  final AIAssistantApprovalDecision? approvalDecisionInFlight;
+  final String? Function(String approvalId) approvalErrorFor;
+  final Future<void> Function(
+    AIAssistantActionCard card,
+    AIAssistantApprovalDecision decision,
+  ) onApproval;
+
+  void _openSourceInEmbeddedBrowser(BuildContext context, String? href) {
+    final uri = Uri.tryParse(href?.trim() ?? '');
+    if (uri == null ||
+        uri.scheme.toLowerCase() != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      return;
+    }
+
+    context.read<WorkspaceManager>().openBrowserWorkspace(uri.toString());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -643,7 +678,11 @@ class _AssistantMessageBody extends StatelessWidget {
               ],
             )
           else
-            MarkdownBody(data: message.text),
+            MarkdownBody(
+              data: message.text,
+              onTapLink: (_, href, __) =>
+                  _openSourceInEmbeddedBrowser(context, href),
+            ),
         if (message.cards.isNotEmpty)
           Padding(
             padding: EdgeInsets.only(top: message.text.trim().isEmpty ? 0 : 10),
@@ -653,7 +692,18 @@ class _AssistantMessageBody extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: _AssistantActionCard(
                           card: card,
-                          onTap: () => onDestination(card.destination),
+                          onTap: () => onCard(card),
+                          approvalEnabled: canResolveApproval(card),
+                          approvalBusy:
+                              card.approvalRef?.id == approvalInFlightId,
+                          approvalDecisionInFlight:
+                              card.approvalRef?.id == approvalInFlightId
+                                  ? approvalDecisionInFlight
+                                  : null,
+                          approvalError: card.approvalRef == null
+                              ? null
+                              : approvalErrorFor(card.approvalRef!.id),
+                          onApproval: (decision) => onApproval(card, decision),
                         ),
                       ))
                   .toList(),
@@ -668,10 +718,20 @@ class _AssistantActionCard extends StatelessWidget {
   const _AssistantActionCard({
     required this.card,
     required this.onTap,
+    required this.approvalEnabled,
+    required this.approvalBusy,
+    required this.approvalDecisionInFlight,
+    required this.approvalError,
+    required this.onApproval,
   });
 
   final AIAssistantActionCard card;
   final VoidCallback onTap;
+  final bool approvalEnabled;
+  final bool approvalBusy;
+  final AIAssistantApprovalDecision? approvalDecisionInFlight;
+  final String? approvalError;
+  final Future<void> Function(AIAssistantApprovalDecision decision) onApproval;
 
   @override
   Widget build(BuildContext context) {
@@ -695,14 +755,19 @@ class _AssistantActionCard extends StatelessWidget {
 
     // Two cards of the same kind can appear in one answer, so the key carries
     // the destination too.
-    final cardKey = 'ai-action-card-${card.kind}-${card.destination.name}';
+    final approvalKey = card.approvalRef?.id;
+    final cardKey = 'ai-action-card-${card.kind}-${card.destination.name}'
+        '${approvalKey == null ? '' : '-$approvalKey'}';
+    final isApprovalPreview = card.approvalRef != null;
 
     return Material(
       key: ValueKey<String>(cardKey),
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
+        // A preview is a governed command, not a navigation card. Only its
+        // explicit approve/discard controls may produce an effect.
+        onTap: isApprovalPreview ? null : onTap,
         child: Ink(
           key: ValueKey<String>('$cardKey-ink'),
           decoration: BoxDecoration(
@@ -805,20 +870,30 @@ class _AssistantActionCard extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Text(
-                            card.ctaLabel,
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: onCard,
-                              fontWeight: FontWeight.w800,
+                      if (isApprovalPreview)
+                        _TaskApprovalControls(
+                          approval: card.approvalRef!,
+                          enabled: approvalEnabled,
+                          busy: approvalBusy,
+                          decisionInFlight: approvalDecisionInFlight,
+                          error: approvalError,
+                          onDecision: onApproval,
+                        )
+                      else
+                        Row(
+                          children: [
+                            Text(
+                              card.ctaLabel,
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: onCard,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Icon(Icons.arrow_outward_rounded,
-                              color: onCard, size: 18),
-                        ],
-                      ),
+                            const SizedBox(width: 6),
+                            Icon(Icons.arrow_outward_rounded,
+                                color: onCard, size: 18),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -843,9 +918,14 @@ class _AssistantActionCard extends StatelessWidget {
       case 'sales_invoice':
         return Icons.point_of_sale_rounded;
       case 'task':
+      case 'task_preview':
         return Icons.checklist_rounded;
       case 'supplier':
         return Icons.local_shipping_rounded;
+      case 'expense':
+        return Icons.receipt_rounded;
+      case 'conversation':
+        return Icons.forum_rounded;
       default:
         return Icons.link_rounded;
     }
@@ -860,6 +940,7 @@ class _AssistantActionCard extends StatelessWidget {
       case 'purchase_invoice':
         return const Color(0xFFBF6A02);
       case 'task':
+      case 'task_preview':
         return theme.colorScheme.tertiary;
       case 'inventory':
         return const Color(0xFF1565C0);
@@ -867,8 +948,143 @@ class _AssistantActionCard extends StatelessWidget {
         return const Color(0xFF00875A);
       case 'supplier':
         return const Color(0xFF6A1B9A);
+      case 'expense':
+        return theme.colorScheme.secondary;
+      case 'conversation':
+        return theme.colorScheme.primary;
       default:
         return theme.colorScheme.primary;
     }
   }
+}
+
+class _TaskApprovalControls extends StatelessWidget {
+  const _TaskApprovalControls({
+    required this.approval,
+    required this.enabled,
+    required this.busy,
+    required this.decisionInFlight,
+    required this.error,
+    required this.onDecision,
+  });
+
+  final AIAssistantApprovalRef approval;
+  final bool enabled;
+  final bool busy;
+  final AIAssistantApprovalDecision? decisionInFlight;
+  final String? error;
+  final Future<void> Function(AIAssistantApprovalDecision decision) onDecision;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final stateLabel = switch (approval.state) {
+      AIAssistantApprovalState.pending =>
+        'Vence ${_formatUtcApprovalExpiry(approval.expiresAt)}',
+      AIAssistantApprovalState.approved => 'Tarea creada',
+      AIAssistantApprovalState.discarded => 'Propuesta descartada',
+      AIAssistantApprovalState.expired => 'Propuesta vencida',
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          key: ValueKey<String>('ai-approval-${approval.id}-status'),
+          children: [
+            Icon(
+              switch (approval.state) {
+                AIAssistantApprovalState.pending => Icons.schedule_rounded,
+                AIAssistantApprovalState.approved => Icons.task_alt_rounded,
+                AIAssistantApprovalState.discarded => Icons.cancel_outlined,
+                AIAssistantApprovalState.expired => Icons.timer_off_outlined,
+              },
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                stateLabel,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if ((error ?? '').isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            error!,
+            key: ValueKey<String>('ai-approval-${approval.id}-error'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
+        if (approval.state == AIAssistantApprovalState.pending) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                key: ValueKey<String>('ai-approval-${approval.id}-approve'),
+                onPressed: enabled
+                    ? () => unawaited(
+                          onDecision(AIAssistantApprovalDecision.approve),
+                        )
+                    : null,
+                icon: busy &&
+                        decisionInFlight == AIAssistantApprovalDecision.approve
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_task_rounded),
+                label: Text(
+                  busy &&
+                          decisionInFlight ==
+                              AIAssistantApprovalDecision.approve
+                      ? 'Creando...'
+                      : 'Crear tarea',
+                ),
+              ),
+              OutlinedButton.icon(
+                key: ValueKey<String>('ai-approval-${approval.id}-discard'),
+                onPressed: enabled
+                    ? () => unawaited(
+                          onDecision(AIAssistantApprovalDecision.discard),
+                        )
+                    : null,
+                icon: busy &&
+                        decisionInFlight == AIAssistantApprovalDecision.discard
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.close_rounded),
+                label: Text(
+                  busy &&
+                          decisionInFlight ==
+                              AIAssistantApprovalDecision.discard
+                      ? 'Descartando...'
+                      : 'Descartar',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+String _formatUtcApprovalExpiry(DateTime value) {
+  final utc = value.toUtc();
+  String twoDigits(int part) => part.toString().padLeft(2, '0');
+  return '${utc.year}-${twoDigits(utc.month)}-${twoDigits(utc.day)} · '
+      '${twoDigits(utc.hour)}:${twoDigits(utc.minute)} UTC';
 }

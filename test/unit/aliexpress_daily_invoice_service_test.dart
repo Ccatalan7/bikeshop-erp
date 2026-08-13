@@ -92,7 +92,10 @@ void main() {
       expect((invoice['sourceOrders'] as List), hasLength(1));
       final items = List<Map<String, dynamic>>.from(invoice['items'] as List);
       expect(items, hasLength(1));
-      expect(items.single['quantity'], 8);
+      expect(items.single['sourcePurchaseQuantity'], 2);
+      expect(items.single['quantity'], 2);
+      expect(items.single['rawPackCount'], 4);
+      expect(items.single['rawUnitToken'], 'pares');
     });
 
     test('keeps authoritative detail components and product media', () {
@@ -183,7 +186,7 @@ void main() {
       );
     });
 
-    test('deduplicates order rows and converts brake-pad packs to pairs', () {
+    test('deduplicates rows but keeps brake-pad packs as raw evidence', () {
       Map<String, dynamic> order(String number) => <String, dynamic>{
             'orderNumber': number,
             'orderDate': '2026-06-15',
@@ -205,6 +208,7 @@ void main() {
               {
                 'sku': 'AE-14758950',
                 'itemId': '1005000014758950',
+                'variantKey': 'sku:12000029999999999',
                 'description':
                     'ZTTO 4 pares de pastillas de freno semimetálicas MS-01B',
                 'quantity': 2,
@@ -223,15 +227,17 @@ void main() {
       expect(items, hasLength(1));
       final item = items.single;
       expect(item['sourcePurchaseQuantity'], 4);
-      expect(item['unitsPerPurchase'], 4);
-      expect(item['quantity'], 16);
-      expect(item['sourceUnitPrice'], 1275);
+      expect(item['rawPackCount'], 4);
+      expect(item['rawUnitToken'], 'pares');
+      expect(item['unitsPerPurchase'], 1);
+      expect(item['quantity'], 4);
+      expect(item['sourceUnitPrice'], 5100);
       expect(item['allocatedShippingTotal'], 2);
       expect(item['allocatedTaxTotal'], 3446);
       expect(item['allocatedDiscountTotal'], 2266);
-      expect(item['unitPrice'], 1348.75);
+      expect(item['unitPrice'], 5395);
       expect(item['total'], 21580);
-      expect(item['allocatedAdjustment'], -0.13);
+      expect(item['allocatedAdjustment'], -0.5);
       expect(item['itemId'], '1005000014758950');
       expect(item['imageUrl'], contains('pads.jpg'));
       expect(item['sourceOrderNumbers'], ['111111', '222222']);
@@ -241,6 +247,217 @@ void main() {
       expect(invoice['discount'], 2266);
       expect(invoice['total'], 21580);
       expect(invoice['componentDifference'], -2);
+    });
+
+    test('takes pack evidence from selected variant before the line title', () {
+      final invoice = AliExpressDailyInvoiceService.buildDailyInvoice(
+        date: DateTime(2025, 12, 2),
+        orders: [
+          <String, dynamic>{
+            'orderNumber': '1',
+            'orderDate': '2025-12-02',
+            'total': 15000,
+            'items': [
+              <String, dynamic>{
+                'itemId': '1005009937769267',
+                'variantKey': 'sku:120000999',
+                'variant': '160mm 2PCS',
+                'lineTitle': 'Rotor RT56 disponible en 1/2/4PCS',
+                'description': 'Rotor RT56 (160mm 2PCS)',
+                'quantity': 1,
+                'total': 15000,
+                'rawPackCount': 4,
+                'rawUnitToken': 'pieces',
+              },
+            ],
+          },
+        ],
+      );
+
+      final item = (invoice['items'] as List).single as Map<String, dynamic>;
+      expect(item['quantity'], 1);
+      expect(item['sourcePurchaseQuantity'], 1);
+      expect(item['rawPackCount'], 2);
+      expect(item['rawUnitToken'], 'pcs');
+    });
+
+    test('never treats a range or option menu as the selected pack', () {
+      Map<String, dynamic> build(String variant, String lineTitle) {
+        final invoice = AliExpressDailyInvoiceService.buildDailyInvoice(
+          date: DateTime(2025, 12, 2),
+          orders: [
+            <String, dynamic>{
+              'orderNumber': '$variant-$lineTitle',
+              'orderDate': '2025-12-02',
+              'total': 100,
+              'items': [
+                <String, dynamic>{
+                  'itemId': '1005000000000001',
+                  'variantKey': 'sku:1',
+                  'variant': variant,
+                  'lineTitle': lineTitle,
+                  'description': '$lineTitle ($variant)',
+                  'quantity': 1,
+                  'total': 100,
+                },
+              ],
+            },
+          ],
+        );
+        return (invoice['items'] as List).single as Map<String, dynamic>;
+      }
+
+      final range = build('100-500 pieces', 'Terminales 2PCS');
+      expect(range['rawPackCount'], isNull);
+      expect(range['rawUnitToken'], isNull);
+
+      final menu = build('BLACK', 'Rotor disponible 1/2/4PCS');
+      expect(menu['rawPackCount'], isNull);
+      expect(menu['rawUnitToken'], isNull);
+    });
+
+    test('v3 aggregates label/pack drift only for the same immutable variant',
+        () {
+      Map<String, dynamic> order({
+        required String number,
+        required String variantKey,
+        required String description,
+        required int rawPackCount,
+        int total = 100,
+      }) =>
+          <String, dynamic>{
+            'orderNumber': number,
+            'orderDate': '2025-10-20',
+            'total': total,
+            'items': [
+              <String, dynamic>{
+                'itemId': '1005001111111111',
+                'variantKey': variantKey,
+                'description': description,
+                'quantity': 1,
+                'total': total,
+                'rawPackCount': rawPackCount,
+                'rawUnitToken': 'pcs',
+              },
+            ],
+          };
+
+      final invoice = AliExpressDailyInvoiceService.buildDailyInvoice(
+        date: DateTime(2025, 10, 20),
+        orders: [
+          order(
+            number: '222',
+            variantKey: 'sku:black',
+            description: 'Translated title A 2PCS',
+            rawPackCount: 2,
+          ),
+          order(
+            number: '111',
+            variantKey: 'sku:black',
+            description: 'Human label drift B 4PCS',
+            rawPackCount: 4,
+          ),
+          order(
+            number: '333',
+            variantKey: 'sku:red',
+            description: 'Translated title A 2PCS',
+            rawPackCount: 2,
+          ),
+          order(
+            number: '444',
+            variantKey: 'sku:black',
+            description: 'Same variant at a different commercial price',
+            rawPackCount: 2,
+            total: 125,
+          ),
+        ],
+      );
+
+      final items = (invoice['items'] as List).cast<Map<String, dynamic>>();
+      expect(items, hasLength(3));
+      final black = items.firstWhere((item) =>
+          item['variantKey'] == 'sku:black' &&
+          item['sourcePurchaseUnitPrice'] == 100);
+      expect(black['quantity'], 2);
+      expect(black['sourcePurchaseQuantity'], 2);
+      expect(black['sourceOrderNumbers'], ['111', '222']);
+      expect(black['rawPackCount'], isNull);
+      expect(black['rawUnitToken'], isNull);
+      expect(black['rawPackEvidenceConflict'], isTrue);
+      expect(
+          items.singleWhere(
+              (item) => item['variantKey'] == 'sku:red')['quantity'],
+          1);
+      expect(
+          items.singleWhere((item) =>
+              item['variantKey'] == 'sku:black' &&
+              item['sourcePurchaseUnitPrice'] == 125)['quantity'],
+          1);
+    });
+
+    test('v3 never aggregates a weak/default variant across orders', () {
+      Map<String, dynamic> order(String number, String variantKey) =>
+          <String, dynamic>{
+            'orderNumber': number,
+            'orderDate': '2025-10-20',
+            'total': 100,
+            'items': [
+              <String, dynamic>{
+                'itemId': '1005001111111111',
+                'variantKey': variantKey,
+                'description': 'Same translated title',
+                'quantity': 1,
+                'total': 100,
+              },
+            ],
+          };
+
+      final invoice = AliExpressDailyInvoiceService.buildDailyInvoice(
+        date: DateTime(2025, 10, 20),
+        orders: [order('111', 'black'), order('222', 'default')],
+      );
+
+      final items = (invoice['items'] as List).cast<Map<String, dynamic>>();
+      expect(items, hasLength(2));
+      expect(items.map((item) => item['quantity']), everyElement(1));
+    });
+
+    test(
+        'same-order observations with distinct immutable variants never dedupe',
+        () {
+      final invoice = AliExpressDailyInvoiceService.buildDailyInvoice(
+        date: DateTime(2025, 10, 20),
+        orders: [
+          <String, dynamic>{
+            'orderNumber': '444',
+            'orderDate': '2025-10-20',
+            'total': 200,
+            'items': [
+              <String, dynamic>{
+                'itemId': '1005001111111111',
+                'variantKey': 'sku:a-b',
+                'description': 'Same human title',
+                'quantity': 1,
+                'total': 100,
+              },
+              <String, dynamic>{
+                'itemId': '1005001111111111',
+                'variantKey': 'sku:a_b',
+                'description': 'Same human title',
+                'quantity': 1,
+                'total': 100,
+              },
+            ],
+          },
+        ],
+      );
+
+      final items = (invoice['items'] as List).cast<Map<String, dynamic>>();
+      expect(items, hasLength(2));
+      expect(items.map((item) => item['variantKey']).toSet(), {
+        'sku:a-b',
+        'sku:a_b',
+      });
     });
   });
 }
