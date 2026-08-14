@@ -351,6 +351,14 @@ Use `--no-verify-jwt` only when the reviewed function intentionally implements
 its own authentication, such as a verified webhook. After a function
 deployment, invoke the affected path and verify logs/behavior.
 
+**2026-08-14 — local Edge bundler fallback.** If a reviewed function passes
+`deno check` but the wrapped deploy fails before upload with
+`failed to open eszip ... output.eszip`, repeat the same wrapped command with
+`--use-api`. That flag moves bundling to Supabase's API and avoids the broken
+local temporary eszip path; it does not relax project identity or function
+authentication. Read back the resulting active version and exercise the real
+endpoint before treating the deployment as complete.
+
 For hosted outages, first compare the wrapped project-list result, project DNS,
 and the Auth health endpoint. A healthy hosted project plus a failed local
 status is a local Docker issue. Backup and recovery operations follow

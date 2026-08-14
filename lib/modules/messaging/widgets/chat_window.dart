@@ -1538,6 +1538,7 @@ class _ChatWindowState extends State<ChatWindow> {
         sendStartedAt: sendStartedAt,
         fallbackContext: dispatchContext,
         conversationId: dispatchConversationId,
+        isSupplierConversation: widget.conversation.isSupplierConversation,
         contextType: dispatchContextType,
         contextId: dispatchContextId,
         contactFuture: contactFuture,
@@ -1666,6 +1667,7 @@ class _ChatWindowState extends State<ChatWindow> {
     required DateTime sendStartedAt,
     required BuildContext fallbackContext,
     required String conversationId,
+    required bool isSupplierConversation,
     required String? contextType,
     required String? contextId,
     required Future<Map<String, dynamic>?> contactFuture,
@@ -1721,6 +1723,8 @@ class _ChatWindowState extends State<ChatWindow> {
         customerPhone: phone,
         message: pendingText,
         contactName: contact?['name']?.toString(),
+        templateContactName: contact?['template_contact_name']?.toString(),
+        isSupplierConversation: isSupplierConversation,
         conversationId: conversationId,
         contextType: contextType,
         contextId: contextId,
@@ -1819,7 +1823,7 @@ class _ChatWindowState extends State<ChatWindow> {
             pendingText,
             title: 'Mensaje pendiente de ventana WhatsApp',
             subtitle:
-                'Se envió la plantilla aprobada. Cuando el cliente responda, puedes enviar este texto.',
+                'Se envió la plantilla aprobada. Cuando el ${isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto.',
           );
         } else {
           chatProvider.clearConversationDraft(conversationId);
@@ -6979,14 +6983,27 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Future<Map<String, dynamic>?> _resolveConversationWhatsAppContact() {
+  Future<Map<String, dynamic>?> _resolveConversationWhatsAppContact() async {
     if (!_isWhatsAppConversation) {
-      return Future.value(null);
+      return null;
     }
 
-    return _messagingService.getSupportConversationContact(
+    final contact = await _messagingService.getSupportConversationContact(
       widget.conversation.id,
     );
+    if (!widget.conversation.isSupplierConversation) return contact;
+
+    final supplierId = widget.conversation.contextHint?.supplierId ??
+        (_effectiveContextType == 'supplier' ? _effectiveContextId : null);
+    final templateContactName =
+        await _messagingService.getSupplierTemplateContactName(
+      conversationId: widget.conversation.id,
+      supplierId: supplierId,
+    );
+    return <String, dynamic>{
+      ...?contact,
+      'template_contact_name': templateContactName,
+    };
   }
 
   Future<Map<String, dynamic>?> _resolvePotentialWhatsAppContact() {
@@ -7293,6 +7310,9 @@ class _ChatWindowState extends State<ChatWindow> {
     String? pendingText,
     GlobalKey? anchorKey,
   }) {
+    final supplierStatusFuture = widget.conversation.isSupplierConversation
+        ? WhatsAppService().getSupplierTemplateReviewStatuses()
+        : null;
     _toggleComposerMenu(
       name: 'whatsapp_templates',
       anchorKey: anchorKey ?? _composerActionsButtonKey,
@@ -7301,6 +7321,7 @@ class _ChatWindowState extends State<ChatWindow> {
       panelBuilder: (overlayContext) => _buildWhatsAppTemplatePanel(
         overlayContext,
         pendingText: pendingText?.trim(),
+        supplierStatusFuture: supplierStatusFuture,
       ),
     );
   }
@@ -7308,10 +7329,15 @@ class _ChatWindowState extends State<ChatWindow> {
   Widget _buildWhatsAppTemplatePanel(
     BuildContext overlayContext, {
     String? pendingText,
+    Future<Map<String, WhatsAppTemplateReviewStatus>>? supplierStatusFuture,
   }) {
     final theme = Theme.of(overlayContext);
-    const options = WhatsAppService.templateOptions;
+    final options = WhatsAppService.templateOptionsForConversation(
+      isSupplier: widget.conversation.isSupplierConversation,
+    );
     final hasPendingText = pendingText != null && pendingText.isNotEmpty;
+    final counterparty =
+        widget.conversation.isSupplierConversation ? 'proveedor' : 'cliente';
 
     return Material(
       color: Colors.transparent,
@@ -7349,7 +7375,7 @@ class _ChatWindowState extends State<ChatWindow> {
                         ),
                         Text(
                           hasPendingText
-                              ? 'El texto escrito queda como borrador hasta que el cliente responda.'
+                              ? 'El texto escrito queda como borrador hasta que el $counterparty responda.'
                               : 'Elige la plantilla aprobada para esta ocasión.',
                           style: TextStyle(
                             fontSize: 12,
@@ -7370,56 +7396,130 @@ class _ChatWindowState extends State<ChatWindow> {
               ),
             ),
             const Divider(height: 1),
-            ...options.map(
-              (option) => InkWell(
-                onTap: () => _sendSelectedWhatsAppTemplate(
+            if (supplierStatusFuture == null)
+              ...options.map(
+                (option) => _buildWhatsAppTemplateOption(
+                  overlayContext,
                   option,
                   pendingText: pendingText,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: Row(
+              )
+            else
+              FutureBuilder<Map<String, WhatsAppTemplateReviewStatus>>(
+                future: supplierStatusFuture,
+                builder: (context, snapshot) {
+                  final isLoading =
+                      snapshot.connectionState == ConnectionState.waiting;
+                  final statuses = snapshot.data ??
+                      const <String, WhatsAppTemplateReviewStatus>{};
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: _accentBlue.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(option.icon, color: _accentBlue, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              option.label,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              option.description,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
+                      if (isLoading)
+                        const LinearProgressIndicator(minHeight: 2),
+                      ...options.map(
+                        (option) => _buildWhatsAppTemplateOption(
+                          context,
+                          option,
+                          pendingText: pendingText,
+                          reviewStatus: statuses[option.defaultTemplateName],
+                          isCheckingReview: isLoading,
+                          reviewCheckFailed: snapshot.hasError,
                         ),
                       ),
-                      const Icon(Icons.chevron_right, size: 18),
                     ],
-                  ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWhatsAppTemplateOption(
+    BuildContext context,
+    WhatsAppTemplateOption option, {
+    String? pendingText,
+    WhatsAppTemplateReviewStatus? reviewStatus,
+    bool isCheckingReview = false,
+    bool reviewCheckFailed = false,
+  }) {
+    final requiresLiveApproval = option.isSupplier;
+    final isEnabled = !requiresLiveApproval || reviewStatus?.isApproved == true;
+    final availabilityLabel = !requiresLiveApproval
+        ? null
+        : isCheckingReview
+            ? 'Revisando…'
+            : reviewCheckFailed
+                ? 'Sin confirmar'
+                : reviewStatus == null
+                    ? 'No disponible'
+                    : switch (reviewStatus.status) {
+                        'PENDING' => 'En revisión',
+                        'REJECTED' => 'Rechazada',
+                        'PAUSED' => 'Pausada',
+                        'DISABLED' => 'Deshabilitada',
+                        'APPROVED' => null,
+                        _ => 'No disponible',
+                      };
+
+    return Opacity(
+      opacity: isEnabled ? 1 : 0.62,
+      child: InkWell(
+        onTap: isEnabled
+            ? () => _sendSelectedWhatsAppTemplate(
+                  option,
+                  pendingText: pendingText,
+                )
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: _accentBlue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(option.icon, color: _accentBlue, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      option.label,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      option.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              if (availabilityLabel == null)
+                const Icon(Icons.chevron_right, size: 18)
+              else
+                Text(
+                  availabilityLabel,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -7441,20 +7541,59 @@ class _ChatWindowState extends State<ChatWindow> {
     setState(() => _isSendingMessage = true);
 
     try {
+      if (option.isSupplier) {
+        final statuses =
+            await whatsappService.getSupplierTemplateReviewStatuses();
+        final review = statuses[option.defaultTemplateName];
+        if (review?.isApproved != true) {
+          throw Exception(
+            review?.status == 'PENDING'
+                ? 'Meta todavía está revisando esta plantilla.'
+                : 'Meta no tiene esta plantilla aprobada para enviar.',
+          );
+        }
+      }
+
       final contact = await contactFuture;
       final phone = contact?['phone']?.toString();
-      final customerName = contact?['name']?.toString().trim();
+      final bindingContactName = contact?['name']?.toString().trim();
+      final supplierTemplateContactName =
+          contact?['template_contact_name']?.toString().trim();
+      final recipientName = widget.conversation.isSupplierConversation
+          ? supplierTemplateContactName
+          : bindingContactName;
 
       if (phone == null || phone.isEmpty) {
         throw Exception('La conversación no tiene teléfono asociado.');
+      }
+      if (recipientName == null || recipientName.isEmpty) {
+        throw Exception(
+          widget.conversation.isSupplierConversation
+              ? 'Falta el nombre del contacto o vendedor en el perfil del proveedor.'
+              : 'La conversación no tiene un nombre de contacto asociado.',
+        );
+      }
+      String? agentName;
+      if (option.parameterLayout ==
+          WhatsAppTemplateParameterLayout.contactAndAgent) {
+        final currentUserId = _messagingService.currentUserId;
+        final senderInfo =
+            currentUserId == null ? null : await _getSenderInfo(currentUserId);
+        agentName = senderInfo?['name']?.toString().trim();
+        if (option.requiresAgentName &&
+            (agentName == null || agentName.isEmpty)) {
+          throw Exception(
+            'No pudimos resolver el nombre del usuario que inició sesión.',
+          );
+        }
       }
 
       final receipt = await whatsappService.sendTemplateMessage(
         option: option,
         customerPhone: phone,
-        customerName: customerName == null || customerName.isEmpty
-            ? 'cliente'
-            : customerName,
+        customerName: recipientName,
+        agentName: agentName,
+        bindingContactName: bindingContactName,
         conversationId: conversationId,
         contextType: contextType,
         contextId: contextId,
@@ -7471,7 +7610,7 @@ class _ChatWindowState extends State<ChatWindow> {
           pending,
           title: 'Mensaje pendiente de ventana WhatsApp',
           subtitle:
-              'Se envió "${option.label}". Cuando el cliente responda, puedes enviar este texto.',
+              'Se envió "${option.label}". Cuando el ${widget.conversation.isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto.',
         );
       }
 

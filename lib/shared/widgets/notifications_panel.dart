@@ -929,18 +929,22 @@ _ActivityDetail? _erpActivityDetail(
 ) {
   switch (type) {
     case 'mechanic_job_created':
-      final request = _payloadText(data, 'client_request');
-      if (request.isEmpty) return null;
+      final fields = <_ActivityDetailField>[
+        ..._optionalField(
+          'SOLICITUD DEL CLIENTE',
+          _payloadText(data, 'client_request'),
+          maxLines: 4,
+        ),
+        ..._optionalField(
+          'REGISTRÓ',
+          _payloadText(data, 'recorded_by_name'),
+        ),
+      ];
+      if (fields.isEmpty) return null;
       return _ActivityDetail(
-        noun: 'la solicitud del cliente',
+        noun: 'el detalle del trabajo',
         actionLabel: 'Abrir trabajo',
-        fields: [
-          _ActivityDetailField(
-            label: 'SOLICITUD DEL CLIENTE',
-            value: request,
-            maxLines: 4,
-          ),
-        ],
+        fields: fields,
       );
     case 'sales_payment_received':
       final fields = <_ActivityDetailField>[
@@ -990,9 +994,19 @@ _ActivityDetail? _erpActivityDetail(
   }
 }
 
-List<_ActivityDetailField> _optionalField(String label, String value) {
+List<_ActivityDetailField> _optionalField(
+  String label,
+  String value, {
+  int maxLines = 2,
+}) {
   if (value.isEmpty) return const [];
-  return [_ActivityDetailField(label: label, value: value)];
+  return [
+    _ActivityDetailField(
+      label: label,
+      value: value,
+      maxLines: maxLines,
+    ),
+  ];
 }
 
 /// A payload date earns a line only when it disagrees with the day the row was

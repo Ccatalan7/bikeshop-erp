@@ -1177,7 +1177,7 @@ class BikeEvent {
       'reference_number': referenceNumber,
       'severity': severity?.dbValue,
       'payload': payload,
-      'created_by': createdBy,
+      if (createdBy != null) 'created_by': createdBy,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };

@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-07-16
+Last updated: 2026-08-14
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, bike memory kernel, sync pipeline, and visible bike history
 
@@ -1288,6 +1288,33 @@ Purpose:
 
 - overall visit container
 - customer, status, timing, costing, invoice linkage, attachments
+
+Registration authorship is part of that visit container's audit boundary:
+
+- `mechanic_jobs.created_by` stores the server-enforced authenticated user who
+  registered each new job; an ordinary client cannot supply another user's ID.
+- `create_mechanic_job_erp_notification` resolves that actor through the
+  tenant-bounded identity helper and freezes `recorded_by_name` into the
+  notification's durable payload, so the Right Toolbar can show `REGISTRÓ`
+  without a per-row identity query.
+- rows created before 2026-08-14 remain nullable when no authoritative actor
+  evidence survived. An exact authenticated API creation log may support a
+  bounded, identity-bound repair; attendance, a later invoice, a later status
+  actor, or whichever user is currently signed in may not.
+- migration `20260814210000_mechanic_job_registration_actor.sql` was deployed
+  and registered in production on 2026-08-14; it intentionally backfilled zero
+  historical rows.
+- migration
+  `20260814213000_backfill_recent_mechanic_job_registration_actor.sql` was
+  deployed and registered in production on 2026-08-14. It recovered exactly
+  the eleven jobs in the fixed seven-day window PG-00499–PG-00509 from their
+  unique successful authenticated `POST /rest/v1/mechanic_jobs` edge logs:
+  PG-00499–PG-00508 belong to Claudio Catalán and PG-00509 to Vicente Díaz.
+  The repair stores the opaque log identity/timestamp in notification evidence,
+  preserves every job `updated_at`, and aborts on a partial or conflicting
+  source graph; older jobs without equivalent evidence remain unknown.
+- this audit projection changes no bicycle/profile truth, visit diagnosis,
+  executed-work metadata, invoice ownership, or derived bike-memory state.
 
 ### `mechanic_job_bikes`
 

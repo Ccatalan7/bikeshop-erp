@@ -35,6 +35,11 @@ const List<MenuSubItem> _accountingMenuItems = [
     route: '/accounting/expenses',
   ),
   MenuSubItem(
+    icon: Icons.account_balance_outlined,
+    title: 'Conciliación bancaria',
+    route: '/accounting/bank-reconciliation',
+  ),
+  MenuSubItem(
     icon: Icons.library_books_outlined,
     title: 'Asientos contables',
     route: '/accounting/journal-entries',
@@ -316,6 +321,7 @@ String _getTitleFromRoute(String route) {
     '/dashboard': 'Dashboard',
     '/accounting/accounts': 'Contabilidad',
     '/accounting/expenses': 'Gastos',
+    '/accounting/bank-reconciliation': 'Conciliación bancaria',
     '/accounting/journal-entries': 'Asientos',
     '/tax-reports/f29': 'Declaraciones F29',
     '/clientes': 'Clientes',

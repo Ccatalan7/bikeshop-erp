@@ -75537,6 +75537,18 @@ comment on column public.suppliers.portal_password is
 -- clients migrate from direct subscription-row upserts to the provider action.
 \ir ../migrations/20260814024000_harden_email_push_subscription_identity.sql
 
+-- Privacy-bounded bank-statement evidence and explicit many-to-many links to
+-- existing accounting operations. Combined card payments remain instrument-
+-- unknown until a future provider settlement feed separates their rails.
+\ir ../migrations/20260814130000_bank_reconciliation_foundation.sql
+\ir ../migrations/20260814131000_fix_bank_reconciliation_purchase_reference.sql
+\ir ../migrations/20260814132000_bank_reconciliation_action_workspace.sql
+\ir ../migrations/20260814133000_fix_bank_reconciliation_sales_reference.sql
+
+-- Server-owned workshop registration identity and its durable notification
+-- projection. Historical nulls remain unknown rather than inferred.
+\ir ../migrations/20260814210000_mechanic_job_registration_actor.sql
+
 -- Bootstrap-wide service-role grants above predate the notification ACL
 -- hardening. Preserve the production end state after every included migration.
 revoke all on function public.create_sales_payment_erp_notification()

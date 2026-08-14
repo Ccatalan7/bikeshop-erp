@@ -34,6 +34,21 @@ class MessageHistoryPage {
   });
 }
 
+@visibleForTesting
+String? resolveSupplierMessagingContactName(Map<String, dynamic>? supplier) {
+  if (supplier == null) return null;
+
+  final salesRepresentative = supplier['sales_rep_name']?.toString().trim();
+  if (salesRepresentative != null && salesRepresentative.isNotEmpty) {
+    return salesRepresentative.split(RegExp(r'\s+')).first;
+  }
+
+  final contactPerson = supplier['contact_person']?.toString().trim();
+  return contactPerson == null || contactPerson.isEmpty
+      ? null
+      : contactPerson.split(RegExp(r'\s+')).first;
+}
+
 class MessagingService {
   static const int recentMessageStreamLimit = 250;
   static const int historyPageSize = 100;
@@ -2468,6 +2483,67 @@ class MessagingService {
       return null;
     } catch (e) {
       debugPrint('⚠️ Error fetching sender info: $e');
+      return null;
+    }
+  }
+
+  /// Resolves the human contact configured on the canonical supplier profile.
+  ///
+  /// The WhatsApp binding intentionally keeps the supplier/company name for
+  /// inbox identity. Supplier templates instead greet only the first name of
+  /// the configured sales representative (or contact person) and fail closed
+  /// when neither exists.
+  Future<String?> getSupplierTemplateContactName({
+    required String conversationId,
+    String? supplierId,
+  }) async {
+    try {
+      final tenantId = (await TenantService().getTenantId())?.trim();
+      if (tenantId == null || tenantId.isEmpty) return null;
+
+      var resolvedSupplierId = _text(supplierId);
+      if (resolvedSupplierId == null) {
+        final conversation = await _client
+            .from('conversations')
+            .select(
+              'context_type, context_id, conversation_contexts(context_type, context_id, is_primary)',
+            )
+            .eq('tenant_id', tenantId)
+            .eq('id', conversationId)
+            .limit(1)
+            .maybeSingle();
+
+        if (conversation != null) {
+          final (contextType, contextId) =
+              _primaryContextFromConversation(conversation);
+          if (contextType == 'supplier') {
+            resolvedSupplierId = contextId;
+          } else if (contextType == 'purchase_invoice' && contextId != null) {
+            final purchase = await _client
+                .from('purchase_invoices')
+                .select('supplier_id')
+                .eq('tenant_id', tenantId)
+                .eq('id', contextId)
+                .limit(1)
+                .maybeSingle();
+            resolvedSupplierId = _text(purchase?['supplier_id']);
+          }
+        }
+      }
+
+      if (resolvedSupplierId == null) return null;
+      final supplier = await _client
+          .from('suppliers')
+          .select('sales_rep_name, contact_person')
+          .eq('tenant_id', tenantId)
+          .eq('id', resolvedSupplierId)
+          .limit(1)
+          .maybeSingle();
+      return resolveSupplierMessagingContactName(supplier);
+    } catch (error) {
+      debugPrint(
+        '⚠️ Error resolving supplier WhatsApp template contact: $error',
+      );
       return null;
     }
   }

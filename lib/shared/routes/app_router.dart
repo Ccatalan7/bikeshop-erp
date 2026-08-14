@@ -26,6 +26,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         AttendancesPage,
         BackupManagementPage,
         BalanceSheetPage,
+        BankReconciliationPage,
         BikeBrandsPage,
         BikeEncyclopediaPage,
         BluetoothScannerPage,
@@ -1559,6 +1560,14 @@ class AppRouter {
             context,
             state,
             () => erp.ExpenseListPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/accounting/bank-reconciliation',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            () => erp.BankReconciliationPage(),
           ),
         ),
         GoRoute(

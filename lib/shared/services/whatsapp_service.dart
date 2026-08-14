@@ -11,11 +11,103 @@ import '../widgets/whatsapp_web_viewer.dart';
 
 export '../services/whatsapp_send_receipt.dart';
 
+const Set<String> _compoundWhatsAppGivenNames = {
+  'ana maria',
+  'ana paula',
+  'ana sofia',
+  'carmen gloria',
+  'francisco javier',
+  'jorge luis',
+  'jose antonio',
+  'jose carlos',
+  'jose francisco',
+  'jose ignacio',
+  'jose luis',
+  'jose manuel',
+  'jose maria',
+  'jose miguel',
+  'jose pablo',
+  'juan antonio',
+  'juan carlos',
+  'juan francisco',
+  'juan ignacio',
+  'juan jose',
+  'juan luis',
+  'juan manuel',
+  'juan miguel',
+  'juan pablo',
+  'juan sebastian',
+  'luis alberto',
+  'luis enrique',
+  'luis felipe',
+  'luis miguel',
+  'luz maria',
+  'marco antonio',
+  'maria angelica',
+  'maria carolina',
+  'maria elena',
+  'maria fernanda',
+  'maria ignacia',
+  'maria isabel',
+  'maria jesus',
+  'maria jose',
+  'maria paz',
+  'maria soledad',
+  'maria teresa',
+  'miguel angel',
+  'pedro pablo',
+  'rosa maria',
+};
+
+String _foldWhatsAppNameToken(String value) => value
+    .toLowerCase()
+    .replaceAll('á', 'a')
+    .replaceAll('é', 'e')
+    .replaceAll('í', 'i')
+    .replaceAll('ó', 'o')
+    .replaceAll('ú', 'u')
+    .replaceAll('ü', 'u');
+
+@visibleForTesting
+String resolveWhatsAppTemplateGreetingName(String fullName) {
+  final parts = fullName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.length <= 1) return parts.isEmpty ? '' : parts.first;
+
+  final firstPair = '${_foldWhatsAppNameToken(parts[0])} '
+      '${_foldWhatsAppNameToken(parts[1])}';
+  final preservesCompoundName =
+      parts.length >= 3 && _compoundWhatsAppGivenNames.contains(firstPair);
+  final hasTwoGivenNames = parts.length >= 4 &&
+      !const {'de', 'del', 'la', 'las', 'los'}
+          .contains(_foldWhatsAppNameToken(parts[1]));
+
+  return preservesCompoundName || hasTwoGivenNames
+      ? '${parts[0]} ${parts[1]}'
+      : parts.first;
+}
+
 enum WhatsAppTemplatePurpose {
   firstContact,
   jobUpdate,
   readyForPickup,
   quoteFollowUp,
+  supplierIntroduction,
+  supplierGreeting,
+  supplierResumeContact,
+  supplierAskForNews,
+  supplierPendingPurchase,
+}
+
+enum WhatsAppTemplateAudience { customer, supplier }
+
+enum WhatsAppTemplateParameterLayout {
+  contactAndAgent,
+  contactAndBusiness,
+  contactOnly,
 }
 
 class WhatsAppTemplateOption {
@@ -28,6 +120,9 @@ class WhatsAppTemplateOption {
   final String templateNameSettingKey;
   final String templateLanguageSettingKey;
   final IconData icon;
+  final WhatsAppTemplateAudience audience;
+  final WhatsAppTemplateParameterLayout parameterLayout;
+  final bool requiresAgentName;
 
   const WhatsAppTemplateOption({
     required this.purpose,
@@ -39,7 +134,109 @@ class WhatsAppTemplateOption {
     required this.templateNameSettingKey,
     required this.templateLanguageSettingKey,
     required this.icon,
+    required this.audience,
+    required this.parameterLayout,
+    this.requiresAgentName = false,
   });
+
+  bool get isSupplier => audience == WhatsAppTemplateAudience.supplier;
+
+  String renderPreview({
+    required String contactName,
+    required String businessName,
+    String? agentName,
+  }) {
+    final greetingName = resolveWhatsAppTemplateGreetingName(contactName);
+    final sender = agentName?.trim().isNotEmpty == true
+        ? agentName!.trim()
+        : 'parte del equipo';
+
+    return switch (purpose) {
+      WhatsAppTemplatePurpose.firstContact =>
+        'Hola $greetingName, buen día. Soy $sender de $businessName y te escribo por el servicio de tu bicicleta.',
+      WhatsAppTemplatePurpose.jobUpdate =>
+        'Hola $greetingName, tenemos una actualización sobre tu bicicleta en $businessName. Responde este mensaje para continuar la conversación.',
+      WhatsAppTemplatePurpose.readyForPickup =>
+        'Hola $greetingName, tu bicicleta está lista para retiro en $businessName. Responde este mensaje si necesitas coordinar algo.',
+      WhatsAppTemplatePurpose.quoteFollowUp =>
+        'Hola $greetingName, necesitamos tu respuesta sobre un presupuesto o aprobación pendiente en $businessName. Responde este mensaje para continuar.',
+      WhatsAppTemplatePurpose.supplierIntroduction =>
+        'Hola $greetingName, buen día. Soy $sender, del equipo de Viñabike en Viña del Mar, razón social NEWEN SpA. Con nuestro equipo estamos usando este nuevo número para comunicarnos con nuestros proveedores, así que quería presentarme y confirmar que podemos coordinarnos por aquí para compras, cotizaciones, documentos y despachos.\n\nQuedo atento. Saludos.',
+      WhatsAppTemplatePurpose.supplierGreeting =>
+        'Hola $greetingName, buen día.',
+      WhatsAppTemplatePurpose.supplierResumeContact =>
+        'Hola $greetingName, buen día. Cuando puedas me hablas, porfa. Quedo atento. Saludos.',
+      WhatsAppTemplatePurpose.supplierAskForNews =>
+        'Hola $greetingName, buen día. Cuando puedas me cuentas si hay alguna novedad, porfa. Quedo atento. Saludos.',
+      WhatsAppTemplatePurpose.supplierPendingPurchase =>
+        'Hola $greetingName, buen día. Te escribo para seguir con el pedido que tenemos pendiente. Cuando puedas me hablas, porfa. Quedo atento, saludos.',
+    };
+  }
+
+  List<String> bodyParameters({
+    required String contactName,
+    required String businessName,
+    String? agentName,
+  }) {
+    final normalizedContact = resolveWhatsAppTemplateGreetingName(contactName);
+    if (normalizedContact.isEmpty) {
+      throw ArgumentError.value(
+        contactName,
+        'contactName',
+        'El nombre del contacto no puede estar vacío',
+      );
+    }
+
+    final normalizedAgent = agentName?.trim();
+    if (requiresAgentName &&
+        (normalizedAgent == null || normalizedAgent.isEmpty)) {
+      throw ArgumentError.value(
+        agentName,
+        'agentName',
+        'La plantilla requiere el nombre del usuario conectado',
+      );
+    }
+    return switch (parameterLayout) {
+      WhatsAppTemplateParameterLayout.contactAndAgent => [
+          normalizedContact,
+          normalizedAgent?.isNotEmpty == true
+              ? normalizedAgent!
+              : 'parte del equipo',
+        ],
+      WhatsAppTemplateParameterLayout.contactAndBusiness => [
+          normalizedContact,
+          businessName.trim(),
+        ],
+      WhatsAppTemplateParameterLayout.contactOnly => [normalizedContact],
+    };
+  }
+}
+
+class WhatsAppTemplateReviewStatus {
+  final String status;
+  final String? category;
+  final String? rejectedReason;
+
+  const WhatsAppTemplateReviewStatus({
+    required this.status,
+    this.category,
+    this.rejectedReason,
+  });
+
+  bool get isApproved => status == 'APPROVED';
+
+  factory WhatsAppTemplateReviewStatus.fromMap(Map<dynamic, dynamic> data) {
+    String? normalized(String key) {
+      final value = data[key]?.toString().trim();
+      return value == null || value.isEmpty ? null : value.toUpperCase();
+    }
+
+    return WhatsAppTemplateReviewStatus(
+      status: normalized('status') ?? 'UNKNOWN',
+      category: normalized('category'),
+      rejectedReason: normalized('rejected_reason'),
+    );
+  }
 }
 
 /// WhatsApp messaging service for customer communication
@@ -53,7 +250,7 @@ class WhatsAppService {
       'whatsapp_first_contact_template_name';
   static const String firstContactTemplateLanguageSettingKey =
       'whatsapp_first_contact_template_language';
-  static const List<WhatsAppTemplateOption> templateOptions = [
+  static const List<WhatsAppTemplateOption> customerTemplateOptions = [
     WhatsAppTemplateOption(
       purpose: WhatsAppTemplatePurpose.firstContact,
       key: 'first_contact',
@@ -64,6 +261,8 @@ class WhatsAppService {
       templateNameSettingKey: firstContactTemplateNameSettingKey,
       templateLanguageSettingKey: firstContactTemplateLanguageSettingKey,
       icon: Icons.waving_hand_outlined,
+      audience: WhatsAppTemplateAudience.customer,
+      parameterLayout: WhatsAppTemplateParameterLayout.contactAndAgent,
     ),
     WhatsAppTemplateOption(
       purpose: WhatsAppTemplatePurpose.jobUpdate,
@@ -75,6 +274,8 @@ class WhatsAppService {
       templateNameSettingKey: 'whatsapp_job_update_template_name',
       templateLanguageSettingKey: 'whatsapp_job_update_template_language',
       icon: Icons.build_outlined,
+      audience: WhatsAppTemplateAudience.customer,
+      parameterLayout: WhatsAppTemplateParameterLayout.contactAndBusiness,
     ),
     WhatsAppTemplateOption(
       purpose: WhatsAppTemplatePurpose.readyForPickup,
@@ -86,6 +287,8 @@ class WhatsAppService {
       templateNameSettingKey: 'whatsapp_ready_pickup_template_name',
       templateLanguageSettingKey: 'whatsapp_ready_pickup_template_language',
       icon: Icons.task_alt_outlined,
+      audience: WhatsAppTemplateAudience.customer,
+      parameterLayout: WhatsAppTemplateParameterLayout.contactAndBusiness,
     ),
     WhatsAppTemplateOption(
       purpose: WhatsAppTemplatePurpose.quoteFollowUp,
@@ -97,8 +300,94 @@ class WhatsAppService {
       templateNameSettingKey: 'whatsapp_quote_follow_up_template_name',
       templateLanguageSettingKey: 'whatsapp_quote_follow_up_template_language',
       icon: Icons.request_quote_outlined,
+      audience: WhatsAppTemplateAudience.customer,
+      parameterLayout: WhatsAppTemplateParameterLayout.contactAndBusiness,
     ),
   ];
+
+  static const List<WhatsAppTemplateOption> supplierTemplateOptions = [
+    WhatsAppTemplateOption(
+      purpose: WhatsAppTemplatePurpose.supplierIntroduction,
+      key: 'supplier_introduction',
+      label: 'Presentación / nuevo número',
+      description: 'Presenta este número y al usuario que inició sesión.',
+      defaultTemplateName: 'proveedor_presentacion_nuevo_numero_v1',
+      defaultLanguage: firstContactTemplateLanguage,
+      templateNameSettingKey: 'whatsapp_supplier_introduction_template_name',
+      templateLanguageSettingKey:
+          'whatsapp_supplier_introduction_template_language',
+      icon: Icons.waving_hand_outlined,
+      audience: WhatsAppTemplateAudience.supplier,
+      parameterLayout: WhatsAppTemplateParameterLayout.contactAndAgent,
+      requiresAgentName: true,
+    ),
+    WhatsAppTemplateOption(
+      purpose: WhatsAppTemplatePurpose.supplierGreeting,
+      key: 'supplier_greeting',
+      label: 'Hola, buen día',
+      description: 'Un saludo breve para volver a abrir la conversación.',
+      defaultTemplateName: 'proveedor_saludo_v1',
+      defaultLanguage: firstContactTemplateLanguage,
+      templateNameSettingKey: 'whatsapp_supplier_greeting_template_name',
+      templateLanguageSettingKey:
+          'whatsapp_supplier_greeting_template_language',
+      icon: Icons.chat_bubble_outline,
+      audience: WhatsAppTemplateAudience.supplier,
+      parameterLayout: WhatsAppTemplateParameterLayout.contactOnly,
+    ),
+    WhatsAppTemplateOption(
+      purpose: WhatsAppTemplatePurpose.supplierResumeContact,
+      key: 'supplier_resume_contact',
+      label: 'Retomar contacto',
+      description: 'Pide que te escriban cuando puedan.',
+      defaultTemplateName: 'proveedor_retomar_contacto_v1',
+      defaultLanguage: firstContactTemplateLanguage,
+      templateNameSettingKey: 'whatsapp_supplier_resume_template_name',
+      templateLanguageSettingKey: 'whatsapp_supplier_resume_template_language',
+      icon: Icons.forum_outlined,
+      audience: WhatsAppTemplateAudience.supplier,
+      parameterLayout: WhatsAppTemplateParameterLayout.contactOnly,
+    ),
+    WhatsAppTemplateOption(
+      purpose: WhatsAppTemplatePurpose.supplierAskForNews,
+      key: 'supplier_ask_for_news',
+      label: 'Consultar novedades',
+      description: 'Pregunta de forma casual si hay alguna novedad.',
+      defaultTemplateName: 'proveedor_consulta_novedades_v1',
+      defaultLanguage: firstContactTemplateLanguage,
+      templateNameSettingKey: 'whatsapp_supplier_news_template_name',
+      templateLanguageSettingKey: 'whatsapp_supplier_news_template_language',
+      icon: Icons.mark_chat_unread_outlined,
+      audience: WhatsAppTemplateAudience.supplier,
+      parameterLayout: WhatsAppTemplateParameterLayout.contactOnly,
+    ),
+    WhatsAppTemplateOption(
+      purpose: WhatsAppTemplatePurpose.supplierPendingPurchase,
+      key: 'supplier_pending_purchase',
+      label: 'Pedido pendiente',
+      description: 'Retoma el pedido que sigue pendiente.',
+      defaultTemplateName: 'proveedor_pedido_pendiente_v3',
+      defaultLanguage: firstContactTemplateLanguage,
+      templateNameSettingKey:
+          'whatsapp_supplier_pending_purchase_template_name',
+      templateLanguageSettingKey:
+          'whatsapp_supplier_pending_purchase_template_language',
+      icon: Icons.shopping_cart_outlined,
+      audience: WhatsAppTemplateAudience.supplier,
+      parameterLayout: WhatsAppTemplateParameterLayout.contactOnly,
+    ),
+  ];
+
+  /// Backwards-compatible customer option list for existing call sites.
+  static const List<WhatsAppTemplateOption> templateOptions =
+      customerTemplateOptions;
+
+  static List<WhatsAppTemplateOption> templateOptionsForConversation({
+    required bool isSupplier,
+  }) {
+    return isSupplier ? supplierTemplateOptions : customerTemplateOptions;
+  }
+
   factory WhatsAppService() => _instance;
   WhatsAppService._internal();
 
@@ -111,6 +400,43 @@ class WhatsAppService {
   );
 
   final _dateFormat = DateFormat('dd/MM/yyyy', 'es_CL');
+
+  Future<Map<String, WhatsAppTemplateReviewStatus>>
+      getSupplierTemplateReviewStatuses() async {
+    final response = await _client.functions.invoke(
+      'whatsapp-template-manager',
+      body: const {'action': 'list'},
+    );
+    if (response.status < 200 || response.status >= 300) {
+      throw StateError(
+        'Meta no pudo confirmar el estado de las plantillas de proveedores.',
+      );
+    }
+
+    final data = response.data;
+    if (data is! Map || data['templates'] is! List) {
+      throw const FormatException(
+        'La respuesta de Meta no contiene el listado de plantillas.',
+      );
+    }
+
+    final expectedNames = supplierTemplateOptions
+        .map((option) => option.defaultTemplateName)
+        .toSet();
+    final statuses = <String, WhatsAppTemplateReviewStatus>{};
+    for (final item in data['templates'] as List) {
+      if (item is! Map) continue;
+      final name = item['name']?.toString().trim();
+      final language = item['language']?.toString().trim();
+      if (name == null ||
+          !expectedNames.contains(name) ||
+          language != firstContactTemplateLanguage) {
+        continue;
+      }
+      statuses[name] = WhatsAppTemplateReviewStatus.fromMap(item);
+    }
+    return statuses;
+  }
 
   /// Format Chilean phone number (remove spaces, dashes, +56 prefix)
   String _formatPhoneNumber(String phone) {
@@ -141,30 +467,17 @@ class WhatsAppService {
     return 'Viñabike';
   }
 
-  String _buildFirstContactTemplateText({
-    required String customerName,
-    required String businessName,
-  }) {
-    return 'Hola $customerName, buen día. Soy parte del equipo de $businessName y te escribo por el servicio de tu bicicleta.';
-  }
-
   String buildTemplatePreviewText({
     required WhatsAppTemplateOption option,
     required String customerName,
     required String businessName,
+    String? agentName,
   }) {
-    return switch (option.purpose) {
-      WhatsAppTemplatePurpose.firstContact => _buildFirstContactTemplateText(
-          customerName: customerName,
-          businessName: businessName,
-        ),
-      WhatsAppTemplatePurpose.jobUpdate =>
-        'Hola $customerName, tenemos una actualización sobre tu bicicleta en $businessName. Responde este mensaje para continuar la conversación.',
-      WhatsAppTemplatePurpose.readyForPickup =>
-        'Hola $customerName, tu bicicleta está lista para retiro en $businessName. Responde este mensaje si necesitas coordinar algo.',
-      WhatsAppTemplatePurpose.quoteFollowUp =>
-        'Hola $customerName, necesitamos tu respuesta sobre un presupuesto o aprobación pendiente en $businessName. Responde este mensaje para continuar.',
-    };
+    return option.renderPreview(
+      contactName: customerName,
+      businessName: businessName,
+      agentName: agentName,
+    );
   }
 
   String? _extractExternalMessageId(dynamic data) {
@@ -247,7 +560,7 @@ class WhatsAppService {
 
   Future<({String templateName, String templateLanguage})>
       _loadFirstContactTemplateSettings() async {
-    return _loadTemplateSettings(templateOptions.first);
+    return _loadTemplateSettings(customerTemplateOptions.first);
   }
 
   Future<({String templateName, String templateLanguage})>
@@ -685,6 +998,8 @@ Viña Bike
     required String customerPhone,
     required String message,
     String? contactName,
+    String? templateContactName,
+    bool isSupplierConversation = false,
     String? conversationId,
     String? contextType,
     String? contextId,
@@ -692,20 +1007,35 @@ Viña Bike
     String? clientMessageId,
     Map<String, dynamic>? metadata,
   }) async {
-    final customerDisplayName =
-        (contactName != null && contactName.trim().isNotEmpty)
-            ? contactName.trim()
-            : 'cliente';
+    final normalizedTemplateContact = templateContactName?.trim();
+    final normalizedBindingContact = contactName?.trim();
+    final customerDisplayName = isSupplierConversation
+        ? normalizedTemplateContact ?? ''
+        : normalizedTemplateContact?.isNotEmpty == true
+            ? normalizedTemplateContact!
+            : normalizedBindingContact?.isNotEmpty == true
+                ? normalizedBindingContact!
+                : 'cliente';
 
     if (!_isCustomerServiceWindowOpen(lastInboundAt)) {
-      return sendFirstContactTemplate(
-        customerPhone: customerPhone,
-        customerName: customerDisplayName,
-        conversationId: conversationId,
-        contextType: contextType,
-        contextId: contextId,
-        clientMessageId: clientMessageId,
-      );
+      return isSupplierConversation
+          ? sendSupplierReengagementTemplate(
+              customerPhone: customerPhone,
+              supplierContactName: customerDisplayName,
+              bindingContactName: contactName,
+              conversationId: conversationId,
+              contextType: contextType,
+              contextId: contextId,
+              clientMessageId: clientMessageId,
+            )
+          : sendFirstContactTemplate(
+              customerPhone: customerPhone,
+              customerName: customerDisplayName,
+              conversationId: conversationId,
+              contextType: contextType,
+              contextId: contextId,
+              clientMessageId: clientMessageId,
+            );
     }
 
     final cloudBody = {
@@ -731,14 +1061,24 @@ Viña Bike
     var failureReceipt = cloudReceipt;
 
     if (cloudReceipt.errorRequiresCustomerReply) {
-      final templateReceipt = await sendFirstContactTemplate(
-        customerPhone: customerPhone,
-        customerName: customerDisplayName,
-        conversationId: conversationId,
-        contextType: contextType,
-        contextId: contextId,
-        clientMessageId: clientMessageId,
-      );
+      final templateReceipt = isSupplierConversation
+          ? await sendSupplierReengagementTemplate(
+              customerPhone: customerPhone,
+              supplierContactName: customerDisplayName,
+              bindingContactName: contactName,
+              conversationId: conversationId,
+              contextType: contextType,
+              contextId: contextId,
+              clientMessageId: clientMessageId,
+            )
+          : await sendFirstContactTemplate(
+              customerPhone: customerPhone,
+              customerName: customerDisplayName,
+              conversationId: conversationId,
+              contextType: contextType,
+              contextId: contextId,
+              clientMessageId: clientMessageId,
+            );
 
       if (templateReceipt.isSuccess) return templateReceipt;
       failureReceipt = templateReceipt;
@@ -767,7 +1107,7 @@ Viña Bike
     String? clientMessageId,
   }) async {
     return sendTemplateMessage(
-      option: templateOptions.first,
+      option: customerTemplateOptions.first,
       customerPhone: customerPhone,
       customerName: customerName,
       agentName: agentName,
@@ -778,11 +1118,34 @@ Viña Bike
     );
   }
 
+  Future<WhatsAppSendReceipt> sendSupplierReengagementTemplate({
+    required String customerPhone,
+    required String supplierContactName,
+    String? bindingContactName,
+    String? conversationId,
+    String? contextType,
+    String? contextId,
+    String? clientMessageId,
+  }) async {
+    final receipt = await sendTemplateMessage(
+      option: supplierTemplateOptions[2],
+      customerPhone: customerPhone,
+      customerName: supplierContactName,
+      bindingContactName: bindingContactName,
+      conversationId: conversationId,
+      contextType: contextType,
+      contextId: contextId,
+      clientMessageId: clientMessageId,
+    );
+    return receipt.copyWith(usedFirstContactTemplate: receipt.isSuccess);
+  }
+
   Future<WhatsAppSendReceipt> sendTemplateMessage({
     required WhatsAppTemplateOption option,
     required String customerPhone,
     required String customerName,
     String? agentName,
+    String? bindingContactName,
     String? conversationId,
     String? contextType,
     String? contextId,
@@ -793,24 +1156,22 @@ Viña Bike
             ? await _loadFirstContactTemplateSettings()
             : await _loadTemplateSettings(option);
     final businessName = await _resolveBusinessName();
-    final resolvedSenderLabel =
-        (agentName != null && agentName.trim().isNotEmpty)
-            ? agentName.trim()
-            : 'parte del equipo';
     final renderedMessage = buildTemplatePreviewText(
       option: option,
       customerName: customerName,
       businessName: businessName,
+      agentName: agentName,
     );
-    final secondParameter =
-        option.purpose == WhatsAppTemplatePurpose.firstContact
-            ? resolvedSenderLabel
-            : businessName;
+    final bodyParameters = option.bodyParameters(
+      contactName: customerName,
+      businessName: businessName,
+      agentName: agentName,
+    );
 
     final receipt = await _sendViaCloud({
       'conversationId': conversationId,
       'phoneNumber': _formatPhoneNumber(customerPhone),
-      'contactName': customerName,
+      'contactName': bindingContactName ?? customerName,
       'contextType': contextType,
       'contextId': contextId,
       'type': 'template',
@@ -820,16 +1181,14 @@ Viña Bike
       'templateComponents': [
         {
           'type': 'body',
-          'parameters': [
-            {
-              'type': 'text',
-              'text': customerName,
-            },
-            {
-              'type': 'text',
-              'text': secondParameter,
-            },
-          ],
+          'parameters': bodyParameters
+              .map(
+                (value) => {
+                  'type': 'text',
+                  'text': value,
+                },
+              )
+              .toList(growable: false),
         },
       ],
       'metadata': {

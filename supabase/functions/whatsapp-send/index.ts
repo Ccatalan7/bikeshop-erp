@@ -13,6 +13,7 @@ import {
   durableWhatsAppSendReceipt,
   whatsappProviderFailureHttpStatus,
 } from "../_shared/whatsapp_send_receipts.ts";
+import { normalizeWhatsAppTemplateGreeting } from "../_shared/whatsapp_template_greeting.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -617,6 +618,10 @@ serve(async (req) => {
   if (!requestBody.phoneNumber || !requestBody.type) {
     return jsonResponse({ error: "phoneNumber and type are required" }, 400);
   }
+
+  requestBody = normalizeWhatsAppTemplateGreeting(
+    requestBody as unknown as JsonRecord,
+  ) as unknown as SendRequest;
 
   const startedAt = Date.now();
   const clientMessageId = requestBody.metadata?.client_message_id ?? null;

@@ -151,7 +151,7 @@ void main() {
           collapsed.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       expect(collapsed.flagsCollection.isButton, isTrue);
       expect(collapsed.flagsCollection.isExpanded, Tristate.isFalse);
-      expect(collapsed.label, contains('Ver la solicitud del cliente'));
+      expect(collapsed.label, contains('Ver el detalle del trabajo'));
       expect(collapsed.label, isNot(contains('Ocultar')));
 
       await tester.tap(find.text('Nuevo trabajo'));
@@ -160,6 +160,8 @@ void main() {
       expect(find.text('SOLICITUD DEL CLIENTE'), findsOneWidget);
       expect(
           find.text('Revisión de frenos y cambio de cadena'), findsOneWidget);
+      expect(find.text('REGISTRÓ'), findsOneWidget);
+      expect(find.text('Guille'), findsOneWidget);
       expect(find.text('Abrir trabajo'), findsOneWidget);
       expect(find.text('Ocultar'), findsOneWidget);
       expect(find.text('Detalles'), findsNothing);
@@ -167,7 +169,7 @@ void main() {
       final expanded = _headerSemanticsOf(tester, 'Ocultar');
       expect(expanded.flagsCollection.isButton, isTrue);
       expect(expanded.flagsCollection.isExpanded, Tristate.isTrue);
-      expect(expanded.label, contains('Ocultar la solicitud del cliente'));
+      expect(expanded.label, contains('Ocultar el detalle del trabajo'));
 
       await tester.tap(find.text('Nuevo trabajo'));
       await _settle(tester);
@@ -176,6 +178,31 @@ void main() {
       expect(find.text('Abrir trabajo'), findsNothing);
       expect(find.text('Detalles'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a job can disclose its registrant without a client request', (
+      tester,
+    ) async {
+      await _pumpBriefing(
+        tester,
+        rows: [
+          _jobRow(
+            id: 'job-actor-only',
+            data: const {
+              'job_id': 'job-actor-only',
+              'recorded_by_name': 'Tania Soto',
+            },
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('Nuevo trabajo'));
+      await _settle(tester);
+
+      expect(find.text('SOLICITUD DEL CLIENTE'), findsNothing);
+      expect(find.text('REGISTRÓ'), findsOneWidget);
+      expect(find.text('Tania Soto'), findsOneWidget);
+      expect(find.text('Abrir trabajo'), findsOneWidget);
     });
 
     testWidgets('only one row stays open', (tester) async {
@@ -1028,6 +1055,7 @@ Map<String, dynamic> _jobRow({
           'customer_name': 'Claudia Arcos',
           'bike_label': 'Oxford Orion 4 · Negro',
           'client_request': 'Revisión de frenos y cambio de cadena',
+          'recorded_by_name': 'Guille',
           'priority': 'NORMAL',
           'status': 'PENDIENTE',
         },
