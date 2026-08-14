@@ -693,7 +693,7 @@ Deno.test("production wiring isolates caller data and assistant_runtime ledger t
         })),
       );
     }
-    if (rpc === "assistant_search_inventory_v5") {
+    if (rpc === "assistant_search_inventory_v6") {
       return Promise.resolve(
         new Response(JSON.stringify({
           authorityTenantId: tenantId,
@@ -755,6 +755,10 @@ Deno.test("production wiring isolates caller data and assistant_runtime ledger t
         category: null,
         availability: "any",
         presentation: "answer",
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
         technicalPredicates: [],
       },
     },
@@ -774,7 +778,7 @@ Deno.test("production wiring isolates caller data and assistant_runtime ledger t
 
   assertEquals(requests.map((entry) => entry.path), [
     "/rest/v1/rpc/assistant_get_authority_v1",
-    "/rest/v1/rpc/assistant_search_inventory_v5",
+    "/rest/v1/rpc/assistant_search_inventory_v6",
     "/rest/v1/rpc/assistant_begin_run_v1",
     "/rest/v1/rpc/assistant_heartbeat_run_v2",
   ], "only fixed transports are reached");

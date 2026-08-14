@@ -297,7 +297,11 @@ class _CalendarBikeshopService extends ChangeNotifier
       const <MechanicJobItem>[];
 
   @override
-  Future<MechanicJob?> getJobById(String id) async => _jobsById[id];
+  Future<MechanicJob?> getJobById(
+    String id, {
+    bool includeOperationalProjections = true,
+  }) async =>
+      _jobsById[id];
 
   @override
   Future<MechanicJob> updateJob(

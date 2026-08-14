@@ -134,8 +134,7 @@ class GatewayAIAssistantTurnEngine
     if (_inFlightAbort != null) {
       throw const AIAgentGatewayException(code: 'turn_in_progress');
     }
-    if (approval.action != AIAssistantApprovalAction.createTask ||
-        approval.state != AIAssistantApprovalState.pending) {
+    if (approval.state != AIAssistantApprovalState.pending) {
       throw const AIAgentGatewayException(code: 'approval_invalid');
     }
     final boundScope = _authorityScope;

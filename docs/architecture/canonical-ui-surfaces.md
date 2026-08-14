@@ -861,16 +861,31 @@ the canonical internal route stored with the notification.
 
 | Workflow / host | User entry point | Canonical implementation | Required shared behavior |
 |---|---|---|---|
-| Unified inbox desktop | `/mail`, `/mail?providerId=<provider>&messageId=<id>`, desktop content width at or above the mail split breakpoint | `mail_inbox_page.dart` desktop split hosting `EmailListItemUnified` and `EmailDetailViewUnified` | Visible account and unread/attachment filters; selected-message provider must match the active account filter; an exact message route clears conflicting search state, selects the owning provider and opens that concrete message; resizable persisted list width; fixed-height count/load-more status row; move-to-trash confirmation |
+| Unified inbox desktop | `/mail`, `/mail?providerId=<provider>&messageId=<id>`, desktop content width at or above the mail split breakpoint | `mail_inbox_page.dart` desktop split hosting `EmailListItemUnified` and `EmailDetailViewUnified` | Visible account and unread/attachment filters; selected-message provider must match the active account filter; an exact message route clears conflicting search state, selects the owning provider and opens that concrete message; resizable persisted list width; fixed-height count/load-more status row; move-to-trash confirmation. Read/unread is provider-authoritative: the UI may project a requested state immediately, but mutations for one provider/message identity are serialized, persistence happens only after provider confirmation, and failure restores the last confirmed state with an explicit diagnostic. Foreground refresh reconciles the complete loaded window and removes rows moved on another client; Gmail known rows still fetch minimal labels so another client's `UNREAD` change cannot be hidden by metadata caching. |
 | Unified inbox compact/mobile | `/mail`, `/mail?providerId=<provider>&messageId=<id>`, compact desktop/web and mobile layouts | `mail_inbox_page.dart` list/detail stack hosting the same list and detail widgets | Same exact-message, account/filter and fixed-height status-row contract; one focused list or detail surface at a time; explicit Back action from detail |
-| Compose and reply | Inbox `Redactar`, message `Responder`, and `Responder a todos` actions | `compose_email_dialog.dart` | New mail defaults to the active account; replies default to the message provider; the single compact `Desde` selector combines each connected provider with only its provider-confirmed sender identities. Zoho refreshes these from the authenticated account's `sendMailDetails` through the server-managed OAuth proxy immediately before composing and sending; removed or arbitrary addresses are rejected rather than forwarded. Recipient validation, CC/CCO, required subject/body, and draft-discard protection remain shared. |
-| Message body and attachments | Selected message on routed desktop, compact, and mobile layouts | `email_detail_view_unified.dart` | Shared sender/actions/attachments; fit-safe HTML on web and native WebView; existing anchors and bare HTTP(S) URLs are visibly clickable and open only in the ERP browser workspace; compatible `.xlsx`/`.csv` attachment bytes open through the canonical Planillas handoff without a download round trip; destructive actions remain outside the renderer |
+| Compose and reply | Inbox `Redactar`, message `Responder`, and `Responder a todos` actions | `compose_email_dialog.dart` | New mail defaults to the active account; replies default to the message provider and use its native reply contract rather than sending a visually quoted but unrelated message (Gmail carries `threadId`, `In-Reply-To` and `References`; Zoho uses its message reply endpoint). The single compact `Desde` selector combines each connected provider with only its provider-confirmed sender identities. Zoho refreshes these from the authenticated account's `sendMailDetails` through the server-managed OAuth proxy immediately before composing and sending; removed or arbitrary addresses are rejected rather than forwarded. Recipient validation, CC/CCO, required subject/body, draft-discard protection, escaped authored text, sanitized quoted HTML, and injection-safe outbound MIME headers remain shared. |
+| Message body and attachments | Selected message on routed desktop, compact, and mobile layouts | `email_detail_view_unified.dart` | Shared sender/actions/attachments; fit-safe HTML on web and native WebView; provider HTML is sanitized before rendering so sender scripts, event handlers, active documents and unsafe URLs never share the native JavaScript bridge; existing anchors and bare HTTP(S) URLs are visibly clickable and open only in the ERP browser workspace; compatible `.xlsx`/`.csv` attachment bytes open through the canonical Planillas handoff without a download round trip; destructive actions remain outside the renderer |
 
 `MailAccountManager` is the shared owner of connected-provider state, merged
 messages, selection, account filtering, read state, search, send, and trash
 commands. Host layouts must not retain a selected message from an account that
 the active provider filter excludes, and reply surfaces must never silently
-fall back to the first connected account.
+fall back to the first connected account. Cache identity is always
+`provider_id + message_id`, because provider message-ID namespaces are not
+shared. A renewed Gmail watch and an attached Realtime channel are setup
+evidence only; the manager calls push end-to-end verified only after observing
+a real provider notification and keeps the shorter polling fallback until then.
+The Gmail Pub/Sub endpoint is trusted only after verifying Google's signed OIDC
+token, its audience, issuer, and the configured push service-account identity;
+an unauthenticated envelope must never create Realtime or FCM evidence. A watch
+with a current expiration but a stale `last_notification_at` is a degraded
+transport and must remain on polling rather than being reported as healthy.
+
+Regressions: `test/unit/mail_folder_read_model_test.dart`,
+`test/unit/mail_provider_read_sync_test.dart`,
+`test/unit/email_html_sanitizer_test.dart`, and
+`test/unit/mail_outbound_content_test.dart`,
+`supabase/functions/_shared/gmail_mail_contract_test.ts`.
 
 ## Embedded Browser Surfaces
 
@@ -1224,7 +1239,7 @@ Regression: `test/unit/public_category_publication_test.dart`,
 single-owner/extraction guards in
 `test/unit/website_builder_workspace_architecture_test.dart`.
 
-## Asistente IA — resumen operativo (hoy / mañana)
+## Asistente IA — operación y acciones gobernadas
 
 Superficie: el panel del Asistente IA en el rail derecho (`ToolbarTool.aiAssistant`),
 en escritorio como panel acoplado y bajo ~900 px como **reemplazo a ancho
@@ -1254,10 +1269,11 @@ que deba reproducirse.
   una petición explícita de buscar, mostrar, listar o abrir productos: el
   servidor puede adjuntar un `listRef` verificado con `autoOpen=true`, aplicar
   primero su búsqueda y disponibilidad y abrir la lista agregada de Inventario.
-  No acepta una ruta ni un conjunto de filas escrito por el modelo. La única
-  escritura admitida durante este rollout es la aprobación gobernada de una
-  propuesta de tarea descrita abajo; no existe un writer libre ni un write tool
-  redactado por el modelo.
+  No acepta una ruta ni un conjunto de filas escrito por el modelo. Las
+  escrituras admitidas son propuestas tipadas congeladas por el servidor y
+  consumidas sólo por una confirmación explícita: tareas, un campo canónico de
+  diagnóstico o una línea de catálogo en un trabajo. No existe un writer libre
+  ni una mutación redactada por el modelo.
 - El briefing heredado ofrece sólo Taller y Tareas agregados. El gateway puede
   ofrecer otros destinos cerrados y detalles exactos únicamente cuando una
   herramienta server-owned adjunta una referencia de entidad verificada; nunca
@@ -1295,8 +1311,8 @@ El gateway nuevo reemplaza detección/redacción/tool execution como un engine
 completo server-owned; no se enchufa como otro provider dentro de ese dispatch
 heredado y no cae de vuelta a él a mitad de un turno.
 
-**Runtime agéntico read-only.** El mismo panel también consume el runtime
-provider-neutral documentado en
+**Runtime agéntico.** El mismo panel consume el runtime provider-neutral
+documentado en
 `docs/architecture/AI_ASSISTANT_AGENT_RUNTIME_PLAN_2026-08-04.md`. El owner de
 contratos es `models/ai_agent_contracts.dart`; el de autoridad, schemas,
 riesgos, aprobación e idempotencia es `models/ai_agent_tool.dart` más
@@ -1346,26 +1362,55 @@ nuevos anuncian soporte mediante `x-vinabike-ai-result-lists: 1`; durante el
 rollout el gateway omite sólo el `listRef` para clientes anteriores, sin romper
 su decoder estricto.
 
-El catálogo server-owned expone sólo lecturas cuya capacidad y RPC están
-verificados para la autoridad actual. El navegador autenticado y toda escritura
-fuera del comando gobernado `create_task` siguen denegados. Una respuesta puede
-proponer una card `task_preview` con destino cerrado `tasks`, su contenido
-completo y `approvalRef = {id, action: create_task, expiresAt, state}`. Ese UUID
-identifica una propuesta congelada por el servidor: Flutter nunca envía título,
-fecha, prioridad, ruta, prompt ni argumentos de tarea al aprobarla.
+El catálogo server-owned expone sólo herramientas cuya capacidad y RPC están
+verificadas para la autoridad actual. El navegador autenticado y toda
+escritura sin un comando tipado siguen denegados. El modelo puede encadenar
+lecturas para resolver una entidad y luego llamar una herramienta `prepare_*`;
+esa herramienta no escribe, sino que devuelve una card de preview con
+`approvalRef = {id, action, expiresAt, state}`. El UUID identifica una propuesta
+congelada por el servidor: Flutter nunca devuelve nombres, IDs de negocio,
+precios, fechas, campos, valores ni rutas al aprobarla.
 
-La card pendiente presenta `Crear tarea` y `Descartar`; no navega al tocar su
-cuerpo. Ambos botones comparten single-flight y llaman directamente al gateway
-con `operation=approval_action`, decisión y un `clientActionId` estable que se
+La card pendiente presenta una acción específica —`Crear tarea`, `Actualizar
+diagnóstico` o `Agregar al trabajo`— y `Descartar`; no navega al tocar su cuerpo.
+Ambos botones comparten single-flight y llaman directamente al gateway con
+`operation=approval_action`, decisión y un `clientActionId` estable que se
 reutiliza si se perdió el ACK. Confirmar no dispara otro turno de modelo ni abre
-Tareas. Un resultado aprobado reemplaza el preview por la card agregada normal
-de Tareas —que sólo navegará con un clic posterior—; descartado o vencido deja
-el preview terminal sin botones. Ese preview terminal sigue siendo un estado
-válido del transcript canónico y debe decodificar igual al recargar o reabrir
-el hilo; sólo `pending` expone decisiones. Reset, logout o cambio de autoridad
-abortan el comando y descartan toda respuesta tardía. Errores se muestran con copy cerrado
-y conservan el mismo identificador en reintentos de resultado incierto; ningún
-detalle interno del gateway llega a la card.
+otra superficie. Un resultado aprobado reemplaza el preview por una card normal
+del destino exacto —Tareas o el trabajo afectado— que sólo navega con un clic
+posterior; descartado o vencido deja el preview terminal sin botones. Ese
+preview terminal sigue siendo un estado válido del transcript canónico y debe
+decodificar igual al recargar o reabrir el hilo; sólo `pending` expone
+decisiones. Reset, logout o cambio de autoridad abortan el comando y descartan
+toda respuesta tardía. Errores se muestran con copy cerrado y conservan el
+mismo identificador en reintentos de resultado incierto; ningún detalle interno
+del gateway llega a la card.
+
+Las acciones de taller usan una cadena general, no frases especiales. Primero
+`search_workshop_jobs` resuelve por trabajo, cliente, cualquiera de sus
+bicicletas o factura y entrega al modelo sólo un `jobRef` aleatorio y
+request-local. `get_workshop_job_context` consume esa referencia; Edge la
+resuelve contra el UUID server-owned y fija trabajo, bicicleta, factura y
+revisión exactos. Un diagnóstico llama además
+`inspect_diagnosis_schema`, que entrega la ruta, tipo y unidad canónicos antes de
+`prepare_diagnosis_update`. Una línea de trabajo obtiene un producto o servicio
+real desde Inventario y entrega un `catalogItemRef` opaco a
+`prepare_workshop_item`; el UUID, nombre, tipo, precio y total pertenecen al
+servidor. Esas referencias no sobreviven al run, no son las `entityRef` de
+navegación de Flutter y una referencia inventada, cruzada de tipo o tomada de
+otro turno se rechaza antes de cualquier RPC. La confirmación vuelve a comprobar
+tenant, autoridad, revisión, estado del trabajo, historial financiero y valor
+de catálogo, aplica una sola transacción y lee el resultado antes de emitir el
+recibo. Si cliente–bicicleta–trabajo–factura no es unívoco, el agente pide la
+mínima aclaración; si no existe una herramienta tipada, declara esa carencia y
+no simula la acción.
+
+Las preguntas temporales tampoco se resuelven filtrando texto en Flutter.
+`analyze_sales_period` convierte intervalos como `last_week` usando el timezone
+del tenant y separa `issued` de `collected`: el segundo cuenta facturas distintas
+y eventos reales no eliminados de `sales_payments`, además del monto y la
+factura principal del período. La tarjeta de mayor factura sólo recibe el UUID
+server-owned que devolvió esa lectura.
 
 `research_public_web` usa un adaptador público aislado, sin sesión ERP, prompt
 libre ni datos internos. Producción usa Gemini Interactions con Google Search

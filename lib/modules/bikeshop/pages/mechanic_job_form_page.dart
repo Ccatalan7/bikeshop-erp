@@ -1705,6 +1705,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   List<Bike> _bikes = [];
   List<Product> _products = [];
   List<Product> _serviceProducts = [];
+  bool _hasLoadedCustomerCatalog = false;
 
   // Loading states
   bool _isLoading = false;
@@ -1715,6 +1716,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   bool _isInlineDiscardPromptOpen = false;
   bool _allowRoutePop = false;
   bool _hasAttemptedSave = false;
+  int _initialLoadGeneration = 0;
   final GlobalKey _workbenchSectionKey =
       GlobalKey(debugLabel: 'mechanic-job-workbench');
   final GlobalKey _customerSectionKey =
@@ -1825,6 +1827,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   @override
   void dispose() {
+    _initialLoadGeneration++;
     _clientRequestController.dispose();
     _diagnosisController.dispose();
     _workSummaryController.dispose();
@@ -1842,7 +1845,16 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     super.dispose();
   }
 
+  void _completeSuccessfulInitialLoad(int loadGeneration) {
+    if (!mounted || loadGeneration != _initialLoadGeneration) return;
+    setState(() => _isLoading = false);
+    if (widget.jobId == null || _existingJobLoadError == null) {
+      _captureInlineDraftBaseline();
+    }
+  }
+
   Future<void> _loadInitialData() async {
+    final loadGeneration = ++_initialLoadGeneration;
     try {
       final customerService =
           Provider.of<CustomerService>(context, listen: false);
@@ -1855,9 +1867,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       if (mounted) {
         setState(() {
-          if (customerService.hasListCustomersCache && _customers.isEmpty) {
-            _customers =
-                List<Customer>.from(customerService.cachedListCustomers);
+          if (customerService.hasListCustomersCache) {
+            _hasLoadedCustomerCatalog = true;
+            if (_customers.isEmpty) {
+              _customers =
+                  List<Customer>.from(customerService.cachedListCustomers);
+            }
           }
           if (inventoryService.hasLoaded && _products.isEmpty) {
             _products = List<Product>.from(inventoryService.products.take(50));
@@ -1868,12 +1883,30 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         });
       }
 
-      final results = await Future.wait([
+      // An existing editor needs the exact job aggregate, linked financial
+      // state, customer, bicycles, lines and service metadata. Broad customer,
+      // product, status and subject catalogs are selector data; loading them
+      // here made every open wait for thousands of unrelated rows.
+      if (widget.jobId != null) {
+        await _loadExistingJob();
+        _completeSuccessfulInitialLoad(loadGeneration);
+        return;
+      }
+
+      final results = await Future.wait<dynamic>([
         customerService.getCustomersForList(),
         inventoryService.searchProducts('', limit: 50),
         jobStatusService.loadStatuses(),
         bikeshopService.getJobSubjects(),
+        inventoryService.hasLoaded
+            ? Future<List<Product>>.value(
+                inventoryService.products
+                    .where((p) => p.productType == ProductType.service)
+                    .toList(),
+              )
+            : inventoryService.getProductsByType(ProductType.service),
       ]);
+      if (!mounted || loadGeneration != _initialLoadGeneration) return;
 
       List<Customer> customers = results[0] as List<Customer>;
       List<Product> products = results[1] as List<Product>;
@@ -1891,11 +1924,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
 
-      final serviceProducts = inventoryService.hasLoaded
-          ? inventoryService.products
-              .where((p) => p.productType == ProductType.service)
-              .toList()
-          : await inventoryService.getProductsByType(ProductType.service);
+      final serviceProducts = results[4] as List<Product>;
 
       final customStatuses = jobStatusService.activeStatuses;
       debugPrint('📋 Loaded ${customStatuses.length} custom statuses');
@@ -1903,6 +1932,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       if (mounted) {
         setState(() {
           _customers = customers;
+          _hasLoadedCustomerCatalog = true;
           _products = products;
           _serviceProducts = serviceProducts;
           _customStatuses = customStatuses;
@@ -1930,11 +1960,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         });
       }
 
-      if (widget.jobId != null) {
-        await _loadExistingJob();
-      }
-
-      if (widget.customerId != null && widget.jobId == null) {
+      if (widget.customerId != null) {
         final customer =
             _customers.where((c) => c.id == widget.customerId).firstOrNull;
         if (customer != null) {
@@ -1948,14 +1974,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         }
       }
 
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        _captureInlineDraftBaseline();
-      }
+      _completeSuccessfulInitialLoad(loadGeneration);
     } catch (e) {
-      if (mounted) {
+      if (mounted && loadGeneration == _initialLoadGeneration) {
         setState(() {
           _isLoading = false;
           if (widget.jobId != null) {
@@ -1992,10 +2013,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
     var hasActivePayments = job.isPaid;
     try {
-      final invoiceData = await databaseService.selectById(
-        'sales_invoices',
-        invoiceId,
-      );
+      final financialRows = await Future.wait<dynamic>([
+        databaseService.selectById('sales_invoices', invoiceId),
+        databaseService.supabase
+            .from('sales_payments')
+            .select('id')
+            .eq('invoice_id', invoiceId)
+            .isFilter('deleted_at', null)
+            .gt('amount', 0)
+            .limit(1),
+      ]);
+      final invoiceData = financialRows[0] as Map<String, dynamic>?;
       if (invoiceData == null) {
         return (
           invoiceNumber: null,
@@ -2015,13 +2043,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       // Invoice mirrors can lag behind the payment ledger. The active rows are
       // queried directly both on load and again immediately before saving.
-      final activePayments = await databaseService.supabase
-          .from('sales_payments')
-          .select('id')
-          .eq('invoice_id', invoiceId)
-          .isFilter('deleted_at', null)
-          .gt('amount', 0)
-          .limit(1);
+      final activePayments = financialRows[1] as List;
       hasActivePayments = hasActivePayments || activePayments.isNotEmpty;
 
       return (
@@ -2098,7 +2120,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Provider.of<CustomerService>(context, listen: false);
 
       debugPrint('🔍 Loading job with ID: ${widget.jobId}');
-      final job = await bikeshopService.getJobById(widget.jobId!);
+      final job = await bikeshopService.getJobById(
+        widget.jobId!,
+        includeOperationalProjections: false,
+      );
 
       if (job == null) {
         debugPrint('❌ Job not found: ${widget.jobId}');
@@ -2113,24 +2138,37 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       debugPrint('✅ Job loaded: ${job.jobNumber}');
 
-      final linkedInvoiceState = await _readLinkedInvoiceFinancialState(
-        databaseService: databaseService,
-        job: job,
-      );
-
-      // Load customer and bikes
-      // Ensure customer is in our list (might not be in the initial top 50)
-      Customer? customer;
-      try {
-        customer = _customers.firstWhere((c) => c.id == job.customerId);
-      } catch (_) {
-        customer = await customerService.getCustomerById(job.customerId);
-        if (customer != null && mounted) {
-          setState(() {
-            _customers = [customer!, ..._customers];
-          });
-        }
+      Future<Customer?> loadExactCustomer() async {
+        final cached = _customers
+            .where((candidate) => candidate.id == job.customerId)
+            .firstOrNull;
+        if (cached != null) return cached;
+        return customerService.getCustomerById(job.customerId);
       }
+
+      // These reads depend only on the exact job header and do not depend on
+      // one another. Starting them together removes the former invoice ->
+      // customer -> customer bikes -> lines/bikes waterfall.
+      final exactResults = await Future.wait<dynamic>([
+        _readLinkedInvoiceFinancialState(
+          databaseService: databaseService,
+          job: job,
+        ),
+        loadExactCustomer(),
+        bikeshopService.getBikes(customerId: job.customerId),
+        bikeshopService.getJobItems(job.id!),
+        bikeshopService.getJobBikes(job.id!, forceRefresh: true),
+      ]);
+
+      final linkedInvoiceState = exactResults[0] as ({
+        String? invoiceNumber,
+        bool hasActivePayments,
+        bool paymentStateUnknown,
+      });
+      final customer = exactResults[1] as Customer?;
+      final customerBikes = exactResults[2] as List<Bike>;
+      final allItems = exactResults[3] as List<MechanicJobItem>;
+      final jobBikes = exactResults[4] as List<MechanicJobBike>;
 
       if (customer == null) {
         throw StateError(
@@ -2138,21 +2176,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         );
       }
 
+      if (!_customers.any((candidate) => candidate.id == customer.id)) {
+        _customers = [customer, ..._customers];
+      }
+
       await _selectCustomer(
         customer,
         loadWarrantySources: job.jobType == JobType.warranty,
+        preloadedBikes: customerBikes,
       );
 
-      // Only core job aggregates are critical for every mode. Warranty claim
-      // reads are isolated below so a projection outage cannot break ordinary
-      // service, quotation, or component editing.
-      final relatedResults = await Future.wait([
-        bikeshopService.getJobItems(job.id!),
-        bikeshopService.getJobBikes(job.id!, forceRefresh: true),
-      ]);
-
-      final allItems = relatedResults[0] as List<MechanicJobItem>;
-      final jobBikes = relatedResults[1] as List<MechanicJobBike>;
+      // Warranty claim reads stay isolated so a projection outage cannot
+      // break ordinary service, quotation, or component editing.
       MechanicJobWarrantyClaim? warrantyClaim;
       if (job.jobType == JobType.warranty) {
         try {
@@ -2243,8 +2278,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           .toSet()
           .toList();
 
-      if (missingProductIds.isNotEmpty) {
-        final fetchedProducts = await Future.wait(
+      final directCatalogProductIds = allItems
+          .map(catalogProductIdForItem)
+          .whereType<String>()
+          .toSet()
+          .toList(growable: false);
+      final catalogHydration = await Future.wait<dynamic>([
+        Future.wait<MapEntry<String, Product?>>(
           missingProductIds.map((id) async {
             try {
               return MapEntry(id, await inventoryService.getProductById(id));
@@ -2253,15 +2293,20 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               return MapEntry<String, Product?>(id, null);
             }
           }),
-        );
+        ),
+        _serviceWizardService.getProfilesForProducts(directCatalogProductIds),
+      ]);
 
-        for (final entry in fetchedProducts) {
-          productCache[entry.key] = entry.value;
-        }
+      for (final entry
+          in catalogHydration[0] as List<MapEntry<String, Product?>>) {
+        productCache[entry.key] = entry.value;
       }
+      final wizardProfilesByProductId = Map<String, ServiceWizardProfile?>.from(
+        catalogHydration[1] as Map<String, ServiceWizardProfile?>,
+      );
 
       // Helper to find/create product for an item
-      Future<Product?> getProductForItem(MechanicJobItem item) async {
+      Product? getProductForItem(MechanicJobItem item) {
         final catalogProductId = catalogProductIdForItem(item);
         if (catalogProductId != null) {
           final cached = productCache[catalogProductId];
@@ -2340,10 +2385,34 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         return null;
       }
 
-      Future<ServiceWizardProfile?> getWizardProfileForLoadedItem(
+      final productByItem = <MechanicJobItem, Product?>{
+        for (final item in allItems) item: getProductForItem(item),
+      };
+      final legacyResolvedServiceProductIds = allItems
+          .where((item) {
+            final product = productByItem[item];
+            return catalogProductIdForItem(item) == null &&
+                (item.itemType == 'service' ||
+                    item.serviceProductId != null ||
+                    product?.isService == true) &&
+                product?.id != null &&
+                !wizardProfilesByProductId.containsKey(product!.id);
+          })
+          .map((item) => productByItem[item]!.id)
+          .whereType<String>()
+          .toSet();
+      if (legacyResolvedServiceProductIds.isNotEmpty) {
+        wizardProfilesByProductId.addAll(
+          await _serviceWizardService.getProfilesForProducts(
+            legacyResolvedServiceProductIds,
+          ),
+        );
+      }
+
+      ServiceWizardProfile? getWizardProfileForLoadedItem(
         MechanicJobItem item,
         Product? product,
-      ) async {
+      ) {
         final isServiceItem = item.itemType == 'service' ||
             item.serviceProductId != null ||
             product?.isService == true;
@@ -2351,15 +2420,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           return null;
         }
 
-        return _serviceWizardService
-            .getProfileForProduct(product!.id)
-            .catchError((_) => null);
+        return wizardProfilesByProductId[product!.id];
       }
 
-      Future<_JobPartItem> buildLoadedPartItem(MechanicJobItem item) async {
-        final product = await getProductForItem(item);
-        final wizardProfile =
-            await getWizardProfileForLoadedItem(item, product);
+      _JobPartItem buildLoadedPartItem(MechanicJobItem item) {
+        final product = productByItem[item];
+        final wizardProfile = getWizardProfileForLoadedItem(item, product);
         return _JobPartItem(
           id: item.id,
           product: product,
@@ -2437,7 +2503,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               allItems.where((item) => item.jobBikeId == jobBike.id).toList();
 
           for (final item in bikeItems) {
-            tab.partItems.add(await buildLoadedPartItem(item));
+            tab.partItems.add(buildLoadedPartItem(item));
           }
 
           loadedBikeTabs.add(tab);
@@ -2451,7 +2517,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         final orphanItems =
             allItems.where((item) => item.jobBikeId == null).toList();
         for (final item in orphanItems) {
-          generalTab.partItems.add(await buildLoadedPartItem(item));
+          generalTab.partItems.add(buildLoadedPartItem(item));
         }
         loadedBikeTabs.add(generalTab);
       } else {
@@ -2485,7 +2551,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           final legacyGeneralTab =
               _BikeTabData(isGeneralTab: true, tabId: 'general_tab');
           for (final item in allItems) {
-            legacyGeneralTab.partItems.add(await buildLoadedPartItem(item));
+            legacyGeneralTab.partItems.add(buildLoadedPartItem(item));
           }
           loadedBikeTabs.add(legacyGeneralTab);
           debugPrint(
@@ -2503,7 +2569,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       );
       final loadedStandaloneItems = <_JobPartItem>[];
       for (final item in standalonePersistedItems) {
-        loadedStandaloneItems.add(await buildLoadedPartItem(item));
+        loadedStandaloneItems.add(buildLoadedPartItem(item));
       }
 
       // Quotation conversion keeps the accepted narrative on mechanic_jobs and
@@ -2657,6 +2723,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   Future<void> _selectCustomer(
     Customer customer, {
     bool loadWarrantySources = false,
+    List<Bike>? preloadedBikes,
   }) async {
     final bikeshopService =
         Provider.of<BikeshopService>(context, listen: false);
@@ -2665,7 +2732,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     // Bicycle/customer loading is part of every job flow. Warranty history is
     // deliberately separate: an unavailable warranty projection must not
     // blank or block an ordinary service, quotation, or component form.
-    final bikes = await bikeshopService.getBikes(customerId: customer.id);
+    final bikes = preloadedBikes ??
+        await bikeshopService.getBikes(customerId: customer.id);
     if (!mounted) return;
 
     if (customerChanged) {
@@ -2792,12 +2860,18 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final customerService =
         Provider.of<CustomerService>(context, listen: false);
 
-    if (_customers.isEmpty) {
+    if (!_hasLoadedCustomerCatalog) {
       try {
         final customers = await customerService.getCustomersForList();
         if (!mounted) return;
         setState(() {
           _customers = List<Customer>.from(customers);
+          final selectedCustomer = _selectedCustomer;
+          if (selectedCustomer != null &&
+              !_customers.any((item) => item.id == selectedCustomer.id)) {
+            _customers.insert(0, selectedCustomer);
+          }
+          _hasLoadedCustomerCatalog = true;
         });
       } catch (e) {
         if (!mounted) return;
@@ -5855,6 +5929,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                     entityId: widget.jobId!,
                     entityTitle:
                         'Trabajo #${_existingJob?.jobNumber ?? widget.jobId!.substring(0, 6)}',
+                    deferLoadingUntilExpanded: true,
                   ),
                 ],
               ],
@@ -16372,6 +16447,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
         }
       },
       allowCustomItems: true,
+      preloadCatalog: false,
       labelText: 'Agregar repuesto o parte',
       hintText: 'Buscar en catálogo o escribir personalizado...',
     );

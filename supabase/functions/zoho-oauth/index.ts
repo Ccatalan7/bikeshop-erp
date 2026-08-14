@@ -9,6 +9,7 @@ import {
   zohoDataRecord,
   type ZohoSenderIdentity,
 } from "../_shared/zoho_sender_identities.ts";
+import { assertAllowedZohoMailProxyRequest } from "../_shared/zoho_mail_proxy_contract.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -247,9 +248,15 @@ async function handleProxy(
   body: Record<string, unknown>,
 ) {
   const proxyUrl = cleanText(body.proxy_url);
-  assertAllowedZohoUrl(proxyUrl);
-
   const account = await requireAccount(admin, authContext.userId);
+  const providerAccountId = normalizeZohoNumericId(account.provider_account_id);
+  if (!providerAccountId) throw new Error("Stored Zoho account ID is invalid");
+  const proxyKind = assertAllowedZohoMailProxyRequest(
+    proxyUrl,
+    cleanText(body.method) || "GET",
+    zohoMailOrigin,
+    providerAccountId,
+  );
   const accessToken = await ensureValidAccessToken(admin, account);
 
   try {
@@ -258,6 +265,7 @@ async function handleProxy(
       body,
       account,
       accessToken,
+      proxyKind === "send",
     );
     if (response.status !== 401) return response;
   } catch (error) {
@@ -270,6 +278,7 @@ async function handleProxy(
     body,
     account,
     refreshedToken,
+    proxyKind === "send",
   );
 }
 
@@ -278,32 +287,21 @@ async function fetchAuthorizedProxyRequest(
   body: Record<string, unknown>,
   account: EmailAccount,
   accessToken: string,
+  requiresSenderAuthorization: boolean,
 ) {
-  if (isZohoSendRequest(proxyUrl, body)) {
-    await assertAuthorizedZohoSend(proxyUrl, body, account, accessToken);
+  if (requiresSenderAuthorization) {
+    await assertAuthorizedZohoSend(body, account, accessToken);
   }
   return await fetchWithToken(proxyUrl, body, accessToken);
 }
 
-function isZohoSendRequest(proxyUrl: string, body: Record<string, unknown>) {
-  if ((cleanText(body.method) || "GET").toUpperCase() !== "POST") return false;
-  const path = decodedZohoPath(proxyUrl);
-  return /^\/api\/accounts\/[^/]+\/messages\/?$/.test(path);
-}
-
 async function assertAuthorizedZohoSend(
-  proxyUrl: string,
   body: Record<string, unknown>,
   account: EmailAccount,
   accessToken: string,
 ) {
   const providerAccountId = normalizeZohoNumericId(account.provider_account_id);
   if (!providerAccountId) throw new Error("Stored Zoho account ID is invalid");
-
-  const pathAccountId = normalizeZohoNumericId(decodedZohoPath(proxyUrl).split("/")[3]);
-  if (pathAccountId !== providerAccountId) {
-    throw new Error("Zoho send account does not match the connected account");
-  }
 
   const requestBody = asRecord(body.body);
   const requestedAddress = cleanText(requestBody?.fromAddress);
@@ -324,14 +322,6 @@ async function assertAuthorizedZohoSend(
   );
   if (!isAuthorizedZohoSender(groupIdentities, requestedAddress)) {
     throw new ZohoPermissionError("Zoho no autorizó esa dirección remitente");
-  }
-}
-
-function decodedZohoPath(value: string) {
-  try {
-    return decodeURIComponent(new URL(value).pathname);
-  } catch (_) {
-    throw new Error("Invalid Zoho proxy path");
   }
 }
 
@@ -706,13 +696,6 @@ async function requireAuthContext(req: Request): Promise<AuthContext> {
   if (!tenantId) throw new Error("Current user has no tenant profile");
 
   return { userId: data.user.id, tenantId };
-}
-
-function assertAllowedZohoUrl(value: string) {
-  const parsed = new URL(value);
-  if (parsed.origin !== zohoMailOrigin || !parsed.pathname.startsWith("/api/")) {
-    throw new Error("Blocked Zoho proxy URL");
-  }
 }
 
 function redactAccount(account: Partial<EmailAccount>) {

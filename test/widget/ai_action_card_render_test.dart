@@ -193,6 +193,46 @@ const _discardedTaskResolution = AIAssistantApprovalResolution(
   cards: <AIAssistantActionCard>[],
 );
 
+final _diagnosisPreviewResponse = AIAssistantResponse(
+  text: 'Preparé este cambio de diagnóstico para tu revisión.',
+  cards: <AIAssistantActionCard>[
+    AIAssistantActionCard(
+      kind: 'diagnosis_preview',
+      eyebrow: 'Diagnóstico por confirmar',
+      title: 'Desgaste de cadena',
+      subtitle: 'PG-00420 · Trek Marlin 7',
+      description: 'Sin valor anterior · Nuevo: 0.60',
+      destination: AIAssistantDestination.workshopJobs,
+      chips: const <String>['Requiere confirmación'],
+      approvalRef: AIAssistantApprovalRef(
+        id: _approvalId,
+        action: AIAssistantApprovalAction.updateDiagnosis,
+        expiresAt: DateTime.utc(2026, 8, 12, 3, 45),
+        state: AIAssistantApprovalState.pending,
+      ),
+    ),
+  ],
+);
+
+final _approvedDiagnosisResolution = AIAssistantApprovalResolution(
+  approvalId: _approvalId,
+  clientActionId: _actionId,
+  state: AIAssistantApprovalState.approved,
+  text: 'Diagnóstico actualizado.',
+  cards: <AIAssistantActionCard>[
+    AIAssistantActionCard(
+      kind: 'job',
+      title: 'PG-00420',
+      description: 'Desgaste de cadena · 0.60',
+      destination: AIAssistantDestination.workshopJobs,
+      entityRef: AIAssistantEntityRef.verified(
+        kind: AIAssistantEntityKind.workshopJob,
+        id: '11111111-1111-4111-8111-111111111111',
+      ),
+    ),
+  ],
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -813,6 +853,46 @@ void main() {
 
     expect(recorded.toolbar.opened, <ToolbarTool>[ToolbarTool.tasks]);
     expect(recorded.workspace.routes, isEmpty);
+  });
+
+  testWidgets(
+      'diagnosis preview confirms the typed change then exposes the exact job',
+      (tester) async {
+    final engine = _CardsEngine(
+      _diagnosisPreviewResponse,
+      approvalResolution: _approvedDiagnosisResolution,
+    );
+    final recorded = await pump(
+      tester,
+      brightness: Brightness.light,
+      response: _diagnosisPreviewResponse,
+      engine: engine,
+    );
+
+    expect(find.text('Actualizar diagnóstico'), findsOneWidget);
+    expect(find.text('Abrir Taller'), findsNothing);
+    final approveAction =
+        find.byKey(const ValueKey('ai-approval-$_approvalId-approve'));
+    await tester.ensureVisible(approveAction);
+    await tester.pumpAndSettle();
+    await tester.tap(approveAction);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Diagnóstico actualizado.'), findsOneWidget);
+    expect(engine.approvalDecisions, <AIAssistantApprovalDecision>[
+      AIAssistantApprovalDecision.approve,
+    ]);
+    expect(recorded.workspace.routes, isEmpty);
+
+    final resultCard =
+        find.byKey(const ValueKey('ai-action-card-job-workshopJobs'));
+    await tester.ensureVisible(resultCard);
+    await tester.tap(resultCard);
+    await tester.pump();
+    expect(
+      recorded.workspace.routes,
+      <String>['/taller/pegas/11111111-1111-4111-8111-111111111111'],
+    );
   });
 
   testWidgets('discard terminalizes the preview and exposes no action buttons',

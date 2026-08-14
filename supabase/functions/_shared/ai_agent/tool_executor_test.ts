@@ -82,7 +82,7 @@ Deno.test("tool executor maps all ERP reads to fixed caller-scoped RPCs", async 
           },
         ]));
       }
-      if (name === "assistant_analyze_cash_and_receivables_v1") {
+      if (name === "assistant_analyze_cash_and_receivables_v2") {
         return Promise.resolve(envelope([{
           kind: "summary",
           asOfDate: "2026-08-11",
@@ -112,6 +112,10 @@ Deno.test("tool executor maps all ERP reads to fixed caller-scoped RPCs", async 
         category: null,
         availability: "any",
         presentation: "answer",
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
         technicalPredicates: [],
       },
     },
@@ -186,10 +190,10 @@ Deno.test("tool executor maps all ERP reads to fixed caller-scoped RPCs", async 
     assertEquals(execution.succeeded, true, `${tool.name} executes`);
   }
   assertEquals(calls.map((call) => call.name), [
-    "assistant_search_inventory_v5",
+    "assistant_search_inventory_v6",
     "assistant_list_attention_items_v1",
     "assistant_get_business_snapshot_v1",
-    "assistant_query_workshop_jobs_v2",
+    "assistant_query_workshop_jobs_v3",
     "assistant_query_tasks_v2",
     "assistant_search_customers_v1",
     "assistant_search_suppliers_v1",
@@ -197,7 +201,7 @@ Deno.test("tool executor maps all ERP reads to fixed caller-scoped RPCs", async 
     "assistant_search_purchase_invoices_v1",
     "assistant_find_inventory_risks_v1",
     "assistant_list_recent_expenses_v1",
-    "assistant_analyze_cash_and_receivables_v1",
+    "assistant_analyze_cash_and_receivables_v2",
     "assistant_search_conversations_v1",
   ], "only fixed RPC names are reachable");
   assertEquals(
@@ -207,6 +211,11 @@ Deno.test("tool executor maps all ERP reads to fixed caller-scoped RPCs", async 
       p_category: null,
       p_availability: "any",
       p_technical_predicates: [],
+      p_operational_predicates: [],
+      p_sort_field: "relevance",
+      p_sort_direction: "desc",
+      p_limit: 10,
+      p_selection_mode: "all_matches",
     },
     "inventory body is fixed",
   );
@@ -277,6 +286,10 @@ Deno.test("tool executor contains tenant mismatch as unavailable", async () => {
         category: null,
         availability: "any",
         presentation: "answer",
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
         technicalPredicates: [],
       },
     },
@@ -304,6 +317,13 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
         tracksInventory: true,
         location: "A1",
         technicalMatch: "not_applicable",
+        matchedCount: 1,
+        trackedCount: 1,
+        totalStock: 3,
+        inventoryRetailValue: 36000,
+        averagePrice: 12000,
+        minimumPrice: 12000,
+        maximumPrice: 12000,
       }])),
   });
   const execution = await executor.execute(
@@ -315,6 +335,10 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
         category: null,
         availability: "in_stock",
         presentation: "answer",
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
         technicalPredicates: [],
       },
     },
@@ -324,6 +348,16 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
   assertEquals(execution.result.items[0].entityId, entityId, "private result retains server ID");
   assertEquals(execution.outputText.includes("entityId"), false, "field name is not model-visible");
   assertEquals(execution.outputText.includes(entityId), false, "UUID is not model-visible");
+  assertEquals(
+    execution.entityReferences?.length,
+    1,
+    "one request-local catalog reference is retained for chaining",
+  );
+  assertEquals(
+    execution.outputText.includes(execution.entityReferences![0].ref),
+    true,
+    "the model receives only the opaque catalog reference",
+  );
   assertEquals(
     execution.outputText.includes("authorityTenantId"),
     false,
@@ -346,6 +380,13 @@ Deno.test("inventory availability is mapped before limit and revalidated after t
     tracksInventory: true,
     location: null,
     technicalMatch: "identity_fallback",
+    matchedCount: 1,
+    trackedCount: 1,
+    totalStock: 0,
+    inventoryRetailValue: 0,
+    averagePrice: 7000,
+    minimumPrice: 7000,
+    maximumPrice: 7000,
   };
   let captured: { name: string; parameters: JsonObject } | null = null;
   const invalid = await createSupabaseAgentToolExecutor({
@@ -362,6 +403,10 @@ Deno.test("inventory availability is mapped before limit and revalidated after t
         category: "Cámaras",
         availability: "in_stock",
         presentation: "open_list",
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
         technicalPredicates: [{ field: "wheel_size", operator: "eq", values: ['29"'] }],
       },
     },
@@ -369,14 +414,19 @@ Deno.test("inventory availability is mapped before limit and revalidated after t
     new AbortController().signal,
   );
   assertEquals(captured, {
-    name: "assistant_search_inventory_v5",
+    name: "assistant_search_inventory_v6",
     parameters: {
       p_query: "camara 29",
       p_category: "Cámaras",
       p_availability: "in_stock",
       p_technical_predicates: [{ field: "wheel_size", operator: "eq", values: ['29"'] }],
+      p_operational_predicates: [],
+      p_sort_field: "relevance",
+      p_sort_direction: "desc",
+      p_limit: 10,
+      p_selection_mode: "all_matches",
     },
-  }, "category, canonical specs and availability reach only the V5 projection");
+  }, "category, canonical specs and availability reach only the V6 projection");
   assertEquals(
     invalid.succeeded,
     false,
@@ -398,6 +448,7 @@ Deno.test("inventory availability is mapped before limit and revalidated after t
         category: null,
         availability: "in_stock",
         presentation: "teleport",
+        operationalPredicates: [],
         technicalPredicates: [],
       },
     },
@@ -408,12 +459,177 @@ Deno.test("inventory availability is mapped before limit and revalidated after t
   assertEquals(calls, 0, "malformed planning never reaches PostgREST");
 });
 
+Deno.test("inventory operational thresholds are typed, mapped and revalidated", async () => {
+  let returnedStock = 5;
+  let calls = 0;
+  let captured: JsonObject | null = null;
+  const executor = createSupabaseAgentToolExecutor({
+    rpc(_name, parameters) {
+      calls++;
+      captured = parameters;
+      return Promise.resolve(envelope([{
+        entityId: "77777777-7777-4777-8777-777777777777",
+        name: "Producto con umbral",
+        sku: "THRESHOLD-1",
+        brand: null,
+        category: "Camaras",
+        price: 7000,
+        stock: returnedStock,
+        minimumStock: 2,
+        availability: "in_stock",
+        tracksInventory: true,
+        location: null,
+        technicalMatch: "not_applicable",
+        matchedCount: 1,
+        trackedCount: 1,
+        totalStock: returnedStock,
+        inventoryRetailValue: Math.max(returnedStock, 0) * 7000,
+        averagePrice: 7000,
+        minimumPrice: 7000,
+        maximumPrice: 7000,
+      }]));
+    },
+  });
+  const call: AgentToolCall = {
+    id: "inventory-stock-threshold",
+    name: "search_inventory",
+    arguments: {
+      query: null,
+      category: "Cámaras",
+      availability: "in_stock",
+      presentation: "open_list",
+      sort: { field: "relevance", direction: "desc" },
+      limit: 10,
+      selectionMode: "all_matches",
+      technicalPredicates: [],
+      operationalPredicates: [{ field: "stock", operator: "gt", values: [5] }],
+    },
+  };
+  const invalid = await executor.execute(call, authority, new AbortController().signal);
+  assertEquals(
+    invalid.succeeded,
+    false,
+    "a row at the boundary cannot satisfy strict greater-than",
+  );
+  assertEquals(captured, {
+    p_query: null,
+    p_category: "Cámaras",
+    p_availability: "in_stock",
+    p_technical_predicates: [],
+    p_operational_predicates: [{ field: "stock", operator: "gt", values: [5] }],
+    p_sort_field: "relevance",
+    p_sort_direction: "desc",
+    p_limit: 10,
+    p_selection_mode: "all_matches",
+  }, "the exact operational predicate reaches only the closed V6 RPC");
+
+  returnedStock = 6;
+  const valid = await executor.execute(call, authority, new AbortController().signal);
+  assertEquals(valid.succeeded, true, "a row above the threshold survives revalidation");
+
+  const invented = await executor.execute(
+    {
+      ...call,
+      id: "inventory-invented-threshold",
+      arguments: {
+        ...call.arguments,
+        operationalPredicates: [{ field: "invented_metric", operator: "gt", values: [5] }],
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(
+    invented.failureCode,
+    "tool_arguments_invalid",
+    "invented operational fields are rejected",
+  );
+  assertEquals(calls, 2, "an invented operational field never reaches PostgREST");
+});
+
+Deno.test("inventory top-N order and full-set metrics are server-validated", async () => {
+  const row = (entityId: string, stock: number): JsonObject => ({
+    entityId,
+    name: `Producto ${stock}`,
+    sku: `SKU-${stock}`,
+    brand: null,
+    category: "Camaras",
+    price: 7000,
+    stock,
+    minimumStock: 1,
+    availability: "in_stock",
+    tracksInventory: true,
+    location: null,
+    technicalMatch: "not_applicable",
+    matchedCount: 3,
+    trackedCount: 3,
+    totalStock: 15,
+    inventoryRetailValue: 105000,
+    averagePrice: 7000,
+    minimumPrice: 7000,
+    maximumPrice: 7000,
+  });
+  let items = [row("77777777-7777-4777-8777-777777777777", 7)];
+  const executor = createSupabaseAgentToolExecutor({
+    rpc: () => Promise.resolve(envelope(items)),
+  });
+  const call: AgentToolCall = {
+    id: "inventory-top-n",
+    name: "search_inventory",
+    arguments: {
+      query: null,
+      category: "Cámaras",
+      availability: "in_stock",
+      presentation: "answer",
+      sort: { field: "stock", direction: "desc" },
+      limit: 1,
+      selectionMode: "top_n",
+      technicalPredicates: [],
+      operationalPredicates: [],
+    },
+  };
+  const valid = await executor.execute(call, authority, new AbortController().signal);
+  assertEquals(valid.succeeded, true, "top-N may summarize more matches than it returns");
+  assertEquals(
+    valid.outputText.includes('"matchedCount":3'),
+    true,
+    "verified full-set metrics remain model-visible",
+  );
+
+  items = [
+    {
+      ...row("77777777-7777-4777-8777-777777777777", 2),
+      matchedCount: 2,
+      trackedCount: 2,
+      totalStock: 9,
+      inventoryRetailValue: 63000,
+    },
+    {
+      ...row("88888888-8888-4888-8888-888888888888", 7),
+      matchedCount: 2,
+      trackedCount: 2,
+      totalStock: 9,
+      inventoryRetailValue: 63000,
+    },
+  ];
+  const invalidOrder = await executor.execute(
+    {
+      ...call,
+      id: "inventory-invalid-order",
+      arguments: { ...call.arguments, limit: 2 },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(invalidOrder.succeeded, false, "a source cannot contradict server-owned ordering");
+});
+
 Deno.test("inventory schema discovery and typed comparisons are composable primitives", async () => {
   const calls: Array<{ name: string; parameters: JsonObject }> = [];
   const executor = createSupabaseAgentToolExecutor({
     rpc(name, parameters) {
       calls.push({ name, parameters });
-      if (name === "assistant_inspect_inventory_schema_v1") {
+      if (name === "assistant_inspect_inventory_schema_v2") {
         return Promise.resolve(envelope([{
           kind: "field",
           category: "Motor",
@@ -460,6 +676,10 @@ Deno.test("inventory schema discovery and typed comparisons are composable primi
         category: "Motores",
         availability: "in_stock",
         presentation: "open_list",
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
         technicalPredicates: [{
           field: "spindle_length_mm",
           operator: "lt",
@@ -472,13 +692,13 @@ Deno.test("inventory schema discovery and typed comparisons are composable primi
   );
   assertEquals(search.succeeded, true, "typed range search executes");
   assertEquals(calls, [{
-    name: "assistant_inspect_inventory_schema_v1",
+    name: "assistant_inspect_inventory_schema_v2",
     parameters: {
       p_query: "motores con eje de menos de 125 mm",
       p_category: "Motores",
     },
   }, {
-    name: "assistant_search_inventory_v5",
+    name: "assistant_search_inventory_v6",
     parameters: {
       p_query: null,
       p_category: "Motores",
@@ -488,6 +708,11 @@ Deno.test("inventory schema discovery and typed comparisons are composable primi
         operator: "lt",
         values: [125],
       }],
+      p_operational_predicates: [],
+      p_sort_field: "relevance",
+      p_sort_direction: "desc",
+      p_limit: 10,
+      p_selection_mode: "all_matches",
     },
   }], "discovery and search reach only fixed RPCs");
 });
@@ -508,6 +733,10 @@ Deno.test("database argument rejection is not mislabeled as a source outage", as
         category: "Motores",
         availability: "in_stock",
         presentation: "answer",
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
         technicalPredicates: [{ field: "invented_field", operator: "lt", values: [125] }],
       },
     },
@@ -625,6 +854,10 @@ Deno.test("aborted tool signal propagates and does not degrade to verified empty
         category: null,
         availability: "any",
         presentation: "answer",
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
         technicalPredicates: [],
       },
     },
@@ -659,6 +892,10 @@ Deno.test("tool query limit is 240 UTF-8 bytes and invalid calls never reach RPC
         category: null,
         availability: "any",
         presentation: "answer",
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
         technicalPredicates: [],
       },
     },
@@ -1433,6 +1670,35 @@ Deno.test("tool result rows cannot exceed or contradict requested filters", asyn
   assertEquals(validExpense.succeeded, true, "DB timestamptz expense dates are accepted");
 });
 
+Deno.test("business eval cases reference the live tool registry, not an aspirational list", async () => {
+  const cases = JSON.parse(
+    await Deno.readTextFile(
+      new URL(
+        "../../../../test/fixtures/ai_assistant_agent_eval_cases.json",
+        import.meta.url,
+      ),
+    ),
+  ) as Array<{ id: string; expected: { tools: string[] } }>;
+  const fullAuthority: AgentAuthority = {
+    ...authority,
+    capabilities: [...authority.capabilities, "ai.write.workshop"],
+  };
+  const advertised = new Set(
+    createDefaultAgentToolRegistry({ publicResearch: true })
+      .advertisedFor(fullAuthority)
+      .map((tool) => tool.name),
+  );
+  for (const item of cases) {
+    for (const tool of item.expected.tools) {
+      assertEquals(
+        advertised.has(tool),
+        true,
+        `${item.id} cannot claim a tool that the production registry does not advertise`,
+      );
+    }
+  }
+});
+
 Deno.test("prepare_task is model-visible but create_task is never a provider tool", async () => {
   const registry = createDefaultAgentToolRegistry();
   const names = registry.advertisedFor(authority).map((tool) => tool.name);
@@ -1538,6 +1804,241 @@ Deno.test("prepare_task is model-visible but create_task is never a provider too
       error.code === "invalid_tool_arguments";
   }
   assertEquals(badAssignmentRejected, true, "named assignment requires an exact name");
+});
+
+Deno.test("workshop reads and preparations are typed, run-bound and never free-form writes", async () => {
+  const workshopAuthority: AgentAuthority = {
+    ...authority,
+    capabilities: [...authority.capabilities, "ai.write.workshop"],
+  };
+  const registry = createDefaultAgentToolRegistry();
+  const advertised = registry.advertisedFor(workshopAuthority).map((tool) => tool.name);
+  for (
+    const name of [
+      "get_workshop_job_context",
+      "inspect_diagnosis_schema",
+      "analyze_sales_period",
+      "prepare_diagnosis_update",
+      "prepare_workshop_item",
+    ]
+  ) {
+    assertEquals(advertised.includes(name), true, `${name} is advertised`);
+  }
+
+  const jobId = "77777777-7777-4777-8777-777777777777";
+  const jobBikeId = "88888888-8888-4888-8888-888888888888";
+  const catalogItemId = "99999999-9999-4999-8999-999999999999";
+  const jobRef = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const catalogItemRef = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+  const approvalId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const runId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const jobUpdatedAt = "2026-08-14T01:00:00.000000Z";
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const calls: Array<{ name: string; parameters: JsonObject }> = [];
+  const executor = createSupabaseAgentToolExecutor({
+    rpc(name, parameters) {
+      calls.push({ name, parameters });
+      if (name === "assistant_get_workshop_job_context_v1") {
+        return Promise.resolve(envelope([{
+          entityId: jobId,
+          jobBikeId,
+          jobNumber: "PG-00420",
+          customerName: "Álvaro González",
+          bikeLabel: "Trek Marlin 7 2023",
+          jobType: "repair",
+          jobStatus: "En diagnóstico",
+          jobUpdatedAt,
+          invoiceId: null,
+          invoiceNumber: null,
+          invoiceStatus: null,
+          diagnosisUpdatedAt: null,
+          canUpdateDiagnosis: true,
+          canAddWorkshopItem: true,
+        }]));
+      }
+      if (name === "assistant_inspect_diagnosis_schema_v1") {
+        return Promise.resolve(envelope([{
+          section: "drivetrain",
+          field: "drivetrain.chain_wear_percent",
+          label: "Desgaste de cadena",
+          valueType: "number",
+          storedUnit: "percent",
+          inputUnits: "display_fraction,percent",
+          allowedValues: null,
+          minimumValue: 0,
+          maximumValue: 100,
+        }]));
+      }
+      if (name === "assistant_analyze_sales_period_v1") {
+        return Promise.resolve(envelope([{
+          basis: "collected",
+          startDate: "2026-08-03",
+          endDate: "2026-08-09",
+          invoiceStatus: "any",
+          invoiceCount: 3,
+          eventCount: 4,
+          totalAmount: 175000,
+          averagePerInvoice: 58333.33,
+          highestInvoiceId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          highestInvoiceNumber: "FV-00419",
+          highestInvoiceCustomerName: "María Soto",
+          highestInvoiceTotal: 120000,
+          highestPeriodAmount: 100000,
+        }]));
+      }
+      if (name === "assistant_prepare_diagnosis_update_v1") {
+        return Promise.resolve(envelope([{
+          approvalId,
+          action: "update_diagnosis",
+          state: "pending",
+          jobId,
+          jobBikeId,
+          jobNumber: "PG-00420",
+          bikeLabel: "Trek Marlin 7 2023",
+          field: "drivetrain.chain_wear_percent",
+          fieldLabel: "Desgaste de cadena",
+          previousValue: null,
+          newValue: "0.60",
+          expiresAt,
+        }]));
+      }
+      return Promise.resolve(envelope([{
+        approvalId,
+        action: "add_workshop_item",
+        state: "pending",
+        jobId,
+        jobBikeId,
+        jobNumber: "PG-00420",
+        bikeLabel: "Trek Marlin 7 2023",
+        catalogItemId,
+        itemName: "Cambio de cadena",
+        itemType: "service",
+        quantity: 1,
+        unitPrice: 15000,
+        lineTotal: 15000,
+        invoiceNumber: null,
+        expiresAt,
+      }]));
+    },
+  });
+  const executionContext = {
+    runId,
+    providerAttemptNo: 2,
+    providerCallHash: "d".repeat(64),
+    argumentsHash: "e".repeat(64),
+    currentUserMessage: "Actualiza el diagnóstico y agrega el servicio",
+  };
+  const toolCalls: AgentToolCall[] = [
+    { id: "context", name: "get_workshop_job_context", arguments: { jobRef } },
+    {
+      id: "schema",
+      name: "inspect_diagnosis_schema",
+      arguments: { section: "drivetrain" },
+    },
+    {
+      id: "sales",
+      name: "analyze_sales_period",
+      arguments: {
+        basis: "collected",
+        rangeMode: "relative",
+        relativePeriod: "last_week",
+        startDate: null,
+        endDate: null,
+        invoiceStatus: "any",
+      },
+    },
+    {
+      id: "diagnosis",
+      name: "prepare_diagnosis_update",
+      arguments: {
+        jobRef,
+        jobBikeId,
+        field: "drivetrain.chain_wear_percent",
+        numberValue: 0.6,
+        textValue: null,
+        unit: "display_fraction",
+        expectedUpdatedAt: null,
+      },
+    },
+    {
+      id: "item",
+      name: "prepare_workshop_item",
+      arguments: {
+        jobRef,
+        jobBikeId,
+        catalogItemRef,
+        quantity: 1,
+        notes: null,
+        expectedJobUpdatedAt: jobUpdatedAt,
+      },
+    },
+  ];
+  registry.validateProviderCalls(toolCalls, workshopAuthority);
+  const resolvedToolCalls = toolCalls.map((toolCall) => {
+    if (toolCall.name === "get_workshop_job_context") {
+      return { ...toolCall, arguments: { jobId } };
+    }
+    if (toolCall.name === "prepare_diagnosis_update") {
+      const { jobRef: _jobRef, ...argumentsValue } = toolCall.arguments;
+      return { ...toolCall, arguments: { ...argumentsValue, jobId } };
+    }
+    if (toolCall.name === "prepare_workshop_item") {
+      const {
+        jobRef: _jobRef,
+        catalogItemRef: _catalogItemRef,
+        ...argumentsValue
+      } = toolCall.arguments;
+      return {
+        ...toolCall,
+        arguments: { ...argumentsValue, jobId, catalogItemId },
+      };
+    }
+    return toolCall;
+  });
+  for (const toolCall of resolvedToolCalls) {
+    const execution = await executor.execute(
+      toolCall,
+      workshopAuthority,
+      new AbortController().signal,
+      executionContext,
+    );
+    assertEquals(execution.succeeded, true, `${toolCall.name} accepted`);
+    if (toolCall.name.startsWith("prepare_")) {
+      assertEquals(
+        execution.outputText.includes(approvalId),
+        false,
+        `${toolCall.name} keeps the approval opaque`,
+      );
+    }
+  }
+  assertEquals(calls.map((call) => call.name), [
+    "assistant_get_workshop_job_context_v1",
+    "assistant_inspect_diagnosis_schema_v1",
+    "assistant_analyze_sales_period_v1",
+    "assistant_prepare_diagnosis_update_v1",
+    "assistant_prepare_workshop_item_v1",
+  ], "only fixed workshop RPCs are reachable");
+  assertEquals(calls[2].parameters, {
+    p_basis: "collected",
+    p_range_mode: "relative",
+    p_relative_period: "last_week",
+    p_start_date: null,
+    p_end_date: null,
+    p_invoice_status: "any",
+  }, "relative dates remain server-owned");
+  assertEquals(calls[3].parameters, {
+    p_job_id: jobId,
+    p_job_bike_id: jobBikeId,
+    p_field: "drivetrain.chain_wear_percent",
+    p_number_value: 0.6,
+    p_text_value: null,
+    p_unit: "display_fraction",
+    p_expected_updated_at: null,
+    p_run_id: runId,
+    p_provider_attempt_no: 2,
+    p_provider_call_hash: "d".repeat(64),
+    p_arguments_hash: "e".repeat(64),
+  }, "diagnosis preparation is exact and run-bound");
 });
 
 Deno.test("cash summary cannot contradict returned receivables or requested limit", async () => {

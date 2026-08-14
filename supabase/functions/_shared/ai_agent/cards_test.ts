@@ -146,6 +146,10 @@ Deno.test("inventory search projects one exact compact result set instead of arb
       category: "Cámaras",
       availability: "in_stock",
       presentation: "open_list",
+      sort: { field: "relevance", direction: "desc" },
+      limit: 10,
+      selectionMode: "all_matches",
+      operationalPredicates: [],
       technicalPredicates: [{ field: "wheel_size", operator: "eq", values: ['29"'] }],
     },
   );
@@ -175,12 +179,12 @@ Deno.test("inventory search projects one exact compact result set instead of arb
   );
   assertEquals(
     autoOpenListAnswer(cards, true),
-    "Abrí 2 resultados coincidentes en Inventario con el filtro “En stock”.",
+    'Abrí 2 resultados coincidentes en Inventario con el filtro “En stock · 29"”.',
     "model prose cannot diverge from an explicit list action",
   );
   assertEquals(
     autoOpenListAnswer(cards, false),
-    "Encontré 2 resultados coincidentes en Inventario con el filtro “En stock”. Usa la tarjeta para abrirlos.",
+    'Encontré 2 resultados coincidentes en Inventario con el filtro “En stock · 29"”. Usa la tarjeta para abrirlos.',
     "an older client gets truthful server-owned click guidance",
   );
   validateStoredCards(cards);
@@ -197,6 +201,90 @@ Deno.test("inventory search projects one exact compact result set instead of arb
   validateStoredCards(cardsForClient(cards, false));
 });
 
+Deno.test("inventory cards preserve operational thresholds in the visible filter", () => {
+  const cards = cardsForToolResult("search_inventory", {
+    authorityTenantId: tenantId,
+    asOf: "2026-08-13T12:00:00Z",
+    status: "success",
+    items: [{
+      entityId,
+      name: "Camara 29 A",
+      stock: 7,
+      technicalMatch: "product_spec",
+    }],
+    resultCount: 1,
+    hasMore: false,
+  }, {
+    query: null,
+    category: "Cámaras",
+    availability: "in_stock",
+    presentation: "open_list",
+    sort: { field: "relevance", direction: "desc" },
+    limit: 10,
+    selectionMode: "all_matches",
+    technicalPredicates: [{ field: "wheel_size", operator: "eq", values: ['29"'] }],
+    operationalPredicates: [{ field: "stock", operator: "gt", values: [5] }],
+  });
+  assertEquals(
+    cards[0].chips,
+    ["En stock", '29"', "Stock > 5"],
+    "the compact card exposes every accumulated filter",
+  );
+  assertEquals(
+    autoOpenListAnswer(cards, true),
+    'Abrí 1 resultado coincidente en Inventario con el filtro “En stock · 29" · Stock > 5”.',
+    "the server-owned answer cannot hide or weaken an exact numeric threshold",
+  );
+
+  const top = cardsForToolResult("search_inventory", {
+    authorityTenantId: tenantId,
+    asOf: "2026-08-13T12:00:00Z",
+    status: "success",
+    items: [{ entityId, name: "Camara 29 A", stock: 7, technicalMatch: "product_spec" }],
+    resultCount: 1,
+    hasMore: false,
+  }, {
+    query: null,
+    category: "Cámaras",
+    availability: "in_stock",
+    presentation: "open_list",
+    sort: { field: "stock", direction: "desc" },
+    limit: 1,
+    selectionMode: "top_n",
+    technicalPredicates: [{ field: "wheel_size", operator: "eq", values: ['29"'] }],
+    operationalPredicates: [],
+  });
+  assertEquals(
+    top[0].chips,
+    ["En stock", '29"', "Top 1 · Mayor stock"],
+    "top-N ordering is visible instead of being hidden in model prose",
+  );
+
+  const wholeInventoryTop = cardsForToolResult("search_inventory", {
+    authorityTenantId: tenantId,
+    asOf: "2026-08-13T12:00:00Z",
+    status: "success",
+    items: [{ entityId, name: "Producto", stock: 1, technicalMatch: "not_applicable" }],
+    resultCount: 1,
+    hasMore: false,
+  }, {
+    query: null,
+    category: null,
+    availability: "in_stock",
+    presentation: "open_list",
+    sort: { field: "stock", direction: "asc" },
+    limit: 1,
+    selectionMode: "top_n",
+    technicalPredicates: [],
+    operationalPredicates: [],
+  });
+  assertEquals(
+    wholeInventoryTop[0].listRef?.query,
+    "Inventario",
+    "a bounded whole-inventory query remains navigable without fake keyword text",
+  );
+});
+
 Deno.test("inventory empty and truncated result sets remain truthful", () => {
   const empty: AgentToolResultEnvelope = {
     authorityTenantId: tenantId,
@@ -211,12 +299,16 @@ Deno.test("inventory empty and truncated result sets remain truthful", () => {
     category: null,
     availability: "in_stock",
     presentation: "open_list",
+    sort: { field: "relevance", direction: "desc" },
+    limit: 10,
+    selectionMode: "all_matches",
+    operationalPredicates: [],
     technicalPredicates: [{ field: "wheel_size", operator: "eq", values: ['31"'] }],
   })[0];
   assertEquals(emptyCard.listRef?.entityIds, [], "verified empty is an exact empty selection");
   assertEquals(
     autoOpenListAnswer([emptyCard], true),
-    "No encontré resultados con el filtro “En stock”. Abrí Inventario para que puedas revisarlo o ajustarlo.",
+    'No encontré resultados con el filtro “En stock · 31"”. Abrí Inventario para que puedas revisarlo o ajustarlo.',
     "empty output is not rewritten as source failure",
   );
 
@@ -228,6 +320,10 @@ Deno.test("inventory empty and truncated result sets remain truthful", () => {
     category: null,
     availability: "any",
     presentation: "answer",
+    sort: { field: "relevance", direction: "desc" },
+    limit: 10,
+    selectionMode: "all_matches",
+    operationalPredicates: [],
     technicalPredicates: [],
   })[0];
   assertEquals(truncated.listRef?.entityIds, null, "a truncated page never claims exact IDs");
@@ -493,4 +589,93 @@ Deno.test("task preparation card carries one closed durable approval reference",
     }
     assertEquals(rejected, true, "approval shape fails closed");
   }
+});
+
+Deno.test("workshop previews keep typed approvals and sales periods route only exact invoices", () => {
+  const approvalId = "99999999-9999-4999-8999-999999999999";
+  const jobId = "88888888-8888-4888-8888-888888888888";
+  const expiresAt = "2026-08-14T01:10:00.000000Z";
+  const diagnosis = cardsForToolResult(
+    "prepare_diagnosis_update",
+    result({
+      approvalId,
+      action: "update_diagnosis",
+      state: "pending",
+      jobId,
+      jobBikeId: entityId,
+      jobNumber: "PG-00420",
+      bikeLabel: "Trek Marlin 7",
+      field: "drivetrain.chain_wear_percent",
+      fieldLabel: "Desgaste de cadena",
+      previousValue: null,
+      newValue: "0.60",
+      expiresAt,
+    }),
+  )[0];
+  const item = cardsForToolResult(
+    "prepare_workshop_item",
+    result({
+      approvalId,
+      action: "add_workshop_item",
+      state: "pending",
+      jobId,
+      jobBikeId: entityId,
+      jobNumber: "PG-00420",
+      bikeLabel: "Trek Marlin 7",
+      catalogItemId: entityId,
+      itemName: "Cambio de cadena",
+      itemType: "service",
+      quantity: 1,
+      unitPrice: 15000,
+      lineTotal: 15000,
+      invoiceNumber: null,
+      expiresAt,
+    }),
+  )[0];
+  assertEquals(diagnosis.kind, "diagnosis_preview", "diagnosis preview kind");
+  assertEquals(
+    diagnosis.approvalRef?.action,
+    "update_diagnosis",
+    "diagnosis action cannot drift",
+  );
+  assertEquals(item.kind, "workshop_item_preview", "item preview kind");
+  assertEquals(
+    item.approvalRef?.action,
+    "add_workshop_item",
+    "item action cannot drift",
+  );
+  validateStoredCards([diagnosis, item]);
+
+  let mismatchedRejected = false;
+  try {
+    validateStoredCards([{
+      ...diagnosis,
+      approvalRef: { ...diagnosis.approvalRef!, action: "add_workshop_item" },
+    }]);
+  } catch (_) {
+    mismatchedRejected = true;
+  }
+  assertEquals(mismatchedRejected, true, "preview kind and action remain inseparable");
+
+  const sales = cardsForToolResult(
+    "analyze_sales_period",
+    result({
+      basis: "collected",
+      startDate: "2026-08-03",
+      endDate: "2026-08-09",
+      invoiceStatus: "any",
+      invoiceCount: 3,
+      eventCount: 4,
+      totalAmount: 175000,
+      averagePerInvoice: 58333.33,
+      highestInvoiceId: entityId,
+      highestInvoiceNumber: "FV-00419",
+      highestInvoiceCustomerName: "María Soto",
+      highestInvoiceTotal: 120000,
+      highestPeriodAmount: 100000,
+    }),
+  );
+  assertEquals(sales.length, 1, "one exact highest invoice card");
+  assertEquals(sales[0].entityRef?.id, entityId, "highest invoice UUID is server-owned");
+  validateStoredCards(sales);
 });

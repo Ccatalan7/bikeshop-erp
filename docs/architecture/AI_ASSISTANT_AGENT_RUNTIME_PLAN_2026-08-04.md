@@ -1,11 +1,12 @@
 # Asistente IA — plan maestro del runtime agéntico
 
 - Fecha de inicio: 2026-08-04
-- Estado: runtime durable activo en producción; gateway Edge v66 `ACTIVE`,
+- Estado: runtime durable activo en producción; gateway Edge v70 `ACTIVE`,
   `verify_jwt=true`, bundle
-  `d34f707a703baa1cd5fa829b33059ae3d0462e4562e509962b34df5d1b8b1808`, con
-  búsqueda web general/técnica, inventario estructurado y reconocimiento de
-  límites verificados en producción el 13 de agosto de 2026
+  `03c95625c3d9bf5365c8d49f3ca1b46dc44dbb387939bd4a9de6788a04c9e0be`, con
+  búsqueda web general/técnica, inventario estructurado, análisis temporal y
+  acciones de taller con preview/confirmación verificados en producción el 13
+  de agosto de 2026
 - Owner de contratos, seguridad e integración: Codex
 - Owner de interacción y revisión visual: Claude
 
@@ -57,9 +58,11 @@ Desde esa línea base, la implementación local de este plan ya agregó:
   Gemini en el último borde;
 - registro tipado, política fail-closed, schemas cerrados, límites por turno,
   recibos saneados y auditoría local acotada con hashes HMAC-SHA-256;
-- catorce herramientas ERP anunciables: snapshot/atención operacional,
+- veintidós herramientas anunciables en la autoridad completa: snapshot/atención operacional,
   inventario y riesgos, trabajos, tareas, clientes, proveedores, facturas de
-  venta/compra, gastos, caja/cobranza, conversaciones y preparación de tareas;
+  venta/compra, gastos, caja/cobranza, análisis por período, conversaciones,
+  contexto y esquema de diagnóstico, preparación de tareas y dos preparaciones
+  de taller, declaración de brechas e investigación pública;
 - `research_public_web` usa Gemini Interactions stateless con búsqueda Google
   obligatoria y verificada; se anuncia sólo con el transporte server-side y el
   modelo lo invoca con `{}`. El servidor deriva la tarea exclusivamente del
@@ -338,8 +341,9 @@ respuesta; así el modelo no puede precomprometer ni cambiar una clave inventada
 después de ver el esquema.
 
 `search_inventory` conserva una sola selección para texto, cards y navegación.
-Su v5 separa `query` opcional, categoría canónica, disponibilidad, presentación
-y `technicalPredicates`. La categoría incluye descendientes y sus familias
+Su contrato vigente separa `query` opcional, categoría canónica,
+disponibilidad, presentación, `technicalPredicates`, `operationalPredicates`,
+`sort`, `limit` y `selectionMode`. La categoría incluye descendientes y sus familias
 técnicas activas. Los predicados tipados soportan igualdad/desigualdad,
 comparaciones numéricas, rango y membresía —más `contains` sólo para texto— y
 PostgreSQL los revalida contra el tipo descubierto. `product_spec_values` es
@@ -351,6 +355,19 @@ fila sigue declarando `product_spec`, `identity_fallback` o `not_applicable`.
 Disponibilidad se aplica antes del límite. Con `open_list`, el runtime reemplaza
 la prosa del modelo y Flutter abre sólo el `listRef` server-owned; con `answer`,
 la card espera clic.
+
+Desde `20260813225000`, los campos operativos cerrados `stock`,
+`minimum_stock` y `price` usan la misma álgebra numérica tipada que las fichas:
+`eq/neq/lt/lte/gt/gte/between/in`. Disponibilidad y cantidad no son
+intercambiables: `in_stock` no puede debilitar `stock > 5`. La base filtra
+antes de ordenar y limitar, devuelve los UUID exactos en orden y proyecta en
+cada fila métricas server-owned del conjunto filtrado completo:
+`matchedCount`, `trackedCount`, `totalStock`, `inventoryRetailValue`,
+`averagePrice`, `minimumPrice` y `maximumPrice`. Así un conteo o suma no se
+calcula desde la primera página, y un top-N explícito queda completo aunque
+existan más filas fuera de N. Agrupar por dimensiones arbitrarias aún no está
+implementado; debe terminar en `report_capability_gap`, no en una agrupación
+inventada por el modelo.
 
 ### Matriz de escenarios del negocio
 
@@ -377,10 +394,125 @@ un dueño canónico y un receipt verificable.
 | Personal/nómina | turnos, liquidaciones, pendientes, pagos | ninguna herramienta del agente | lecturas PII mínimas por permiso; pagos siempre sensitiveWrite específico |
 | Analítica | margen, rotación, forecast, comparación por período | snapshots acotados solamente | agregadores server-owned con métricas definidas; nunca descargar tablas al modelo |
 
+La matriz es un mapa de cobertura, no una afirmación de que todo el ERP ya
+puede operarse por chat. Hoy hay 22 primitivas efectivas para una autoridad con
+todos los permisos: lecturas operacionales, análisis temporal, investigación
+pública, tres preparaciones gobernadas y declaración de brechas. Diagnóstico y
+líneas de taller ya no son brechas: llegan sólo hasta preview y requieren una
+confirmación post-click. Los drafts de cotización/seguimiento/orden de compra,
+conciliación, OCR desde chat, forecast, nómina y publicación siguen siendo
+brechas explícitas hasta que cada una tenga contrato, executor, receipt,
+aprobación cuando corresponda y prueba real. El objetivo integral es que toda
+petición termine en ejecución verificable o limitación honesta; no fingir una
+capacidad futura.
+
 El dataset de evaluación incluye desde esta corrección consultas técnicas con
 inspección previa y escenarios no cubiertos de conciliación, pricing masivo,
 OCR y forecast. El éxito no consiste en que el modelo siempre responda: consiste
 en ejecutar la composición correcta o detenerse con la limitación correcta.
+La prueba ya no valida herramientas contra una lista aspiracional escrita a
+mano: cada nombre esperado debe estar realmente anunciado por
+`createDefaultAgentToolRegistry`. El defecto anterior permitió declarar como
+cubiertas herramientas de borrador/actualización que el runtime no tenía.
+Además, la matriz fija casos transversales de umbral, rango, top-N, métricas del
+conjunto completo y agregación agrupada no soportada. Agregar nombres a una
+matriz sin executor real vuelve a fallar el gate.
+
+**Cierre productivo vigente del 13 de agosto de 2026 — álgebra básica de
+consulta:** la migración `20260813225000` quedó aplicada, leída de vuelta y
+registrada. `assistant_search_inventory_v6` es `SECURITY DEFINER`, `STABLE`,
+tiene `search_path=pg_catalog, public, pg_temp`, timeout de 4500 ms y sólo
+`authenticated` puede ejecutarla. El gateway v68 quedó `ACTIVE`,
+`verify_jwt=true`, bundle
+`c1f75ef305304e5255d92a0f42f97651ce48e4b467ee50bdf3a5941a151dd5cc`.
+
+La prueba real
+`encuentrame camaras 29 que tengamos mas de 5 en stock` produjo
+`clientRequestId=8f51da54-ad0a-42d9-b919-c55acd21a7a1`, run
+`04ebb437-9100-41ce-b559-7dcf2b1d6722`: `succeeded`, sin `error_code`, costo
+total 59416 µUSD. Los receipts de inspector (`result_count=6`) y búsqueda
+(`result_count=1`) quedaron `succeeded`, sin `failure_code` y con
+`read_back_verified=true`. La respuesta server-owned mostró literalmente
+`En stock · 29" · Stock > 5 · Mayor stock`; abrió Product List con un solo UUID
+y la app real mostró únicamente la cámara RBX con stock 7.
+
+La prueba general independiente
+`muestrame los 3 productos con menos stock que esten en stock` produjo
+`clientRequestId=2b1b84c7-872b-44f8-9d26-8ce07dc70ccc`, run
+`8f944fff-6f91-4650-a2dc-553d1e4c2929`: `succeeded`, sin `error_code`, costo
+34158 µUSD y un receipt `search_inventory` verificado con tres resultados. La
+card preservó `En stock · Top 3 · Menor stock`, los tres UUID exactos y abrió
+el listado real ordenado con tres productos de stock 1. Esta segunda prueba no
+usa cámara, motor, medida ni frase especial.
+
+Los gates finales de esta ronda fueron 222/222 pruebas Deno del runtime/gateway,
+89/89 pgTAP local, 89/89 pgTAP sobre scratch derivado del catálogo productivo,
+4/4 validaciones del dataset Flutter, además de check/lint/fmt y
+`git diff --check`.
+
+**Cierre productivo vigente del 13 de agosto de 2026 — análisis temporal y
+acciones gobernadas de taller:** las migraciones `20260814010000` y
+`20260814011000` quedaron aplicadas, leídas de vuelta y registradas. Incorporan
+el rango civil server-owned de `analyze_sales_period`, resolución exacta
+trabajo–bicicleta–factura, registro canónico de campos de diagnóstico,
+`prepare_diagnosis_update`, `prepare_workshop_item` y un único apply post-click
+que vuelve a comprobar autoridad, revisión optimista, ciclo de vida y bloqueos
+financieros antes de escribir y leer de vuelta. El gateway v70 quedó `ACTIVE`,
+`verify_jwt=true`, bundle
+`03c95625c3d9bf5365c8d49f3ca1b46dc44dbb387939bd4a9de6788a04c9e0be`.
+
+La primera prueba real de diagnóstico expuso una imposibilidad de contrato, no
+un fallo de razonamiento: las lecturas conservaban `entityId` sólo para cards y
+lo eliminaban del output del modelo, mientras la herramienta siguiente exigía
+ese UUID. El modelo podía encontrar el trabajo pero físicamente no podía
+encadenar el contexto. La corrección general mantiene los UUID de negocio fuera
+del output y publica `jobRef`/`catalogItemRef` aleatorios, opacos y válidos sólo
+durante ese run; el runtime los resuelve contra un mapa request-local tipado y
+rechaza una referencia inventada, de otro tipo o de otro turno antes del RPC.
+Esto sirve al mismo contrato para cualquier trabajo y cualquier item de
+catálogo; no agrega frases, clientes, folios ni productos especiales.
+
+La prueba temporal
+`La semana pasada, ¿cuántas facturas se cobraron y cuál fue la de mayor valor?`
+produjo `clientRequestId=b432ac9e-38d6-4da3-9d8e-b2465be28b8f`, run
+`02e75e89-d9ef-4564-8fda-2ec76ba71483`: `succeeded`, sin `error_code`, costo
+39776 µUSD y un receipt `analyze_sales_period` `succeeded`,
+`read_back_verified=true`. Resolvió el intervalo exacto 3–9 de agosto de 2026,
+contó 24 facturas distintas en 25 eventos de pago y proyectó la mayor factura
+como card navegable sin inferir cobros desde estados.
+
+La prueba de acción sobre el fixture de taller produjo
+`clientRequestId=0e427416-dac1-4284-b7d5-cfac2d9b92a0`, run
+`e96a2227-43e7-43e3-b6a6-7aa0fed126fa`: `succeeded`, sin `error_code`, costo
+90236 µUSD. Sus cuatro receipts fueron, en orden, `search_workshop_jobs`,
+`get_workshop_job_context`, `inspect_diagnosis_schema` y
+`prepare_diagnosis_update`; todos quedaron `succeeded`, sin `failure_code` y
+con read-back. El último quedó `risk=draft`,
+`policy_decision=approval_required`, `approval_used=false`. La app mostró el
+diff `Antes: 0.45 · Nuevo: 0.60`; se tocó `Descartar` y producción confirmó
+`state=discarded`, sin entidad ni receipt de escritura y con el valor persistido
+todavía en `45.0`.
+
+La prueba pública distinta al registro de mazas preguntó por convertir una
+Trek Fuel EX 8 Gen 6 2023 a SRAM GX Eagle Transmission. Produjo
+`clientRequestId=12cf56c5-d220-4579-a32a-96b82f8bd9be`, run
+`dfed89e8-2264-4dea-a3f9-77d0aea6712f`: `succeeded`, sin `error_code`, cuatro
+fuentes oficiales directas Trek/SRAM y separación visible entre hechos e
+inferencias. El receipt `research_public_web` registró seis queries,
+1756/1024 tokens externos y 94314 µUSD externos. La respuesta confirmó UDH y
+Full Mount, y declaró explícitamente que la evidencia recuperada no bastaba
+para enumerar el resto del grupo en vez de inventarlo. En la app real también
+se tocó semánticamente la URL Specialized `p/199785` de una investigación
+técnica; abrió un workspace/pestaña del navegador embebido dentro de la misma
+sesión macOS, no un navegador externo ni una segunda app.
+
+Los gates finales de este cierre fueron 226/226 pruebas Deno en los 11 archivos
+AI/gateway, check/lint/fmt de los 21 sources, 223 assertions pgTAP de los cinco
+contratos relevantes sobre el scratch derivado de producción, analyzer Flutter
+de los ocho archivos tocados y 52 pruebas Flutter focalizadas. El intento de
+correr los 139 archivos pgTAP completos sobre ese scratch incluyó migraciones
+históricas pendientes ajenas a este slice y no se usa como evidencia de este
+contrato; no se maquilló como verde ni se repitió como auditoría.
 
 Las migraciones `20260813174500` y `20260813180300` desplegaron inicialmente la
 proyección/lista cerrada. El smoke autenticado
@@ -428,7 +560,7 @@ recibe la misma card sin el campo desconocido `listRef` y copy de clic veraz;
 el auto-open y la lista exacta sólo se activan cuando el cliente anuncia el
 contrato.
 
-**Cierre productivo vigente del 13 de agosto de 2026:** las migraciones
+**Cierre productivo supersedido del 13 de agosto de 2026:** las migraciones
 `20260813213000`, `20260813214500` y `20260813215000` quedaron aplicadas, con
 read-back exacto y registro de historia. La última reemplaza el allowlist y
 límite global duplicados del ledger por un contrato tipado de riesgo, política
@@ -466,17 +598,17 @@ receipts verificados de inspector (`result_count=6`) y búsqueda v5
 buscador manual vacío y la misma separación visible de una ficha técnica y
 cuatro matches de identidad; la aro 26 no apareció.
 
-Las primeras acciones llegan sólo cuando esas lecturas estén verificadas:
+Las primeras acciones activas son primitivas generales, no casos de prompt:
 
-1. `draft_customer_followup`
-2. `draft_quote`
-3. `prepare_purchase_order`
-4. `prepare_task`
-5. `create_task`
-6. `update_job_status`
+1. `prepare_task` → confirmación → `create_task` server-owned;
+2. `prepare_diagnosis_update` → confirmación → actualización escalar tipada;
+3. `prepare_workshop_item` → confirmación → línea de producto/servicio y sync
+   de la factura exacta sólo si sigue mutable.
 
-Cada acción conserva el par `preview -> confirm -> commit`; no existe un
-executor que acepte directamente la intención libre del modelo.
+Cada acción conserva `prepare -> preview congelado -> confirm/discard -> apply
+atómico -> read-back`; no existe un executor que acepte directamente la
+intención libre del modelo. Seguimiento, cotización, orden de compra y cambio de
+estado siguen requiriendo su propia primitiva antes de anunciarse.
 
 ## Estado durable y auditoría
 
@@ -557,10 +689,9 @@ resultado final en una pestaña ERP, pero no hereda el perfil del usuario.
 ### D — Potencia read-only
 
 - [x] migrar inventario e investigación pública al registro;
-- [ ] completar el catálogo (9 de 13 lecturas ERP son ejecutables y la
-      investigación pública completa 10 de 14 herramientas, condicional a su
-      worker; inventario de riesgo, caja/cobranza, gastos y conversaciones están
-      en el siguiente slice);
+- [x] catálogo actual de lecturas y preparaciones ejecutable para las 22
+      herramientas anunciadas por una autoridad completa; las capacidades
+      futuras permanecen ausentes y se declaran como brecha;
 - [x] respuestas parciales y tarjetas por fuente para la primera ola;
 - [x] ninguna lectura determinística o cacheada salta capacidades/tenant; un
       vacío sin receipt de autoridad se declara no disponible;
@@ -577,8 +708,8 @@ resultado final en una pestaña ERP, pero no hereda el perfil del usuario.
       pero ningún proveedor nuevo queda activado sin configuración productiva;
 - [x] allowlists, errores sanitizados, routing por rol lógico, pricing exacto,
       cuota, cancelación, retry único y telemetría durable;
-- [x] 95 tests Deno locales, type-check, formato y lint; smoke autenticado
-      pendiente;
+- [x] 226 tests Deno, type-check, formato y lint; smokes autenticados y read-back
+      productivo cerrados;
 - [x] ninguna API key privada ni elección libre de proveedor llega a Flutter.
 
 El gateway ya ejecuta tool calls en servidor y Flutter dispone de un engine
@@ -601,24 +732,20 @@ outputs de baja entropía. Eso evita que un hash directo funcione como
 diccionario de folios, nombres o montos, pero no reemplaza el store durable con
 RLS, retención y correlación de runs del Checkpoint F.
 
-La app activa todavía usa el boundary heredado `gemini-proxy`, no este gateway,
-porque el flag de rollout permanece apagado. Ese proxy autentica, pero aún
-permite `contents/system/tools/config` y modelo allowlisted desde el cliente,
-carece de autoridad tenant/rol, cuota, body limit y deadline propios y usa CORS
-amplio. Sus logs y errores visibles ya fueron saneados, pero reemplazarlo por el
-gateway gobernado sigue bloqueado por los gates DB/productivos y por conservar
-el resumen determinístico hoy/mañana; no es una tarea que pueda declararse
-resuelta por tests locales.
+La app activa consume `ai-agent-gateway` como engine completo y fija esa elección
+al crear la sesión; nunca cae a `gemini-proxy` a mitad de un turno. El boundary
+heredado permanece sólo para builds antiguas sin el define de rollout y no
+recibe capacidades nuevas. La sesión macOS canónica probó lectura temporal,
+preview/descarte, búsqueda pública y apertura de fuente contra producción.
 
 Los logs preexistentes del contexto, toolbar y proxy heredado fueron saneados:
 no imprimen scope, folios, UUID de usuario, body upstream ni detalles de
 excepción.
 
-Verificación local de esta ampliación: analyzer limpio en los archivos Flutter
-tocados; 83/83 pruebas Deno, formato, type-check y lint limpios. El runner de
-Flutter no pudo crear su socket loopback dentro del sandbox, por lo que las
-pruebas nuevas y el smoke macOS siguen siendo un gate real, no un verde
-inferido.
+Verificación de esta ampliación: analyzer limpio en los archivos Flutter
+tocados, 226/226 pruebas Deno y 52 pruebas Flutter focalizadas, con formato,
+type-check y lint limpios. Los smokes se ejecutaron además en la sesión macOS
+canónica; no se infieren desde tests locales.
 
 ### F — Threads, runs y receipts
 
@@ -631,17 +758,19 @@ inferido.
 - [x] TTL, eliminación de thread y purge acotado con schedule cuando `pg_cron`
       está disponible;
 - [x] respuesta y cards terminales se leen desde el mismo commit durable;
-- [ ] pgTAP/clone de producción, despliegue, schedule read-back y smoke
-      autenticado.
+- [x] pgTAP/clone derivado de producción, despliegue, read-back y smokes
+      autenticados para las capacidades activas de este slice.
 
 ### G — Borradores y escrituras gobernadas
 
-- [ ] UI canónica de preview/aprobación liderada por Claude;
-- [ ] herramientas `draft` y luego `reversibleWrite`;
-- [x] contrato local de aprobación exacta, single-use, idempotencia, timeout y
-      read-back; no hay executors de escritura activados;
-- [ ] confirmación específica para todo `sensitiveWrite`;
-- [ ] smokes rollback-only antes de cualquier activación productiva.
+- [x] UI canónica de preview/aprobación para tarea, diagnóstico y línea de
+      taller, con acción específica y descarte explícito;
+- [x] herramientas `draft` y apply post-click atómico para esas tres primitivas;
+- [x] aprobación exacta, single-use, idempotencia, vencimiento, bloqueo
+      concurrente/financiero y read-back;
+- [x] confirmación específica para toda escritura hoy anunciada;
+- [x] smoke rollback-only por descarte antes de aceptar la acción de diagnóstico
+      en producción.
 
 ### H — Investigación pública con navegador
 
@@ -654,7 +783,8 @@ inferido.
 - [x] herramienta condicional: sin `BROWSER_USE_API_KEY` no se anuncia ni puede
       fingir una búsqueda web;
 - [x] citas HTTPS visibles añadidas por el runtime desde fuentes validadas;
-- [ ] smoke pagado real del worker y apertura opcional de la fuente en el ERP.
+- [x] smokes pagados reales del worker y apertura semántica de una fuente HTTPS
+      en el navegador embebido del ERP.
 
 ### I — Portales autenticados
 

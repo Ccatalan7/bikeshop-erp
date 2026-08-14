@@ -78,6 +78,26 @@ Map<String, Object?> _taskPreviewCard({
           },
     };
 
+Map<String, Object?> _workshopPreviewCard({
+  String kind = 'diagnosis_preview',
+  String action = 'update_diagnosis',
+}) =>
+    <String, Object?>{
+      'kind': kind,
+      'eyebrow': 'Cambio por confirmar',
+      'title': 'Desgaste de cadena',
+      'subtitle': 'PG-00420 · Trek Marlin 7',
+      'description': 'Sin valor anterior · Nuevo: 0.60',
+      'destination': 'workshop_jobs',
+      'chips': <String>['Requiere confirmación'],
+      'approvalRef': <String, Object?>{
+        'id': _approvalA,
+        'action': action,
+        'expiresAt': _approvalExpiryWire,
+        'state': 'pending',
+      },
+    };
+
 Map<String, Object?> _approvalResponse({
   String approvalId = _approvalA,
   String clientActionId = _actionA,
@@ -529,6 +549,52 @@ void main() {
     }
   });
 
+  test('workshop previews decode only their matching closed action', () {
+    final diagnosis = AIAgentGatewayResponse.fromJson(
+      _response(cards: <Object?>[_workshopPreviewCard()]),
+    ).cards.single;
+    final item = AIAgentGatewayResponse.fromJson(
+      _response(
+        cards: <Object?>[
+          _workshopPreviewCard(
+            kind: 'workshop_item_preview',
+            action: 'add_workshop_item',
+          ),
+        ],
+      ),
+    ).cards.single;
+
+    expect(diagnosis.destination, AIAssistantDestination.workshopJobs);
+    expect(
+      diagnosis.approvalRef?.action,
+      AIAssistantApprovalAction.updateDiagnosis,
+    );
+    expect(
+      item.approvalRef?.action,
+      AIAssistantApprovalAction.addWorkshopItem,
+    );
+
+    for (final invalid in <Map<String, Object?>>[
+      _workshopPreviewCard(action: 'add_workshop_item'),
+      _workshopPreviewCard(
+        kind: 'workshop_item_preview',
+        action: 'update_diagnosis',
+      ),
+      <String, Object?>{
+        ..._workshopPreviewCard(),
+        'destination': 'tasks',
+      },
+    ]) {
+      expect(
+        () => AIAgentGatewayResponse.fromJson(
+          _response(cards: <Object?>[invalid]),
+        ),
+        throwsA(isA<AIAgentGatewayContractException>()),
+        reason: '$invalid',
+      );
+    }
+  });
+
   test('task preview rejects malformed, broadened or misplaced approvals', () {
     final invalidApprovalRefs = <Object?>[
       <String, Object?>{
@@ -638,6 +704,24 @@ void main() {
     expect(approved.cards.single.approvalRef, isNull);
     expect(discarded.state, AIAssistantApprovalState.discarded);
     expect(discarded.cards, isEmpty);
+
+    final workshop = AIAgentGatewayApprovalResponse.fromJson(
+      _approvalResponse(
+        cards: <Object?>[
+          <String, Object?>{
+            'kind': 'job',
+            'title': 'PG-00420',
+            'destination': 'workshop_jobs',
+            'chips': <String>[],
+            'entityRef': <String, Object?>{
+              'kind': 'workshopJob',
+              'id': _jobA,
+            },
+          },
+        ],
+      ),
+    );
+    expect(workshop.cards.single.entityRef?.id, _jobA);
 
     for (final invalid in <Map<String, Object?>>[
       _approvalResponse(state: 'pending', cards: const <Object?>[]),

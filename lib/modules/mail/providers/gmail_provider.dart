@@ -6,6 +6,73 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/mail_folder.dart';
 import 'email_provider.dart';
 
+/// Applies the authoritative labels returned for a message whose immutable
+/// metadata is already cached locally. Gmail's list endpoint returns IDs only;
+/// the Edge Function therefore fetches `id,labelIds` with `format=minimal` for
+/// known rows instead of returning a marker that freezes read/unread forever.
+@visibleForTesting
+Email reconcileKnownGmailMetadata(
+  Email known,
+  Map<String, dynamic> metadata, {
+  required MailFolder folder,
+}) {
+  final rawLabels = metadata['labelIds'];
+  if (rawLabels is! List) return known;
+  final labels = rawLabels.map((label) => label.toString()).toSet();
+  return known.copyWith(
+    folderId: folder.gmailLabelId,
+    isRead: !labels.contains('UNREAD'),
+  );
+}
+
+@visibleForTesting
+String buildGmailRawMessage({
+  required String to,
+  required String from,
+  required String subject,
+  required String content,
+  String? cc,
+  String? bcc,
+  String? inReplyTo,
+  String? references,
+}) {
+  String safe(String name, String value) {
+    if (value.contains(RegExp(r'[\r\n\u0000]'))) {
+      throw FormatException('$name contains an invalid header separator.');
+    }
+    return value.trim();
+  }
+
+  String encodedSubject(String value) {
+    final clean = safe('Subject', value);
+    final isAscii = clean.codeUnits.every((unit) => unit >= 32 && unit <= 126);
+    return isAscii ? clean : '=?UTF-8?B?${base64.encode(utf8.encode(clean))}?=';
+  }
+
+  final message = StringBuffer();
+  message.writeln('To: ${safe('To', to)}');
+  message.writeln('From: ${safe('From', from)}');
+  if (cc != null && cc.trim().isNotEmpty) {
+    message.writeln('Cc: ${safe('Cc', cc)}');
+  }
+  if (bcc != null && bcc.trim().isNotEmpty) {
+    message.writeln('Bcc: ${safe('Bcc', bcc)}');
+  }
+  message.writeln('Subject: ${encodedSubject(subject)}');
+  if (inReplyTo != null && inReplyTo.trim().isNotEmpty) {
+    message.writeln('In-Reply-To: ${safe('In-Reply-To', inReplyTo)}');
+  }
+  if (references != null && references.trim().isNotEmpty) {
+    message.writeln('References: ${safe('References', references)}');
+  }
+  message.writeln('MIME-Version: 1.0');
+  message.writeln('Content-Type: text/html; charset=utf-8');
+  message.writeln('Content-Transfer-Encoding: 8bit');
+  message.writeln();
+  message.write(content);
+  return message.toString();
+}
+
 /// Gmail implementation of EmailProvider
 class GmailProvider extends EmailProvider {
   static const String _providerId = 'gmail';
@@ -234,46 +301,28 @@ class GmailProvider extends EmailProvider {
     try {
       debugPrint('📧 [Gmail Push] Setting up push notifications...');
 
-      // The Pub/Sub topic must be created in Google Cloud Console first
-      // Format: projects/{project-id}/topics/{topic-name}
-      // You need to grant gmail-api-push@system.gserviceaccount.com publish rights
-      const topicName = 'projects/vinabikeapp/topics/gmail-push-notifications';
-
-      final response = await _proxyRequest(
-        method: 'POST',
-        url: '$_apiBase/watch',
-        body: {
-          'topicName': topicName,
-          'labelIds': ['INBOX'],
-        },
+      // The server owns the topic name and writes subscription identity from
+      // the authenticated email_accounts row. Clients never assert which
+      // mailbox/tenant a Pub/Sub notification belongs to.
+      final response = await _supabase.functions.invoke(
+        'gmail-oauth',
+        body: {'action': 'setup_push'},
       );
 
-      final historyId = response['historyId']?.toString();
-      final expiration = response['expiration']?.toString();
+      if (response.status != 200 || response.data is! Map) {
+        throw Exception('Gmail push setup failed: ${response.data}');
+      }
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (data['push_configured'] != true) {
+        throw Exception('Gmail push setup was not confirmed');
+      }
+
+      final historyId = data['history_id']?.toString();
+      final expiration = data['expiration']?.toString();
 
       debugPrint('📧 [Gmail Push] ✅ Watch set up!');
       debugPrint('📧 [Gmail Push] History ID: $historyId');
       debugPrint('📧 [Gmail Push] Expires: $expiration');
-
-      // Store the subscription info in Supabase for renewal tracking
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId != null) {
-        await _supabase.from('email_push_subscriptions').upsert({
-          'user_id': userId,
-          'tenant_id': await _getTenantId(),
-          'provider': 'gmail',
-          'email_address': _email, // Added for lookup
-          'gmail_history_id': historyId,
-          'gmail_expiration': expiration != null
-              ? DateTime.fromMillisecondsSinceEpoch(int.parse(expiration))
-                  .toIso8601String()
-              : null,
-          'is_active': true,
-          'updated_at': DateTime.now().toIso8601String(),
-        }, onConflict: 'user_id,provider');
-
-        debugPrint('📧 [Gmail Push] Subscription saved to database');
-      }
 
       return true;
     } catch (e) {
@@ -296,20 +345,6 @@ class GmailProvider extends EmailProvider {
     } catch (e) {
       debugPrint('📧 [Gmail Push] Error stopping push: $e');
     }
-  }
-
-  Future<String?> _getTenantId() async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return null;
-
-    final result = await _supabase
-        .from('user_profiles')
-        .select('tenant_id')
-        .eq('user_id', userId)
-        .limit(1)
-        .maybeSingle();
-
-    return result?['tenant_id'] as String?;
   }
 
   Future<dynamic> _proxyRequest({
@@ -418,7 +453,11 @@ class GmailProvider extends EmailProvider {
         final typedMessage = Map<String, dynamic>.from(message);
         final id = typedMessage['id']?.toString() ?? '';
         if (typedMessage['known'] == true && knownById.containsKey(id)) {
-          return knownById[id]!;
+          return reconcileKnownGmailMetadata(
+            knownById[id]!,
+            typedMessage,
+            folder: folder,
+          );
         }
         return _parseGmailMessage(typedMessage, folder: folder);
       }).toList();
@@ -473,6 +512,8 @@ class GmailProvider extends EmailProvider {
       hasAttachment: attachments.isNotEmpty,
       summary: data['snippet'],
       threadId: data['threadId'],
+      rfcMessageId: getHeader('Message-ID'),
+      references: getHeader('References'),
       attachments: attachments,
     );
   }
@@ -504,9 +545,17 @@ class GmailProvider extends EmailProvider {
           }
         }
 
+        final rawLabels = data['labelIds'];
+        final labels = rawLabels is List
+            ? rawLabels.map((label) => label.toString()).toSet()
+            : null;
         _selectedEmail = email.copyWith(
           content: content,
+          isRead: labels == null ? email.isRead : !labels.contains('UNREAD'),
           hasAttachment: email.hasAttachment || attachments.isNotEmpty,
+          threadId: data['threadId']?.toString(),
+          rfcMessageId: _headerValue(payload, 'Message-ID'),
+          references: _headerValue(payload, 'References'),
           attachments: attachments,
         );
         return _selectedEmail!;
@@ -907,20 +956,17 @@ class GmailProvider extends EmailProvider {
         throw StateError('El remitente no está autorizado por Gmail.');
       }
 
-      // Build RFC 2822 message
-      final message = StringBuffer();
-      message.writeln('To: $to');
-      message.writeln('From: ${sender.address}');
-      if (cc != null && cc.isNotEmpty) message.writeln('Cc: $cc');
-      if (bcc != null && bcc.isNotEmpty) message.writeln('Bcc: $bcc');
-      message.writeln('Subject: $subject');
-      message.writeln('Content-Type: text/html; charset=utf-8');
-      message.writeln();
-      message.write(content);
+      final message = buildGmailRawMessage(
+        to: to,
+        from: sender.address,
+        subject: subject,
+        content: content,
+        cc: cc,
+        bcc: bcc,
+      );
 
       // Base64 URL encode
-      final raw =
-          base64Url.encode(utf8.encode(message.toString())).replaceAll('=', '');
+      final raw = base64Url.encode(utf8.encode(message)).replaceAll('=', '');
 
       await _proxyRequest(
         method: 'POST',
@@ -943,10 +989,78 @@ class GmailProvider extends EmailProvider {
   Future<bool> replyToEmail({
     required String emailId,
     required String content,
+    required String to,
+    required String subject,
+    String? fromAddress,
+    String? cc,
+    String? bcc,
+    String? threadId,
+    String? rfcMessageId,
+    String? references,
     bool replyAll = false,
   }) async {
-    // TODO: Implement proper reply with threading
-    return false;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final sender = resolveSenderIdentity(fromAddress);
+      if (sender == null) {
+        throw StateError('El remitente no está autorizado por Gmail.');
+      }
+
+      var targetThreadId = threadId?.trim() ?? '';
+      var targetMessageId = rfcMessageId?.trim() ?? '';
+      var targetReferences = references?.trim() ?? '';
+      if (targetThreadId.isEmpty || targetMessageId.isEmpty) {
+        final original = await _proxyRequest(
+          method: 'GET',
+          url: '$_apiBase/messages/$emailId?format=full',
+        );
+        final payload = _asStringMap(original['payload']);
+        targetThreadId = original['threadId']?.toString().trim() ?? '';
+        if (payload != null) {
+          targetMessageId = _headerValue(payload, 'Message-ID').trim();
+          targetReferences = _headerValue(payload, 'References').trim();
+        }
+      }
+
+      if (targetThreadId.isEmpty || targetMessageId.isEmpty) {
+        throw StateError(
+          'Gmail no devolvió la identidad necesaria para responder en el hilo.',
+        );
+      }
+
+      final replyReferences = <String>[
+        if (targetReferences.isNotEmpty) targetReferences,
+        targetMessageId,
+      ].join(' ');
+      final message = buildGmailRawMessage(
+        to: to,
+        from: sender.address,
+        subject: subject,
+        content: content,
+        cc: cc,
+        bcc: bcc,
+        inReplyTo: targetMessageId,
+        references: replyReferences,
+      );
+      final raw = base64Url.encode(utf8.encode(message)).replaceAll('=', '');
+
+      await _proxyRequest(
+        method: 'POST',
+        url: '$_apiBase/messages/send',
+        body: {'raw': raw, 'threadId': targetThreadId},
+      );
+      return true;
+    } catch (e) {
+      debugPrint('replyToEmail error: $e');
+      _error = _friendlyGmailError(e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   @override
@@ -1041,10 +1155,20 @@ class GmailProvider extends EmailProvider {
           if (read) 'removeLabelIds': ['UNREAD'] else 'addLabelIds': ['UNREAD'],
         },
       );
+      final index = _emails.indexWhere((email) => email.id == emailId);
+      if (index != -1) {
+        _emails[index] = _emails[index].copyWith(isRead: read);
+      }
+      if (_selectedEmail?.id == emailId) {
+        _selectedEmail = _selectedEmail!.copyWith(isRead: read);
+      }
+      _error = null;
       notifyListeners();
       return true;
     } catch (e) {
       debugPrint('markAsRead error: $e');
+      _error = _friendlyGmailError(e);
+      notifyListeners();
       return false;
     }
   }

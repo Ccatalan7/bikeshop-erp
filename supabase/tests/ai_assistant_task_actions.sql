@@ -28,7 +28,7 @@ select ok(has_function_privilege('authenticated',
     'public.assistant_apply_task_approval_v1(uuid,text,uuid)', 'EXECUTE'),
   'only authenticated caller JWT can prepare or click an approval');
 select ok(position('prepare_task' in pg_get_functiondef(
-  'assistant_runtime.assistant_record_tool_receipt_v1(uuid,uuid,text,uuid,uuid,bigint,integer,integer,text,text,text,text,text,text,text,text,integer,integer,boolean,boolean,text,timestamptz,timestamptz)'::regprocedure
+  'assistant_runtime.assistant_tool_receipt_contract_internal_v1(text)'::regprocedure
 )) > 0, 'runtime receipt allowlist includes the draft tool');
 select ok(position('can_manage_tenant_users' in pg_get_functiondef(
   'public.assistant_prepare_task_v1(text,text,text,text,text,text,uuid,integer,text,text)'::regprocedure

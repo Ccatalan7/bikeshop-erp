@@ -1,4 +1,4 @@
-import { committedTaskCard } from "./cards.ts";
+import { committedTaskCard, committedWorkshopActionCard } from "./cards.ts";
 import type {
   AgentApprovalActionRequest,
   AgentApprovalActionResponse,
@@ -67,7 +67,7 @@ export function createSupabaseAgentApprovalActionExecutor(
     ) {
       let value: unknown;
       try {
-        value = await client.rpc("assistant_apply_task_approval_v1", {
+        value = await client.rpc("assistant_apply_approval_v2", {
           p_approval_id: request.approvalId,
           p_action: request.approvalAction,
           p_client_action_id: request.clientActionId,
@@ -116,34 +116,120 @@ function responseFromRpc(
       "approvalId",
       "clientActionId",
       "approvalState",
-      "task",
+      "action",
+      "result",
     ]) ||
     value.authorityTenantId !== authority.tenantId ||
     value.actorUserId !== authority.userId ||
     value.approvalId !== request.approvalId ||
     value.clientActionId !== request.clientActionId ||
-    !["approved", "discarded", "expired"].includes(String(value.approvalState))
+    !["approved", "discarded", "expired"].includes(String(value.approvalState)) ||
+    !["create_task", "update_diagnosis", "add_workshop_item"].includes(
+      String(value.action),
+    )
   ) throw unavailableApproval();
   const approvalState = value.approvalState as "approved" | "discarded" | "expired";
-  const task = value.task;
-  if ((approvalState === "approved") !== isRecord(task)) throw unavailableApproval();
-  const cards = approvalState === "approved" && isRecord(task)
-    ? [committedTaskCard(validateTask(task))]
-    : [];
+  const action = value.action as "create_task" | "update_diagnosis" | "add_workshop_item";
+  const result = value.result;
+  if ((approvalState === "approved") !== isRecord(result)) throw unavailableApproval();
+  const validatedResult = approvalState === "approved" && isRecord(result)
+    ? validateApprovalResult(action, result)
+    : null;
+  const cards = validatedResult === null
+    ? []
+    : action === "create_task"
+    ? [committedTaskCard(validatedResult)]
+    : [committedWorkshopActionCard(action, validatedResult)];
+  const actionCopy = action === "create_task"
+    ? {
+      approved: "Tarea creada.",
+      discarded: "No se creó la tarea.",
+      expired: "La confirmación venció; no se creó la tarea.",
+    }
+    : action === "update_diagnosis"
+    ? {
+      approved: "Diagnóstico actualizado.",
+      discarded: "No se modificó el diagnóstico.",
+      expired: "La confirmación venció; no se modificó el diagnóstico.",
+    }
+    : {
+      approved: "Línea agregada al trabajo.",
+      discarded: "No se agregó la línea.",
+      expired: "La confirmación venció; no se agregó la línea.",
+    };
   return Object.freeze({
     version: 1,
     operation: "approval_action",
     approvalId: request.approvalId,
     clientActionId: request.clientActionId,
     approvalState,
-    text: approvalState === "approved"
-      ? "Tarea creada."
-      : approvalState === "discarded"
-      ? "No se creó la tarea."
-      : "La confirmación venció; no se creó la tarea.",
+    text: actionCopy[approvalState],
     cards: Object.freeze(cards),
     status: "completed",
   });
+}
+
+function validateApprovalResult(
+  action: "create_task" | "update_diagnosis" | "add_workshop_item",
+  value: Record<string, JsonValue>,
+): JsonObject {
+  if (action === "create_task") return validateTask(value);
+  return action === "update_diagnosis"
+    ? validateDiagnosisUpdate(value)
+    : validateWorkshopItem(value);
+}
+
+function validateDiagnosisUpdate(value: Record<string, JsonValue>): JsonObject {
+  if (
+    !hasExactKeys(value, [
+      "entityId",
+      "jobBikeId",
+      "jobNumber",
+      "bikeLabel",
+      "field",
+      "fieldLabel",
+      "newValue",
+      "updatedAt",
+    ]) ||
+    typeof value.entityId !== "string" || !validUuid(value.entityId) ||
+    typeof value.jobBikeId !== "string" || !validUuid(value.jobBikeId) ||
+    !boundedText(value.jobNumber, 80) || !boundedText(value.bikeLabel, 200) ||
+    !boundedText(value.field, 80) || !boundedText(value.fieldLabel, 160) ||
+    !boundedText(value.newValue, 160) ||
+    typeof value.updatedAt !== "string" || !isoInstant(value.updatedAt)
+  ) throw unavailableApproval();
+  return Object.freeze({ ...value });
+}
+
+function validateWorkshopItem(value: Record<string, JsonValue>): JsonObject {
+  if (
+    !hasExactKeys(value, [
+      "entityId",
+      "jobItemId",
+      "jobBikeId",
+      "jobNumber",
+      "bikeLabel",
+      "itemName",
+      "itemType",
+      "quantity",
+      "unitPrice",
+      "lineTotal",
+      "invoiceNumber",
+    ]) ||
+    typeof value.entityId !== "string" || !validUuid(value.entityId) ||
+    typeof value.jobItemId !== "string" || !validUuid(value.jobItemId) ||
+    !(value.jobBikeId === null ||
+      (typeof value.jobBikeId === "string" && validUuid(value.jobBikeId))) ||
+    !boundedText(value.jobNumber, 80) ||
+    !(value.bikeLabel === null || boundedText(value.bikeLabel, 200)) ||
+    !boundedText(value.itemName, 160) ||
+    !["product", "service"].includes(String(value.itemType)) ||
+    !finiteNumber(value.quantity) || (value.quantity as number) <= 0 ||
+    !finiteNumber(value.unitPrice) || (value.unitPrice as number) < 0 ||
+    !finiteNumber(value.lineTotal) || (value.lineTotal as number) < 0 ||
+    !(value.invoiceNumber === null || boundedText(value.invoiceNumber, 100))
+  ) throw unavailableApproval();
+  return Object.freeze({ ...value });
 }
 
 function validateTask(value: Record<string, JsonValue>): JsonObject {
@@ -169,6 +255,14 @@ function validateTask(value: Record<string, JsonValue>): JsonObject {
     utf8Bytes(value.assigneeName) > 160
   ) throw unavailableApproval();
   return Object.freeze({ ...value });
+}
+
+function boundedText(value: JsonValue, maxBytes: number): value is string {
+  return typeof value === "string" && Boolean(value.trim()) && utf8Bytes(value) <= maxBytes;
+}
+
+function finiteNumber(value: JsonValue): boolean {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function invalidApproval(): AgentApprovalActionError {

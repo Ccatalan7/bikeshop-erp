@@ -523,7 +523,7 @@ class _AIChatPanelState extends State<AIChatPanel> {
                             approvalDecisionInFlight:
                                 session.approvalDecisionInFlight,
                             approvalErrorFor: session.approvalErrorFor,
-                            onApproval: session.resolveTaskApproval,
+                            onApproval: session.resolveApproval,
                           ),
                   ),
                 );
@@ -915,7 +915,7 @@ class _AssistantActionCard extends StatelessWidget {
                       ],
                       const SizedBox(height: 10),
                       if (isApprovalPreview)
-                        _TaskApprovalControls(
+                        _ApprovalControls(
                           approval: card.approvalRef!,
                           enabled: approvalEnabled,
                           busy: approvalBusy,
@@ -980,6 +980,8 @@ class _AssistantActionCard extends StatelessWidget {
       case 'customer':
         return Icons.person_rounded;
       case 'job':
+      case 'diagnosis_preview':
+      case 'workshop_item_preview':
         return Icons.build_circle_rounded;
       case 'purchase_invoice':
         return Icons.receipt_long_rounded;
@@ -1006,6 +1008,8 @@ class _AssistantActionCard extends StatelessWidget {
       case 'customer':
         return const Color(0xFF7B1FA2);
       case 'job':
+      case 'diagnosis_preview':
+      case 'workshop_item_preview':
         return const Color(0xFF6D4C41);
       case 'purchase_invoice':
         return const Color(0xFFBF6A02);
@@ -1028,8 +1032,8 @@ class _AssistantActionCard extends StatelessWidget {
   }
 }
 
-class _TaskApprovalControls extends StatelessWidget {
-  const _TaskApprovalControls({
+class _ApprovalControls extends StatelessWidget {
+  const _ApprovalControls({
     required this.approval,
     required this.enabled,
     required this.busy,
@@ -1051,9 +1055,29 @@ class _TaskApprovalControls extends StatelessWidget {
     final stateLabel = switch (approval.state) {
       AIAssistantApprovalState.pending =>
         'Vence ${_formatUtcApprovalExpiry(approval.expiresAt)}',
-      AIAssistantApprovalState.approved => 'Tarea creada',
+      AIAssistantApprovalState.approved => switch (approval.action) {
+          AIAssistantApprovalAction.createTask => 'Tarea creada',
+          AIAssistantApprovalAction.updateDiagnosis =>
+            'Diagnóstico actualizado',
+          AIAssistantApprovalAction.addWorkshopItem => 'Línea agregada',
+        },
       AIAssistantApprovalState.discarded => 'Propuesta descartada',
       AIAssistantApprovalState.expired => 'Propuesta vencida',
+    };
+    final approveLabel = switch (approval.action) {
+      AIAssistantApprovalAction.createTask => 'Crear tarea',
+      AIAssistantApprovalAction.updateDiagnosis => 'Actualizar diagnóstico',
+      AIAssistantApprovalAction.addWorkshopItem => 'Agregar al trabajo',
+    };
+    final approvingLabel = switch (approval.action) {
+      AIAssistantApprovalAction.createTask => 'Creando...',
+      AIAssistantApprovalAction.updateDiagnosis => 'Actualizando...',
+      AIAssistantApprovalAction.addWorkshopItem => 'Agregando...',
+    };
+    final approveIcon = switch (approval.action) {
+      AIAssistantApprovalAction.createTask => Icons.add_task_rounded,
+      AIAssistantApprovalAction.updateDiagnosis => Icons.save_outlined,
+      AIAssistantApprovalAction.addWorkshopItem => Icons.playlist_add_rounded,
     };
 
     return Column(
@@ -1113,13 +1137,13 @@ class _TaskApprovalControls extends StatelessWidget {
                         dimension: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.add_task_rounded),
+                    : Icon(approveIcon),
                 label: Text(
                   busy &&
                           decisionInFlight ==
                               AIAssistantApprovalDecision.approve
-                      ? 'Creando...'
-                      : 'Crear tarea',
+                      ? approvingLabel
+                      : approveLabel,
                 ),
               ),
               OutlinedButton.icon(

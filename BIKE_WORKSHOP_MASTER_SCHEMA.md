@@ -1217,6 +1217,19 @@ show the same invariant. Minimum regression for Jobs remains out-of-order
 success/error, authority cancellation, dispose, current real error and proof
 that service notifications keep the cache-only surgical route.
 
+The routed/embedded existing-job editor follows the same ownership boundary at
+the detail level. Its blocking load contains only the exact job, linked
+invoice/payment state, exact customer and bicycles, persisted job-bike/item
+rows, referenced catalog products and the service profiles needed by those
+rows. It no longer waits for the complete customer catalog, a generic product
+preview, all alternate statuses/subjects, an unfocused product autocomplete or
+the collapsed chat. Those selector/read-model owners load on explicit
+interaction (or reuse an already eligible cache), while service-profile
+mapping, targets and questions are hydrated once per distinct profile batch
+instead of once per line. This changes no workshop, invoice, diagnosis, bike
+profile or memory truth; it removes unrelated read models from the editor's
+critical path and keeps exact persistence dependencies fail-closed.
+
 ### Invoice-linked inventory integrity (current rule)
 
 - A posted sales invoice item edit must replace the previously posted inventory snapshot atomically; leaving an invoice confirmed/paid is not a reason to ignore product or quantity changes.
@@ -1354,6 +1367,53 @@ Current fields:
 - `rotorContaminationStatus`
 - `symptomKeys`
 - `notes`
+
+### AI assistant workshop action boundary
+
+The assistant may change workshop truth only through the same canonical owners
+used by the job editor. Natural language never becomes a free-form database
+patch.
+
+The general action sequence is:
+
+1. resolve an exact job from job number, customer, any linked bike, or linked
+   sales invoice and expose only a random request-local `jobRef` to the model;
+2. read the exact `mechanic_job_bikes` target, linked invoice, mutable state and
+   optimistic revision;
+3. inspect the server-owned diagnosis field registry or resolve an exact active
+   catalog product/service through a request-local `catalogItemRef`;
+4. create a frozen approval preview without changing business data;
+5. after an explicit operator click, recheck authority, tenant, revision,
+   lifecycle and financial locks, apply one transaction and read the result
+back before success.
+
+`jobRef` and `catalogItemRef` are typed opaque capabilities for one agent run,
+not business UUIDs and not Flutter navigation references. Edge retains their
+server-owned ID map, resolves it immediately before the fixed RPC, and rejects
+unknown, cross-type or stale references. This allows arbitrary tool chaining
+without disclosing business IDs to the model or accepting IDs it invented.
+
+Diagnosis field paths use the persisted snake-case JSON keys under
+`mechanic_job_bikes.diagnosis_sheet_data`, for example
+`drivetrain.chain_wear_percent`; Dart property names such as
+`chainWearPercent` are application projections, not database keys. The field
+registry owns type, stored unit, accepted input units, allowed values and
+bounds. A chain-gauge reading expressed as `0.6` with input unit
+`display_fraction` is normalized to the canonical stored percentage `60`; it is
+not stored as an ambiguous raw fraction.
+
+Adding a product or service uses `products.id` as the frozen input. Name, SKU,
+product/service classification and unit price are server-owned and revalidated
+at confirmation. The action writes `mechanic_job_items`, preserves optional
+`job_bike_id`, and invokes the existing job→invoice synchronization only when
+the exact linked invoice is still mutable. A paid invoice, any live payment,
+an altered price, a stale job, a delivered/completed job or an ambiguous bike
+aborts the action; the assistant must never create a parallel invoice writer.
+
+Current typed actions are deliberately narrow primitives, not prompt cases:
+task creation, scalar diagnosis update, and catalog-backed workshop item
+addition. An unsupported mutation must be reported as a missing capability
+instead of being approximated through names, notes or UI automation.
 
 ### Diagnosis Field Semantics Rule
 

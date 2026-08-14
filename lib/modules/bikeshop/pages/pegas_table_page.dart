@@ -8216,6 +8216,9 @@ class _PegasTablePageState extends State<PegasTablePage>
                     children: [
                       Expanded(
                         child: Semantics(
+                          key: ValueKey(
+                            'workshop-job-proposal-items-${job.id}',
+                          ),
                           button: true,
                           excludeSemantics: true,
                           label:

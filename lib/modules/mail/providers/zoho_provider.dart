@@ -7,6 +7,24 @@ import '../models/mail_folder.dart';
 import 'email_provider.dart';
 
 @visibleForTesting
+bool parseZohoReadStatus(Object? value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+
+  final normalized = value?.toString().trim().toUpperCase() ?? '';
+  if (const {'0', 'UNREAD', 'UNREADMESSAGE', 'FALSE'}.contains(normalized)) {
+    return false;
+  }
+  if (const {'1', 'READ', 'READMESSAGE', 'TRUE'}.contains(normalized)) {
+    return true;
+  }
+
+  // Zoho historically omitted this field on a few list shapes. Preserve the
+  // existing fail-quiet default rather than inflating the unread badge.
+  return true;
+}
+
+@visibleForTesting
 List<EmailSenderIdentity> parseZohoSenderIdentities(
   Object? payload, {
   required String? accountEmail,
@@ -538,8 +556,10 @@ class ZohoProvider extends EmailProvider {
     String? fallbackFolderId,
   }) {
     final messageId = json['messageId']?.toString() ?? '';
-    final folderId =
-        json['folderId']?.toString() ?? fallbackFolderId ?? _inboxFolderId ?? '';
+    final folderId = json['folderId']?.toString() ??
+        fallbackFolderId ??
+        _inboxFolderId ??
+        '';
     final attachments = _extractZohoAttachments(json, messageId: messageId);
     final hasAttachment = attachments.isNotEmpty ||
         _isTruthyAttachmentFlag(json['hasAttachment']) ||
@@ -558,9 +578,9 @@ class ZohoProvider extends EmailProvider {
       receivedTime: DateTime.fromMillisecondsSinceEpoch(
         int.tryParse(json['receivedTime']?.toString() ?? '0') ?? 0,
       ),
-      // status: 0=Unread, 1=Read (Zoho API v1 usually)
-      // Check for explicit "Unread" indicators, default to true if ambiguous to avoid noise
-      isRead: json['status']?.toString() != '0' && json['status'] != 'UNREAD',
+      // status: 0=Unread, 1=Read (Zoho API v1 usually). Some response
+      // variants expose the same fact as `isRead`.
+      isRead: parseZohoReadStatus(json['isRead'] ?? json['status']),
       hasAttachment: hasAttachment,
       summary: json['summary'],
       attachments: attachments,
@@ -779,10 +799,51 @@ class ZohoProvider extends EmailProvider {
   Future<bool> replyToEmail({
     required String emailId,
     required String content,
+    required String to,
+    required String subject,
+    String? fromAddress,
+    String? cc,
+    String? bcc,
+    String? threadId,
+    String? rfcMessageId,
+    String? references,
     bool replyAll = false,
   }) async {
-    // TODO: Implement
-    return false;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _loadSenderIdentities(notify: false);
+      final sender = resolveSenderIdentity(fromAddress);
+      if (sender == null) {
+        throw StateError('El remitente no está autorizado por Zoho.');
+      }
+
+      await _proxyRequest(
+        method: 'POST',
+        url: '$_accountUrl/messages/$emailId',
+        body: {
+          'fromAddress': sender.address,
+          'toAddress': to,
+          'subject': subject,
+          'content': content,
+          'action': 'reply',
+          'mailFormat': 'html',
+          'encoding': 'UTF-8',
+          if (cc != null && cc.isNotEmpty) 'ccAddress': cc,
+          if (bcc != null && bcc.isNotEmpty) 'bccAddress': bcc,
+        },
+      );
+      return true;
+    } catch (e) {
+      debugPrint('replyToEmail error: $e');
+      _error = e.toString();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   @override
@@ -859,10 +920,20 @@ class ZohoProvider extends EmailProvider {
           'messageId': [emailId],
         },
       );
+      final index = _emails.indexWhere((email) => email.id == emailId);
+      if (index != -1) {
+        _emails[index] = _emails[index].copyWith(isRead: read);
+      }
+      if (_selectedEmail?.id == emailId) {
+        _selectedEmail = _selectedEmail!.copyWith(isRead: read);
+      }
+      _error = null;
       notifyListeners();
       return true;
     } catch (e) {
       debugPrint('markAsRead error: $e');
+      _error = e.toString();
+      notifyListeners();
       return false;
     }
   }

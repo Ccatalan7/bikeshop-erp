@@ -30,7 +30,7 @@ const workshopViewFields = [
 
 const toolContracts = {
   inspect_inventory_schema: {
-    rpc: "assistant_inspect_inventory_schema_v1",
+    rpc: "assistant_inspect_inventory_schema_v2",
     parameters: inventorySchemaInspectionParameters,
     fields: [
       "kind",
@@ -49,7 +49,7 @@ const toolContracts = {
     maxItems: 40,
   },
   search_inventory: {
-    rpc: "assistant_search_inventory_v5",
+    rpc: "assistant_search_inventory_v6",
     parameters: inventorySearchParameters,
     fields: [
       "entityId",
@@ -64,6 +64,13 @@ const toolContracts = {
       "tracksInventory",
       "location",
       "technicalMatch",
+      "matchedCount",
+      "trackedCount",
+      "totalStock",
+      "inventoryRetailValue",
+      "averagePrice",
+      "minimumPrice",
+      "maximumPrice",
     ],
   },
   find_inventory_risks: {
@@ -110,7 +117,7 @@ const toolContracts = {
     maxItems: 3,
   },
   search_workshop_jobs: {
-    rpc: "assistant_query_workshop_jobs_v2",
+    rpc: "assistant_query_workshop_jobs_v3",
     parameters: workshopQueryParameters,
     fields: [
       "entityId",
@@ -122,7 +129,47 @@ const toolContracts = {
       "deliveryDeadline",
       "clientRequest",
       "assignedTechnicianName",
+      "invoiceNumber",
+      "bikeSummary",
+      "bikeCount",
     ],
+  },
+  get_workshop_job_context: {
+    rpc: "assistant_get_workshop_job_context_v1",
+    parameters: (args: JsonObject) => ({ p_job_id: args.jobId }),
+    fields: [
+      "entityId",
+      "jobBikeId",
+      "jobNumber",
+      "customerName",
+      "bikeLabel",
+      "jobType",
+      "jobStatus",
+      "jobUpdatedAt",
+      "invoiceId",
+      "invoiceNumber",
+      "invoiceStatus",
+      "diagnosisUpdatedAt",
+      "canUpdateDiagnosis",
+      "canAddWorkshopItem",
+    ],
+    maxItems: 10,
+  },
+  inspect_diagnosis_schema: {
+    rpc: "assistant_inspect_diagnosis_schema_v1",
+    parameters: (args: JsonObject) => ({ p_section: args.section }),
+    fields: [
+      "section",
+      "field",
+      "label",
+      "valueType",
+      "storedUnit",
+      "inputUnits",
+      "allowedValues",
+      "minimumValue",
+      "maximumValue",
+    ],
+    maxItems: 40,
   },
   search_tasks: {
     rpc: "assistant_query_tasks_v2",
@@ -201,13 +248,40 @@ const toolContracts = {
     ],
   },
   analyze_cash_and_receivables: {
-    rpc: "assistant_analyze_cash_and_receivables_v1",
+    rpc: "assistant_analyze_cash_and_receivables_v2",
     parameters: (args: JsonObject) => ({
       p_horizon: args.horizon,
       p_limit: args.limit,
     }),
     fields: [],
     maxItems: 9,
+  },
+  analyze_sales_period: {
+    rpc: "assistant_analyze_sales_period_v1",
+    parameters: (args: JsonObject) => ({
+      p_basis: args.basis,
+      p_range_mode: args.rangeMode,
+      p_relative_period: args.relativePeriod,
+      p_start_date: args.startDate,
+      p_end_date: args.endDate,
+      p_invoice_status: args.invoiceStatus,
+    }),
+    fields: [
+      "basis",
+      "startDate",
+      "endDate",
+      "invoiceStatus",
+      "invoiceCount",
+      "eventCount",
+      "totalAmount",
+      "averagePerInvoice",
+      "highestInvoiceId",
+      "highestInvoiceNumber",
+      "highestInvoiceCustomerName",
+      "highestInvoiceTotal",
+      "highestPeriodAmount",
+    ],
+    maxItems: 1,
   },
   search_conversations: {
     rpc: "assistant_search_conversations_v1",
@@ -268,6 +342,76 @@ const toolContracts = {
     ],
     maxItems: 1,
   },
+  prepare_diagnosis_update: {
+    rpc: "assistant_prepare_diagnosis_update_v1",
+    parameters: (args: JsonObject, context?: AgentToolExecutionContext) => {
+      if (!context) throw new InvalidToolArguments();
+      return {
+        p_job_id: args.jobId,
+        p_job_bike_id: args.jobBikeId,
+        p_field: args.field,
+        p_number_value: args.numberValue,
+        p_text_value: args.textValue,
+        p_unit: args.unit,
+        p_expected_updated_at: args.expectedUpdatedAt,
+        p_run_id: context.runId,
+        p_provider_attempt_no: context.providerAttemptNo,
+        p_provider_call_hash: context.providerCallHash,
+        p_arguments_hash: context.argumentsHash,
+      };
+    },
+    fields: [
+      "approvalId",
+      "action",
+      "state",
+      "jobId",
+      "jobBikeId",
+      "jobNumber",
+      "bikeLabel",
+      "field",
+      "fieldLabel",
+      "previousValue",
+      "newValue",
+      "expiresAt",
+    ],
+    maxItems: 1,
+  },
+  prepare_workshop_item: {
+    rpc: "assistant_prepare_workshop_item_v1",
+    parameters: (args: JsonObject, context?: AgentToolExecutionContext) => {
+      if (!context) throw new InvalidToolArguments();
+      return {
+        p_job_id: args.jobId,
+        p_job_bike_id: args.jobBikeId,
+        p_catalog_item_id: args.catalogItemId,
+        p_quantity: args.quantity,
+        p_notes: args.notes,
+        p_expected_job_updated_at: args.expectedJobUpdatedAt,
+        p_run_id: context.runId,
+        p_provider_attempt_no: context.providerAttemptNo,
+        p_provider_call_hash: context.providerCallHash,
+        p_arguments_hash: context.argumentsHash,
+      };
+    },
+    fields: [
+      "approvalId",
+      "action",
+      "state",
+      "jobId",
+      "jobBikeId",
+      "jobNumber",
+      "bikeLabel",
+      "catalogItemId",
+      "itemName",
+      "itemType",
+      "quantity",
+      "unitPrice",
+      "lineTotal",
+      "invoiceNumber",
+      "expiresAt",
+    ],
+    maxItems: 1,
+  },
 } as const;
 
 export interface AgentToolExecution {
@@ -276,8 +420,15 @@ export interface AgentToolExecution {
   outputBytes: number;
   succeeded: boolean;
   failureCode?: string;
+  entityReferences?: readonly AgentToolEntityReference[];
   externalAccounting?: PublicResearchAccounting;
   publicResearchCompleteness?: PublicResearchEvidenceCompleteness;
+}
+
+export interface AgentToolEntityReference {
+  ref: string;
+  kind: "workshop_job" | "catalog_item";
+  entityId: string;
 }
 
 export interface AgentToolExecutor {
@@ -343,12 +494,19 @@ export function createSupabaseAgentToolExecutor(
           : validateEnvelope(value, authority, contract.fields, maxItems);
         if (call.name === "get_business_snapshot") validateBusinessSnapshot(result, call.arguments);
         validateSpecializedResult(call.name, result, call.arguments);
-        const outputText = JSON.stringify(modelVisibleResult(result));
+        const projection = modelVisibleResult(call.name, result);
+        const outputText = JSON.stringify(projection.value);
         const outputBytes = new TextEncoder().encode(outputText).byteLength;
         if (outputBytes > MAX_TOOL_OUTPUT_BYTES) {
           return unavailable(authority.tenantId, "tool_output_too_large");
         }
-        return { result, outputText, outputBytes, succeeded: true };
+        return {
+          result,
+          outputText,
+          outputBytes,
+          succeeded: true,
+          entityReferences: projection.entityReferences,
+        };
       } catch (error) {
         throwIfAborted(signal);
         return unavailable(
@@ -416,8 +574,9 @@ async function executePublicResearch(
       resultCount: publicSources.length,
       hasMore: research.hasMore,
     });
+    const visibleResult = modelVisibleResult("research_public_web", result);
     const outputText = JSON.stringify({
-      ...modelVisibleResult(result),
+      ...visibleResult.value,
       ...(research.evidenceCompleteness.targets.length
         ? {
           evidenceCompleteness: {
@@ -523,7 +682,11 @@ function inventorySearchParameters(args: JsonObject): JsonObject {
       "category",
       "availability",
       "presentation",
+      "sort",
+      "limit",
+      "selectionMode",
       "technicalPredicates",
+      "operationalPredicates",
     ]) ||
     !(args.query === null ||
       (typeof args.query === "string" && args.query.trim() &&
@@ -534,19 +697,33 @@ function inventorySearchParameters(args: JsonObject): JsonObject {
     !["any", "in_stock", "low_stock", "out_of_stock"].includes(
       String(args.availability),
     ) ||
-    !["answer", "open_list"].includes(String(args.presentation))
+    !["answer", "open_list"].includes(String(args.presentation)) ||
+    !isRecord(args.sort) ||
+    !hasExactKeys(args.sort, ["field", "direction"]) ||
+    !["relevance", "name", "stock", "minimum_stock", "price"].includes(
+      String(args.sort.field),
+    ) ||
+    !["asc", "desc"].includes(String(args.sort.direction)) ||
+    (args.sort.field === "relevance" && args.sort.direction !== "desc") ||
+    !boundedInteger(args.limit, 1, 10) ||
+    !["all_matches", "top_n"].includes(String(args.selectionMode))
   ) throw new InvalidToolArguments();
   const technicalPredicates = normalizedInventoryTechnicalPredicates(
     args.technicalPredicates,
   );
-  if (args.query === null && args.category === null && technicalPredicates.length === 0) {
-    throw new InvalidToolArguments();
-  }
+  const operationalPredicates = normalizedInventoryOperationalPredicates(
+    args.operationalPredicates,
+  );
   return {
     p_query: typeof args.query === "string" ? args.query.trim() : null,
     p_category: typeof args.category === "string" ? args.category.trim() : null,
     p_availability: args.availability,
     p_technical_predicates: technicalPredicates,
+    p_operational_predicates: operationalPredicates,
+    p_sort_field: args.sort.field,
+    p_sort_direction: args.sort.direction,
+    p_limit: args.limit,
+    p_selection_mode: args.selectionMode,
   };
 }
 
@@ -579,6 +756,35 @@ function normalizedInventoryTechnicalPredicates(value: JsonValue): JsonValue[] {
       field: predicate.field,
       operator: predicate.operator,
       values: predicate.values.map((item) => typeof item === "string" ? item.trim() : item),
+    };
+  });
+}
+
+function normalizedInventoryOperationalPredicates(value: JsonValue): JsonValue[] {
+  if (!Array.isArray(value) || value.length > 6) throw new InvalidToolArguments();
+  const fields = new Set<string>();
+  return value.map((predicate) => {
+    if (
+      !isRecord(predicate) ||
+      !hasExactKeys(predicate, ["field", "operator", "values"]) ||
+      typeof predicate.field !== "string" ||
+      !["stock", "minimum_stock", "price"].includes(predicate.field) ||
+      fields.has(predicate.field) ||
+      typeof predicate.operator !== "string" ||
+      !["eq", "neq", "lt", "lte", "gt", "gte", "between", "in"]
+        .includes(predicate.operator) ||
+      !Array.isArray(predicate.values) || predicate.values.length < 1 ||
+      predicate.values.length > 10 ||
+      (predicate.operator === "between" && predicate.values.length !== 2) ||
+      (predicate.operator !== "between" && predicate.operator !== "in" &&
+        predicate.values.length !== 1) ||
+      predicate.values.some((item) => typeof item !== "number" || !Number.isFinite(item))
+    ) throw new InvalidToolArguments();
+    fields.add(predicate.field);
+    return {
+      field: predicate.field,
+      operator: predicate.operator,
+      values: [...predicate.values],
     };
   });
 }
@@ -631,6 +837,45 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
     ) throw new InvalidToolArguments();
     return;
   }
+  if (toolName === "prepare_diagnosis_update") {
+    if (
+      !validUuidValue(parameters.p_job_id) ||
+      !validUuidValue(parameters.p_job_bike_id) ||
+      typeof parameters.p_field !== "string" ||
+      !/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/.test(parameters.p_field) ||
+      ((typeof parameters.p_number_value === "number") ===
+        (typeof parameters.p_text_value === "string")) ||
+      !(parameters.p_number_value === null || finiteNumber(parameters.p_number_value)) ||
+      !(parameters.p_text_value === null ||
+        (typeof parameters.p_text_value === "string" && parameters.p_text_value.trim() &&
+          utf8Bytes(parameters.p_text_value) <= 1000)) ||
+      !["none", "display_fraction", "percent", "millimeter"].includes(
+        String(parameters.p_unit),
+      ) ||
+      !(parameters.p_expected_updated_at === null ||
+        (typeof parameters.p_expected_updated_at === "string" &&
+          isoInstant(parameters.p_expected_updated_at))) ||
+      !validPreparationBinding(parameters)
+    ) throw new InvalidToolArguments();
+    return;
+  }
+  if (toolName === "prepare_workshop_item") {
+    if (
+      !validUuidValue(parameters.p_job_id) ||
+      !(parameters.p_job_bike_id === null || validUuidValue(parameters.p_job_bike_id)) ||
+      !validUuidValue(parameters.p_catalog_item_id) ||
+      !finiteNumber(parameters.p_quantity) ||
+      (parameters.p_quantity as number) < 0.01 ||
+      (parameters.p_quantity as number) > 999 ||
+      !(parameters.p_notes === null ||
+        (typeof parameters.p_notes === "string" && parameters.p_notes.trim() &&
+          utf8Bytes(parameters.p_notes) <= 500)) ||
+      typeof parameters.p_expected_job_updated_at !== "string" ||
+      !isoInstant(parameters.p_expected_job_updated_at) ||
+      !validPreparationBinding(parameters)
+    ) throw new InvalidToolArguments();
+    return;
+  }
   if (toolName === "list_attention_items") {
     if (parameters.p_horizon !== "today" && parameters.p_horizon !== "tomorrow") {
       throw new InvalidToolArguments();
@@ -650,6 +895,56 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
     ) throw new InvalidToolArguments();
     return;
   }
+  if (toolName === "analyze_sales_period") {
+    const relativePeriods = [
+      "today",
+      "yesterday",
+      "this_week",
+      "last_week",
+      "last_7_days",
+      "this_month",
+      "last_month",
+      "this_year",
+      "last_year",
+    ];
+    if (
+      !["issued", "collected"].includes(String(parameters.p_basis)) ||
+      !["relative", "absolute"].includes(String(parameters.p_range_mode)) ||
+      (parameters.p_range_mode === "relative" &&
+        (!relativePeriods.includes(String(parameters.p_relative_period)) ||
+          parameters.p_start_date !== null || parameters.p_end_date !== null)) ||
+      (parameters.p_range_mode === "absolute" &&
+        (parameters.p_relative_period !== null ||
+          typeof parameters.p_start_date !== "string" ||
+          typeof parameters.p_end_date !== "string" ||
+          !isoDate(parameters.p_start_date) || !isoDate(parameters.p_end_date) ||
+          parameters.p_start_date > parameters.p_end_date)) ||
+      !["any", "open", "paid", "cancelled"].includes(
+        String(parameters.p_invoice_status),
+      )
+    ) throw new InvalidToolArguments();
+    return;
+  }
+  if (toolName === "get_workshop_job_context") {
+    if (!validUuidValue(parameters.p_job_id)) throw new InvalidToolArguments();
+    return;
+  }
+  if (toolName === "inspect_diagnosis_schema") {
+    if (
+      ![
+        "any",
+        "suspension",
+        "drivetrain",
+        "front_brake",
+        "rear_brake",
+        "front_wheel",
+        "rear_wheel",
+        "bottom_bracket",
+        "cockpit",
+      ].includes(String(parameters.p_section))
+    ) throw new InvalidToolArguments();
+    return;
+  }
   const query = parameters.p_query;
   if (
     query !== null &&
@@ -666,14 +961,6 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
   }
   if (
     toolName === "search_inventory" &&
-    query === null && parameters.p_category === null &&
-    Array.isArray(parameters.p_technical_predicates) &&
-    parameters.p_technical_predicates.length === 0
-  ) {
-    throw new InvalidToolArguments();
-  }
-  if (
-    toolName === "search_inventory" &&
     !["any", "in_stock", "low_stock", "out_of_stock"].includes(
       String(parameters.p_availability),
     )
@@ -684,6 +971,23 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
   ) {
     throw new InvalidToolArguments();
   }
+  if (
+    toolName === "search_inventory" &&
+    !Array.isArray(parameters.p_operational_predicates)
+  ) {
+    throw new InvalidToolArguments();
+  }
+  if (
+    toolName === "search_inventory" &&
+    (!["relevance", "name", "stock", "minimum_stock", "price"].includes(
+      String(parameters.p_sort_field),
+    ) ||
+      !["asc", "desc"].includes(String(parameters.p_sort_direction)) ||
+      (parameters.p_sort_field === "relevance" &&
+        parameters.p_sort_direction !== "desc") ||
+      !boundedInteger(parameters.p_limit, 1, 10) ||
+      !["all_matches", "top_n"].includes(String(parameters.p_selection_mode)))
+  ) throw new InvalidToolArguments();
   if (
     toolName === "find_inventory_risks" &&
     !["any", "low_stock", "out_of_stock"].includes(String(parameters.p_risk))
@@ -746,6 +1050,25 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
       throw new InvalidToolArguments();
     }
   }
+}
+
+function validPreparationBinding(parameters: JsonObject): boolean {
+  return validUuidValue(parameters.p_run_id) &&
+    boundedInteger(parameters.p_provider_attempt_no, 1, 42) &&
+    typeof parameters.p_provider_call_hash === "string" &&
+    /^[0-9a-f]{64}$/.test(parameters.p_provider_call_hash) &&
+    typeof parameters.p_arguments_hash === "string" &&
+    /^[0-9a-f]{64}$/.test(parameters.p_arguments_hash);
+}
+
+function validUuidValue(value: JsonValue): value is string {
+  return typeof value === "string" && validUuid(value);
+}
+
+function isoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function boundedInteger(value: JsonValue, minimum: number, maximum: number): boolean {
@@ -898,9 +1221,21 @@ function validateSpecializedResult(
   if (toolName === "list_recent_expenses") validateRecentExpenses(result, args);
   if (toolName === "search_conversations") validateConversations(result, args);
   if (toolName === "prepare_task") validatePreparedTask(result, args);
+  if (toolName === "get_workshop_job_context") validateWorkshopJobContext(result, args);
+  if (toolName === "inspect_diagnosis_schema") validateDiagnosisSchema(result, args);
+  if (toolName === "analyze_sales_period") validateSalesPeriod(result, args);
+  if (toolName === "prepare_diagnosis_update") {
+    validatePreparedDiagnosisUpdate(result, args);
+  }
+  if (toolName === "prepare_workshop_item") validatePreparedWorkshopItem(result, args);
 }
 
 function validateInventorySearch(result: AgentToolResultEnvelope, args: JsonObject): void {
+  if (
+    result.resultCount > (args.limit as number) ||
+    (result.status === "verifiedEmpty" && result.hasMore)
+  ) throw new Error("invalid inventory search");
+  let summaryFingerprint: string | null = null;
   for (const item of result.items) {
     const stock = item.stock;
     const minimumStock = item.minimumStock;
@@ -930,15 +1265,109 @@ function validateInventorySearch(result: AgentToolResultEnvelope, args: JsonObje
       (availability === "out_of_stock" && (stock as number) > 0) ||
       (args.availability === "in_stock" && (stock as number) <= 0) ||
       (args.availability === "low_stock" && availability !== "low_stock") ||
-      (args.availability === "out_of_stock" && availability !== "out_of_stock")
+      (args.availability === "out_of_stock" && availability !== "out_of_stock") ||
+      !Number.isSafeInteger(item.matchedCount) || (item.matchedCount as number) < 1 ||
+      !Number.isSafeInteger(item.trackedCount) || (item.trackedCount as number) < 0 ||
+      (item.trackedCount as number) > (item.matchedCount as number) ||
+      !Number.isSafeInteger(item.totalStock) ||
+      !finiteNumber(item.inventoryRetailValue) ||
+      !finiteNumber(item.averagePrice) ||
+      !finiteNumber(item.minimumPrice) ||
+      !finiteNumber(item.maximumPrice) ||
+      (item.minimumPrice as number) > (item.averagePrice as number) ||
+      (item.averagePrice as number) > (item.maximumPrice as number) ||
+      (item.matchedCount as number) < result.resultCount ||
+      !(args.operationalPredicates as JsonValue[]).every((predicate) =>
+        inventoryOperationalPredicateMatches(item, predicate)
+      )
     ) throw new Error("invalid inventory search");
+    const fingerprint = JSON.stringify([
+      item.matchedCount,
+      item.trackedCount,
+      item.totalStock,
+      item.inventoryRetailValue,
+      item.averagePrice,
+      item.minimumPrice,
+      item.maximumPrice,
+    ]);
+    if (summaryFingerprint !== null && summaryFingerprint !== fingerprint) {
+      throw new Error("invalid inventory search");
+    }
+    summaryFingerprint = fingerprint;
+  }
+  if (result.items.length > 0) {
+    const matchedCount = result.items[0].matchedCount as number;
+    if (
+      (args.selectionMode === "all_matches" &&
+        result.hasMore !== (matchedCount > result.resultCount)) ||
+      (args.selectionMode === "top_n" && result.hasMore)
+    ) throw new Error("invalid inventory search");
+    validateInventoryOrder(result.items, args.sort as JsonObject);
+  }
+}
+
+function validateInventoryOrder(items: readonly JsonObject[], sort: JsonObject): void {
+  const field = sort.field;
+  if (!["stock", "minimum_stock", "price"].includes(String(field))) return;
+  const key = field === "minimum_stock" ? "minimumStock" : field;
+  for (let index = 1; index < items.length; index += 1) {
+    const previous = items[index - 1][key as string];
+    const current = items[index][key as string];
+    if (
+      typeof previous !== "number" || typeof current !== "number" ||
+      (sort.direction === "asc" && previous > current) ||
+      (sort.direction === "desc" && previous < current)
+    ) throw new Error("invalid inventory sort");
+  }
+}
+
+function inventoryOperationalPredicateMatches(item: JsonObject, value: JsonValue): boolean {
+  if (!isRecord(value) || !Array.isArray(value.values)) return false;
+  const actual = value.field === "stock"
+    ? item.stock
+    : value.field === "minimum_stock"
+    ? item.minimumStock
+    : value.field === "price"
+    ? item.price
+    : undefined;
+  if (typeof actual !== "number" || !Number.isFinite(actual)) return false;
+  if (
+    (value.field === "stock" || value.field === "minimum_stock") &&
+    item.tracksInventory !== true
+  ) return false;
+  const values = value.values;
+  if (values.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))) {
+    return false;
+  }
+  const first = values[0] as number;
+  switch (value.operator) {
+    case "eq":
+      return actual === first;
+    case "neq":
+      return actual !== first;
+    case "lt":
+      return actual < first;
+    case "lte":
+      return actual <= first;
+    case "gt":
+      return actual > first;
+    case "gte":
+      return actual >= first;
+    case "between": {
+      const second = values[1] as number;
+      return actual >= Math.min(first, second) && actual <= Math.max(first, second);
+    }
+    case "in":
+      return (values as number[]).includes(actual);
+    default:
+      return false;
   }
 }
 
 function validateInventorySchemaInspection(result: AgentToolResultEnvelope): void {
   for (const item of result.items) {
     if (
-      !["category", "field"].includes(String(item.kind)) ||
+      !["category", "field", "operational_field"].includes(String(item.kind)) ||
       typeof item.category !== "string" || !item.category.trim() ||
       typeof item.categoryPath !== "string" || !item.categoryPath.trim() ||
       !nullableString(item.technicalFamily) ||
@@ -957,7 +1386,12 @@ function validateInventorySchemaInspection(result: AgentToolResultEnvelope): voi
           typeof item.label !== "string" ||
           !["text", "number", "boolean", "single_select", "multi_select", "range"]
             .includes(String(item.dataType)) ||
-          typeof item.operators !== "string" || !item.operators.trim()))
+          typeof item.operators !== "string" || !item.operators.trim())) ||
+      (item.kind === "operational_field" &&
+        (item.technicalFamily !== null ||
+          !["stock", "minimum_stock", "price"].includes(String(item.field)) ||
+          item.dataType !== "number" || item.allowedValues !== null ||
+          item.operators !== "eq,neq,lt,lte,gt,gte,between,in"))
     ) throw new Error("invalid inventory schema inspection");
   }
 }
@@ -977,6 +1411,138 @@ function validatePreparedTask(result: AgentToolResultEnvelope, args: JsonObject)
     typeof item.expiresAt !== "string" || !isoInstant(item.expiresAt) ||
     Date.parse(item.expiresAt) <= Date.now()
   ) throw new Error("invalid prepared task");
+}
+
+function validateWorkshopJobContext(
+  result: AgentToolResultEnvelope,
+  args: JsonObject,
+): void {
+  if (result.hasMore || result.resultCount > 10) throw new Error("invalid workshop context");
+  for (const item of result.items) {
+    if (
+      item.entityId !== args.jobId ||
+      !nullableUuid(item.jobBikeId) ||
+      typeof item.jobNumber !== "string" || !item.jobNumber.trim() ||
+      typeof item.customerName !== "string" || !item.customerName.trim() ||
+      !nullableString(item.bikeLabel) ||
+      typeof item.jobType !== "string" || !item.jobType.trim() ||
+      typeof item.jobStatus !== "string" || !item.jobStatus.trim() ||
+      !nullableTimestamp(item.jobUpdatedAt) || item.jobUpdatedAt === null ||
+      !nullableUuid(item.invoiceId) || !nullableString(item.invoiceNumber) ||
+      !nullableString(item.invoiceStatus) ||
+      !nullableTimestamp(item.diagnosisUpdatedAt) ||
+      typeof item.canUpdateDiagnosis !== "boolean" ||
+      typeof item.canAddWorkshopItem !== "boolean" ||
+      (item.canUpdateDiagnosis && item.jobBikeId === null) ||
+      ((item.invoiceId === null) !== (item.invoiceNumber === null))
+    ) throw new Error("invalid workshop context");
+  }
+}
+
+function validateDiagnosisSchema(
+  result: AgentToolResultEnvelope,
+  args: JsonObject,
+): void {
+  if (result.hasMore || result.resultCount > 40) throw new Error("invalid diagnosis schema");
+  const fields = new Set<string>();
+  for (const item of result.items) {
+    if (
+      typeof item.section !== "string" ||
+      (args.section !== "any" && item.section !== args.section) ||
+      typeof item.field !== "string" ||
+      !/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/.test(item.field) ||
+      !item.field.startsWith(`${item.section}.`) || fields.has(item.field) ||
+      typeof item.label !== "string" || !item.label.trim() ||
+      !["number", "text"].includes(String(item.valueType)) ||
+      typeof item.storedUnit !== "string" ||
+      typeof item.inputUnits !== "string" || !item.inputUnits.trim() ||
+      !nullableString(item.allowedValues) ||
+      !(item.minimumValue === null || finiteNumber(item.minimumValue)) ||
+      !(item.maximumValue === null || finiteNumber(item.maximumValue)) ||
+      ((item.minimumValue === null) !== (item.maximumValue === null)) ||
+      (typeof item.minimumValue === "number" && typeof item.maximumValue === "number" &&
+        item.minimumValue > item.maximumValue)
+    ) throw new Error("invalid diagnosis schema");
+    fields.add(item.field);
+  }
+}
+
+function validateSalesPeriod(result: AgentToolResultEnvelope, args: JsonObject): void {
+  if (result.status !== "success" || result.resultCount !== 1 || result.hasMore) {
+    throw new Error("invalid sales period");
+  }
+  const item = result.items[0];
+  if (
+    item.basis !== args.basis || item.invoiceStatus !== args.invoiceStatus ||
+    typeof item.startDate !== "string" || !dateString(item.startDate) ||
+    typeof item.endDate !== "string" || !dateString(item.endDate) ||
+    item.startDate > item.endDate ||
+    (args.rangeMode === "absolute" &&
+      (item.startDate !== args.startDate || item.endDate !== args.endDate)) ||
+    !Number.isSafeInteger(item.invoiceCount) || (item.invoiceCount as number) < 0 ||
+    !Number.isSafeInteger(item.eventCount) || (item.eventCount as number) < 0 ||
+    !finiteNumber(item.totalAmount) || (item.totalAmount as number) < 0 ||
+    !finiteNumber(item.averagePerInvoice) || (item.averagePerInvoice as number) < 0 ||
+    !nullableUuid(item.highestInvoiceId) ||
+    !nullableString(item.highestInvoiceNumber) ||
+    !nullableString(item.highestInvoiceCustomerName) ||
+    !(item.highestInvoiceTotal === null || finiteNumber(item.highestInvoiceTotal)) ||
+    !(item.highestPeriodAmount === null || finiteNumber(item.highestPeriodAmount)) ||
+    ((item.invoiceCount as number) === 0) !== (item.highestInvoiceId === null) ||
+    ((item.highestInvoiceId === null) !== (item.highestInvoiceNumber === null))
+  ) throw new Error("invalid sales period");
+}
+
+function validatePreparedDiagnosisUpdate(
+  result: AgentToolResultEnvelope,
+  args: JsonObject,
+): void {
+  if (result.status !== "success" || result.resultCount !== 1 || result.hasMore) {
+    throw new Error("invalid prepared diagnosis update");
+  }
+  const item = result.items[0];
+  if (
+    typeof item.approvalId !== "string" || !validUuid(item.approvalId) ||
+    item.action !== "update_diagnosis" || item.state !== "pending" ||
+    item.jobId !== args.jobId || item.jobBikeId !== args.jobBikeId ||
+    typeof item.jobNumber !== "string" || !item.jobNumber.trim() ||
+    typeof item.bikeLabel !== "string" || !item.bikeLabel.trim() ||
+    item.field !== args.field ||
+    typeof item.fieldLabel !== "string" || !item.fieldLabel.trim() ||
+    !nullableString(item.previousValue) ||
+    typeof item.newValue !== "string" || !item.newValue.trim() ||
+    typeof item.expiresAt !== "string" || !isoInstant(item.expiresAt) ||
+    Date.parse(item.expiresAt) <= Date.now()
+  ) throw new Error("invalid prepared diagnosis update");
+}
+
+function validatePreparedWorkshopItem(
+  result: AgentToolResultEnvelope,
+  args: JsonObject,
+): void {
+  if (result.status !== "success" || result.resultCount !== 1 || result.hasMore) {
+    throw new Error("invalid prepared workshop item");
+  }
+  const item = result.items[0];
+  if (
+    typeof item.approvalId !== "string" || !validUuid(item.approvalId) ||
+    item.action !== "add_workshop_item" || item.state !== "pending" ||
+    item.jobId !== args.jobId || item.jobBikeId !== args.jobBikeId ||
+    item.catalogItemId !== args.catalogItemId ||
+    typeof item.jobNumber !== "string" || !item.jobNumber.trim() ||
+    !nullableString(item.bikeLabel) ||
+    typeof item.itemName !== "string" || !item.itemName.trim() ||
+    !["product", "service"].includes(String(item.itemType)) ||
+    item.quantity !== args.quantity || !finiteNumber(item.unitPrice) ||
+    !finiteNumber(item.lineTotal) ||
+    Math.abs(
+        (item.lineTotal as number) -
+          (item.quantity as number) * (item.unitPrice as number),
+      ) > 0.011 ||
+    !nullableString(item.invoiceNumber) ||
+    typeof item.expiresAt !== "string" || !isoInstant(item.expiresAt) ||
+    Date.parse(item.expiresAt) <= Date.now()
+  ) throw new Error("invalid prepared workshop item");
 }
 
 function validateInventoryRisks(result: AgentToolResultEnvelope, args: JsonObject): void {
@@ -1222,6 +1788,10 @@ function nullableString(value: JsonValue): boolean {
   return value === null || typeof value === "string";
 }
 
+function nullableUuid(value: JsonValue): boolean {
+  return value === null || (typeof value === "string" && validUuid(value));
+}
+
 function nullableEnum(value: JsonValue, values: readonly string[]): boolean {
   return value === null || (typeof value === "string" && values.includes(value));
 }
@@ -1260,8 +1830,27 @@ function validUuid(value: string): boolean {
     .test(value);
 }
 
-function modelVisibleResult(result: AgentToolResultEnvelope): JsonObject {
-  return {
+function modelVisibleResult(
+  toolName: string,
+  result: AgentToolResultEnvelope,
+): {
+  value: JsonObject;
+  entityReferences: readonly AgentToolEntityReference[];
+} {
+  const referenceKind = toolName === "search_workshop_jobs" ||
+      toolName === "get_workshop_job_context"
+    ? "workshop_job"
+    : toolName === "search_inventory"
+    ? "catalog_item"
+    : null;
+  const referenceField = referenceKind === "workshop_job"
+    ? "jobRef"
+    : referenceKind === "catalog_item"
+    ? "catalogItemRef"
+    : null;
+  const referencesByEntityId = new Map<string, AgentToolEntityReference>();
+  const entityReferences: AgentToolEntityReference[] = [];
+  const value: JsonObject = {
     asOf: result.asOf,
     status: result.status,
     items: result.items.map((item) => {
@@ -1274,11 +1863,28 @@ function modelVisibleResult(result: AgentToolResultEnvelope): JsonObject {
         counterpartyType: _potentiallyIdentifyingCounterpartyType,
         ...visible
       } = item;
+      if (
+        referenceKind !== null && referenceField !== null &&
+        typeof _serverOwnedEntityId === "string" && validUuid(_serverOwnedEntityId)
+      ) {
+        let reference = referencesByEntityId.get(_serverOwnedEntityId);
+        if (!reference) {
+          reference = Object.freeze({
+            ref: crypto.randomUUID(),
+            kind: referenceKind,
+            entityId: _serverOwnedEntityId,
+          });
+          referencesByEntityId.set(_serverOwnedEntityId, reference);
+          entityReferences.push(reference);
+        }
+        visible[referenceField] = reference.ref;
+      }
       return visible;
     }),
     resultCount: result.resultCount,
     hasMore: result.hasMore,
   };
+  return { value, entityReferences: Object.freeze(entityReferences) };
 }
 
 function isoInstant(value: string): boolean {

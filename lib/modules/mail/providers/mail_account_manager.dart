@@ -61,6 +61,11 @@ class MailAccountManager extends ChangeNotifier {
   Timer? _pollingTimer;
   Timer? _refreshDebounceTimer;
   Future<void>? _refreshInboxFuture;
+  final Map<String, Future<void>> _readMutationTails = {};
+  final Map<String, int> _readMutationVersions = {};
+  final Map<String, bool> _confirmedReadStatus = {};
+  final Map<String, bool> _pendingReadStatus = {};
+  String? _readStatusFailureKey;
   final EmailCacheService _cache = EmailCacheService();
   final StreamController<Email> _newEmailController =
       StreamController<Email>.broadcast();
@@ -455,14 +460,20 @@ class MailAccountManager extends ChangeNotifier {
           final knownEmails = _unifiedEmails
               .where((email) => email.providerId == provider.providerId)
               .toList(growable: false);
-          final emails = await provider.getMessages(
-            folder: MailFolder.inbox,
-            limit: inboxPageSize,
-            start: 0,
+          final emails = await _fetchInboxForRefresh(
+            provider: provider,
             knownEmails: knownEmails,
+            background: background,
           );
           if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
-          allEmails.addAll(_mergeProviderEmails(provider.providerId, emails));
+          allEmails.addAll(
+            background
+                ? _reconcileProviderFirstPage(
+                    provider: provider,
+                    fetched: emails,
+                  )
+                : emails,
+          );
         } catch (e) {
           debugPrint('Error fetching ${provider.providerId} inbox: $e');
           failedProviders.add(provider);
@@ -473,13 +484,11 @@ class MailAccountManager extends ChangeNotifier {
         }
       }
 
-      if (allEmails.isEmpty && _unifiedEmails.isNotEmpty) {
-        allEmails.addAll(_unifiedEmails);
-      }
-
       if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
 
-      _unifiedEmails = _dedupeAndSort(allEmails);
+      _unifiedEmails = _preservePendingReadStatuses(
+        _dedupeAndSort(allEmails),
+      );
       _lastFetch = DateTime.now();
 
       if (shouldNotifyNewMail) {
@@ -522,6 +531,43 @@ class MailAccountManager extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  /// A foreground/manual refresh reconciles at least the number of rows that
+  /// are already loaded, so messages moved or deleted on another device do not
+  /// remain as ghosts. Background refreshes stay bounded to the newest page;
+  /// [_reconcileProviderFirstPage] replaces that authoritative window while
+  /// preserving genuinely older loaded rows.
+  Future<List<Email>> _fetchInboxForRefresh({
+    required EmailProvider provider,
+    required List<Email> knownEmails,
+    required bool background,
+  }) async {
+    final targetCount = background
+        ? inboxPageSize
+        : (knownEmails.length > inboxPageSize
+            ? knownEmails.length
+            : inboxPageSize);
+    final fetched = <Email>[];
+
+    while (true) {
+      final page = await provider.getMessages(
+        folder: MailFolder.inbox,
+        limit: inboxPageSize,
+        start: fetched.length,
+        knownEmails: knownEmails,
+      );
+      fetched.addAll(page);
+
+      if (background ||
+          page.isEmpty ||
+          fetched.length >= targetCount ||
+          !provider.hasMoreIn(MailFolder.inbox)) {
+        break;
+      }
+    }
+
+    return _dedupeAndSort(fetched);
   }
 
   /// Refresh in background (for when returning to mail page)
@@ -760,11 +806,30 @@ class MailAccountManager extends ChangeNotifier {
         .toList(growable: false);
   }
 
-  List<Email> _mergeProviderEmails(String providerId, List<Email> fetched) {
-    final existing = _unifiedEmails.where(
-      (email) => email.providerId == providerId,
+  List<Email> _reconcileProviderFirstPage({
+    required EmailProvider provider,
+    required List<Email> fetched,
+  }) {
+    if (!provider.hasMoreIn(MailFolder.inbox)) {
+      return fetched;
+    }
+    if (fetched.isEmpty) {
+      return _unifiedEmails
+          .where((email) => email.providerId == provider.providerId)
+          .toList(growable: false);
+    }
+
+    final fetchedKeys = fetched.map(_emailKey).toSet();
+    final oldestFetched = fetched
+        .map((email) => email.receivedTime)
+        .reduce((left, right) => left.isBefore(right) ? left : right);
+    final olderLoaded = _unifiedEmails.where(
+      (email) =>
+          email.providerId == provider.providerId &&
+          email.receivedTime.isBefore(oldestFetched) &&
+          !fetchedKeys.contains(_emailKey(email)),
     );
-    return _dedupeAndSort([...existing, ...fetched]);
+    return _dedupeAndSort([...fetched, ...olderLoaded]);
   }
 
   List<Email> _dedupeAndSort(Iterable<Email> emails) {
@@ -788,6 +853,14 @@ class MailAccountManager extends ChangeNotifier {
           ? incoming.attachments
           : existing.attachments,
     );
+  }
+
+  List<Email> _preservePendingReadStatuses(List<Email> emails) {
+    if (_pendingReadStatus.isEmpty) return emails;
+    return emails.map((email) {
+      final pending = _pendingReadStatus[_emailKey(email)];
+      return pending == null ? email : email.copyWith(isRead: pending);
+    }).toList(growable: false);
   }
 
   String _emailKey(Email email) => '${email.providerId}:${email.id}';
@@ -839,14 +912,15 @@ class MailAccountManager extends ChangeNotifier {
     _selectedEmailError = null;
     _isLoadingSelectedEmail = email.content == null;
     if (shouldMarkReadOnOpen) {
-      _applyReadStatusLocally(email, true);
-      unawaited(_cache.updateReadStatus(email.id, true));
-      unawaited(_syncReadStatusForOpenedEmail(provider, email, requestId));
+      unawaited(_setReadStatus(email, read: true));
     }
     notifyListeners();
 
     try {
-      cachedContent = await _cache.getCachedContent(email.id);
+      cachedContent = await _cache.getCachedContent(
+        email.providerId,
+        email.id,
+      );
       if (!_isCurrentSelection(requestId, email.id)) return;
 
       final hasCachedContent =
@@ -873,7 +947,11 @@ class MailAccountManager extends ChangeNotifier {
 
       final loadedContent = loadedEmail.content;
       if (loadedContent != null && loadedContent.trim().isNotEmpty) {
-        await _cache.cacheContent(loadedEmail.id, loadedContent);
+        await _cache.cacheContent(
+          loadedEmail.providerId,
+          loadedEmail.id,
+          loadedContent,
+        );
       }
 
       if (provider is GmailProvider &&
@@ -982,7 +1060,11 @@ class MailAccountManager extends ChangeNotifier {
 
       final hydratedContent = hydratedEmail.content;
       if (hydratedContent != null && hydratedContent.trim().isNotEmpty) {
-        await _cache.cacheContent(hydratedEmail.id, hydratedContent);
+        await _cache.cacheContent(
+          hydratedEmail.providerId,
+          hydratedEmail.id,
+          hydratedContent,
+        );
       }
     } catch (e) {
       debugPrint('Error hydrating Gmail inline images: $e');
@@ -995,22 +1077,6 @@ class MailAccountManager extends ChangeNotifier {
 
   bool _isCurrentSelection(int requestId, String emailId) {
     return requestId == _selectionRequestId && _selectedEmail?.id == emailId;
-  }
-
-  Future<void> _syncReadStatusForOpenedEmail(
-    EmailProvider provider,
-    Email email,
-    int requestId,
-  ) async {
-    final success = await provider.markAsRead(email.id);
-    if (!success) {
-      debugPrint(
-        '📧 [MailManager] Could not sync read status for ${email.providerId}:${email.id}',
-      );
-      return;
-    }
-    if (!_isCurrentSelection(requestId, email.id)) return;
-    notifyListeners();
   }
 
   void _applyReadStatusLocally(Email email, bool read) {
@@ -1161,85 +1227,29 @@ class MailAccountManager extends ChangeNotifier {
   Future<bool> replyToEmail({
     required Email originalEmail,
     required String content,
+    required String to,
+    required String subject,
+    String? fromAddress,
+    String? cc,
+    String? bcc,
     bool replyAll = false,
   }) async {
     final provider = getProvider(originalEmail.providerId);
     if (provider == null) return false;
 
-    // Build reply subject
-    String replySubject = originalEmail.subject;
-    if (!replySubject.toLowerCase().startsWith('re:')) {
-      replySubject = 'Re: $replySubject';
-    }
-
-    // Build reply with quoted content
-    // Get recipients first (needed for string interpolation)
-    String to = originalEmail.senderEmail;
-    String? cc;
-
-    // Build reply with quoted content - Outlook style
-    final quotedContent = '''
-$content
-
-<br>
-<hr style="border:0; border-top:1px solid #e1e1e1;">
-<div style="font-family: sans-serif; font-size: 13px; color: #333;">
-<b>De:</b> ${originalEmail.senderName} &lt;${originalEmail.senderEmail}&gt;<br>
-<b>Enviado:</b> ${_formatDateFull(originalEmail.receivedTime)}<br>
-<b>Para:</b> ${originalEmail.toAddress}<br>
-<b>Asunto:</b> ${originalEmail.subject}<br>
-</div>
-<br>
-${originalEmail.content ?? originalEmail.summary ?? ''}
-''';
-
-    if (replyAll && originalEmail.ccAddress != null) {
-      cc = originalEmail.ccAddress;
-    }
-
-    return provider.sendEmail(
+    return provider.replyToEmail(
+      emailId: originalEmail.id,
+      content: content,
       to: to,
-      subject: replySubject,
-      content: quotedContent,
+      subject: subject,
+      fromAddress: fromAddress,
       cc: cc,
+      bcc: bcc,
+      threadId: originalEmail.threadId,
+      rfcMessageId: originalEmail.rfcMessageId,
+      references: originalEmail.references,
+      replyAll: replyAll,
     );
-  }
-
-  String _formatDateFull(DateTime date) {
-    // Format: "Wednesday, January 7, 2026 4:51 PM"
-    // Using simple format for now if intl date formatting is complex
-    final days = [
-      'Lunes',
-      'Martes',
-      'Miércoles',
-      'Jueves',
-      'Viernes',
-      'Sábado',
-      'Domingo'
-    ];
-    final months = [
-      'Enero',
-      'Febrero',
-      'Marzo',
-      'Abril',
-      'Mayo',
-      'Junio',
-      'Julio',
-      'Agosto',
-      'Septiembre',
-      'Octubre',
-      'Noviembre',
-      'Diciembre'
-    ];
-
-    final dayName = days[date.weekday - 1];
-    final monthName = months[date.month - 1];
-    final hour =
-        date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
-    final ampm = date.hour >= 12 ? 'PM' : 'AM';
-    final minute = date.minute.toString().padLeft(2, '0');
-
-    return '$dayName, ${date.day} de $monthName de ${date.year} $hour:$minute $ampm';
   }
 
   /// Delete/trash selected email
@@ -1299,17 +1309,130 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
   }
 
   /// Mark email as read/unread
-  Future<bool> markAsRead(Email email, {bool read = true}) async {
-    final provider = getProvider(email.providerId);
-    if (provider == null) return false;
+  Future<bool> markAsRead(Email email, {bool read = true}) =>
+      _setReadStatus(email, read: read);
 
-    final success = await provider.markAsRead(email.id, read: read);
-    if (success) {
-      _applyReadStatusLocally(email, read);
-      await _cache.updateReadStatus(email.id, read);
-      notifyListeners();
+  /// Serializes provider mutations per message while keeping the UI immediate.
+  ///
+  /// The old open path persisted the optimistic flag before Gmail/Zoho had
+  /// confirmed it and ignored a failed provider call. That made this session
+  /// look correct while every other device retained the unread message. The
+  /// queue also prevents a rapid read -> unread toggle from reaching the
+  /// provider out of order.
+  Future<bool> _setReadStatus(Email email, {required bool read}) {
+    final provider = getProvider(email.providerId);
+    if (provider == null) return Future<bool>.value(false);
+
+    final key = _emailKey(email);
+    final epoch = _lifecycleEpoch;
+    final expectedUserId = _sessionUserId;
+    final predecessor = _readMutationTails[key];
+    if (predecessor == null) {
+      _confirmedReadStatus[key] = _currentReadStatus(email) ?? email.isRead;
     }
-    return success;
+    final version = (_readMutationVersions[key] ?? 0) + 1;
+    _readMutationVersions[key] = version;
+    _pendingReadStatus[key] = read;
+
+    _applyReadStatusLocally(email, read);
+    notifyListeners();
+
+    late final Future<bool> operation;
+    operation = () async {
+      if (predecessor != null) await predecessor;
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return false;
+
+      var success = false;
+      try {
+        success = await provider.markAsRead(email.id, read: read);
+      } catch (error) {
+        debugPrint(
+          '📧 [MailManager] Read status mutation threw for $key: $error',
+        );
+      }
+
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return false;
+      final isLatest = _readMutationVersions[key] == version;
+      if (success) {
+        _confirmedReadStatus[key] = read;
+        if (isLatest) {
+          await _updateCachedReadStatus(email, read);
+          if (!_isCurrentLifecycle(epoch, expectedUserId)) return true;
+          if (_readStatusFailureKey == key) {
+            _readStatusFailureKey = null;
+            _error = null;
+            notifyListeners();
+          }
+        }
+        return true;
+      }
+
+      debugPrint('📧 [MailManager] Could not sync read status for $key');
+      if (isLatest) {
+        final confirmed = _confirmedReadStatus[key] ?? email.isRead;
+        _pendingReadStatus.remove(key);
+        _applyReadStatusLocally(email, confirmed);
+        await _updateCachedReadStatus(email, confirmed);
+        if (!_isCurrentLifecycle(epoch, expectedUserId)) return false;
+        _readStatusFailureKey = key;
+        _error = _readStatusFailureMessage(provider, read: read);
+        notifyListeners();
+      }
+      return false;
+    }();
+
+    final tail = operation.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint(
+            '📧 [MailManager] Read mutation queue error for $key: $error');
+      },
+    );
+    _readMutationTails[key] = tail;
+    unawaited(tail.whenComplete(() {
+      if (!identical(_readMutationTails[key], tail)) return;
+      _readMutationTails.remove(key);
+      _readMutationVersions.remove(key);
+      _confirmedReadStatus.remove(key);
+      _pendingReadStatus.remove(key);
+    }));
+
+    return operation;
+  }
+
+  bool? _currentReadStatus(Email identity) {
+    for (final source in <List<Email>>[
+      _unifiedEmails,
+      _searchResults,
+      ..._folderEmails.values,
+    ]) {
+      for (final email in source) {
+        if (_emailKey(email) == _emailKey(identity)) return email.isRead;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _updateCachedReadStatus(Email email, bool read) async {
+    try {
+      await _cache.updateReadStatus(email.providerId, email.id, read);
+    } catch (error) {
+      // Provider truth already won. A cache write failure must not turn a
+      // successful mailbox mutation into a false failure; the next refresh
+      // rewrites the metadata cache.
+      debugPrint('📧 [MailManager] Could not cache read status: $error');
+    }
+  }
+
+  String _readStatusFailureMessage(
+    EmailProvider provider, {
+    required bool read,
+  }) {
+    final action = read ? 'marcar como leído' : 'marcar como no leído';
+    final detail = provider.error?.trim();
+    final suffix = detail == null || detail.isEmpty ? '' : ' $detail';
+    return 'No se pudo $action en ${provider.displayName}. '
+        'Se restauró el estado confirmado.$suffix';
   }
 
   /// Override dispose but do nothing - singleton should persist.
@@ -1364,6 +1487,11 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
     _isLoading = false;
     _isLoadingMore = false;
     _lastFetch = null;
+    _readMutationTails.clear();
+    _readMutationVersions.clear();
+    _confirmedReadStatus.clear();
+    _pendingReadStatus.clear();
+    _readStatusFailureKey = null;
     _sessionUserId = null;
     _isSessionScopeReady = false;
     debugAuthUserIdOverride = null;
@@ -1387,6 +1515,11 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
         _refreshDebounceTimer?.cancel();
         _refreshDebounceTimer = null;
         _refreshInboxFuture = null;
+        _readMutationTails.clear();
+        _readMutationVersions.clear();
+        _confirmedReadStatus.clear();
+        _pendingReadStatus.clear();
+        _readStatusFailureKey = null;
         _initializingFuture = null;
         _initializingUserId = null;
         _initializingEpoch = null;
@@ -1476,6 +1609,11 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
     }
 
     try {
+      // A Realtime channel and a renewed Gmail watch prove transport setup,
+      // not end-to-end Pub/Sub delivery. Keep the shorter fallback until this
+      // session actually receives a new-mail flag.
+      _isPushEnabled = false;
+
       // Subscribe to changes on email_push_subscriptions for this user
       final previousChannel = _pushChannel;
       _pushChannel = null;
@@ -1504,6 +1642,17 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
                   payload.newRecord['new_mail_notification'] as bool? ?? false;
 
               if (newMailNotification) {
+                if (!_isPushEnabled) {
+                  _isPushEnabled = true;
+                  debugPrint(
+                    '📧 [MailManager] ✅ End-to-end push delivery verified',
+                  );
+                  _startPolling(
+                    epoch: epoch,
+                    expectedUserId: expectedUserId,
+                  );
+                }
+
                 // Reset flag asynchronously (fire and forget)
                 supabase
                     .from('email_push_subscriptions')
@@ -1533,8 +1682,9 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
       }
       _pushChannel = channel;
 
-      _isPushEnabled = true;
-      debugPrint('📧 [MailManager] ✅ Push notification listener active');
+      debugPrint(
+        '📧 [MailManager] Realtime listener active; awaiting a provider event',
+      );
 
       // Set up push for each connected provider
       for (final provider in connectedProviders) {
@@ -1542,7 +1692,9 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
           final success = await provider.setupPushNotifications();
           if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
           debugPrint(
-              '📧 [MailManager] Gmail push setup: ${success ? "✅" : "❌ (will use polling)"}');
+            '📧 [MailManager] Gmail watch setup: '
+            '${success ? "✅ (delivery not yet verified)" : "❌ (using polling)"}',
+          );
         }
         // TODO: Add Zoho push setup when implemented
       }
@@ -1557,8 +1709,9 @@ ${originalEmail.content ?? originalEmail.summary ?? ''}
     required String? expectedUserId,
   }) {
     _pollingTimer?.cancel();
-    // Use 300s (5 min) polling as fallback when push is enabled
-    // If push fails, this ensures we still get emails
+    // Only a provider event observed in this session earns the slower 5-minute
+    // safety poll. A configured watch that never reaches the webhook remains
+    // on the 3-minute fallback.
     final pollInterval = _isPushEnabled ? 300 : 180;
     debugPrint(
         '📧 [MailManager] Starting fallback polling (${pollInterval}s, push: $_isPushEnabled)');

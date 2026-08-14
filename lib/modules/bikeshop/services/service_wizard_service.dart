@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/brake_canonical_data.dart';
@@ -111,72 +112,155 @@ class ServiceWizardResult {
 
 /// Service that fetches wizard profiles from Supabase
 class ServiceWizardService {
-  final _client = Supabase.instance.client;
+  final SupabaseClient _client;
+
+  ServiceWizardService({SupabaseClient? client})
+      : _client = client ?? Supabase.instance.client;
 
   Future<ServiceWizardProfile?> getProfileForProduct(String productId) async {
+    final profiles = await getProfilesForProducts([productId]);
+    return profiles[productId];
+  }
+
+  /// Loads wizard metadata for a set of catalog rows without a per-line
+  /// mapping -> target -> questions waterfall.
+  ///
+  /// The first query resolves every active product mapping. Targets and
+  /// questions are then loaded once per distinct profile, in parallel. Every
+  /// requested product id is represented in the result, including unmapped or
+  /// ambiguous products whose value is `null`.
+  Future<Map<String, ServiceWizardProfile?>> getProfilesForProducts(
+    Iterable<String> productIds,
+  ) async {
+    final requestedProductIds = productIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (requestedProductIds.isEmpty) {
+      return const <String, ServiceWizardProfile?>{};
+    }
+
+    final result = <String, ServiceWizardProfile?>{
+      for (final productId in requestedProductIds) productId: null,
+    };
+
     try {
-      final mapping = await _client
+      final rawMappings = await _client
           .from('service_product_profile_mappings')
           .select(
-              'tenant_id, service_profile_id, service_profiles(id, name, service_family, customer_summary_template)')
-          .eq('product_id', productId)
-          .eq('status', 'active')
-          .maybeSingle();
+              'product_id, tenant_id, service_profile_id, service_profiles(id, name, service_family, customer_summary_template)')
+          .inFilter('product_id', requestedProductIds)
+          .eq('status', 'active');
 
-      if (mapping == null) return null;
-
-      final profileData = mapping['service_profiles'] as Map<String, dynamic>?;
-      if (profileData == null) return null;
-
-      final profileId = profileData['id'] as String;
-      final tenantId = mapping['tenant_id']?.toString();
-
-      final rawTargets = await _client
-          .from('service_profile_targets')
-          .select('tenant_id, target_family, target_position_mode')
-          .eq('service_profile_id', profileId)
-          .or(
-            tenantId != null && tenantId.isNotEmpty
-                ? 'tenant_id.is.null,tenant_id.eq.$tenantId'
-                : 'tenant_id.is.null',
-          );
-
-      Map<String, dynamic>? selectedTarget;
-      for (final rawTarget in rawTargets as List) {
-        final target = Map<String, dynamic>.from(rawTarget as Map);
-        if (target['tenant_id']?.toString() == tenantId) {
-          selectedTarget = target;
-          break;
-        }
-        selectedTarget ??= target;
+      final mappingsByProductId = <String, List<Map<String, dynamic>>>{};
+      for (final rawMapping in rawMappings as List) {
+        final mapping = Map<String, dynamic>.from(rawMapping as Map);
+        final productId = mapping['product_id']?.toString();
+        if (productId == null || productId.isEmpty) continue;
+        mappingsByProductId
+            .putIfAbsent(productId, () => <Map<String, dynamic>>[])
+            .add(mapping);
       }
 
-      final rawQuestions = await _client
-          .from('service_profile_questions')
-          .select()
-          .eq('service_profile_id', profileId)
-          .order('sort_order');
+      // `maybeSingle()` deliberately returned no usable profile for duplicate
+      // active mappings. Preserve that fail-closed behavior in the batch path.
+      final mappingByProductId = <String, Map<String, dynamic>>{};
+      for (final entry in mappingsByProductId.entries) {
+        if (entry.value.length == 1) {
+          mappingByProductId[entry.key] = entry.value.single;
+        }
+      }
 
-      final questions = (rawQuestions as List)
-          .map(
-              (q) => ServiceProfileQuestion.fromJson(q as Map<String, dynamic>))
-          .toList();
+      final profileIds = mappingByProductId.values
+          .map((mapping) => mapping['service_profile_id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList(growable: false);
+      if (profileIds.isEmpty) return result;
 
-      return normalizeProfile(
-        ServiceWizardProfile(
-          id: profileId,
-          name: profileData['name'] as String,
-          serviceFamily: (profileData['service_family'] as String?) ?? '',
-          targetFamily: selectedTarget?['target_family']?.toString(),
-          targetPositionMode:
-              selectedTarget?['target_position_mode']?.toString(),
-          customerSummaryTemplate:
-              profileData['customer_summary_template'] as String?,
-          questions: questions,
-        ),
-      );
-    } catch (_) {
-      return null;
+      final targetAndQuestionRows = await Future.wait<dynamic>([
+        _client
+            .from('service_profile_targets')
+            .select(
+                'tenant_id, service_profile_id, target_family, target_position_mode')
+            .inFilter('service_profile_id', profileIds),
+        _client
+            .from('service_profile_questions')
+            .select()
+            .inFilter('service_profile_id', profileIds)
+            .order('sort_order'),
+      ]);
+
+      final targetsByProfileId = <String, List<Map<String, dynamic>>>{};
+      for (final rawTarget in targetAndQuestionRows[0] as List) {
+        final target = Map<String, dynamic>.from(rawTarget as Map);
+        final profileId = target['service_profile_id']?.toString();
+        if (profileId == null || profileId.isEmpty) continue;
+        targetsByProfileId
+            .putIfAbsent(profileId, () => <Map<String, dynamic>>[])
+            .add(target);
+      }
+
+      final questionsByProfileId = <String, List<ServiceProfileQuestion>>{};
+      for (final rawQuestion in targetAndQuestionRows[1] as List) {
+        final questionJson = Map<String, dynamic>.from(rawQuestion as Map);
+        final profileId = questionJson['service_profile_id']?.toString();
+        if (profileId == null || profileId.isEmpty) continue;
+        questionsByProfileId
+            .putIfAbsent(profileId, () => <ServiceProfileQuestion>[])
+            .add(ServiceProfileQuestion.fromJson(questionJson));
+      }
+      for (final questions in questionsByProfileId.values) {
+        questions.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      }
+
+      for (final entry in mappingByProductId.entries) {
+        final mapping = entry.value;
+        final profileDataRaw = mapping['service_profiles'];
+        if (profileDataRaw is! Map) continue;
+        final profileData = Map<String, dynamic>.from(profileDataRaw);
+        final profileId = profileData['id']?.toString();
+        if (profileId == null || profileId.isEmpty) continue;
+
+        final mappingTenantId = mapping['tenant_id']?.toString();
+        Map<String, dynamic>? globalTarget;
+        Map<String, dynamic>? tenantTarget;
+        for (final target in targetsByProfileId[profileId] ?? const []) {
+          final targetTenantId = target['tenant_id']?.toString();
+          if (mappingTenantId != null &&
+              mappingTenantId.isNotEmpty &&
+              targetTenantId == mappingTenantId) {
+            tenantTarget ??= target;
+          } else if (targetTenantId == null || targetTenantId.isEmpty) {
+            globalTarget ??= target;
+          }
+        }
+        final selectedTarget = tenantTarget ?? globalTarget;
+
+        result[entry.key] = normalizeProfile(
+          ServiceWizardProfile(
+            id: profileId,
+            name: profileData['name']?.toString() ?? '',
+            serviceFamily: profileData['service_family']?.toString() ?? '',
+            targetFamily: selectedTarget?['target_family']?.toString(),
+            targetPositionMode:
+                selectedTarget?['target_position_mode']?.toString(),
+            customerSummaryTemplate:
+                profileData['customer_summary_template']?.toString(),
+            questions: questionsByProfileId[profileId] ?? const [],
+          ),
+        );
+      }
+
+      return result;
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('ServiceWizardService batch load failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      return result;
     }
   }
 

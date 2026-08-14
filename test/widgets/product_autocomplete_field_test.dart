@@ -66,6 +66,39 @@ void main() {
     },
   );
 
+  testWidgets('deferred catalog stays idle until the field is opened',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final inventory = _RecordingInventoryService();
+    await tester.pumpWidget(
+      ChangeNotifierProvider<InventoryService>.value(
+        value: inventory,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 500,
+              child: ProductAutocompleteField(
+                preloadCatalog: false,
+                onProductSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(inventory.requests, isEmpty);
+
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+
+    expect(inventory.requests, hasLength(1));
+    expect(inventory.requests.single.query, isEmpty);
+  });
+
   testWidgets('sale picker labels but allows child products from a set',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1000, 700));

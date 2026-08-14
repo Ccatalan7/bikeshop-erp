@@ -1,8 +1,20 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import '../providers/email_provider.dart';
 import '../providers/mail_account_manager.dart';
+import '../utils/email_html_sanitizer.dart';
+
+@visibleForTesting
+String buildSafeOutboundMailBody(String authoredText, {String? quotedHtml}) {
+  final normalized =
+      authoredText.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  final authoredHtml =
+      const HtmlEscape().convert(normalized).replaceAll('\n', '<br>');
+  final quote = quotedHtml == null ? '' : sanitizeEmailHtml(quotedHtml);
+  return '$authoredHtml$quote';
+}
 
 bool isValidMailRecipientList(String value, {bool allowEmpty = false}) {
   final normalized = value.trim();
@@ -27,6 +39,7 @@ class ComposeEmailDialog extends StatefulWidget {
   final String? replySubject;
   final String? quotedContent;
   final bool replyAll;
+  final Email? replySource;
 
   const ComposeEmailDialog({
     super.key,
@@ -36,6 +49,7 @@ class ComposeEmailDialog extends StatefulWidget {
     this.replySubject,
     this.quotedContent,
     this.replyAll = false,
+    this.replySource,
   });
 
   @override
@@ -178,25 +192,41 @@ class _ComposeEmailDialogState extends State<ComposeEmailDialog> {
     setState(() => _isSending = true);
 
     try {
-      // Build content with quoted text if replying
-      String content = _bodyController.text;
-      if (widget.quotedContent != null) {
-        content = '$content${widget.quotedContent}';
-      }
-
-      final success = await widget.manager.sendEmail(
-        sender.provider.providerId,
-        to: _toController.text.trim(),
-        subject: _subjectController.text.trim(),
-        content: content,
-        fromAddress: sender.identity.address,
-        cc: _ccController.text.trim().isNotEmpty
-            ? _ccController.text.trim()
-            : null,
-        bcc: _bccController.text.trim().isNotEmpty
-            ? _bccController.text.trim()
-            : null,
+      final content = buildSafeOutboundMailBody(
+        _bodyController.text,
+        quotedHtml: widget.quotedContent,
       );
+
+      final to = _toController.text.trim();
+      final subject = _subjectController.text.trim();
+      final cc = _ccController.text.trim().isNotEmpty
+          ? _ccController.text.trim()
+          : null;
+      final bcc = _bccController.text.trim().isNotEmpty
+          ? _bccController.text.trim()
+          : null;
+      final replySource = widget.replySource;
+      final success = replySource != null &&
+              replySource.providerId == sender.provider.providerId
+          ? await widget.manager.replyToEmail(
+              originalEmail: replySource,
+              content: content,
+              to: to,
+              subject: subject,
+              fromAddress: sender.identity.address,
+              cc: cc,
+              bcc: bcc,
+              replyAll: widget.replyAll,
+            )
+          : await widget.manager.sendEmail(
+              sender.provider.providerId,
+              to: to,
+              subject: subject,
+              content: content,
+              fromAddress: sender.identity.address,
+              cc: cc,
+              bcc: bcc,
+            );
 
       if (!mounted) return;
 

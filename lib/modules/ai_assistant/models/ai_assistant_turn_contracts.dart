@@ -72,12 +72,15 @@ class AIAssistantTurnAuthority {
   }
 }
 
-/// The only write intent currently admitted by an assistant approval card.
+/// A closed server-owned command admitted by an assistant approval card.
 ///
-/// It names a server-owned command, never model-authored arguments. The exact
-/// task preview is already frozen behind [AIAssistantApprovalRef.id].
+/// The model may prepare one of these commands, but it never supplies the
+/// payload at approval time. The exact proposal is already frozen behind
+/// [AIAssistantApprovalRef.id].
 enum AIAssistantApprovalAction {
   createTask,
+  updateDiagnosis,
+  addWorkshopItem,
 }
 
 /// The operator decision sent to the approval endpoint.

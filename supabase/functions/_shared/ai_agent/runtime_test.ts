@@ -3,6 +3,7 @@ import type {
   AgentGatewayRequest,
   AgentProviderRequest,
   AgentProviderTurn,
+  AgentToolCall,
   JsonObject,
 } from "./contracts.ts";
 import { createDefaultAgentToolRegistry } from "./tool_registry.ts";
@@ -388,6 +389,10 @@ Deno.test("runtime executes tool rounds sequentially and persists receipts befor
               category: null,
               availability: "any",
               presentation: "answer",
+              sort: { field: "relevance", direction: "desc" },
+              limit: 10,
+              selectionMode: "all_matches",
+              operationalPredicates: [],
               technicalPredicates: [],
             },
           }],
@@ -512,8 +517,18 @@ Deno.test("explicit inventory listing has one server-owned answer, result set an
           const definition = providerRequest.tools.find((tool) => tool.name === "search_inventory");
           assertEquals(
             definition?.parameters.required,
-            ["query", "category", "availability", "presentation", "technicalPredicates"],
-            "planner must choose availability, presentation and technical facts explicitly",
+            [
+              "query",
+              "category",
+              "availability",
+              "presentation",
+              "sort",
+              "limit",
+              "selectionMode",
+              "technicalPredicates",
+              "operationalPredicates",
+            ],
+            "planner must choose filters, ordering, bound and presentation explicitly",
           );
           return Promise.resolve<AgentProviderTurn>({
             text: "",
@@ -541,6 +556,10 @@ Deno.test("explicit inventory listing has one server-owned answer, result set an
                 category: "Cámaras",
                 availability: "in_stock",
                 presentation: "open_list",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
                 technicalPredicates: [{
                   field: "wheel_size",
                   operator: "eq",
@@ -569,7 +588,7 @@ Deno.test("explicit inventory listing has one server-owned answer, result set an
 
   assertEquals(
     response.text,
-    "Abrí 2 resultados coincidentes en Inventario con el filtro “En stock”.",
+    'Abrí 2 resultados coincidentes en Inventario con el filtro “En stock · 29"”.',
     "server projection replaces divergent model prose",
   );
   assertEquals(response.cards.length, 1, "only one compact result-set action is returned");
@@ -606,6 +625,10 @@ Deno.test("technical inventory search cannot skip schema discovery or fake an ou
                 category: "Motores",
                 availability: "in_stock",
                 presentation: "open_list",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
                 technicalPredicates: [{
                   field: "spindle_length_mm",
                   operator: "lt",
@@ -722,6 +745,10 @@ Deno.test("technical inventory plan stays bound to the inspected category and fi
                 category: "Motores",
                 availability: "any",
                 presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
                 technicalPredicates: [{
                   field: "spindle_length_mm",
                   operator: "lt",
@@ -1063,6 +1090,10 @@ Deno.test("tool prompt injection stays inside the exact receipted untrusted enve
               category: null,
               availability: "any",
               presentation: "answer",
+              sort: { field: "relevance", direction: "desc" },
+              limit: 10,
+              selectionMode: "all_matches",
+              operationalPredicates: [],
               technicalPredicates: [],
             },
           }],
@@ -1196,6 +1227,10 @@ Deno.test("model-first runtime can plan ERP and public-web tools in one turn", a
                 category: null,
                 availability: "any",
                 presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
                 technicalPredicates: [],
               },
             },
@@ -2288,6 +2323,10 @@ Deno.test("ERP reads remain available before an incomplete-research terminal ans
                 category: null,
                 availability: "any",
                 presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
                 technicalPredicates: [],
               },
             }],
@@ -3162,6 +3201,10 @@ Deno.test("tool wrapper stays within the exact 48 KiB receipt boundary", async (
               category: null,
               availability: "any",
               presentation: "answer",
+              sort: { field: "relevance", direction: "desc" },
+              limit: 10,
+              selectionMode: "all_matches",
+              operationalPredicates: [],
               technicalPredicates: [],
             },
           }],
@@ -3423,6 +3466,10 @@ Deno.test("runtime abort stops the current tool fan-out and all later model call
                 category: null,
                 availability: "any",
                 presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
                 technicalPredicates: [],
               },
             },
@@ -3434,6 +3481,10 @@ Deno.test("runtime abort stops the current tool fan-out and all later model call
                 category: null,
                 availability: "any",
                 presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
                 technicalPredicates: [],
               },
             },
@@ -3511,6 +3562,10 @@ Deno.test("cancellation after tool execution records its receipt before stopping
                 category: null,
                 availability: "any",
                 presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
                 technicalPredicates: [],
               },
             },
@@ -3522,6 +3577,10 @@ Deno.test("cancellation after tool execution records its receipt before stopping
                 category: null,
                 availability: "any",
                 presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
                 technicalPredicates: [],
               },
             },
@@ -3599,6 +3658,10 @@ Deno.test("aggregate tool output exhaustion never leaves an executed tool withou
               category: null,
               availability: "any",
               presentation: "answer",
+              sort: { field: "relevance", direction: "desc" },
+              limit: 10,
+              selectionMode: "all_matches",
+              operationalPredicates: [],
               technicalPredicates: [],
             },
           })),
@@ -3886,6 +3949,10 @@ Deno.test("duplicate provider call ids across rounds are rejected before executi
               category: null,
               availability: "any",
               presentation: "answer",
+              sort: { field: "relevance", direction: "desc" },
+              limit: 10,
+              selectionMode: "all_matches",
+              operationalPredicates: [],
               technicalPredicates: [],
             },
           }],
@@ -4311,6 +4378,394 @@ Deno.test("task preparation is run-bound, receipted as approval-required draft, 
     false,
     "no provider can call the commit action",
   );
+});
+
+Deno.test("workshop preparations remain previews under the same generic approval policy", async () => {
+  const workshopAuthority: AgentAuthority = {
+    ...authority,
+    capabilities: [...authority.capabilities, "ai.write.workshop"],
+  };
+  const jobRef = "12121212-1212-4121-8121-121212121212";
+  const catalogItemRef = "13131313-1313-4131-8131-131313131313";
+  const jobBikeId = "88888888-8888-4888-8888-888888888888";
+  const catalogItemId = "99999999-9999-4999-8999-999999999999";
+  const jobUpdatedAt = "2026-08-14T01:00:00Z";
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const cases = [
+    {
+      toolName: "prepare_diagnosis_update",
+      cardKind: "diagnosis_preview",
+      action: "update_diagnosis",
+      arguments: {
+        jobRef,
+        jobBikeId,
+        field: "drivetrain.chain_wear_percent",
+        numberValue: 0.6,
+        textValue: null,
+        unit: "display_fraction",
+        expectedUpdatedAt: null,
+      },
+      item: {
+        approvalId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        action: "update_diagnosis",
+        state: "pending",
+        jobId: contextJobId,
+        jobBikeId,
+        jobNumber: "PG-00420",
+        bikeLabel: "Trek Marlin 7",
+        field: "drivetrain.chain_wear_percent",
+        fieldLabel: "Desgaste de cadena",
+        previousValue: null,
+        newValue: "0.60",
+        expiresAt,
+      },
+    },
+    {
+      toolName: "prepare_workshop_item",
+      cardKind: "workshop_item_preview",
+      action: "add_workshop_item",
+      arguments: {
+        jobRef,
+        jobBikeId,
+        catalogItemRef,
+        quantity: 1,
+        notes: null,
+        expectedJobUpdatedAt: jobUpdatedAt,
+      },
+      item: {
+        approvalId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        action: "add_workshop_item",
+        state: "pending",
+        jobId: contextJobId,
+        jobBikeId,
+        jobNumber: "PG-00420",
+        bikeLabel: "Trek Marlin 7",
+        catalogItemId,
+        itemName: "Cambio de cadena",
+        itemType: "service",
+        quantity: 1,
+        unitPrice: 15000,
+        lineTotal: 15000,
+        invoiceNumber: null,
+        expiresAt,
+      },
+    },
+  ] as const;
+
+  for (const scenario of cases) {
+    const store = new TestRunStore();
+    let turns = 0;
+    const executedCalls: AgentToolCall[] = [];
+    const executor: AgentToolExecutor = {
+      execute(call) {
+        executedCalls.push(call);
+        if (call.name === "search_workshop_jobs") {
+          const result = {
+            authorityTenantId: tenantId,
+            asOf: new Date().toISOString(),
+            status: "success" as const,
+            items: [{
+              entityId: contextJobId,
+              jobNumber: "PG-00420",
+              customerName: "Cliente de prueba",
+              status: "pending",
+              priority: "normal",
+              arrivalDate: "2026-08-13",
+              deliveryDeadline: null,
+              clientRequest: "Revisar transmisión",
+              assignedTechnicianName: null,
+              invoiceNumber: null,
+              bikeSummary: "Trek Marlin 7",
+              bikeCount: 1,
+            }],
+            resultCount: 1,
+            hasMore: false,
+          };
+          const outputText = JSON.stringify({
+            status: "success",
+            items: [{ jobRef, jobNumber: "PG-00420", bikeCount: 1 }],
+            resultCount: 1,
+            hasMore: false,
+          });
+          return Promise.resolve({
+            result,
+            outputText,
+            outputBytes: outputText.length,
+            succeeded: true,
+            entityReferences: [{
+              ref: jobRef,
+              kind: "workshop_job" as const,
+              entityId: contextJobId,
+            }],
+          });
+        }
+        if (call.name === "search_inventory") {
+          const result = {
+            authorityTenantId: tenantId,
+            asOf: new Date().toISOString(),
+            status: "success" as const,
+            items: [{
+              entityId: catalogItemId,
+              name: "Cambio de cadena",
+              sku: "SERV-CADENA",
+              brand: null,
+              category: "Servicios",
+              price: 15000,
+              stock: 0,
+              minimumStock: 0,
+              availability: "not_tracked",
+              tracksInventory: false,
+              location: null,
+              technicalMatch: "not_applicable",
+              matchedCount: 1,
+              trackedCount: 0,
+              totalStock: 0,
+              inventoryRetailValue: 0,
+              averagePrice: 15000,
+              minimumPrice: 15000,
+              maximumPrice: 15000,
+            }],
+            resultCount: 1,
+            hasMore: false,
+          };
+          const outputText = JSON.stringify({
+            status: "success",
+            items: [{ catalogItemRef, name: "Cambio de cadena", price: 15000 }],
+            resultCount: 1,
+            hasMore: false,
+          });
+          return Promise.resolve({
+            result,
+            outputText,
+            outputBytes: outputText.length,
+            succeeded: true,
+            entityReferences: [{
+              ref: catalogItemRef,
+              kind: "catalog_item" as const,
+              entityId: catalogItemId,
+            }],
+          });
+        }
+        if (call.name === "get_workshop_job_context") {
+          assertEquals(
+            call.arguments.jobId,
+            contextJobId,
+            "opaque jobRef resolves only inside the runtime",
+          );
+          const result = {
+            authorityTenantId: tenantId,
+            asOf: new Date().toISOString(),
+            status: "success" as const,
+            items: [{
+              entityId: contextJobId,
+              jobBikeId,
+              jobNumber: "PG-00420",
+              customerName: "Cliente de prueba",
+              bikeLabel: "Trek Marlin 7",
+              jobType: "repair",
+              jobStatus: "pending",
+              jobUpdatedAt,
+              invoiceId: null,
+              invoiceNumber: null,
+              invoiceStatus: null,
+              diagnosisUpdatedAt: null,
+              canUpdateDiagnosis: true,
+              canAddWorkshopItem: true,
+            }],
+            resultCount: 1,
+            hasMore: false,
+          };
+          const outputText = JSON.stringify({
+            status: "success",
+            items: [{
+              jobRef,
+              jobBikeId,
+              jobUpdatedAt,
+              diagnosisUpdatedAt: null,
+              canUpdateDiagnosis: true,
+              canAddWorkshopItem: true,
+            }],
+            resultCount: 1,
+            hasMore: false,
+          });
+          return Promise.resolve({
+            result,
+            outputText,
+            outputBytes: outputText.length,
+            succeeded: true,
+            entityReferences: [{
+              ref: jobRef,
+              kind: "workshop_job" as const,
+              entityId: contextJobId,
+            }],
+          });
+        }
+        if (call.name === "inspect_diagnosis_schema") {
+          const result = {
+            authorityTenantId: tenantId,
+            asOf: new Date().toISOString(),
+            status: "success" as const,
+            items: [{
+              section: "drivetrain",
+              field: "drivetrain.chain_wear_percent",
+              label: "Desgaste de cadena",
+              valueType: "number",
+              storedUnit: "percent",
+              inputUnits: "display_fraction,percent",
+              allowedValues: null,
+              minimumValue: 0,
+              maximumValue: 100,
+            }],
+            resultCount: 1,
+            hasMore: false,
+          };
+          const outputText = JSON.stringify({
+            status: "success",
+            items: result.items,
+            resultCount: 1,
+            hasMore: false,
+          });
+          return Promise.resolve({
+            result,
+            outputText,
+            outputBytes: outputText.length,
+            succeeded: true,
+          });
+        }
+        assertEquals(call.arguments.jobId, contextJobId, "draft receives resolved job UUID");
+        if (call.name === "prepare_workshop_item") {
+          assertEquals(
+            call.arguments.catalogItemId,
+            catalogItemId,
+            "draft receives resolved catalog UUID",
+          );
+        }
+        const result = {
+          authorityTenantId: tenantId,
+          asOf: new Date().toISOString(),
+          status: "success" as const,
+          items: [scenario.item],
+          resultCount: 1,
+          hasMore: false,
+        };
+        return Promise.resolve({
+          result,
+          outputText: JSON.stringify({
+            status: "success",
+            items: [{ state: "pending" }],
+            resultCount: 1,
+            hasMore: false,
+          }),
+          outputBytes: 80,
+          succeeded: true,
+        });
+      },
+      workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+    };
+    const response = await executeAgentRun(request(), workshopAuthority, {
+      providerRouter: providerRouter(() => {
+        turns++;
+        if (turns === 1) {
+          const toolCalls: AgentToolCall[] = [{
+            id: `${scenario.toolName}-search-job`,
+            name: "search_workshop_jobs",
+            arguments: {
+              query: "PG-00420",
+              horizon: "any",
+              status: "any",
+              priority: "any",
+              limit: 10,
+            },
+          }];
+          if (scenario.toolName === "prepare_workshop_item") {
+            toolCalls.push({
+              id: `${scenario.toolName}-search-catalog`,
+              name: "search_inventory",
+              arguments: {
+                query: "Cambio de cadena",
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                technicalPredicates: [],
+                operationalPredicates: [],
+              },
+            });
+          }
+          return Promise.resolve({
+            text: "Resolveré las referencias exactas.",
+            toolCalls,
+            usage: { inputTokens: 4, outputTokens: 3, totalTokens: 7 },
+            finishReason: "tool_calls",
+            continuationToken: `opaque-search-${scenario.toolName}`,
+          });
+        }
+        if (turns === 2) {
+          const toolCalls: AgentToolCall[] = [{
+            id: `${scenario.toolName}-context`,
+            name: "get_workshop_job_context",
+            arguments: { jobRef },
+          }];
+          if (scenario.toolName === "prepare_diagnosis_update") {
+            toolCalls.push({
+              id: `${scenario.toolName}-schema`,
+              name: "inspect_diagnosis_schema",
+              arguments: { section: "drivetrain" },
+            });
+          }
+          return Promise.resolve({
+            text: "Verificaré contexto, revisiones y esquema.",
+            toolCalls,
+            usage: { inputTokens: 4, outputTokens: 3, totalTokens: 7 },
+            finishReason: "tool_calls",
+            continuationToken: `opaque-context-${scenario.toolName}`,
+          });
+        }
+        if (turns === 3) {
+          return Promise.resolve({
+            text: "Prepararé el cambio para confirmación.",
+            toolCalls: [{
+              id: `${scenario.toolName}-call`,
+              name: scenario.toolName,
+              arguments: scenario.arguments,
+            }],
+            usage: { inputTokens: 4, outputTokens: 3, totalTokens: 7 },
+            finishReason: "tool_calls",
+            continuationToken: `opaque-${scenario.toolName}`,
+          });
+        }
+        return Promise.resolve(finalTurn("Cambio preparado para confirmación."));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    }, new AbortController().signal);
+    const preview = response.cards.find((card) => card.kind === scenario.cardKind);
+    assertEquals(preview?.kind, scenario.cardKind, "typed preview card");
+    assertEquals(
+      preview?.approvalRef?.action,
+      scenario.action,
+      "typed approval action",
+    );
+    const draftReceipt = store.toolReceiptInputs.find((receipt) =>
+      receipt.toolName === scenario.toolName
+    );
+    assertEquals(draftReceipt?.risk, "draft", "no model-turn write");
+    assertEquals(
+      draftReceipt?.policyDecision,
+      "approval_required",
+      "post-click confirmation remains mandatory",
+    );
+    assertEquals(
+      executedCalls.some((call) => call.arguments.jobRef !== undefined),
+      false,
+      "opaque refs never cross into an ERP RPC adapter",
+    );
+  }
 });
 
 function unexpectedExecutor(): AgentToolExecutor {

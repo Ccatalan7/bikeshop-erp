@@ -128,6 +128,8 @@ class Email {
   final String? summary;
   final String? content;
   final String? threadId; // Gmail specific
+  final String? rfcMessageId;
+  final String? references;
   final List<EmailAttachment> attachments;
 
   Email({
@@ -145,6 +147,8 @@ class Email {
     this.summary,
     this.content,
     this.threadId,
+    this.rfcMessageId,
+    this.references,
     this.attachments = const [],
   });
 
@@ -183,6 +187,8 @@ class Email {
     String? summary,
     String? content,
     String? threadId,
+    String? rfcMessageId,
+    String? references,
     List<EmailAttachment>? attachments,
   }) {
     return Email(
@@ -200,6 +206,8 @@ class Email {
       summary: summary ?? this.summary,
       content: content ?? this.content,
       threadId: threadId ?? this.threadId,
+      rfcMessageId: rfcMessageId ?? this.rfcMessageId,
+      references: references ?? this.references,
       attachments: attachments ?? this.attachments,
     );
   }
@@ -333,6 +341,14 @@ abstract class EmailProvider with ChangeNotifier {
   Future<bool> replyToEmail({
     required String emailId,
     required String content,
+    required String to,
+    required String subject,
+    String? fromAddress,
+    String? cc,
+    String? bcc,
+    String? threadId,
+    String? rfcMessageId,
+    String? references,
     bool replyAll = false,
   });
 

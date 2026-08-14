@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  const plannedTools = <String>{
+  const runtimeTools = <String>{
     'get_business_snapshot',
     'list_attention_items',
     'search_workshop_jobs',
+    'get_workshop_job_context',
+    'inspect_diagnosis_schema',
     'search_tasks',
     'inspect_inventory_schema',
     'search_inventory',
@@ -18,14 +20,13 @@ void main() {
     'search_sales_invoices',
     'search_purchase_invoices',
     'analyze_cash_and_receivables',
+    'analyze_sales_period',
     'list_recent_expenses',
     'search_conversations',
     'research_public_web',
-    'draft_customer_followup',
-    'draft_quote',
-    'prepare_purchase_order',
     'prepare_task',
-    'update_job_status',
+    'prepare_diagnosis_update',
+    'prepare_workshop_item',
   };
   const outcomes = <String>{
     'answer',
@@ -47,7 +48,7 @@ void main() {
     expect(decoded, isA<List<Object?>>());
     final cases = (decoded as List<Object?>).cast<Map<String, Object?>>();
 
-    expect(cases, hasLength(56));
+    expect(cases, hasLength(65));
     expect(cases.map((item) => item['id']).toSet(), hasLength(cases.length));
 
     final categories = <String>{};
@@ -87,9 +88,9 @@ void main() {
       final tools = (contract['tools']! as List<Object?>).cast<String>();
       final dispatch = contract['dispatch'] ?? 'model';
       expect(
-        tools.where((tool) => !plannedTools.contains(tool)),
+        tools.where((tool) => !runtimeTools.contains(tool)),
         isEmpty,
-        reason: '$id references an undeclared tool',
+        reason: '$id references a tool absent from the runtime registry',
       );
       expect(outcomes, contains(contract['outcome']), reason: '$id outcome');
       expect(dispatches, contains(dispatch), reason: '$id dispatch');
@@ -157,6 +158,26 @@ void main() {
     );
   });
 
+  test('inventory evals cover the basic typed query algebra', () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+    expect(cases['inventory-009']!['scenario'], 'typed_operational_threshold');
+    expect(cases['inventory-010']!['scenario'], 'typed_operational_range');
+    expect(cases['inventory-011']!['scenario'], 'typed_sort_top_n');
+    expect(cases['inventory-012']!['scenario'], 'verified_full_set_metrics');
+    expect(
+      (cases['inventory-013']!['expected']! as Map<String, Object?>)['tools'],
+      <String>['report_capability_gap'],
+      reason: 'unsupported grouped aggregation must be declared, not simulated',
+    );
+  });
+
   test('general named-source web research stays model-first', () {
     final decoded = jsonDecode(
       File('test/fixtures/ai_assistant_agent_eval_cases.json')
@@ -207,5 +228,43 @@ void main() {
       expect(expected['tools'], isNot(contains('create_task')),
           reason: '${value['id']} must not expose create_task to the model');
     }
+  });
+
+  test('action evals resolve entities and schemas before preparing writes', () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+
+    final diagnosis =
+        cases['workshop-006']!['expected']! as Map<String, Object?>;
+    expect(diagnosis['tools'], <String>[
+      'search_workshop_jobs',
+      'get_workshop_job_context',
+      'inspect_diagnosis_schema',
+      'prepare_diagnosis_update',
+    ]);
+    expect(diagnosis['outcome'], 'approvalRequired');
+    expect(diagnosis['mutation'], 'draft');
+
+    final workshopItem =
+        cases['workshop-007']!['expected']! as Map<String, Object?>;
+    expect(workshopItem['tools'], <String>[
+      'search_workshop_jobs',
+      'get_workshop_job_context',
+      'search_inventory',
+      'prepare_workshop_item',
+    ]);
+    expect(workshopItem['outcome'], 'approvalRequired');
+    expect(workshopItem['mutation'], 'draft');
+
+    final salesPeriod =
+        cases['sales-003']!['expected']! as Map<String, Object?>;
+    expect(salesPeriod['tools'], <String>['analyze_sales_period']);
+    expect(salesPeriod['mutation'], 'none');
   });
 }

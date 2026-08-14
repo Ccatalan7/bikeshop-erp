@@ -15,7 +15,7 @@ const MAX_CARDS = 6;
 const kindsByDestination: Readonly<Record<AgentActionCard["destination"], readonly string[]>> = {
   customers: ["customer"],
   suppliers: ["supplier"],
-  workshop_jobs: ["job"],
+  workshop_jobs: ["job", "diagnosis_preview", "workshop_item_preview"],
   sales_invoices: ["sales_invoice"],
   purchases: ["purchase_invoice"],
   inventory_products: ["inventory"],
@@ -27,6 +27,8 @@ const entityKindByCardKind: Readonly<Record<string, AgentEntityKind | undefined>
   customer: "customer",
   supplier: "supplier",
   job: "workshopJob",
+  diagnosis_preview: undefined,
+  workshop_item_preview: undefined,
   sales_invoice: "salesInvoice",
   purchase_invoice: "purchaseInvoice",
   inventory: "product",
@@ -50,6 +52,7 @@ export function cardsForToolResult(
   if (toolName === "analyze_cash_and_receivables") {
     return receivableCards(result.items.filter((item) => item.kind === "receivable").slice(0, 3));
   }
+  if (toolName === "analyze_sales_period") return salesPeriodCards(result.items);
   const items = result.items.slice(0, 3);
   switch (toolName) {
     case "search_workshop_jobs":
@@ -81,6 +84,10 @@ export function cardsForToolResult(
       );
     case "prepare_task":
       return items.map(preparedTaskCard);
+    case "prepare_diagnosis_update":
+      return items.map(preparedDiagnosisCard);
+    case "prepare_workshop_item":
+      return items.map(preparedWorkshopItemCard);
     case "search_customers":
       return entityCards(items, "customer", "Cliente", "customers");
     case "search_suppliers":
@@ -105,6 +112,14 @@ function inventorySearchCards(
   const technicalFilterChips = inventoryTechnicalFilterChips(
     argumentsValue.technicalPredicates,
   );
+  const operationalFilterChips = inventoryOperationalFilterChips(
+    argumentsValue.operationalPredicates,
+  );
+  const orderChips = inventoryOrderChips(
+    argumentsValue.sort,
+    argumentsValue.limit,
+    argumentsValue.selectionMode,
+  );
   const category = argumentsValue.category === null
     ? null
     : typeof argumentsValue.category === "string" && argumentsValue.category.trim() &&
@@ -123,8 +138,8 @@ function inventorySearchCards(
       argumentsValue.availability as AgentInventoryAvailabilityFilter,
     ) ||
     !["answer", "open_list"].includes(String(argumentsValue.presentation)) ||
-    technicalFilterChips === null || category === undefined ||
-    technicalMatchSummary === null
+    technicalFilterChips === null || operationalFilterChips === null || orderChips === null ||
+    category === undefined || technicalMatchSummary === null
   ) return [];
   const entityIds = result.items.map((item) => {
     if (typeof item.entityId !== "string" || !validUuid(item.entityId)) {
@@ -143,8 +158,7 @@ function inventorySearchCards(
       resultCount === 1 ? "resultado" : "resultados"
     }`;
   const filterLabel = category ??
-    (typeof argumentsValue.query === "string" ? argumentsValue.query.trim() : null);
-  if (!filterLabel) return [];
+    (typeof argumentsValue.query === "string" ? argumentsValue.query.trim() : "Inventario");
   return [card({
     kind: "inventory",
     eyebrow: "Inventario",
@@ -153,7 +167,12 @@ function inventorySearchCards(
       ? `${filterLabel} · ${technicalMatchSummary}`
       : `Coincidencias para “${filterLabel}”`,
     destination: "inventory_products",
-    chips: [inventoryAvailabilityLabel(availability), ...technicalFilterChips],
+    chips: [
+      inventoryAvailabilityLabel(availability),
+      ...technicalFilterChips,
+      ...operationalFilterChips,
+      ...orderChips,
+    ],
     listRef: Object.freeze({
       kind: "inventory",
       query: filterLabel,
@@ -164,6 +183,71 @@ function inventorySearchCards(
       autoOpen: argumentsValue.presentation === "open_list",
     }),
   })];
+}
+
+function inventoryOrderChips(
+  value: unknown,
+  limit: unknown,
+  selectionMode: unknown,
+): readonly string[] | null {
+  if (
+    !value || typeof value !== "object" || Array.isArray(value) ||
+    Object.keys(value).length !== 2 ||
+    !Object.hasOwn(value, "field") || !Object.hasOwn(value, "direction") ||
+    !Number.isSafeInteger(limit) || (limit as number) < 1 || (limit as number) > 10 ||
+    !["all_matches", "top_n"].includes(String(selectionMode))
+  ) return null;
+  const field = (value as Record<string, unknown>).field;
+  const direction = (value as Record<string, unknown>).direction;
+  if (
+    !["relevance", "name", "stock", "minimum_stock", "price"].includes(String(field)) ||
+    !["asc", "desc"].includes(String(direction)) ||
+    (field === "relevance" && direction !== "desc")
+  ) return null;
+  const labels: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+    name: { asc: "Nombre A–Z", desc: "Nombre Z–A" },
+    stock: { asc: "Menor stock", desc: "Mayor stock" },
+    minimum_stock: { asc: "Menor stock mínimo", desc: "Mayor stock mínimo" },
+    price: { asc: "Menor precio", desc: "Mayor precio" },
+  };
+  const orderLabel = field === "relevance" ? null : labels[String(field)]?.[String(direction)];
+  if (field !== "relevance" && !orderLabel) return null;
+  if (selectionMode === "top_n") {
+    return Object.freeze([`Top ${limit}${orderLabel ? ` · ${orderLabel}` : ""}`]);
+  }
+  return Object.freeze(orderLabel ? [orderLabel] : []);
+}
+
+function inventoryOperationalFilterChips(value: unknown): readonly string[] | null {
+  if (!Array.isArray(value) || value.length > 6) return null;
+  const labels: Readonly<Record<string, string>> = {
+    stock: "Stock",
+    minimum_stock: "Stock mínimo",
+    price: "Precio",
+  };
+  const fields = new Set<string>();
+  const chips: string[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const entries = Object.entries(item);
+    if (
+      entries.length !== 3 ||
+      !entries.every(([key]) => key === "field" || key === "operator" || key === "values")
+    ) return null;
+    const field = (item as Record<string, unknown>).field;
+    const operator = (item as Record<string, unknown>).operator;
+    const values = (item as Record<string, unknown>).values;
+    if (
+      typeof field !== "string" || labels[field] === undefined || fields.has(field) ||
+      typeof operator !== "string" ||
+      !["eq", "neq", "lt", "lte", "gt", "gte", "between", "in"].includes(operator) ||
+      !Array.isArray(values) || values.length < 1 || values.length > 10 ||
+      values.some((filterValue) => typeof filterValue !== "number" || !Number.isFinite(filterValue))
+    ) return null;
+    fields.add(field);
+    chips.push(`${labels[field]} ${inventoryPredicateLabel(operator, values.map(String))}`);
+  }
+  return Object.freeze(chips.slice(0, 3));
 }
 
 function inventoryTechnicalMatchSummary(
@@ -255,7 +339,7 @@ export function autoOpenListAnswer(
   if (cards.length !== 1) return undefined;
   const listRef = cards[0].listRef;
   if (!listRef?.autoOpen || listRef.kind !== "inventory") return undefined;
-  const filter = inventoryAvailabilityLabel(listRef.availability);
+  const filter = cards[0].chips.join(" · ") || inventoryAvailabilityLabel(listRef.availability);
   if (listRef.resultCount === 0) {
     return supportsResultLists
       ? `No encontré resultados con el filtro “${filter}”. Abrí Inventario para que puedas revisarlo o ajustarlo.`
@@ -264,9 +348,10 @@ export function autoOpenListAnswer(
   const count = listRef.hasMore
     ? `${listRef.resultCount} o más resultados`
     : `${listRef.resultCount} ${listRef.resultCount === 1 ? "resultado" : "resultados"}`;
+  const agreement = !listRef.hasMore && listRef.resultCount === 1 ? "coincidente" : "coincidentes";
   return supportsResultLists
-    ? `Abrí ${count} coincidentes en Inventario con el filtro “${filter}”.`
-    : `Encontré ${count} coincidentes en Inventario con el filtro “${filter}”. Usa la tarjeta para abrirlos.`;
+    ? `Abrí ${count} ${agreement} en Inventario con el filtro “${filter}”.`
+    : `Encontré ${count} ${agreement} en Inventario con el filtro “${filter}”. Usa la tarjeta para abrirlos.`;
 }
 
 /** Keeps rolling client updates compatible with the strict v1 card decoder. */
@@ -540,6 +625,43 @@ function preparedTaskCard(item: JsonObject): AgentActionCard {
   });
 }
 
+function preparedDiagnosisCard(item: JsonObject): AgentActionCard {
+  const previousValue = optionalText(item, "previousValue");
+  return card({
+    kind: "diagnosis_preview",
+    eyebrow: "Diagnóstico por confirmar",
+    title: text(item, "fieldLabel", "Cambio de diagnóstico"),
+    subtitle: join([optionalText(item, "jobNumber"), optionalText(item, "bikeLabel")]),
+    description: join([
+      previousValue === undefined ? "Sin valor anterior" : `Antes: ${previousValue}`,
+      `Nuevo: ${text(item, "newValue", "")}`,
+    ]),
+    destination: "workshop_jobs",
+    chips: ["Requiere confirmación"],
+    approvalRef: approvalRef(item, "diagnosis_preview"),
+  });
+}
+
+function preparedWorkshopItemCard(item: JsonObject): AgentActionCard {
+  return card({
+    kind: "workshop_item_preview",
+    eyebrow: "Línea por confirmar",
+    title: text(item, "itemName", "Producto o servicio"),
+    subtitle: join([
+      optionalText(item, "jobNumber"),
+      optionalText(item, "bikeLabel"),
+      optionalText(item, "invoiceNumber"),
+    ]),
+    description: join([
+      numericText(item, "quantity", "Cantidad"),
+      money(item.lineTotal, "Total línea"),
+    ]),
+    destination: "workshop_jobs",
+    chips: compact([optionalText(item, "itemType"), "Requiere confirmación"]),
+    approvalRef: approvalRef(item, "workshop_item_preview"),
+  });
+}
+
 export function committedTaskCard(item: JsonObject): AgentActionCard {
   return card({
     kind: "task",
@@ -550,6 +672,45 @@ export function committedTaskCard(item: JsonObject): AgentActionCard {
     destination: "tasks",
     chips: compact([optionalText(item, "status"), optionalText(item, "priority")]),
   });
+}
+
+export function committedWorkshopActionCard(
+  action: "update_diagnosis" | "add_workshop_item",
+  item: JsonObject,
+): AgentActionCard {
+  return card({
+    kind: "job",
+    eyebrow: action === "update_diagnosis" ? "Diagnóstico actualizado" : "Línea agregada",
+    title: text(item, "jobNumber", "Trabajo"),
+    subtitle: optionalText(item, "bikeLabel"),
+    description: action === "update_diagnosis"
+      ? join([optionalText(item, "fieldLabel"), optionalText(item, "newValue")])
+      : join([optionalText(item, "itemName"), money(item.lineTotal, "Total línea")]),
+    destination: "workshop_jobs",
+    chips: compact([optionalText(item, "invoiceNumber")]),
+    entityRef: entityRef(item, "workshopJob"),
+  });
+}
+
+function salesPeriodCards(items: readonly JsonObject[]): readonly AgentActionCard[] {
+  const summary = items[0];
+  if (!summary || typeof summary.highestInvoiceId !== "string") return [];
+  return [card({
+    kind: "sales_invoice",
+    eyebrow: "Factura principal del período",
+    title: text(summary, "highestInvoiceNumber", "Factura"),
+    subtitle: optionalText(summary, "highestInvoiceCustomerName"),
+    description: join([
+      money(summary.highestInvoiceTotal, "Total factura"),
+      money(summary.highestPeriodAmount, "Monto del período"),
+    ]),
+    destination: "sales_invoices",
+    chips: compact([optionalText(summary, "basis")]),
+    entityRef: {
+      kind: "salesInvoice",
+      id: summary.highestInvoiceId.toLowerCase(),
+    },
+  })];
 }
 
 function card(value: AgentActionCard): AgentActionCard {
@@ -604,35 +765,42 @@ function validateEntityRef(value: unknown, cardKind: unknown): AgentActionCard["
   return Object.freeze({ kind: expected, id: value.id.toLowerCase() });
 }
 
-function approvalRef(item: JsonObject): AgentApprovalRef {
+function approvalRef(item: JsonObject, cardKind = "task_preview"): AgentApprovalRef {
   return validateApprovalRef({
     id: item.approvalId,
     action: item.action,
     state: item.state,
     expiresAt: item.expiresAt,
-  }, "task_preview")!;
+  }, cardKind)!;
 }
 
 function validateApprovalRef(
   value: unknown,
   cardKind: unknown,
 ): AgentActionCard["approvalRef"] {
+  const expectedAction = cardKind === "task_preview"
+    ? "create_task"
+    : cardKind === "diagnosis_preview"
+    ? "update_diagnosis"
+    : cardKind === "workshop_item_preview"
+    ? "add_workshop_item"
+    : null;
   if (value === undefined) {
-    if (cardKind === "task_preview") throw new Error("Missing approval reference");
+    if (expectedAction !== null) throw new Error("Missing approval reference");
     return undefined;
   }
   if (
-    cardKind !== "task_preview" || !isRecord(value) ||
+    expectedAction === null || !isRecord(value) ||
     !hasExactKeys(value, ["id", "action", "state", "expiresAt"]) ||
     typeof value.id !== "string" || !validUuid(value.id) ||
-    value.action !== "create_task" ||
+    value.action !== expectedAction ||
     typeof value.state !== "string" ||
     !(agentApprovalStates as readonly string[]).includes(value.state) ||
     typeof value.expiresAt !== "string" || !isoInstant(value.expiresAt)
   ) throw new Error("Invalid approval reference");
   return Object.freeze({
     id: value.id.toLowerCase(),
-    action: "create_task",
+    action: expectedAction,
     state: value.state as AgentApprovalRef["state"],
     expiresAt: value.expiresAt,
   });
@@ -713,6 +881,13 @@ function optionalText(item: JsonObject, key: string): string | undefined {
 function money(value: unknown, prefix: string): string | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? `${prefix} $${Math.round(value).toLocaleString("es-CL")}`
+    : undefined;
+}
+
+function numericText(item: JsonObject, key: string, prefix: string): string | undefined {
+  const value = item[key];
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${prefix} ${value.toLocaleString("es-CL", { maximumFractionDigits: 2 })}`
     : undefined;
 }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -161,6 +162,117 @@ void main() {
     expect(manager.selectedEmail, isNull);
     expect(manager.emails, isEmpty);
   });
+
+  test('abrir un correo revierte el leído local si el proveedor falla',
+      () async {
+    final unread = mail('in-1');
+    provider.script(MailFolder.inbox, [unread]);
+    await manager.refreshInbox();
+
+    final remoteMutation = Completer<bool>();
+    provider.markReadCompleters.add(remoteMutation);
+    provider.providerError = 'El proveedor rechazó la actualización.';
+
+    final selection = manager.selectEmail(unread);
+
+    expect(
+      manager.emails.single.isRead,
+      isTrue,
+      reason: 'la proyección optimista mantiene la interfaz inmediata',
+    );
+    expect(provider.markReadCalls, [(id: 'in-1', read: true)]);
+
+    remoteMutation.complete(false);
+    await selection;
+    await pumpEventQueue();
+
+    expect(manager.emails.single.isRead, isFalse);
+    expect(manager.unreadCount, 1);
+    expect(manager.error, contains('Se restauró el estado confirmado'));
+  });
+
+  test('serializa leído y no leído para no invertir el estado remoto',
+      () async {
+    final unread = mail('in-1');
+    provider.script(MailFolder.inbox, [unread]);
+    await manager.refreshInbox();
+
+    final markRead = Completer<bool>();
+    final markUnread = Completer<bool>();
+    provider.markReadCompleters.addAll([markRead, markUnread]);
+
+    final first = manager.markAsRead(unread);
+    final second = manager.markAsRead(unread, read: false);
+
+    expect(manager.emails.single.isRead, isFalse);
+    expect(
+      provider.markReadCalls,
+      [(id: 'in-1', read: true)],
+      reason: 'la segunda mutación espera la confirmación de la primera',
+    );
+
+    markRead.complete(true);
+    expect(await first, isTrue);
+    await pumpEventQueue();
+    expect(
+      provider.markReadCalls,
+      [(id: 'in-1', read: true), (id: 'in-1', read: false)],
+    );
+
+    markUnread.complete(true);
+    expect(await second, isTrue);
+    await pumpEventQueue();
+
+    expect(manager.emails.single.isRead, isFalse);
+    expect(manager.unreadCount, 1);
+  });
+
+  test('un refresco vacío autoritativo elimina correos movidos en otro equipo',
+      () async {
+    provider.script(MailFolder.inbox, [mail('in-1')]);
+    await manager.refreshInbox();
+    expect(manager.emails, hasLength(1));
+
+    provider.script(MailFolder.inbox, const []);
+    await manager.refreshInbox();
+
+    expect(manager.emails, isEmpty);
+    expect(manager.unreadCount, 0);
+  });
+
+  test('responder usa la operación nativa y conserva la identidad del hilo',
+      () async {
+    final original = mail('in-1').copyWith(
+      threadId: 'thread-1',
+      rfcMessageId: '<message-1@example.com>',
+      references: '<parent@example.com>',
+    );
+
+    final success = await manager.replyToEmail(
+      originalEmail: original,
+      content: '<p>Respuesta</p>',
+      to: 'sender@example.com',
+      subject: 'Re: Asunto in-1',
+      fromAddress: 'scripted@example.com',
+      cc: 'team@example.com',
+      replyAll: true,
+    );
+
+    expect(success, isTrue);
+    expect(provider.replyCalls, [
+      {
+        'emailId': 'in-1',
+        'threadId': 'thread-1',
+        'rfcMessageId': '<message-1@example.com>',
+        'references': '<parent@example.com>',
+        'to': 'sender@example.com',
+        'subject': 'Re: Asunto in-1',
+        'fromAddress': 'scripted@example.com',
+        'cc': 'team@example.com',
+        'replyAll': true,
+      }
+    ]);
+  });
 }
 
 class _ScriptedProvider extends EmailProvider {
@@ -175,6 +287,10 @@ class _ScriptedProvider extends EmailProvider {
   final List<String> spamIds = [];
   final List<String> notSpamIds = [];
   final List<String> trashedIds = [];
+  final List<Completer<bool>> markReadCompleters = [];
+  final List<({String id, bool read})> markReadCalls = [];
+  final List<Map<String, Object?>> replyCalls = [];
+  String? providerError;
 
   void script(MailFolder folder, List<Email> emails, {bool hasMore = false}) {
     _pageQueues
@@ -201,7 +317,7 @@ class _ScriptedProvider extends EmailProvider {
   bool get isLoading => false;
 
   @override
-  String? get error => null;
+  String? get error => providerError;
 
   @override
   List<Email> get emails => const [];
@@ -282,9 +398,29 @@ class _ScriptedProvider extends EmailProvider {
   Future<bool> replyToEmail({
     required String emailId,
     required String content,
+    required String to,
+    required String subject,
+    String? fromAddress,
+    String? cc,
+    String? bcc,
+    String? threadId,
+    String? rfcMessageId,
+    String? references,
     bool replyAll = false,
-  }) async =>
-      true;
+  }) async {
+    replyCalls.add({
+      'emailId': emailId,
+      'threadId': threadId,
+      'rfcMessageId': rfcMessageId,
+      'references': references,
+      'to': to,
+      'subject': subject,
+      'fromAddress': fromAddress,
+      'cc': cc,
+      'replyAll': replyAll,
+    });
+    return true;
+  }
 
   @override
   Future<bool> moveToTrash(String emailId) async {
@@ -311,7 +447,11 @@ class _ScriptedProvider extends EmailProvider {
   }
 
   @override
-  Future<bool> markAsRead(String emailId, {bool read = true}) async => true;
+  Future<bool> markAsRead(String emailId, {bool read = true}) async {
+    markReadCalls.add((id: emailId, read: read));
+    if (markReadCompleters.isEmpty) return true;
+    return markReadCompleters.removeAt(0).future;
+  }
 
   @override
   void clearError() {}

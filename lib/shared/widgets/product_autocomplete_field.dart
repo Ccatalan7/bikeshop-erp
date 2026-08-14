@@ -28,6 +28,7 @@ class ProductAutocompleteField extends StatefulWidget {
   final bool enabled;
   final bool showCost; // Show cost instead of price (for purchase invoices)
   final bool autoFocus; // Auto-focus when created
+  final bool preloadCatalog;
   final Future<Map<String, ProductCompatibilityAssessment>> Function(
       List<Product> products)? compatibilityResolver;
   final Object? compatibilityContextKey;
@@ -44,6 +45,7 @@ class ProductAutocompleteField extends StatefulWidget {
     this.enabled = true,
     this.showCost = false, // Default to showing price
     this.autoFocus = false,
+    this.preloadCatalog = true,
     this.compatibilityResolver,
     this.compatibilityContextKey,
   });
@@ -182,6 +184,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   int _compatibilityRequestSerial = 0;
   int _catalogRequestSerial = 0;
   String? _lastCompatibilitySignature;
+  bool _initialCatalogLoadRequested = false;
 
   ProductType? get _exclusiveProductTypeFilter {
     if (_filterShowServices && !_filterShowProducts) {
@@ -204,10 +207,13 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     _controller.text = widget.initialValue ?? '';
     _controller.text = widget.initialValue ?? '';
 
-    // Defer loading to avoid "setState() called during build" if service notifies synchronously
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _loadProducts();
-    });
+    if (widget.preloadCatalog || widget.autoFocus) {
+      // Defer loading to avoid "setState() called during build" if the
+      // service notifies synchronously.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _ensureInitialCatalogLoaded();
+      });
+    }
 
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
@@ -1355,6 +1361,18 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
     await _reloadProductsForCurrentQuery();
   }
 
+  void _ensureInitialCatalogLoaded() {
+    if (_initialCatalogLoadRequested) return;
+    _initialCatalogLoadRequested = true;
+    unawaited(
+      _loadProducts().onError((error, stackTrace) {
+        if (mounted) {
+          _initialCatalogLoadRequested = false;
+        }
+      }),
+    );
+  }
+
   Future<void> _reloadProductsForCurrentQuery() async {
     if (!mounted) return;
 
@@ -1462,6 +1480,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
         _hasUserInteracted = true;
       });
     }
+    _ensureInitialCatalogLoaded();
     // Show overlay when user explicitly taps the field
     if (_focusNode.hasFocus) {
       _showOverlay();

@@ -70,7 +70,7 @@ select ok((select pg_get_functiondef(function.oid)
   from pg_proc function join pg_namespace namespace
     on namespace.oid = function.pronamespace
   where namespace.nspname = 'assistant_runtime'
-    and function.proname = 'assistant_record_tool_receipt_v1'),
+    and function.proname = 'assistant_tool_receipt_contract_internal_v1'),
   'runtime receipts allowlist all four exact read tool names');
 select is(public.assistant_capabilities_internal_v2(
     'manager', 'manager', '{}'::jsonb) ? 'ai.read.accounting', true,

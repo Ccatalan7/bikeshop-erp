@@ -18,10 +18,11 @@ import '../../spreadsheets/services/spreadsheet_service.dart';
 import '../../storage/models/app_stored_file.dart';
 import '../../storage/services/app_file_storage_service.dart';
 import '../providers/email_provider.dart';
+import '../utils/email_html_sanitizer.dart';
 import '../utils/email_link_transform.dart';
 import 'mail_error_diagnostic_banner.dart';
 
-const int _emailBodyRendererVersion = 9;
+const int _emailBodyRendererVersion = 10;
 const String _emailReaderBaseUrl = 'https://mail.vinabike.local/';
 const bool _emailReaderDiagnosticsEnabled = false;
 
@@ -1925,7 +1926,9 @@ class _EmailBodyWebViewState extends State<_EmailBodyWebView> {
 
   String _buildBodyHtml() {
     final rawContent = linkifyBareEmailUrls(
-      (widget.email.content ?? 'Sin contenido.').trim(),
+      sanitizeEmailHtml(
+        (widget.email.content ?? 'Sin contenido.').trim(),
+      ),
     );
     if (_looksLikeEmailDocument(rawContent)) {
       _mailReaderDebug('build using full email document');
@@ -2173,7 +2176,9 @@ $_emailKeyboardBridgeScript
 
     if (!_useNativeWebView) {
       final rawWebContent = widget.email.content ?? '';
-      final renderedWebContent = linkifyBareEmailUrls(rawWebContent);
+      final renderedWebContent = linkifyBareEmailUrls(
+        sanitizeEmailHtml(rawWebContent),
+      );
       return ColoredBox(
         color: Colors.white,
         child: SingleChildScrollView(

@@ -144,12 +144,25 @@ class AIAssistantSessionService extends ChangeNotifier {
     final approval = card.approvalRef;
     return canSend &&
         approval != null &&
-        approval.action == AIAssistantApprovalAction.createTask &&
         approval.state == AIAssistantApprovalState.pending &&
-        card.kind == 'task_preview' &&
-        card.destination == AIAssistantDestination.tasks &&
+        _approvalCardMatchesAction(card, approval.action) &&
         _containsExactApprovalCard(card);
   }
+
+  bool _approvalCardMatchesAction(
+    AIAssistantActionCard card,
+    AIAssistantApprovalAction action,
+  ) =>
+      switch (action) {
+        AIAssistantApprovalAction.createTask => card.kind == 'task_preview' &&
+            card.destination == AIAssistantDestination.tasks,
+        AIAssistantApprovalAction.updateDiagnosis =>
+          card.kind == 'diagnosis_preview' &&
+              card.destination == AIAssistantDestination.workshopJobs,
+        AIAssistantApprovalAction.addWorkshopItem =>
+          card.kind == 'workshop_item_preview' &&
+              card.destination == AIAssistantDestination.workshopJobs,
+      };
 
   /// Tenant of the current authority, or null when there is none.
   String? get authorityTenantId => _scope.key?.tenantId;
@@ -446,10 +459,10 @@ class AIAssistantSessionService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Resolves one exact server-frozen task preview without sending another
+  /// Resolves one exact server-frozen action preview without sending another
   /// prompt or navigating. The gateway runtime is the only engine allowed to
   /// implement this optional command boundary.
-  Future<void> resolveTaskApproval(
+  Future<void> resolveApproval(
     AIAssistantActionCard card,
     AIAssistantApprovalDecision decision,
   ) async {
@@ -526,11 +539,21 @@ class AIAssistantSessionService extends ChangeNotifier {
       return false;
     }
     if (resolution.state == AIAssistantApprovalState.approved) {
-      return resolution.cards.length == 1 &&
-          resolution.cards.single.kind == 'task' &&
-          resolution.cards.single.destination == AIAssistantDestination.tasks &&
-          resolution.cards.single.approvalRef == null &&
-          resolution.cards.single.entityRef == null;
+      if (resolution.cards.length != 1 ||
+          resolution.cards.single.approvalRef != null) {
+        return false;
+      }
+      final result = resolution.cards.single;
+      return switch (approval.action) {
+        AIAssistantApprovalAction.createTask => result.kind == 'task' &&
+            result.destination == AIAssistantDestination.tasks &&
+            result.entityRef == null,
+        AIAssistantApprovalAction.updateDiagnosis ||
+        AIAssistantApprovalAction.addWorkshopItem =>
+          result.kind == 'job' &&
+              result.destination == AIAssistantDestination.workshopJobs &&
+              result.entityRef?.kind == AIAssistantEntityKind.workshopJob,
+      };
     }
     return resolution.cards.isEmpty;
   }

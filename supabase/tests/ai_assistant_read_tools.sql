@@ -18,6 +18,12 @@ select has_function('public', 'assistant_inspect_inventory_schema_v1',
 select has_function('public', 'assistant_search_inventory_v5',
   array['text','text','text','jsonb'],
   'typed-predicate inventory list RPC exists');
+select has_function('public', 'assistant_inspect_inventory_schema_v2',
+  array['text','text'],
+  'operational and technical capability discovery RPC exists');
+select has_function('public', 'assistant_search_inventory_v6',
+  array['text','text','text','jsonb','jsonb','text','text','integer','text'],
+  'typed inventory query RPC exists');
 select has_function('public', 'assistant_list_attention_items_v1', array['text'],
   'attention tool RPC exists');
 select has_function('public', 'assistant_search_workshop_jobs_v1',
@@ -544,6 +550,76 @@ select is(public.assistant_search_inventory_v5(
   '[{"field":"spindle_length_mm","operator":"gt","values":[125]}]'::jsonb
 ) #>> '{items,0,entityId}', 'a1710000-0000-4000-8000-000000000311',
   'the same typed primitive supports the opposite numeric comparison');
+select is(public.assistant_inspect_inventory_schema_v2(
+  'cámaras 29 con más de cinco unidades', 'Camaras'
+) #>> '{items,0,field}', 'stock',
+  'capability discovery exposes stock as a general operational numeric field');
+select is(public.assistant_inspect_inventory_schema_v2(
+  'cámaras 29 con más de cinco unidades', 'Camaras'
+) #>> '{items,0,operators}', 'eq,neq,lt,lte,gt,gte,between,in',
+  'operational discovery advertises exact numeric comparisons');
+select is(public.assistant_search_inventory_v6(
+  null, 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","operator":"eq","values":["29\""]}]'::jsonb,
+  '[{"field":"stock","operator":"gt","values":[5]}]'::jsonb,
+  'relevance', 'desc', 10, 'all_matches'
+) ->> 'resultCount', '1',
+  'a stock threshold composes with category, technical spec and availability');
+select is(public.assistant_search_inventory_v6(
+  null, 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","operator":"eq","values":["29\""]}]'::jsonb,
+  '[{"field":"stock","operator":"gt","values":[5]}]'::jsonb,
+  'relevance', 'desc', 10, 'all_matches'
+) #>> '{items,0,entityId}', 'a1710000-0000-4000-8000-000000000303',
+  'the stock threshold returns only the camera whose effective stock is greater than five');
+select is(public.assistant_search_inventory_v6(
+  null, 'Motores', 'any', '[]'::jsonb,
+  '[{"field":"price","operator":"between","values":[11000,13000]}]'::jsonb,
+  'relevance', 'desc', 10, 'all_matches'
+) ->> 'resultCount', '3',
+  'the same operational predicate primitive works for price in another category');
+select is(public.assistant_search_inventory_v6(
+  null, 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","operator":"eq","values":["29\""]}]'::jsonb,
+  '[]'::jsonb, 'stock', 'desc', 1, 'top_n'
+) #>> '{items,0,entityId}', 'a1710000-0000-4000-8000-000000000303',
+  'server-owned ordering returns the highest-stock matching product');
+select is(public.assistant_search_inventory_v6(
+  null, 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","operator":"eq","values":["29\""]}]'::jsonb,
+  '[]'::jsonb, 'stock', 'desc', 1, 'top_n'
+) ->> 'hasMore', 'false',
+  'an explicit top-N selection is complete even when more filtered rows exist');
+select is(public.assistant_search_inventory_v6(
+  null, 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","operator":"eq","values":["29\""]}]'::jsonb,
+  '[]'::jsonb, 'stock', 'desc', 1, 'top_n'
+) #>> '{items,0,matchedCount}', '2',
+  'metrics count the complete filtered set before the top-N limit');
+select is(public.assistant_search_inventory_v6(
+  null, 'Camaras', 'in_stock',
+  '[{"field":"wheel_size","operator":"eq","values":["29\""]}]'::jsonb,
+  '[]'::jsonb, 'stock', 'desc', 1, 'top_n'
+) #>> '{items,0,totalStock}', '8',
+  'metrics sum stock over the complete filtered set instead of the returned page');
+select throws_ok(
+  $$select public.assistant_search_inventory_v6(
+    null, 'Camaras', 'any', '[]'::jsonb,
+    '[{"field":"invented_metric","operator":"gt","values":[5]}]'::jsonb,
+    'relevance', 'desc', 10, 'all_matches'
+  )$$,
+  '22023', 'Invalid AI tool arguments',
+  'operational predicates reject invented fields'
+);
+select throws_ok(
+  $$select public.assistant_search_inventory_v6(
+    null, 'Camaras', 'any', '[]'::jsonb,
+    '[{"field":"stock","operator":"contains","values":[5]}]'::jsonb,
+    'relevance', 'desc', 10, 'all_matches'
+  )$$,
+  '22023', 'Invalid AI tool arguments',
+  'operational numeric fields reject text operators'
+);
 select is(public.assistant_search_inventory_v5(
   null, 'Camaras', 'low_stock',
   '[{"field":"wheel_size","operator":"eq","values":["29\""]}]'::jsonb

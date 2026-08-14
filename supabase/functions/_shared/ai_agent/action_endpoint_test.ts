@@ -11,6 +11,9 @@ const userId = "33333333-3333-4333-8333-333333333333";
 const approvalId = "44444444-4444-4444-8444-444444444444";
 const clientActionId = "55555555-5555-4555-8555-555555555555";
 const taskId = "66666666-6666-4666-8666-666666666666";
+const jobId = "77777777-7777-4777-8777-777777777777";
+const jobBikeId = "88888888-8888-4888-8888-888888888888";
+const jobItemId = "99999999-9999-4999-8999-999999999999";
 const authority: AgentAuthority = {
   tenantId,
   userId,
@@ -68,7 +71,7 @@ Deno.test("approved task uses only server read-back and yields one task card", a
   let parameters: JsonObject | null = null;
   const executor = createSupabaseAgentApprovalActionExecutor({
     rpc(name, next) {
-      assertEquals(name, "assistant_apply_task_approval_v1", "fixed RPC");
+      assertEquals(name, "assistant_apply_approval_v2", "fixed RPC");
       parameters = next;
       return Promise.resolve({
         authorityTenantId: tenantId,
@@ -76,7 +79,8 @@ Deno.test("approved task uses only server read-back and yields one task card", a
         approvalId,
         clientActionId,
         approvalState: "approved",
-        task: {
+        action: "create_task",
+        result: {
           entityId: taskId,
           title: "Llamar al cliente",
           description: "Confirmar retiro",
@@ -101,6 +105,71 @@ Deno.test("approved task uses only server read-back and yields one task card", a
   assertEquals(response.cards[0].approvalRef ?? null, null, "committed card has no approval");
 });
 
+Deno.test("approved workshop actions use exact read-back and open the affected job", async () => {
+  for (
+    const [action, result, expectedDescription] of [
+      [
+        "update_diagnosis",
+        {
+          entityId: jobId,
+          jobBikeId,
+          jobNumber: "PG-00420",
+          bikeLabel: "Trek Marlin 7",
+          field: "drivetrain.chain_wear_percent",
+          fieldLabel: "Desgaste de cadena",
+          newValue: "0.60",
+          updatedAt: "2026-08-14T01:00:00.000000Z",
+        },
+        "Desgaste de cadena • 0.60",
+      ],
+      [
+        "add_workshop_item",
+        {
+          entityId: jobId,
+          jobItemId,
+          jobBikeId,
+          jobNumber: "PG-00420",
+          bikeLabel: "Trek Marlin 7",
+          itemName: "Cambio de cadena",
+          itemType: "service",
+          quantity: 1,
+          unitPrice: 15000,
+          lineTotal: 15000,
+          invoiceNumber: "FV-00420",
+        },
+        "Cambio de cadena • Total línea $15.000",
+      ],
+    ] as const
+  ) {
+    const executor = createSupabaseAgentApprovalActionExecutor({
+      rpc() {
+        return Promise.resolve({
+          authorityTenantId: tenantId,
+          actorUserId: userId,
+          approvalId,
+          clientActionId,
+          approvalState: "approved",
+          action,
+          result,
+        });
+      },
+    });
+    const response = await executor.apply(
+      request(),
+      authority,
+      new AbortController().signal,
+    );
+    assertEquals(response.cards.length, 1, `${action} produces one card`);
+    assertEquals(response.cards[0].kind, "job", `${action} opens a job`);
+    assertEquals(response.cards[0].entityRef?.id, jobId, `${action} binds job UUID`);
+    assertEquals(
+      response.cards[0].description,
+      expectedDescription,
+      `${action} renders server read-back`,
+    );
+  }
+});
+
 Deno.test("discard and expiry are terminal and never fabricate task cards", async () => {
   for (const state of ["discarded", "expired"] as const) {
     const executor = createSupabaseAgentApprovalActionExecutor({
@@ -111,7 +180,8 @@ Deno.test("discard and expiry are terminal and never fabricate task cards", asyn
           approvalId,
           clientActionId,
           approvalState: state,
-          task: null,
+          action: "create_task",
+          result: null,
         });
       },
     });
@@ -134,7 +204,8 @@ Deno.test("approval response is authority-bound and upstream details stay closed
         approvalId,
         clientActionId,
         approvalState: "discarded",
-        task: null,
+        action: "create_task",
+        result: null,
       });
     },
   });
@@ -146,6 +217,31 @@ Deno.test("approval response is authority-bound and upstream details stay closed
       error.code === "approval_unavailable";
   }
   assertEquals(invalidResponse, true, "cross-tenant response rejected");
+
+  const malformedWrite = createSupabaseAgentApprovalActionExecutor({
+    rpc() {
+      return Promise.resolve({
+        authorityTenantId: tenantId,
+        actorUserId: userId,
+        approvalId,
+        clientActionId,
+        approvalState: "approved",
+        action: "update_diagnosis",
+        result: {
+          entityId: jobId,
+          claimedSuccess: true,
+        },
+      });
+    },
+  });
+  invalidResponse = false;
+  try {
+    await malformedWrite.apply(request(), authority, new AbortController().signal);
+  } catch (error) {
+    invalidResponse = error instanceof AgentApprovalActionError &&
+      error.code === "approval_unavailable";
+  }
+  assertEquals(invalidResponse, true, "unverified write read-back rejected");
 
   for (
     const [outcome, code] of [

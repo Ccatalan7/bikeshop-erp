@@ -75521,6 +75521,22 @@ comment on column public.suppliers.portal_password is
 \ir ../migrations/20260813214500_ai_assistant_capability_tool_receipts.sql
 \ir ../migrations/20260813215000_ai_assistant_tool_receipt_contract.sql
 
+-- Inventory comparisons such as stock, stock minimum and price use closed
+-- typed predicates instead of degrading numeric thresholds to availability.
+\ir ../migrations/20260813225000_ai_assistant_inventory_operational_predicates.sql
+
+-- Relative business-date analytics, relationship-aware workshop resolution
+-- and canonical diagnosis-field discovery for model-planned operations.
+\ir ../migrations/20260814010000_ai_assistant_temporal_workshop_reads.sql
+
+-- Diagnosis and catalog-backed workshop writes remain frozen previews until
+-- an explicit caller click applies and reads back the exact typed action.
+\ir ../migrations/20260814011000_ai_assistant_workshop_actions.sql
+
+-- Keep push mailbox identity and webhook evidence server-owned while released
+-- clients migrate from direct subscription-row upserts to the provider action.
+\ir ../migrations/20260814024000_harden_email_push_subscription_identity.sql
+
 -- Bootstrap-wide service-role grants above predate the notification ACL
 -- hardening. Preserve the production end state after every included migration.
 revoke all on function public.create_sales_payment_erp_notification()

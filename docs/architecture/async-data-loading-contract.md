@@ -200,6 +200,43 @@ adopción app-wide. En particular, cualquier cambio posterior que mezcle un
 snapshot completo con deltas realtime simultáneos debe añadir la regresión de
 interleaving del apartado 9 antes de ampliar o extraer el coordinador.
 
+### 6.1 Editores compuestos: verdad exacta antes que catálogos secundarios
+
+**Validado el 2026-08-13 en el editor de Trabajos.** Abrir un registro existente
+no autoriza a poner todos los catálogos que sus controles podrían usar en el
+camino bloqueante. El editor separa ahora dos conjuntos:
+
+- el agregado exacto que protege la edición —trabajo, estado financiero
+  vinculado, cliente, bicicletas, líneas, productos referenciados y metadatos
+  de servicio de esas líneas— se lee antes de habilitar el formulario y falla
+  cerrado si queda incompleto;
+- los universos de selección que no explican el registro actual —todos los
+  clientes, una vista previa de productos, estados alternativos, componentes y
+  chat colapsado— se cargan sólo cuando el operador abre el control que los
+  necesita, o desde una caché elegible ya disponible.
+
+Una precarga invisible de miles de filas no es «background refresh» útil si
+compite por red, RPC o CPU con el primer estado operable. Un control colapsado
+o sin foco no inicia su consulta por existir en el árbol. Al abrirse, toma su
+propio ticket/request serial y conserva sus estados de carga/error locales.
+
+Cuando cada fila del agregado necesita la misma metadata relacional, el owner
+agrupa primero las identidades y carga mappings, targets y preguntas por lote.
+No se permite un waterfall por fila. La regresión mínima debe probar tanto que
+el editor existente retorna antes del catálogo amplio como que los consumidores
+dormidos no ejecutan lecturas antes de una interacción explícita.
+
+Referencias vigentes:
+
+- `lib/modules/bikeshop/pages/mechanic_job_form_page.dart`
+- `lib/modules/bikeshop/services/service_wizard_service.dart`
+- `lib/shared/widgets/product_autocomplete_field.dart`
+- `lib/modules/messaging/widgets/entity_chat_sidebar.dart`
+- `test/unit/mechanic_job_editor_loading_contract_test.dart`
+- `test/unit/service_wizard_batch_loading_test.dart`
+- `test/widgets/product_autocomplete_field_test.dart`
+- `test/widgets/entity_chat_sidebar_deferred_loading_test.dart`
+
 ## 7. Antipatrones que una revisión debe rechazar
 
 - dos `initState`/listener/post-frame callbacks que llaman la misma carga sin

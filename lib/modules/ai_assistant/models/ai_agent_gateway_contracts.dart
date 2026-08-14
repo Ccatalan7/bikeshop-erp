@@ -271,11 +271,17 @@ class AIAgentGatewayApprovalResponse {
           throw const AIAgentGatewayContractException(),
     ];
     if (state == AIAssistantApprovalState.approved) {
-      if (cards.length != 1 ||
-          cards.single.kind != 'task' ||
-          cards.single.destination != AIAssistantDestination.tasks ||
-          cards.single.approvalRef != null ||
-          cards.single.entityRef != null) {
+      if (cards.length != 1 || cards.single.approvalRef != null) {
+        throw const AIAgentGatewayContractException();
+      }
+      final card = cards.single;
+      final isCommittedTask = card.kind == 'task' &&
+          card.destination == AIAssistantDestination.tasks &&
+          card.entityRef == null;
+      final isCommittedWorkshopAction = card.kind == 'job' &&
+          card.destination == AIAssistantDestination.workshopJobs &&
+          card.entityRef?.kind == AIAssistantEntityKind.workshopJob;
+      if (!isCommittedTask && !isCommittedWorkshopAction) {
         throw const AIAgentGatewayContractException();
       }
     } else if (cards.isNotEmpty) {
@@ -384,9 +390,16 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
   }
   final kind = _requiredBoundedText(json['kind'], maxBytes: 32);
   final expectedKind = _kindForDestination[destination];
-  final isTaskPreview =
-      destination == AIAssistantDestination.tasks && kind == 'task_preview';
-  if (expectedKind != kind && !isTaskPreview) {
+  final previewAction = switch ((destination, kind)) {
+    (AIAssistantDestination.tasks, 'task_preview') =>
+      AIAssistantApprovalAction.createTask,
+    (AIAssistantDestination.workshopJobs, 'diagnosis_preview') =>
+      AIAssistantApprovalAction.updateDiagnosis,
+    (AIAssistantDestination.workshopJobs, 'workshop_item_preview') =>
+      AIAssistantApprovalAction.addWorkshopItem,
+    _ => null,
+  };
+  if (expectedKind != kind && previewAction == null) {
     throw const AIAgentGatewayContractException();
   }
 
@@ -434,6 +447,8 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     );
     final action = switch (approvalJson['action']) {
       'create_task' => AIAssistantApprovalAction.createTask,
+      'update_diagnosis' => AIAssistantApprovalAction.updateDiagnosis,
+      'add_workshop_item' => AIAssistantApprovalAction.addWorkshopItem,
       _ => null,
     };
     final state = _approvalStateFromWire(approvalJson['state']);
@@ -447,11 +462,13 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
       state: state,
     );
   }
-  if (isTaskPreview) {
+  if (previewAction != null) {
     // The canonical transcript updates this same preview after a decision.
     // Terminal previews are valid history; only the UI/action engine decides
     // that `pending` is actionable.
-    if (entityRef != null || approvalRef == null) {
+    if (entityRef != null ||
+        approvalRef == null ||
+        approvalRef.action != previewAction) {
       throw const AIAgentGatewayContractException();
     }
   } else if (approvalRef != null) {

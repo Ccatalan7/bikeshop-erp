@@ -2989,7 +2989,10 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  Future<MechanicJob?> getJobById(String id) async {
+  Future<MechanicJob?> getJobById(
+    String id, {
+    bool includeOperationalProjections = true,
+  }) async {
     try {
       if (id.isEmpty) return null;
 
@@ -3006,12 +3009,22 @@ class BikeshopService extends ChangeNotifier {
           .maybeSingle();
 
       if (data == null) return null;
-      var hydrated = await _hydrateJobSubjects([
-        MechanicJob.fromJson(data),
+      final job = MechanicJob.fromJson(data);
+      final subjectHydration = _hydrateJobSubjects([job]);
+      if (!includeOperationalProjections) {
+        return (await subjectHydration).first;
+      }
+
+      final hydratedSlices = await Future.wait<List<MechanicJob>>([
+        subjectHydration,
+        _hydrateServiceWarranties([job]),
+        _hydrateJobTimeMetrics([job]),
       ]);
-      hydrated = await _hydrateServiceWarranties(hydrated);
-      hydrated = await _hydrateJobTimeMetrics(hydrated);
-      return hydrated.isNotEmpty ? hydrated.first : null;
+      return job.copyWith(
+        subjectData: hydratedSlices[0].first.subjectData,
+        serviceWarranty: hydratedSlices[1].first.serviceWarranty,
+        timeMetrics: hydratedSlices[2].first.timeMetrics,
+      );
     } catch (e) {
       if (kDebugMode) print('Error fetching job: $e');
       rethrow;

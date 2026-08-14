@@ -11,8 +11,11 @@ const operationalRead = "ai.read.operational";
 const salesRead = "ai.read.sales";
 const purchasesRead = "ai.read.purchases";
 const accountingRead = "ai.read.accounting";
+const workshopWrite = "ai.write.workshop";
 const publicResearchToolName = "research_public_web";
 const prepareTaskToolName = "prepare_task";
+const prepareDiagnosisUpdateToolName = "prepare_diagnosis_update";
+const prepareWorkshopItemToolName = "prepare_workshop_item";
 const inventorySchemaToolName = "inspect_inventory_schema";
 const capabilityGapToolName = "report_capability_gap";
 
@@ -101,6 +104,18 @@ export class AgentToolRegistry {
     if (call.name === prepareTaskToolName) {
       validatePrepareTaskProjection(call.arguments, status);
     }
+    if (call.name === prepareDiagnosisUpdateToolName) {
+      validatePrepareDiagnosisUpdateProjection(call.arguments, status);
+    }
+    if (call.name === prepareWorkshopItemToolName) {
+      validatePrepareWorkshopItemProjection(call.arguments, status);
+    }
+    if (call.name === "get_workshop_job_context") {
+      validateWorkshopJobContextProjection(call.arguments, status);
+    }
+    if (call.name === "analyze_sales_period") {
+      validateSalesPeriodProjection(call.arguments, status);
+    }
   }
 
   #requireAllowed(
@@ -142,7 +157,7 @@ const inventorySearchSchema: StrictJsonSchema = {
       minLength: 1,
       maxLength: 160,
       description:
-        'Categoría canónica del catálogo, por ejemplo "Cámaras". El backend la resuelve contra product_categories y expande sólo su category_tech_mappings. Usa null únicamente si la petición identifica un producto pero no una familia/categoría.',
+        'Categoría canónica del catálogo, por ejemplo "Cámaras". El backend la resuelve contra product_categories y expande sólo su category_tech_mappings. Usa null para una identidad concreta o una consulta acotada sobre todo el inventario, como un top-N o un resumen general.',
     },
     availability: enumProperty(
       ["any", "in_stock", "low_stock", "out_of_stock"],
@@ -151,6 +166,37 @@ const inventorySearchSchema: StrictJsonSchema = {
     presentation: enumProperty(
       ["answer", "open_list"],
       "Usa open_list sólo cuando abrir el listado filtrado completa una petición explícita de buscar, mostrar, listar o abrir productos. Usa answer para preguntas, conteos, comparaciones o resúmenes.",
+    ),
+    sort: {
+      type: "object",
+      description:
+        "Orden server-owned de la selección. relevance conserva el ranking de identidad; los demás campos permiten ordenar de forma exacta sin pedir al modelo que reordene texto.",
+      properties: {
+        field: {
+          type: "string",
+          enum: ["relevance", "name", "stock", "minimum_stock", "price"],
+          description: "Campo cerrado por el cual ordenar los productos filtrados.",
+        },
+        direction: {
+          type: "string",
+          enum: ["asc", "desc"],
+          description:
+            "Dirección exacta. relevance sólo admite desc; conserva asc/desc literalmente para cantidades, precios y nombre.",
+        },
+      },
+      required: ["field", "direction"],
+      additionalProperties: false,
+    },
+    limit: {
+      type: "integer",
+      minimum: 1,
+      maximum: 10,
+      description:
+        "Cantidad máxima de filas. Usa 10 salvo que el operador pida explícitamente una cantidad menor.",
+    },
+    selectionMode: enumProperty(
+      ["all_matches", "top_n"],
+      "Usa top_n sólo cuando el operador pide explícitamente los N mayores/menores o una cantidad cerrada; all_matches mantiene hasMore si el límite trunca coincidencias.",
     ),
     technicalPredicates: {
       type: "array",
@@ -185,8 +231,51 @@ const inventorySearchSchema: StrictJsonSchema = {
         additionalProperties: false,
       },
     },
+    operationalPredicates: {
+      type: "array",
+      minItems: 0,
+      maxItems: 6,
+      description:
+        "Comparaciones exactas sobre campos operativos autorizados del inventario. No sustituyas un umbral numérico por availability: stock es la existencia disponible efectiva, minimum_stock es el mínimo configurado y price es el precio de venta. Usa [] cuando no exista una restricción operativa.",
+      items: {
+        type: "object",
+        properties: {
+          field: {
+            type: "string",
+            enum: ["stock", "minimum_stock", "price"],
+            description: "Campo operativo exacto anunciado por inspect_inventory_schema.",
+          },
+          operator: {
+            type: "string",
+            enum: ["eq", "neq", "lt", "lte", "gt", "gte", "between", "in"],
+            description:
+              "Comparador numérico exacto; conserva estrictamente mayor/menor versus mayor/menor o igual.",
+          },
+          values: {
+            type: "array",
+            minItems: 1,
+            maxItems: 10,
+            items: { type: "number" },
+            description:
+              "Umbral numérico: between usa exactamente dos valores, in admite varios y el resto exactamente uno.",
+          },
+        },
+        required: ["field", "operator", "values"],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["query", "category", "availability", "presentation", "technicalPredicates"],
+  required: [
+    "query",
+    "category",
+    "availability",
+    "presentation",
+    "sort",
+    "limit",
+    "selectionMode",
+    "technicalPredicates",
+    "operationalPredicates",
+  ],
   additionalProperties: false,
 };
 
@@ -374,6 +463,213 @@ const cashAndReceivablesSchema: StrictJsonSchema = {
   additionalProperties: false,
 };
 
+const salesPeriodSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    basis: enumProperty(
+      ["issued", "collected"],
+      "issued agrupa facturas por fecha de emisión; collected agrupa pagos efectivos no eliminados por fecha de cobro.",
+    ),
+    rangeMode: enumProperty(
+      ["relative", "absolute"],
+      "relative deja que el servidor resuelva límites desde la fecha local del negocio; absolute usa las dos fechas explícitas.",
+    ),
+    relativePeriod: {
+      type: ["string", "null"],
+      enum: [
+        "today",
+        "yesterday",
+        "this_week",
+        "last_week",
+        "last_7_days",
+        "this_month",
+        "last_month",
+        "this_year",
+        "last_year",
+        null,
+      ],
+      description: "Período relativo server-owned, o null cuando rangeMode es absolute.",
+    },
+    startDate: {
+      type: ["string", "null"],
+      minLength: 10,
+      maxLength: 10,
+      description:
+        "Primer día inclusivo YYYY-MM-DD sólo para rangeMode absolute; null para relative.",
+    },
+    endDate: {
+      type: ["string", "null"],
+      minLength: 10,
+      maxLength: 10,
+      description:
+        "Último día inclusivo YYYY-MM-DD sólo para rangeMode absolute; null para relative.",
+    },
+    invoiceStatus: enumProperty(
+      ["any", "open", "paid", "cancelled"],
+      "Estado comercial opcional aplicado a las facturas; any conserva todos los documentos válidos para la base elegida.",
+    ),
+  },
+  required: [
+    "basis",
+    "rangeMode",
+    "relativePeriod",
+    "startDate",
+    "endDate",
+    "invoiceStatus",
+  ],
+  additionalProperties: false,
+};
+
+const workshopJobContextSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    jobRef: {
+      type: "string",
+      minLength: 36,
+      maxLength: 36,
+      description:
+        "Referencia opaca jobRef devuelta por search_workshop_jobs; nunca un UUID, nombre o folio inventado.",
+    },
+  },
+  required: ["jobRef"],
+  additionalProperties: false,
+};
+
+const diagnosisSchemaInspectionSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    section: enumProperty(
+      [
+        "any",
+        "suspension",
+        "drivetrain",
+        "front_brake",
+        "rear_brake",
+        "front_wheel",
+        "rear_wheel",
+        "bottom_bracket",
+        "cockpit",
+      ],
+      "Sección estructurada del diagnóstico que se desea inspeccionar.",
+    ),
+  },
+  required: ["section"],
+  additionalProperties: false,
+};
+
+const prepareDiagnosisUpdateSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    jobRef: {
+      type: "string",
+      minLength: 36,
+      maxLength: 36,
+      description:
+        "Referencia opaca jobRef del trabajo obtenida desde search_workshop_jobs/get_workshop_job_context.",
+    },
+    jobBikeId: {
+      type: "string",
+      minLength: 36,
+      maxLength: 36,
+      description:
+        "UUID exacto de la bicicleta dentro del trabajo obtenido desde get_workshop_job_context.",
+    },
+    field: {
+      type: "string",
+      minLength: 3,
+      maxLength: 80,
+      description: "Ruta exacta section.field devuelta por inspect_diagnosis_schema.",
+    },
+    numberValue: {
+      type: ["number", "null"],
+      description: "Valor numérico exacto, o null cuando el campo inspeccionado es textual.",
+    },
+    textValue: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 1000,
+      description:
+        "Clave canónica o nota exacta, o null cuando el campo inspeccionado es numérico.",
+    },
+    unit: enumProperty(
+      ["none", "display_fraction", "percent", "millimeter"],
+      "Unidad exacta anunciada por inspect_diagnosis_schema. display_fraction representa lecturas de calibre 0..1 y el servidor las normaliza al almacenamiento porcentual 0..100.",
+    ),
+    expectedUpdatedAt: {
+      type: ["string", "null"],
+      minLength: 20,
+      maxLength: 40,
+      description:
+        "Revisión exacta diagnosisUpdatedAt devuelta por get_workshop_job_context; null sólo si esa revisión era null.",
+    },
+  },
+  required: [
+    "jobRef",
+    "jobBikeId",
+    "field",
+    "numberValue",
+    "textValue",
+    "unit",
+    "expectedUpdatedAt",
+  ],
+  additionalProperties: false,
+};
+
+const prepareWorkshopItemSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    jobRef: {
+      type: "string",
+      minLength: 36,
+      maxLength: 36,
+      description:
+        "Referencia opaca jobRef del trabajo obtenida desde search_workshop_jobs/get_workshop_job_context.",
+    },
+    jobBikeId: {
+      type: ["string", "null"],
+      minLength: 36,
+      maxLength: 36,
+      description:
+        "Bicicleta exacta del trabajo, o null sólo cuando la línea es general para todo el trabajo.",
+    },
+    catalogItemRef: {
+      type: "string",
+      minLength: 36,
+      maxLength: 36,
+      description:
+        "Referencia opaca catalogItemRef devuelta por search_inventory. El servidor conserva el UUID, nombre, tipo y precio.",
+    },
+    quantity: {
+      type: "number",
+      minimum: 0.01,
+      maximum: 999,
+      description: "Cantidad u horas exactas que se propondrán.",
+    },
+    notes: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 500,
+      description: "Detalle opcional de la línea; null si el catálogo basta.",
+    },
+    expectedJobUpdatedAt: {
+      type: "string",
+      minLength: 20,
+      maxLength: 40,
+      description:
+        "Revisión exacta jobUpdatedAt devuelta por get_workshop_job_context para evitar sobrescribir cambios concurrentes.",
+    },
+  },
+  required: [
+    "jobRef",
+    "jobBikeId",
+    "catalogItemRef",
+    "quantity",
+    "notes",
+    "expectedJobUpdatedAt",
+  ],
+  additionalProperties: false,
+};
+
 const conversationsSchema: StrictJsonSchema = {
   type: "object",
   properties: {
@@ -491,13 +787,13 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
   return new AgentToolRegistry([
     readTool(
       inventorySchemaToolName,
-      "Descubre el árbol real de categorías, familias técnicas, campos de ficha, tipos, unidades, operadores y cobertura de datos antes de construir una búsqueda técnica de inventario. No adivines claves desde la frase del operador: llama primero a esta herramienta y usa exactamente su contrato.",
+      "Descubre el árbol real de categorías, familias técnicas y campos operativos/técnicos filtrables, con tipos, unidades, operadores y cobertura de datos. No adivines claves desde la frase del operador: llama primero a esta herramienta y usa exactamente su contrato.",
       inventorySchemaInspectionSchema,
       operationalRead,
     ),
     readTool(
       "search_inventory",
-      "Busca productos, precio y stock en el inventario autorizado. Separa categoría, identidad y especificaciones: category se valida contra el árbol real y sus descendientes; query queda sólo para identidad/contexto; restricciones técnicas van en technicalPredicates con las claves, tipos y operadores devueltos por inspect_inventory_schema. La base aplica categoría, ficha técnica y disponibilidad antes de devolver IDs. Separa una respuesta informativa de una petición explícita de abrir el listado y nunca enumeres un conjunto distinto del devuelto por la herramienta.",
+      "Consulta productos, precio y stock en el inventario autorizado. Separa categoría, identidad, especificaciones y magnitudes operativas: category se valida contra el árbol real y sus descendientes; query queda sólo para identidad/contexto; restricciones de ficha van en technicalPredicates y comparaciones de stock, stock mínimo o precio van en operationalPredicates. availability expresa estados, nunca reemplaza un umbral numérico. La base aplica todos los predicados antes de ordenar y limitar; cada fila incluye métricas verificadas del conjunto completo filtrado para responder conteos, stock total, valor de inventario y mínimos/máximos/promedio de precio sin sumar una página truncada. Usa sort y selectionMode para top-N. Separa una respuesta informativa de una petición explícita de abrir el listado y nunca enumeres un conjunto distinto del devuelto por la herramienta.",
       inventorySearchSchema,
       operationalRead,
     ),
@@ -521,8 +817,20 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     readTool(
       "search_workshop_jobs",
-      "Consulta trabajos autorizados combinando texto opcional, horizonte, estado y prioridad.",
+      "Consulta trabajos autorizados combinando texto opcional, horizonte, estado y prioridad. La identidad relacional incluye cliente, todas las bicicletas y la factura vinculada; úsala para resolver primero el trabajo exacto antes de cualquier acción.",
       workshopQuerySchema,
+      operationalRead,
+    ),
+    readTool(
+      "get_workshop_job_context",
+      "Lee el contexto exacto de un trabajo ya resuelto: sus bicicletas internas, factura vinculada, revisión concurrente y si cada acción puede prepararse. No acepta nombres ni hace coincidencias aproximadas.",
+      workshopJobContextSchema,
+      operationalRead,
+    ),
+    readTool(
+      "inspect_diagnosis_schema",
+      "Descubre los campos escalares reales del diagnóstico de bicicleta, sus tipos, unidades y valores canónicos. Debes llamarla antes de preparar una actualización de diagnóstico y reutilizar exactamente field y unit.",
+      diagnosisSchemaInspectionSchema,
       operationalRead,
     ),
     readTool(
@@ -568,6 +876,12 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
       accountingRead,
     ),
     readTool(
+      "analyze_sales_period",
+      "Calcula sobre un intervalo inclusivo de fechas del negocio cuántas facturas se emitieron o recibieron cobros, el monto total y la factura de mayor monto. collected usa eventos reales de sales_payments y cuenta facturas distintas; no infiere cobro desde el estado de la factura.",
+      salesPeriodSchema,
+      salesRead,
+    ),
+    readTool(
       "search_conversations",
       "Busca conversaciones autorizadas por canal, estado y contexto sin leer contenido, nombres ni contactos.",
       conversationsSchema,
@@ -578,6 +892,18 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
       "Prepara una tarea exacta y durable para revisión. Nunca la crea: la escritura sólo ocurre después de una confirmación explícita en la tarjeta.",
       prepareTaskSchema,
       operationalRead,
+    ),
+    readTool(
+      prepareDiagnosisUpdateToolName,
+      "Prepara un cambio tipado sobre un campo real del diagnóstico de una bicicleta ya resuelta. Nunca modifica el trabajo durante el turno del modelo: congela valor anterior, valor nuevo y revisión; sólo la confirmación explícita ejecuta y verifica el cambio.",
+      prepareDiagnosisUpdateSchema,
+      workshopWrite,
+    ),
+    readTool(
+      prepareWorkshopItemToolName,
+      "Prepara agregar un producto o servicio de catálogo a un trabajo exacto y, cuando corresponde, a su factura vinculada. El servidor toma nombre, tipo y precio del catálogo, revalida bloqueos financieros y sólo escribe tras confirmación explícita.",
+      prepareWorkshopItemSchema,
+      workshopWrite,
     ),
     localTool(
       capabilityGapToolName,
@@ -704,9 +1030,111 @@ function validatePrepareTaskProjection(
   }
 }
 
+function validatePrepareDiagnosisUpdateProjection(
+  argumentsValue: Readonly<Record<string, JsonValue>>,
+  status: 400 | 502,
+): void {
+  const numberValue = argumentsValue.numberValue;
+  const textValue = argumentsValue.textValue;
+  const expectedUpdatedAt = argumentsValue.expectedUpdatedAt;
+  if (
+    (typeof numberValue === "number") === (typeof textValue === "string") ||
+    !isUuid(argumentsValue.jobRef) ||
+    !isUuid(argumentsValue.jobBikeId) ||
+    (typeof expectedUpdatedAt === "string" && !isIsoInstant(expectedUpdatedAt))
+  ) {
+    throw new ToolRegistryError(
+      status,
+      "invalid_tool_arguments",
+      "AI tool arguments are invalid",
+    );
+  }
+}
+
+function validatePrepareWorkshopItemProjection(
+  argumentsValue: Readonly<Record<string, JsonValue>>,
+  status: 400 | 502,
+): void {
+  if (
+    !isUuid(argumentsValue.jobRef) ||
+    !(argumentsValue.jobBikeId === null || isUuid(argumentsValue.jobBikeId)) ||
+    !isUuid(argumentsValue.catalogItemRef) ||
+    typeof argumentsValue.expectedJobUpdatedAt !== "string" ||
+    !isIsoInstant(argumentsValue.expectedJobUpdatedAt)
+  ) {
+    throw new ToolRegistryError(
+      status,
+      "invalid_tool_arguments",
+      "AI tool arguments are invalid",
+    );
+  }
+}
+
+function validateWorkshopJobContextProjection(
+  argumentsValue: Readonly<Record<string, JsonValue>>,
+  status: 400 | 502,
+): void {
+  if (!isUuid(argumentsValue.jobRef)) {
+    throw new ToolRegistryError(
+      status,
+      "invalid_tool_arguments",
+      "AI tool arguments are invalid",
+    );
+  }
+}
+
+function validateSalesPeriodProjection(
+  argumentsValue: Readonly<Record<string, JsonValue>>,
+  status: 400 | 502,
+): void {
+  const start = argumentsValue.startDate;
+  const end = argumentsValue.endDate;
+  const mode = argumentsValue.rangeMode;
+  const relative = argumentsValue.relativePeriod;
+  const relativePeriods = [
+    "today",
+    "yesterday",
+    "this_week",
+    "last_week",
+    "last_7_days",
+    "this_month",
+    "last_month",
+    "this_year",
+    "last_year",
+  ];
+  if (
+    !["relative", "absolute"].includes(String(mode)) ||
+    (mode === "relative" &&
+      (!relativePeriods.includes(String(relative)) || start !== null || end !== null)) ||
+    (mode === "absolute" &&
+      (relative !== null || typeof start !== "string" || typeof end !== "string" ||
+        !isIsoDate(start) || !isIsoDate(end) || start > end ||
+        (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) /
+              86_400_000 > 366))
+  ) {
+    throw new ToolRegistryError(
+      status,
+      "invalid_tool_arguments",
+      "AI tool arguments are invalid",
+    );
+  }
+}
+
+function isUuid(value: JsonValue | undefined): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(value);
+}
+
 function isIsoInstant(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
     Number.isFinite(Date.parse(value));
+}
+
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function invalidPublicResearchArguments(status: 400 | 502): ToolRegistryError {

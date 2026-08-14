@@ -11,6 +11,7 @@ export const agentCapabilities = [
   "ai.read.sales",
   "ai.read.purchases",
   "ai.read.accounting",
+  "ai.write.workshop",
 ] as const;
 
 export type AgentCapability = (typeof agentCapabilities)[number];
@@ -188,7 +189,7 @@ export type AgentApprovalState = (typeof agentApprovalStates)[number];
 
 export interface AgentApprovalRef {
   id: string;
-  action: "create_task";
+  action: "create_task" | "update_diagnosis" | "add_workshop_item";
   state: AgentApprovalState;
   expiresAt: string;
 }
