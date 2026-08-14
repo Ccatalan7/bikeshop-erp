@@ -17,6 +17,10 @@ class MailAccountManager extends ChangeNotifier {
   static const int _searchWarmPageLimit = 5;
   static const int _searchWarmTargetResults = 25;
   static const Duration _startupStepTimeout = Duration(seconds: 8);
+  static const List<Duration> _transientReadRetryDelays = [
+    Duration(milliseconds: 400),
+    Duration(milliseconds: 1200),
+  ];
   static const String _cacheUserScopePreference = 'mail_cache_user_scope';
 
   // Singleton pattern
@@ -81,6 +85,11 @@ class MailAccountManager extends ChangeNotifier {
   int _lifecycleEpoch = 0;
   Future<void>? _sessionTransitionFuture;
   String? _pendingSessionUserId;
+
+  /// Reemplaza solamente la espera de reintentos de lectura en pruebas. La
+  /// política y el número de intentos siguen siendo los de producción.
+  @visibleForTesting
+  Future<void> Function(Duration delay)? debugTransientReadRetryWaitOverride;
 
   /// Filter: null = all, 'gmail' = only gmail, 'zoho' = only zoho
   String? _providerFilter;
@@ -266,7 +275,6 @@ class MailAccountManager extends ChangeNotifier {
       if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
       if (cached.isNotEmpty) {
         _unifiedEmails = cached;
-        _lastFetch = DateTime.now();
         debugPrint(
             '📧 [MailManager] Loaded ${cached.length} emails from cache');
         notifyListeners();
@@ -442,6 +450,7 @@ class MailAccountManager extends ChangeNotifier {
   }) async {
     if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
     final previousKeys = _unifiedEmails.map(_emailKey).toSet();
+    final previousNewestByProvider = _newestReceivedByProvider(_unifiedEmails);
     MailNotificationGate.shared.rememberInboxBaseline(previousKeys);
     final shouldNotifyNewMail = background && previousKeys.isNotEmpty;
 
@@ -463,12 +472,13 @@ class MailAccountManager extends ChangeNotifier {
           final emails = await _fetchInboxForRefresh(
             provider: provider,
             knownEmails: knownEmails,
-            background: background,
+            epoch: epoch,
+            expectedUserId: expectedUserId,
           );
           if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
           allEmails.addAll(
             background
-                ? _reconcileProviderFirstPage(
+                ? _reconcileProviderFetchedWindow(
                     provider: provider,
                     fetched: emails,
                   )
@@ -489,10 +499,16 @@ class MailAccountManager extends ChangeNotifier {
       _unifiedEmails = _preservePendingReadStatuses(
         _dedupeAndSort(allEmails),
       );
-      _lastFetch = DateTime.now();
+      if (failedProviders.isEmpty) {
+        _lastFetch = DateTime.now();
+      }
 
       if (shouldNotifyNewMail) {
-        _emitNewEmailNotifications(_unifiedEmails, previousKeys);
+        _emitNewEmailNotifications(
+          _unifiedEmails,
+          previousKeys,
+          previousNewestByProvider,
+        );
       }
       MailNotificationGate.shared.rememberInboxBaseline(
         _unifiedEmails.map(_emailKey),
@@ -533,41 +549,98 @@ class MailAccountManager extends ChangeNotifier {
     }
   }
 
-  /// A foreground/manual refresh reconciles at least the number of rows that
-  /// are already loaded, so messages moved or deleted on another device do not
-  /// remain as ghosts. Background refreshes stay bounded to the newest page;
-  /// [_reconcileProviderFirstPage] replaces that authoritative window while
-  /// preserving genuinely older loaded rows.
+  /// Every refresh reconciles at least the number of rows already loaded for
+  /// the provider. Read/unread is provider-owned state: limiting background
+  /// refreshes to the newest page leaves older cached rows permanently stale
+  /// on a second device. The fetched window may grow to a page boundary; rows
+  /// genuinely older than that window remain preserved by
+  /// [_reconcileProviderFetchedWindow].
   Future<List<Email>> _fetchInboxForRefresh({
     required EmailProvider provider,
     required List<Email> knownEmails,
-    required bool background,
+    required int epoch,
+    required String? expectedUserId,
   }) async {
-    final targetCount = background
-        ? inboxPageSize
-        : (knownEmails.length > inboxPageSize
-            ? knownEmails.length
-            : inboxPageSize);
+    final knownKeys = knownEmails.map(_emailKey).toSet();
+    final oldestKnown = knownEmails.isEmpty
+        ? null
+        : knownEmails
+            .map((email) => email.receivedTime)
+            .reduce((left, right) => left.isBefore(right) ? left : right);
     final fetched = <Email>[];
 
     while (true) {
-      final page = await provider.getMessages(
-        folder: MailFolder.inbox,
-        limit: inboxPageSize,
+      final page = await _getInboxPageWithRetry(
+        provider: provider,
         start: fetched.length,
         knownEmails: knownEmails,
+        epoch: epoch,
+        expectedUserId: expectedUserId,
       );
+      if (!_isCurrentLifecycle(epoch, expectedUserId)) return fetched;
       fetched.addAll(page);
 
-      if (background ||
-          page.isEmpty ||
-          fetched.length >= targetCount ||
+      final fetchedKeys = fetched.map(_emailKey).toSet();
+      final allKnownRowsSeen = knownKeys.isNotEmpty &&
+          knownKeys.every((knownKey) => fetchedKeys.contains(knownKey));
+      final oldestFetched = fetched.isEmpty
+          ? null
+          : fetched
+              .map((email) => email.receivedTime)
+              .reduce((left, right) => left.isBefore(right) ? left : right);
+      final crossedKnownWindow = oldestKnown != null &&
+          oldestFetched != null &&
+          oldestFetched.isBefore(oldestKnown);
+      final coveredRequestedWindow = knownKeys.isEmpty
+          ? fetched.length >= inboxPageSize
+          : allKnownRowsSeen || crossedKnownWindow;
+
+      if (page.isEmpty ||
+          coveredRequestedWindow ||
           !provider.hasMoreIn(MailFolder.inbox)) {
         break;
       }
     }
 
     return _dedupeAndSort(fetched);
+  }
+
+  Future<List<Email>> _getInboxPageWithRetry({
+    required EmailProvider provider,
+    required int start,
+    required List<Email> knownEmails,
+    required int epoch,
+    required String? expectedUserId,
+  }) async {
+    for (var attempt = 0;; attempt++) {
+      try {
+        return await provider.getMessages(
+          folder: MailFolder.inbox,
+          limit: inboxPageSize,
+          start: start,
+          knownEmails: knownEmails,
+        );
+      } catch (error) {
+        final canRetry = attempt < _transientReadRetryDelays.length &&
+            _isCurrentLifecycle(epoch, expectedUserId) &&
+            _isTransientProviderReadFailure(provider, error);
+        if (!canRetry) rethrow;
+
+        final delay = _transientReadRetryDelays[attempt];
+        debugPrint(
+          '📧 [MailManager] Retrying ${provider.providerId} inbox page '
+          '${attempt + 1}/${_transientReadRetryDelays.length} after a '
+          'transient network failure',
+        );
+        final waitOverride = debugTransientReadRetryWaitOverride;
+        if (waitOverride == null) {
+          await Future<void>.delayed(delay);
+        } else {
+          await waitOverride(delay);
+        }
+        if (!_isCurrentLifecycle(epoch, expectedUserId)) rethrow;
+      }
+    }
   }
 
   /// Refresh in background (for when returning to mail page)
@@ -806,7 +879,7 @@ class MailAccountManager extends ChangeNotifier {
         .toList(growable: false);
   }
 
-  List<Email> _reconcileProviderFirstPage({
+  List<Email> _reconcileProviderFetchedWindow({
     required EmailProvider provider,
     required List<Email> fetched,
   }) {
@@ -878,14 +951,14 @@ class MailAccountManager extends ChangeNotifier {
     }
 
     String providerDetail(EmailProvider provider) {
-      final detail = provider.error?.trim();
+      final detail = _providerErrorDetailForUser(provider);
       if (detail == null || detail.isEmpty) return provider.displayName;
       return '${provider.displayName}: $detail';
     }
 
     if (providers.length == 1) {
       final provider = providers.first;
-      final detail = provider.error?.trim();
+      final detail = _providerErrorDetailForUser(provider);
       if (detail == null || detail.isEmpty) {
         return withSuffix('$singleAction ${provider.displayName}.');
       }
@@ -894,6 +967,43 @@ class MailAccountManager extends ChangeNotifier {
 
     final details = providers.map(providerDetail).join(' · ');
     return withSuffix('$multiAction. $details');
+  }
+
+  bool _isTransientProviderReadFailure(
+    EmailProvider provider,
+    Object error,
+  ) {
+    final text = '$error ${provider.error ?? ''}'.toLowerCase();
+    return _containsTransientNetworkMarker(text);
+  }
+
+  bool _containsTransientNetworkMarker(String text) {
+    return const [
+      'timeout',
+      'socket',
+      'network',
+      'failed host',
+      'host lookup',
+      'dns',
+      'connection refused',
+      'connection reset',
+      'clientexception',
+      'status: 502',
+      'status: 503',
+      'status: 504',
+      ' 502',
+      ' 503',
+      ' 504',
+    ].any(text.contains);
+  }
+
+  String? _providerErrorDetailForUser(EmailProvider provider) {
+    final detail = provider.error?.trim();
+    if (detail == null || detail.isEmpty) return detail;
+    if (_containsTransientNetworkMarker(detail.toLowerCase())) {
+      return 'Red/API: la conexión falló temporalmente.';
+    }
+    return detail;
   }
 
   /// Select an email and load its content
@@ -1154,12 +1264,29 @@ class MailAccountManager extends ChangeNotifier {
         .hasMatch(content);
   }
 
+  Map<String, DateTime> _newestReceivedByProvider(Iterable<Email> emails) {
+    final newest = <String, DateTime>{};
+    for (final email in emails) {
+      final current = newest[email.providerId];
+      if (current == null || email.receivedTime.isAfter(current)) {
+        newest[email.providerId] = email.receivedTime;
+      }
+    }
+    return newest;
+  }
+
   void _emitNewEmailNotifications(
-      List<Email> emails, Set<String> previousKeys) {
-    final newUnreadEmails = emails
-        .where((email) =>
-            !email.isRead && !previousKeys.contains(_emailKey(email)))
-        .toList(growable: false);
+    List<Email> emails,
+    Set<String> previousKeys,
+    Map<String, DateTime> previousNewestByProvider,
+  ) {
+    final newUnreadEmails = emails.where((email) {
+      final previousNewest = previousNewestByProvider[email.providerId];
+      return !email.isRead &&
+          !previousKeys.contains(_emailKey(email)) &&
+          previousNewest != null &&
+          email.receivedTime.isAfter(previousNewest);
+    }).toList(growable: false);
 
     if (newUnreadEmails.isEmpty) return;
 
@@ -1429,7 +1556,7 @@ class MailAccountManager extends ChangeNotifier {
     required bool read,
   }) {
     final action = read ? 'marcar como leído' : 'marcar como no leído';
-    final detail = provider.error?.trim();
+    final detail = _providerErrorDetailForUser(provider);
     final suffix = detail == null || detail.isEmpty ? '' : ' $detail';
     return 'No se pudo $action en ${provider.displayName}. '
         'Se restauró el estado confirmado.$suffix';
@@ -1492,6 +1619,7 @@ class MailAccountManager extends ChangeNotifier {
     _confirmedReadStatus.clear();
     _pendingReadStatus.clear();
     _readStatusFailureKey = null;
+    debugTransientReadRetryWaitOverride = null;
     _sessionUserId = null;
     _isSessionScopeReady = false;
     debugAuthUserIdOverride = null;

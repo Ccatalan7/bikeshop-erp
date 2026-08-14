@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/mail/models/mail_folder.dart';
 import 'package:vinabike_erp/modules/mail/providers/email_provider.dart';
 import 'package:vinabike_erp/modules/mail/providers/mail_account_manager.dart';
+import 'package:vinabike_erp/shared/services/mail_notification_gate.dart';
 
 /// El modelo de lectura unificado con carpetas tiene dos invariantes que no
 /// pueden depender de qué carpeta esté mirando el usuario:
@@ -33,6 +34,7 @@ void main() {
     MailFolder folder = MailFolder.inbox,
     bool isRead = false,
     String to = 'taller@vinabike.cl',
+    DateTime? receivedTime,
   }) {
     return Email(
       id: id,
@@ -41,7 +43,7 @@ void main() {
       subject: 'Asunto $id',
       fromAddress: 'Remitente <r@example.com>',
       toAddress: to,
-      receivedTime: DateTime(2026, 8, 5, 12),
+      receivedTime: receivedTime ?? DateTime(2026, 8, 5, 12),
       isRead: isRead,
       hasAttachment: false,
     );
@@ -240,6 +242,207 @@ void main() {
     expect(manager.unreadCount, 0);
   });
 
+  test('el refresh de fondo reconcilia leído en todas las páginas cargadas',
+      () async {
+    final firstPage = List.generate(
+      MailAccountManager.inboxPageSize,
+      (index) => mail('in-$index'),
+    );
+    final secondPage = List.generate(
+      25,
+      (index) => mail('in-${MailAccountManager.inboxPageSize + index}'),
+    );
+    provider.script(MailFolder.inbox, firstPage, hasMore: true);
+    await manager.refreshInbox();
+    provider.script(MailFolder.inbox, secondPage);
+    await manager.loadMore();
+    expect(manager.emails, hasLength(75));
+    expect(manager.unreadCount, 75);
+
+    provider.script(
+      MailFolder.inbox,
+      firstPage.map((email) => email.copyWith(isRead: true)).toList(),
+      hasMore: true,
+    );
+    provider.script(
+      MailFolder.inbox,
+      secondPage.map((email) => email.copyWith(isRead: true)).toList(),
+    );
+
+    await manager.refreshInbox(background: true);
+
+    expect(
+      provider.listedStarts.sublist(provider.listedStarts.length - 2),
+      [0, MailAccountManager.inboxPageSize],
+    );
+    expect(manager.emails, hasLength(75));
+    expect(manager.unreadCount, 0);
+  });
+
+  test('correo nuevo no desplaza fuera de la reconciliación al caché antiguo',
+      () async {
+    final baselineTime = DateTime(2026, 8, 5, 12);
+    final known = List.generate(
+      75,
+      (index) => mail(
+        'known-$index',
+        receivedTime: baselineTime.subtract(Duration(minutes: index)),
+      ),
+    );
+    provider.script(
+      MailFolder.inbox,
+      known.take(MailAccountManager.inboxPageSize).toList(),
+      hasMore: true,
+    );
+    await manager.refreshInbox();
+    provider.script(MailFolder.inbox, known.skip(50).toList());
+    await manager.loadMore();
+
+    final newRows = List.generate(
+      30,
+      (index) => mail(
+        'new-$index',
+        isRead: true,
+        receivedTime: baselineTime.add(Duration(minutes: index + 1)),
+      ),
+    );
+    provider.script(
+      MailFolder.inbox,
+      [
+        ...newRows,
+        ...known.take(20).map((email) => email.copyWith(isRead: true)),
+      ],
+      hasMore: true,
+    );
+    provider.script(
+      MailFolder.inbox,
+      known
+          .skip(20)
+          .take(50)
+          .map((email) => email.copyWith(isRead: true))
+          .toList(),
+      hasMore: true,
+    );
+    provider.script(
+      MailFolder.inbox,
+      [
+        ...known.skip(70).map((email) => email.copyWith(isRead: true)),
+        ...List.generate(
+          45,
+          (index) => mail(
+            'older-$index',
+            isRead: true,
+            receivedTime: baselineTime.subtract(Duration(days: index + 1)),
+          ),
+        ),
+      ],
+    );
+
+    await manager.refreshInbox(background: true);
+
+    expect(
+      provider.listedStarts.sublist(provider.listedStarts.length - 3),
+      [0, 50, 100],
+      reason: 'el conteo cargado no basta cuando llegaron correos nuevos',
+    );
+    expect(
+      manager.emails
+          .where((email) => email.id.startsWith('known-'))
+          .every((email) => email.isRead),
+      isTrue,
+    );
+  });
+
+  test('ampliar la ventana paginada no notifica correos antiguos', () async {
+    MailNotificationGate.shared.activateScope(
+      userId: 'user-test',
+      tenantId: 'tenant-test',
+    );
+    addTearDown(MailNotificationGate.shared.clearScope);
+    final notifications = <Email>[];
+    final subscription = manager.newEmailStream.listen(notifications.add);
+    addTearDown(subscription.cancel);
+
+    final baselineTime = DateTime(2026, 8, 5, 12);
+    final firstPage = List.generate(
+      MailAccountManager.inboxPageSize,
+      (index) => mail('in-$index', receivedTime: baselineTime),
+    );
+    final secondPage = List.generate(
+      25,
+      (index) => mail(
+        'in-${MailAccountManager.inboxPageSize + index}',
+        receivedTime: baselineTime.subtract(const Duration(minutes: 1)),
+      ),
+    );
+    provider.script(MailFolder.inbox, firstPage, hasMore: true);
+    await manager.refreshInbox();
+    provider.script(MailFolder.inbox, secondPage);
+    await manager.loadMore();
+
+    final trulyNew = mail(
+      'new',
+      receivedTime: baselineTime.add(const Duration(minutes: 1)),
+    );
+    provider.script(
+      MailFolder.inbox,
+      [trulyNew, ...firstPage.take(49)],
+      hasMore: true,
+    );
+    provider.script(
+      MailFolder.inbox,
+      [
+        firstPage.last,
+        ...secondPage,
+        ...List.generate(
+          4,
+          (index) => mail(
+            'old-extra-$index',
+            receivedTime: baselineTime.subtract(const Duration(days: 1)),
+          ),
+        ),
+      ],
+    );
+
+    await manager.refreshInbox(background: true);
+    await pumpEventQueue();
+
+    expect(notifications.map((email) => email.id), ['new']);
+    expect(manager.emails.map((email) => email.id), contains('old-extra-0'));
+  });
+
+  test('un fallo DNS de lectura se reintenta y publica sólo al recuperarse',
+      () async {
+    manager.debugTransientReadRetryWaitOverride = (_) async {};
+    provider.getMessageErrors.add(
+      Exception('SocketException: Failed host lookup'),
+    );
+    provider.script(MailFolder.inbox, [mail('in-1')]);
+
+    await manager.refreshInbox();
+
+    expect(provider.listedStarts, [0, 0]);
+    expect(manager.emails.map((email) => email.id), ['in-1']);
+    expect(manager.error, isNull);
+    expect(manager.lastFetch, isNotNull);
+  });
+
+  test('un fallo DNS persistente conserva caché y no finge frescura', () async {
+    manager.debugTransientReadRetryWaitOverride = (_) async {};
+    provider.getMessageErrors.addAll([
+      Exception('SocketException: Failed host lookup: internal.example'),
+      Exception('SocketException: Failed host lookup: internal.example'),
+      Exception('SocketException: Failed host lookup: internal.example'),
+    ]);
+
+    await manager.refreshInbox();
+
+    expect(provider.listedStarts, [0, 0, 0]);
+    expect(manager.lastFetch, isNull);
+    expect(manager.error, contains('Red/API'));
+    expect(manager.error, isNot(contains('internal.example')));
+  });
+
   test('responder usa la operación nativa y conserva la identidad del hilo',
       () async {
     final original = mail('in-1').copyWith(
@@ -290,6 +493,7 @@ class _ScriptedProvider extends EmailProvider {
   final List<Completer<bool>> markReadCompleters = [];
   final List<({String id, bool read})> markReadCalls = [];
   final List<Map<String, Object?>> replyCalls = [];
+  final List<Object> getMessageErrors = [];
   String? providerError;
 
   void script(MailFolder folder, List<Email> emails, {bool hasMore = false}) {
@@ -365,6 +569,12 @@ class _ScriptedProvider extends EmailProvider {
   }) async {
     listedFolders.add(folder);
     listedStarts.add(start);
+    if (getMessageErrors.isNotEmpty) {
+      final error = getMessageErrors.removeAt(0);
+      providerError = error.toString();
+      throw error;
+    }
+    providerError = null;
     final queue = _pageQueues[folder];
     if (queue == null || queue.isEmpty) return const [];
     final page = queue.removeAt(0);

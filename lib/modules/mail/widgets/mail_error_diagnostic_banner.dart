@@ -52,6 +52,7 @@ class MailErrorDiagnostic {
       'timeout',
       'socket',
       'network',
+      'red/api',
       'failed host',
       'connection refused',
       'connection reset',
