@@ -1955,7 +1955,7 @@ class _CashierPanelState extends State<_CashierPanel> {
     }
 
     // ⚠️ WARN when paying with card but no tax included
-    if (_selectedPaymentMethod?.code == 'card' &&
+    if (_selectedPaymentMethod?.isCardInstrument == true &&
         posService.taxTreatment == TaxTreatment.noTax) {
       final result = await showDialog<String>(
         context: context,
@@ -2260,7 +2260,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                 const SizedBox(height: 12),
                 Consumer<PaymentMethodService>(
                   builder: (context, paymentMethodService, _) {
-                    final methods = paymentMethodService.paymentMethods;
+                    final methods = paymentMethodService.incomingPaymentMethods;
                     return Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -3141,7 +3141,7 @@ class _CashierPanelState extends State<_CashierPanel> {
                 const SizedBox(height: 12),
                 Consumer<PaymentMethodService>(
                   builder: (context, paymentMethodService, _) {
-                    final methods = paymentMethodService.paymentMethods
+                    final methods = paymentMethodService.incomingPaymentMethods
                         .where((m) => m.isActive)
                         .toList();
                     return Wrap(
@@ -3341,21 +3341,22 @@ class _CashierPanelState extends State<_CashierPanel> {
     );
   }
 
-  /// Convert new PaymentMethod model to old enum-based PaymentMethod for transactions
+  /// Preserve the canonical database method identity through the legacy POS
+  /// payment envelope. Its broad [PaymentType] is presentation-only.
   old_pm.PaymentMethod _convertToOldPaymentMethod(pm.PaymentMethod newMethod) {
-    switch (newMethod.code.toLowerCase()) {
-      case 'cash':
-        return old_pm.PaymentMethod.cash;
-      case 'card':
-        return old_pm.PaymentMethod.card;
-      case 'transfer':
-        return old_pm.PaymentMethod.transfer;
-      case 'check':
-      case 'voucher':
-        return old_pm.PaymentMethod.voucher;
-      default:
-        return old_pm.PaymentMethod.cash; // Default fallback
-    }
+    final type = switch (newMethod.code.toLowerCase()) {
+      'cash' => old_pm.PaymentType.cash,
+      'transfer' => old_pm.PaymentType.transfer,
+      'check' || 'voucher' => old_pm.PaymentType.voucher,
+      _ when newMethod.isCardInstrument => old_pm.PaymentType.card,
+      _ => old_pm.PaymentType.cash,
+    };
+    return old_pm.PaymentMethod(
+      id: newMethod.id,
+      type: type,
+      name: newMethod.name,
+      requiresChange: type == old_pm.PaymentType.cash,
+    );
   }
 
   IconData _getPaymentMethodIcon(String code) {
@@ -3363,6 +3364,9 @@ class _CashierPanelState extends State<_CashierPanel> {
       case 'cash':
         return Icons.attach_money;
       case 'card':
+      case 'card_debit':
+      case 'card_credit':
+      case 'card_prepaid':
         return Icons.credit_card;
       case 'transfer':
         return Icons.account_balance;

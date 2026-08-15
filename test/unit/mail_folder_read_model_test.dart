@@ -35,10 +35,11 @@ void main() {
     bool isRead = false,
     String to = 'taller@vinabike.cl',
     DateTime? receivedTime,
+    String providerId = 'scripted',
   }) {
     return Email(
       id: id,
-      providerId: 'scripted',
+      providerId: providerId,
       folderId: folder.name,
       subject: 'Asunto $id',
       fromAddress: 'Remitente <r@example.com>',
@@ -443,6 +444,96 @@ void main() {
     expect(manager.error, isNot(contains('internal.example')));
   });
 
+  test('un 429 de cualquier proveedor conserva caché y corta el polling',
+      () async {
+    provider.script(MailFolder.inbox, [mail('in-1')]);
+    await manager.refreshInbox();
+    final confirmedFetch = manager.lastFetch;
+    final listedBeforeLimit = provider.listedStarts.length;
+
+    provider.getMessageErrors.add(
+      EmailProviderRateLimitException(
+        providerId: provider.providerId,
+        retryAt: DateTime.now().toUtc().add(const Duration(minutes: 10)),
+      ),
+    );
+    await manager.refreshInbox(background: true);
+
+    expect(provider.listedStarts.length, listedBeforeLimit + 1);
+    expect(manager.emails.map((email) => email.id), ['in-1']);
+    expect(manager.lastFetch, confirmedFetch,
+        reason: 'un resultado diferido no puede fingir frescura');
+    expect(manager.error, isNull,
+        reason: 'el caché conocido sigue siendo una vista utilizable');
+
+    await manager.refreshInbox(background: true);
+
+    expect(provider.listedStarts.length, listedBeforeLimit + 1,
+        reason: 'el cooldown local evita volver a tocar el proveedor');
+    expect(manager.emails.map((email) => email.id), ['in-1']);
+  });
+
+  test('un 429 sin caché falla cerrado aunque el cooldown evite otro request',
+      () async {
+    provider.getMessageErrors.add(
+      EmailProviderRateLimitException(
+        providerId: provider.providerId,
+        retryAt: DateTime.now().toUtc().add(const Duration(minutes: 10)),
+      ),
+    );
+
+    await manager.refreshInbox();
+    expect(manager.emails, isEmpty);
+    expect(manager.error, contains(provider.displayName));
+    expect(provider.listedStarts, [0]);
+
+    await manager.refreshInbox(background: true);
+    expect(provider.listedStarts, [0]);
+    expect(manager.error, contains(provider.displayName));
+  });
+
+  test('un proveedor diferido no acelera las lecturas del proveedor sano',
+      () async {
+    final healthy = _ScriptedProvider(
+      providerId: 'healthy',
+      displayName: 'Healthy',
+    );
+    manager.debugAttachProvider(healthy);
+    provider.script(MailFolder.inbox, [mail('limited-1')]);
+    healthy.script(
+      MailFolder.inbox,
+      [mail('healthy-1', providerId: 'healthy')],
+    );
+    await manager.refreshInbox();
+
+    provider.getMessageErrors.add(
+      EmailProviderRateLimitException(
+        providerId: provider.providerId,
+        retryAt: DateTime.now().toUtc().add(const Duration(minutes: 10)),
+      ),
+    );
+    healthy.script(
+      MailFolder.inbox,
+      [mail('healthy-1', providerId: 'healthy', isRead: true)],
+    );
+    await manager.refreshInbox();
+    final limitedCalls = provider.listedStarts.length;
+    final healthyCalls = healthy.listedStarts.length;
+
+    await manager.refreshInbox(background: true);
+
+    expect(provider.listedStarts.length, limitedCalls,
+        reason: 'el proveedor limitado conserva su cooldown propio');
+    expect(healthy.listedStarts.length, healthyCalls,
+        reason: 'el proveedor sano conserva su propia frescura de 30 s');
+    expect(
+      manager.emails
+          .singleWhere((email) => email.providerId == 'healthy')
+          .isRead,
+      isTrue,
+    );
+  });
+
   test('responder usa la operación nativa y conserva la identidad del hilo',
       () async {
     final original = mail('in-1').copyWith(
@@ -479,6 +570,11 @@ void main() {
 }
 
 class _ScriptedProvider extends EmailProvider {
+  _ScriptedProvider({
+    this.providerId = 'scripted',
+    this.displayName = 'Scripted',
+  });
+
   /// Cola de páginas por carpeta: cada fetch consume una y publica el
   /// `hasMore` que rige DESPUÉS de esa página, como un servidor real.
   final Map<MailFolder, List<({List<Email> emails, bool hasMoreAfter})>>
@@ -503,16 +599,16 @@ class _ScriptedProvider extends EmailProvider {
   }
 
   @override
-  String get providerId => 'scripted';
+  final String providerId;
 
   @override
-  String get displayName => 'Scripted';
+  final String displayName;
 
   @override
   String get iconAsset => '';
 
   @override
-  String? get accountEmail => 'scripted@example.com';
+  String? get accountEmail => '$providerId@example.com';
 
   @override
   bool get isAuthenticated => true;

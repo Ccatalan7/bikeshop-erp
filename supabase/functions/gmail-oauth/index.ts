@@ -3,9 +3,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   assertAllowedGmailProxyRequest,
   buildGmailMessageDetailUrl,
+  buildKnownGmailInboxMarkers,
   GMAIL_API_ORIGIN,
+  gmailRateLimitRetryAt,
   parseKnownGmailIds,
+  selectUnknownGmailInboxDetailIds,
 } from "../_shared/gmail_mail_contract.ts";
+import {
+  activeMailProviderRateLimitUntil,
+  advanceMailProviderRateLimit,
+  withMailProviderRateLimit,
+  withoutMailProviderRateLimit,
+} from "../_shared/mail_provider_rate_limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +25,9 @@ const corsHeaders = {
 const provider = "gmail";
 const gmailAccountsOrigin = "https://accounts.google.com";
 const gmailPushTopic = "projects/vinabikeapp/topics/gmail-push-notifications";
+const gmailSnapshotSize = 500;
+const gmailDetailConcurrency = 4;
+const gmailLargeKnownSnapshotThreshold = 400;
 type AdminClient = ReturnType<typeof adminClient>;
 const defaultGmailScopes = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -239,13 +251,21 @@ async function handleProxy(
   assertAllowedGmailProxyRequest(proxyUrl, cleanText(body.method) || "GET");
 
   const account = await requireAccount(admin, authContext.userId);
-  const accessToken = await ensureValidAccessToken(admin, account);
-  const response = await fetchWithToken(proxyUrl, body, accessToken);
+  const activeRateLimitUntil = gmailRateLimitUntil(account);
+  if (activeRateLimitUntil) {
+    return gmailRateLimitResponse(activeRateLimitUntil);
+  }
 
-  if (response.status !== 401) return response;
+  let accessToken = await ensureValidAccessToken(admin, account);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetchWithToken(proxyUrl, body, accessToken);
+    if (response.status !== 401 || attempt > 0) {
+      return await finalizeGmailProxyResponse(admin, account, response);
+    }
+    accessToken = await refreshStoredAccessToken(admin, account);
+  }
 
-  const refreshedToken = await refreshStoredAccessToken(admin, account);
-  return await fetchWithToken(proxyUrl, body, refreshedToken);
+  throw new Error("Gmail authorization retry was exhausted");
 }
 
 async function handleInboxList(
@@ -254,16 +274,175 @@ async function handleInboxList(
   body: Record<string, unknown>,
 ) {
   const account = await requireAccount(admin, authContext.userId);
-  const firstToken = await ensureValidAccessToken(admin, account);
-  const firstAttempt = await fetchInboxMetadata(firstToken, body);
-
-  if (firstAttempt.status !== 401) {
-    return jsonResponse(firstAttempt.payload, firstAttempt.status);
+  const knownIds = parseKnownGmailIds(body.known_ids);
+  const activeRateLimitUntil = gmailRateLimitUntil(account);
+  if (activeRateLimitUntil) {
+    return knownIds.size > 0
+      ? jsonResponse(deferredKnownInboxPayload(knownIds, activeRateLimitUntil))
+      : jsonResponse({
+        error: "Gmail rate limit cooldown is active",
+        retry_after: activeRateLimitUntil,
+      }, 429);
   }
 
-  const refreshedToken = await refreshStoredAccessToken(admin, account);
-  const secondAttempt = await fetchInboxMetadata(refreshedToken, body);
-  return jsonResponse(secondAttempt.payload, secondAttempt.status);
+  const firstToken = await ensureValidAccessToken(admin, account);
+  let attempt = await fetchInboxMetadata(firstToken, body);
+
+  if (attempt.status === 401) {
+    const refreshedToken = await refreshStoredAccessToken(admin, account);
+    attempt = await fetchInboxMetadata(refreshedToken, body);
+  }
+
+  if (attempt.status === 429) {
+    const providerRetryAt = gmailRateLimitRetryAt(attempt.payload);
+    const cooldown = await rememberGmailRateLimit(
+      admin,
+      account,
+      providerRetryAt,
+    );
+    const effectiveRetryAt = gmailEffectiveRateLimitUntil(cooldown.retryAt);
+    console.warn("gmail_provider_rate_limited", {
+      operation: "list_inbox",
+      provider_retry_after: providerRetryAt,
+      effective_retry_after: effectiveRetryAt,
+      consecutive_attempts: cooldown.attempts,
+    });
+    if (knownIds.size > 0) {
+      return jsonResponse(
+        deferredKnownInboxPayload(knownIds, effectiveRetryAt),
+      );
+    }
+  } else if (attempt.status >= 200 && attempt.status < 300) {
+    await clearGmailRateLimit(admin, account);
+    console.info("gmail_inbox_sync_success", {
+      known_count: knownIds.size,
+      returned_count: Array.isArray(attempt.payload.messages) ? attempt.payload.messages.length : 0,
+      snapshot_complete: attempt.payload.snapshotComplete === true,
+    });
+  }
+
+  return jsonResponse(attempt.payload, attempt.status);
+}
+
+function deferredKnownInboxPayload(
+  knownIds: ReadonlySet<string>,
+  retryAfter: string,
+) {
+  return {
+    // No labelIds means the released client deliberately keeps its cached
+    // read state. Returning every key also prevents its multi-page refresh
+    // loop from trying another Gmail request during the cooldown.
+    messages: Array.from(knownIds, (id) => ({ id, known: true })),
+    nextPageToken: null,
+    resultSizeEstimate: knownIds.size,
+    snapshotComplete: false,
+    deferred: true,
+    retryAfter,
+  };
+}
+
+function gmailRateLimitResponse(
+  retryAt: string,
+  providerPayload?: unknown,
+) {
+  const retrySeconds = Math.max(
+    1,
+    Math.ceil((Date.parse(retryAt) - Date.now()) / 1000),
+  );
+  return jsonResponse(
+    {
+      code: "provider_rate_limited",
+      provider,
+      error: "Gmail rate limit cooldown is active",
+      retry_after: retryAt,
+      provider_error: providerPayload ?? null,
+    },
+    429,
+    { "Retry-After": String(retrySeconds) },
+  );
+}
+
+function gmailRateLimitUntil(account: EmailAccount): string | null {
+  return activeMailProviderRateLimitUntil(
+    account.provider_metadata,
+    provider,
+  );
+}
+
+function gmailEffectiveRateLimitUntil(retryAt: string): string {
+  return activeMailProviderRateLimitUntil(
+    withMailProviderRateLimit({}, provider, retryAt),
+    provider,
+  ) ?? retryAt;
+}
+
+async function finalizeGmailProxyResponse(
+  admin: AdminClient,
+  account: EmailAccount,
+  response: Response,
+) {
+  if (response.status === 429) {
+    const payload = await response.clone().json().catch(() => ({}));
+    const retryAt = gmailRateLimitRetryAt(
+      payload,
+      Date.now(),
+      response.headers.get("Retry-After"),
+    );
+    const cooldown = await rememberGmailRateLimit(admin, account, retryAt);
+    const effectiveRetryAt = gmailEffectiveRateLimitUntil(cooldown.retryAt);
+    console.warn("gmail_provider_rate_limited", {
+      operation: "proxy",
+      provider_retry_after: retryAt,
+      effective_retry_after: effectiveRetryAt,
+      consecutive_attempts: cooldown.attempts,
+    });
+    return gmailRateLimitResponse(effectiveRetryAt, payload);
+  }
+
+  if (response.ok) await clearGmailRateLimit(admin, account);
+  return response;
+}
+
+async function rememberGmailRateLimit(
+  admin: AdminClient,
+  account: EmailAccount,
+  providerRetryAt: string,
+) {
+  const cooldown = advanceMailProviderRateLimit(
+    account.provider_metadata,
+    provider,
+    providerRetryAt,
+  );
+  const { error } = await admin
+    .from("email_accounts")
+    .update({
+      provider_metadata: cooldown.metadata,
+      last_error: "gmail_rate_limited",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", account.id);
+  if (error) throw error;
+  return cooldown;
+}
+
+async function clearGmailRateLimit(
+  admin: AdminClient,
+  account: EmailAccount,
+) {
+  const cleared = withoutMailProviderRateLimit(
+    account.provider_metadata,
+    provider,
+  );
+  if (!cleared.changed) return;
+  const { error } = await admin
+    .from("email_accounts")
+    .update({
+      provider_metadata: cleared.metadata,
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", account.id);
+  if (error) throw error;
 }
 
 async function handlePushSetup(
@@ -271,6 +450,11 @@ async function handlePushSetup(
   authContext: AuthContext,
 ) {
   const account = await requireAccount(admin, authContext.userId);
+  const activeRateLimitUntil = gmailRateLimitUntil(account);
+  if (activeRateLimitUntil) {
+    return gmailRateLimitResponse(activeRateLimitUntil);
+  }
+
   const firstToken = await ensureValidAccessToken(admin, account);
   let watch = await requestGmailWatch(firstToken);
 
@@ -278,9 +462,26 @@ async function handlePushSetup(
     const refreshedToken = await refreshStoredAccessToken(admin, account);
     watch = await requestGmailWatch(refreshedToken);
   }
+  if (watch.status === 429) {
+    const providerRetryAt = gmailRateLimitRetryAt(watch.payload);
+    const cooldown = await rememberGmailRateLimit(
+      admin,
+      account,
+      providerRetryAt,
+    );
+    const effectiveRetryAt = gmailEffectiveRateLimitUntil(cooldown.retryAt);
+    console.warn("gmail_provider_rate_limited", {
+      operation: "setup_push",
+      provider_retry_after: providerRetryAt,
+      effective_retry_after: effectiveRetryAt,
+      consecutive_attempts: cooldown.attempts,
+    });
+    return gmailRateLimitResponse(effectiveRetryAt, watch.payload);
+  }
   if (watch.status < 200 || watch.status >= 300) {
     return jsonResponse(watch.payload, watch.status);
   }
+  await clearGmailRateLimit(admin, account);
 
   const historyId = cleanText(watch.payload.historyId);
   const expiration = cleanText(watch.payload.expiration);
@@ -350,53 +551,235 @@ async function fetchInboxMetadata(accessToken: string, body: Record<string, unkn
   const pageToken = cleanText(body.page_token);
   const searchQuery = cleanText(body.search_query);
   const labelId = resolveListLabel(body.label_id);
+  const rawStart = Number(body.start ?? 0);
+  const start = Number.isFinite(rawStart) ? Math.max(Math.trunc(rawStart), 0) : 0;
 
-  const listUrl = new URL(`${GMAIL_API_ORIGIN}/gmail/v1/users/me/messages`);
-  listUrl.searchParams.set("maxResults", String(limit));
-  listUrl.searchParams.append("labelIds", labelId);
-  if (pageToken) listUrl.searchParams.set("pageToken", pageToken);
-  if (searchQuery) listUrl.searchParams.set("q", searchQuery);
-
-  const listResponse = await fetch(listUrl, {
-    headers: { "Authorization": `Bearer ${accessToken}` },
-  });
-  const listPayload = await listResponse.json().catch(() => ({}));
-
-  if (!listResponse.ok) {
-    return { status: listResponse.status, payload: listPayload };
+  // A normal Inbox refresh used to issue one messages.get (20 quota units) for
+  // every cached row. At the 500-row cache boundary that costs more than
+  // Gmail's per-user minute budget before any other client can make a request.
+  // Reconcile the bounded cache from two cheap ID lists instead. The large-
+  // cache branch also catches the second page requested by older clients while
+  // they perform the one-time attachment metadata migration.
+  const shouldUseKnownSnapshot = labelId === "INBOX" &&
+    !searchQuery &&
+    knownIds.size > 0 &&
+    (start === 0 || !pageToken || knownIds.size >= gmailLargeKnownSnapshotThreshold);
+  if (shouldUseKnownSnapshot) {
+    return await fetchKnownInboxSnapshot(accessToken, {
+      knownIds,
+      limit,
+      stopPagination: knownIds.size >= gmailLargeKnownSnapshotThreshold,
+    });
   }
 
-  const messageRefs = Array.isArray(listPayload.messages)
-    ? listPayload.messages as Array<Record<string, unknown>>
-    : [];
-
-  const messages = await mapWithConcurrency(messageRefs, 8, async (messageRef) => {
-    const id = cleanText(messageRef.id);
-    if (!id) return null;
-
-    const known = knownIds.has(id);
-    const detailUrl = buildGmailMessageDetailUrl(id, known);
-
-    const detailResponse = await fetch(detailUrl, {
-      headers: { "Authorization": `Bearer ${accessToken}` },
-    });
-    const detailPayload = await detailResponse.json().catch(() => ({}));
-
-    if (!detailResponse.ok) {
-      console.error("Gmail inbox metadata fetch failed:", id, detailResponse.status, detailPayload);
-      return null;
-    }
-
-    return known ? { ...detailPayload, known: true } : detailPayload;
+  const listAttempt = await requestGmailMessageList(accessToken, {
+    maxResults: limit,
+    labelIds: [labelId],
+    pageToken,
+    searchQuery,
   });
+  if (listAttempt.status < 200 || listAttempt.status >= 300) {
+    return listAttempt;
+  }
+
+  const listPayload = listAttempt.payload;
+  const messageIds = messageIdsFromPayload(listPayload);
+  const detailsAttempt = await fetchGmailMessageDetails(
+    accessToken,
+    messageIds,
+    knownIds,
+  );
+  if (detailsAttempt.status < 200 || detailsAttempt.status >= 300) {
+    return detailsAttempt;
+  }
 
   return {
     status: 200,
     payload: {
-      messages: messages.filter(Boolean),
+      messages: detailsAttempt.messages,
       nextPageToken: listPayload.nextPageToken ?? null,
       resultSizeEstimate: listPayload.resultSizeEstimate ?? null,
     },
+  };
+}
+
+async function fetchKnownInboxSnapshot(
+  accessToken: string,
+  options: {
+    knownIds: Set<string>;
+    limit: number;
+    stopPagination: boolean;
+  },
+) {
+  // Do not burst the provider at the exact end of a throttle window. These
+  // list calls are cheap, but Gmail applies the per-user rolling window to
+  // concurrent requests as well as their aggregate quota cost.
+  const visibleAttempt = options.stopPagination
+    ? null
+    : await requestGmailMessageList(accessToken, {
+      maxResults: options.limit,
+      labelIds: ["INBOX"],
+    });
+  if (
+    visibleAttempt != null &&
+    (visibleAttempt.status < 200 || visibleAttempt.status >= 300)
+  ) {
+    return visibleAttempt;
+  }
+
+  const inboxAttempt = await requestGmailMessageList(accessToken, {
+    maxResults: gmailSnapshotSize,
+    labelIds: ["INBOX"],
+  });
+  if (inboxAttempt.status < 200 || inboxAttempt.status >= 300) {
+    return inboxAttempt;
+  }
+
+  const unreadAttempt = await requestGmailMessageList(accessToken, {
+    maxResults: gmailSnapshotSize,
+    labelIds: ["INBOX", "UNREAD"],
+  });
+  if (unreadAttempt.status < 200 || unreadAttempt.status >= 300) {
+    return unreadAttempt;
+  }
+
+  const inboxIds = messageIdsFromPayload(inboxAttempt.payload);
+  const visibleIds = inboxIds.slice(0, options.limit);
+  const unreadIds = new Set(messageIdsFromPayload(unreadAttempt.payload));
+  const unknownDetailIds = selectUnknownGmailInboxDetailIds(
+    inboxIds,
+    visibleIds,
+    options.knownIds,
+    options.limit,
+  );
+  const detailsAttempt = await fetchGmailMessageDetails(
+    accessToken,
+    unknownDetailIds,
+    new Set<string>(),
+  );
+  if (detailsAttempt.status < 200 || detailsAttempt.status >= 300) {
+    return detailsAttempt;
+  }
+
+  const byId = new Map<string, Record<string, unknown>>();
+  for (
+    const marker of buildKnownGmailInboxMarkers(
+      inboxIds,
+      unreadIds,
+      options.knownIds,
+    )
+  ) {
+    byId.set(cleanText(marker.id), marker);
+  }
+  for (const message of detailsAttempt.messages) {
+    const id = cleanText(message.id);
+    if (id) byId.set(id, message);
+  }
+
+  return {
+    status: 200,
+    payload: {
+      messages: inboxIds.map((id) => byId.get(id)).filter(Boolean),
+      nextPageToken: options.stopPagination ? null : visibleAttempt?.payload.nextPageToken ?? null,
+      resultSizeEstimate: inboxAttempt.payload.resultSizeEstimate ?? null,
+      snapshotComplete: true,
+    },
+  };
+}
+
+async function requestGmailMessageList(
+  accessToken: string,
+  options: {
+    maxResults: number;
+    labelIds: string[];
+    pageToken?: string;
+    searchQuery?: string;
+  },
+) {
+  const listUrl = new URL(`${GMAIL_API_ORIGIN}/gmail/v1/users/me/messages`);
+  listUrl.searchParams.set("maxResults", String(options.maxResults));
+  for (const labelId of options.labelIds) {
+    listUrl.searchParams.append("labelIds", labelId);
+  }
+  if (options.pageToken) listUrl.searchParams.set("pageToken", options.pageToken);
+  if (options.searchQuery) listUrl.searchParams.set("q", options.searchQuery);
+
+  const listResponse = await fetch(listUrl, {
+    headers: { "Authorization": `Bearer ${accessToken}` },
+  });
+  return {
+    status: listResponse.status,
+    payload: await listResponse.json().catch(() => ({})) as Record<string, unknown>,
+  };
+}
+
+function messageIdsFromPayload(payload: Record<string, unknown>): string[] {
+  const refs = Array.isArray(payload.messages)
+    ? payload.messages as Array<Record<string, unknown>>
+    : [];
+  return refs.map((message) => cleanText(message.id)).filter(Boolean);
+}
+
+async function fetchGmailMessageDetails(
+  accessToken: string,
+  messageIds: string[],
+  knownIds: ReadonlySet<string>,
+): Promise<{
+  status: number;
+  payload: Record<string, unknown>;
+  messages: Array<Record<string, unknown>>;
+}> {
+  let failure: { status: number; payload: Record<string, unknown> } | null = null;
+  const messages = await mapWithConcurrency(
+    messageIds,
+    gmailDetailConcurrency,
+    async (id) => {
+      if (failure) return null;
+
+      const known = knownIds.has(id);
+      const detailUrl = buildGmailMessageDetailUrl(id, known);
+
+      const detailResponse = await fetch(detailUrl, {
+        headers: { "Authorization": `Bearer ${accessToken}` },
+      });
+      const detailPayload = await detailResponse.json().catch(() => ({}));
+
+      if (!detailResponse.ok) {
+        console.error(
+          "Gmail inbox metadata fetch failed:",
+          id,
+          detailResponse.status,
+          detailPayload,
+        );
+        if (detailResponse.status !== 404 && failure === null) {
+          failure = {
+            status: detailResponse.status,
+            payload: detailPayload as Record<string, unknown>,
+          };
+        }
+        return null;
+      }
+
+      const typedPayload = detailPayload as Record<string, unknown>;
+      return known ? { ...typedPayload, known: true } : typedPayload;
+    },
+  );
+
+  const capturedFailure = failure as {
+    status: number;
+    payload: Record<string, unknown>;
+  } | null;
+  if (capturedFailure !== null) {
+    return {
+      status: capturedFailure.status,
+      payload: capturedFailure.payload,
+      messages: [],
+    };
+  }
+  return {
+    status: 200,
+    payload: {},
+    messages: messages.filter((message): message is Record<string, unknown> => message !== null),
   };
 }
 
@@ -445,8 +828,14 @@ async function fetchWithToken(
     responseData = { text: responseText };
   }
 
+  const responseHeaders: Record<string, string> = {
+    ...corsHeaders,
+    "Content-Type": "application/json",
+  };
+  const retryAfter = response.headers.get("Retry-After");
+  if (retryAfter) responseHeaders["Retry-After"] = retryAfter;
   return new Response(JSON.stringify(responseData), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: responseHeaders,
     status: response.status,
   });
 }
@@ -628,10 +1017,18 @@ function cleanText(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function jsonResponse(payload: unknown, status = 200) {
+function jsonResponse(
+  payload: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {},
+) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      ...extraHeaders,
+    },
   });
 }
 
@@ -652,6 +1049,7 @@ type EmailAccount = {
   token_type?: string | null;
   scope?: string | null;
   token_expires_at?: string | null;
+  provider_metadata?: Record<string, unknown> | null;
   is_active?: boolean | null;
   updated_at?: string | null;
 };

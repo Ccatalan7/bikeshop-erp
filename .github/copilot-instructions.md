@@ -461,11 +461,15 @@ workflow UI changes.
   mode updates followed by a separate best-effort invoice call. The historical
   `create_invoice_from_mechanic_job` RPC is only a guarded compatibility alias;
   never expose or call its private `_internal` builder directly.
-- Converting `Servicio · Presupuesto` reuses its persisted bicycle/ficha and
-  never asks the worker to choose another object. Converting standalone
-  `Cotización` keeps the explicit bicycle/component intake picker. Both paths
-  must atomically create exactly one invoice and leave one tenant-scoped strong
-  relationship. Its canonical source of truth is
+- Converting `Servicio · Presupuesto` reuses its complete persisted bicycle/ficha
+  graph, preserves every line's existing `job_bike_id`, and keeps intentional
+  `NULL` attribution as valid General job-wide scope; it never asks the worker
+  to choose another object or performs a conversion-time graph upsert. Only a
+  standalone `Cotización` keeps the explicit bicycle/component intake picker
+  and may assign its previously unscoped lines inside the audited conversion
+  RPC. Never bulk-backfill NULL attribution without row-specific human evidence.
+  Both paths must atomically create exactly one invoice and leave one
+  tenant-scoped strong relationship. Its canonical source of truth is
   `mechanic_jobs.invoice_id -> sales_invoices.id`; invoice-to-job navigation is
   the reverse lookup over that same foreign key. Do not add a second writable
   inverse pointer unless every legacy client, backup/restore path, hard-delete

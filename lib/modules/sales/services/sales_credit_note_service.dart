@@ -113,9 +113,10 @@ class SalesCreditNoteService {
   Future<List<SalesRefundPaymentMethod>> getRefundPaymentMethods() async {
     final rows = await _client
         .from('payment_methods')
-        .select('id,name,requires_reference')
+        .select('id,name,requires_reference,usage_scope')
         .eq('is_active', true)
-        .order('sort_order');
+        .inFilter(
+            'usage_scope', const ['outbound', 'both']).order('sort_order');
     return rows
         .map((row) =>
             SalesRefundPaymentMethod.fromJson(Map<String, dynamic>.from(row)))

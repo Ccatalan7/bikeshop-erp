@@ -30,14 +30,24 @@ class BankReconciliationMatcher {
   Map<String, List<BankReconciliationProposal>> match({
     required List<BankStatementMovement> movements,
     required List<BankReconciliationCandidate> candidates,
+    List<BankTerminalMatchPolicy> terminalPolicies = const [],
   }) {
     final result = <String, List<BankReconciliationProposal>>{};
     final directlyClaimedCandidateIds = <String>{};
 
     for (final movement in movements) {
-      final proposals = _isTransbankMovement(movement)
-          ? _transbankProposals(movement, candidates)
-          : _directProposals(movement, candidates);
+      final matchingPolicies = _matchingPolicies(
+        movement,
+        terminalPolicies,
+      );
+      final configuredProposals = matchingPolicies.isEmpty
+          ? const <BankReconciliationProposal>[]
+          : _terminalProposals(movement, candidates, matchingPolicies);
+      final proposals = configuredProposals.isNotEmpty
+          ? configuredProposals
+          : _isTransbankMovement(movement)
+              ? _transbankProposals(movement, candidates)
+              : _directProposals(movement, candidates);
 
       final available = <BankReconciliationProposal>[];
       for (final proposal in proposals) {
@@ -72,6 +82,175 @@ class BankReconciliationMatcher {
       result[movement.sourceRowId] = List.unmodifiable(available.take(3));
     }
     return result;
+  }
+
+  List<BankTerminalMatchPolicy> _matchingPolicies(
+    BankStatementMovement movement,
+    List<BankTerminalMatchPolicy> policies,
+  ) {
+    final evidence = _normalize(movement.normalizedDescription);
+    return policies.where((policy) {
+      return policy.descriptorPatterns.any((pattern) {
+        final normalized = _normalize(pattern);
+        return normalized.isNotEmpty && evidence.contains(normalized);
+      });
+    }).toList(growable: false);
+  }
+
+  List<BankReconciliationProposal> _terminalProposals(
+    BankStatementMovement movement,
+    List<BankReconciliationCandidate> candidates,
+    List<BankTerminalMatchPolicy> policies,
+  ) {
+    final bookingDate = movement.bookingDate;
+    final movementAmount = movement.amountClp;
+    if (movement.direction != BankMovementDirection.credit ||
+        bookingDate == null ||
+        movementAmount == null) {
+      return const [];
+    }
+
+    final grouped = <String, List<BankTerminalMatchPolicy>>{};
+    for (final policy in policies) {
+      grouped.putIfAbsent(policy.profileId, () => []).add(policy);
+    }
+    final proposals = <_DirectRank>[];
+    for (final profilePolicies in grouped.values) {
+      final eligible = <_TerminalRailCandidate>[];
+      for (final policy in profilePolicies) {
+        for (final candidate in candidates) {
+          if (candidate.targetKind !=
+                  BankReconciliationTargetKind.salesPayment ||
+              candidate.direction != BankMovementDirection.credit ||
+              candidate.paymentMethodCode != policy.paymentMethodCode ||
+              !policy.appliesOn(candidate.occurredOn)) {
+            continue;
+          }
+          final expectedBooking = _addBusinessDays(
+            candidate.occurredOn,
+            policy.settlementBusinessDays,
+          );
+          final latestBooking = _addBusinessDays(
+            expectedBooking,
+            policy.bookingGraceBusinessDays,
+          );
+          if (bookingDate.compareTo(expectedBooking) < 0 ||
+              bookingDate.compareTo(latestBooking) > 0) {
+            continue;
+          }
+          eligible.add(
+            _TerminalRailCandidate(
+              candidate: candidate,
+              policy: policy,
+              expectedNetClp: policy.expectedNetClp(candidate.amountClp),
+            ),
+          );
+        }
+      }
+      eligible.sort((left, right) {
+        final byDate =
+            left.candidate.occurredOn.compareTo(right.candidate.occurredOn);
+        return byDate != 0
+            ? byDate
+            : left.candidate.identity.compareTo(right.candidate.identity);
+      });
+      if (eligible.isEmpty) continue;
+      final tolerance = profilePolicies
+          .map((policy) => policy.amountToleranceClp)
+          .reduce((left, right) => left > right ? left : right);
+      final states = <int, List<_TerminalRailCandidate>>{
+        0: const <_TerminalRailCandidate>[],
+      };
+      for (final railCandidate in eligible) {
+        if (railCandidate.expectedNetClp <= 0 ||
+            railCandidate.expectedNetClp > movementAmount + tolerance) {
+          continue;
+        }
+        final prior = states.entries.toList(growable: false);
+        for (final state in prior) {
+          final net = state.key + railCandidate.expectedNetClp;
+          if (net > movementAmount + tolerance) continue;
+          final cohort = <_TerminalRailCandidate>[
+            ...state.value,
+            railCandidate,
+          ];
+          final current = states[net];
+          if (current == null ||
+              _terminalLagScore(cohort, bookingDate) <
+                  _terminalLagScore(current, bookingDate)) {
+            states[net] = cohort;
+          }
+        }
+        _pruneTerminalStates(states, targetAmountClp: movementAmount);
+      }
+      final viable = states.entries
+          .where((entry) =>
+              entry.value.isNotEmpty &&
+              (entry.key - movementAmount).abs() <= tolerance)
+          .toList(growable: false)
+        ..sort((left, right) {
+          final difference = (left.key - movementAmount)
+              .abs()
+              .compareTo((right.key - movementAmount).abs());
+          if (difference != 0) return difference;
+          return _terminalLagScore(left.value, bookingDate)
+              .compareTo(_terminalLagScore(right.value, bookingDate));
+        });
+      for (final entry in viable.take(3)) {
+        final cohort = entry.value;
+        final expectedNet = entry.key;
+        final gross = cohort.fold<int>(
+          0,
+          (sum, item) => sum + item.candidate.amountClp,
+        );
+        final ruleDifference = (expectedNet - movementAmount).abs();
+        final instruments =
+            cohort.map((item) => item.policy.instrument).toSet();
+        final profile = profilePolicies.first;
+        proposals.add(
+          _DirectRank(
+            score: 100000 -
+                ruleDifference * 100 -
+                _terminalLagScore(cohort, bookingDate),
+            proposal: BankReconciliationProposal(
+              sourceRowId: movement.sourceRowId,
+              matchKind: BankReconciliationMatchKind.processorEstimate,
+              confidence: ruleDifference == 0
+                  ? BankReconciliationConfidence.medium
+                  : BankReconciliationConfidence.low,
+              allocations: _proportionalTerminalAllocations(
+                cohort: cohort,
+                bankAmountClp: movementAmount,
+                expectedNetClp: expectedNet,
+              ),
+              reasons: <String>[
+                '${cohort.length} venta(s) · ${profile.providerName} / '
+                    '${profile.terminalName}',
+                _railBreakdown(cohort),
+                'Plazos aplicados por tipo de tarjeta y margen de fecha '
+                    'contable bancaria',
+                'Bruto \$${_group(gross)} · abono esperado '
+                    '\$${_group(expectedNet)} · cartola '
+                    '\$${_group(movementAmount)}',
+                if (ruleDifference > 0)
+                  'Diferencia de \$${_group(ruleDifference)} dentro de la '
+                      'tolerancia configurada',
+              ],
+              estimatedGrossClp: gross,
+              estimatedDifferenceClp: gross - movementAmount,
+              instrument: instruments.length == 1
+                  ? instruments.single
+                  : BankPaymentInstrument.unknown,
+            ),
+          ),
+        );
+      }
+    }
+    proposals.sort((left, right) => right.score.compareTo(left.score));
+    return proposals
+        .map((rank) => rank.proposal)
+        .take(3)
+        .toList(growable: false);
   }
 
   List<BankReconciliationProposal> _directProposals(
@@ -186,8 +365,9 @@ class BankReconciliationMatcher {
               candidate.targetKind ==
                   BankReconciliationTargetKind.salesPayment &&
               candidate.direction == BankMovementDirection.credit &&
-              (candidate.provider == BankSettlementProvider.transbank ||
-                  candidate.paymentMethodCode == 'card') &&
+              (candidate.paymentMethodCode == 'card' ||
+                  (candidate.provider == BankSettlementProvider.transbank &&
+                      candidate.instrument == BankPaymentInstrument.unknown)) &&
               candidate.occurredOn.compareTo(firstDate) >= 0 &&
               candidate.occurredOn.compareTo(bookingDate) <= 0,
         )
@@ -292,6 +472,17 @@ class BankReconciliationMatcher {
     );
   }
 
+  int _terminalLagScore(
+    List<_TerminalRailCandidate> candidates,
+    BankCivilDate bookingDate,
+  ) {
+    return candidates.fold<int>(
+      0,
+      (sum, item) =>
+          sum + item.candidate.occurredOn.daysUntil(bookingDate).abs(),
+    );
+  }
+
   void _pruneTransbankStates(
     Map<int, List<BankReconciliationCandidate>> states, {
     required int targetAmountClp,
@@ -305,6 +496,25 @@ class BankReconciliationMatcher {
         final leftDistance = (left.key - targetAmountClp).abs();
         final rightDistance = (right.key - targetAmountClp).abs();
         return leftDistance.compareTo(rightDistance);
+      });
+    states
+      ..clear()
+      ..addEntries(ranked.take(maximumStateCount));
+  }
+
+  void _pruneTerminalStates(
+    Map<int, List<_TerminalRailCandidate>> states, {
+    required int targetAmountClp,
+  }) {
+    const maximumStateCount = 12000;
+    if (states.length <= maximumStateCount) return;
+    final ranked = states.entries.toList(growable: false)
+      ..sort((left, right) {
+        if (left.key == 0) return -1;
+        if (right.key == 0) return 1;
+        return (left.key - targetAmountClp)
+            .abs()
+            .compareTo((right.key - targetAmountClp).abs());
       });
     states
       ..clear()
@@ -335,6 +545,55 @@ class BankReconciliationMatcher {
     return allocations;
   }
 
+  List<BankReconciliationAllocationDraft> _proportionalTerminalAllocations({
+    required List<_TerminalRailCandidate> cohort,
+    required int bankAmountClp,
+    required int expectedNetClp,
+  }) {
+    var assigned = 0;
+    final allocations = <BankReconciliationAllocationDraft>[];
+    for (var index = 0; index < cohort.length; index++) {
+      final item = cohort[index];
+      final amount = index == cohort.length - 1
+          ? bankAmountClp - assigned
+          : (bankAmountClp * item.expectedNetClp / expectedNetClp).round();
+      if (amount <= 0) continue;
+      assigned += amount;
+      allocations.add(
+        BankReconciliationAllocationDraft(
+          candidate: item.candidate,
+          bankAmountClp: amount,
+        ),
+      );
+    }
+    return allocations;
+  }
+
+  String _railBreakdown(List<_TerminalRailCandidate> cohort) {
+    final counts = <BankPaymentInstrument, int>{};
+    for (final item in cohort) {
+      counts.update(
+        item.policy.instrument,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    final entries = counts.entries.toList(growable: false)
+      ..sort((left, right) =>
+          _instrumentOrder(left.key).compareTo(_instrumentOrder(right.key)));
+    return entries
+        .map((entry) => '${entry.value} ${_instrumentLabel(entry.key)}')
+        .join(' + ');
+  }
+
+  int _instrumentOrder(BankPaymentInstrument instrument) =>
+      switch (instrument) {
+        BankPaymentInstrument.debit => 0,
+        BankPaymentInstrument.credit => 1,
+        BankPaymentInstrument.prepaid => 2,
+        BankPaymentInstrument.unknown => 3,
+      };
+
   bool _isTransbankMovement(BankStatementMovement movement) {
     final text = movement.normalizedDescription;
     return text.contains('transbank') ||
@@ -354,6 +613,27 @@ class BankReconciliationMatcher {
     }
     return date;
   }
+
+  BankCivilDate _addBusinessDays(BankCivilDate source, int count) {
+    var remaining = count;
+    var date = source;
+    while (remaining > 0) {
+      date = date.addDays(1);
+      final weekday = date.utcDate.weekday;
+      if (weekday != DateTime.saturday && weekday != DateTime.sunday) {
+        remaining--;
+      }
+    }
+    return date;
+  }
+
+  String _instrumentLabel(BankPaymentInstrument instrument) =>
+      switch (instrument) {
+        BankPaymentInstrument.debit => 'débito',
+        BankPaymentInstrument.credit => 'crédito',
+        BankPaymentInstrument.prepaid => 'prepago',
+        BankPaymentInstrument.unknown => 'tarjeta',
+      };
 
   int _tokenOverlap(String left, String right) {
     final leftTokens =
@@ -397,4 +677,16 @@ class _DirectRank {
 
   final int score;
   final BankReconciliationProposal proposal;
+}
+
+class _TerminalRailCandidate {
+  const _TerminalRailCandidate({
+    required this.candidate,
+    required this.policy,
+    required this.expectedNetClp,
+  });
+
+  final BankReconciliationCandidate candidate;
+  final BankTerminalMatchPolicy policy;
+  final int expectedNetClp;
 }

@@ -81,6 +81,7 @@ export '../../modules/settings/pages/business_hours_settings_page.dart';
 export '../../modules/settings/pages/company_settings_page.dart';
 export '../../modules/settings/pages/user_management_page.dart';
 export '../../modules/settings/pages/payment_methods_settings_page.dart';
+export '../../modules/settings/pages/payment_terminals_settings_page.dart';
 export '../../modules/settings/pages/whatsapp_settings_page.dart';
 export '../../modules/settings/pages/meta_settings_page.dart';
 export '../../modules/settings/pages/bluetooth_scanner_page.dart';

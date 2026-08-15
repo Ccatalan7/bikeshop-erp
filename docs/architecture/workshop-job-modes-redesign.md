@@ -128,6 +128,12 @@ Los eventos cubrirán como mínimo:
     deriva `status`, `status_id` y timestamps en el servidor. Guardar la ficha
     no reenvía esas columnas; una garantía cubierta con evidencia de pago falla
     antes de ejecutar efectos financieros.
+16. Convertir `quotation/bike` a `service/bike` conserva byte por byte el grafo
+    recibido y la atribución de cada línea, incluido `job_bike_id = NULL` para
+    trabajo General. Solo una Cotización sin recepción previa puede asignar sus
+    líneas no atribuidas a la bicicleta seleccionada, y esa mutación ocurre
+    dentro del comando auditado; una actualización directa después de aprobar
+    siempre falla.
 
 ## 5. Flujos de usuario
 
@@ -495,6 +501,8 @@ evidencia. Una falla de migración revierte la transacción completa.
 - clasificación con ACK perdido reutiliza la misma clave y reconcilia el recibo
   antes de permitir otro intento;
 - conversión crea exactamente una factura y conserva líneas;
+- conversión de un presupuesto multibicicleta conserva todas las fichas, cada
+  `job_bike_id`, las líneas General en `NULL` y los subtotales por bicicleta;
 - confirmación manual online enlaza sus trazas hijas por sus claves de operación
   determinísticas exactas, nunca por un rango de `created_at`, y revierte si una
   hija falta o no está completa;
@@ -510,6 +518,9 @@ evidencia. Una falla de migración revierte la transacción completa.
   los efectos de stock/costo y la completa;
 - eventos son inmutables y tenant-scoped;
 - backfill no cambia pagos, totales, stock ni balance de asientos.
+- no existe backfill masivo de `mechanic_job_items.job_bike_id IS NULL`: ese
+  valor puede representar alcance General legítimo y solo se reclasifica con
+  evidencia humana del trabajo concreto.
 
 ### Flutter
 

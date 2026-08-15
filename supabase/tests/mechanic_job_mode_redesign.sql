@@ -2,7 +2,7 @@ begin;
 
 select set_config('request.jwt.claims', '{}', true);
 select set_config('request.jwt.claim.sub', '', true);
-select plan(155);
+select plan(162);
 
 select is(
   (
@@ -184,6 +184,7 @@ insert into public.customers(id, tenant_id, name) values
 
 insert into public.bikes(id, tenant_id, customer_id, brand, model) values
   ('99616000-0000-4000-8000-000000000031', '99616000-0000-4000-8000-000000000001', '99616000-0000-4000-8000-000000000011', 'Codex', 'Bike A'),
+  ('99616000-0000-4000-8000-000000000032', '99616000-0000-4000-8000-000000000001', '99616000-0000-4000-8000-000000000011', 'Codex', 'Bike A2'),
   ('99616000-0000-4000-8000-000000000041', '99616000-0000-4000-8000-000000000002', '99616000-0000-4000-8000-000000000021', 'Codex', 'Bike B');
 
 -- The deployed tenant trigger does not currently seed workshop subjects.
@@ -799,34 +800,72 @@ insert into public.mechanic_jobs(
 insert into public.mechanic_job_bikes(
   id, tenant_id, job_id, bike_id, order_index, diagnosis, work_requested,
   technician_notes, diagnosis_sheet_key, diagnosis_sheet_data
-) values (
-  '99616000-0000-4000-8000-000000000091',
-  '99616000-0000-4000-8000-000000000001',
-  '99616000-0000-4000-8000-000000000090',
-  '99616000-0000-4000-8000-000000000031',
-  0,
-  'Diagnóstico por bicicleta conservado',
-  'Limpieza y ajuste',
-  'No reemplazar cadena sin confirmar',
-  'workshop-v1',
-  jsonb_build_object('drivetrain', jsonb_build_object('status', 'dirty'))
-);
+) values
+  (
+    '99616000-0000-4000-8000-000000000091',
+    '99616000-0000-4000-8000-000000000001',
+    '99616000-0000-4000-8000-000000000090',
+    '99616000-0000-4000-8000-000000000031',
+    0,
+    'Diagnóstico por bicicleta conservado',
+    'Limpieza y ajuste',
+    'No reemplazar cadena sin confirmar',
+    'workshop-v1',
+    jsonb_build_object('drivetrain', jsonb_build_object('status', 'dirty'))
+  ),
+  (
+    '99616000-0000-4000-8000-000000000095',
+    '99616000-0000-4000-8000-000000000001',
+    '99616000-0000-4000-8000-000000000090',
+    '99616000-0000-4000-8000-000000000032',
+    1,
+    'Segunda bicicleta conservada',
+    'Regulación secundaria',
+    null,
+    'workshop-v1',
+    jsonb_build_object('brakes', jsonb_build_object('status', 'review'))
+  );
 
 insert into public.mechanic_job_items(
   id, tenant_id, job_id, job_bike_id, product_id, product_name, product_sku,
   item_type, quantity, unit_price
-) values (
-  '99616000-0000-4000-8000-000000000092',
-  '99616000-0000-4000-8000-000000000001',
-  '99616000-0000-4000-8000-000000000090',
-  '99616000-0000-4000-8000-000000000091',
-  '99616000-0000-4000-8000-000000000051',
-  'Quoted Part',
-  'MODE-PART',
-  'product',
-  1,
-  9000
-);
+) values
+  (
+    '99616000-0000-4000-8000-000000000092',
+    '99616000-0000-4000-8000-000000000001',
+    '99616000-0000-4000-8000-000000000090',
+    '99616000-0000-4000-8000-000000000091',
+    '99616000-0000-4000-8000-000000000051',
+    'Quoted Part',
+    'MODE-PART',
+    'product',
+    1,
+    9000
+  ),
+  (
+    '99616000-0000-4000-8000-000000000093',
+    '99616000-0000-4000-8000-000000000001',
+    '99616000-0000-4000-8000-000000000090',
+    '99616000-0000-4000-8000-000000000095',
+    null,
+    'Second Bike Labor',
+    null,
+    'service',
+    1,
+    2000
+  ),
+  (
+    '99616000-0000-4000-8000-000000000094',
+    '99616000-0000-4000-8000-000000000001',
+    '99616000-0000-4000-8000-000000000090',
+    null,
+    null,
+    'General inspection',
+    null,
+    'service',
+    1,
+    1000
+  );
 
 select is(
   (select job_type from public.mechanic_jobs
@@ -843,8 +882,8 @@ select is(
 select is(
   (select total_cost from public.mechanic_jobs
    where id = '99616000-0000-4000-8000-000000000090'),
-  8500::numeric,
-  'a service budget total includes its staged discount'
+  11500::numeric,
+  'a multi-bike service budget total includes linked and General lines plus its staged discount'
 );
 select is(
   (select count(*)::integer from public.sales_invoices),
@@ -882,6 +921,15 @@ select throws_ok(
   'an approved service budget protects its bicycle ficha and diagnosis'
 );
 
+select throws_ok(
+  $$update public.mechanic_job_items
+      set job_bike_id = '99616000-0000-4000-8000-000000000091'
+    where id = '99616000-0000-4000-8000-000000000094'$$,
+  '23514',
+  'Los ítems de una cotización decidida son inmutables; reábrela antes de editarlos.',
+  'approved service-budget attribution cannot be changed outside the audited conversion command'
+);
+
 create temporary table mode_service_budget_conversion as
 select public.convert_mechanic_job_to_billable(
   '99616000-0000-4000-8000-000000000090',
@@ -912,6 +960,12 @@ select is(
   'service-budget conversion creates exactly one linked invoice'
 );
 select is(
+  (select count(*)::integer from public.mechanic_job_bikes
+   where job_id = '99616000-0000-4000-8000-000000000090'),
+  2,
+  'service-budget conversion preserves the complete received multi-bike graph'
+);
+select is(
   (select diagnosis from public.mechanic_job_bikes
    where id = '99616000-0000-4000-8000-000000000091'),
   'Diagnóstico por bicicleta conservado',
@@ -929,6 +983,38 @@ select is(
    where id = '99616000-0000-4000-8000-000000000092'),
   '99616000-0000-4000-8000-000000000091'::uuid,
   'service-budget conversion preserves existing line-to-bike attribution'
+);
+select is(
+  (select job_bike_id from public.mechanic_job_items
+   where id = '99616000-0000-4000-8000-000000000094'),
+  null::uuid,
+  'service-budget conversion preserves an intentional General line as unscoped'
+);
+select is(
+  (select job_bike_id from public.mechanic_job_items
+   where id = '99616000-0000-4000-8000-000000000093'),
+  '99616000-0000-4000-8000-000000000095'::uuid,
+  'service-budget conversion does not collapse the second bicycle into the primary bicycle'
+);
+select is(
+  (select subtotal from public.mechanic_job_bikes
+   where id = '99616000-0000-4000-8000-000000000091'),
+  9000::numeric,
+  'conversion does not fold General work into the primary bicycle rollup'
+);
+select is(
+  (select subtotal from public.mechanic_job_bikes
+   where id = '99616000-0000-4000-8000-000000000095'),
+  2000::numeric,
+  'conversion preserves the second bicycle rollup'
+);
+select is(
+  (select invoice.total
+   from public.sales_invoices invoice
+   join public.mechanic_jobs job on job.invoice_id = invoice.id
+   where job.id = '99616000-0000-4000-8000-000000000090'),
+  11500::numeric,
+  'the linked invoice still includes bike-linked and General commercial lines'
 );
 select is(
   (select job.id::text from public.mechanic_jobs job
@@ -987,6 +1073,18 @@ insert into public.mechanic_jobs(
   clock_timestamp() + interval '7 days',
   'Rueda trasera para enrayar',
   'PRESUPUESTO'
+);
+
+insert into public.mechanic_job_items(
+  id, tenant_id, job_id, product_name, item_type, quantity, unit_price
+) values (
+  '99616000-0000-4000-8000-000000000073',
+  '99616000-0000-4000-8000-000000000001',
+  '99616000-0000-4000-8000-000000000072',
+  'Component labor',
+  'service',
+  1,
+  3000
 );
 
 select is(
@@ -1245,6 +1343,15 @@ insert into public.mechanic_jobs(
   clock_timestamp() + interval '7 days', 'PRESUPUESTO'
 );
 
+insert into public.mechanic_job_items(
+  id, tenant_id, job_id, product_name, item_type, quantity, unit_price
+) values (
+  '99616000-0000-4000-8000-000000000096',
+  '99616000-0000-4000-8000-000000000001',
+  '99616000-0000-4000-8000-000000000084',
+  'Component inspection', 'service', 1, 0
+);
+
 select public.transition_mechanic_job_quotation(
   '99616000-0000-4000-8000-000000000084',
   'approved', null,
@@ -1288,6 +1395,15 @@ insert into public.mechanic_jobs(
   'MODE-QUOTE-EXPLICIT-CROSS-TENANT-SUBJECT',
   'quotation', 'component', 'Rueda por seleccionar', 'pending',
   clock_timestamp() + interval '7 days', 'PRESUPUESTO'
+);
+
+insert into public.mechanic_job_items(
+  id, tenant_id, job_id, product_name, item_type, quantity, unit_price
+) values (
+  '99616000-0000-4000-8000-000000000097',
+  '99616000-0000-4000-8000-000000000001',
+  '99616000-0000-4000-8000-000000000085',
+  'Component inspection', 'service', 1, 0
 );
 
 select public.transition_mechanic_job_quotation(
@@ -1337,6 +1453,15 @@ insert into public.mechanic_jobs(
   'PRESUPUESTO'
 );
 
+insert into public.mechanic_job_items(
+  id, tenant_id, job_id, product_name, item_type, quantity, unit_price
+) values (
+  '99616000-0000-4000-8000-000000000098',
+  '99616000-0000-4000-8000-000000000001',
+  '99616000-0000-4000-8000-000000000082',
+  'Component inspection', 'service', 1, 0
+);
+
 select public.transition_mechanic_job_quotation(
   '99616000-0000-4000-8000-000000000082',
   'approved', null,
@@ -1368,6 +1493,15 @@ insert into public.mechanic_jobs(
   'pending',
   clock_timestamp() - interval '1 day',
   'PRESUPUESTO'
+);
+
+insert into public.mechanic_job_items(
+  id, tenant_id, job_id, product_name, item_type, quantity, unit_price
+) values (
+  '99616000-0000-4000-8000-000000000100',
+  '99616000-0000-4000-8000-000000000001',
+  '99616000-0000-4000-8000-000000000073',
+  'Quotation review', 'service', 1, 0
 );
 
 select throws_ok(

@@ -2880,8 +2880,11 @@ the retained audit row.
   `Facturar ahora` explicitly preserves the existing immediate-invoice path.
   This default is never retroactively applied when loading an existing
   billable service. Converting a service budget reuses every persisted
-  `mechanic_job_bikes` relationship and never asks the worker to replace the
-  received bicycle; only standalone Cotización chooses its approved outcome.
+  `mechanic_job_bikes` relationship, preserves every existing line attribution
+  and leaves intentional `job_bike_id = NULL` General lines as job-wide work.
+  It never asks the worker to replace the received bicycle; only standalone
+  Cotización chooses its approved outcome and may assign previously unscoped
+  lines to the bicycle selected during conversion.
   A product-only Cotización may become `sale/none` without inventing physical
   intake; otherwise it uses the bicycle/component intake picker. The approved
   `Presupuesto` or `Cotización` chip in the table's existing invoice column is
@@ -2916,7 +2919,11 @@ the retained audit row.
 - after a service-budget decision leaves `pending`, its
   `mechanic_job_bikes` aggregate (received bikes, ficha and diagnosis) is
   database-immutable until the audited proposal command reopens it. The
-  conversion command may only replay its idempotent no-op upsert.
+  conversion command validates and reuses that frozen graph without an upsert
+  and without rewriting `mechanic_job_items.job_bike_id`. The 2026-08-15
+  correction removed the former conversion-time NULL-line assignment because
+  its cost-rollup trigger attempted to mutate the frozen bike graph and because
+  NULL is a valid General scope, not missing data.
 - a `sale/none` row means a real product sale tracked operationally in the same
   workshop table without any bicycle or loose component received. It has no
   diagnosis or service-warranty window and never contributes to bicycle or

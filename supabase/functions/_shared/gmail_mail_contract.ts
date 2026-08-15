@@ -1,3 +1,5 @@
+import { mailProviderRateLimitRetryAt } from "./mail_provider_rate_limit.ts";
+
 export const GMAIL_API_ORIGIN = "https://www.googleapis.com";
 
 const gmailMessageFields = [
@@ -17,6 +19,97 @@ export function parseKnownGmailIds(value: unknown): Set<string> {
       .filter((item) => item.length > 0)
       .slice(0, 500),
   );
+}
+
+/**
+ * Reconciles provider-owned Inbox membership and read state without issuing a
+ * `messages.get` request for every cached row. Gmail's list endpoint can return
+ * the newest 500 Inbox IDs and the newest 500 unread Inbox IDs for five quota
+ * units each; every unread message inside the newest 500 Inbox rows is
+ * necessarily present in that unread window.
+ *
+ * IDs absent from [currentInboxIds] are intentionally omitted. The caller can
+ * therefore treat this as an authoritative snapshot for the same bounded
+ * cache window and remove messages that were archived, trashed, or displaced
+ * beyond it.
+ */
+export function buildKnownGmailInboxMarkers(
+  currentInboxIds: readonly string[],
+  unreadInboxIds: ReadonlySet<string>,
+  knownIds: ReadonlySet<string>,
+): Array<Record<string, unknown>> {
+  const emitted = new Set<string>();
+  const markers: Array<Record<string, unknown>> = [];
+
+  for (const rawId of currentInboxIds) {
+    const id = String(rawId ?? "").trim();
+    if (!id || emitted.has(id) || !knownIds.has(id)) continue;
+    emitted.add(id);
+    markers.push({
+      id,
+      known: true,
+      labelIds: unreadInboxIds.has(id) ? ["INBOX", "UNREAD"] : ["INBOX"],
+    });
+  }
+
+  return markers;
+}
+
+/**
+ * Chooses the bounded set of unknown messages that needs full metadata.
+ * Visible new messages are always included. If cached rows left Inbox, older
+ * unknown rows are added only far enough to fill those holes; a routine
+ * refresh must not silently preload the rest of the 500-row snapshot.
+ */
+export function selectUnknownGmailInboxDetailIds(
+  currentInboxIds: readonly string[],
+  visibleInboxIds: readonly string[],
+  knownIds: ReadonlySet<string>,
+  maxDetails: number,
+): string[] {
+  const current = Array.from(
+    new Set(currentInboxIds.map((id) => String(id ?? "").trim()).filter(Boolean)),
+  );
+  const visible = Array.from(
+    new Set(visibleInboxIds.map((id) => String(id ?? "").trim()).filter(Boolean)),
+  );
+  const selected = visible.filter((id) => !knownIds.has(id));
+  const selectedSet = new Set(selected);
+  const presentKnownCount = current.reduce(
+    (count, id) => count + (knownIds.has(id) ? 1 : 0),
+    0,
+  );
+  let replacementsNeeded = Math.max(
+    0,
+    knownIds.size - presentKnownCount - selected.length,
+  );
+
+  for (const id of current) {
+    if (selected.length >= maxDetails || replacementsNeeded <= 0) break;
+    if (knownIds.has(id) || selectedSet.has(id)) continue;
+    selected.push(id);
+    selectedSet.add(id);
+    replacementsNeeded -= 1;
+  }
+
+  return selected.slice(0, Math.max(maxDetails, 0));
+}
+
+/**
+ * Extracts Gmail's provider-owned Retry-After timestamp from an error payload.
+ * The API currently returns it inside `error.message`, not as a response
+ * header through the Supabase client. A bounded fallback prevents an older
+ * polling client from immediately hammering the same exhausted mailbox.
+ */
+export function gmailRateLimitRetryAt(
+  payload: unknown,
+  nowMs = Date.now(),
+  retryAfterHeader?: string | null,
+): string {
+  return mailProviderRateLimitRetryAt(payload, {
+    nowMs,
+    retryAfterHeader,
+  });
 }
 
 /**

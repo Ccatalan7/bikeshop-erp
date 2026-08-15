@@ -30,6 +30,10 @@ void main() {
     )['row-1']!;
 
     expect(proposals, hasLength(1));
+    expect(
+      proposals.single.matchKind,
+      BankReconciliationMatchKind.direct,
+    );
     expect(proposals.single.confidence, BankReconciliationConfidence.high);
     expect(proposals.single.isSelectedByDefault, isTrue);
 
@@ -313,6 +317,78 @@ void main() {
       isTrue,
     );
   });
+
+  test('configured terminal combines debit and credit with each rail terms',
+      () {
+    final movement = _movement(
+      id: 'configured-mixed-deposit',
+      date: const BankCivilDate(2026, 8, 12),
+      direction: BankMovementDirection.credit,
+      amount: 97631,
+      description: 'Pago Abonos Debito Y Credito Transbank 0966893109',
+    );
+    final candidates = <BankReconciliationCandidate>[
+      _separatedCardSale(
+        'debit-sale',
+        const BankCivilDate(2026, 8, 10),
+        60000,
+        code: 'card_debit',
+        instrument: BankPaymentInstrument.debit,
+      ),
+      _separatedCardSale(
+        'credit-sale',
+        const BankCivilDate(2026, 8, 10),
+        40000,
+        code: 'card_credit',
+        instrument: BankPaymentInstrument.credit,
+      ),
+    ];
+
+    final proposals = matcher.match(
+      movements: [movement],
+      candidates: candidates,
+      terminalPolicies: _transbankSeparatedPolicies(),
+    )['configured-mixed-deposit']!;
+
+    expect(proposals, hasLength(1));
+    expect(
+      proposals.single.matchKind,
+      BankReconciliationMatchKind.processorEstimate,
+    );
+    expect(proposals.single.allocations, hasLength(2));
+    expect(proposals.single.estimatedGrossClp, 100000);
+    expect(proposals.single.estimatedDifferenceClp, 2369);
+    expect(proposals.single.instrument, BankPaymentInstrument.unknown);
+    expect(
+        proposals.single.reasons.join(' '), contains('1 débito + 1 crédito'));
+    expect(proposals.single.isSelectedByDefault, isFalse);
+  });
+
+  test('credit rail cannot settle before its configured business-day release',
+      () {
+    final movement = _movement(
+      id: 'credit-too-early',
+      date: const BankCivilDate(2026, 8, 11),
+      direction: BankMovementDirection.credit,
+      amount: 38881,
+      description: 'Pago Abonos Debito Y Credito Transbank 0966893109',
+    );
+    final candidate = _separatedCardSale(
+      'credit-sale',
+      const BankCivilDate(2026, 8, 10),
+      40000,
+      code: 'card_credit',
+      instrument: BankPaymentInstrument.credit,
+    );
+
+    final proposals = matcher.match(
+      movements: [movement],
+      candidates: [candidate],
+      terminalPolicies: _transbankSeparatedPolicies(),
+    )['credit-too-early']!;
+
+    expect(proposals, isEmpty);
+  });
 }
 
 BankStatementMovement _movement({
@@ -373,3 +449,56 @@ BankReconciliationCandidate _cardSale(
     instrument: BankPaymentInstrument.unknown,
   );
 }
+
+BankReconciliationCandidate _separatedCardSale(
+  String id,
+  BankCivilDate date,
+  int amount, {
+  required String code,
+  required BankPaymentInstrument instrument,
+}) {
+  return BankReconciliationCandidate(
+    targetKind: BankReconciliationTargetKind.salesPayment,
+    targetId: id,
+    direction: BankMovementDirection.credit,
+    amountClp: amount,
+    occurredOn: date,
+    label: 'Venta $id',
+    paymentMethodCode: code,
+    provider: BankSettlementProvider.transbank,
+    instrument: instrument,
+  );
+}
+
+List<BankTerminalMatchPolicy> _transbankSeparatedPolicies() => [
+      BankTerminalMatchPolicy(
+        profileId: 'profile-transbank',
+        providerCode: 'transbank',
+        providerName: 'Transbank',
+        terminalName: 'Transbank POS',
+        descriptorPatterns: const ['transbank', 'abonos debito y credito'],
+        paymentMethodCode: 'card_debit',
+        instrument: BankPaymentInstrument.debit,
+        commissionRateBps: 175,
+        commissionVatBps: 1900,
+        settlementBusinessDays: 1,
+        bookingGraceBusinessDays: 2,
+        amountToleranceClp: 1000,
+        effectiveFrom: const BankCivilDate(2026, 5, 20),
+      ),
+      BankTerminalMatchPolicy(
+        profileId: 'profile-transbank',
+        providerCode: 'transbank',
+        providerName: 'Transbank',
+        terminalName: 'Transbank POS',
+        descriptorPatterns: const ['transbank', 'abonos debito y credito'],
+        paymentMethodCode: 'card_credit',
+        instrument: BankPaymentInstrument.credit,
+        commissionRateBps: 235,
+        commissionVatBps: 1900,
+        settlementBusinessDays: 2,
+        bookingGraceBusinessDays: 2,
+        amountToleranceClp: 1000,
+        effectiveFrom: const BankCivilDate(2026, 5, 20),
+      ),
+    ];

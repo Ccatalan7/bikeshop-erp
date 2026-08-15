@@ -388,7 +388,7 @@ class _QuickAccessExpenseRailState extends State<QuickAccessExpenseRail> {
           .toList()
         ..sort((left, right) => left.name.compareTo(right.name));
       final methods =
-          List<PaymentMethod>.from(paymentMethodService.paymentMethods)
+          List<PaymentMethod>.from(paymentMethodService.outgoingPaymentMethods)
             ..sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
       final nextNumber = results[5] as String;
       final templates = (results[6] as List<ExpenseTemplate>)

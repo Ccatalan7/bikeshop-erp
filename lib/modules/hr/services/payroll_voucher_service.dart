@@ -1131,7 +1131,13 @@ class PayrollVoucherService extends ChangeNotifier {
 
   /// Fetches available payment methods.
   Future<List<Map<String, dynamic>>> getPaymentMethods() async {
-    final methods = await _db.select('payment_methods', orderBy: 'name');
+    final rawMethods = await _db.select('payment_methods', orderBy: 'name');
+    final methods = rawMethods
+        .where((method) => method['is_active'] != false)
+        .where((method) {
+      final scope = method['usage_scope']?.toString() ?? 'both';
+      return scope == 'outbound' || scope == 'both';
+    }).toList(growable: false);
     final accountIds = methods
         .map((method) => method['account_id']?.toString().trim())
         .whereType<String>()

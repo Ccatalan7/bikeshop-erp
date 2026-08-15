@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../shared/services/database_service.dart';
+import '../../models/account.dart';
+import '../../utils/bank_ledger_account_policy.dart';
 import '../../../hr/models/payroll_statement_reconciliation.dart';
 import '../../../hr/services/payroll_bank_statement_parser.dart';
 import '../../../hr/services/payroll_statement_extraction_service.dart';
@@ -53,22 +54,22 @@ class BankReconciliationService {
   Future<List<BankReconciliationAccountOption>> loadBankAccounts() async {
     final rows = await _database.supabase
         .from('accounts')
-        .select('id, code, name, type, is_active')
+        .select(
+          'id, tenant_id, code, name, type, category, parent_id, is_active',
+        )
         .eq('type', 'asset')
         .eq('is_active', true)
         .order('code');
+    final accounts = rows
+        .map((raw) => Account.fromJson(Map<String, dynamic>.from(raw)))
+        .toList(growable: false);
     final result = <BankReconciliationAccountOption>[];
-    for (final raw in rows) {
-      final row = Map<String, dynamic>.from(raw);
-      final id = row['id']?.toString().trim() ?? '';
-      final code = row['code']?.toString().trim() ?? '';
-      final name = row['name']?.toString().trim() ?? '';
+    for (final account
+        in BankLedgerAccountPolicy.activeBankAccounts(accounts)) {
+      final id = account.id?.trim() ?? '';
+      final code = account.code.trim();
+      final name = account.name.trim();
       if (id.isEmpty || code.isEmpty || name.isEmpty) continue;
-      final normalized = _normalize('$code $name');
-      if (!normalized.contains('banco') &&
-          !normalized.contains('cuenta corriente')) {
-        continue;
-      }
       result.add(
         BankReconciliationAccountOption(
           accountId: id,
@@ -90,10 +91,10 @@ class BankReconciliationService {
         .order('code');
     final methodRows = await _database.supabase
         .from('payment_methods')
-        .select('id, code, name, account_id, is_active')
+        .select('id, code, name, account_id, is_active, usage_scope')
         .eq('account_id', erpAccountId)
         .eq('is_active', true)
-        .order('name');
+        .inFilter('usage_scope', const ['outbound', 'both']).order('name');
 
     final accounts = <BankReconciliationLedgerAccountOption>[];
     for (final raw in accountRows) {
@@ -207,9 +208,14 @@ class BankReconciliationService {
       from: dated.first.addDays(-14),
       to: dated.last.addDays(7),
     );
+    final terminalPolicies = await loadTerminalMatchPolicies(
+      from: dated.first.addDays(-30),
+      to: dated.last,
+    );
     final proposals = _matcher.match(
       movements: movements,
       candidates: candidates,
+      terminalPolicies: terminalPolicies,
     );
 
     return BankReconciliationPreparedDraft(
@@ -232,6 +238,79 @@ class BankReconciliationService {
         ...parsed.warnings.map((warning) => warning.message),
       ],
     );
+  }
+
+  Future<List<BankTerminalMatchPolicy>> loadTerminalMatchPolicies({
+    required BankCivilDate from,
+    required BankCivilDate to,
+  }) async {
+    try {
+      final profileRows = await _database.supabase
+          .from('payment_terminal_profiles')
+          .select(
+            'id,provider_code,provider_name,terminal_name,descriptor_patterns',
+          )
+          .eq('is_active', true);
+      final termRows = await _database.supabase
+          .from('payment_terminal_terms')
+          .select(
+            'terminal_profile_id,instrument,commission_rate_bps,'
+            'commission_vat_bps,settlement_business_days,'
+            'booking_grace_business_days,amount_tolerance_clp,'
+            'effective_from,effective_to,'
+            'payment_methods!payment_terminal_terms_method_fk(code,is_active)',
+          )
+          .lte('effective_from', to.toString())
+          .or('effective_to.is.null,effective_to.gte.${from.toString()}');
+      final profileById = <String, Map<String, dynamic>>{
+        for (final raw in profileRows)
+          raw['id'].toString(): Map<String, dynamic>.from(raw),
+      };
+      final policies = <BankTerminalMatchPolicy>[];
+      for (final raw in termRows) {
+        final term = Map<String, dynamic>.from(raw);
+        final profile = profileById[term['terminal_profile_id']?.toString()];
+        final method = term['payment_methods'];
+        if (profile == null || method is! Map || method['is_active'] == false) {
+          continue;
+        }
+        final code = method['code']?.toString().trim() ?? '';
+        final effectiveFrom = _civilDate(term['effective_from']);
+        if (code.isEmpty || effectiveFrom == null) continue;
+        policies.add(
+          BankTerminalMatchPolicy(
+            profileId: profile['id'].toString(),
+            providerCode: profile['provider_code']?.toString() ?? 'other',
+            providerName: profile['provider_name']?.toString() ?? 'Proveedor',
+            terminalName: profile['terminal_name']?.toString() ?? 'Terminal',
+            descriptorPatterns:
+                (profile['descriptor_patterns'] as List? ?? const [])
+                    .map((item) => item.toString())
+                    .toList(growable: false),
+            paymentMethodCode: code,
+            instrument: _instrument(term['instrument']),
+            commissionRateBps:
+                (term['commission_rate_bps'] as num?)?.toInt() ?? 0,
+            commissionVatBps:
+                (term['commission_vat_bps'] as num?)?.toInt() ?? 0,
+            settlementBusinessDays:
+                (term['settlement_business_days'] as num?)?.toInt() ?? 0,
+            bookingGraceBusinessDays:
+                (term['booking_grace_business_days'] as num?)?.toInt() ?? 0,
+            amountToleranceClp:
+                (term['amount_tolerance_clp'] as num?)?.toInt() ?? 0,
+            effectiveFrom: effectiveFrom,
+            effectiveTo: _civilDate(term['effective_to']),
+          ),
+        );
+      }
+      return List.unmodifiable(policies);
+    } catch (error) {
+      // A legacy tenant can still use the conservative combined-card matcher
+      // while this independently deployable settings schema is unavailable.
+      debugPrint('BankReconciliationService terminal policies: $error');
+      return const [];
+    }
   }
 
   Future<List<BankReconciliationCandidate>> loadCandidates({
@@ -513,6 +592,19 @@ class BankReconciliationService {
     );
   }
 
+  BankPaymentInstrument _instrument(Object? value) =>
+      switch (value?.toString()) {
+        'debit' => BankPaymentInstrument.debit,
+        'credit' => BankPaymentInstrument.credit,
+        'prepaid' => BankPaymentInstrument.prepaid,
+        _ => BankPaymentInstrument.unknown,
+      };
+
+  BankCivilDate? _civilDate(Object? value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    return parsed == null ? null : BankCivilDate.fromDateTime(parsed);
+  }
+
   Map<String, dynamic> _rowPayload(BankStatementMovement movement) {
     final base = <String>[
       movement.bookingDate?.toString() ?? '',
@@ -642,6 +734,7 @@ class BankReconciliationService {
 
   String _matchKindCode(BankReconciliationMatchKind kind) => switch (kind) {
         BankReconciliationMatchKind.direct => 'direct',
+        BankReconciliationMatchKind.processorEstimate => 'processor_estimate',
         BankReconciliationMatchKind.transbankEstimate => 'transbank_estimate',
         BankReconciliationMatchKind.manual => 'manual',
       };

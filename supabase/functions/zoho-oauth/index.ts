@@ -10,6 +10,13 @@ import {
   type ZohoSenderIdentity,
 } from "../_shared/zoho_sender_identities.ts";
 import { assertAllowedZohoMailProxyRequest } from "../_shared/zoho_mail_proxy_contract.ts";
+import {
+  activeMailProviderRateLimitUntil,
+  advanceMailProviderRateLimit,
+  mailProviderRateLimitRetryAt,
+  withMailProviderRateLimit,
+  withoutMailProviderRateLimit,
+} from "../_shared/mail_provider_rate_limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -257,28 +264,156 @@ async function handleProxy(
     zohoMailOrigin,
     providerAccountId,
   );
-  const accessToken = await ensureValidAccessToken(admin, account);
-
-  try {
-    const response = await fetchAuthorizedProxyRequest(
-      proxyUrl,
-      body,
-      account,
-      accessToken,
-      proxyKind === "send",
-    );
-    if (response.status !== 401) return response;
-  } catch (error) {
-    if (!(error instanceof ZohoApiError) || error.status !== 401) throw error;
+  const activeRateLimitUntil = activeMailProviderRateLimitUntil(
+    account.provider_metadata,
+    provider,
+  );
+  if (activeRateLimitUntil) {
+    return zohoRateLimitResponse(activeRateLimitUntil);
   }
 
-  const refreshedToken = await refreshStoredAccessToken(admin, account);
-  return await fetchAuthorizedProxyRequest(
-    proxyUrl,
-    body,
-    account,
-    refreshedToken,
-    proxyKind === "send",
+  let accessToken = await ensureValidAccessToken(admin, account);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetchAuthorizedProxyRequest(
+        proxyUrl,
+        body,
+        account,
+        accessToken,
+        proxyKind === "send",
+      );
+      if (response.status !== 401 || attempt > 0) {
+        return await finalizeZohoProxyResponse(admin, account, response);
+      }
+    } catch (error) {
+      if (error instanceof ZohoApiError && error.status === 429) {
+        const providerRetryAt = mailProviderRateLimitRetryAt(error);
+        const cooldown = await rememberZohoRateLimit(
+          admin,
+          account,
+          providerRetryAt,
+        );
+        const effectiveRetryAt = zohoEffectiveRateLimitUntil(
+          cooldown.retryAt,
+        );
+        console.warn("zoho_provider_rate_limited", {
+          operation: proxyKind,
+          provider_retry_after: providerRetryAt,
+          effective_retry_after: effectiveRetryAt,
+          consecutive_attempts: cooldown.attempts,
+        });
+        return zohoRateLimitResponse(effectiveRetryAt);
+      }
+      if (
+        !(error instanceof ZohoApiError) ||
+        error.status !== 401 ||
+        attempt > 0
+      ) {
+        throw error;
+      }
+    }
+    accessToken = await refreshStoredAccessToken(admin, account);
+  }
+
+  throw new Error("Zoho authorization retry was exhausted");
+}
+
+async function finalizeZohoProxyResponse(
+  admin: SupabaseAdminClient,
+  account: EmailAccount,
+  response: Response,
+) {
+  if (response.status === 429) {
+    const payload = await response.clone().json().catch(() => ({}));
+    const providerRetryAt = mailProviderRateLimitRetryAt(payload, {
+      retryAfterHeader: response.headers.get("Retry-After"),
+    });
+    const cooldown = await rememberZohoRateLimit(
+      admin,
+      account,
+      providerRetryAt,
+    );
+    const effectiveRetryAt = zohoEffectiveRateLimitUntil(cooldown.retryAt);
+    console.warn("zoho_provider_rate_limited", {
+      operation: "proxy",
+      provider_retry_after: providerRetryAt,
+      effective_retry_after: effectiveRetryAt,
+      consecutive_attempts: cooldown.attempts,
+    });
+    return zohoRateLimitResponse(effectiveRetryAt, payload);
+  }
+
+  if (response.ok) await clearZohoRateLimit(admin, account);
+  return response;
+}
+
+async function rememberZohoRateLimit(
+  admin: SupabaseAdminClient,
+  account: EmailAccount,
+  providerRetryAt: string,
+) {
+  const cooldown = advanceMailProviderRateLimit(
+    account.provider_metadata,
+    provider,
+    providerRetryAt,
+  );
+  const { error } = await admin
+    .from("email_accounts")
+    .update({
+      provider_metadata: cooldown.metadata,
+      last_error: "zoho_rate_limited",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", account.id);
+  if (error) throw error;
+  return cooldown;
+}
+
+function zohoEffectiveRateLimitUntil(retryAt: string): string {
+  return activeMailProviderRateLimitUntil(
+    withMailProviderRateLimit({}, provider, retryAt),
+    provider,
+  ) ?? retryAt;
+}
+
+async function clearZohoRateLimit(
+  admin: SupabaseAdminClient,
+  account: EmailAccount,
+) {
+  const cleared = withoutMailProviderRateLimit(
+    account.provider_metadata,
+    provider,
+  );
+  if (!cleared.changed) return;
+  const { error } = await admin
+    .from("email_accounts")
+    .update({
+      provider_metadata: cleared.metadata,
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", account.id);
+  if (error) throw error;
+}
+
+function zohoRateLimitResponse(
+  retryAt: string,
+  providerPayload?: unknown,
+) {
+  const retrySeconds = Math.max(
+    1,
+    Math.ceil((Date.parse(retryAt) - Date.now()) / 1000),
+  );
+  return jsonResponse(
+    {
+      code: "provider_rate_limited",
+      provider,
+      error: "Zoho rate limit cooldown is active",
+      retry_after: retryAt,
+      provider_error: providerPayload ?? null,
+    },
+    429,
+    { "Retry-After": String(retrySeconds) },
   );
 }
 
@@ -365,8 +500,14 @@ async function fetchWithToken(
     responseData = { text: responseText };
   }
 
+  const responseHeaders: Record<string, string> = {
+    ...corsHeaders,
+    "Content-Type": "application/json",
+  };
+  const retryAfter = response.headers.get("Retry-After");
+  if (retryAfter) responseHeaders["Retry-After"] = retryAfter;
   return new Response(JSON.stringify(responseData), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: responseHeaders,
     status: response.status,
   });
 }
@@ -735,10 +876,18 @@ function cleanText(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function jsonResponse(payload: unknown, status = 200) {
+function jsonResponse(
+  payload: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {},
+) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      ...extraHeaders,
+    },
   });
 }
 
@@ -761,6 +910,7 @@ type EmailAccount = {
   token_type?: string | null;
   scope?: string | null;
   token_expires_at?: string | null;
+  provider_metadata?: Record<string, unknown> | null;
   is_active?: boolean | null;
   updated_at?: string | null;
 };

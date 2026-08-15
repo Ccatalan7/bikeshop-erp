@@ -288,6 +288,7 @@ String getRouteTitle(String path) {
     '/settings/business-hours': 'Horario de Atención',
     '/settings/users': 'Usuarios y roles',
     '/settings/payment-methods': 'Métodos de Pago',
+    '/settings/payment-terminals': 'Terminales y Abonos',
     '/settings/bluetooth-scanner': 'Escáner Bluetooth',
     '/settings/keyboard-scanner': 'Escáner USB',
     '/settings/remote-scanner': 'Escáner Remoto',

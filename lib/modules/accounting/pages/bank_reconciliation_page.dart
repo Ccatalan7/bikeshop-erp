@@ -51,7 +51,11 @@ class BankReconciliationActions {
   }) apply;
 }
 
-enum _MovementFilter { all, proposed, transbank, unmatched }
+enum _MovementFilter { all, proposed, processor, unmatched }
+
+bool _isProcessorEstimate(BankReconciliationMatchKind kind) =>
+    kind == BankReconciliationMatchKind.processorEstimate ||
+    kind == BankReconciliationMatchKind.transbankEstimate;
 
 class BankReconciliationPage extends StatefulWidget {
   const BankReconciliationPage({
@@ -415,9 +419,8 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       return switch (_filter) {
         _MovementFilter.all => true,
         _MovementFilter.proposed => row.proposals.isNotEmpty,
-        _MovementFilter.transbank => row.proposals.any((proposal) =>
-            proposal.matchKind ==
-            BankReconciliationMatchKind.transbankEstimate),
+        _MovementFilter.processor => row.proposals
+            .any((proposal) => _isProcessorEstimate(proposal.matchKind)),
         _MovementFilter.unmatched => row.proposals.isEmpty,
       };
     }).toList(growable: false);
@@ -860,7 +863,7 @@ class _ReviewToolbar extends StatelessWidget {
               VbShortSelectOption(
                   value: _MovementFilter.proposed, label: 'Con propuesta'),
               VbShortSelectOption(
-                  value: _MovementFilter.transbank, label: 'Transbank'),
+                  value: _MovementFilter.processor, label: 'Recaudadores'),
               VbShortSelectOption(
                   value: _MovementFilter.unmatched, label: 'Sin asociación'),
             ],
@@ -1135,8 +1138,7 @@ class _ProposalSummary extends StatelessWidget {
       return Text('Sin operación existente candidata',
           style: Theme.of(context).textTheme.bodySmall);
     }
-    final transbank =
-        value.matchKind == BankReconciliationMatchKind.transbankEstimate;
+    final processor = _isProcessorEstimate(value.matchKind);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1146,12 +1148,12 @@ class _ProposalSummary extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             VbStatusBadge(
-              label: transbank
+              label: processor
                   ? 'Estimado · revisar'
                   : value.isSelectedByDefault
                       ? 'Directo incluido'
                       : 'Propuesta',
-              tone: transbank
+              tone: processor
                   ? VbStatusTone.info
                   : value.isSelectedByDefault
                       ? VbStatusTone.success
@@ -1159,7 +1161,7 @@ class _ProposalSummary extends StatelessWidget {
               dense: true,
             ),
             Text(
-              transbank
+              processor
                   ? '${value.allocations.length} ventas con tarjeta'
                   : value.allocations.first.candidate.label,
               style: Theme.of(context).textTheme.bodyMedium,
@@ -1523,8 +1525,7 @@ class _ProposalChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final transbank =
-        proposal.matchKind == BankReconciliationMatchKind.transbankEstimate;
+    final processor = _isProcessorEstimate(proposal.matchKind);
     final theme = Theme.of(context);
     return Card(
       key: ValueKey(
@@ -1553,13 +1554,13 @@ class _ProposalChoice extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      transbank
-                          ? '${proposal.allocations.length} ventas Transbank estimadas'
+                      processor
+                          ? '${proposal.allocations.length} ventas del recaudador estimadas'
                           : proposal.allocations.first.candidate.label,
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 4),
-                    if (transbank) ...[
+                    if (processor) ...[
                       Text(
                         'Bruto ${_money(proposal.estimatedGrossClp)} − depósito '
                         '${_money(proposal.allocatedBankAmountClp)} = '

@@ -80,5 +80,72 @@ void main() {
     test('keeps the quiet legacy default for an omitted field', () {
       expect(parseZohoReadStatus(null), isTrue);
     });
+
+    test('uses the documented 200-row maximum only for routine Inbox sync', () {
+      expect(
+        resolveZohoMessageListLimit(
+          folder: MailFolder.inbox,
+          requestedLimit: 50,
+        ),
+        200,
+      );
+      expect(
+        resolveZohoMessageListLimit(
+          folder: MailFolder.inbox,
+          requestedLimit: 50,
+          searchQuery: 'bike',
+        ),
+        50,
+      );
+      expect(
+        resolveZohoMessageListLimit(
+          folder: MailFolder.sent,
+          requestedLimit: 500,
+        ),
+        200,
+      );
+    });
+  });
+
+  group('Provider-neutral rate-limit parsing', () {
+    final now = DateTime.utc(2026, 8, 15, 19);
+
+    test('accepts Gmail timestamp and Zoho normalized payload', () {
+      final gmail = EmailProviderRateLimitException.tryParse(
+        'gmail',
+        'FunctionException(status: 429, message: User-rate limit exceeded. '
+            'Retry after 2026-08-15T19:15:00.000Z)',
+        now: now,
+      );
+      final zoho = EmailProviderRateLimitException.tryParse(
+        'zoho',
+        const {
+          'code': 'provider_rate_limited',
+          'retry_after': '2026-08-15T19:20:00.000Z',
+        },
+        now: now,
+      );
+
+      expect(gmail?.retryAt, DateTime.utc(2026, 8, 15, 19, 15));
+      expect(zoho?.retryAt, DateTime.utc(2026, 8, 15, 19, 20));
+    });
+
+    test('uses a bounded fallback only for actual throttle errors', () {
+      final limited = EmailProviderRateLimitException.tryParse(
+        'zoho',
+        'Zoho API error: rate limit exceeded',
+        now: now,
+      );
+
+      expect(limited?.retryAt, DateTime.utc(2026, 8, 15, 19, 5));
+      expect(
+        EmailProviderRateLimitException.tryParse(
+          'zoho',
+          'Zoho API error: invalid folder',
+          now: now,
+        ),
+        isNull,
+      );
+    });
   });
 }

@@ -98,7 +98,10 @@ void main() {
         expect(find.text('Clasificar cuenta'), findsOneWidget);
         expect(find.text('Excluir'), findsOneWidget);
         expect(find.text('Dejar pendiente'), findsOneWidget);
-        expect(find.text('2 ventas Transbank estimadas'), findsOneWidget);
+        expect(
+          find.text('2 ventas del recaudador estimadas'),
+          findsOneWidget,
+        );
         expect(find.textContaining('Bruto'), findsOneWidget);
         expect(
           find.byType(ModalBarrier).evaluate().length,
@@ -145,7 +148,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Vincular operación'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('2 ventas Transbank estimadas'));
+    await tester.tap(find.text('2 ventas del recaudador estimadas'));
     await tester.pumpAndSettle();
 
     expect(

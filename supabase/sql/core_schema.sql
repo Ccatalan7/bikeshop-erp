@@ -75549,6 +75549,17 @@ comment on column public.suppliers.portal_password is
 -- projection. Historical nulls remain unknown rather than inferred.
 \ir ../migrations/20260814210000_mechanic_job_registration_actor.sql
 
+-- Service-budget conversion preserves every received-bike relationship and
+-- every line attribution, including intentional NULL General scope. Only a
+-- standalone quotation may attribute unscoped lines inside the audited RPC.
+\ir ../migrations/20260815190000_preserve_service_budget_line_attribution.sql
+
+-- Separate debit and credit rails at their acquiring terminal. Commercial
+-- terms are versioned per provider/terminal so bank reconciliation does not
+-- encode Transbank policy in the client and future providers can coexist.
+\ir ../migrations/20260815200000_card_terminal_profiles_and_rails.sql
+\ir ../migrations/20260815201000_card_terminal_settlement_accounting.sql
+
 -- Bootstrap-wide service-role grants above predate the notification ACL
 -- hardening. Preserve the production end state after every included migration.
 revoke all on function public.create_sales_payment_erp_notification()

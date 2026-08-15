@@ -354,16 +354,31 @@ class GmailProvider extends EmailProvider {
   }) async {
     if (!isAuthenticated) throw Exception('Gmail account is not connected');
 
-    final response = await _supabase.functions.invoke(
-      'gmail-oauth',
-      body: {
-        'proxy_url': url,
-        'method': method,
-        'body': body,
-      },
-    );
+    late final FunctionResponse response;
+    try {
+      response = await _supabase.functions.invoke(
+        'gmail-oauth',
+        body: {
+          'proxy_url': url,
+          'method': method,
+          'body': body,
+        },
+      );
+    } catch (error) {
+      final rateLimit = EmailProviderRateLimitException.tryParse(
+        _providerId,
+        error,
+      );
+      if (rateLimit != null) throw rateLimit;
+      rethrow;
+    }
 
     if (response.status != 200 && response.status != 204) {
+      final rateLimit = EmailProviderRateLimitException.tryParse(
+        _providerId,
+        response.data,
+      );
+      if (rateLimit != null) throw rateLimit;
       throw Exception('Gmail API error: ${response.data}');
     }
 
@@ -437,10 +452,21 @@ class GmailProvider extends EmailProvider {
       );
 
       if (response.status != 200) {
+        final rateLimit = EmailProviderRateLimitException.tryParse(
+          _providerId,
+          response.data,
+        );
+        if (rateLimit != null) throw rateLimit;
         throw Exception('Gmail API error: ${response.data}');
       }
 
       final data = response.data as Map<String, dynamic>? ?? {};
+      if (data['deferred'] == true) {
+        throw EmailProviderRateLimitException.tryParse(
+          _providerId,
+          {...data, 'code': 'provider_rate_limited'},
+        )!;
+      }
       var nextToken = data['nextPageToken']?.toString();
       if (nextToken?.isEmpty ?? false) nextToken = null;
       if (isSearch) {
@@ -469,6 +495,14 @@ class GmailProvider extends EmailProvider {
       return _emails;
     } catch (e) {
       debugPrint('getInbox error: $e');
+      final rateLimit = EmailProviderRateLimitException.tryParse(
+        _providerId,
+        e,
+      );
+      if (rateLimit != null) {
+        _error = null;
+        throw rateLimit;
+      }
       _error = _friendlyGmailError(e);
       throw Exception(_error);
     } finally {

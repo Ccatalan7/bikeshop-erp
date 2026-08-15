@@ -2143,7 +2143,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     if (mounted) {
       setState(() {
         _isLoadingPaymentMethods = false;
-        _paymentMethods = paymentMethodService.paymentMethods;
+        _paymentMethods = paymentMethodService.outgoingPaymentMethods;
         if (_paymentMethods.isNotEmpty) {
           _selectedPaymentMethod = _paymentMethods.first;
         }

@@ -135,9 +135,9 @@ class PurchaseCreditNoteService {
   Future<List<PurchaseRefundPaymentMethod>> getRefundPaymentMethods() async {
     final rows = await _client
         .from('payment_methods')
-        .select('id,name,requires_reference')
+        .select('id,name,requires_reference,usage_scope')
         .eq('is_active', true)
-        .order('sort_order');
+        .inFilter('usage_scope', const ['inbound', 'both']).order('sort_order');
     return rows
         .map((row) => PurchaseRefundPaymentMethod.fromJson(
             Map<String, dynamic>.from(row)))

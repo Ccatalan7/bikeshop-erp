@@ -310,7 +310,8 @@ class _InvoicePaymentLayoutState extends State<InvoicePaymentLayout> {
                         // Payment Method Selector
                         Consumer<PaymentMethodService>(
                           builder: (context, paymentMethodService, child) {
-                            final methods = paymentMethodService.paymentMethods;
+                            final methods =
+                                paymentMethodService.incomingPaymentMethods;
                             if (methods.isEmpty) {
                               return const Text(
                                   'No hay métodos de pago disponibles');

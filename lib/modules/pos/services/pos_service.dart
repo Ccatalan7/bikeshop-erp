@@ -311,9 +311,16 @@ class POSService extends ChangeNotifier {
 
   // Checkout process
   pm.PaymentMethod? _databasePaymentMethodFor(POSPayment payment) {
+    final canonical = _paymentMethodService.getPaymentMethodById(
+      payment.method.id,
+    );
+    if (canonical != null) return canonical;
     return switch (payment.method.type) {
       PaymentType.cash => _paymentMethodService.getPaymentMethodByCode('cash'),
-      PaymentType.card => _paymentMethodService.getPaymentMethodByCode('card'),
+      // A generic card fallback would collapse debit/credit and could post a
+      // customer collection to the legacy outbound business-card account.
+      // Card tenders must preserve the exact database method selected by POS.
+      PaymentType.card => null,
       PaymentType.transfer =>
         _paymentMethodService.getPaymentMethodByCode('transfer'),
       PaymentType.voucher =>

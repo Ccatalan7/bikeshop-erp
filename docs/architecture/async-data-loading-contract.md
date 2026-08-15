@@ -237,6 +237,75 @@ Referencias vigentes:
 - `test/widgets/product_autocomplete_field_test.dart`
 - `test/widgets/entity_chat_sidebar_deferred_loading_test.dart`
 
+### 6.2 Proveedores con cuota: reconciliar la proyección, no cada fila
+
+**Corrección 2026-08-15 — Gmail.** Reconciliar las 500 filas cacheadas mediante
+un `messages.get` por fila preservaba correctamente el estado leído/no leído
+entre dispositivos, pero dejó de ser una lectura válida bajo el límite vigente
+de Gmail de 6.000 unidades por usuario/proyecto/minuto: cada `messages.get`
+cuesta 20, por lo que un solo refresh consumía más de 10.000 unidades y
+producía 429 antes de considerar otro dispositivo.
+
+La proyección acotada de Inbox se recompone ahora con las identidades de los
+500 mensajes más recientes y las identidades de los 500 no leídos más
+recientes. Cualquier no leído dentro de la primera ventana necesariamente está
+en la segunda; así se derivan pertenencia a Inbox y estado leído para todo el
+caché mediante listas baratas. Sólo los IDs nuevos visibles y los reemplazos
+necesarios para llenar huecos del caché exigen detalle completo, con el mismo
+límite de una página. Un ID cacheado ausente de la ventana autoritativa se
+elimina, y cualquier 5xx al leer detalle se propaga: no se convierte una
+respuesta parcial en éxito. El 429 tiene el contrato diferido acotado que
+sigue.
+
+La regresión mínima vive en
+`supabase/functions/_shared/gmail_mail_contract_test.ts` y debe comprobar que
+un snapshot mezcla leído/no leído, deduplica IDs y omite correos archivados sin
+emitir consultas por fila. Si el proveedor ofrece un cursor de cambios
+confiable por cliente, éste puede reemplazar el snapshot periódico; el cursor
+compartido de una suscripción push no sirve como cursor consumible por varios
+dispositivos.
+
+**Corrección 2026-08-15 — contrato integral Gmail/Zoho.** Un 429 activa un
+cortacircuito durable por cuenta y proveedor antes de cualquier otra llamada a
+su API. `Retry-After` puede venir como segundos, fecha HTTP, timestamp dentro
+del payload o no venir: el backend lo normaliza a una ventana acotada y usa
+cinco minutos cuando el proveedor no publica la duración. Como `Retry-After`
+es un límite inferior y no garantiza que la ventana móvil ya drenó, cualquier
+reanudación espera además un minuto de resguardo y las listas que reconstruyen
+Gmail se ejecutan secuencialmente. Si el primer intento posterior vuelve a ser
+rechazado, el backend duplica de manera durable la espera por intento hasta una
+hora; un éxito autoritativo limpia tanto el contador como el cooldown. Esto
+también cubre los 429 de Gmail por ancho de banda o límites diarios, que Google
+documenta que pueden persistir durante varias horas aunque el timestamp de
+reintento avance de quince en quince minutos. El estado vive en
+`email_accounts.provider_metadata`, por lo que una segunda sesión o dispositivo
+adopta el mismo cooldown en vez de volver a presionar la cuota.
+
+La app transforma ese resultado en
+`EmailProviderRateLimitException`, conserva todas las filas conocidas, no
+publica una frescura ficticia y omite el proveedor hasta el vencimiento. Esto
+es un resultado explícitamente diferido, no una lectura fresca: sólo se usa
+cuando existe caché conocida; un primer montaje vacío sigue fallando cerrado.
+La frescura se registra además por proveedor: una cuenta diferida no vuelve
+«fresca» a la bandeja completa, pero tampoco puede provocar que otra cuenta que
+acaba de responder sea consultada repetidamente por eventos de fondo durante
+los siguientes 30 segundos.
+Al vencer, la siguiente lectura exitosa limpia el cooldown tanto local como
+servidor. La regresión compartida vive en
+`supabase/functions/_shared/mail_provider_rate_limit_test.ts` y
+`test/unit/mail_folder_read_model_test.dart`; todo proveedor nuevo de Correo
+debe adoptar este contrato antes de entrar al polling unificado.
+
+Zoho ya entrega el resumen de cada correo dentro de la lista y no necesita un
+detalle por fila. Su Inbox usa ahora el máximo documentado de 200 mensajes por
+página para que una reconciliación de 500 filas requiera como máximo tres
+listas, no diez. El cortacircuito de `zoho-oauth` cubre lecturas, mutaciones y
+envíos; el de Gmail cubre Inbox, detalle, adjuntos, mutaciones, envíos y la
+renovación de push. Si el proveedor no divulga el período de bloqueo, el
+fallback impide que el polling de varios dispositivos lo prolongue. Gmail
+conserva además la respuesta diferida retrocompatible para las versiones ya
+instaladas.
+
 ## 7. Antipatrones que una revisión debe rechazar
 
 - dos `initState`/listener/post-frame callbacks que llaman la misma carga sin

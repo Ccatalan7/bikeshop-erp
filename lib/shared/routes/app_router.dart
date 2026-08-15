@@ -82,6 +82,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         POSReceiptPage,
         PageManagementPage,
         PaymentMethodsSettingsPage,
+        PaymentTerminalsSettingsPage,
         PayrollRedesignRoute,
         PayrollReconciliationPage,
         MetaSettingsPage,
@@ -2585,6 +2586,18 @@ class AppRouter {
             state,
             () => MainLayout(
               child: erp.PaymentMethodsSettingsPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/settings/payment-terminals',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            // Deferred page classes cannot be constructed with const.
+            // ignore: prefer_const_constructors
+            () => MainLayout(
+              child: erp.PaymentTerminalsSettingsPage(),
             ),
           ),
         ),

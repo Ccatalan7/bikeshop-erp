@@ -4,10 +4,8 @@ enum BankMovementDirection { debit, credit, unknown }
 
 /// Instrument observed or inferred for a card settlement.
 ///
-/// `unknown` is intentional in the first release: Banco de Chile deposits do
-/// not prove whether the underlying Transbank cohort was debit, credit or
-/// prepaid. Keeping the dimension explicit lets a later provider settlement
-/// feed refine the estimate without changing allocations or the review UI.
+/// A sale records its rail explicitly. A mixed bank deposit remains `unknown`
+/// because the statement line itself represents a cohort, not one card type.
 enum BankPaymentInstrument { unknown, debit, credit, prepaid }
 
 enum BankSettlementProvider { none, transbank, mercadoPago, other }
@@ -20,11 +18,67 @@ enum BankReconciliationTargetKind {
   journalEntry,
 }
 
-enum BankReconciliationMatchKind { direct, transbankEstimate, manual }
+enum BankReconciliationMatchKind {
+  direct,
+  processorEstimate,
+  transbankEstimate,
+  manual,
+}
 
 enum BankReconciliationConfidence { low, medium, high }
 
 enum BankReconciliationDisposition { pending, reconciled, ignored, held }
+
+/// Versioned acquiring rule used to estimate one terminal deposit.
+///
+/// The statement description identifies the terminal profile; the payment
+/// method identifies the debit/credit rail. This keeps future providers and
+/// terminals out of matcher constants.
+class BankTerminalMatchPolicy {
+  BankTerminalMatchPolicy({
+    required this.profileId,
+    required this.providerCode,
+    required this.providerName,
+    required this.terminalName,
+    required List<String> descriptorPatterns,
+    required this.paymentMethodCode,
+    required this.instrument,
+    required this.commissionRateBps,
+    required this.commissionVatBps,
+    required this.settlementBusinessDays,
+    required this.bookingGraceBusinessDays,
+    required this.amountToleranceClp,
+    required this.effectiveFrom,
+    this.effectiveTo,
+  })  : assert(profileId != ''),
+        assert(paymentMethodCode != ''),
+        descriptorPatterns = List.unmodifiable(descriptorPatterns);
+
+  final String profileId;
+  final String providerCode;
+  final String providerName;
+  final String terminalName;
+  final List<String> descriptorPatterns;
+  final String paymentMethodCode;
+  final BankPaymentInstrument instrument;
+  final int commissionRateBps;
+  final int commissionVatBps;
+  final int settlementBusinessDays;
+  final int bookingGraceBusinessDays;
+  final int amountToleranceClp;
+  final BankCivilDate effectiveFrom;
+  final BankCivilDate? effectiveTo;
+
+  int expectedNetClp(int grossClp) {
+    final commission = (grossClp * commissionRateBps / 10000).round();
+    final vat = (commission * commissionVatBps / 10000).round();
+    return grossClp - commission - vat;
+  }
+
+  bool appliesOn(BankCivilDate date) =>
+      date.compareTo(effectiveFrom) >= 0 &&
+      (effectiveTo == null || date.compareTo(effectiveTo!) <= 0);
+}
 
 /// Operator intent for one statement movement.
 ///

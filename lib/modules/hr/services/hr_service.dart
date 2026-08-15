@@ -399,8 +399,11 @@ class HRService extends ChangeNotifier {
   /// Get available payment methods
   Future<List<Map<String, dynamic>>> getPaymentMethods() async {
     try {
-      final response =
-          await _client.from('payment_methods').select().order('name');
+      final response = await _client
+          .from('payment_methods')
+          .select()
+          .eq('is_active', true)
+          .inFilter('usage_scope', const ['outbound', 'both']).order('name');
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint('Error getting payment methods: $e');

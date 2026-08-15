@@ -69,6 +69,8 @@ class MailAccountManager extends ChangeNotifier {
   final Map<String, int> _readMutationVersions = {};
   final Map<String, bool> _confirmedReadStatus = {};
   final Map<String, bool> _pendingReadStatus = {};
+  final Map<String, DateTime> _providerReadCooldownUntil = {};
+  final Map<String, DateTime> _providerLastSuccessfulInboxFetch = {};
   String? _readStatusFailureKey;
   final EmailCacheService _cache = EmailCacheService();
   final StreamController<Email> _newEmailController =
@@ -418,6 +420,8 @@ class MailAccountManager extends ChangeNotifier {
     if (provider == null) return;
 
     await provider.disconnect();
+    _providerReadCooldownUntil.remove(providerId);
+    _providerLastSuccessfulInboxFetch.remove(providerId);
     _unifiedEmails.removeWhere((e) => e.providerId == providerId);
     notifyListeners();
   }
@@ -463,12 +467,49 @@ class MailAccountManager extends ChangeNotifier {
     try {
       final allEmails = <Email>[];
       final failedProviders = <EmailProvider>[];
+      var hasDeferredProvider = false;
+      final refreshStartedAt = DateTime.now();
+      final hasActiveProviderCooldownAtStart = connectedProviders.any(
+        (provider) =>
+            _providerReadCooldownUntil[provider.providerId]
+                ?.isAfter(refreshStartedAt) ??
+            false,
+      );
 
       for (final provider in connectedProviders) {
+        final knownEmails = _unifiedEmails
+            .where((email) => email.providerId == provider.providerId)
+            .toList(growable: false);
+        final cooldownUntil = _providerReadCooldownUntil[provider.providerId];
+        if (cooldownUntil != null && cooldownUntil.isAfter(refreshStartedAt)) {
+          if (knownEmails.isEmpty) {
+            failedProviders.add(provider);
+          } else {
+            hasDeferredProvider = true;
+          }
+          allEmails.addAll(knownEmails);
+          debugPrint(
+            '📧 [MailManager] Skipping ${provider.providerId} until '
+            '${cooldownUntil.toUtc().toIso8601String()} (provider cooldown)',
+          );
+          continue;
+        }
+        _providerReadCooldownUntil.remove(provider.providerId);
+        final lastProviderFetch =
+            _providerLastSuccessfulInboxFetch[provider.providerId];
+        if (background &&
+            hasActiveProviderCooldownAtStart &&
+            lastProviderFetch != null &&
+            refreshStartedAt.difference(lastProviderFetch).inSeconds < 30) {
+          allEmails.addAll(knownEmails);
+          debugPrint(
+            '📧 [MailManager] Skipping ${provider.providerId}; its last '
+            'authoritative fetch is still fresh',
+          );
+          continue;
+        }
+
         try {
-          final knownEmails = _unifiedEmails
-              .where((email) => email.providerId == provider.providerId)
-              .toList(growable: false);
           final emails = await _fetchInboxForRefresh(
             provider: provider,
             knownEmails: knownEmails,
@@ -476,6 +517,9 @@ class MailAccountManager extends ChangeNotifier {
             expectedUserId: expectedUserId,
           );
           if (!_isCurrentLifecycle(epoch, expectedUserId)) return;
+          _providerReadCooldownUntil.remove(provider.providerId);
+          _providerLastSuccessfulInboxFetch[provider.providerId] =
+              DateTime.now();
           allEmails.addAll(
             background
                 ? _reconcileProviderFetchedWindow(
@@ -485,6 +529,24 @@ class MailAccountManager extends ChangeNotifier {
                 : emails,
           );
         } catch (e) {
+          final rateLimit = EmailProviderRateLimitException.tryParse(
+            provider.providerId,
+            e,
+          );
+          if (rateLimit != null) {
+            _providerReadCooldownUntil[provider.providerId] = rateLimit.retryAt;
+            allEmails.addAll(knownEmails);
+            if (knownEmails.isEmpty) {
+              failedProviders.add(provider);
+            } else {
+              hasDeferredProvider = true;
+            }
+            debugPrint(
+              '📧 [MailManager] ${provider.providerId} deferred until '
+              '${rateLimit.retryAt.toUtc().toIso8601String()}',
+            );
+            continue;
+          }
           debugPrint('Error fetching ${provider.providerId} inbox: $e');
           failedProviders.add(provider);
           allEmails.addAll(
@@ -499,7 +561,7 @@ class MailAccountManager extends ChangeNotifier {
       _unifiedEmails = _preservePendingReadStatuses(
         _dedupeAndSort(allEmails),
       );
-      if (failedProviders.isEmpty) {
+      if (failedProviders.isEmpty && !hasDeferredProvider) {
         _lastFetch = DateTime.now();
       }
 
@@ -1618,6 +1680,8 @@ class MailAccountManager extends ChangeNotifier {
     _readMutationVersions.clear();
     _confirmedReadStatus.clear();
     _pendingReadStatus.clear();
+    _providerReadCooldownUntil.clear();
+    _providerLastSuccessfulInboxFetch.clear();
     _readStatusFailureKey = null;
     debugTransientReadRetryWaitOverride = null;
     _sessionUserId = null;
@@ -1647,6 +1711,8 @@ class MailAccountManager extends ChangeNotifier {
         _readMutationVersions.clear();
         _confirmedReadStatus.clear();
         _pendingReadStatus.clear();
+        _providerReadCooldownUntil.clear();
+        _providerLastSuccessfulInboxFetch.clear();
         _readStatusFailureKey = null;
         _initializingFuture = null;
         _initializingUserId = null;

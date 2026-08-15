@@ -82,8 +82,9 @@ class _PaymentFormState extends State<PaymentForm> {
       setState(() {
         _isLoadingMethods = false;
         // Default to first payment method (usually cash)
-        if (paymentMethodService.paymentMethods.isNotEmpty) {
-          _selectedPaymentMethod = paymentMethodService.paymentMethods.first;
+        if (paymentMethodService.incomingPaymentMethods.isNotEmpty) {
+          _selectedPaymentMethod =
+              paymentMethodService.incomingPaymentMethods.first;
         }
       });
     }
@@ -286,7 +287,7 @@ class _PaymentFormState extends State<PaymentForm> {
           const SizedBox(height: 12),
           if (_isLoadingMethods)
             const LinearProgressIndicator()
-          else if (paymentMethodService.paymentMethods.isEmpty)
+          else if (paymentMethodService.incomingPaymentMethods.isEmpty)
             const Text(
               'No hay métodos de pago disponibles',
               style: TextStyle(color: Colors.red),
@@ -295,7 +296,7 @@ class _PaymentFormState extends State<PaymentForm> {
             DropdownButtonFormField<PaymentMethod>(
               initialValue: _selectedPaymentMethod,
               decoration: const InputDecoration(labelText: 'Medio de pago'),
-              items: paymentMethodService.paymentMethods
+              items: paymentMethodService.incomingPaymentMethods
                   .map((method) => DropdownMenuItem(
                         value: method,
                         child: Row(

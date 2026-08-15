@@ -78,6 +78,20 @@ Map<String, dynamic>? _stringKeyedMap(Object? value) {
 bool _looksLikeEmailAddress(String value) =>
     RegExp(r'^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$').hasMatch(value);
 
+@visibleForTesting
+int resolveZohoMessageListLimit({
+  required MailFolder folder,
+  required int requestedLimit,
+  String? searchQuery,
+}) {
+  const providerMaximum = 200;
+  final bounded = requestedLimit.clamp(1, providerMaximum).toInt();
+  if (folder == MailFolder.inbox && searchQuery == null) {
+    return providerMaximum;
+  }
+  return bounded;
+}
+
 /// Zoho Mail implementation of EmailProvider
 class ZohoProvider extends EmailProvider {
   static const String _providerId = 'zoho';
@@ -379,18 +393,33 @@ class ZohoProvider extends EmailProvider {
   }) async {
     if (!isAuthenticated) throw Exception('Zoho account is not connected');
 
-    final response = await _supabase.functions.invoke(
-      'zoho-oauth',
-      body: {
-        'proxy_url': url,
-        'method': method,
-        'body': body,
-        if (accept != null) 'accept': accept,
-        if (responseType != null) 'response_type': responseType,
-      },
-    );
+    late final FunctionResponse response;
+    try {
+      response = await _supabase.functions.invoke(
+        'zoho-oauth',
+        body: {
+          'proxy_url': url,
+          'method': method,
+          'body': body,
+          if (accept != null) 'accept': accept,
+          if (responseType != null) 'response_type': responseType,
+        },
+      );
+    } catch (error) {
+      final rateLimit = EmailProviderRateLimitException.tryParse(
+        _providerId,
+        error,
+      );
+      if (rateLimit != null) throw rateLimit;
+      rethrow;
+    }
 
     if (response.status != 200 && response.status != 204) {
+      final rateLimit = EmailProviderRateLimitException.tryParse(
+        _providerId,
+        response.data,
+      );
+      if (rateLimit != null) throw rateLimit;
       throw Exception('Zoho API error: ${response.data}');
     }
 
@@ -423,9 +452,14 @@ class ZohoProvider extends EmailProvider {
       final normalizedSearch = searchQuery?.trim();
       final effectiveSearch =
           normalizedSearch?.isEmpty ?? true ? null : normalizedSearch;
+      final providerLimit = resolveZohoMessageListLimit(
+        folder: folder,
+        requestedLimit: limit,
+        searchQuery: effectiveSearch,
+      );
       final page = await _fetchZohoMessagePage(
         folderId: folderId,
-        limit: limit,
+        limit: providerLimit,
         start: start,
         searchQuery: effectiveSearch,
       );
@@ -433,7 +467,7 @@ class ZohoProvider extends EmailProvider {
       if (effectiveSearch != null) {
         _searchCanLoadMore = messages.length >= limit;
       } else {
-        _folderHasMore[folder] = messages.length >= limit;
+        _folderHasMore[folder] = messages.length >= providerLimit;
       }
 
       _emails = messages
@@ -449,6 +483,14 @@ class ZohoProvider extends EmailProvider {
       return _emails;
     } catch (e) {
       debugPrint('getMessages error: $e');
+      final rateLimit = EmailProviderRateLimitException.tryParse(
+        _providerId,
+        e,
+      );
+      if (rateLimit != null) {
+        _error = null;
+        throw rateLimit;
+      }
       _error = e.toString();
       rethrow;
     } finally {

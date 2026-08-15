@@ -14,6 +14,12 @@ class PaymentMethodService extends ChangeNotifier {
   String? _error;
 
   List<PaymentMethod> get paymentMethods => _paymentMethods;
+  List<PaymentMethod> get incomingPaymentMethods => _paymentMethods
+      .where((method) => method.supportsInbound)
+      .toList(growable: false);
+  List<PaymentMethod> get outgoingPaymentMethods => _paymentMethods
+      .where((method) => method.supportsOutbound)
+      .toList(growable: false);
   bool get isLoading => _isLoading;
   String? get error => _error;
 
