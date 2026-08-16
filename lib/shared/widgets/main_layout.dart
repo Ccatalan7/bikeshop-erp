@@ -18,6 +18,7 @@ import '../utils/responsive_viewport.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/mail/providers/mail_account_manager.dart';
+import 'browser_workspace_favicon.dart';
 import 'expandable_menu_item.dart';
 import 'toolbar_tool_presentation.dart';
 import 'current_user_profile_tile.dart';
@@ -3959,6 +3960,57 @@ class _AppDrawerState extends State<AppDrawer> {
         // Elegir entre espacios sólo tiene sentido cuando hay más de uno; la
         // acción de abrir uno nuevo vive aparte, siempre visible.
         if (workspaces.length <= 1) return const SizedBox.shrink();
+
+        final browserStack = manager.unpinnedBrowserWorkspaces;
+        final groupsBrowsers = browserStack.length > 1;
+        final browserStackIds = groupsBrowsers
+            ? browserStack.map((workspace) => workspace.id).toSet()
+            : const <String>{};
+        final workspaceChildren = <Widget>[];
+        var insertedBrowserStack = false;
+        for (final workspace in workspaces) {
+          if (browserStackIds.contains(workspace.id)) {
+            if (!insertedBrowserStack) {
+              workspaceChildren.add(
+                ExpansionTile(
+                  key: const ValueKey('mobile-browser-workspace-group'),
+                  minTileHeight: 48,
+                  initiallyExpanded: browserStack.any(
+                    (browser) => browser.id == activeId,
+                  ),
+                  leading: const Icon(Icons.tab_rounded, size: 20),
+                  title: Text(
+                    'Pestañas web · ${browserStack.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  children: [
+                    for (final browser in browserStack)
+                      _buildCompactWorkspaceTile(
+                        context,
+                        manager: manager,
+                        workspace: browser,
+                        activeId: activeId,
+                        chrome: chrome,
+                      ),
+                  ],
+                ),
+              );
+              insertedBrowserStack = true;
+            }
+            continue;
+          }
+          workspaceChildren.add(
+            _buildCompactWorkspaceTile(
+              context,
+              manager: manager,
+              workspace: workspace,
+              activeId: activeId,
+              chrome: chrome,
+            ),
+          );
+        }
+
         return ExpansionTile(
           key: const ValueKey('mobile-workspace-selector'),
           minTileHeight: 48,
@@ -3969,47 +4021,80 @@ class _AppDrawerState extends State<AppDrawer> {
                   fontWeight: FontWeight.w700,
                 ),
           ),
-          children: [
-            for (final workspace in workspaces)
-              Builder(
-                builder: (context) {
-                  final theme = Theme.of(context);
-                  final selected = workspace.id == activeId;
-                  return ListTile(
-                    key: ValueKey('mobile-workspace-${workspace.id}'),
-                    minTileHeight: 48,
-                    selected: selected,
-                    // Congelar también la selección contra el chrome: el
-                    // ListTile heredaba el primaryContainer claro de la app.
-                    selectedColor: theme.colorScheme.onPrimaryContainer,
-                    selectedTileColor: theme.colorScheme.primaryContainer,
-                    iconColor: chrome.mutedForeground,
-                    textColor: chrome.foreground,
-                    title: Text(
-                      workspace.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () {
-                      manager.switchToWorkspaceById(workspace.id);
-                      Navigator.pop(context);
-                    },
-                    trailing: workspaces.length <= 1
-                        ? null
-                        : IconButton(
-                            onPressed: () async {
-                              await manager
-                                  .requestCloseWorkspaceById(workspace.id);
-                            },
-                            icon: const Icon(Icons.close_rounded, size: 18),
-                            tooltip: 'Cerrar ${workspace.title}',
-                          ),
-                  );
-                },
-              ),
-          ],
+          children: workspaceChildren,
         );
       },
+    );
+  }
+
+  Widget _buildCompactWorkspaceTile(
+    BuildContext context, {
+    required WorkspaceManager manager,
+    required Workspace workspace,
+    required String? activeId,
+    required WorkspaceChromeStyleData chrome,
+  }) {
+    final theme = Theme.of(context);
+    final selected = workspace.id == activeId;
+    return ListTile(
+      key: ValueKey('mobile-workspace-${workspace.id}'),
+      minTileHeight: 48,
+      selected: selected,
+      // Congelar también la selección contra el chrome: el ListTile heredaba
+      // el primaryContainer claro de la app.
+      selectedColor: theme.colorScheme.onPrimaryContainer,
+      selectedTileColor: theme.colorScheme.primaryContainer,
+      iconColor: chrome.mutedForeground,
+      textColor: chrome.foreground,
+      leading: workspace.isBrowserWorkspace
+          ? BrowserWorkspaceFavicon(
+              key: ValueKey('mobile-workspace-favicon-${workspace.id}'),
+              faviconUrl: workspace.browserFaviconUrl,
+              size: 20,
+              fallbackColor: chrome.mutedForeground,
+            )
+          : null,
+      title: Text(
+        workspace.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      onTap: () {
+        manager.switchToWorkspaceById(workspace.id);
+        Navigator.pop(context);
+      },
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (workspace.isBrowserWorkspace)
+            IconButton(
+              key: ValueKey('mobile-workspace-pin-${workspace.id}'),
+              onPressed: () {
+                final index = manager.workspaces.indexWhere(
+                  (candidate) => candidate.id == workspace.id,
+                );
+                if (index >= 0) manager.toggleWorkspacePinned(index);
+              },
+              icon: Icon(
+                workspace.isPinned
+                    ? Icons.push_pin_rounded
+                    : Icons.push_pin_outlined,
+                size: 18,
+              ),
+              tooltip: workspace.isPinned
+                  ? 'Desfijar ${workspace.title}'
+                  : 'Fijar ${workspace.title}',
+            ),
+          IconButton(
+            key: ValueKey('mobile-workspace-close-${workspace.id}'),
+            onPressed: () async {
+              await manager.requestCloseWorkspaceById(workspace.id);
+            },
+            icon: const Icon(Icons.close_rounded, size: 18),
+            tooltip: 'Cerrar ${workspace.title}',
+          ),
+        ],
+      ),
     );
   }
 

@@ -243,10 +243,15 @@ void main() {
       isNot(contains('onPermissionRequest: (controller, request) async {')),
     );
     expect(browser, contains('openBrowserWorkspace('));
+    expect(browser, contains('.getFavicons()'));
+    expect(browser, contains("meta[property=\"og:site_name\"]"));
     expect(manager, contains('updateBrowserWorkspaceState('));
     expect(manager, contains('_restoreBrowserSession('));
     expect(app, contains("'dormant-\${workspace.id}'"));
     expect(registry, contains('## Embedded Browser Surfaces'));
+    expect(registry, contains('browser workspaces are session-only'));
+    expect(registry, contains('### Browser workspace stack'));
+    expect(registry, contains('presentation-only'));
     expect(registry, contains('memoria de dominios'));
     expect(registry, contains('autocompletado inline'));
     expect(registry, contains('catálogo corporativo'));

@@ -229,6 +229,7 @@ class PayrollRedesignActions {
     this.reverseSettlement,
     this.updateDraft,
     this.settlePaymentTarget,
+    this.settlePaymentBatch,
     this.loadAdditionalExpenseAccounts,
   });
 
@@ -278,6 +279,14 @@ class PayrollRedesignActions {
     required PayrollPaymentTargetSaveCommand command,
     PayrollOcrStatementSource? ocrSource,
   })? settlePaymentTarget;
+
+  /// Writer atómico de una mesa con varias personas. La fila `Pagar` usa el
+  /// comando single; `Pagar nómina` usa éste una sola vez para toda la semana.
+  final Future<void> Function({
+    required List<PayrollPaymentTargetSaveCommand> commands,
+    required String operationKey,
+    PayrollOcrStatementSource? ocrSource,
+  })? settlePaymentBatch;
 
   final Future<List<PayrollExpenseAccountOption>> Function()?
       loadAdditionalExpenseAccounts;
@@ -396,6 +405,8 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   // (L-H3, Codex cross-review 2026-07-30). Absent key => device-local.
   final Map<String, DateTime> _advanceLedgerCivilDates = <String, DateTime>{};
   String? _lastCompactContextLine;
+  PayrollPaymentWorkspaceController? _weekPaymentWorkspaceController;
+  List<PayrollExpenseAccountOption> _weekPaymentExpenseAccounts = const [];
 
   static const List<String> _months = [
     'ene', 'feb', 'mar', 'abr', 'may', 'jun', //
@@ -429,6 +440,12 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     }
     _selectedVoucherId = nextVoucherId;
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _weekPaymentWorkspaceController?.dispose();
+    super.dispose();
   }
 
   /// Aplica `?scope=` y `?employee=`.
@@ -654,6 +671,18 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       settlePaymentTarget: ({required command, ocrSource}) async {
         await paymentWorkspaceService.applyTarget(
           command: command,
+          ocrSource: ocrSource,
+        );
+        service.invalidateVouchersCache();
+      },
+      settlePaymentBatch: ({
+        required commands,
+        required operationKey,
+        ocrSource,
+      }) async {
+        await paymentWorkspaceService.applyTargets(
+          commands: commands,
+          operationKey: operationKey,
           ocrSource: ocrSource,
         );
         service.invalidateVouchersCache();
@@ -1419,6 +1448,26 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
         );
       }
       return false;
+    } on PayrollPaymentCommittedUnverifiedException catch (error) {
+      // The RPC completed and only the stricter client-side receipt check
+      // failed. Treating this as a retryable command failure would lie about
+      // the server result and could invite a duplicate operator intent. Fence
+      // the projection, try one authoritative refresh, then preserve the typed
+      // outcome so the workspace marks every row as saved and says not to
+      // repeat the batch.
+      debugPrint(
+        '⚠️ [PayrollRedesign] pago registrado con comprobante no '
+        'verificado: operationKey=${error.operationKey}',
+      );
+      _authoritativeReloadRequired = true;
+      _fencedMovementWasConfirmed = true;
+      if (mounted) {
+        final refreshed = await _load();
+        if (!refreshed) {
+          _authoritativeReloadRequired = true;
+        }
+      }
+      rethrow;
     } catch (error) {
       debugPrint('❌ [PayrollRedesign] comando: $error');
       // A transport failure may happen after the server committed. Fence every
@@ -1878,24 +1927,7 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       await _commitWeek(week);
       return;
     }
-
-    for (final line in week.lines.where((candidate) => candidate.isIncluded)) {
-      if (line.balance <= 0.01) continue;
-      if (_requiresMethodConfiguration(line)) {
-        await _openEmployeePaymentMethod(line, resumePaymentFor: week);
-        return;
-      }
-      if (!_versionedMutationsAvailable) {
-        _showVersionedUpdateRequired();
-        return;
-      }
-      if (_statusOf(week, line) == PayrollRowStatus.pendingCash) {
-        await _openCash(week, line);
-      } else {
-        await _openComposer(week, line);
-      }
-      return;
-    }
+    await _openWeekPaymentWorkspace(week);
   }
 
   // ── VMs ──────────────────────────────────────────────────────────────────
@@ -2951,13 +2983,6 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     final isDraft = week.status == PayrollVoucherStatus.draft;
     final weekName = 'S${_isoWeek(week.periodStart)}';
 
-    PayrollVoucherLine? firstPending;
-    for (final l in lines) {
-      if (l.balance > 0.01) {
-        firstPending = l;
-        break;
-      }
-    }
     return PayrollWeekTotalsVM(
       title: 'Semana ${_isoWeek(week.periodStart)} · '
           '${_range(week.periodStart, week.periodEnd)}',
@@ -2981,13 +3006,9 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
       // superficie no la renderiza (nunca dos CTA idénticos).
       nextActionLabel: !_versionedMutationsAvailable || isDraft
           ? ''
-          : firstPending == null
+          : pendingCount == 0
               ? ''
-              : _requiresMethodConfiguration(firstPending)
-                  ? _employeePaymentMethodCommandAvailable
-                      ? 'Configurar método'
-                      : ''
-                  : 'Continuar pagos',
+              : 'Pagar nómina',
     );
   }
 
@@ -3110,6 +3131,104 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
   }
 
   // ── Composer (2b) ────────────────────────────────────────────────────────
+
+  Future<void> _openWeekPaymentWorkspace(PayrollVoucher week) async {
+    if (!_versionedMutationsAvailable) {
+      _showVersionedUpdateRequired();
+      return;
+    }
+    final data = _data;
+    final actions = _resolveActions();
+    final writer = actions.settlePaymentBatch;
+    if (data == null || writer == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+        content: Text('La mesa completa de pago todavía no está disponible. '
+            'No se registró ningún movimiento.'),
+      ));
+      return;
+    }
+
+    final pendingLines = week.lines
+        .where((line) => line.isIncluded && line.balance > 0.01)
+        .map((line) {
+      final method = _resolvedMethodForLine(line);
+      return method == null
+          ? line
+          : line.copyWith(
+              paymentMethodId: method['id']?.toString(),
+              paymentAccountId: method['account_id']?.toString(),
+            );
+    }).toList(growable: false);
+    if (pendingLines.isEmpty) return;
+
+    List<PayrollExpenseAccountOption> expenseAccounts = const [];
+    if (actions.loadAdditionalExpenseAccounts != null) {
+      try {
+        expenseAccounts = await actions.loadAdditionalExpenseAccounts!();
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+          content: Text('No pudimos cargar las cuentas de gasto. Los sueldos '
+              'pueden pagarse; los conceptos adicionales quedan '
+              'deshabilitados en este intento.'),
+        ));
+      }
+    }
+    if (!mounted) return;
+
+    final request = payrollPaymentWorkspaceRequestForWeek(
+      voucher: week,
+      lines: pendingLines,
+      paymentMethods: data.paymentMethods,
+      openAdvances: data.openAdvances,
+    );
+    late final PayrollPaymentWorkspaceController controller;
+    controller = PayrollPaymentWorkspaceController(
+      request: request,
+      additionalConceptsSupported: true,
+      onSaveBatch: (commands, operationKey) async {
+        final adjusted = commands.map((command) {
+          final liveWeek = _voucherById(command.target.voucherId);
+          return liveWeek == null
+              ? command
+              : command.copyWith(
+                  target: command.target.copyWith(
+                    reconciliationVersion: liveWeek.reconciliationVersion,
+                  ),
+                );
+        }).toList(growable: false);
+        final ok = await _run(
+          () => writer(
+            commands: adjusted,
+            operationKey: operationKey,
+            ocrSource: null,
+          ),
+          commandConfirmationIsEnough: true,
+        );
+        if (!ok) {
+          throw const PayrollPaymentWorkspaceSaveException(
+            'No pudimos registrar la nómina. Revisa el aviso y reintenta con '
+            'la misma operación.',
+          );
+        }
+      },
+    );
+
+    setState(() {
+      _weekPaymentWorkspaceController = controller;
+      _weekPaymentExpenseAccounts = expenseAccounts;
+    });
+  }
+
+  void _closeWeekPaymentWorkspace() {
+    final controller = _weekPaymentWorkspaceController;
+    if (controller == null || !mounted) return;
+    setState(() {
+      _weekPaymentWorkspaceController = null;
+      _weekPaymentExpenseAccounts = const [];
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
+  }
 
   Future<void> _openPaymentWorkspace(
     PayrollPaymentWorkspaceRequest request,
@@ -4826,6 +4945,24 @@ class _PayrollRedesignPageState extends State<PayrollRedesignPage> {
     final compactShell = ResponsiveViewport.usesCompactShell(context);
     final week = _selected;
     _publishCompactHeaderContext(data, week);
+
+    final weekWorkspace = _weekPaymentWorkspaceController;
+    if (weekWorkspace != null) {
+      return ColoredBox(
+        color: visual.canvas,
+        child: PayrollPaymentWorkspace(
+          key: const ValueKey<String>('payroll-selected-week-workspace'),
+          controller: weekWorkspace,
+          expenseAccounts: _weekPaymentExpenseAccounts,
+          showBatchHeader: true,
+          completeBatchOnSave: true,
+          batchBackLabel: 'Volver a la semana',
+          batchCompleteLabel: 'Volver a la semana',
+          onClose: _closeWeekPaymentWorkspace,
+          onBatchComplete: _closeWeekPaymentWorkspace,
+        ),
+      );
+    }
 
     if (compactShell) {
       // 3c: sin rail ni tabs persistentes; el header único lo pone el shell

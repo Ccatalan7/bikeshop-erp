@@ -190,6 +190,7 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
     final method = normalized.isEmpty ? null : _methodOption(normalized);
     _mutate(targetId, (mutable) {
       if (method == null || !method.isActive) {
+        mutable.autoPaymentTemplate = null;
         mutable.salaryLegs.clear();
         return;
       }
@@ -216,9 +217,43 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
         notes: current?.notes,
         ocrEvidence: current?.ocrEvidence,
       );
+      final remainsAutomatic = current == null ||
+          mutable.autoPaymentTemplate?.legId == current.legId;
       mutable.salaryLegs
         ..clear()
         ..add(replacement);
+      if (remainsAutomatic) {
+        mutable.autoPaymentTemplate = replacement;
+        _rebalanceAutoPayment(targetId, mutable);
+      }
+    });
+  }
+
+  /// Sets the visible payment date for every money leg of this salary row.
+  ///
+  /// A row with several payment dates stays explicit as "Varias fechas" until
+  /// the operator intentionally chooses one date here. Advances have their own
+  /// historical date and are therefore not rewritten.
+  void setSalaryPaymentDate(String targetId, PayrollCivilDate date) {
+    _mutate(targetId, (state) {
+      var changed = false;
+      for (var index = 0; index < state.salaryLegs.length; index++) {
+        final leg = state.salaryLegs[index];
+        if (leg.kind != PayrollPaymentLegKind.payment) continue;
+        final replacement = _paymentLegWith(
+          leg,
+          amountClp: leg.amountClp,
+          paymentDate: date,
+        );
+        state.salaryLegs[index] = replacement;
+        if (state.autoPaymentTemplate?.legId == leg.legId) {
+          state.autoPaymentTemplate = replacement;
+        }
+        changed = true;
+      }
+      if (!changed) {
+        throw StateError('Este sueldo no tiene una salida de dinero fechable.');
+      }
     });
   }
 
@@ -307,8 +342,60 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
     return remaining > 0 ? remaining : 0;
   }
 
+  /// Money that can be moved from the generated full-balance payment into a
+  /// new split or advance without making the target exceed its payroll saldo.
+  ///
+  /// Once the operator explicitly changes the generated amount, that payment
+  /// stops being automatic and this falls back to the ordinary uncovered
+  /// balance.
+  int availableForSalaryAllocation(String targetId) {
+    final state = _stateFor(targetId);
+    if (state.autoPaymentTemplate == null) {
+      return validationFor(targetId).payrollRemainingClp;
+    }
+    return _autoPaymentCapacity(targetId, state);
+  }
+
+  /// Applies one eligible advance without making the operator manually reduce
+  /// the generated full-balance payment first.
+  ///
+  /// The generated payment yields exactly the amount consumed here. A full
+  /// advance removes that payment altogether; a partial advance leaves only
+  /// the difference on the employee's prepared payment method and date.
+  int applyAdvanceToSalary(String targetId, String advanceId) {
+    final target = targetById(targetId);
+    final option = _advanceOption(target, advanceId);
+    if (option == null ||
+        !option.isAvailable ||
+        option.availableAmountClp <= 0) {
+      throw ArgumentError.value(
+        advanceId,
+        'advanceId',
+        'Unavailable advance',
+      );
+    }
+    final state = _stateFor(targetId);
+    final existing = state.salaryLegs
+        .where(
+          (leg) =>
+              leg.kind == PayrollPaymentLegKind.advance &&
+              leg.advanceId == advanceId,
+        )
+        .firstOrNull;
+    if (existing != null) return existing.amountClp;
+
+    final available = availableForSalaryAllocation(targetId);
+    if (available <= 0) return 0;
+    final amount = option.availableAmountClp < available
+        ? option.availableAmountClp
+        : available;
+    toggleAdvance(targetId, advanceId, amountClp: amount);
+    return amount;
+  }
+
   void replaceSalaryLegs(String targetId, List<PayrollPaymentLeg> legs) {
     _mutate(targetId, (state) {
+      state.autoPaymentTemplate = null;
       state.salaryLegs
         ..clear()
         ..addAll(legs);
@@ -323,7 +410,10 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
   }
 
   void addSalaryLeg(String targetId, PayrollPaymentLeg leg) {
-    _mutate(targetId, (state) => state.salaryLegs.add(leg));
+    _mutate(targetId, (state) {
+      state.salaryLegs.add(leg);
+      _rebalanceAutoPayment(targetId, state);
+    });
   }
 
   void updatePaymentLeg(String targetId, PayrollPaymentLeg leg) {
@@ -338,7 +428,16 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
       if (index < 0) {
         throw ArgumentError.value(leg.legId, 'leg.legId', 'Unknown salary leg');
       }
+      final previous = state.salaryLegs[index];
       state.salaryLegs[index] = leg;
+      if (state.autoPaymentTemplate?.legId == leg.legId) {
+        if (leg.amountClp != previous.amountClp) {
+          state.autoPaymentTemplate = null;
+          return;
+        }
+        state.autoPaymentTemplate = leg;
+      }
+      _rebalanceAutoPayment(targetId, state);
     });
   }
 
@@ -354,6 +453,11 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
       if (removed == 0) {
         throw ArgumentError.value(legId, 'legId', 'Unknown salary leg');
       }
+      if (state.autoPaymentTemplate?.legId == legId) {
+        state.autoPaymentTemplate = null;
+        return;
+      }
+      _rebalanceAutoPayment(targetId, state);
     });
   }
 
@@ -372,14 +476,16 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
       final before = state.salaryLegs.length;
       state.salaryLegs.removeWhere((leg) => leg.legId == legId);
       final removed = before - state.salaryLegs.length;
-      if (removed > 0) return;
-      state.salaryLegs.add(
-        PayrollPaymentLeg.advance(
-          legId: legId,
-          advanceId: advanceId,
-          amountClp: amountClp ?? option.availableAmountClp,
-        ),
-      );
+      if (removed == 0) {
+        state.salaryLegs.add(
+          PayrollPaymentLeg.advance(
+            legId: legId,
+            advanceId: advanceId,
+            amountClp: amountClp ?? option.availableAmountClp,
+          ),
+        );
+      }
+      _rebalanceAutoPayment(targetId, state);
     });
   }
 
@@ -397,10 +503,16 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
     final legId = 'ocr:$candidateId';
     _mutate(targetId, (state) {
       state.salaryLegs.removeWhere((leg) => leg.legId == legId);
-      if (!selected) return;
+      if (!selected) {
+        _rebalanceAutoPayment(targetId, state);
+        return;
+      }
+      final autoLegId = state.autoPaymentTemplate?.legId;
       final alreadyApplied = state.salaryLegs.fold<int>(
         0,
-        (sum, leg) => sum + (leg.amountClp > 0 ? leg.amountClp : 0),
+        (sum, leg) =>
+            sum +
+            (leg.legId != autoLegId && leg.amountClp > 0 ? leg.amountClp : 0),
       );
       final includedConcepts = state.additionalConcepts
           .where(
@@ -419,6 +531,7 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
           amountClp: available < remaining ? available : remaining,
         ),
       );
+      _rebalanceAutoPayment(targetId, state);
     });
   }
 
@@ -430,11 +543,15 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
       state.additionalConcepts
         ..clear()
         ..addAll(concepts);
+      _rebalanceAutoPayment(targetId, state);
     });
   }
 
   void addConcept(String targetId, PayrollAdditionalConcept concept) {
-    _mutate(targetId, (state) => state.additionalConcepts.add(concept));
+    _mutate(targetId, (state) {
+      state.additionalConcepts.add(concept);
+      _rebalanceAutoPayment(targetId, state);
+    });
   }
 
   void updateConcept(String targetId, PayrollAdditionalConcept concept) {
@@ -450,6 +567,7 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
         );
       }
       state.additionalConcepts[index] = concept;
+      _rebalanceAutoPayment(targetId, state);
     });
   }
 
@@ -463,6 +581,7 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
       if (removed == 0) {
         throw ArgumentError.value(conceptId, 'conceptId', 'Unknown concept');
       }
+      _rebalanceAutoPayment(targetId, state);
     });
   }
 
@@ -1161,9 +1280,7 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
       result.add(_paymentLegFromCandidate(candidate, amountClp: amount));
       remaining -= amount;
     }
-    if (result.isNotEmpty ||
-        request.mode != PayrollPaymentWorkspaceMode.batch ||
-        target.salaryBalanceClp <= 0) {
+    if (result.isNotEmpty || target.salaryBalanceClp <= 0) {
       return result;
     }
 
@@ -1173,8 +1290,14 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
       final preferred = _methodOption(preferredId);
       if (preferred?.isActive == true) method = preferred;
     }
-    method ??=
-        request.paymentMethods.where((option) => option.isActive).firstOrNull;
+    // A single-person payment only defaults when Payroll already knows that
+    // employee's preferred method. A batch is intentionally completion-ready,
+    // so a legacy row without a saved preference falls back to the first
+    // configured method and remains editable before saving.
+    if (method == null && request.mode == PayrollPaymentWorkspaceMode.batch) {
+      method =
+          request.paymentMethods.where((option) => option.isActive).firstOrNull;
+    }
     if (method == null) return result;
 
     final now = DateTime.now();
@@ -1208,6 +1331,62 @@ class PayrollPaymentWorkspaceController extends ChangeNotifier {
     );
   }
 
+  int _autoPaymentCapacity(String targetId, _TargetState state) {
+    final target = targetById(targetId);
+    final autoLegId = state.autoPaymentTemplate?.legId;
+    final allocatedOutsideAuto = state.salaryLegs.fold<int>(
+      0,
+      (sum, leg) => sum + (leg.legId == autoLegId ? 0 : leg.amountClp),
+    );
+    final includedConcepts = state.additionalConcepts
+        .where(
+          (concept) =>
+              concept.disposition ==
+              PayrollAdditionalConceptDisposition.includedInPayrollTotal,
+        )
+        .fold<int>(0, (sum, concept) => sum + concept.amountClp);
+    final remaining =
+        target.salaryBalanceClp - allocatedOutsideAuto - includedConcepts;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  void _rebalanceAutoPayment(String targetId, _TargetState state) {
+    final template = state.autoPaymentTemplate;
+    if (template == null) return;
+    final currentIndex = state.salaryLegs.indexWhere(
+      (leg) => leg.legId == template.legId,
+    );
+    state.salaryLegs.removeWhere((leg) => leg.legId == template.legId);
+    final amount = _autoPaymentCapacity(targetId, state);
+    if (amount <= 0) return;
+    final replacement = _paymentLegWith(template, amountClp: amount);
+    state.autoPaymentTemplate = replacement;
+    state.salaryLegs.insert(
+      currentIndex < 0 ? 0 : currentIndex,
+      replacement,
+    );
+  }
+
+  static PayrollPaymentLeg _paymentLegWith(
+    PayrollPaymentLeg leg, {
+    required int amountClp,
+    PayrollCivilDate? paymentDate,
+  }) {
+    if (leg.kind != PayrollPaymentLegKind.payment) {
+      throw ArgumentError('Only payment legs carry payment metadata.');
+    }
+    return PayrollPaymentLeg.payment(
+      legId: leg.legId,
+      amountClp: amountClp,
+      paymentMethodId: leg.paymentMethodId,
+      paymentAccountId: leg.paymentAccountId,
+      paymentDate: paymentDate ?? leg.paymentDate,
+      reference: leg.reference,
+      notes: leg.notes,
+      ocrEvidence: leg.ocrEvidence,
+    );
+  }
+
   static String _defaultOperationKey() => const Uuid().v4();
 }
 
@@ -1216,10 +1395,17 @@ class _TargetState {
     required this.operationKey,
     required List<PayrollPaymentLeg> salaryLegs,
   })  : salaryLegs = [...salaryLegs],
+        autoPaymentTemplate = salaryLegs.length == 1 &&
+                salaryLegs.single.kind == PayrollPaymentLegKind.payment &&
+                salaryLegs.single.legId.startsWith('simple:') &&
+                salaryLegs.single.ocrEvidence == null
+            ? salaryLegs.single
+            : null,
         isDirty = salaryLegs.isNotEmpty;
 
   String operationKey;
   final List<PayrollPaymentLeg> salaryLegs;
+  PayrollPaymentLeg? autoPaymentTemplate;
   final List<PayrollAdditionalConcept> additionalConcepts =
       <PayrollAdditionalConcept>[];
   bool isDirty;

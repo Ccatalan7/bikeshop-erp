@@ -5,6 +5,12 @@ import 'package:flutter/services.dart';
 
 import '../themes/vinabike_theme_roles.dart';
 
+typedef VbAnchoredPopoverContentTransitionBuilder = Widget Function(
+  BuildContext context,
+  Animation<double> animation,
+  Widget child,
+);
+
 /// Anchored popover surface defined by the Viñabike component guide.
 ///
 /// Guide, section S-05 (`Select corto`), verbatim on the two rules that matter:
@@ -28,6 +34,7 @@ Future<T?> showVbAnchoredPopover<T>({
   double gap = 4,
   double minWidth = 0,
   String barrierLabel = 'Cerrar',
+  VbAnchoredPopoverContentTransitionBuilder? contentTransitionBuilder,
 }) {
   final navigator = Navigator.of(anchorContext, rootNavigator: true);
   final overlayBox =
@@ -59,6 +66,7 @@ Future<T?> showVbAnchoredPopover<T>({
       minWidth: math.max(minWidth, anchorRect.width),
       barrierLabel: barrierLabel,
       builder: builder,
+      contentTransitionBuilder: contentTransitionBuilder,
     ),
   );
 }
@@ -70,12 +78,14 @@ class _VbAnchoredPopoverRoute<T> extends PopupRoute<T> {
     required this.minWidth,
     required this.barrierLabel,
     required this.builder,
+    required this.contentTransitionBuilder,
   });
 
   final Rect anchorRect;
   final double gap;
   final double minWidth;
   final WidgetBuilder builder;
+  final VbAnchoredPopoverContentTransitionBuilder? contentTransitionBuilder;
 
   @override
   final String barrierLabel;
@@ -120,7 +130,15 @@ class _VbAnchoredPopoverRoute<T> extends PopupRoute<T> {
           },
           child: FocusScope(
             autofocus: true,
-            child: Builder(builder: builder),
+            child: Builder(
+              builder: (context) {
+                final content = builder(context);
+                final transitionBuilder = contentTransitionBuilder;
+                return transitionBuilder == null
+                    ? content
+                    : transitionBuilder(context, animation, content);
+              },
+            ),
           ),
         ),
       ),
@@ -134,6 +152,7 @@ class _VbAnchoredPopoverRoute<T> extends PopupRoute<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
+    if (contentTransitionBuilder != null) return child;
     final curved = CurvedAnimation(
       parent: animation,
       // F-05: cubic-bezier(.22, 1, .36, 1).

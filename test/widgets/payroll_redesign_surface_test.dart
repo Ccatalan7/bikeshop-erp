@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:vinabike_erp/modules/hr/models/payroll_audit_read_models.dart';
 import 'package:vinabike_erp/modules/hr/models/payroll_voucher.dart';
 import 'package:vinabike_erp/modules/hr/payroll/payment_workspace/payroll_payment_workspace.dart';
+import 'package:vinabike_erp/modules/hr/payroll/payment_workspace/payroll_payment_workspace_models.dart';
 import 'package:vinabike_erp/modules/hr/payroll/payroll_redesign_page.dart';
 import 'package:vinabike_erp/modules/hr/payroll/surfaces/payroll_advances_and_cash_surfaces.dart';
 import 'package:vinabike_erp/modules/hr/payroll/theme/payroll_tokens.dart';
@@ -16,6 +17,7 @@ import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/utils/responsive_viewport.dart';
 import 'package:vinabike_erp/shared/widgets/vb_money_text.dart';
+import 'package:vinabike_erp/shared/widgets/vb_short_select.dart';
 
 /// Conductual de la superficie nueva (handoff 2a/2b/2e + 3a/3c).
 /// Fixtures sintéticas; ningún dato real.
@@ -113,6 +115,7 @@ void main() {
   ({
     PayrollRedesignActions actions,
     List<Map<String, dynamic>> paid,
+    List<List<PayrollPaymentTargetSaveCommand>> paidBatches,
     List<Map<String, dynamic>> corrected,
     List<String> confirmed,
     List<String> registeredAdvanceEmployees,
@@ -133,10 +136,16 @@ void main() {
     })? loadAdvanceLedgerPage,
     Future<DateTime> Function(DateTime instant)? tenantCivilDateOf,
     Future<void> Function()? beforePayLine,
+    Future<void> Function({
+      required List<PayrollPaymentTargetSaveCommand> commands,
+      required String operationKey,
+      PayrollOcrStatementSource? ocrSource,
+    })? onSettlePaymentBatch,
     Future<void> Function(PayrollVoucher voucher, String operationKey)?
         onUpdateDraft,
   }) {
     final paid = <Map<String, dynamic>>[];
+    final paidBatches = <List<PayrollPaymentTargetSaveCommand>>[];
     final corrected = <Map<String, dynamic>>[];
     final confirmed = <String>[];
     final registeredAdvanceEmployees = <String>[];
@@ -188,6 +197,22 @@ void main() {
             'version': expectedReconciliationVersion,
           });
         },
+        settlePaymentBatch: ({
+          required commands,
+          required operationKey,
+          ocrSource,
+        }) async {
+          final custom = onSettlePaymentBatch;
+          if (custom != null) {
+            await custom(
+              commands: commands,
+              operationKey: operationKey,
+              ocrSource: ocrSource,
+            );
+            return;
+          }
+          paidBatches.add(List<PayrollPaymentTargetSaveCommand>.of(commands));
+        },
         reverseSettlement: ({
           required voucherId,
           required settlementKind,
@@ -226,6 +251,7 @@ void main() {
         tenantCivilDateOf: tenantCivilDateOf,
       ),
       paid: paid,
+      paidBatches: paidBatches,
       corrected: corrected,
       confirmed: confirmed,
       registeredAdvanceEmployees: registeredAdvanceEmployees,
@@ -285,6 +311,17 @@ void main() {
     WidgetTester tester, {
     String? amount,
   }) async {
+    final defaultPart = find.byTooltip('Editar parte');
+    if (defaultPart.evaluate().isNotEmpty) {
+      if (amount == null) return;
+      await tester.tap(defaultPart.first);
+      await tester.pumpAndSettle();
+      final amountField = find.widgetWithText(TextField, 'Monto');
+      await tester.enterText(amountField, amount);
+      await tester.tap(find.text('Guardar parte'));
+      await tester.pumpAndSettle();
+      return;
+    }
     await tester.tap(find.text('Agregar parte'));
     await tester.pumpAndSettle();
 
@@ -378,11 +415,224 @@ void main() {
     expect(find.text('FALTA PAGAR'), findsOneWidget);
     expect(
         find.textContaining('pasa a Pagada automáticamente'), findsOneWidget);
-    expect(find.text('Continuar pagos'), findsOneWidget);
+    expect(find.text('Pagar nómina'), findsOneWidget);
     expect(find.textContaining('Pagar a '), findsNothing);
     // Asistencias entrega la fuente; el borrador sigue siendo editable.
     expect(
         find.textContaining('Puedes ajustar horas y tarifa'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'Pagar nómina abre una mesa completa sólo con trabajadores pendientes',
+      (tester) async {
+    final week = voucher(
+      status: PayrollVoucherStatus.partial,
+      lines: <PayrollVoucherLine>[
+        line(
+          id: 'paid',
+          name: 'Persona Ya Pagada',
+          total: 35000,
+          settled: 35000,
+          balance: 0,
+        ),
+        line(
+          id: 'cash-pending',
+          name: 'Rodrigo Pendiente',
+          total: 42000,
+          balance: 42000,
+          methodId: 'method-cash',
+        ),
+        line(
+          id: 'transfer-pending',
+          name: 'Vicente Pendiente',
+          total: 129500,
+          balance: 129500,
+          methodId: 'method-transfer',
+        ),
+      ],
+    );
+    final h = harness(vouchers: <PayrollVoucher>[week]);
+    await pump(tester, h.actions, size: const Size(1440, 900));
+    final barriersBefore = find.byType(ModalBarrier).evaluate().length;
+
+    await tester.tap(find.text('Pagar nómina'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('payroll-selected-week-workspace')),
+      findsOneWidget,
+    );
+    expect(find.text('PAGAR NÓMINA'), findsOneWidget);
+    expect(find.text('Persona Ya Pagada'), findsNothing);
+    expect(find.text('Rodrigo Pendiente'), findsOneWidget);
+    expect(find.text('Vicente Pendiente'), findsOneWidget);
+    expect(find.byType(ModalBarrier), findsNWidgets(barriersBefore));
+    expect(find.text(r'$42.000'), findsWidgets);
+    expect(find.text(r'$129.500'), findsWidgets);
+    expect(find.text('Registrar 2 pagos'), findsOneWidget);
+
+    final cashSelect = tester.widget<VbShortSelect<String>>(
+      find.byKey(
+        const ValueKey<String>('payroll-payment-method-cash-pending'),
+      ),
+    );
+    final transferSelect = tester.widget<VbShortSelect<String>>(
+      find.byKey(
+        const ValueKey<String>('payroll-payment-method-transfer-pending'),
+      ),
+    );
+    expect(cashSelect.value, 'method-cash');
+    expect(transferSelect.value, 'method-transfer');
+    expect(
+      find.byKey(
+        const ValueKey<String>('payroll-payment-date-cash-pending'),
+      ),
+      findsOneWidget,
+    );
+    final transferDate = find.byKey(
+      const ValueKey<String>('payroll-payment-date-transfer-pending'),
+    );
+    expect(transferDate, findsOneWidget);
+    await tester.tap(transferDate);
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    Navigator.of(tester.element(find.byType(DatePickerDialog))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('payroll-payment-save-batch')),
+    );
+    await tester.pumpAndSettle();
+    expect(h.paidBatches, hasLength(1));
+    expect(
+      h.paidBatches.single.map((command) => command.target.targetId).toSet(),
+      <String>{'cash-pending', 'transfer-pending'},
+    );
+    expect(
+      find.byKey(const ValueKey<String>('payroll-selected-week-workspace')),
+      findsNothing,
+    );
+    expect(find.text('Semanas'), findsOneWidget);
+    expect(find.text('Volver a la semana'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Pagar individual abre método habitual y saldo completo',
+      (tester) async {
+    final h = harness(
+      vouchers: <PayrollVoucher>[
+        voucher(lines: <PayrollVoucherLine>[
+          line(
+            id: 'single-cash',
+            name: 'Rodrigo Individual',
+            total: 42000,
+            balance: 42000,
+            methodId: 'method-cash',
+          ),
+        ]),
+      ],
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+
+    await openPaymentWorkspace(tester);
+    expect(find.text('Efectivo'), findsWidgets);
+    expect(find.text(r'$42.000'), findsWidgets);
+    expect(
+      find.text('Todavía no agregas ninguna parte del pago'),
+      findsNothing,
+    );
+
+    await savePayment(tester);
+    final splits = h.paid.single['splits'] as List<Map<String, dynamic>>;
+    expect(splits, hasLength(1));
+    expect(splits.single['payment_method_id'], 'method-cash');
+    expect(splits.single['amount'], 42000);
+  });
+
+  testWidgets(
+      'Pagar nómina anuncia y aplica el anticipo elegible desde la fila',
+      (tester) async {
+    final advanceLine = line(
+      id: 'batch-advance',
+      name: 'Rodrigo Con Anticipo',
+      total: 42000,
+      balance: 42000,
+      methodId: 'method-cash',
+    );
+    final h = harness(
+      vouchers: <PayrollVoucher>[
+        voucher(lines: <PayrollVoucherLine>[advanceLine]),
+      ],
+      openAdvances: <EmployeeAdvance>[
+        EmployeeAdvance(
+          id: 'batch-advance-id',
+          employeeId: advanceLine.employeeId,
+          amount: 20000,
+          amountApplied: 0,
+          paidAt: DateTime(2026, 7, 8, 12),
+          status: 'open',
+        ),
+      ],
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+
+    await tester.tap(find.text('Pagar nómina'));
+    await tester.pumpAndSettle();
+    expect(find.text(r'Anticipo disponible · $20.000'), findsOneWidget);
+    await tester.tap(find.text('Aplicar anticipo'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(r'Anticipo aplicado · $20.000'), findsOneWidget);
+    expect(find.text('2 formas de pago'), findsOneWidget);
+    expect(find.text(r'$22.000'), findsWidgets);
+    expect(find.text('Pagado el 08/07/2026'), findsOneWidget);
+    expect(find.byTooltip('Editar parte'), findsOneWidget);
+    expect(find.byTooltip('Editar monto del anticipo'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'mesa semanal conserva el estado comprometido y nunca ofrece reintento',
+      (tester) async {
+    var saveCalls = 0;
+    final h = harness(
+      vouchers: <PayrollVoucher>[
+        voucher(lines: <PayrollVoucherLine>[
+          line(
+            id: 'committed-week-line',
+            name: 'Pago ya comprometido',
+            total: 42000,
+            balance: 42000,
+            methodId: 'method-cash',
+          ),
+        ]),
+      ],
+      onSettlePaymentBatch: ({
+        required commands,
+        required operationKey,
+        ocrSource,
+      }) async {
+        saveCalls += 1;
+        throw PayrollPaymentCommittedUnverifiedException(
+          operationKey: operationKey,
+        );
+      },
+    );
+    await pump(tester, h.actions, size: const Size(1440, 900));
+
+    await tester.tap(find.text('Pagar nómina'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('payroll-payment-save-batch')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(saveCalls, 1);
+    expect(find.textContaining('El servidor registró los pagos'), findsOne);
+    expect(find.textContaining('No vuelvas a registrarlos'), findsOne);
+    expect(find.text('Registrar 1 pagos'), findsNothing);
+    expect(find.text('Volver a la semana'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -722,14 +972,15 @@ void main() {
 
     expect(find.text('Configuración requerida'), findsOneWidget);
     expect(find.text('Sin método'), findsOneWidget);
-    expect(find.text('Configurar método'), findsOneWidget);
+    expect(find.text('Pagar nómina'), findsOneWidget);
+    expect(find.text('Configurar método'), findsNothing);
     await tester.tap(
       find.byKey(
         const ValueKey('payroll-method-menu-Persona Sin Método'),
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Configurar método'), findsNWidgets(2));
+    expect(find.text('Configurar método'), findsOneWidget);
     await tester.tap(
       find.widgetWithText(MenuItemButton, 'Configurar método'),
     );
@@ -966,7 +1217,7 @@ void main() {
 
     expect(find.text('Transferencia'), findsOneWidget);
     await openPaymentWorkspace(tester);
-    await tester.tap(find.text('Agregar parte'));
+    await tester.tap(find.byTooltip('Editar parte').first);
     await tester.pumpAndSettle();
 
     final editor = find.byKey(
@@ -1350,7 +1601,7 @@ void main() {
     await pump(tester, h.actions, size: const Size(1440, 900));
 
     await openPaymentWorkspace(tester);
-    await tester.tap(find.text('Agregar parte'));
+    await tester.tap(find.byTooltip('Editar parte').first);
     await tester.pumpAndSettle();
 
     // Registered contract: duplicate names identify their accounting

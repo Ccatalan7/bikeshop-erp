@@ -11,6 +11,51 @@ PayrollPaymentWorkspaceRequest payrollPaymentWorkspaceRequestForLine({
   required List<Map<String, dynamic>> paymentMethods,
   required List<EmployeeAdvance> openAdvances,
 }) {
+  return PayrollPaymentWorkspaceRequest.single(
+    target: _targetForVoucherLine(
+      voucher: voucher,
+      line: line,
+      openAdvances: openAdvances,
+    ),
+    paymentMethods: _paymentMethods(paymentMethods),
+  );
+}
+
+/// Builds the all-visible payment table for one selected payroll week.
+///
+/// Paid/excluded/zero-balance workers never enter the command. Every remaining
+/// line keeps its persisted employee/method identity and is independently
+/// editable in the shared batch workspace before the atomic save.
+PayrollPaymentWorkspaceRequest payrollPaymentWorkspaceRequestForWeek({
+  required PayrollVoucher voucher,
+  required List<PayrollVoucherLine> lines,
+  required List<Map<String, dynamic>> paymentMethods,
+  required List<EmployeeAdvance> openAdvances,
+}) {
+  final targets = lines
+      .where((line) => line.isIncluded && line.balance > 0.01)
+      .map(
+        (line) => _targetForVoucherLine(
+          voucher: voucher,
+          line: line,
+          openAdvances: openAdvances,
+        ),
+      )
+      .toList(growable: false);
+  if (targets.isEmpty) {
+    throw ArgumentError('The payroll week has no pending payment targets.');
+  }
+  return PayrollPaymentWorkspaceRequest.batch(
+    targets: targets,
+    paymentMethods: _paymentMethods(paymentMethods),
+  );
+}
+
+PayrollPaymentTarget _targetForVoucherLine({
+  required PayrollVoucher voucher,
+  required PayrollVoucherLine line,
+  required List<EmployeeAdvance> openAdvances,
+}) {
   final voucherId = voucher.id?.trim() ?? '';
   final lineId = line.id?.trim() ?? '';
   if (voucherId.isEmpty || lineId.isEmpty) {
@@ -26,34 +71,37 @@ PayrollPaymentWorkspaceRequest payrollPaymentWorkspaceRequestForLine({
     voucher.periodEnd.month,
     voucher.periodEnd.day,
   );
-  return PayrollPaymentWorkspaceRequest.single(
-    target: PayrollPaymentTarget(
-      targetId: lineId,
-      voucherId: voucherId,
-      voucherLineId: lineId,
+  return PayrollPaymentTarget(
+    targetId: lineId,
+    voucherId: voucherId,
+    voucherLineId: lineId,
+    employeeId: line.employeeId,
+    employeeName: line.employeeName,
+    periodStart: start,
+    periodEnd: end,
+    salaryBalanceClp: line.balance.round(),
+    salaryTotalClp: line.totalAmount.round(),
+    reconciliationVersion: voucher.reconciliationVersion,
+    voucherStatus: voucher.status.name,
+    preferredPaymentMethodId: line.paymentMethodId,
+    availableAdvances: _advancesForTarget(
+      openAdvances,
       employeeId: line.employeeId,
-      employeeName: line.employeeName,
-      periodStart: start,
       periodEnd: end,
-      salaryBalanceClp: line.balance.round(),
-      salaryTotalClp: line.totalAmount.round(),
-      reconciliationVersion: voucher.reconciliationVersion,
-      voucherStatus: voucher.status.name,
-      preferredPaymentMethodId: line.paymentMethodId,
-      availableAdvances: _advancesForTarget(
-        openAdvances,
-        employeeId: line.employeeId,
-        periodEnd: end,
-      ),
     ),
-    paymentMethods: paymentMethods
-        .map(PayrollPaymentMethodOption.fromMap)
-        .where((method) =>
-            method.isActive &&
-            method.methodId.isNotEmpty &&
-            method.accountId.isNotEmpty)
-        .toList(growable: false),
   );
+}
+
+List<PayrollPaymentMethodOption> _paymentMethods(
+  List<Map<String, dynamic>> paymentMethods,
+) {
+  return paymentMethods
+      .map(PayrollPaymentMethodOption.fromMap)
+      .where((method) =>
+          method.isActive &&
+          method.methodId.isNotEmpty &&
+          method.accountId.isNotEmpty)
+      .toList(growable: false);
 }
 
 /// Translates the in-memory OCR/read model into the only object the payment

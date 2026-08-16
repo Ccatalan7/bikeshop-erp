@@ -525,6 +525,224 @@ void main() {
   }
 
   testWidgets(
+      'un anticipo completo reemplaza el método y la fecha del dinero nuevo',
+      (tester) async {
+    final target = _target(
+      id: 'advance-full',
+      voucherId: 'voucher-advance-full',
+      name: 'Rodrigo Nieto',
+      balanceClp: 42000,
+      preferredPaymentMethodId: 'method-cash',
+      advances: const <PayrollAdvanceOption>[
+        PayrollAdvanceOption(
+          advanceId: 'advance-full-id',
+          label: 'Anticipo de junio',
+          availableAmountClp: 42000,
+          paidDate: PayrollCivilDate(2026, 6, 26),
+        ),
+      ],
+    );
+    final controller = PayrollPaymentWorkspaceController(
+      request: PayrollPaymentWorkspaceRequest.batch(
+        targets: <PayrollPaymentTarget>[target],
+        paymentMethods: _paymentMethods,
+      ),
+    );
+    addTearDown(controller.dispose);
+    await pumpWorkspace(
+      tester,
+      controller: controller,
+      size: const Size(1440, 900),
+    );
+
+    expect(find.text(r'Anticipo disponible · $42.000'), findsOneWidget);
+    expect(find.text('Aplicar anticipo'), findsOneWidget);
+    await tester.tap(find.text('Aplicar anticipo'));
+    await tester.pumpAndSettle();
+
+    final draft = controller.draftFor(target.targetId);
+    expect(draft.salaryLegs, hasLength(1));
+    expect(draft.salaryLegs.single.kind, PayrollPaymentLegKind.advance);
+    expect(draft.salaryLegs.single.amountClp, 42000);
+    expect(controller.validationFor(target.targetId).remainingClp, 0);
+    expect(find.text(r'Anticipo aplicado · $42.000'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(
+              const ValueKey<String>(
+                'payroll-payment-method-advance-full',
+              ),
+            ),
+          )
+          .data,
+      'Anticipo aplicado',
+    );
+    expect(find.text('FECHA DEL ANTICIPO'), findsOneWidget);
+    expect(find.text('26/06/2026'), findsWidgets);
+    expect(find.byTooltip('Editar monto del anticipo'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'un anticipo parcial deja sólo la diferencia y muestra ambos controles',
+      (tester) async {
+    final target = _target(
+      id: 'advance-partial',
+      voucherId: 'voucher-advance-partial',
+      name: 'Rodrigo Nieto',
+      balanceClp: 42000,
+      preferredPaymentMethodId: 'method-cash',
+      advances: const <PayrollAdvanceOption>[
+        PayrollAdvanceOption(
+          advanceId: 'advance-partial-id',
+          label: 'Anticipo parcial',
+          availableAmountClp: 20000,
+          paidDate: PayrollCivilDate(2026, 6, 26),
+        ),
+      ],
+    );
+    final controller = PayrollPaymentWorkspaceController(
+      request: PayrollPaymentWorkspaceRequest.batch(
+        targets: <PayrollPaymentTarget>[target],
+        paymentMethods: _paymentMethods,
+      ),
+    );
+    addTearDown(controller.dispose);
+    await pumpWorkspace(
+      tester,
+      controller: controller,
+      size: const Size(1440, 900),
+    );
+
+    await tester.tap(find.text('Aplicar anticipo'));
+    await tester.pumpAndSettle();
+
+    final draft = controller.draftFor(target.targetId);
+    final payment = draft.salaryLegs.singleWhere(
+      (leg) => leg.kind == PayrollPaymentLegKind.payment,
+    );
+    final advance = draft.salaryLegs.singleWhere(
+      (leg) => leg.kind == PayrollPaymentLegKind.advance,
+    );
+    expect(payment.amountClp, 22000);
+    expect(payment.paymentMethodId, 'method-cash');
+    expect(advance.amountClp, 20000);
+    expect(controller.validationFor(target.targetId).remainingClp, 0);
+    expect(find.text(r'Anticipo aplicado · $20.000'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(
+              const ValueKey<String>(
+                'payroll-payment-method-advance-partial',
+              ),
+            ),
+          )
+          .data,
+      '2 formas de pago',
+    );
+    expect(find.text('FECHA DE PAGO'), findsOneWidget);
+    expect(find.text(r'$22.000'), findsWidgets);
+    expect(find.text(r'$20.000'), findsWidgets);
+    expect(find.byTooltip('Editar parte'), findsOneWidget);
+    expect(find.byTooltip('Editar monto del anticipo'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('varios anticipos se eligen sin aplicarlos todos por sorpresa',
+      (tester) async {
+    final target = _target(
+      id: 'advance-multiple',
+      voucherId: 'voucher-advance-multiple',
+      name: 'Rodrigo Nieto',
+      balanceClp: 42000,
+      advances: const <PayrollAdvanceOption>[
+        PayrollAdvanceOption(
+          advanceId: 'advance-a',
+          label: 'Primer anticipo',
+          availableAmountClp: 20000,
+        ),
+        PayrollAdvanceOption(
+          advanceId: 'advance-b',
+          label: 'Segundo anticipo',
+          availableAmountClp: 16000,
+        ),
+      ],
+    );
+    final controller = PayrollPaymentWorkspaceController(
+      request: PayrollPaymentWorkspaceRequest.batch(
+        targets: <PayrollPaymentTarget>[target],
+        paymentMethods: _paymentMethods,
+      ),
+    );
+    addTearDown(controller.dispose);
+    await pumpWorkspace(
+      tester,
+      controller: controller,
+      size: const Size(1440, 900),
+    );
+
+    expect(find.text(r'2 anticipos disponibles · $36.000'), findsOneWidget);
+    await tester.tap(find.text('Elegir anticipos'));
+    await tester.pumpAndSettle();
+
+    expect(
+      controller
+          .draftFor(target.targetId)
+          .salaryLegs
+          .where((leg) => leg.kind == PayrollPaymentLegKind.advance),
+      isEmpty,
+    );
+    expect(find.text('Anticipos disponibles'), findsOneWidget);
+    expect(find.text('Primer anticipo'), findsOneWidget);
+    expect(find.text('Segundo anticipo'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('el hint de anticipo conserva la fila táctil a 390',
+      (tester) async {
+    final target = _target(
+      id: 'advance-phone',
+      voucherId: 'voucher-advance-phone',
+      name: 'Rodrigo Nieto',
+      balanceClp: 42000,
+      advances: const <PayrollAdvanceOption>[
+        PayrollAdvanceOption(
+          advanceId: 'advance-phone-id',
+          label: 'Anticipo móvil',
+          availableAmountClp: 20000,
+          paidDate: PayrollCivilDate(2026, 6, 26),
+        ),
+      ],
+    );
+    final controller = PayrollPaymentWorkspaceController(
+      request: PayrollPaymentWorkspaceRequest.batch(
+        targets: <PayrollPaymentTarget>[target],
+        paymentMethods: _paymentMethods,
+      ),
+    );
+    addTearDown(controller.dispose);
+    await pumpWorkspace(
+      tester,
+      controller: controller,
+      size: const Size(390, 844),
+    );
+
+    expect(find.text(r'Anticipo disponible · $20.000'), findsOneWidget);
+    await tester.tap(find.text('Aplicar anticipo'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('payroll-payment-row-advance-phone')),
+      findsOneWidget,
+    );
+    expect(find.text(r'Anticipo aplicado · $20.000'), findsOneWidget);
+    expect(find.text('Anticipos disponibles'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
       'batch conserva todas las filas mientras un detalle se edita inline',
       (tester) async {
     final first = _target(
@@ -1733,6 +1951,8 @@ PayrollPaymentTarget _target({
   PayrollCivilDate periodStart = const PayrollCivilDate(2026, 7, 27),
   PayrollCivilDate periodEnd = const PayrollCivilDate(2026, 8, 2),
   List<PayrollOcrPaymentCandidate> candidates = const [],
+  List<PayrollAdvanceOption> advances = const [],
+  String? preferredPaymentMethodId,
   String voucherStatus = 'confirmed',
   int reconciliationVersion = 1,
 }) {
@@ -1747,6 +1967,8 @@ PayrollPaymentTarget _target({
     salaryBalanceClp: balanceClp,
     reconciliationVersion: reconciliationVersion,
     voucherStatus: voucherStatus,
+    preferredPaymentMethodId: preferredPaymentMethodId,
     ocrCandidates: candidates,
+    availableAdvances: advances,
   );
 }

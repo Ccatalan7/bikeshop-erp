@@ -121,6 +121,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   int _loadingProgress = 0;
   String _currentUrl = '';
   String? _pageTitle;
+  String? _pageSiteName;
+  String? _pageFaviconUrl;
   String? _platformMessage;
   String? _lastErrorMessage;
   String? _relayPreviewSourceUrl;
@@ -406,10 +408,140 @@ class _WebViewModulePageState extends State<WebViewModulePage>
             workspaceId,
             url: url,
             title: title,
+            siteName: _pageSiteName,
+            faviconUrl: _pageFaviconUrl,
           );
     } catch (_) {
       // The workspace provider can disappear during app shutdown.
     }
+  }
+
+  String? _browserIdentityOrigin(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      return null;
+    }
+    return uri.origin;
+  }
+
+  bool _stillOwnsBrowserIdentity(String requestedUrl) =>
+      _browserIdentityOrigin(requestedUrl) != null &&
+      _browserIdentityOrigin(requestedUrl) ==
+          _browserIdentityOrigin(_currentUrl);
+
+  Future<({String? siteName, String? faviconUrl})> _readDeclaredBrowserIdentity(
+    InAppWebViewController controller,
+  ) async {
+    try {
+      final result = await controller.evaluateJavascript(
+        source: r'''
+(() => {
+  const content = (selector) =>
+    document.querySelector(selector)?.getAttribute('content')?.trim() || '';
+  const siteName = content('meta[property="og:site_name"]') ||
+    content('meta[name="application-name"]') ||
+    content('meta[name="apple-mobile-web-app-title"]');
+  const icons = Array.from(document.querySelectorAll(
+    'link[rel~="icon"], link[rel="apple-touch-icon"]'
+  ));
+  const favicon =
+    icons.find((link) => link.sizes?.value?.split(/\s+/).includes('32x32')) ||
+    icons.find((link) => link.sizes?.value?.split(/\s+/).includes('16x16')) ||
+    icons.find((link) => link.rel === 'shortcut icon') ||
+    icons.find((link) => link.rel === 'icon') ||
+    icons[0];
+  return {
+    siteName: siteName || null,
+    faviconUrl: favicon?.href || null,
+  };
+})()
+''',
+      ).timeout(const Duration(seconds: 1));
+      Map<dynamic, dynamic>? payload;
+      if (result is Map) {
+        payload = result;
+      } else if (result is String && result.trim().startsWith('{')) {
+        final decoded = jsonDecode(result);
+        if (decoded is Map) payload = decoded;
+      }
+      final siteName = payload?['siteName']?.toString().trim();
+      return (
+        siteName: siteName?.isNotEmpty == true ? siteName : null,
+        faviconUrl: sanitizeBrowserFaviconUrl(
+          payload?['faviconUrl']?.toString(),
+        ),
+      );
+    } catch (_) {
+      return (siteName: null, faviconUrl: null);
+    }
+  }
+
+  String? _bestBrowserFaviconUrl(List<Favicon> favicons) {
+    final candidates = favicons
+        .where(
+          (favicon) =>
+              sanitizeBrowserFaviconUrl(favicon.url.toString()) != null,
+        )
+        .toList(growable: false);
+    if (candidates.isEmpty) return null;
+
+    int score(Favicon favicon) {
+      final size = math.max(favicon.width ?? 32, favicon.height ?? 32);
+      var value = (size - 32).abs();
+      if (size < 16) value += 80;
+      if (size > 128) value += 32;
+      final rel = favicon.rel?.toLowerCase() ?? '';
+      if (rel.contains('mask')) value += 80;
+      if (rel.contains('apple-touch')) value += 16;
+      if (favicon.url.path.toLowerCase().endsWith('.svg')) value += 24;
+      return value;
+    }
+
+    candidates.sort((left, right) => score(left).compareTo(score(right)));
+    return sanitizeBrowserFaviconUrl(candidates.first.url.toString());
+  }
+
+  Future<void> _refreshBrowserPageIdentity(
+    InAppWebViewController controller,
+    String requestedUrl,
+  ) async {
+    if (_browserIdentityOrigin(requestedUrl) == null) return;
+
+    final declared = await _readDeclaredBrowserIdentity(controller);
+    if (!mounted || !_stillOwnsBrowserIdentity(requestedUrl)) return;
+    _pageSiteName = declared.siteName;
+    _pageFaviconUrl = declared.faviconUrl;
+    if (kDebugMode) {
+      final faviconUri = Uri.tryParse(_pageFaviconUrl ?? '');
+      debugPrint(
+        '🌐 [BrowserIdentity] host='
+        '${Uri.tryParse(requestedUrl)?.host ?? ''} '
+        'site=${_pageSiteName ?? '-'} favicon='
+        '${faviconUri == null ? '-' : '${faviconUri.origin}${faviconUri.path}'}',
+      );
+    }
+    _publishBrowserWorkspaceState(url: _currentUrl, title: _pageTitle);
+    if (_pageFaviconUrl != null) return;
+
+    List<Favicon> favicons;
+    try {
+      favicons =
+          await controller.getFavicons().timeout(const Duration(seconds: 3));
+    } catch (_) {
+      favicons = const <Favicon>[];
+    }
+    if (!mounted || !_stillOwnsBrowserIdentity(requestedUrl)) return;
+    _pageFaviconUrl = _bestBrowserFaviconUrl(favicons);
+    if (kDebugMode) {
+      final faviconUri = Uri.tryParse(_pageFaviconUrl ?? '');
+      debugPrint(
+        '🌐 [BrowserIdentity] fallback favicon='
+        '${faviconUri == null ? '-' : '${faviconUri.origin}${faviconUri.path}'}',
+      );
+    }
+    _publishBrowserWorkspaceState(url: _currentUrl, title: _pageTitle);
   }
 
   Future<Uint8List?> _takeBrowserScreenshot() async {
@@ -4367,8 +4499,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         value.startsWith('data:') && _relayPreviewSourceUrl != null
             ? _relayPreviewSourceUrl!
             : value;
+    final changedOrigin = _browserIdentityOrigin(_currentUrl) !=
+        _browserIdentityOrigin(displayValue);
     setState(() {
       _currentUrl = displayValue;
+      if (changedOrigin) {
+        _pageTitle = null;
+        _pageSiteName = null;
+        _pageFaviconUrl = null;
+      }
     });
     _syncAddressField(displayValue);
     _publishBrowserWorkspaceState(url: displayValue, title: _pageTitle);
@@ -4655,6 +4794,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 _publishBrowserWorkspaceState(
                   url: _currentUrl,
                   title: _pageTitle,
+                );
+                unawaited(
+                  _refreshBrowserPageIdentity(
+                    controller,
+                    _currentUrl,
+                  ),
                 );
                 unawaited(_recordBrowserHistory(url, title: _pageTitle));
                 if (mounted) setState(() {});

@@ -56281,9 +56281,15 @@ alter table public.payroll_money_command_contexts
     command in (
       'manual_payment',
       'advance_registration',
-      'legacy_reversal'
+      'advance_audit_attach',
+      'legacy_reversal',
+      'audited_reversal'
     )
   );
+
+comment on constraint payroll_money_command_contexts_command_check
+  on public.payroll_money_command_contexts is
+  'Complete command domain shared by payroll payments, advances, audit attachment, and reversals.';
 
 alter table public.payroll_statement_command_contexts
   drop constraint if exists payroll_statement_command_contexts_command_check;
@@ -75559,6 +75565,10 @@ comment on column public.suppliers.portal_password is
 -- encode Transbank policy in the client and future providers can coexist.
 \ir ../migrations/20260815200000_card_terminal_profiles_and_rails.sql
 \ir ../migrations/20260815201000_card_terminal_settlement_accounting.sql
+
+-- Cash-basis expense drill-down follows each real payment or advance date;
+-- expenses.paid_at remains only the explicit fallback for legacy rows.
+\ir ../migrations/20260815212000_expense_cash_detail_uses_transaction_ledger.sql
 
 -- Bootstrap-wide service-role grants above predate the notification ACL
 -- hardening. Preserve the production end state after every included migration.

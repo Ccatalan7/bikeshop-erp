@@ -250,7 +250,7 @@ class PayrollWeekTotalsVM {
   final bool showCommitAction;
   final bool canConfirm;
   final String blockedReason;
-  final String nextActionLabel; // "Continuar pagos"
+  final String nextActionLabel; // "Pagar nómina"
 }
 
 // ── Superficie ──────────────────────────────────────────────────────────────

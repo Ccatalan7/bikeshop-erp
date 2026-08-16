@@ -284,6 +284,18 @@ void main() {
     expect(selector, contains("ValueKey('mobile-workspace-selector')"));
     expect(selector, contains('minTileHeight: 48'));
     expect(selector, contains('manager.switchToWorkspaceById(workspace.id)'));
+    expect(selector, contains('manager.unpinnedBrowserWorkspaces'));
+    expect(selector, contains('BrowserWorkspaceFavicon('));
+    expect(
+      selector,
+      contains("ValueKey('mobile-browser-workspace-group')"),
+      reason: 'dos browsers no fijados comparten una sección táctil',
+    );
+    expect(
+      selector,
+      contains("ValueKey('mobile-workspace-pin-\${workspace.id}')"),
+      reason: 'compacto conserva la salida explícita de la agrupación',
+    );
 
     // Abrir un espacio nuevo es una acción propia y siempre visible: vive
     // fuera del selector, porque hasta el 2026-08-06 el shell compacto sólo

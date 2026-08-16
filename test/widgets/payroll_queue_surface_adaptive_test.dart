@@ -75,7 +75,7 @@ void main() {
     canConfirm: false,
     blockedReason:
         'S28 pasa a Pagada automáticamente cuando sus saldos lleguen a \$0.',
-    nextActionLabel: 'Continuar pagos',
+    nextActionLabel: 'Pagar nómina',
   );
 
   Future<void> pumpQueue(
@@ -1190,7 +1190,7 @@ void main() {
     canConfirm: false,
     blockedReason:
         r'S27 pasa a Pagada automáticamente cuando sus saldos lleguen a $0.',
-    nextActionLabel: 'Continuar pagos',
+    nextActionLabel: 'Pagar nómina',
   );
 
   testWidgets(
@@ -1205,7 +1205,7 @@ void main() {
       value: soloSiguiente,
     );
 
-    expect(find.text('Continuar pagos'), findsOneWidget);
+    expect(find.text('Pagar nómina'), findsOneWidget);
     final bar = tester.getRect(
       find.byKey(const ValueKey<String>('payroll-money-bar')),
     );

@@ -11,7 +11,78 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('browser tabs restore their latest URL and active state per ERP user',
+  test('browser tab identity combines site owner with ambiguous page titles',
+      () {
+    expect(
+      browserWorkspaceDisplayTitle(
+        url: 'https://www.aliexpress.com/p/order/detail.html',
+        pageTitle: 'Details',
+      ),
+      'AliExpress · Details',
+    );
+    expect(
+      browserWorkspaceDisplayTitle(
+        url: 'https://accounts.google.com/signin',
+        pageTitle: 'Sign in – Google accounts',
+      ),
+      'Sign in – Google accounts',
+    );
+    expect(
+      browserWorkspaceDisplayTitle(
+        url: 'https://portal.bike-supplier.co.uk/orders',
+        pageTitle: 'Order 4812',
+        declaredSiteName: 'Bike Supplier',
+      ),
+      'Bike Supplier · Order 4812',
+    );
+  });
+
+  test('browser workspace keeps favicon and raw document title separately',
+      () async {
+    final manager = WorkspaceManager(sessionIdentity: 'staff-identity');
+    await manager.browserSessionReady;
+    final browserId = manager.openBrowserWorkspace(
+      'https://www.aliexpress.com/p/order/detail.html',
+      title: 'Details',
+    );
+
+    expect(manager.workspaceById(browserId!)?.title, 'AliExpress · Details');
+    manager.updateBrowserWorkspaceState(
+      browserId,
+      url: 'https://www.aliexpress.com/p/order/detail.html?id=4812',
+      title: 'Details',
+      siteName: 'AliExpress',
+      faviconUrl: 'https://ae01.alicdn.com/favicon.ico',
+    );
+
+    final browser = manager.workspaceById(browserId)!;
+    expect(browser.title, 'AliExpress · Details');
+    expect(browser.browserTitle, 'Details');
+    expect(browser.browserSiteName, 'AliExpress');
+    expect(browser.browserFaviconUrl, 'https://ae01.alicdn.com/favicon.ico');
+  });
+
+  test('unpinned browser tabs are session-only', () async {
+    const storageKey = 'vinabike_browser_workspace_session_v1::staff-session';
+    final manager = WorkspaceManager(sessionIdentity: 'staff-session');
+    await manager.browserSessionReady;
+
+    manager.openBrowserWorkspace(
+      'https://example.com/account',
+      title: 'Account',
+    );
+    await manager.flushBrowserSession();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(storageKey), isNull);
+
+    final restored = WorkspaceManager(sessionIdentity: 'staff-session');
+    await restored.browserSessionReady;
+    expect(restored.workspaces, hasLength(1));
+    expect(restored.workspaces.single.currentRoute, '/dashboard');
+  });
+
+  test('pinned browser tabs restore latest URL and active state per ERP user',
       () async {
     final manager = WorkspaceManager(sessionIdentity: 'staff-a');
     await manager.browserSessionReady;
@@ -21,11 +92,17 @@ void main() {
       title: 'Example',
     );
     expect(browserId, isNotNull);
+    final browserIndex = manager.workspaces.indexWhere(
+      (workspace) => workspace.id == browserId,
+    );
+    manager.toggleWorkspacePinned(browserIndex);
 
     manager.updateBrowserWorkspaceState(
       browserId!,
       url: 'https://example.com/account/preferences',
       title: 'Preferences',
+      siteName: 'Example Store',
+      faviconUrl: 'https://example.com/favicon.png',
     );
     await manager.flushBrowserSession();
 
@@ -37,7 +114,11 @@ void main() {
       (workspace) => workspace.isBrowserWorkspace,
     );
     expect(browser.browserUrl, 'https://example.com/account/preferences');
-    expect(browser.title, 'Preferences');
+    expect(browser.title, 'Example Store · Preferences');
+    expect(browser.browserTitle, 'Preferences');
+    expect(browser.browserSiteName, 'Example Store');
+    expect(browser.browserFaviconUrl, 'https://example.com/favicon.png');
+    expect(browser.isPinned, isTrue);
     expect(browser.isHydrated, isTrue);
     expect(restored.activeWorkspace?.id, browser.id);
     expect(
@@ -55,21 +136,32 @@ void main() {
       () async {
     final manager = WorkspaceManager(sessionIdentity: 'staff-lazy');
     await manager.browserSessionReady;
-    manager.openBrowserWorkspace('https://example.org', title: 'Example');
-    manager.switchToWorkspace(0);
+    final browserId = manager.openBrowserWorkspace(
+      'https://example.org',
+      title: 'Example',
+    );
+    expect(browserId, isNotNull);
+    final browserIndex = manager.workspaces.indexWhere(
+      (workspace) => workspace.id == browserId,
+    );
+    manager.toggleWorkspacePinned(browserIndex);
+    final dashboardIndex = manager.workspaces.indexWhere(
+      (workspace) => workspace.currentRoute == '/dashboard',
+    );
+    manager.switchToWorkspace(dashboardIndex);
     await manager.flushBrowserSession();
 
     final restored = WorkspaceManager(sessionIdentity: 'staff-lazy');
     await restored.browserSessionReady;
 
-    final browserIndex = restored.workspaces.indexWhere(
+    final restoredBrowserIndex = restored.workspaces.indexWhere(
       (workspace) => workspace.isBrowserWorkspace,
     );
-    expect(browserIndex, greaterThanOrEqualTo(0));
-    expect(restored.workspaces[browserIndex].isHydrated, isFalse);
+    expect(restoredBrowserIndex, greaterThanOrEqualTo(0));
+    expect(restored.workspaces[restoredBrowserIndex].isHydrated, isFalse);
 
-    restored.switchToWorkspace(browserIndex);
-    expect(restored.workspaces[browserIndex].isHydrated, isTrue);
+    restored.switchToWorkspace(restoredBrowserIndex);
+    expect(restored.workspaces[restoredBrowserIndex].isHydrated, isTrue);
   });
 
   test('pinned browser tabs restore first without stealing focus', () async {
@@ -110,7 +202,15 @@ void main() {
     ];
     await Future.wait(transitions);
 
-    manager.openBrowserWorkspace('https://final.example', title: 'Final');
+    final browserId = manager.openBrowserWorkspace(
+      'https://final.example',
+      title: 'Final',
+    );
+    expect(browserId, isNotNull);
+    final browserIndex = manager.workspaces.indexWhere(
+      (workspace) => workspace.id == browserId,
+    );
+    manager.toggleWorkspacePinned(browserIndex);
     await manager.flushBrowserSession();
 
     final restoredFinal = WorkspaceManager(sessionIdentity: 'staff-final');
@@ -131,7 +231,15 @@ void main() {
       () async {
     final saved = WorkspaceManager(sessionIdentity: 'staff-direct-route');
     await saved.browserSessionReady;
-    saved.openBrowserWorkspace('https://example.edu', title: 'Browser');
+    final browserId = saved.openBrowserWorkspace(
+      'https://example.edu',
+      title: 'Browser',
+    );
+    expect(browserId, isNotNull);
+    final browserIndex = saved.workspaces.indexWhere(
+      (workspace) => workspace.id == browserId,
+    );
+    saved.toggleWorkspacePinned(browserIndex);
     await saved.flushBrowserSession();
 
     final restored = WorkspaceManager(sessionIdentity: 'staff-direct-route');
@@ -159,12 +267,12 @@ void main() {
             'url':
                 'https://ae-pic-a1.aliexpress-media.com/kf/example-image.jpg',
             'title': 'Imagen',
-            'isPinned': false,
+            'isPinned': true,
           },
           {
             'url': 'https://www.aliexpress.com/account',
             'title': 'AliExpress',
-            'isPinned': false,
+            'isPinned': true,
           },
         ],
       }),
@@ -186,6 +294,7 @@ void main() {
           workspace.browserUrl == 'https://www.aliexpress.com/account',
     );
     expect(retained.isHydrated, isFalse);
+    expect(retained.isPinned, isTrue);
 
     final prefs = await SharedPreferences.getInstance();
     final sanitized = jsonDecode(prefs.getString(storageKey)!) as Map;
@@ -209,17 +318,17 @@ void main() {
           {
             'url': 'https://ae-pic-a1.aliexpress-media.com/kf/stale.jpg',
             'title': 'Stale',
-            'isPinned': false,
+            'isPinned': true,
           },
           {
             'url': 'https://first.example',
             'title': 'First',
-            'isPinned': false,
+            'isPinned': true,
           },
           {
             'url': 'https://second.example',
             'title': 'Second',
-            'isPinned': false,
+            'isPinned': true,
           },
         ],
       }),
@@ -230,6 +339,32 @@ void main() {
 
     expect(restored.activeWorkspace?.browserUrl, 'https://first.example');
     expect(restored.activeWorkspace?.isHydrated, isTrue);
+  });
+
+  test('legacy unpinned saved tabs are removed during restore', () async {
+    const storageKey = 'vinabike_browser_workspace_session_v1::staff-legacy';
+    SharedPreferences.setMockInitialValues({
+      storageKey: jsonEncode({
+        'version': 1,
+        'activeWasBrowser': true,
+        'activeBrowserIndex': 0,
+        'tabs': [
+          {
+            'url': 'https://legacy.example/account',
+            'title': 'Legacy tab',
+            'isPinned': false,
+          },
+        ],
+      }),
+    });
+
+    final restored = WorkspaceManager(sessionIdentity: 'staff-legacy');
+    await restored.browserSessionReady;
+
+    expect(restored.workspaces, hasLength(1));
+    expect(restored.activeWorkspace?.currentRoute, '/dashboard');
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(storageKey), isNull);
   });
 
   test('restore exclusion is narrow to the AliExpress media CDN', () {

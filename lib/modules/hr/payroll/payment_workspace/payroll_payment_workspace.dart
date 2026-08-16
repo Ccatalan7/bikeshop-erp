@@ -27,12 +27,20 @@ class PayrollPaymentWorkspace extends StatefulWidget {
     required this.controller,
     required this.onClose,
     this.onBatchComplete,
+    this.completeBatchOnSave = false,
+    this.showBatchHeader = false,
+    this.batchBackLabel = 'Volver a propuestas',
+    this.batchCompleteLabel = 'Volver a Nóminas',
     this.expenseAccounts = const <PayrollExpenseAccountOption>[],
   });
 
   final PayrollPaymentWorkspaceController controller;
   final VoidCallback onClose;
   final VoidCallback? onBatchComplete;
+  final bool completeBatchOnSave;
+  final bool showBatchHeader;
+  final String batchBackLabel;
+  final String batchCompleteLabel;
   final List<PayrollExpenseAccountOption> expenseAccounts;
 
   @override
@@ -115,6 +123,11 @@ class _PayrollPaymentWorkspaceState extends State<PayrollPaymentWorkspace> {
       key: const ValueKey<String>('payroll-payment-batch-workspace'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (widget.showBatchHeader)
+          _WorkspaceHeader(
+            request: request,
+            onClose: _requestClose,
+          ),
         Expanded(
           child: ListView.separated(
             key: const ValueKey<String>('payroll-payment-batch-list'),
@@ -173,6 +186,8 @@ class _PayrollPaymentWorkspaceState extends State<PayrollPaymentWorkspace> {
           onApproveWeeks: _approveWeeks,
           onSave: _saveBatch,
           onComplete: widget.onBatchComplete ?? widget.onClose,
+          backLabel: widget.batchBackLabel,
+          completeLabel: widget.batchCompleteLabel,
         ),
       ],
     );
@@ -220,6 +235,12 @@ class _PayrollPaymentWorkspaceState extends State<PayrollPaymentWorkspace> {
     });
     try {
       await _controller.saveBatch();
+      if (!mounted ||
+          !widget.completeBatchOnSave ||
+          !_controller.isBatchSaved) {
+        return;
+      }
+      (widget.onBatchComplete ?? widget.onClose)();
     } on PayrollPaymentWorkspaceValidationException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -310,6 +331,9 @@ class _WorkspaceHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final visual = PayrollVisualTokens.of(context);
     final batch = request.mode == PayrollPaymentWorkspaceMode.batch;
+    final selectedWeekBatch =
+        batch && request.ocrSource == null && request.groups.length == 1;
+    final selectedWeek = selectedWeekBatch ? request.groups.single : null;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 10, 12),
       decoration: BoxDecoration(
@@ -323,15 +347,23 @@ class _WorkspaceHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  batch ? 'PREPARAR PAGOS DE NÓMINA' : 'PAGO DE NÓMINA',
+                  selectedWeekBatch
+                      ? 'PAGAR NÓMINA'
+                      : batch
+                          ? 'PREPARAR PAGOS DE NÓMINA'
+                          : 'PAGO DE NÓMINA',
                   style: visual.overline.copyWith(color: visual.onShellMuted),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  batch
-                      ? '${request.groups.length} semanas · '
-                          '${request.targets.length} trabajadores'
-                      : 'Una semana · un trabajador',
+                  selectedWeek != null
+                      ? 'Semana ${_isoWeek(selectedWeek.periodStart)} · '
+                          '${selectedWeek.targets.length} '
+                          '${selectedWeek.targets.length == 1 ? 'trabajador' : 'trabajadores'}'
+                      : batch
+                          ? '${request.groups.length} semanas · '
+                              '${request.targets.length} trabajadores'
+                          : 'Una semana · un trabajador',
                   style: visual.moduleTitle,
                 ),
               ],
@@ -480,6 +512,28 @@ class _BatchTargetRow extends StatelessWidget {
     final paymentLegs = draft.salaryLegs
         .where((leg) => leg.kind == PayrollPaymentLegKind.payment)
         .toList(growable: false);
+    final advanceLegs = draft.salaryLegs
+        .where((leg) => leg.kind == PayrollPaymentLegKind.advance)
+        .toList(growable: false);
+    final selectedAdvanceIds =
+        advanceLegs.map((leg) => leg.advanceId).whereType<String>().toSet();
+    final unappliedAdvances = target.availableAdvances
+        .where(
+          (advance) =>
+              advance.isAvailable &&
+              advance.availableAmountClp > 0 &&
+              !selectedAdvanceIds.contains(advance.advanceId),
+        )
+        .toList(growable: false);
+    final appliedAdvanceClp = advanceLegs.fold<int>(
+      0,
+      (sum, leg) => sum + leg.amountClp,
+    );
+    final availableAdvanceClp = unappliedAdvances.fold<int>(
+      0,
+      (sum, advance) => sum + advance.availableAmountClp,
+    );
+    final onlyAdvances = paymentLegs.isEmpty && advanceLegs.isNotEmpty;
     final simple = draft.salaryLegs.length == 1 && paymentLegs.length == 1;
     final currentMethod =
         simple ? paymentLegs.single.paymentMethodId?.trim() ?? '' : '';
@@ -490,6 +544,42 @@ class _BatchTargetRow extends StatelessWidget {
         .where((leg) => leg.ocrEvidence != null)
         .map((leg) => leg.ocrEvidence!)
         .firstOrNull;
+    final paymentDates = paymentLegs
+        .map((leg) => leg.paymentDate)
+        .whereType<PayrollCivilDate>()
+        .toSet();
+    final advanceDates = advanceLegs
+        .map(
+          (leg) => target.availableAdvances
+              .where((advance) => advance.advanceId == leg.advanceId)
+              .firstOrNull
+              ?.paidDate,
+        )
+        .whereType<PayrollCivilDate>()
+        .toSet();
+    final visibleDates = onlyAdvances ? advanceDates : paymentDates;
+    final canOfferAdvance =
+        !draft.isSaved && !controller.isSavingBatch && advanceLegs.isEmpty;
+    final quickAdvance = canOfferAdvance &&
+            unappliedAdvances.length == 1 &&
+            controller.availableForSalaryAllocation(target.targetId) > 0
+        ? unappliedAdvances.single
+        : null;
+    final hasAdvanceDecision = canOfferAdvance && unappliedAdvances.isNotEmpty;
+    final advanceHint = appliedAdvanceClp > 0
+        ? unappliedAdvances.isEmpty
+            ? 'Anticipo aplicado · '
+                '${VbMoneyText.formatClp(appliedAdvanceClp)}'
+            : 'Anticipo aplicado · '
+                '${VbMoneyText.formatClp(appliedAdvanceClp)} · '
+                '${VbMoneyText.formatClp(availableAdvanceClp)} disponible'
+        : unappliedAdvances.length == 1
+            ? 'Anticipo disponible · '
+                '${VbMoneyText.formatClp(availableAdvanceClp)}'
+            : unappliedAdvances.isNotEmpty
+                ? '${unappliedAdvances.length} anticipos disponibles · '
+                    '${VbMoneyText.formatClp(availableAdvanceClp)}'
+                : null;
     final wide =
         ResponsiveViewport.widthOf(context) >= ResponsiveViewport.desktopMin;
 
@@ -536,6 +626,22 @@ class _BatchTargetRow extends StatelessWidget {
                   ),
                 ],
               ),
+              if (advanceHint != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  advanceHint,
+                  key: ValueKey<String>(
+                    'payroll-payment-advance-hint-${target.targetId}',
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: visual.bodyS.copyWith(
+                    color: appliedAdvanceClp > 0
+                        ? visual.successFg
+                        : visual.accent,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -548,50 +654,102 @@ class _BatchTargetRow extends StatelessWidget {
       remainingClp: validation.remainingClp,
     );
 
-    final method = methods.isEmpty
-        ? Text('Sin métodos disponibles', style: visual.bodyS)
-        : simple
-            ? VbShortSelect<String>(
-                key: ValueKey<String>(
-                  'payroll-payment-method-${target.targetId}',
-                ),
-                value: currentMethod,
-                options: [
-                  for (final option in methods)
-                    VbShortSelectOption<String>(
-                      value: option.methodId,
-                      label: option.label,
+    final method = onlyAdvances
+        ? Text(
+            advanceLegs.length == 1
+                ? 'Anticipo aplicado'
+                : '${advanceLegs.length} anticipos aplicados',
+            key: ValueKey<String>(
+              'payroll-payment-method-${target.targetId}',
+            ),
+            style: visual.labelStrong,
+          )
+        : methods.isEmpty
+            ? Text('Sin métodos disponibles', style: visual.bodyS)
+            : simple
+                ? VbShortSelect<String>(
+                    key: ValueKey<String>(
+                      'payroll-payment-method-${target.targetId}',
                     ),
-                ],
-                onChanged: draft.isSaved || controller.isSavingBatch
-                    ? null
-                    : (value) => controller.setSimplePaymentMethod(
-                        target.targetId, value),
-                sheetTitle: 'Método de ${target.employeeName}',
-                semanticLabel: 'Método de pago de ${target.employeeName}',
-              )
-            : Text(
-                '${draft.salaryLegs.length} formas de pago',
-                key: ValueKey<String>(
-                  'payroll-payment-method-${target.targetId}',
-                ),
-                style: visual.labelStrong,
-              );
+                    value: currentMethod,
+                    options: [
+                      for (final option in methods)
+                        VbShortSelectOption<String>(
+                          value: option.methodId,
+                          label: option.label,
+                        ),
+                    ],
+                    onChanged: draft.isSaved || controller.isSavingBatch
+                        ? null
+                        : (value) => controller.setSimplePaymentMethod(
+                            target.targetId, value),
+                    sheetTitle: 'Método de ${target.employeeName}',
+                    semanticLabel: 'Método de pago de ${target.employeeName}',
+                  )
+                : Text(
+                    '${draft.salaryLegs.length} formas de pago',
+                    key: ValueKey<String>(
+                      'payroll-payment-method-${target.targetId}',
+                    ),
+                    style: visual.labelStrong,
+                  );
+
+    final paymentDate = _BatchPaymentDateControl(
+      buttonKey: ValueKey<String>(
+        'payroll-payment-date-${target.targetId}',
+      ),
+      label: onlyAdvances ? 'FECHA DEL ANTICIPO' : 'FECHA DE PAGO',
+      value: visibleDates.isEmpty
+          ? 'Sin fecha'
+          : visibleDates.length == 1
+              ? _dateLabel(visibleDates.single)
+              : 'Varias fechas',
+      enabled:
+          paymentLegs.isNotEmpty && !draft.isSaved && !controller.isSavingBatch,
+      onPressed: () => _pickPaymentDate(
+        context,
+        initialDate: visibleDates.firstOrNull,
+      ),
+    );
 
     final details = TextButton.icon(
       key: ValueKey<String>(
         'payroll-payment-details-${target.targetId}',
       ),
-      onPressed: detailsEnabled ? onToggleDetails : null,
+      onPressed: !detailsEnabled
+          ? null
+          : () {
+              if (!expanded && quickAdvance != null) {
+                final applied = controller.applyAdvanceToSalary(
+                  target.targetId,
+                  quickAdvance.advanceId,
+                );
+                if (applied <= 0) {
+                  onError(
+                    'Abre el detalle y reduce otra parte antes de aplicar '
+                    'este anticipo.',
+                  );
+                }
+              }
+              onToggleDetails();
+            },
       icon: Icon(
-        expanded ? Icons.expand_less_rounded : Icons.tune_rounded,
+        expanded
+            ? Icons.expand_less_rounded
+            : hasAdvanceDecision
+                ? Icons.savings_outlined
+                : Icons.tune_rounded,
       ),
       label: Text(
         expanded
             ? 'Cerrar detalle'
-            : hasManualAdjustments
-                ? 'Editar ajuste'
-                : 'Dividir o ajustar',
+            : hasAdvanceDecision
+                ? quickAdvance == null
+                    ? 'Elegir anticipos'
+                    : 'Aplicar anticipo'
+                : hasManualAdjustments
+                    ? 'Editar ajuste'
+                    : 'Dividir o ajustar',
       ),
     );
 
@@ -608,6 +766,8 @@ class _BatchTargetRow extends StatelessWidget {
                 const SizedBox(width: 16),
                 Expanded(flex: 4, child: method),
                 const SizedBox(width: 16),
+                paymentDate,
+                const SizedBox(width: 16),
                 Expanded(flex: 5, child: money),
                 const SizedBox(width: 8),
                 details,
@@ -621,11 +781,15 @@ class _BatchTargetRow extends StatelessWidget {
             if (ResponsiveViewport.widthOf(context) <
                 ResponsiveViewport.phoneMaxExclusive) ...[
               method,
+              const SizedBox(height: 8),
+              paymentDate,
               Align(alignment: Alignment.centerRight, child: details),
             ] else
               Row(
                 children: [
                   Expanded(child: method),
+                  const SizedBox(width: 8),
+                  paymentDate,
                   const SizedBox(width: 8),
                   details,
                 ],
@@ -659,6 +823,65 @@ class _BatchTargetRow extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  Future<void> _pickPaymentDate(
+    BuildContext context, {
+    PayrollCivilDate? initialDate,
+  }) async {
+    final now = DateTime.now();
+    final initial = initialDate == null
+        ? now
+        : DateTime(initialDate.year, initialDate.month, initialDate.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: now,
+      helpText: 'Fecha de pago de ${target.employeeName}',
+    );
+    if (picked == null) return;
+    controller.setSalaryPaymentDate(
+      target.targetId,
+      PayrollCivilDate(picked.year, picked.month, picked.day),
+    );
+  }
+}
+
+class _BatchPaymentDateControl extends StatelessWidget {
+  const _BatchPaymentDateControl({
+    required this.buttonKey,
+    required this.label,
+    required this.value,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final Key buttonKey;
+  final String label;
+  final String value;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = PayrollVisualTokens.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: visual.overline.copyWith(color: visual.inkFaint),
+        ),
+        TextButton.icon(
+          key: buttonKey,
+          onPressed: enabled ? onPressed : null,
+          icon: const Icon(Icons.calendar_today_outlined),
+          label: Text(value),
+        ),
+      ],
     );
   }
 }
@@ -734,6 +957,8 @@ class _BatchWorkspaceFooter extends StatelessWidget {
     required this.onApproveWeeks,
     required this.onSave,
     required this.onComplete,
+    required this.backLabel,
+    required this.completeLabel,
   });
 
   final PayrollPaymentWorkspaceController controller;
@@ -743,6 +968,8 @@ class _BatchWorkspaceFooter extends StatelessWidget {
   final VoidCallback onApproveWeeks;
   final VoidCallback onSave;
   final VoidCallback onComplete;
+  final String backLabel;
+  final String completeLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -779,7 +1006,7 @@ class _BatchWorkspaceFooter extends StatelessWidget {
         : null;
     final saveAction = PayrollAccentAction(
       actionKey: const ValueKey<String>('payroll-payment-save-batch'),
-      label: saved ? 'Volver a Nóminas' : 'Registrar $count pagos',
+      label: saved ? completeLabel : 'Registrar $count pagos',
       enabled: saved ||
           (controller.canSaveBatch &&
               !controller.isSavingBatch &&
@@ -794,7 +1021,7 @@ class _BatchWorkspaceFooter extends StatelessWidget {
         onPressed: controller.isSavingBatch || controller.isApprovingWeeks
             ? null
             : onBack,
-        child: Text(saved ? 'Cerrar' : 'Volver a propuestas'),
+        child: Text(saved ? 'Cerrar' : backLabel),
       ),
       const SizedBox(width: 8),
       if (approveAction != null) ...[
@@ -821,7 +1048,7 @@ class _BatchWorkspaceFooter extends StatelessWidget {
                       controller.isSavingBatch || controller.isApprovingWeeks
                           ? null
                           : onBack,
-                  child: Text(saved ? 'Cerrar' : 'Volver a propuestas'),
+                  child: Text(saved ? 'Cerrar' : backLabel),
                 ),
                 const SizedBox(height: 8),
                 if (approveAction != null) ...[
@@ -1012,20 +1239,15 @@ class _TargetEditorState extends State<_TargetEditor> {
                         );
                         return;
                       }
-                      final remaining = validation.payrollRemainingClp;
-                      if (remaining <= 0) {
+                      final applied = controller.applyAdvanceToSalary(
+                        target.targetId,
+                        advance.advanceId,
+                      );
+                      if (applied <= 0) {
                         onError(
                             'El sueldo ya está cubierto. Quita o reduce otra '
                             'parte antes de aplicar este anticipo.');
-                        return;
                       }
-                      controller.toggleAdvance(
-                        target.targetId,
-                        advance.advanceId,
-                        amountClp: advance.availableAmountClp < remaining
-                            ? advance.availableAmountClp
-                            : remaining,
-                      );
                     },
               onEdit: canStartEditor
                   ? (selectedLeg) => _editAdvance(context, advance, selectedLeg)
@@ -1101,7 +1323,7 @@ class _TargetEditorState extends State<_TargetEditor> {
   }
 
   Future<void> _addSalaryPayment(BuildContext context) async {
-    final remaining = validation.payrollRemainingClp;
+    final remaining = controller.availableForSalaryAllocation(target.targetId);
     if (_usesInlineEditor(context)) {
       _openInlineEditor(
         _InlineEditorSession.salaryLeg(
@@ -1714,8 +1936,17 @@ class _AdvanceTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(advance.label, style: visual.labelStrong),
-                if (advance.reference?.trim().isNotEmpty == true)
-                  Text(advance.reference!, style: visual.bodyS),
+                if (advance.paidDate != null ||
+                    advance.reference?.trim().isNotEmpty == true)
+                  Text(
+                    <String>[
+                      if (advance.paidDate != null)
+                        'Pagado el ${_dateLabel(advance.paidDate!)}',
+                      if (advance.reference?.trim().isNotEmpty == true)
+                        advance.reference!.trim(),
+                    ].join(' · '),
+                    style: visual.bodyS,
+                  ),
               ],
             ),
           ),

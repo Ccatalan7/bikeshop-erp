@@ -190,6 +190,22 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    Future<void> closePaymentWorkspace() async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(PayrollPaymentWorkspace),
+          matching: find.byTooltip('Cerrar'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final discard = find.widgetWithText(FilledButton, 'Descartar cambios');
+      if (discard.evaluate().isNotEmpty) {
+        await tester.tap(discard);
+        await tester.pumpAndSettle();
+      }
+      expect(find.byType(PayrollPaymentWorkspace), findsNothing);
+    }
+
     for (final preset in AppearancePresets.all) {
       for (final brightness in Brightness.values) {
         final theme = AppTheme.resolve(preset: preset, brightness: brightness);
@@ -230,13 +246,7 @@ void main() {
         expect(find.byType(PayrollPaymentWorkspace), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '$cell workspace');
         assertNoDarkRegression('workspace');
-        await tester.tap(
-          find.descendant(
-            of: find.byType(PayrollPaymentWorkspace),
-            matching: find.byTooltip('Cerrar'),
-          ),
-        );
-        await tester.pumpAndSettle();
+        await closePaymentWorkspace();
 
         // Efectivo y transferencia comparten el verbo `Pagar`: la fila de
         // efectivo se identifica por su persona.
@@ -249,13 +259,7 @@ void main() {
         expect(find.byType(PayrollPaymentWorkspace), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '$cell efectivo');
         assertNoDarkRegression('efectivo');
-        await tester.tap(
-          find.descendant(
-            of: find.byType(PayrollPaymentWorkspace),
-            matching: find.byTooltip('Cerrar'),
-          ),
-        );
-        await tester.pumpAndSettle();
+        await closePaymentWorkspace();
 
         await tester.tap(
           find.byKey(

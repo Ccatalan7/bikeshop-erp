@@ -144,6 +144,22 @@ scripts/db/query.sh production --sql "select … "
 Afirmar sin ella puede costar la confianza del dueño en sus propios datos, que
 es mucho más caro que la consulta.
 
+## Un encabezado liquidado no es el ledger de caja
+
+**2026-08-15 — el detalle de Panorama financiero fechaba un anticipo cuando se
+aplicó a Nóminas.** La serie agregada ya sumaba `expense_payments.payment_date`
+y `employee_advances.paid_at`, pero su drill-down reconstruía todo desde
+`expenses.paid_at`. Ese campo resume cuándo quedó liquidado el gasto: puede ser
+la última cuota o la aplicación posterior de un anticipo y no identifica el
+momento en que salió el dinero.
+
+En base caja, el detalle y su agregado deben compartir los mismos dueños: cada
+`purchase_payments.date`, `expense_payments.payment_date` y
+`employee_advances.paid_at` es un movimiento; `expenses.paid_at` se admite sólo
+como fallback explícito para registros heredados sin ninguno de esos ledgers.
+Una prueba mínima incluye un gasto dividido en dos fechas y un anticipo pagado
+antes de su aplicación, y exige tanto las fechas como el total del período.
+
 ## Un `text` con `CHECK` es un enum disfrazado: lee `pg_constraint`
 
 **El dominio de una columna no está en `information_schema.columns`.** Esa vista
@@ -169,6 +185,15 @@ La regla:
 - El dominio se **cita**, no se transcribe: un `enum` de Dart que repite la
   lista a mano vuelve a divergir en el primer cambio. Que la lista tenga un
   único dueño que la tome del constraint.
+- **2026-08-15 — una migración aditiva conserva todo el dominio vivo.** Una
+  migración posterior de Nóminas agregó `audited_reversal` reemplazando un
+  CHECK compartido, pero borró `advance_audit_attach`. Como consecuencia,
+  `register_employee_advance_v3` revertía cada anticipo estructurado al llegar
+  al paso de adjuntar su auditoría. Antes de reemplazar un CHECK compartido,
+  haz inventario de todos sus escritores actuales y migra a la unión de valores
+  existentes y nuevos; prueba además un escritor anterior después de aplicar
+  la migración nueva. Nunca redefinas el dominio sólo desde los literales del
+  feature que estás agregando.
 - Vale igual para `NOT NULL`, `DEFAULT`, `UNIQUE` y las FK: lo que la base
   acepta lo definen sus constraints, y la vista de columnas sólo cuenta una
   parte.

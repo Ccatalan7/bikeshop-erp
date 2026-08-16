@@ -68,6 +68,210 @@ void main() {
       expect(controller.hasManualAdjustments(target.targetId), isTrue);
     });
 
+    test('single payment defaults to preferred method and full balance', () {
+      final target = _target(
+        balanceClp: 42000,
+        preferredPaymentMethodId: 'cash',
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.single(
+          target: target,
+          paymentMethods: const <PayrollPaymentMethodOption>[
+            PayrollPaymentMethodOption(
+              methodId: 'cash',
+              label: 'Efectivo',
+              code: 'cash',
+              accountId: 'cashbox',
+            ),
+          ],
+        ),
+      );
+
+      final draft = controller.draftFor(target.targetId);
+      expect(draft.salaryLegs, hasLength(1));
+      expect(draft.salaryLegs.single.amountClp, 42000);
+      expect(draft.salaryLegs.single.paymentMethodId, 'cash');
+      expect(draft.salaryLegs.single.paymentAccountId, 'cashbox');
+      expect(draft.remainingClp, 0);
+      expect(controller.validationFor(target.targetId).isValid, isTrue);
+      expect(controller.hasManualAdjustments(target.targetId), isFalse);
+    });
+
+    test('generated full payment yields to splits and advances, then restores',
+        () {
+      final target = _target(
+        balanceClp: 100000,
+        preferredPaymentMethodId: 'cash',
+        advances: const <PayrollAdvanceOption>[
+          PayrollAdvanceOption(
+            advanceId: 'advance-a',
+            label: 'Primer anticipo',
+            availableAmountClp: 80000,
+          ),
+          PayrollAdvanceOption(
+            advanceId: 'advance-b',
+            label: 'Segundo anticipo',
+            availableAmountClp: 80000,
+          ),
+        ],
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.single(
+          target: target,
+          paymentMethods: const <PayrollPaymentMethodOption>[
+            PayrollPaymentMethodOption(
+              methodId: 'cash',
+              label: 'Efectivo',
+              code: 'cash',
+              accountId: 'cashbox',
+            ),
+          ],
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      controller.addPaymentLeg(
+        target.targetId,
+        _paymentLeg(id: 'extra', amountClp: 30000),
+      );
+      var draft = controller.draftFor(target.targetId);
+      expect(
+        draft.salaryLegs
+            .where((leg) => leg.legId.startsWith('simple:'))
+            .single
+            .amountClp,
+        70000,
+      );
+      controller.removePaymentLeg(target.targetId, 'extra');
+      expect(controller.draftFor(target.targetId).salaryLegs.single.amountClp,
+          100000);
+
+      controller.toggleAdvance(
+        target.targetId,
+        'advance-a',
+        amountClp: 80000,
+      );
+      draft = controller.draftFor(target.targetId);
+      expect(
+        draft.salaryLegs
+            .where((leg) => leg.kind == PayrollPaymentLegKind.payment)
+            .single
+            .amountClp,
+        20000,
+      );
+      expect(controller.availableForSalaryAllocation(target.targetId), 20000);
+
+      controller.toggleAdvance(
+        target.targetId,
+        'advance-b',
+        amountClp: 20000,
+      );
+      draft = controller.draftFor(target.targetId);
+      expect(
+        draft.salaryLegs
+            .where((leg) => leg.kind == PayrollPaymentLegKind.payment),
+        isEmpty,
+      );
+      expect(draft.advancesTotalClp, 100000);
+
+      controller.toggleAdvance(target.targetId, 'advance-a');
+      draft = controller.draftFor(target.targetId);
+      expect(draft.advancesTotalClp, 20000);
+      expect(
+        draft.salaryLegs
+            .where((leg) => leg.kind == PayrollPaymentLegKind.payment)
+            .single
+            .amountClp,
+        80000,
+      );
+    });
+
+    test('included concept reduces generated salary payment without pending',
+        () {
+      final target = _target(
+        balanceClp: 72000,
+        preferredPaymentMethodId: 'transfer',
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.single(
+          target: target,
+          paymentMethods: const <PayrollPaymentMethodOption>[
+            PayrollPaymentMethodOption(
+              methodId: 'transfer',
+              label: 'Transferencia',
+              code: 'transfer',
+              accountId: 'bank',
+            ),
+          ],
+        ),
+        additionalConceptsSupported: true,
+      );
+      addTearDown(controller.dispose);
+      controller.addConcept(
+        target.targetId,
+        PayrollAdditionalConcept(
+          conceptId: 'boxes',
+          type: PayrollAdditionalConceptType.expenseReimbursement,
+          description: 'Cajas para el taller',
+          amountClp: 10000,
+          expenseAccountId: 'supplies',
+        ),
+      );
+      expect(
+        controller.draftFor(target.targetId).salaryLegs.single.amountClp,
+        62000,
+      );
+      controller.addConceptPaymentLeg(
+        target.targetId,
+        'boxes',
+        const PayrollPaymentLeg.payment(
+          legId: 'boxes-payment',
+          amountClp: 10000,
+          paymentMethodId: 'transfer',
+          paymentAccountId: 'bank',
+          paymentDate: PayrollCivilDate(2026, 8, 11),
+          reference: 'boxes-ref',
+        ),
+      );
+
+      final validation = controller.validationFor(target.targetId);
+      expect(validation.payrollRemainingClp, 0);
+      expect(validation.remainingClp, 0);
+      expect(validation.appliedTotalClp, 72000);
+      expect(validation.isValid, isTrue);
+    });
+
+    test('payment date shown by the batch can update the generated leg', () {
+      final target = _target(
+        balanceClp: 42000,
+        preferredPaymentMethodId: 'cash',
+      );
+      final controller = PayrollPaymentWorkspaceController(
+        request: PayrollPaymentWorkspaceRequest.single(
+          target: target,
+          paymentMethods: const <PayrollPaymentMethodOption>[
+            PayrollPaymentMethodOption(
+              methodId: 'cash',
+              label: 'Efectivo',
+              code: 'cash',
+              accountId: 'cashbox',
+            ),
+          ],
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      controller.setSalaryPaymentDate(
+        target.targetId,
+        const PayrollCivilDate(2026, 8, 10),
+      );
+
+      final leg = controller.draftFor(target.targetId).salaryLegs.single;
+      expect(leg.paymentDate, const PayrollCivilDate(2026, 8, 10));
+      expect(leg.amountClp, 42000);
+      expect(controller.hasManualAdjustments(target.targetId), isTrue);
+    });
+
     test('serializes multiple payments and an advance for the existing RPC',
         () {
       final target = _target(
@@ -840,6 +1044,7 @@ PayrollPaymentTarget _target({
   PayrollCivilDate periodEnd = const PayrollCivilDate(2026, 8, 2),
   List<PayrollOcrPaymentCandidate> candidates = const [],
   List<PayrollAdvanceOption> advances = const [],
+  String? preferredPaymentMethodId,
   String voucherStatus = 'confirmed',
   int reconciliationVersion = 1,
 }) {
@@ -854,6 +1059,7 @@ PayrollPaymentTarget _target({
     salaryBalanceClp: balanceClp,
     reconciliationVersion: reconciliationVersion,
     voucherStatus: voucherStatus,
+    preferredPaymentMethodId: preferredPaymentMethodId,
     ocrCandidates: candidates,
     availableAdvances: advances,
   );

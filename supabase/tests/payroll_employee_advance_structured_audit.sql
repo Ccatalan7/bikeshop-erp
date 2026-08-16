@@ -6,6 +6,22 @@ set local timezone = 'UTC';
 select no_plan();
 
 select ok(
+  exists (
+    select 1
+    from pg_catalog.pg_constraint constraint_row
+    where constraint_row.conrelid =
+      'public.payroll_money_command_contexts'::regclass
+      and constraint_row.conname =
+        'payroll_money_command_contexts_command_check'
+      and pg_catalog.pg_get_constraintdef(constraint_row.oid) like
+        '%advance_audit_attach%'
+      and pg_catalog.pg_get_constraintdef(constraint_row.oid) like
+        '%audited_reversal%'
+  ),
+  'the shared payroll command domain preserves advance audit and reversal writers'
+);
+
+select ok(
   has_function_privilege(
     'authenticated',
     'public.register_employee_advance_v3(text,uuid,numeric,uuid,uuid,timestamp with time zone,text,text,text,text,date,uuid,text)',

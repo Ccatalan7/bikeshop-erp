@@ -19,6 +19,31 @@ const _browserWorkspaceSessionPrefsKey =
 const _browserWorkspaceSessionVersion = 1;
 const _browserWorkspacePersistDelay = Duration(milliseconds: 250);
 
+const _browserBrandLabels = <String, String>{
+  'aliexpress': 'AliExpress',
+  'amazon': 'Amazon',
+  'ebay': 'eBay',
+  'facebook': 'Facebook',
+  'google': 'Google',
+  'instagram': 'Instagram',
+  'linkedin': 'LinkedIn',
+  'mercadolibre': 'Mercado Libre',
+  'microsoft': 'Microsoft',
+  'shopify': 'Shopify',
+  'whatsapp': 'WhatsApp',
+  'youtube': 'YouTube',
+};
+
+const _compoundPublicSuffixPrefixes = <String>{
+  'ac',
+  'co',
+  'com',
+  'edu',
+  'gov',
+  'net',
+  'org',
+};
+
 const _initialWorkspaceRouteRoots = <String>[
   '/mail',
   '/storage',
@@ -115,6 +140,91 @@ String buildBrowserWorkspaceRoute({
       if (cleanTitle != null && cleanTitle.isNotEmpty) 'name': cleanTitle,
     },
   ).toString();
+}
+
+String _cleanBrowserIdentityText(String? value, {int maxLength = 80}) {
+  final clean = value?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
+  if (clean.length <= maxLength) return clean;
+  return '${clean.substring(0, maxLength - 3)}...';
+}
+
+/// Human-readable site owner for browser chrome.
+///
+/// Pages may provide `og:site_name`/`application-name`; when they do not, the
+/// registrable-looking host segment supplies a stable fallback. The small
+/// override table preserves brand capitalization that DNS necessarily loses.
+String browserWorkspaceSiteLabel(
+  String url, {
+  String? declaredSiteName,
+}) {
+  final declared = _cleanBrowserIdentityText(declaredSiteName);
+  if (declared.isNotEmpty) return declared;
+
+  final uri = Uri.tryParse(url.trim());
+  final host = uri?.host.toLowerCase() ?? '';
+  if (host.isEmpty) return 'Navegador web';
+
+  final labels = host.split('.').where((part) => part.isNotEmpty).toList();
+  if (labels.isEmpty) return 'Navegador web';
+
+  var candidateIndex = labels.length == 1 ? 0 : labels.length - 2;
+  if (labels.length >= 3 &&
+      labels.last.length == 2 &&
+      _compoundPublicSuffixPrefixes.contains(labels[labels.length - 2])) {
+    candidateIndex = labels.length - 3;
+  }
+  final candidate = labels[candidateIndex];
+  final branded = _browserBrandLabels[candidate];
+  if (branded != null) return branded;
+
+  return candidate
+      .split(RegExp(r'[-_]'))
+      .where((part) => part.isNotEmpty)
+      .map(
+        (part) => part.length == 1
+            ? part.toUpperCase()
+            : '${part[0].toUpperCase()}${part.substring(1)}',
+      )
+      .join(' ');
+}
+
+/// Context-rich title for a constrained browser tab.
+///
+/// A document title such as `Details` is meaningful only after its site owner
+/// is named. Titles already carrying that identity are left untouched.
+String browserWorkspaceDisplayTitle({
+  required String url,
+  String? pageTitle,
+  String? declaredSiteName,
+}) {
+  final site = browserWorkspaceSiteLabel(
+    url,
+    declaredSiteName: declaredSiteName,
+  );
+  final page = _cleanBrowserIdentityText(pageTitle, maxLength: 140);
+  if (page.isEmpty) return site;
+
+  String comparable(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\u00c0-\u024f]+'), '');
+
+  final comparableSite = comparable(site);
+  final comparablePage = comparable(page);
+  if (comparableSite.isEmpty || comparablePage.contains(comparableSite)) {
+    return page;
+  }
+  return '$site · $page';
+}
+
+String? sanitizeBrowserFaviconUrl(String? value) {
+  final clean = value?.trim() ?? '';
+  if (clean.isEmpty || clean.length > 2048) return null;
+  final uri = Uri.tryParse(clean);
+  if (uri == null ||
+      (uri.scheme != 'http' && uri.scheme != 'https') ||
+      uri.host.isEmpty) {
+    return null;
+  }
+  return uri.toString();
 }
 
 /// Whether a browser URL is safe and useful to restore as an ERP workspace.
@@ -406,6 +516,8 @@ class Workspace {
   bool isApplyingHistoryNavigation;
   String? browserUrl;
   String? browserTitle;
+  String? browserSiteName;
+  String? browserFaviconUrl;
   bool isHydrated;
 
   Workspace({
@@ -419,6 +531,8 @@ class Workspace {
     this.pinnedRouteRoot,
     this.browserUrl,
     this.browserTitle,
+    this.browserSiteName,
+    this.browserFaviconUrl,
     this.isHydrated = true,
   })  : initialRoute = workspaceRouteIdentity(initialRoute),
         currentRoute = workspaceRouteIdentity(initialRoute),
@@ -508,6 +622,11 @@ class WorkspaceManager extends ChangeNotifier {
   final Map<String, Future<bool>> _pendingCloseRequests = {};
 
   List<Workspace> get workspaces => List.unmodifiable(_workspaces);
+  List<Workspace> get unpinnedBrowserWorkspaces => List.unmodifiable(
+        _workspaces.where(
+          (workspace) => workspace.isBrowserWorkspace && !workspace.isPinned,
+        ),
+      );
   List<Workspace> get workspaceStackOrder => List.unmodifiable(
         _workspaceStackOrderIds
             .map(workspaceById)
@@ -587,21 +706,36 @@ class WorkspaceManager extends ChangeNotifier {
     required bool activate,
     bool isPinned = false,
     bool isHydrated = true,
+    String? browserSiteName,
+    String? browserFaviconUrl,
   }) {
     final routeUri = Uri.tryParse(initialRoute);
     final isBrowserRoute = routeUri?.path == '/tools/web';
     final routeUrl = isBrowserRoute ? routeUri?.queryParameters['url'] : null;
     final routeTitle =
         isBrowserRoute ? routeUri?.queryParameters['name']?.trim() : null;
+    final browserPageTitle =
+        routeTitle?.isNotEmpty == true ? routeTitle! : title;
+    final workspaceTitle = isBrowserRoute && routeUrl != null
+        ? browserWorkspaceDisplayTitle(
+            url: routeUrl,
+            pageTitle: browserPageTitle,
+            declaredSiteName: browserSiteName,
+          )
+        : title;
+    final cleanBrowserSiteName = _cleanBrowserIdentityText(browserSiteName);
 
     final workspace = Workspace(
       id: _newWorkspaceId(),
-      title: title,
+      title: workspaceTitle,
       initialRoute: initialRoute,
       isPinned: isPinned,
       pinnedRouteRoot: isPinned ? inferWorkspaceModuleRoot(initialRoute) : null,
       browserUrl: routeUrl,
-      browserTitle: routeTitle?.isNotEmpty == true ? routeTitle : title,
+      browserTitle: browserPageTitle,
+      browserSiteName:
+          cleanBrowserSiteName.isEmpty ? null : cleanBrowserSiteName,
+      browserFaviconUrl: sanitizeBrowserFaviconUrl(browserFaviconUrl),
       isHydrated: isHydrated,
     );
 
@@ -660,6 +794,14 @@ class WorkspaceManager extends ChangeNotifier {
           continue;
         }
 
+        // Ordinary browser workspaces are session-only. Older builds stored
+        // every browser tab, so discard those legacy unpinned rows while
+        // retaining explicitly pinned tabs as the opt-in restore contract.
+        if (value['isPinned'] != true) {
+          discardedStoredTab = true;
+          continue;
+        }
+
         final url = value['url']?.toString().trim() ?? '';
         final uri = Uri.tryParse(url);
         if (uri == null || !isRestorableBrowserWorkspaceUri(uri)) {
@@ -669,6 +811,8 @@ class WorkspaceManager extends ChangeNotifier {
         if (existingUrls.remove(uri.toString())) continue;
 
         final storedTitle = value['title']?.toString().trim() ?? '';
+        final storedSiteName = value['siteName']?.toString().trim();
+        final storedFaviconUrl = value['faviconUrl']?.toString().trim();
         final title = storedTitle.isNotEmpty
             ? storedTitle
             : (uri.host.isNotEmpty ? uri.host : 'Navegador web');
@@ -679,8 +823,10 @@ class WorkspaceManager extends ChangeNotifier {
             title: title,
           ),
           activate: false,
-          isPinned: value['isPinned'] == true,
+          isPinned: true,
           isHydrated: false,
+          browserSiteName: storedSiteName,
+          browserFaviconUrl: storedFaviconUrl,
         );
         restored.add(workspace);
         restoredByStoredIndex[storedIndex] = workspace;
@@ -775,6 +921,10 @@ class WorkspaceManager extends ChangeNotifier {
           {
             'url': _browserUrlForWorkspace(workspace),
             'title': workspace.browserTitle ?? workspace.title,
+            if (workspace.browserSiteName?.isNotEmpty == true)
+              'siteName': workspace.browserSiteName,
+            if (workspace.browserFaviconUrl?.isNotEmpty == true)
+              'faviconUrl': workspace.browserFaviconUrl,
             'isPinned': workspace.isPinned,
           },
       ],
@@ -783,6 +933,7 @@ class WorkspaceManager extends ChangeNotifier {
 
   List<Workspace> _persistableBrowserWorkspaces() => _workspaces
           .where((workspace) => workspace.isBrowserWorkspace)
+          .where((workspace) => workspace.isPinned)
           .where((workspace) {
         final url = _browserUrlForWorkspace(workspace);
         final uri = url == null ? null : Uri.tryParse(url);
@@ -928,6 +1079,8 @@ class WorkspaceManager extends ChangeNotifier {
     String workspaceId, {
     required String url,
     String? title,
+    String? siteName,
+    String? faviconUrl,
   }) {
     final workspace = workspaceById(workspaceId);
     if (workspace == null || !workspace.isBrowserWorkspace) return;
@@ -935,22 +1088,34 @@ class WorkspaceManager extends ChangeNotifier {
     final uri = Uri.tryParse(url.trim());
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
 
-    final cleanTitle = title?.trim();
-    final nextTitle = cleanTitle?.isNotEmpty == true
-        ? cleanTitle!
-        : (uri.host.isNotEmpty ? uri.host : workspace.title);
-    final boundedTitle = nextTitle.length <= 140
-        ? nextTitle
-        : '${nextTitle.substring(0, 137)}...';
+    final cleanTitle = _cleanBrowserIdentityText(title, maxLength: 140);
+    final nextBrowserTitle = cleanTitle.isNotEmpty
+        ? cleanTitle
+        : (uri.host.isNotEmpty ? uri.host : workspace.browserTitle ?? '');
+    final cleanSiteName = _cleanBrowserIdentityText(siteName);
+    final nextSiteName = cleanSiteName.isEmpty ? null : cleanSiteName;
+    final nextFaviconUrl = sanitizeBrowserFaviconUrl(faviconUrl);
+    final displayTitle = browserWorkspaceDisplayTitle(
+      url: uri.toString(),
+      pageTitle: nextBrowserTitle,
+      declaredSiteName: nextSiteName,
+    );
+    final boundedDisplayTitle = displayTitle.length <= 140
+        ? displayTitle
+        : '${displayTitle.substring(0, 137)}...';
 
     final changed = workspace.browserUrl != uri.toString() ||
-        workspace.browserTitle != boundedTitle ||
-        workspace.title != boundedTitle;
+        workspace.browserTitle != nextBrowserTitle ||
+        workspace.browserSiteName != nextSiteName ||
+        workspace.browserFaviconUrl != nextFaviconUrl ||
+        workspace.title != boundedDisplayTitle;
     if (!changed) return;
 
     workspace.browserUrl = uri.toString();
-    workspace.browserTitle = boundedTitle;
-    workspace.title = boundedTitle;
+    workspace.browserTitle = nextBrowserTitle;
+    workspace.browserSiteName = nextSiteName;
+    workspace.browserFaviconUrl = nextFaviconUrl;
+    workspace.title = boundedDisplayTitle;
     notifyListeners();
   }
 
