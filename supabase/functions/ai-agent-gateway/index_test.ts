@@ -205,7 +205,7 @@ Deno.test("missing bearer is rejected before production transports are construct
   assertEquals((await response.json()).code, "invalid_session", "missing bearer is sanitized");
 });
 
-Deno.test("CORS preflight permits the result-list rollout capability header", async () => {
+Deno.test("CORS preflight permits negotiated card capability headers", async () => {
   const setup = options();
   const response = await handler(
     new Request(endpoint, {
@@ -220,6 +220,12 @@ Deno.test("CORS preflight permits the result-list rollout capability header", as
       "x-vinabike-ai-result-lists",
     ),
     "web clients may negotiate typed result lists",
+  );
+  assert(
+    response.headers.get("access-control-allow-headers")?.includes(
+      "x-vinabike-ai-structured-clarifications",
+    ),
+    "web clients may negotiate structured clarification prompts",
   );
 });
 
@@ -278,11 +284,20 @@ Deno.test("view context is closed, UUID-only and bounded", () => {
     viewContext: { kind: "workshop_jobs", jobIds: [runId], truncated: true },
   }));
   assertEquals(parsed.viewContext.kind, "workshop_jobs", "trusted kind accepted");
+  assertEquals(
+    parseGatewayRequest(body({
+      viewContext: { kind: "intelligent_purchasing", jobIds: [], truncated: false },
+    })).viewContext.kind,
+    "intelligent_purchasing",
+    "purchasing workspace context is closed and carries no client-authored rows",
+  );
   for (
     const invalid of [
       { kind: "workshop_jobs", jobIds: ["folio-visible"], truncated: false },
       { kind: "none", jobIds: [runId], truncated: false },
       { kind: "rejected", jobIds: [], truncated: true },
+      { kind: "intelligent_purchasing", jobIds: [runId], truncated: false },
+      { kind: "intelligent_purchasing", jobIds: [], truncated: true },
     ]
   ) {
     let rejected = false;
@@ -693,7 +708,7 @@ Deno.test("production wiring isolates caller data and assistant_runtime ledger t
         })),
       );
     }
-    if (rpc === "assistant_search_inventory_v6") {
+    if (rpc === "assistant_search_inventory_v7") {
       return Promise.resolve(
         new Response(JSON.stringify({
           authorityTenantId: tenantId,
@@ -778,7 +793,7 @@ Deno.test("production wiring isolates caller data and assistant_runtime ledger t
 
   assertEquals(requests.map((entry) => entry.path), [
     "/rest/v1/rpc/assistant_get_authority_v1",
-    "/rest/v1/rpc/assistant_search_inventory_v6",
+    "/rest/v1/rpc/assistant_search_inventory_v7",
     "/rest/v1/rpc/assistant_begin_run_v1",
     "/rest/v1/rpc/assistant_heartbeat_run_v2",
   ], "only fixed transports are reached");

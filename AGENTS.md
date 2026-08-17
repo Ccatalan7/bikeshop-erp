@@ -75,10 +75,23 @@
   y si no reinventa un control canónico— y se registra qué se copia, qué se
   descarta y qué se agrega, con su razón. Ver
   `docs/development/AGENT_VISUAL_WORKFLOW.md` §5.b.
+  **Precisión 2026-08-17:** «el aspecto» incluye la **contención** —que un
+  bloque sea un panel con superficie, borde, radio y padding, y no elementos
+  sueltos apoyados en el fondo—, el **ancho y centrado de la columna**, la
+  **escala tipográfica** y el **espaciado entre bloques**. Eso se copia exacto
+  aunque el contenido, los CTAs y las palabras de adentro sean nuestros y se
+  descarten los del frame. Y una superficie **no se declara implementada porque
+  sus constantes coincidan con el `spec.json`**: se demuestra con el frame real
+  de la app al lado del de Design, en la misma celda de tema y host. El
+  Asistente de compras tenía todas las medidas correctas en el código y no se
+  parecía en nada; hubo que rehacerlo.
 - **Codex owns module product design by default:** information architecture,
   workflow, navigation, hierarchy, layout and responsive composition are
   derived from the operator's next decision, real domain behavior and the
-  canonical GUI guides. `GUÍA GENERAL` owns the visual language and component
+  canonical GUI guides. Here `layout` means **which blocks exist and in what
+  order**, never how they look: containment, column width and centering, type
+  scale and inter-block spacing stay with the visual language (precisión
+  2026-08-17). `GUÍA GENERAL` owns the visual language and component
   anatomy, not a module's screen arrangement. Claude/Design collaboration is
   used only when the owner explicitly asks for it; a Design frame never
   overrides product reasoning or becomes required before Codex can redesign a

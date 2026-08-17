@@ -107,7 +107,11 @@ export interface AgentGatewayRequest {
 }
 
 export type AgentViewContext =
-  | { kind: "none" | "rejected"; jobIds: readonly []; truncated: false }
+  | {
+    kind: "none" | "rejected" | "intelligent_purchasing";
+    jobIds: readonly [];
+    truncated: false;
+  }
   | { kind: "workshop_jobs"; jobIds: readonly string[]; truncated: boolean };
 
 export const agentCardDestinations = [
@@ -165,6 +169,47 @@ export interface AgentInventoryListRef {
 
 export type AgentListRef = AgentInventoryListRef;
 
+export interface AgentSupplyNeedTechnicalPredicate {
+  field: string;
+  operator: "eq" | "neq" | "lt" | "lte" | "gt" | "gte" | "between" | "in" | "contains";
+  values: readonly (string | number | boolean)[];
+}
+
+export interface AgentSupplyNeedClarificationOption {
+  value: string;
+  label: string;
+}
+
+export interface AgentSupplyNeedClarificationPrompt {
+  id: string;
+  question: string;
+  inputKind: "single_choice" | "text" | "number";
+  options: readonly AgentSupplyNeedClarificationOption[];
+  unit: string | null;
+  allowUnknown: boolean;
+}
+
+export interface AgentSupplyNeedDraftLine {
+  lineRef: string;
+  description: string;
+  productId: string | null;
+  productName: string | null;
+  productSku: string | null;
+  identityState: "unresolved" | "confirmed";
+  quantity: number;
+  unit: string;
+  technicalPredicates: readonly AgentSupplyNeedTechnicalPredicate[];
+  preference: string | null;
+  clarification: string | null;
+  clarificationRequired: boolean;
+  clarificationPrompts: readonly AgentSupplyNeedClarificationPrompt[];
+}
+
+export interface AgentSupplyNeedDraft {
+  profile: "balanced" | "profitability" | "urgent_local";
+  lines: readonly AgentSupplyNeedDraftLine[];
+}
+
 export interface AgentActionCard {
   kind: string;
   title: string;
@@ -176,6 +221,7 @@ export interface AgentActionCard {
   entityRef?: AgentEntityRef;
   approvalRef?: AgentApprovalRef;
   listRef?: AgentListRef;
+  supplyNeedDraft?: AgentSupplyNeedDraft;
 }
 
 export const agentApprovalStates = [

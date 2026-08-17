@@ -7,6 +7,7 @@ import {
   type AgentInventoryAvailabilityFilter,
   agentInventoryAvailabilityFilters,
   type AgentListRef,
+  type AgentSupplyNeedClarificationPrompt,
   type AgentToolResultEnvelope,
   type JsonObject,
 } from "./contracts.ts";
@@ -17,7 +18,7 @@ const kindsByDestination: Readonly<Record<AgentActionCard["destination"], readon
   suppliers: ["supplier"],
   workshop_jobs: ["job", "diagnosis_preview", "workshop_item_preview"],
   sales_invoices: ["sales_invoice"],
-  purchases: ["purchase_invoice"],
+  purchases: ["purchase_invoice", "supply_need_draft"],
   inventory_products: ["inventory"],
   tasks: ["task", "task_preview"],
   expenses: ["expense"],
@@ -31,6 +32,7 @@ const entityKindByCardKind: Readonly<Record<string, AgentEntityKind | undefined>
   workshop_item_preview: undefined,
   sales_invoice: "salesInvoice",
   purchase_invoice: "purchaseInvoice",
+  supply_need_draft: undefined,
   inventory: "product",
   task: undefined,
   task_preview: undefined,
@@ -88,6 +90,8 @@ export function cardsForToolResult(
       return items.map(preparedDiagnosisCard);
     case "prepare_workshop_item":
       return items.map(preparedWorkshopItemCard);
+    case "prepare_supply_request":
+      return preparedSupplyRequestCards(result.items);
     case "search_customers":
       return entityCards(items, "customer", "Cliente", "customers");
     case "search_suppliers":
@@ -358,12 +362,34 @@ export function autoOpenListAnswer(
 export function cardsForClient(
   cards: readonly AgentActionCard[],
   supportsResultLists: boolean,
+  supportsStructuredClarifications = false,
 ): readonly AgentActionCard[] {
-  if (supportsResultLists || !cards.some((item) => item.listRef)) return cards;
+  if (
+    (supportsResultLists || !cards.some((item) => item.listRef)) &&
+    (supportsStructuredClarifications ||
+      !cards.some((item) => item.supplyNeedDraft))
+  ) return cards;
   return Object.freeze(cards.map((item) => {
-    if (!item.listRef) return item;
-    const { listRef: _unsupportedListRef, ...compatible } = item;
-    return card(compatible);
+    const withoutList = supportsResultLists || !item.listRef ? item : (() => {
+      const { listRef: _unsupportedListRef, ...compatible } = item;
+      return compatible;
+    })();
+    if (supportsStructuredClarifications || !withoutList.supplyNeedDraft) {
+      return card(withoutList);
+    }
+    const compatible = {
+      ...withoutList,
+      supplyNeedDraft: Object.freeze({
+        ...withoutList.supplyNeedDraft,
+        lines: Object.freeze(withoutList.supplyNeedDraft.lines.map((line) => {
+          const { clarificationPrompts: _unsupportedPrompts, ...compatibleLine } = line;
+          return Object.freeze(compatibleLine);
+        })),
+      }),
+    };
+    // The wire shape intentionally matches the strict v1 client and therefore
+    // omits a field required by the server's normalized v2 type.
+    return Object.freeze(compatible) as unknown as AgentActionCard;
   }));
 }
 
@@ -502,6 +528,8 @@ function cardIdentity(item: AgentActionCard): string {
     ? `entity\u0000${item.entityRef.kind}\u0000${item.entityRef.id}`
     : item.listRef
     ? `list\u0000${item.listRef.kind}\u0000${item.listRef.query}\u0000${item.listRef.availability}`
+    : item.supplyNeedDraft
+    ? `supply\u0000${item.supplyNeedDraft.lines.map((line) => line.lineRef).join("\u0000")}`
     : `aggregate\u0000${item.destination}\u0000${item.kind}\u0000${item.title}`;
 }
 
@@ -517,6 +545,7 @@ export function validateStoredCards(value: unknown): readonly AgentActionCard[] 
       "entityRef",
       "approvalRef",
       "listRef",
+      "supplyNeedDraft",
     ]);
     if (Object.keys(item).some((key) => !requiredKeys.has(key) && !optionalKeys.has(key))) {
       throw new Error("Invalid stored card");
@@ -533,6 +562,13 @@ export function validateStoredCards(value: unknown): readonly AgentActionCard[] 
     if (!Array.isArray(item.chips) || item.chips.length > 4) throw new Error("Invalid card chips");
     const entityRefValue = validateEntityRef(item.entityRef, item.kind);
     const approvalRefValue = validateApprovalRef(item.approvalRef, item.kind);
+    const supplyNeedDraftValue = validateSupplyNeedDraft(
+      item.supplyNeedDraft,
+      item.kind,
+      closedDestination,
+      entityRefValue,
+      approvalRefValue,
+    );
     const listRefValue = validateListRef(
       item.listRef,
       item.kind,
@@ -551,6 +587,7 @@ export function validateStoredCards(value: unknown): readonly AgentActionCard[] 
       entityRef: entityRefValue,
       approvalRef: approvalRefValue,
       listRef: listRefValue,
+      supplyNeedDraft: supplyNeedDraftValue,
     });
   }));
 }
@@ -662,6 +699,69 @@ function preparedWorkshopItemCard(item: JsonObject): AgentActionCard {
   });
 }
 
+function preparedSupplyRequestCards(
+  items: readonly JsonObject[],
+): readonly AgentActionCard[] {
+  if (items.length < 1 || items.length > 8) {
+    throw new Error("Invalid supply request draft");
+  }
+  const profile = items[0].profile;
+  if (
+    typeof profile !== "string" ||
+    !["balanced", "profitability", "urgent_local"].includes(profile) ||
+    items.some((item) => item.profile !== profile)
+  ) throw new Error("Invalid supply request draft");
+
+  const lines = items.map((item) => ({
+    lineRef: item.lineRef,
+    description: item.description,
+    productId: item.entityId,
+    productName: item.productName,
+    productSku: item.productSku,
+    identityState: item.identityState,
+    quantity: item.quantity,
+    unit: item.unit,
+    technicalPredicates: item.technicalPredicates,
+    preference: item.preference,
+    clarification: item.clarification,
+    clarificationRequired: item.clarificationRequired,
+    clarificationPrompts: item.clarificationPrompts ?? [],
+  }));
+  const confirmed = items.filter((item) => item.identityState === "confirmed").length;
+  const pending = items.length - confirmed;
+  const questions = items.filter((item) => item.clarificationRequired === true).length;
+  const profileLabel = profile === "profitability"
+    ? "Rentabilidad"
+    : profile === "urgent_local"
+    ? "Urgencia local"
+    : "Equilibrio";
+  const draft = validateSupplyNeedDraft(
+    { profile, lines },
+    "supply_need_draft",
+    "purchases",
+    undefined,
+    undefined,
+  );
+  return [card({
+    kind: "supply_need_draft",
+    eyebrow: "Petición estructurada",
+    title: items.length === 1
+      ? "1 necesidad para revisar"
+      : `${items.length} necesidades para revisar`,
+    description: pending === 0
+      ? "Cada línea quedó vinculada a un producto exacto. Revisa antes de guardar."
+      : "Las líneas pendientes conservan el texto y no se presentan como compatibilidad confirmada.",
+    destination: "purchases",
+    chips: compact([
+      profileLabel,
+      confirmed ? `${confirmed} vinculada${confirmed === 1 ? "" : "s"}` : undefined,
+      pending ? `${pending} por precisar` : undefined,
+      questions ? `${questions} aclaración${questions === 1 ? "" : "es"}` : undefined,
+    ]),
+    supplyNeedDraft: draft,
+  })];
+}
+
 export function committedTaskCard(item: JsonObject): AgentActionCard {
   return card({
     kind: "task",
@@ -717,6 +817,13 @@ function card(value: AgentActionCard): AgentActionCard {
   const eyebrow = optionalProjectedText(value.eyebrow, 80);
   const subtitle = optionalProjectedText(value.subtitle, 240);
   const description = optionalProjectedText(value.description, 500);
+  const supplyNeedDraft = validateSupplyNeedDraft(
+    value.supplyNeedDraft,
+    value.kind,
+    value.destination,
+    value.entityRef,
+    value.approvalRef,
+  );
   return Object.freeze({
     kind: projectedText(value.kind, 32, true),
     title: projectedText(value.title, 160, true),
@@ -739,6 +846,7 @@ function card(value: AgentActionCard): AgentActionCard {
         }),
       }
       : {}),
+    ...(supplyNeedDraft ? { supplyNeedDraft } : {}),
   });
 }
 
@@ -804,6 +912,219 @@ function validateApprovalRef(
     state: value.state as AgentApprovalRef["state"],
     expiresAt: value.expiresAt,
   });
+}
+
+function validateSupplyNeedDraft(
+  value: unknown,
+  cardKind: unknown,
+  destination: AgentActionCard["destination"],
+  entityRefValue: AgentActionCard["entityRef"],
+  approvalRefValue: AgentActionCard["approvalRef"],
+): AgentActionCard["supplyNeedDraft"] {
+  if (value === undefined) {
+    if (cardKind === "supply_need_draft") {
+      throw new Error("Missing supply need draft");
+    }
+    return undefined;
+  }
+  if (
+    cardKind !== "supply_need_draft" || destination !== "purchases" ||
+    entityRefValue !== undefined || approvalRefValue !== undefined ||
+    !isRecord(value) || !hasExactKeys(value, ["profile", "lines"]) ||
+    typeof value.profile !== "string" ||
+    !["balanced", "profitability", "urgent_local"].includes(value.profile) ||
+    !Array.isArray(value.lines) || value.lines.length < 1 || value.lines.length > 8
+  ) throw new Error("Invalid supply need draft");
+
+  const lineReferences = new Set<string>();
+  const lines = value.lines.map((line) => {
+    const baseFields = [
+      "lineRef",
+      "description",
+      "productId",
+      "productName",
+      "productSku",
+      "identityState",
+      "quantity",
+      "unit",
+      "technicalPredicates",
+      "preference",
+      "clarification",
+      "clarificationRequired",
+    ] as const;
+    if (
+      !isRecord(line) ||
+      (!hasExactKeys(line, baseFields) &&
+        !hasExactKeys(line, [...baseFields, "clarificationPrompts"])) ||
+      typeof line.lineRef !== "string" || !/^line-[1-8]$/.test(line.lineRef) ||
+      lineReferences.has(line.lineRef) ||
+      !(line.productId === null ||
+        (typeof line.productId === "string" && validUuid(line.productId))) ||
+      !(line.productName === null || typeof line.productName === "string") ||
+      !(line.productSku === null || typeof line.productSku === "string") ||
+      !["unresolved", "confirmed"].includes(String(line.identityState)) ||
+      typeof line.quantity !== "number" || !Number.isFinite(line.quantity) ||
+      line.quantity < 0.001 || line.quantity > 999999 ||
+      typeof line.clarificationRequired !== "boolean" ||
+      !Array.isArray(line.technicalPredicates) || line.technicalPredicates.length > 8 ||
+      !(line.preference === null || typeof line.preference === "string") ||
+      !(line.clarification === null || typeof line.clarification === "string")
+    ) throw new Error("Invalid supply need draft line");
+
+    const description = bounded(line.description, 2000, true);
+    const unit = bounded(line.unit, 32, true);
+    const productName = line.productName === null ? null : bounded(line.productName, 500, true);
+    const productSku = line.productSku === null ? null : bounded(line.productSku, 160, true);
+    const preference = line.preference === null ? null : bounded(line.preference, 240, true);
+    const clarification = line.clarification === null
+      ? null
+      : bounded(line.clarification, 500, true);
+    const clarificationPrompts = validateSupplyNeedClarificationPrompts(
+      line.clarificationPrompts ?? [],
+      line.clarificationRequired,
+    );
+    const productId = typeof line.productId === "string" ? line.productId.toLowerCase() : null;
+    if (
+      (productId === null &&
+        (line.identityState !== "unresolved" || productName !== null || productSku !== null)) ||
+      (productId !== null &&
+        (line.identityState !== "confirmed" || productName === null)) ||
+      (line.clarificationRequired === true &&
+        (clarification === null || productId !== null))
+    ) throw new Error("Invalid supply need draft identity");
+
+    const predicateFields = new Set<string>();
+    const technicalPredicates = line.technicalPredicates.map((predicate) => {
+      if (
+        !isRecord(predicate) ||
+        !hasExactKeys(predicate, ["field", "operator", "values"]) ||
+        typeof predicate.field !== "string" ||
+        !/^[a-z][a-z0-9_]{1,63}$/.test(predicate.field) ||
+        predicateFields.has(predicate.field) ||
+        typeof predicate.operator !== "string" ||
+        !["eq", "neq", "lt", "lte", "gt", "gte", "between", "in", "contains"]
+          .includes(predicate.operator) ||
+        !Array.isArray(predicate.values) || predicate.values.length < 1 ||
+        predicate.values.length > 10 ||
+        (predicate.operator === "between" && predicate.values.length !== 2) ||
+        (predicate.operator !== "between" && predicate.operator !== "in" &&
+          predicate.values.length !== 1)
+      ) throw new Error("Invalid supply need technical predicate");
+      predicateFields.add(predicate.field);
+      const values = predicate.values.map((item) => {
+        if (
+          !["string", "number", "boolean"].includes(typeof item) ||
+          (typeof item === "number" && !Number.isFinite(item)) ||
+          (typeof item === "string" &&
+            new TextEncoder().encode(item).byteLength > 160)
+        ) throw new Error("Invalid supply need technical value");
+        return item;
+      });
+      return Object.freeze({
+        field: predicate.field,
+        operator: predicate.operator as
+          | "eq"
+          | "neq"
+          | "lt"
+          | "lte"
+          | "gt"
+          | "gte"
+          | "between"
+          | "in"
+          | "contains",
+        values: Object.freeze(values),
+      });
+    });
+
+    lineReferences.add(line.lineRef);
+    return Object.freeze({
+      lineRef: line.lineRef,
+      description,
+      productId,
+      productName,
+      productSku,
+      identityState: line.identityState as "unresolved" | "confirmed",
+      quantity: line.quantity,
+      unit,
+      technicalPredicates: Object.freeze(technicalPredicates),
+      preference,
+      clarification,
+      clarificationRequired: line.clarificationRequired,
+      clarificationPrompts,
+    });
+  });
+
+  return Object.freeze({
+    profile: value.profile as "balanced" | "profitability" | "urgent_local",
+    lines: Object.freeze(lines),
+  });
+}
+
+function validateSupplyNeedClarificationPrompts(
+  value: unknown,
+  clarificationRequired: boolean,
+): readonly AgentSupplyNeedClarificationPrompt[] {
+  if (!Array.isArray(value) || value.length > 3) {
+    throw new Error("Invalid supply need clarification prompts");
+  }
+  if (!clarificationRequired && value.length !== 0) {
+    throw new Error("Unexpected supply need clarification prompts");
+  }
+  // Empty remains accepted for persisted v1 cards during the negotiated
+  // rollout. Newly generated tool calls enforce at least one prompt whenever
+  // clarificationRequired is true.
+  const ids = new Set<string>();
+  const prompts = value.map((prompt) => {
+    if (
+      !isRecord(prompt) ||
+      !hasExactKeys(prompt, [
+        "id",
+        "question",
+        "inputKind",
+        "options",
+        "unit",
+        "allowUnknown",
+      ]) ||
+      typeof prompt.id !== "string" ||
+      !/^[a-z][a-z0-9_]{1,31}$/.test(prompt.id) || ids.has(prompt.id) ||
+      typeof prompt.question !== "string" ||
+      !["single_choice", "text", "number"].includes(String(prompt.inputKind)) ||
+      !Array.isArray(prompt.options) || prompt.options.length > 5 ||
+      typeof prompt.allowUnknown !== "boolean" ||
+      !(prompt.unit === null || typeof prompt.unit === "string")
+    ) throw new Error("Invalid supply need clarification prompt");
+    ids.add(prompt.id);
+    const question = bounded(prompt.question, 320, true);
+    const unit = prompt.unit === null ? null : bounded(prompt.unit, 32, true);
+    const options = prompt.options.map((option) => {
+      if (
+        !isRecord(option) || !hasExactKeys(option, ["value", "label"]) ||
+        typeof option.value !== "string" ||
+        !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(option.value) ||
+        typeof option.label !== "string"
+      ) throw new Error("Invalid supply need clarification option");
+      return Object.freeze({
+        value: option.value,
+        label: bounded(option.label, 160, true),
+      });
+    });
+    if (
+      (prompt.inputKind === "single_choice" &&
+        (options.length < 2 || unit !== null ||
+          new Set(options.map((option) => option.value)).size !== options.length)) ||
+      (prompt.inputKind !== "single_choice" && options.length !== 0) ||
+      (prompt.inputKind !== "number" && unit !== null)
+    ) throw new Error("Invalid supply need clarification prompt shape");
+    return Object.freeze({
+      id: prompt.id,
+      question,
+      inputKind: prompt.inputKind as "single_choice" | "text" | "number",
+      options: Object.freeze(options),
+      unit,
+      allowUnknown: prompt.allowUnknown,
+    });
+  });
+  return Object.freeze(prompts);
 }
 
 function validateListRef(

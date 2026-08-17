@@ -190,7 +190,7 @@ Deno.test("tool executor maps all ERP reads to fixed caller-scoped RPCs", async 
     assertEquals(execution.succeeded, true, `${tool.name} executes`);
   }
   assertEquals(calls.map((call) => call.name), [
-    "assistant_search_inventory_v6",
+    "assistant_search_inventory_v7",
     "assistant_list_attention_items_v1",
     "assistant_get_business_snapshot_v1",
     "assistant_query_workshop_jobs_v3",
@@ -366,6 +366,471 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
   assertEquals(execution.outputText.includes(tenantId), false, "tenant UUID is not model-visible");
 });
 
+Deno.test("purchase ranking is closed, caller-scoped and projected without internal IDs", async () => {
+  const registry = createDefaultAgentToolRegistry();
+  const catalogItemRef = "77777777-7777-4777-8777-777777777777";
+  registry.validateProviderCalls([{
+    id: "rank-query",
+    name: "rank_purchase_candidates",
+    arguments: {
+      catalogItemRef: null,
+      query: "piñon shimano",
+      profile: "balanced",
+      limit: 5,
+    },
+  }, {
+    id: "rank-product",
+    name: "rank_purchase_candidates",
+    arguments: {
+      catalogItemRef,
+      query: null,
+      profile: "urgent_local",
+      limit: 3,
+    },
+  }], authority);
+  for (
+    const argumentsValue of [{
+      catalogItemRef,
+      query: "piñon",
+      profile: "balanced",
+      limit: 5,
+    }, {
+      catalogItemRef: null,
+      query: null,
+      profile: "balanced",
+      limit: 5,
+    }]
+  ) {
+    let rejected = false;
+    try {
+      registry.validateProviderCalls([{
+        id: crypto.randomUUID(),
+        name: "rank_purchase_candidates",
+        arguments: argumentsValue,
+      }], authority);
+    } catch (error) {
+      rejected = error instanceof ToolRegistryError &&
+        error.code === "invalid_tool_arguments";
+    }
+    assertEquals(rejected, true, "exactly one product identity source is required");
+  }
+
+  const candidateId = "88888888-8888-4888-8888-888888888888";
+  const calls: Array<{ name: string; parameters: JsonObject }> = [];
+  const executor = createSupabaseAgentToolExecutor({
+    rpc(name, parameters) {
+      calls.push({ name, parameters });
+      return Promise.resolve(envelope([{
+        entityId: candidateId,
+        rank: 1,
+        rankingProfile: "balanced",
+        rankingVersion: "purchase-ranking-v1",
+        rankingScore: 0.82,
+        productName: "Piñón Shimano",
+        productSku: "PIN-1",
+        brand: "Shimano",
+        category: "Transmisión > Piñones",
+        supplierName: "Distribuidor",
+        supplierWebsite: "https://supplier.invalid",
+        supplierLocation: "Santiago",
+        isConfirmedLocal: false,
+        supplierAvailability: "unverified",
+        currency: "CLP",
+        latestBaseUnitCostNet: 9000,
+        latestAllocatedFreightNet: 1000,
+        latestLandedUnitCostNet: 10000,
+        catalogSalePriceGross: 22000,
+        catalogSalePriceNet: 18487.394958,
+        projectedUnitGrossProfit: 8487.394958,
+        projectedGrossMarginRatio: 0.459318,
+        purchaseCount: 12,
+        purchasedUnits: 15,
+        lastPurchaseAt: "2026-08-01T12:00:00Z",
+        evidenceAgeDays: 15,
+        evidenceQuality: "complete",
+        freightEvidence: "complete",
+        economyScore: 0.8,
+        historyScore: 0.9,
+        recencyScore: 0.92,
+        stabilityScore: 0.75,
+        evidenceScore: 1,
+      }]));
+    },
+  });
+  const execution = await executor.execute(
+    {
+      id: "rank-execute",
+      name: "rank_purchase_candidates",
+      arguments: {
+        catalogItemId: null,
+        query: "  piñon shimano  ",
+        profile: "balanced",
+        limit: 5,
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(execution.succeeded, true, "governed ranking executes");
+  assertEquals(calls, [{
+    name: "assistant_rank_purchase_candidates_v1",
+    parameters: {
+      p_query: "piñon shimano",
+      p_product_id: null,
+      p_profile: "balanced",
+      p_limit: 5,
+    },
+  }], "ranking maps only to its fixed RPC contract");
+  assertEquals(execution.outputText.includes(candidateId), false, "candidate ID stays server-side");
+  assertEquals(
+    execution.outputText.includes('"supplierAvailability":"unverified"'),
+    true,
+    "historical candidates keep availability uncertainty visible",
+  );
+});
+
+Deno.test("basket scenarios are bounded, stock-first and preserve nested coverage", async () => {
+  const registry = createDefaultAgentToolRegistry();
+  const firstRef = "71717171-7171-4171-8171-717171717171";
+  const secondRef = "72727272-7272-4272-8272-727272727272";
+  registry.validateProviderCalls([{
+    id: "basket-valid",
+    name: "build_purchase_scenarios",
+    arguments: {
+      items: [
+        { catalogItemRef: firstRef, quantity: 1, externalOnly: false },
+        { catalogItemRef: secondRef, quantity: 2, externalOnly: true },
+      ],
+      profile: "balanced",
+      maxSuppliers: 2,
+      limit: 3,
+    },
+  }], authority);
+  let duplicateRejected = false;
+  try {
+    registry.validateProviderCalls([{
+      id: "basket-duplicate",
+      name: "build_purchase_scenarios",
+      arguments: {
+        items: [
+          { catalogItemRef: firstRef, quantity: 1, externalOnly: false },
+          { catalogItemRef: firstRef, quantity: 1, externalOnly: false },
+        ],
+        profile: "balanced",
+        maxSuppliers: 2,
+        limit: 3,
+      },
+    }], authority);
+  } catch (error) {
+    duplicateRejected = error instanceof ToolRegistryError &&
+      error.code === "invalid_tool_arguments";
+  }
+  assertEquals(duplicateRejected, true, "duplicate basket references fail closed");
+
+  const firstProductId = "73737373-7373-4373-8373-737373737373";
+  const secondProductId = "74747474-7474-4474-8474-747474747474";
+  const calls: Array<{ name: string; parameters: JsonObject }> = [];
+  const executor = createSupabaseAgentToolExecutor({
+    rpc(name, parameters) {
+      calls.push({ name, parameters });
+      return Promise.resolve(envelope([{
+        scenarioKey: "recommended:abc",
+        kind: "recommended",
+        label: "Mejor equilibrio",
+        coverageLineCount: 2,
+        externalCoverageLineCount: 1,
+        totalLineCount: 2,
+        externalLineCount: 1,
+        complete: true,
+        supplierCount: 1,
+        historicalSubtotals: [{
+          currency: "CLP",
+          historicalLandedSubtotalNet: 20200,
+        }],
+        supplierAvailability: "historical_only_unverified",
+        freightAssumption: "sum_historical_landed_line_costs_no_consolidation_saving",
+        lines: [{
+          lineRef: "line-1",
+          productName: "Producto local",
+          productSku: "LOCAL-1",
+          requestedQuantity: 1,
+          availableToPromise: 3,
+          sourcing: "internal",
+          covered: true,
+        }, {
+          lineRef: "line-2",
+          productName: "Producto externo",
+          productSku: "EXT-1",
+          requestedQuantity: 2,
+          availableToPromise: 0,
+          sourcing: "external",
+          covered: true,
+          supplierName: "Distribuidor",
+          isConfirmedLocal: false,
+          supplierAvailability: "unverified",
+          currency: "CLP",
+          latestLandedUnitCostNet: 10100,
+          projectedGrossMarginRatio: 0.45,
+          purchaseCount: 4,
+          evidenceAgeDays: 20,
+          evidenceQuality: "complete",
+          freightEvidence: "complete",
+        }],
+        explanationCodes: [
+          "stock_first",
+          "complete_external_coverage",
+          "profile_ranked",
+          "historical_availability_unverified",
+          "no_consolidation_freight_saving_assumed",
+        ],
+      }]));
+    },
+  });
+  const execution = await executor.execute(
+    {
+      id: "basket-execute",
+      name: "build_purchase_scenarios",
+      arguments: {
+        items: [
+          {
+            lineRef: "line-1",
+            productId: firstProductId,
+            quantity: 1,
+            sourcingMode: "stock_first",
+          },
+          {
+            lineRef: "line-2",
+            productId: secondProductId,
+            quantity: 2,
+            sourcingMode: "external_only",
+          },
+        ],
+        profile: "balanced",
+        maxSuppliers: 2,
+        limit: 3,
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(execution.succeeded, true, "bounded basket scenario executes");
+  assertEquals(calls, [{
+    name: "assistant_build_purchase_scenarios_v1",
+    parameters: {
+      p_items: [
+        {
+          lineRef: "line-1",
+          productId: firstProductId,
+          quantity: 1,
+          sourcingMode: "stock_first",
+        },
+        {
+          lineRef: "line-2",
+          productId: secondProductId,
+          quantity: 2,
+          sourcingMode: "external_only",
+        },
+      ],
+      p_profile: "balanced",
+      p_max_suppliers: 2,
+      p_limit: 3,
+    },
+  }], "basket input maps only to the fixed scenario RPC");
+  assertEquals(
+    execution.outputText.includes("historical_only_unverified"),
+    true,
+    "nested supplier uncertainty remains model-visible",
+  );
+  assertEquals(
+    execution.outputText.includes(firstProductId) ||
+      execution.outputText.includes(secondProductId),
+    false,
+    "internal catalog IDs never return to the model",
+  );
+});
+
+Deno.test("supply request preparation is typed, read-only and preserves ambiguity", async () => {
+  const registry = createDefaultAgentToolRegistry();
+  const catalogItemRef = "71717171-7171-4171-8171-717171717171";
+  const modelArguments = {
+    items: [{
+      catalogItemRef,
+      description: "Neumático 27,5 ancho mayor a 2,0",
+      quantity: 2,
+      unit: "unit",
+      technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
+      preference: "gama económica",
+      clarification: null,
+      clarificationRequired: false,
+      clarificationPrompts: [],
+    }, {
+      catalogItemRef: null,
+      description: "Rayos 27,5",
+      quantity: 1,
+      unit: "set",
+      technicalPredicates: [],
+      preference: null,
+      clarification: "¿Medida del rayo o compatibilidad con rueda 27,5?",
+      clarificationRequired: true,
+      clarificationPrompts: [{
+        id: "measurement_meaning",
+        question: "¿27,5 es la medida del producto o del contexto donde se instalará?",
+        inputKind: "single_choice",
+        options: [{ value: "product", label: "Medida del producto" }, {
+          value: "fitment",
+          label: "Medida del contexto",
+        }],
+        unit: null,
+        allowUnknown: false,
+      }],
+    }],
+    profile: "balanced",
+  };
+  registry.validateProviderCalls([{
+    id: "prepare-supply",
+    name: "prepare_supply_request",
+    arguments: modelArguments,
+  }], authority);
+
+  let contradictoryRejected = false;
+  try {
+    registry.validateProviderCalls([{
+      id: "prepare-supply-contradictory",
+      name: "prepare_supply_request",
+      arguments: {
+        ...modelArguments,
+        items: [{
+          ...modelArguments.items[0],
+          clarification: "Falta confirmar compatibilidad",
+          clarificationRequired: true,
+        }],
+      },
+    }], authority);
+  } catch (error) {
+    contradictoryRejected = error instanceof ToolRegistryError &&
+      error.code === "invalid_tool_arguments";
+  }
+  assertEquals(
+    contradictoryRejected,
+    true,
+    "a blocking ambiguity cannot retain an exact catalog reference",
+  );
+
+  const productId = "73737373-7373-4373-8373-737373737373";
+  const calls: Array<{ name: string; parameters: JsonObject }> = [];
+  const executor = createSupabaseAgentToolExecutor({
+    rpc(name, parameters) {
+      calls.push({ name, parameters });
+      return Promise.resolve(envelope([{
+        entityId: productId,
+        lineRef: "line-1",
+        description: "Neumático 27,5 ancho mayor a 2,0",
+        productName: "Kenda Kwick 27,5 × 2,10",
+        productSku: "KEN-275-210",
+        identityState: "confirmed",
+        quantity: 2,
+        unit: "unit",
+        // PostgreSQL jsonb canonicalizes object-key order. Validation must
+        // compare the typed predicate, not its serialized key order.
+        technicalPredicates: [{ field: "tire_width", values: [2], operator: "gt" }],
+        preference: "gama económica",
+        clarification: null,
+        clarificationRequired: false,
+        profile: "balanced",
+      }, {
+        entityId: null,
+        lineRef: "line-2",
+        description: "Rayos 27,5",
+        productName: null,
+        productSku: null,
+        identityState: "unresolved",
+        quantity: 1,
+        unit: "set",
+        technicalPredicates: [],
+        preference: null,
+        clarification: "¿Medida del rayo o compatibilidad con rueda 27,5?",
+        clarificationRequired: true,
+        profile: "balanced",
+      }]));
+    },
+  });
+  const execution = await executor.execute(
+    {
+      id: "prepare-supply-execute",
+      name: "prepare_supply_request",
+      arguments: {
+        items: [{
+          description: "Neumático 27,5 ancho mayor a 2,0",
+          productId,
+          quantity: 2,
+          unit: "unit",
+          technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
+          preference: "gama económica",
+          clarification: null,
+          clarificationRequired: false,
+          clarificationPrompts: [],
+        }, {
+          description: "Rayos 27,5",
+          productId: null,
+          quantity: 1,
+          unit: "set",
+          technicalPredicates: [],
+          preference: null,
+          clarification: "¿Medida del rayo o compatibilidad con rueda 27,5?",
+          clarificationRequired: true,
+          clarificationPrompts: modelArguments.items[1].clarificationPrompts,
+        }],
+        profile: "balanced",
+      },
+    },
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(execution.succeeded, true, "validated supply draft executes");
+  assertEquals(calls, [{
+    name: "assistant_prepare_supply_request_v1",
+    parameters: {
+      p_items: [{
+        lineRef: "line-1",
+        description: "Neumático 27,5 ancho mayor a 2,0",
+        productId,
+        quantity: 2,
+        unit: "unit",
+        technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
+        preference: "gama económica",
+        clarification: null,
+        clarificationRequired: false,
+      }, {
+        lineRef: "line-2",
+        description: "Rayos 27,5",
+        productId: null,
+        quantity: 1,
+        unit: "set",
+        technicalPredicates: [],
+        preference: null,
+        clarification: "¿Medida del rayo o compatibilidad con rueda 27,5?",
+        clarificationRequired: true,
+      }],
+      p_profile: "balanced",
+    },
+  }], "draft maps only to the fixed read projection");
+  assertEquals(
+    execution.outputText.includes(productId),
+    false,
+    "exact catalog UUID never returns to the model",
+  );
+  assertEquals(
+    execution.result.items[1].identityState,
+    "unresolved",
+    "unresolved identity remains explicit for the typed client card",
+  );
+  assertEquals(
+    execution.result.items[1].clarificationPrompts,
+    modelArguments.items[1].clarificationPrompts,
+    "typed prompts survive the SQL read projection without entering SQL arguments",
+  );
+});
+
 Deno.test("inventory availability is mapped before limit and revalidated after the RPC", async () => {
   const row = {
     entityId: "77777777-7777-4777-8777-777777777777",
@@ -414,7 +879,7 @@ Deno.test("inventory availability is mapped before limit and revalidated after t
     new AbortController().signal,
   );
   assertEquals(captured, {
-    name: "assistant_search_inventory_v6",
+    name: "assistant_search_inventory_v7",
     parameters: {
       p_query: "camara 29",
       p_category: "Cámaras",
@@ -698,7 +1163,7 @@ Deno.test("inventory schema discovery and typed comparisons are composable primi
       p_category: "Motores",
     },
   }, {
-    name: "assistant_search_inventory_v6",
+    name: "assistant_search_inventory_v7",
     parameters: {
       p_query: null,
       p_category: "Motores",

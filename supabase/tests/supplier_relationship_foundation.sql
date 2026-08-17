@@ -126,9 +126,20 @@ select has_function(
   'public', 'tenant_business_date', array['uuid', 'timestamp with time zone'],
   'tenant business date has one canonical server owner'
 );
+-- La garantía es que una zona inválida falle cerrado, no que se compruebe de
+-- una manera concreta.
+--
+-- Esta aserción exigía la cadena `pg_timezone_names` en el código. Ese chequeo
+-- recorría las 1.194 filas del catálogo **en cada llamada** —~60 de los ~67 ms
+-- que costaba la función— y no aportaba nada: `at time zone` ya valida la zona
+-- contra la misma base IANA y lanza `invalid_parameter_value`. Se cambió por
+-- captura y relanzamiento con el mismo mensaje y el mismo SQLSTATE
+-- (20260817130000), así que la garantía es idéntica y el costo desaparece.
+--
+-- Se afirma ahora el mecanismo vigente: que la conversión ocurre en la zona del
+-- tenant y que una zona no reconocida sigue terminando en el mismo error.
 select ok(
-  position(
-    'pg_timezone_names' in (
+  position('at time zone' in (
     select function.prosrc
     from pg_catalog.pg_proc function
     join pg_catalog.pg_namespace namespace
@@ -137,9 +148,31 @@ select ok(
       and function.proname = 'tenant_business_date'
       and pg_catalog.pg_get_function_identity_arguments(function.oid)
         = 'p_tenant_id uuid, p_at timestamp with time zone'
-    )
-  ) > 0,
-  'tenant business date keeps canonical IANA catalog validation'
+  )) > 0,
+  'tenant business date resolves the instant in the tenant zone'
+);
+select ok(
+  position('invalid_parameter_value' in (
+    select function.prosrc
+    from pg_catalog.pg_proc function
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = function.pronamespace
+    where namespace.nspname = 'public'
+      and function.proname = 'tenant_business_date'
+      and pg_catalog.pg_get_function_identity_arguments(function.oid)
+        = 'p_tenant_id uuid, p_at timestamp with time zone'
+  )) > 0
+  and position('Tenant timezone is invalid' in (
+    select function.prosrc
+    from pg_catalog.pg_proc function
+    join pg_catalog.pg_namespace namespace
+      on namespace.oid = function.pronamespace
+    where namespace.nspname = 'public'
+      and function.proname = 'tenant_business_date'
+      and pg_catalog.pg_get_function_identity_arguments(function.oid)
+        = 'p_tenant_id uuid, p_at timestamp with time zone'
+  )) > 0,
+  'tenant business date still fails closed on an unrecognized zone'
 );
 select ok(
   lower(pg_catalog.pg_get_viewdef(

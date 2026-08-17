@@ -80,16 +80,16 @@ sentinels_ready() {
 if [[ "$mode" != "--reset" ]] && sentinels_ready; then
   if [[ ! -f "$hash_file" && "$mode" == "--adopt-existing" ]]; then
     printf '%s\n' "$current_hash" >"$hash_file"
-    echo "Local database adopted: canonical ERP sentinel objects are present."
+    echo "Local database adopted: historical-fixture sentinel objects are present."
     exit 0
   fi
   if [[ -f "$hash_file" && "$(<"$hash_file")" == "$current_hash" ]]; then
-    echo "Local database ready: canonical schema hash unchanged."
+    echo "Local database ready: historical fixture hash unchanged."
     exit 0
   fi
 fi
 
-echo "Rebuilding disposable local public schema from the canonical snapshot..."
+echo "Rebuilding disposable local public schema from the incomplete historical fixture..."
 psql "$db_url" -X -v ON_ERROR_STOP=1 >"$DB_CACHE_DIR/schema-reset.log" 2>&1 <<'SQL'
 drop schema if exists public cascade;
 create schema public;
@@ -98,7 +98,7 @@ grant all on schema public to public;
 grant usage on schema public to anon, authenticated, service_role;
 
 -- Match the standard Supabase public-schema defaults before applying the
--- canonical snapshot. Applying these up front lets later object-specific
+-- historical fixture. Applying these up front lets later object-specific
 -- REVOKE statements remain authoritative while keeping a fresh local rebuild
 -- behaviorally equivalent to the hosted project for PostgREST clients.
 alter default privileges in schema public
@@ -117,7 +117,7 @@ SQL
 
 if ! psql "$db_url" -X -v ON_ERROR_STOP=1 -f "$schema" >"$DB_CACHE_DIR/core-schema-apply.log" 2>&1; then
   tail -40 "$DB_CACHE_DIR/core-schema-apply.log" >&2
-  die "Canonical schema application failed; full log: $DB_CACHE_DIR/core-schema-apply.log"
+  die "Historical local fixture application failed; full log: $DB_CACHE_DIR/core-schema-apply.log"
 fi
 
 printf '%s\n' "$current_hash" >"$hash_file"

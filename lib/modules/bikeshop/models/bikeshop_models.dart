@@ -1990,6 +1990,7 @@ class JobStatusCustom {
   final bool triggersStart; // Sets startedAt
   final bool triggersCompletion; // Sets completedAt
   final bool triggersDelivery; // Sets deliveredAt
+  final bool promptsSupplyNeedCapture;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -2006,6 +2007,7 @@ class JobStatusCustom {
     this.triggersStart = false,
     this.triggersCompletion = false,
     this.triggersDelivery = false,
+    this.promptsSupplyNeedCapture = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -2025,6 +2027,8 @@ class JobStatusCustom {
       triggersStart: json['triggers_start'] as bool? ?? false,
       triggersCompletion: json['triggers_completion'] as bool? ?? false,
       triggersDelivery: json['triggers_delivery'] as bool? ?? false,
+      promptsSupplyNeedCapture:
+          json['prompts_supply_need_capture'] as bool? ?? false,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
     );
@@ -2044,6 +2048,7 @@ class JobStatusCustom {
       'triggers_start': triggersStart,
       'triggers_completion': triggersCompletion,
       'triggers_delivery': triggersDelivery,
+      'prompts_supply_need_capture': promptsSupplyNeedCapture,
     };
   }
 
@@ -2060,6 +2065,7 @@ class JobStatusCustom {
     bool? triggersStart,
     bool? triggersCompletion,
     bool? triggersDelivery,
+    bool? promptsSupplyNeedCapture,
   }) {
     return JobStatusCustom(
       id: id ?? this.id,
@@ -2074,6 +2080,8 @@ class JobStatusCustom {
       triggersStart: triggersStart ?? this.triggersStart,
       triggersCompletion: triggersCompletion ?? this.triggersCompletion,
       triggersDelivery: triggersDelivery ?? this.triggersDelivery,
+      promptsSupplyNeedCapture:
+          promptsSupplyNeedCapture ?? this.promptsSupplyNeedCapture,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );

@@ -28,13 +28,57 @@ DateTime _parseDate(dynamic value, {DateTime? fallback}) {
 
 double _clp(num value) => value.roundToDouble();
 
+class PurchaseSourceDocumentKind {
+  const PurchaseSourceDocumentKind({
+    required this.code,
+    required this.displayName,
+    required this.description,
+    required this.workflowKind,
+    required this.sortOrder,
+    required this.isActive,
+  });
+
+  static const String defaultCode = 'tax_invoice';
+
+  final String code;
+  final String displayName;
+  final String description;
+  final String workflowKind;
+  final int sortOrder;
+  final bool isActive;
+
+  bool get isDirectPurchase => workflowKind == 'direct_purchase';
+
+  factory PurchaseSourceDocumentKind.fromJson(Map<String, dynamic> json) {
+    final code = json['code']?.toString().trim() ?? '';
+    final displayName = json['display_name']?.toString().trim() ?? '';
+    final workflowKind = json['workflow_kind']?.toString().trim() ?? '';
+    if (code.isEmpty ||
+        displayName.isEmpty ||
+        !const {'ordered_purchase', 'direct_purchase'}.contains(workflowKind)) {
+      throw const FormatException(
+        'Invalid purchase source document kind row',
+      );
+    }
+    return PurchaseSourceDocumentKind(
+      code: code,
+      displayName: displayName,
+      description: json['description']?.toString().trim() ?? '',
+      workflowKind: workflowKind,
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+      isActive: json['is_active'] as bool? ?? true,
+    );
+  }
+}
+
 class PurchaseInvoice {
   static const String listPreviewSelect =
       'id,tenant_id,invoice_number,supplier_id,supplier_name,supplier_rut,'
       'date,due_date,status,subtotal,tax,total,net_amount,paid_amount,balance,'
       'supplier_refunded_amount,credited_amount,supplier_credit_balance,'
       'prepayment_model,sent_date,confirmed_date,received_date,paid_date,'
-      'items,created_at,updated_at';
+      'items,created_at,updated_at,source_document_kind,'
+      'source_document_kind_label,source_document_workflow_kind';
   static const String listReadModelSelect =
       '$listPreviewSelect,receipt_state,receipt_expected_quantity,'
       'receipt_accepted_quantity,receipt_reported_difference_quantity,'
@@ -47,6 +91,9 @@ class PurchaseInvoice {
   final String? id;
   final String tenantId;
   final String invoiceNumber;
+  final String sourceDocumentKind;
+  final String? sourceDocumentKindLabel;
+  final String? sourceDocumentWorkflowKind;
   final String? supplierId;
   final String? supplierName;
   final String? supplierRut;
@@ -90,6 +137,9 @@ class PurchaseInvoice {
     this.id,
     required this.tenantId,
     required this.invoiceNumber,
+    this.sourceDocumentKind = PurchaseSourceDocumentKind.defaultCode,
+    this.sourceDocumentKindLabel,
+    this.sourceDocumentWorkflowKind,
     required this.supplierId,
     this.supplierName,
     this.supplierRut,
@@ -132,6 +182,9 @@ class PurchaseInvoice {
     String? id,
     String? tenantId,
     String? invoiceNumber,
+    String? sourceDocumentKind,
+    String? sourceDocumentKindLabel,
+    String? sourceDocumentWorkflowKind,
     String? supplierId,
     String? supplierName,
     String? supplierRut,
@@ -171,6 +224,11 @@ class PurchaseInvoice {
       id: id ?? this.id,
       tenantId: tenantId ?? this.tenantId,
       invoiceNumber: invoiceNumber ?? this.invoiceNumber,
+      sourceDocumentKind: sourceDocumentKind ?? this.sourceDocumentKind,
+      sourceDocumentKindLabel:
+          sourceDocumentKindLabel ?? this.sourceDocumentKindLabel,
+      sourceDocumentWorkflowKind:
+          sourceDocumentWorkflowKind ?? this.sourceDocumentWorkflowKind,
       supplierId: supplierId ?? this.supplierId,
       supplierName: supplierName ?? this.supplierName,
       supplierRut: supplierRut ?? this.supplierRut,
@@ -218,6 +276,11 @@ class PurchaseInvoice {
       id: json['id']?.toString(),
       tenantId: json['tenant_id']?.toString() ?? '',
       invoiceNumber: json['invoice_number']?.toString() ?? '',
+      sourceDocumentKind: json['source_document_kind']?.toString() ??
+          PurchaseSourceDocumentKind.defaultCode,
+      sourceDocumentKindLabel: json['source_document_kind_label']?.toString(),
+      sourceDocumentWorkflowKind:
+          json['source_document_workflow_kind']?.toString(),
       supplierId: json['supplier_id']?.toString(),
       supplierName: json['supplier_name'] as String?,
       supplierRut: json['supplier_rut'] as String?,
@@ -286,6 +349,7 @@ class PurchaseInvoice {
       if (id != null) 'id': id,
       'tenant_id': tenantId,
       'invoice_number': invoiceNumber,
+      'source_document_kind': sourceDocumentKind,
       'supplier_id': supplierId,
       'supplier_name': supplierName,
       'supplier_rut': supplierRut,
@@ -350,6 +414,7 @@ extension PurchaseInvoiceStatusX on PurchaseInvoiceStatus {
 class PurchaseInvoiceItem {
   /// Stable client/source line identity. Legacy invoice rows may omit it.
   final String? lineId;
+  final String? sourceNeedId;
   final String productId;
   final String? productName;
   final String? productSku;
@@ -392,6 +457,7 @@ class PurchaseInvoiceItem {
 
   PurchaseInvoiceItem({
     this.lineId,
+    this.sourceNeedId,
     required this.productId,
     this.productName,
     this.productSku,
@@ -429,6 +495,7 @@ class PurchaseInvoiceItem {
 
   PurchaseInvoiceItem copyWith({
     String? lineId,
+    String? sourceNeedId,
     String? productId,
     String? productName,
     String? productSku,
@@ -463,6 +530,7 @@ class PurchaseInvoiceItem {
   }) {
     return PurchaseInvoiceItem(
       lineId: lineId ?? this.lineId,
+      sourceNeedId: sourceNeedId ?? this.sourceNeedId,
       productId: productId ?? this.productId,
       productName: productName ?? this.productName,
       productSku: productSku ?? this.productSku,
@@ -513,6 +581,7 @@ class PurchaseInvoiceItem {
   PurchaseInvoiceItem withoutSupplierResolutionProvenance() {
     return PurchaseInvoiceItem(
       lineId: lineId,
+      sourceNeedId: sourceNeedId,
       productId: productId,
       productName: productName,
       productSku: productSku,
@@ -529,6 +598,7 @@ class PurchaseInvoiceItem {
   factory PurchaseInvoiceItem.fromJson(Map<String, dynamic> json) {
     return PurchaseInvoiceItem(
       lineId: json['line_id']?.toString(),
+      sourceNeedId: json['source_need_id']?.toString(),
       productId: json['product_id']?.toString() ?? '',
       productName: json['product_name'] as String?,
       productSku: json['product_sku'] as String?,
@@ -578,6 +648,7 @@ class PurchaseInvoiceItem {
   Map<String, dynamic> toJson() {
     return {
       if (lineId != null) 'line_id': lineId,
+      if (sourceNeedId != null) 'source_need_id': sourceNeedId,
       'product_id': productId,
       'product_name': productName,
       'product_sku': productSku,

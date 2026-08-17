@@ -38,6 +38,43 @@ sha256_text() {
   fi
 }
 
+# Resolve one current forward migration and expose its exact identity through
+# MIGRATION_ABSOLUTE, MIGRATION_RELATIVE, MIGRATION_FILENAME and
+# MIGRATION_VERSION. New deployable migrations use a unique 14-digit version;
+# older historical files with shorter or duplicated versions are reference
+# material and cannot enter the governed deployment path.
+resolve_forward_migration() {
+  local requested="$1" directory duplicate_count migration_root
+  [[ -n "$requested" ]] || die "A migration file is required"
+
+  directory="$(cd "$(dirname "$requested")" 2>/dev/null && pwd -P)" ||
+    die "Migration directory does not exist: $(dirname "$requested")"
+  MIGRATION_FILENAME="$(basename "$requested")"
+  MIGRATION_ABSOLUTE="$directory/$MIGRATION_FILENAME"
+  [[ -f "$MIGRATION_ABSOLUTE" ]] ||
+    die "Migration file does not exist: $requested"
+
+  migration_root="$(cd "$DB_ROOT/supabase/migrations" && pwd -P)"
+  case "$MIGRATION_ABSOLUTE" in
+    "$migration_root"/*) ;;
+    *) die "Deployable SQL must live under supabase/migrations/: $requested" ;;
+  esac
+
+  if [[ "$MIGRATION_FILENAME" =~ ^([0-9]{14})_[a-z0-9_]+\.sql$ ]]; then
+    MIGRATION_VERSION="${BASH_REMATCH[1]}"
+  else
+    die "Deployable migrations require YYYYMMDDHHMMSS_slug.sql: $MIGRATION_FILENAME"
+  fi
+
+  duplicate_count="$(find "$migration_root" -maxdepth 1 -type f \
+    -name "${MIGRATION_VERSION}_*.sql" -print | wc -l | tr -d '[:space:]')"
+  [[ "$duplicate_count" == 1 ]] ||
+    die "Migration version $MIGRATION_VERSION is not unique ($duplicate_count files)"
+
+  MIGRATION_RELATIVE="${MIGRATION_ABSOLUTE#"$DB_ROOT"/}"
+  export MIGRATION_ABSOLUTE MIGRATION_RELATIVE MIGRATION_FILENAME MIGRATION_VERSION
+}
+
 json_escape() {
   local value="$1"
   value="${value//\\/\\\\}"

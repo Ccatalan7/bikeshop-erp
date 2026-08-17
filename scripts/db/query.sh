@@ -53,6 +53,9 @@ Usage: query.sh <local|staging|production> (--sql SQL | --file PATH)
 
 The canonical SQL path for every agent and every environment. The Supabase CLI
 and the hosted SQL Editor are not SQL paths: they bypass the guards below.
+For hosted schema changes, do not call --write directly: use
+scripts/db/deploy_migration.sh so read-back and the remote migration stamp
+cannot be skipped. core_schema.sql is never a hosted input.
 
   --format    table (default), csv, or json.
   --max-rows  Hosted read cap for a single SELECT/WITH statement.
@@ -160,6 +163,37 @@ die() {
   finish 1 "$journal_sha" "$journal_source"
 }
 
+# core_schema.sql is an incomplete historical/local reference, never a hosted
+# deployment or query input. Keep this executable boundary next to the hosted
+# guard so stale documentation cannot accidentally turn it into a remote path.
+if [[ "$hosted" == true && -n "$file" && "$(basename "$file")" == "core_schema.sql" ]]; then
+  die "core_schema.sql is a historical local reference and can never be run against a hosted environment. Use one reviewed file from supabase/migrations/."
+fi
+
+# A hosted forward migration must enter through the apply -> verify -> stamp
+# coordinator. Direct query.sh execution can commit schema while silently
+# leaving migration history unregistered, which is precisely the ambiguity the
+# governed workflow eliminates. Data/application writes outside the migration
+# directory retain their existing task-specific paths.
+if [[ "$hosted" == true && "$write" == true && -n "$file" && -f "$file" ]]; then
+  file_directory="$(cd "$(dirname "$file")" && pwd -P)"
+  file_absolute="$file_directory/$(basename "$file")"
+  migration_directory="$(cd "$DB_ROOT/supabase/migrations" && pwd -P)"
+  case "$file_absolute" in
+    "$migration_directory"/*)
+      migration_basename="$(basename "$file_absolute")"
+      if [[ "$migration_basename" =~ ^([0-9]{14})_[a-z0-9_]+\.sql$ ]]; then
+        migration_version="${BASH_REMATCH[1]}"
+      else
+        die "Hosted migration files require YYYYMMDDHHMMSS_slug.sql"
+      fi
+      expected_workflow="apply-verify-stamp:$migration_version"
+      [[ "${VINABIKE_DB_DEPLOY_WORKFLOW:-}" == "$expected_workflow" ]] ||
+        die "Direct hosted migration execution is forbidden. Use scripts/db/deploy_migration.sh so $migration_version is verified and stamped."
+      ;;
+  esac
+fi
+
 if [[ "$environment" == staging ]]; then
   expected_staging_ref="bczzjhjrpmtpgwdvlbut"
   [[ "${VINABIKE_STAGING_REACTIVATION_CONFIRM:-}" == "$expected_staging_ref" ]] ||
@@ -168,7 +202,7 @@ fi
 
 # Disclosure guard. Hosted reads only: local holds synthetic data, and a write
 # is already gated by explicit confirmation and task-level authorization.
-if [[ "$hosted" == true && "$allow_pii" == false ]]; then
+if [[ "$hosted" == true && "$write" == false && "$allow_pii" == false ]]; then
   guard_subject=""
   if [[ -n "$file" ]]; then
     [[ -f "$file" ]] || die "SQL file not found: $file"

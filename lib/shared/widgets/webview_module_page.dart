@@ -32,6 +32,7 @@ import '../services/browser_supplier_credential_resolver.dart';
 import '../services/browser_supplier_portal_catalog.dart';
 import '../services/current_user_profile_service.dart';
 import '../services/document_relay_service.dart';
+import '../services/html_pdf_renderer_service.dart';
 import '../services/ocr_file_handoff_service.dart';
 import '../services/smart_screenshot_service.dart';
 import '../services/window_zoom_service.dart';
@@ -103,6 +104,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   final GlobalKey _browserViewportKey =
       GlobalKey(debugLabel: 'browser viewport');
   final DocumentRelayService _documentRelayService = DocumentRelayService();
+  final HtmlPdfRendererService _htmlPdfRenderer = HtmlPdfRendererService();
   final BrowserCredentialVault _credentialVault =
       BrowserCredentialVault.instance;
   final TextEditingController _addressController = TextEditingController();
@@ -2263,20 +2265,20 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     Map<String, dynamic> invoice,
   ) async {
     try {
-      final printingInfo = await Printing.info();
-      if (!printingInfo.canConvertHtml) {
-        throw UnsupportedError(
-          'Este equipo no puede convertir la plantilla HTML de AliExpress.',
-        );
-      }
       final html = await _buildAliExpressInvoiceHtml(invoice);
       // The extension invoice is HTML-first. Converting that same renderer
       // keeps the ERP preview and Chrome document on one visual contract.
-      // ignore: deprecated_member_use
-      return await Printing.convertHtml(
+      final bytes = await _htmlPdfRenderer.render(
         html: html,
         format: PdfPageFormat.letter,
+        readySelector: '#invoiceRoot',
+        readyFlag: '__ALIEXPRESS_INVOICE_READY__',
       );
+      _aliExpressDebug(
+          'invoice.canonical-renderer.succeeded', <String, dynamic>{
+        'bytes': bytes.length,
+      });
+      return bytes;
     } catch (error) {
       _aliExpressDebug('invoice.canonical-renderer.failed', <String, dynamic>{
         'error': error.toString(),

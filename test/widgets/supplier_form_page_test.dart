@@ -206,6 +206,115 @@ void main() {
   );
 
   testWidgets(
+    'rescate urgente deriva los dos tags sin exponer una pared de etiquetas',
+    (tester) async {
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        saveError: StateError('offline'),
+      );
+      await pumpEditor(tester, source: source);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('supplier-display-name')),
+        'Taller de rescate',
+      );
+      final chooseRelation =
+          find.byKey(const ValueKey('supplier-choose-relation'));
+      await tester.ensureVisible(chooseRelation);
+      await tester.tap(chooseRelation);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bienes y repuestos').last);
+      await tester.pumpAndSettle();
+
+      final localCoverage =
+          find.byKey(const ValueKey('supplier-local-coverage'));
+      await tester.ensureVisible(localCoverage);
+      expect(find.text('Disponibilidad local'), findsOneWidget);
+      expect(find.text('Sin confirmar'), findsOneWidget);
+      expect(find.text('Etiquetas internas'), findsNothing);
+      await tester.tap(localCoverage);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rescate urgente').last);
+      await tester.pumpAndSettle();
+
+      final save = find.byKey(const ValueKey('supplier-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      final command = source.profileCommands.single;
+      expect(
+        command.tags.map((selection) => selection.definition.code),
+        unorderedEquals(<String>['local_workshop', 'emergency_local']),
+      );
+    },
+  );
+
+  testWidgets(
+    'edición hidrata rescate y permite retirarlo sin borrar tags ajenos',
+    (tester) async {
+      final source = _FakeSupplierEditorDataSource(
+        catalog: _catalog(),
+        profile: _profile(
+          tags: const <Map<String, dynamic>>[
+            {
+              'id': '90400000-0000-0000-0000-000000000009',
+              'definition_id': '70100000-0000-0000-0000-000000000007',
+              'code': 'local_workshop',
+              'label': 'Proveedor local',
+              'source': 'manual',
+              'metadata': <String, dynamic>{},
+            },
+            {
+              'id': '90500000-0000-0000-0000-000000000009',
+              'definition_id': '70200000-0000-0000-0000-000000000007',
+              'code': 'emergency_local',
+              'label': 'Rescate urgente',
+              'source': 'manual',
+              'metadata': <String, dynamic>{},
+            },
+            {
+              'id': '90300000-0000-0000-0000-000000000009',
+              'definition_id': '70000000-0000-0000-0000-000000000007',
+              'code': 'critical',
+              'label': 'Crítico para la operación',
+              'source': 'manual',
+              'metadata': <String, dynamic>{},
+            },
+          ],
+        ),
+        saveError: StateError('offline'),
+      );
+      await pumpEditor(
+        tester,
+        source: source,
+        editingSupplierId: supplierId,
+      );
+
+      final localCoverage =
+          find.byKey(const ValueKey('supplier-local-coverage'));
+      await tester.ensureVisible(localCoverage);
+      expect(find.text('Rescate urgente'), findsOneWidget);
+      expect(find.text('Crítico para la operación'), findsNothing);
+      await tester.tap(localCoverage);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sin confirmar').last);
+      await tester.pumpAndSettle();
+
+      final save = find.byKey(const ValueKey('supplier-save'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(
+        source.profileCommands.single.tags
+            .map((selection) => selection.definition.code),
+        <String>['critical'],
+      );
+    },
+  );
+
+  testWidgets(
     'editar no borra clasificaciones históricas que la pregunta guiada no muestra',
     (tester) async {
       final source = _FakeSupplierEditorDataSource(
@@ -1740,6 +1849,18 @@ SupplierClassificationCatalog _catalog() {
         code: 'critical',
         label: 'Crítico para la operación',
       ),
+      definition(
+        id: '70100000-0000-0000-0000-000000000007',
+        kind: SupplierClassificationDefinitionKind.tag,
+        code: 'local_workshop',
+        label: 'Proveedor local',
+      ),
+      definition(
+        id: '70200000-0000-0000-0000-000000000007',
+        kind: SupplierClassificationDefinitionKind.tag,
+        code: 'emergency_local',
+        label: 'Rescate urgente',
+      ),
     ],
     operationalNatures: [
       definition(
@@ -1757,6 +1878,7 @@ SupplierProfile _profile({
   String tenantId = _tenantId,
   String updatedAt = '2026-08-08T00:00:00Z',
   List<Map<String, dynamic>>? roles,
+  List<Map<String, dynamic>>? tags,
 }) =>
     SupplierProfile.fromJson({
       'tenant_id': tenantId,
@@ -1779,7 +1901,7 @@ SupplierProfile _profile({
             },
           ],
       'relationship_capabilities': const <Map<String, dynamic>>[],
-      'relationship_tags': const <Map<String, dynamic>>[],
+      'relationship_tags': tags ?? const <Map<String, dynamic>>[],
       'engagements': const <Map<String, dynamic>>[],
       'accounting': const {
         'policies': <Map<String, dynamic>>[],

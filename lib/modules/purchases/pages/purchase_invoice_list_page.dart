@@ -185,6 +185,14 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         invoice.status == PurchaseInvoiceStatus.paid;
   }
 
+  String _documentKindLabel(PurchaseInvoice invoice) {
+    final serverLabel = invoice.sourceDocumentKindLabel?.trim();
+    if (serverLabel != null && serverLabel.isNotEmpty) return serverLabel;
+    return invoice.sourceDocumentKind == PurchaseSourceDocumentKind.defaultCode
+        ? 'Factura'
+        : 'Documento de compra';
+  }
+
   PurchaseReceiptFulfillment _fulfillmentFor(PurchaseInvoice invoice) {
     final invoiceId = invoice.id;
     if (invoiceId != null) {
@@ -228,7 +236,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       });
     } catch (error) {
       debugPrint(
-        'No se pudo cargar el estado físico de facturas de compra: $error',
+        'No se pudo cargar el estado físico de documentos de compra: $error',
       );
     }
   }
@@ -331,7 +339,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         _getFilteredAndSortedInvoices(purchaseService.listInvoices);
 
     return MainLayout(
-      title: 'Facturas de Compra',
+      title: 'Documentos de compra',
       child: Column(
         children: [
           // Header with New button
@@ -346,7 +354,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             child: Row(
               children: [
                 Text(
-                  'Facturas de Compra',
+                  'Documentos de compra',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -553,7 +561,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'El documento se cerró, pero no se pudo actualizar la factura: '
+            'El documento se cerró, pero no se pudo actualizar la compra: '
             '$error',
           ),
         ),
@@ -662,7 +670,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 autofocus: true,
                 onChanged: (v) => setState(() => _searchTerm = v),
                 decoration: InputDecoration(
-                  hintText: 'Buscar factura, proveedor...',
+                  hintText: 'Buscar documento, proveedor...',
                   prefixIcon: const Icon(Icons.search, size: 20),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.close, size: 20),
@@ -730,7 +738,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: _createNewInvoice,
-            tooltip: 'Nueva factura',
+            tooltip: 'Nuevo documento de compra',
           ),
         ],
       ),
@@ -976,7 +984,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         Colors.green,
       ),
       _buildSummaryCard(
-        'Facturas contabilizadas',
+        'Documentos contabilizados',
         '$monthlyCount',
         Icons.fact_check_outlined,
         monthlyCount > 0 ? Colors.teal : Colors.grey,
@@ -1100,7 +1108,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             Icon(Icons.receipt_long_outlined, size: 48, color: theme.hintColor),
             const SizedBox(height: 12),
             Text(
-              'No se encontraron facturas',
+              'No se encontraron documentos de compra',
               style: TextStyle(color: theme.hintColor, fontSize: 14),
             ),
           ],
@@ -1149,14 +1157,18 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        invoice.invoiceNumber,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                      Expanded(
+                        child: Text(
+                          '${_documentKindLabel(invoice)} · ${invoice.invoiceNumber}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       _buildStatusChip(invoice),
                     ],
                   ),
@@ -1254,7 +1266,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                     child: Text(column == 'date'
                         ? 'Fecha'
                         : column == 'invoice_number'
-                            ? 'N° Factura'
+                            ? 'N° interno'
                             : column == 'supplier'
                                 ? 'Proveedor'
                                 : column == 'status'
@@ -1302,8 +1314,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             const SizedBox(height: 16),
             Text(
               _searchTerm.isEmpty
-                  ? 'No hay facturas de compra'
-                  : 'No se encontraron facturas',
+                  ? 'No hay documentos de compra'
+                  : 'No se encontraron documentos',
               style:
                   theme.textTheme.titleMedium?.copyWith(color: theme.hintColor),
             ),
@@ -1389,7 +1401,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   Widget _buildColumnHeaderCell(String columnName, double width) {
     final labels = {
       'date': 'Fecha',
-      'invoice_number': 'N° Factura',
+      'invoice_number': 'N° interno',
       'supplier': 'Proveedor',
       'status': 'Estado',
       'total': 'Total',
@@ -1592,15 +1604,15 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         context: context,
         builder: (context) => AlertDialog(
           icon: const Icon(Icons.account_tree_outlined),
-          title: const Text('Esta factura conserva evidencia contable'),
+          title: const Text('Este documento conserva evidencia contable'),
           content: const SizedBox(
             width: 560,
             child: Text(
-              'Una factura confirmada, pagada o recibida no se elimina. '
+              'Un documento confirmado, pagado o recibido no se elimina. '
               'Primero deben anularse, mediante sus propias reversas, los '
               'documentos dependientes en este orden: reembolsos, notas de '
               'crédito, pérdidas documentadas o entregas posteriores, '
-              'recepciones de stock y pagos. Cuando la factura vuelva a '
+              'recepciones de stock y pagos. Cuando el documento vuelva a '
               'Borrador podrá eliminarse sin borrar evidencia histórica.',
             ),
           ),
@@ -1619,13 +1631,13 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.warning_amber_rounded,
             color: Colors.red, size: 48),
-        title: const Text('Eliminar factura'),
+        title: const Text('Eliminar documento'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-                '¿Estás seguro de eliminar la factura "${invoice.invoiceNumber}"?'),
+                '¿Estás seguro de eliminar el documento "${invoice.invoiceNumber}"?'),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -1687,7 +1699,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Factura "${invoice.invoiceNumber}" eliminada'),
+              content: Text('Documento "${invoice.invoiceNumber}" eliminado'),
               backgroundColor: Colors.green,
             ),
           );
@@ -1734,13 +1746,25 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         );
         break;
       case 'invoice_number':
-        content = Text(
-          invoice.invoiceNumber,
-          style: const TextStyle(
-            fontSize: 13,
-            color: Colors.blue,
-            fontWeight: FontWeight.w500,
-          ),
+        content = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              invoice.invoiceNumber,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.blue,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            Text(
+              _documentKindLabel(invoice),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
         );
         break;
       case 'supplier':
@@ -1914,16 +1938,18 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       String message;
       switch (newStatus) {
         case PurchaseInvoiceStatus.sent:
-          message = 'Factura enviada al proveedor';
+          message = 'Documento enviado al proveedor';
           break;
         case PurchaseInvoiceStatus.confirmed:
-          message = 'Factura confirmada';
+          message = invoice.sourceDocumentWorkflowKind == 'direct_purchase'
+              ? 'Compra confirmada'
+              : 'Documento confirmado';
           break;
         case PurchaseInvoiceStatus.received:
-          message = 'Factura marcada como recibida. Inventario actualizado.';
+          message = 'Recepción registrada. Inventario actualizado.';
           break;
         case PurchaseInvoiceStatus.draft:
-          message = 'Factura revertida a borrador';
+          message = 'Documento revertido a borrador';
           break;
         default:
           message = 'Estado actualizado';
@@ -1959,7 +1985,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       final fullInvoice =
           await purchaseService.getPurchaseInvoice(invoiceId, refresh: true);
       if (fullInvoice == null) {
-        throw StateError('No se pudo cargar la factura completa.');
+        throw StateError('No se pudo cargar el documento completo.');
       }
       if (!mounted) return;
       final fulfillment = await receivingService.getFulfillment(fullInvoice);
@@ -2052,7 +2078,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             '$openDifferenceQuantity '
             '${openDifferenceQuantity == 1 ? 'unidad pendiente' : 'unidades pendientes'}. '
             'Quedó disponible en Diferencias y resoluciones dentro de la '
-            'factura para cuando tengas respuesta del proveedor.',
+            'documento para cuando tengas respuesta del proveedor.',
           ),
         ),
       );
@@ -2352,13 +2378,21 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
     final effectiveBalance = _effectiveBalance(invoice);
     final fulfillment = _fulfillmentFor(invoice);
+    final isDirectPurchase =
+        invoice.sourceDocumentWorkflowKind == 'direct_purchase';
 
     switch (invoice.status) {
       case PurchaseInvoiceStatus.draft:
-        nextActionLabel = 'Enviar';
-        subLabel = 'Envía la orden al proveedor.';
-        onActionPressed =
-            () => _updateStatus(invoice, PurchaseInvoiceStatus.sent);
+        nextActionLabel = isDirectPurchase ? 'Confirmar compra' : 'Enviar';
+        subLabel = isDirectPurchase
+            ? 'Confirma que esta compra directa ocurrió; recepción y pago se registran por separado.'
+            : 'Envía la orden al proveedor.';
+        onActionPressed = () => _updateStatus(
+              invoice,
+              isDirectPurchase
+                  ? PurchaseInvoiceStatus.confirmed
+                  : PurchaseInvoiceStatus.sent,
+            );
         break;
 
       case PurchaseInvoiceStatus.sent:
@@ -2382,9 +2416,16 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       case PurchaseInvoiceStatus.confirmed:
         secondaryActions.add(
           OutlinedButton.icon(
-            onPressed: () => _updateStatus(invoice, PurchaseInvoiceStatus.sent),
+            onPressed: () => _updateStatus(
+              invoice,
+              isDirectPurchase
+                  ? PurchaseInvoiceStatus.draft
+                  : PurchaseInvoiceStatus.sent,
+            ),
             icon: const Icon(Icons.undo, size: 16),
-            label: const Text('Volver a enviado'),
+            label: Text(
+              isDirectPurchase ? 'Volver a borrador' : 'Volver a enviado',
+            ),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
@@ -2395,7 +2436,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           if (effectiveBalance <= 0) {
             nextActionLabel = 'Registrar recepción';
             subLabel =
-                'Factura prepagada pagada en su totalidad. Registra la recepción física para ingresar al inventario.';
+                'Compra prepagada en su totalidad. Registra la recepción física para ingresar al inventario.';
             onActionPressed = () => _receiveProducts(invoice);
           } else {
             nextActionLabel = 'Registrar pago';
@@ -2452,11 +2493,11 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         break;
 
       case PurchaseInvoiceStatus.paid:
-        subLabel = 'Esta factura ha sido pagada en su totalidad.';
+        subLabel = 'Este documento ha sido pagado en su totalidad.';
         if (invoice.prepaymentModel) {
           nextActionLabel = 'Registrar recepción';
           subLabel =
-              'Factura prepagada pagada. Registra la recepción física para ingresar al inventario.';
+              'Compra prepagada. Registra la recepción física para ingresar al inventario.';
           onActionPressed = () => _receiveProducts(invoice);
         }
 
@@ -2761,7 +2802,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                                                 entries:
                                                     accounting.journalEntries,
                                                 documentLabel:
-                                                    'Factura de compra',
+                                                    _documentKindLabel(invoice),
                                                 emptyReference:
                                                     invoice.invoiceNumber,
                                               ),
@@ -2912,7 +2953,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back),
-                      tooltip: 'Volver a la factura',
+                      tooltip: 'Volver al documento',
                       onPressed: () =>
                           setState(() => _showingPaymentForm = false),
                     ),
@@ -2936,7 +2977,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildPaymentRow('Total factura:',
+                        _buildPaymentRow('Total documento:',
                             ChileanUtils.formatCurrency(invoice.total), theme),
                         const SizedBox(height: 4),
                         _buildPaymentRow(
@@ -3139,7 +3180,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             children: [
               // Invoice number on the left
               Text(
-                invoice.invoiceNumber,
+                '${_documentKindLabel(invoice)} · ${invoice.invoiceNumber}',
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -3436,7 +3477,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Facturar a',
+                      'Proveedor',
                       style: TextStyle(
                         fontSize: labelSize,
                         fontWeight: FontWeight.w600,
@@ -3459,7 +3500,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'Fecha de la factura :',
+                    'Fecha del documento:',
                     style: TextStyle(
                       fontSize: labelSize,
                       color: Colors.grey[700],
@@ -3661,8 +3702,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
       if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
         // Desktop: Use Save As dialog
         final String? outputFile = await FilePicker.platform.saveFile(
-          dialogTitle: 'Guardar Factura PDF',
-          fileName: 'factura_compra_${invoice.invoiceNumber}.pdf',
+          dialogTitle: 'Guardar documento de compra PDF',
+          fileName: 'documento_compra_${invoice.invoiceNumber}.pdf',
           allowedExtensions: ['pdf'],
           type: FileType.custom,
         );
@@ -3683,7 +3724,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         // Use printing package for mobile/share
         await Printing.sharePdf(
           bytes: bytes,
-          filename: 'factura_compra_${invoice.invoiceNumber}.pdf',
+          filename: 'documento_compra_${invoice.invoiceNumber}.pdf',
         );
       }
     } catch (e) {
@@ -3848,7 +3889,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
                     pw.Text(
-                      'Fecha de la factura :',
+                      'Fecha del documento:',
                       style: const pw.TextStyle(
                         fontSize: 9,
                         color: PdfColors.grey700,

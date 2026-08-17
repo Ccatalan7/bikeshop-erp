@@ -36,6 +36,16 @@ screen look newer. A module-specific Design or Claude proposal is optional and
 must not introduce a wizard, inspector, modal, rail, card wall or disclosure
 unless the task itself justifies that interaction.
 
+**Qué sigue siendo gramática visual aunque el contenido sea nuestro
+(2026-08-17).** La frontera no es «controles sí, disposición no». Pertenecen a
+la gramática, y se copian exactos del diseño: la **contención** —un bloque es un
+panel con superficie, borde, radio y padding, no elementos sueltos apoyados en el
+fondo—, el **ancho de columna y su alineación**, la **escala tipográfica** y el
+**espaciado entre bloques**. Dibujar plano lo que el lenguaje dibuja como panel,
+o inflar el tipo, es un defecto del mismo tipo que inventar un hex. Nuestro es
+**qué va adentro del panel y cómo se llama**; de Design es **cómo se ve el panel
+que lo contiene**.
+
 ## Las palabras son parte del diseño
 
 El dueño de este ERP es el dueño del taller, no un contador ni un
@@ -627,6 +637,17 @@ Shared requirements:
 - Size columns, panes, and rows from content, task, viewport, and user-adjusted
   preferences rather than universal constants.
 
+A trailing action inside a shared notice still belongs to the notice's width
+budget. In a narrow split-pane decision surface, a labelled secondary button
+may consume the space needed by the evidence and overflow the row. At that
+breakpoint, keep the same command as a compact icon action with tooltip and
+spoken label, or move it to a deliberate next row when its wording must remain
+visible; never squeeze, crop, or wrap the notice into a competing card. This
+pattern was validated on 2026-08-16 in the intelligent-purchasing decision pane
+at `599/600` and `899/900`, with
+`test/widget/intelligent_purchasing_workspace_test.dart` as the minimum
+overflow regression.
+
 Phone and tablet recomposition is owned by the mobile guide. A desktop table
 must not become a horizontally scrolling miniature table by default.
 
@@ -761,6 +782,16 @@ rendering behavior must be designed together.
 - If the host scrolls or resizes while the surface is open, the surface must
   either follow, recompute, or close. A detached popover is never acceptable.
 
+An autocomplete embedded in a brief capture popover or compact sheet is not a
+catalog browser. Empty programmatic focus must not preload and expose hundreds
+of rows. Wait for a useful query, keep the result surface aligned to the field,
+and use restrained list rows instead of repeating the full filter/chip toolbar.
+Free description remains available when no canonical item is selected. If the
+surface offers internal back/forward navigation, keep the unsaved draft mounted
+for that round trip; only an explicit close may discard it. The minimum
+regression is empty-focus silence, query-triggered results, no filter wall,
+draft preservation across back/forward, and compact-width overflow coverage.
+
 ### Choose the Flutter primitive deliberately
 
 There is no universal overlay primitive. Use this evaluation order:
@@ -892,6 +923,34 @@ Validate behavior through the real host, not an isolated screenshot:
   registered routed, embedded, pane, inline, and quick-action surface;
 - add the smallest behavioral regression that would fail if the validated
   interaction regressed.
+
+### `flex-wrap: wrap` no es una `Row` (2026-08-17)
+
+Al traducir una fila de acciones del prototipo se copió `display:flex; gap;
+align-items` y se omitió `flex-wrap: wrap`, porque en escritorio no se nota. A
+390 px desbordó 40 px y tumbó cuatro pruebas.
+
+**La declaración completa se traduce completa.** `flex-wrap` con un espaciador
+`flex:1` significa dos comportamientos en un solo control: en columna ancha el
+último elemento se va al borde derecho; en columna angosta baja de línea. En
+Flutter eso es un `LayoutBuilder` que elige entre `Row` con `Spacer` y `Wrap`,
+con el umbral puesto por el **contenido**, no por el breakpoint del módulo.
+
+Anti-patrón: `Row` con `Spacer` para una fila de acciones que en el diseño
+envuelve. Se ve bien en escritorio y desborda en teléfono.
+
+### Un control que se apaga cambia las pruebas que lo tocan (2026-08-17)
+
+El mismo prototipo apaga la acción primaria mientras el campo está vacío. Al
+implementarlo, 25 pruebas de widget empezaron a fallar lejos del composer: cada
+una escribía y tocaba «Analizar» sin un `pump()` entre medio, así que el botón
+todavía estaba deshabilitado y el toque **no fallaba, no hacía nada**. Los
+errores aparecían mucho después, como elementos que no existían.
+
+Cuando un control pasa a tener estado deshabilitado, toda prueba que escriba y
+después lo toque necesita un `pump()` entre las dos acciones. Un toque sobre un
+botón deshabilitado es silencioso: no lanza, y el diagnóstico aparece a varios
+pasos de distancia.
 
 ### Reusable learning rule
 

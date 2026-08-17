@@ -294,6 +294,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
   final Set<String> _selectedRoleIds = {};
   final Set<String> _selectedCapabilityIds = {};
   final Set<String> _selectedTagIds = {};
+  _SupplierLocalCoverage _localCoverage = _SupplierLocalCoverage.unconfirmed;
 
   /// The operator's answer to the single question.
   final List<_RelationChoice> _relationChoices = <_RelationChoice>[];
@@ -338,8 +339,43 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     return null;
   }
 
+  String? _tagIdForCode(String code) {
+    final catalog = _catalog;
+    if (catalog == null) return null;
+    for (final tag in catalog.tags) {
+      if (tag.code.toLowerCase() == code) return tag.id;
+    }
+    return null;
+  }
+
+  bool get _supportsLocalCoverage =>
+      _tagIdForCode(_localWorkshopTagCode) != null &&
+      _tagIdForCode(_emergencyLocalTagCode) != null;
+
+  bool get _hasGoodsRelation =>
+      _relationChoices.any((choice) => choice.kindKey == 'goods');
+
+  void _adoptPreservedLocalCoverage() {
+    if (!_supportsLocalCoverage || !_hasGoodsRelation) return;
+    final localId = _tagIdForCode(_localWorkshopTagCode)!;
+    final emergencyId = _tagIdForCode(_emergencyLocalTagCode)!;
+    final hadLocal = _preservedTagIds.remove(localId);
+    final hadEmergency = _preservedTagIds.remove(emergencyId);
+    if (hadEmergency) {
+      _localCoverage = _SupplierLocalCoverage.emergency;
+    } else if (hadLocal) {
+      _localCoverage = _SupplierLocalCoverage.local;
+    }
+  }
+
   /// The single write path: the answer becomes the three arrays.
   void _syncClassificationFromRelations() {
+    // A malformed historical profile may contain a local tag without the
+    // goods relation. It stays untouched while the detail has no visible
+    // home. If the operator later adds Bienes y repuestos, adopt that stored
+    // value instead of showing «Sin confirmar» while silently preserving it.
+    _adoptPreservedLocalCoverage();
+
     _selectedRoleIds
       ..clear()
       ..addAll(<String>{
@@ -369,10 +405,23 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       ..addAll(derived)
       ..addAll(_preservedCapabilityIds);
 
-    // Tags left the flow entirely; whatever was stored keeps being stored.
     _selectedTagIds
       ..clear()
       ..addAll(_preservedTagIds);
+    if (_supportsLocalCoverage && _hasGoodsRelation) {
+      final localId = _tagIdForCode(_localWorkshopTagCode)!;
+      final emergencyId = _tagIdForCode(_emergencyLocalTagCode)!;
+      switch (_localCoverage) {
+        case _SupplierLocalCoverage.unconfirmed:
+          break;
+        case _SupplierLocalCoverage.local:
+          _selectedTagIds.add(localId);
+        case _SupplierLocalCoverage.emergency:
+          _selectedTagIds
+            ..add(localId)
+            ..add(emergencyId);
+      }
+    }
   }
 
   /// Rebuilds the operator's answer from what is already stored.
@@ -423,9 +472,24 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       ..addAll(storedCapabilityIds.where(
         (id) => !derivedCapabilityIds.contains(id),
       ));
+    final storedTagIds = Set<String>.of(_selectedTagIds);
+    final representedTagIds = <String>{};
+    _localCoverage = _SupplierLocalCoverage.unconfirmed;
+    if (_supportsLocalCoverage && _hasGoodsRelation) {
+      final localId = _tagIdForCode(_localWorkshopTagCode)!;
+      final emergencyId = _tagIdForCode(_emergencyLocalTagCode)!;
+      representedTagIds
+        ..add(localId)
+        ..add(emergencyId);
+      if (storedTagIds.contains(emergencyId)) {
+        _localCoverage = _SupplierLocalCoverage.emergency;
+      } else if (storedTagIds.contains(localId)) {
+        _localCoverage = _SupplierLocalCoverage.local;
+      }
+    }
     _preservedTagIds
       ..clear()
-      ..addAll(_selectedTagIds);
+      ..addAll(storedTagIds.where((id) => !representedTagIds.contains(id)));
     _syncClassificationFromRelations();
   }
 
@@ -583,6 +647,7 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     _selectedCapabilityIds.clear();
     _selectedTagIds.clear();
     _relationChoices.clear();
+    _localCoverage = _SupplierLocalCoverage.unconfirmed;
     _preservedRoleIds.clear();
     _preservedCapabilityIds.clear();
     _preservedTagIds.clear();
@@ -1222,6 +1287,8 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                         const SizedBox(height: 16),
                         _RelationKindSection(
                           choices: _relationChoices,
+                          localCoverage: _localCoverage,
+                          localCoverageAvailable: _supportsLocalCoverage,
                           availableKinds: _supportedRelationKinds
                               .where((kind) => !_relationChoices
                                   .any((c) => c.kindKey == kind.key))
@@ -1239,6 +1306,10 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                                 choice.subtypeKey = subtypeKey;
                               }
                             }
+                            _syncClassificationFromRelations();
+                          }),
+                          onLocalCoverageChanged: (value) => setState(() {
+                            _localCoverage = value;
                             _syncClassificationFromRelations();
                           }),
                         ),
@@ -2110,6 +2181,14 @@ class _IdentitySection extends StatelessWidget {
   }
 }
 
+const String _localWorkshopTagCode = 'local_workshop';
+const String _emergencyLocalTagCode = 'emergency_local';
+
+/// The one purchasing-oriented detail represented inside the goods relation.
+/// It deliberately is not shown as a tag: the operator states the business
+/// fact and the adapter derives the normalized assignments.
+enum _SupplierLocalCoverage { unconfirmed, local, emergency }
+
 /// One human relationship the operator can declare.
 ///
 /// The backend still stores three independent arrays (roles, capabilities,
@@ -2331,17 +2410,23 @@ class _RelationPickerSheetState extends State<_RelationPickerSheet> {
 class _RelationKindSection extends StatelessWidget {
   const _RelationKindSection({
     required this.choices,
+    required this.localCoverage,
+    required this.localCoverageAvailable,
     required this.availableKinds,
     required this.onAdd,
     required this.onRemove,
     required this.onSubtypeChanged,
+    required this.onLocalCoverageChanged,
   });
 
   final List<_RelationChoice> choices;
+  final _SupplierLocalCoverage localCoverage;
+  final bool localCoverageAvailable;
   final List<_SupplierRelationKind> availableKinds;
   final VoidCallback onAdd;
   final ValueChanged<String> onRemove;
   final void Function(String kindKey, String? subtypeKey) onSubtypeChanged;
+  final ValueChanged<_SupplierLocalCoverage> onLocalCoverageChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -2367,9 +2452,14 @@ class _RelationKindSection extends StatelessWidget {
             for (final choice in choices) ...<Widget>[
               _RelationChoiceCard(
                 choice: choice,
+                localCoverage: localCoverage,
                 onRemove: () => onRemove(choice.kindKey),
                 onSubtypeChanged: (value) =>
                     onSubtypeChanged(choice.kindKey, value),
+                onLocalCoverageChanged:
+                    choice.kindKey == 'goods' && localCoverageAvailable
+                        ? onLocalCoverageChanged
+                        : null,
               ),
               const SizedBox(height: 10),
             ],
@@ -2424,13 +2514,17 @@ class _RelationEmptyPrompt extends StatelessWidget {
 class _RelationChoiceCard extends StatelessWidget {
   const _RelationChoiceCard({
     required this.choice,
+    required this.localCoverage,
     required this.onRemove,
     required this.onSubtypeChanged,
+    required this.onLocalCoverageChanged,
   });
 
   final _RelationChoice choice;
+  final _SupplierLocalCoverage localCoverage;
   final VoidCallback onRemove;
   final ValueChanged<String?> onSubtypeChanged;
+  final ValueChanged<_SupplierLocalCoverage>? onLocalCoverageChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -2493,6 +2587,40 @@ class _RelationChoiceCard extends StatelessWidget {
                     ),
                 ],
                 onChanged: onSubtypeChanged,
+              ),
+            ),
+          ],
+          if (onLocalCoverageChanged != null) ...<Widget>[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: VbShortSelect<_SupplierLocalCoverage>(
+                key: const ValueKey('supplier-local-coverage'),
+                label: 'Disponibilidad local',
+                sheetTitle: 'Disponibilidad local',
+                value: localCoverage,
+                options: const <VbShortSelectOption<_SupplierLocalCoverage>>[
+                  VbShortSelectOption<_SupplierLocalCoverage>(
+                    value: _SupplierLocalCoverage.unconfirmed,
+                    label: 'Sin confirmar',
+                  ),
+                  VbShortSelectOption<_SupplierLocalCoverage>(
+                    value: _SupplierLocalCoverage.local,
+                    label: 'Proveedor local',
+                  ),
+                  VbShortSelectOption<_SupplierLocalCoverage>(
+                    value: _SupplierLocalCoverage.emergency,
+                    label: 'Rescate urgente',
+                  ),
+                ],
+                onChanged: onLocalCoverageChanged,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Orienta las sugerencias del asistente; no genera compras.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],

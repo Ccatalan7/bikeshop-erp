@@ -154,6 +154,182 @@ class AIAssistantInventoryListRef {
   final bool autoOpen;
 }
 
+enum AIAssistantSupplyNeedProfile {
+  balanced,
+  profitability,
+  urgentLocal,
+}
+
+@immutable
+class AIAssistantSupplyNeedTechnicalPredicate {
+  const AIAssistantSupplyNeedTechnicalPredicate({
+    required this.field,
+    required this.operator,
+    required this.values,
+  });
+
+  final String field;
+  final String operator;
+  final List<Object> values;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'field': field,
+        'operator': operator,
+        'values': values,
+      };
+}
+
+enum AIAssistantSupplyNeedClarificationInputKind {
+  singleChoice,
+  text,
+  number,
+}
+
+@immutable
+class AIAssistantSupplyNeedClarificationOption {
+  const AIAssistantSupplyNeedClarificationOption({
+    required this.value,
+    required this.label,
+  });
+
+  final String value;
+  final String label;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'value': value,
+        'label': label,
+      };
+}
+
+/// One model-authored question for a material ambiguity in the operator's
+/// request. These prompts are deliberately category-agnostic: the model may
+/// ask for the next missing fact, but the client never encodes a product-
+/// specific decision tree.
+@immutable
+class AIAssistantSupplyNeedClarificationPrompt {
+  const AIAssistantSupplyNeedClarificationPrompt({
+    required this.id,
+    required this.question,
+    required this.inputKind,
+    required this.options,
+    required this.unit,
+    required this.allowUnknown,
+  });
+
+  final String id;
+  final String question;
+  final AIAssistantSupplyNeedClarificationInputKind inputKind;
+  final List<AIAssistantSupplyNeedClarificationOption> options;
+  final String? unit;
+  final bool allowUnknown;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'id': id,
+        'question': question,
+        'inputKind': switch (inputKind) {
+          AIAssistantSupplyNeedClarificationInputKind.singleChoice =>
+            'single_choice',
+          AIAssistantSupplyNeedClarificationInputKind.text => 'text',
+          AIAssistantSupplyNeedClarificationInputKind.number => 'number',
+        },
+        'options': options.map((option) => option.toJson()).toList(
+              growable: false,
+            ),
+        'unit': unit,
+        'allowUnknown': allowUnknown,
+      };
+}
+
+@immutable
+class AIAssistantSupplyNeedDraftLine {
+  const AIAssistantSupplyNeedDraftLine({
+    required this.lineRef,
+    required this.description,
+    required this.productId,
+    required this.productName,
+    required this.productSku,
+    required this.identityState,
+    required this.quantity,
+    required this.unit,
+    required this.technicalPredicates,
+    required this.preference,
+    required this.clarification,
+    required this.clarificationRequired,
+    this.clarificationPrompts = const [],
+  });
+
+  final String lineRef;
+  final String description;
+  final String? productId;
+  final String? productName;
+  final String? productSku;
+  final String identityState;
+  final double quantity;
+  final String unit;
+  final List<AIAssistantSupplyNeedTechnicalPredicate> technicalPredicates;
+  final String? preference;
+  final String? clarification;
+  final bool clarificationRequired;
+  final List<AIAssistantSupplyNeedClarificationPrompt> clarificationPrompts;
+
+  bool get hasConfirmedProduct =>
+      identityState == 'confirmed' && productId != null && productName != null;
+
+  AIAssistantSupplyNeedDraftLine copyWith({
+    String? description,
+    double? quantity,
+    String? unit,
+  }) =>
+      AIAssistantSupplyNeedDraftLine(
+        lineRef: lineRef,
+        description: description ?? this.description,
+        productId: productId,
+        productName: productName,
+        productSku: productSku,
+        identityState: identityState,
+        quantity: quantity ?? this.quantity,
+        unit: unit ?? this.unit,
+        technicalPredicates: technicalPredicates,
+        preference: preference,
+        clarification: clarification,
+        clarificationRequired: clarificationRequired,
+        clarificationPrompts: clarificationPrompts,
+      );
+
+  Map<String, Object?> toCommandJson() => <String, Object?>{
+        'lineRef': lineRef,
+        'description': description,
+        'productId': productId,
+        'quantity': quantity,
+        'unit': unit,
+        'technicalPredicates': technicalPredicates
+            .map((predicate) => predicate.toJson())
+            .toList(growable: false),
+        'preference': preference,
+        'clarification': clarification,
+        'clarificationRequired': clarificationRequired,
+      };
+}
+
+@immutable
+class AIAssistantSupplyNeedDraft {
+  const AIAssistantSupplyNeedDraft({
+    required this.profile,
+    required this.lines,
+  });
+
+  final AIAssistantSupplyNeedProfile profile;
+  final List<AIAssistantSupplyNeedDraftLine> lines;
+
+  AIAssistantSupplyNeedDraft copyWith({
+    List<AIAssistantSupplyNeedDraftLine>? lines,
+  }) =>
+      AIAssistantSupplyNeedDraft(
+        profile: profile,
+        lines: lines ?? this.lines,
+      );
+}
+
 /// A card the assistant offers after answering.
 ///
 /// The card carries a closed [destination] and may carry one verified,
@@ -172,6 +348,7 @@ class AIAssistantActionCard {
     this.entityRef,
     this.approvalRef,
     this.inventoryListRef,
+    this.supplyNeedDraft,
   });
 
   final String kind;
@@ -184,10 +361,13 @@ class AIAssistantActionCard {
   final AIAssistantEntityRef? entityRef;
   final AIAssistantApprovalRef? approvalRef;
   final AIAssistantInventoryListRef? inventoryListRef;
+  final AIAssistantSupplyNeedDraft? supplyNeedDraft;
 
-  String get ctaLabel => inventoryListRef != null
-      ? 'Ver resultados'
-      : entityRef?.detailCtaLabel ?? destination.ctaLabel;
+  String get ctaLabel => supplyNeedDraft != null
+      ? 'Revisar petición'
+      : inventoryListRef != null
+          ? 'Ver resultados'
+          : entityRef?.detailCtaLabel ?? destination.ctaLabel;
 
   AIAssistantActionCard withApprovalState(
     AIAssistantApprovalState state,
@@ -205,6 +385,7 @@ class AIAssistantActionCard {
       entityRef: entityRef,
       approvalRef: approval.withState(state),
       inventoryListRef: inventoryListRef,
+      supplyNeedDraft: supplyNeedDraft,
     );
   }
 }

@@ -99,6 +99,55 @@ void main() {
     expect(inventory.requests.single.query, isEmpty);
   });
 
+  testWidgets(
+    'compact deferred search stays closed until the query is useful',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final inventory = _RecordingInventoryService();
+      await tester.pumpWidget(
+        ChangeNotifierProvider<InventoryService>.value(
+          value: inventory,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 360,
+                  child: ProductAutocompleteField(
+                    autoFocus: true,
+                    preloadCatalog: false,
+                    minimumSearchCharacters: 2,
+                    compactSuggestions: true,
+                    onProductSelected: (_) {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(inventory.requests, isEmpty);
+      expect(find.text('Filtros:'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'p');
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(inventory.requests, isEmpty);
+
+      await tester.enterText(find.byType(TextField), 'pi');
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+
+      expect(inventory.requests.single.query, 'pi');
+      expect(find.text('Piñón de prueba'), findsOneWidget);
+      expect(find.text('Filtros:'), findsNothing);
+      expect(find.byType(FilterChip), findsNothing);
+    },
+  );
+
   testWidgets('sale picker labels but allows child products from a set',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1000, 700));

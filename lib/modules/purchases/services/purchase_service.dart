@@ -62,6 +62,7 @@ class PurchaseService extends ChangeNotifier {
   List<PurchaseInvoice> _invoiceCache = const [];
   List<PurchaseInvoice> _listInvoiceCache = const [];
   List<PurchasePayment> _paymentCache = const [];
+  List<PurchaseSourceDocumentKind> _sourceDocumentKindCache = const [];
   bool _suppliersLoaded = false;
   bool _invoicesLoaded = false;
   bool _paymentsLoaded = false;
@@ -207,6 +208,9 @@ class PurchaseService extends ChangeNotifier {
       id: invoice.id,
       tenantId: invoice.tenantId,
       invoiceNumber: invoice.invoiceNumber,
+      sourceDocumentKind: invoice.sourceDocumentKind,
+      sourceDocumentKindLabel: invoice.sourceDocumentKindLabel,
+      sourceDocumentWorkflowKind: invoice.sourceDocumentWorkflowKind,
       supplierId: invoice.supplierId,
       supplierName: invoice.supplierName,
       supplierRut: invoice.supplierRut,
@@ -254,8 +258,8 @@ class PurchaseService extends ChangeNotifier {
 
     final listInvoices = List<PurchaseInvoice>.from(_listInvoiceCache);
     final listIndex = listInvoices.indexWhere((inv) => inv.id == invoice.id);
-    final existingFulfillment =
-        listIndex >= 0 ? listInvoices[listIndex].receiptFulfillment : null;
+    final existingListInvoice = listIndex >= 0 ? listInvoices[listIndex] : null;
+    final existingFulfillment = existingListInvoice?.receiptFulfillment;
     final authoritativeFulfillment =
         invoice.receiptFulfillment ?? existingFulfillment;
 
@@ -266,7 +270,13 @@ class PurchaseService extends ChangeNotifier {
     // that row's fulfillment snapshot.
     if (authoritativeFulfillment != null) {
       final previewInvoice = _toListPreviewInvoice(
-        invoice.copyWith(receiptFulfillment: authoritativeFulfillment),
+        invoice.copyWith(
+          receiptFulfillment: authoritativeFulfillment,
+          sourceDocumentKindLabel: invoice.sourceDocumentKindLabel ??
+              existingListInvoice?.sourceDocumentKindLabel,
+          sourceDocumentWorkflowKind: invoice.sourceDocumentWorkflowKind ??
+              existingListInvoice?.sourceDocumentWorkflowKind,
+        ),
       );
       if (listIndex >= 0) {
         listInvoices[listIndex] = previewInvoice;
@@ -556,7 +566,42 @@ class PurchaseService extends ChangeNotifier {
       notifyListeners(); // Notify UI to rebuild after loading invoices
       return _invoiceCache;
     } catch (e) {
-      throw Exception('No se pudieron cargar las facturas de compra: $e');
+      throw Exception('No se pudieron cargar los documentos de compra: $e');
+    }
+  }
+
+  Future<List<PurchaseSourceDocumentKind>> getSourceDocumentKinds({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _sourceDocumentKindCache.isNotEmpty) {
+      return _sourceDocumentKindCache;
+    }
+    try {
+      final rows = await _db.select(
+        'purchase_source_document_kinds',
+        selectColumns:
+            'code,display_name,description,workflow_kind,sort_order,is_active',
+        where: 'is_active=true',
+        orderBy: 'sort_order',
+      );
+      final kinds = rows
+          .map(PurchaseSourceDocumentKind.fromJson)
+          .where((kind) => kind.isActive)
+          .toList(growable: false);
+      if (kinds.isEmpty ||
+          kinds.every(
+            (kind) => kind.code != PurchaseSourceDocumentKind.defaultCode,
+          )) {
+        throw const FormatException(
+          'Purchase source document catalog is incomplete',
+        );
+      }
+      _sourceDocumentKindCache = kinds;
+      return kinds;
+    } catch (e) {
+      throw Exception(
+        'No se pudo cargar el catálogo de comprobantes de compra: $e',
+      );
     }
   }
 
@@ -579,7 +624,7 @@ class PurchaseService extends ChangeNotifier {
 
     try {
       final data = await _db.select(
-        'purchase_invoice_list_read_model',
+        'purchase_invoice_list_read_model_v2',
         selectColumns: PurchaseInvoice.listReadModelSelect,
         fetchAll: true,
       );
@@ -593,7 +638,7 @@ class PurchaseService extends ChangeNotifier {
       _setupPurchaseRealtime();
       return _listInvoiceCache;
     } catch (e) {
-      throw Exception('No se pudieron cargar las facturas de compra: $e');
+      throw Exception('No se pudieron cargar los documentos de compra: $e');
     } finally {
       _isLoadingListInvoices = false;
       notifyListeners();

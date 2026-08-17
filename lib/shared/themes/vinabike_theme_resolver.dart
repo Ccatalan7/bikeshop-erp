@@ -893,6 +893,29 @@ abstract final class VinabikeThemeResolver {
             ),
       selectionContainer: scheme.primaryContainer,
       onSelectionContainer: scheme.onPrimaryContainer,
+      // Separador interno: una capa diseñada de la escalera de superficies
+      // usada como línea, no un borde con la opacidad bajada — esa derivación
+      // está prohibida y además no sigue al preset. Queda entre la superficie
+      // y `outlineVariant`, que es el lugar que ocupa `--hair` en los diseños.
+      hairline:
+          isDark ? scheme.surfaceContainerHighest : scheme.surfaceContainerHigh,
+      // Borde de la familia del acento para lo ya teñido con
+      // `selectionContainer`: más presente que el relleno, más suave que el
+      // acento pleno. Mezcla de dos roles diseñados, no un alpha sobre el
+      // acento, para que cada preset lo resuelva con su propio azul.
+      accentBorder: Color.lerp(
+        scheme.primaryContainer,
+        scheme.primary,
+        isDark ? 0.42 : 0.34,
+      )!,
+      // Tercer nivel de tinta. Se aleja de `onSurfaceVariant` hacia la
+      // superficie lo justo para quedar por debajo del caveat y bien por
+      // encima de deshabilitado, que baja bastante más.
+      faintForeground: Color.lerp(
+        scheme.onSurfaceVariant,
+        scheme.surface,
+        isDark ? 0.26 : 0.30,
+      )!,
       focusRing: scheme.primary,
       disabledForeground:
           scheme.onSurfaceVariant.withValues(alpha: isDark ? 0.5 : 0.56),

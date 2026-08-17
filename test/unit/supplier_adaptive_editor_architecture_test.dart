@@ -103,6 +103,19 @@ void main() {
     expect(source, contains('_preservedTagIds'));
     expect(source, contains('_hydrateRelationsFromSelection'));
     expect(source, contains("roleCodes: <String>['operational_resource']"));
+    // La única excepción operativa a «tags ocultos» sigue siendo una decisión
+    // humana dentro de Bienes y repuestos, no una taxonomía visible.
+    expect(source, contains("'supplier-local-coverage'"));
+    expect(source, contains("'local_workshop'"));
+    expect(source, contains("'emergency_local'"));
+    expect(source, contains("label: 'Disponibilidad local'"));
+    expect(source, contains("label: 'Sin confirmar'"));
+    expect(source, contains("label: 'Proveedor local'"));
+    expect(source, contains("label: 'Rescate urgente'"));
+    expect(
+      source,
+      contains('Orienta las sugerencias del asistente; no genera compras.'),
+    );
     expect(
       source,
       isNot(contains('DropdownButtonFormField<ExternalPartyKind>')),

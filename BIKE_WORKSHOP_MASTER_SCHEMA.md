@@ -1,8 +1,8 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-08-14
+Last updated: 2026-08-16
 Status: Living architecture document
-Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, bike memory kernel, sync pipeline, and visible bike history
+Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, supply needs and commitments, bike memory kernel, sync pipeline, and visible bike history
 
 Compatibility concepts companion: `BIKE_WORKSHOP_COMPATIBILITY_CONCEPTS.md`
 
@@ -630,6 +630,7 @@ The existing generic product spec engine should therefore be used progressively,
 - when product spec coverage is sparse, products with no detailed spec rows should remain neutral unless a controlled coarse technical-family mapping already proves an obvious incompatibility
 - compatibility hints in workshop suggestion UI should be driven first by `bike_profiles.technical_profile.values`, then by `product_spec_values` / `spec_definitions.key`, and may use `category_tech_mappings.technical_family` as a coarse fallback; they must not be driven by raw `products.category_name` or page-local keyword matching
 - AI inventory discovery is another consumer of this same product-side backbone. The model separates catalog category, product identity and technical facts instead of flattening all three into a Product List keyword. For any measurement, range, standard or compatibility request it must first call the tenant-bound schema inspector, which resolves active `product_categories` plus descendants, `category_tech_mappings`, template fields, canonical `spec_definitions.key`, data types, units, supported operators and actual populated/total coverage. Only a later model round may call inventory search with those typed predicates (`eq`, `neq`, numeric inequalities, `between`, `in` or text `contains` where the discovered type permits it). Matching `product_spec_values` are authoritative and a populated conflict eliminates the row. Identity text may fill an unpopulated field only for exact equality/membership when the product's curated identity states the value; it never proves a range or inequality, so a name such as `68x122.5` cannot satisfy `eje < 125`. That fallback is labelled separately and never claims the ficha was populated. SKU/barcode substrings, descriptions and compatibility prose never satisfy a technical predicate. Availability is applied in the same server projection before result IDs are returned. When the inspector proves zero structured coverage for the needed fact, the assistant must disclose the missing data instead of returning name matches or calling the source unavailable.
+- Intelligent purchasing reuses that same discovery contract for durable demand. One natural request is decomposed by the model into one to eight ordered lines, but the server accepts a technical predicate only when its key, type, operator and values are valid for a real active filterable `spec_definitions` field. An exact product must also satisfy its authoritative `product_spec_values`; an unresolved line may retain the literal request and an allowed predicate even when coverage is zero, but it must not claim compatibility or an exact identity. If one measurement could describe the product itself or the bike/wheel/system where it will be installed, the model preserves the relationship exactly as stated and asks that semantic fork before requesting downstream compatibility facts. This is a general ambiguity rule, not a per-part subwizard. The closed review card remains editable; only an explicit user confirmation creates all reviewed `supply_needs`, their AI interpretation revisions and one replay receipt atomically. Preparation and review create no purchase document, payment, receipt, stock movement or accounting entry.
 - ficha controls for finite workshop vocabularies must use standardized selectors or bounded numeric ranges, not arbitrary free text when the bike world already works with known counts, diameters, widths, tooth ranges, and driver families
 - when one product-spec field is downstream of stronger upstream selections such as chain width, drivetrain speeds, declared profile, brand family, or freehub family, the ficha UI must filter, lock, or suppress incompatible options instead of letting the user save contradictory combinations that later poison the compatibility layer
 
@@ -1180,6 +1181,104 @@ state instead of adding mobile writers. Remaining responsive gaps are explicit:
 the native Galaxy S23 Ultra landscape canary remains to be proven; customer
 selection/creation, add-bicycle, the service wizard, and some deep item rows
 still retain legacy dialogs or layouts and need their own touch/keyboard audit.
+
+### Supply needs and pre-invoice commitments (2026-08-16)
+
+A missing workshop part is now represented by `supply_needs`, not by a status
+name, a `mechanic_job_items` placeholder or an unstructured expense note. A
+need preserves its original description verbatim, optional confirmed catalog
+product, quantity/unit, identity state, sourcing state, optimistic version and
+exact `mechanic_job_id` / optional `mechanic_job_bikes.id` provenance. A null
+`job_bike_id` remains intentional `General` scope; it is never filled from a
+primary-bike guess.
+
+`job_statuses_custom.prompts_supply_need_capture` is a semantic UI capability.
+The audited `set_job_status_supply_need_capability_v1` command owns changes to
+that flag, and `mechanic_job_supply_attention_v1` derives whether a job whose
+current state requests parts still has no active need. Renaming or recoloring a
+status cannot change this behavior. Selecting such a status first completes
+the canonical job transition; only after success may its anchored surface
+offer product-autocomplete or verbatim-description capture.
+
+`workshop_inventory_commitments` is the pre-invoice physical promise for a
+confirmed need. It is versioned by append-only
+`workshop_inventory_commitment_events`, reduces common ATP, and never writes
+`products.stock_quantity`, `stock_movements`, COGS, revenue or journals.
+`active_inventory_commitments_v1` combines workshop commitments with active
+online reservations, while `inventory_available_quantity_v1` and
+`inventory_availability_v1` are the shared ATP authority. Product edits,
+set-component edits and every physical consumer protect that combined reserved
+floor.
+
+`assign_supply_need_from_stock_v1` atomically proves capacity and creates the
+commitment. `release_supply_need_stock_v1` releases it without a stock
+movement. If assignable stock is deliberately unsuitable, the operator records
+a reason through `reject_supply_need_internal_stock_v1` before external
+alternatives become eligible. The reason is workflow evidence, not technical
+truth about the bicycle or product.
+
+The linked `sales_invoices` document remains the only owner of physical
+consumption and accounting. Its posting path transitions matching commitments
+`active -> consuming -> consumed` around the exact invoice-owned stock
+movements; reopening the invoice reactivates the commitment. A mismatch or
+partial consumption aborts the transaction instead of leaving ATP and on-hand
+truth divergent.
+
+This addition strengthens the existing backbone without moving facts between
+its technical layers:
+
+- `bike_catalog` and `bike_profiles.technical_profile.values` still own durable
+  baseline technical truth;
+- `mechanic_job_bikes.diagnosis_sheet_data` still owns visit findings;
+- ficha fields in `product_spec_values` remain the authority used to interpret
+  and filter a requested part;
+- `mechanic_job_items` still represents billable/executed work, not unmet
+  demand; and
+- bike memory remains derived from confirmed profile, diagnosis and executed
+  work, never from an unconfirmed supply description.
+
+The purchasing workspace can use the need's workshop provenance as fitment
+context, but it must keep request compliance distinct from compatibility. It
+may ask a schema-derived clarification when one phrase or measurement admits
+materially different technical meanings; it must not encode per-product
+branches such as a dedicated spoke workflow.
+
+The first purchasing-driven extension of the product ficha backbone is the
+system `tire` template. It reuses canonical `wheel_size` and adds filterable
+`tire_width_in`, `tire_width_mm`, `tire_etrto`, `tire_bead_type` and
+`tire_tubeless_ready` facts. The exact active category
+`Componentes / Ruedas / Neumáticos` maps to that template for every tenant that
+owns it. Existing commercial names are deliberately not backfilled into
+`product_spec_values`: until an operator or an authoritative import confirms a
+fact, schema inspection must report zero coverage and the assistant must offer
+a broader search instead of claiming that a range or fitment was proven.
+
+The production AI runtime consumes this backbone through the governed
+`inspect_inventory_schema`, `search_inventory`,
+`rank_purchase_candidates` and `build_purchase_scenarios` tools. Schema and
+catalog references exposed to the model remain opaque; the server resolves
+them to tenant-scoped product IDs, ATP, ficha predicates and purchase evidence.
+Every advertised purchasing tool must also exist in the durable receipt
+contract. A ranked supplier candidate hash is evidence for one calculation,
+not product identity; receipts and navigation use the exact canonical product
+UUID. This keeps flexible model planning separate from authoritative identity,
+fitment, economics and writes.
+
+A local or emergency purchase opened from this workspace remains a canonical
+purchase document. `purchase_invoices.source_document_kind` cites the
+server-owned `purchase_source_document_kinds` vocabulary; a boleta, ticket,
+no-tax document or other direct evidence skips the fictional supplier-send
+step but does not bypass confirmation, receiving or payment ownership. The
+seeded line carries the exact need through
+`purchase_invoice_lines.source_need_id`, whose composite tenant FK and
+immutable trigger guard preserve provenance after normalization. This link does
+not transition `supply_needs`, receive stock, pay the supplier or post
+accounting implicitly. Those remain separate explicit commands. An unresolved
+description stays reviewable; a confirmed product remains a canonical product
+link. Locality is also explicit supplier-relationship evidence through
+`local_workshop` / `emergency_local`; no legacy supplier default or document
+kind silently creates that assignment. Merchandise bought for resale or a
+workshop job is therefore never hidden in a generic expense note.
 
 ### Jobs load ownership and surgical realtime (2026-08-04)
 

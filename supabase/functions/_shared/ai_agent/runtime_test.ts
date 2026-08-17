@@ -97,6 +97,7 @@ class TestRunStore implements AgentRunStore {
   toolReceipts = 0;
   toolReceiptInputs: Array<Parameters<AgentRunStore["recordToolReceipt"]>[0]> = [];
   completions: string[] = [];
+  completionInputs: Array<Parameters<AgentRunStore["complete"]>[0]> = [];
   failProviderReceipt = false;
   failCompletion = false;
   completionStatus: "succeeded" | "failed" | "cancelled" | "timed_out" | null = null;
@@ -138,6 +139,7 @@ class TestRunStore implements AgentRunStore {
 
   complete(input: Parameters<AgentRunStore["complete"]>[0]) {
     this.completions.push(input.status);
+    this.completionInputs.push(input);
     if (this.failCompletion) {
       return Promise.reject(new Error("completion unavailable"));
     }
@@ -881,6 +883,127 @@ Deno.test("zero structured coverage yields a server-owned honest capability gap"
   assertEquals(store.completions, ["succeeded"], "gap is a valid completed response");
 });
 
+Deno.test("zero structured coverage terminates even when the model insists on searching", async () => {
+  const store = new TestRunStore();
+  let providerCalls = 0;
+  let executorCalls = 0;
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      executorCalls++;
+      assertEquals(
+        call.name,
+        "inspect_inventory_schema",
+        "a zero-coverage search never reaches the inventory RPC",
+      );
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-13T18:00:00Z",
+        status: "success" as const,
+        items: [{
+          kind: "field",
+          category: "Neumáticos",
+          categoryPath: "Componentes / Ruedas / Neumáticos",
+          technicalFamily: "tire",
+          field: "tire_width_in",
+          label: "Ancho nominal (pulgadas)",
+          dataType: "number",
+          unit: "in",
+          operators: "eq,neq,lt,lte,gt,gte,between,in",
+          allowedValues: null,
+          productCount: 113,
+          populatedCount: 0,
+        }],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify(result);
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  const response = await executeAgentRun(
+    {
+      ...request(),
+      message: "necesito neumáticos de ancho mayor a 2,0 pulgadas",
+    },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        providerCalls++;
+        return providerCalls === 1
+          ? Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: [{
+              id: "inspect-tire-schema",
+              name: "inspect_inventory_schema",
+              arguments: {
+                query: "neumáticos de más de 2,0 pulgadas",
+                category: "Neumáticos",
+              },
+            }],
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "inspect-tire-schema-1",
+          })
+          : Promise.resolve<AgentProviderTurn>({
+            text: "Voy a buscarlo igualmente por el nombre.",
+            toolCalls: [{
+              id: "unsafe-zero-coverage-search",
+              name: "search_inventory",
+              arguments: {
+                query: null,
+                category: "Neumáticos",
+                availability: "any",
+                presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
+                technicalPredicates: [{
+                  field: "tire_width_in",
+                  operator: "gt",
+                  values: [2.0],
+                }],
+              },
+            }],
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "unsafe-zero-coverage-search-2",
+          });
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(providerCalls, 2, "the server terminates without a repair round");
+  assertEquals(executorCalls, 1, "only schema inspection reaches the executor");
+  assert(
+    response.text.includes("fichas autorizadas no tienen cargado"),
+    "the terminal explains the structured-data gap",
+  );
+  assertEquals(
+    response.text.includes("Voy a buscarlo"),
+    false,
+    "model prose cannot override the server-owned terminal",
+  );
+  assertEquals(
+    store.toolReceiptInputs.at(-1)?.failureCode,
+    "missing_structured_data",
+    "the refused approximation has an exact durable receipt",
+  );
+  assertEquals(store.completions, ["succeeded"], "the honest gap is a valid answer");
+});
+
 Deno.test("an unrelated unavailable operation uses the same capability terminal", async () => {
   const store = new TestRunStore();
   const executor: AgentToolExecutor = {
@@ -1276,6 +1399,9 @@ Deno.test("model-first runtime can plan ERP and public-web tools in one turn", a
       ) &&
       providerRequests[0].systemInstruction.includes(
         "saldo contable de cuentas configuradas",
+      ) &&
+      providerRequests[0].systemInstruction.includes(
+        "no repitas el inspector ni inventes una clave",
       ),
     "system policy is model-first and multi-tool",
   );
@@ -4768,6 +4894,1048 @@ Deno.test("workshop preparations remain previews under the same generic approval
   }
 });
 
+Deno.test("purchase baskets resolve every opaque catalog reference before the ERP adapter", async () => {
+  const store = new TestRunStore();
+  const catalogItemRefA = "14141414-1414-4141-8141-141414141414";
+  const catalogItemRefB = "15151515-1515-4151-8151-151515151515";
+  const productIdA = "16161616-1616-4161-8161-161616161616";
+  const productIdB = "17171717-1717-4171-8171-171717171717";
+  const executedCalls: AgentToolCall[] = [];
+  let turns = 0;
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      executedCalls.push(call);
+      if (call.name === "search_inventory") {
+        const isFirst = call.arguments.query === "piñón 9 velocidades";
+        const catalogItemRef = isFirst ? catalogItemRefA : catalogItemRefB;
+        const entityId = isFirst ? productIdA : productIdB;
+        const name = isFirst ? "Piñón 9 velocidades" : "Neumático 27,5 x 2,10";
+        const result = {
+          authorityTenantId: tenantId,
+          asOf: "2026-08-16T18:00:00Z",
+          status: "success" as const,
+          items: [{ entityId, name, sku: null, stock: 0 }],
+          resultCount: 1,
+          hasMore: false,
+        };
+        const outputText = JSON.stringify({
+          status: "success",
+          items: [{ catalogItemRef, name, stock: 0 }],
+          resultCount: 1,
+          hasMore: false,
+        });
+        return Promise.resolve({
+          result,
+          outputText,
+          outputBytes: new TextEncoder().encode(outputText).byteLength,
+          succeeded: true,
+          entityReferences: [{
+            ref: catalogItemRef,
+            kind: "catalog_item" as const,
+            entityId,
+          }],
+        });
+      }
+      assertEquals(call.name, "build_purchase_scenarios", "basket tool executed");
+      assertEquals(call.arguments.items, [{
+        lineRef: "line-1",
+        productId: productIdA,
+        quantity: 2,
+        sourcingMode: "stock_first",
+      }, {
+        lineRef: "line-2",
+        productId: productIdB,
+        quantity: 1,
+        sourcingMode: "external_only",
+      }], "all catalog refs are resolved with stable line identities");
+      assertEquals(
+        JSON.stringify(call.arguments).includes("catalogItemRef"),
+        false,
+        "opaque references never cross into the ERP RPC adapter",
+      );
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-16T18:00:01Z",
+        status: "success" as const,
+        items: [{
+          scenarioKey: "recommended",
+          kind: "balanced",
+          label: "Equilibrio recomendado",
+          coverageLineCount: 2,
+          externalCoverageLineCount: 2,
+          totalLineCount: 2,
+          externalLineCount: 2,
+          complete: true,
+          supplierCount: 1,
+          historicalSubtotals: [{ currency: "CLP", amount: 28980 }],
+          supplierAvailability: "unverified",
+          freightAssumption: "historical_allocated_only",
+          lines: [],
+          explanationCodes: ["stock_first", "bounded_supplier_set"],
+        }],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify({
+        status: "success",
+        items: result.items,
+        resultCount: 1,
+        hasMore: false,
+      });
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+
+  await executeAgentRun(request(), authority, {
+    providerRouter: providerRouter(() => {
+      turns++;
+      if (turns === 1) {
+        return Promise.resolve({
+          text: "Resolveré cada producto exacto antes de comparar la canasta.",
+          toolCalls: [{
+            id: "basket-search-a",
+            name: "search_inventory",
+            arguments: {
+              query: "piñón 9 velocidades",
+              category: null,
+              availability: "any",
+              presentation: "answer",
+              sort: { field: "relevance", direction: "desc" },
+              limit: 10,
+              selectionMode: "all_matches",
+              technicalPredicates: [],
+              operationalPredicates: [],
+            },
+          }, {
+            id: "basket-search-b",
+            name: "search_inventory",
+            arguments: {
+              query: "neumático 27,5 x 2,10",
+              category: null,
+              availability: "any",
+              presentation: "answer",
+              sort: { field: "relevance", direction: "desc" },
+              limit: 10,
+              selectionMode: "all_matches",
+              technicalPredicates: [],
+              operationalPredicates: [],
+            },
+          }],
+          usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12 },
+          finishReason: "tool_calls",
+          continuationToken: "opaque-basket-searches",
+        });
+      }
+      if (turns === 2) {
+        return Promise.resolve({
+          text: "Compararé cobertura, costo e historial sin asumir disponibilidad.",
+          toolCalls: [{
+            id: "basket-build",
+            name: "build_purchase_scenarios",
+            arguments: {
+              items: [{
+                catalogItemRef: catalogItemRefA,
+                quantity: 2,
+                externalOnly: false,
+              }, {
+                catalogItemRef: catalogItemRefB,
+                quantity: 1,
+                externalOnly: true,
+              }],
+              profile: "balanced",
+              maxSuppliers: 2,
+              limit: 3,
+            },
+          }],
+          usage: { inputTokens: 6, outputTokens: 4, totalTokens: 10 },
+          finishReason: "tool_calls",
+          continuationToken: "opaque-basket-build",
+        });
+      }
+      return Promise.resolve(
+        finalTurn("Encontré una alternativa completa con disponibilidad por verificar."),
+      );
+    }),
+    toolRegistry: createDefaultAgentToolRegistry(),
+    toolExecutor: executor,
+    runStore: store,
+    auditHmacKey: hmacKey,
+    pricingCatalog,
+  }, new AbortController().signal);
+
+  assertEquals(
+    executedCalls.filter((call) => call.name === "search_inventory").length,
+    2,
+    "each basket line is resolved through inventory",
+  );
+  assertEquals(
+    executedCalls.filter((call) => call.name === "build_purchase_scenarios").length,
+    1,
+    "one bounded basket comparison is executed",
+  );
+  assertEquals(store.completions, ["succeeded"], "basket run completes once");
+});
+
+Deno.test("supply draft preparation is purchasing-scoped and resolves opaque products", async () => {
+  const ordinaryStore = new TestRunStore();
+  await executeAgentRun(request(), authority, {
+    providerRouter: providerRouter((providerRequest) => {
+      assertEquals(
+        providerRequest.tools.some((tool) => tool.name === "prepare_supply_request"),
+        false,
+        "ordinary assistant contexts do not advertise the purchasing-only draft tool",
+      );
+      return Promise.resolve(finalTurn());
+    }),
+    toolRegistry: createDefaultAgentToolRegistry(),
+    toolExecutor: unexpectedExecutor(),
+    runStore: ordinaryStore,
+    auditHmacKey: hmacKey,
+    pricingCatalog,
+  }, new AbortController().signal);
+
+  const productId = "81818181-8181-4181-8181-818181818181";
+  const catalogItemRef = "82828282-8282-4282-8282-828282828282";
+  const store = new TestRunStore();
+  const executedCalls: AgentToolCall[] = [];
+  const providerRequests: AgentProviderRequest[] = [];
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      executedCalls.push(call);
+      if (call.name === "search_inventory") {
+        const result = {
+          authorityTenantId: tenantId,
+          asOf: "2026-08-16T20:00:00Z",
+          status: "success" as const,
+          items: [{ entityId: productId, name: "Kenda Kwick 27,5 × 2,10", stock: 0 }],
+          resultCount: 1,
+          hasMore: false,
+        };
+        const outputText = JSON.stringify({
+          status: "success",
+          items: [{ catalogItemRef, name: "Kenda Kwick 27,5 × 2,10", stock: 0 }],
+          resultCount: 1,
+          hasMore: false,
+        });
+        return Promise.resolve({
+          result,
+          outputText,
+          outputBytes: new TextEncoder().encode(outputText).byteLength,
+          succeeded: true,
+          entityReferences: [{ ref: catalogItemRef, kind: "catalog_item", entityId: productId }],
+        });
+      }
+      assertEquals(call.name, "prepare_supply_request", "draft tool executed");
+      assertEquals(call.arguments, {
+        items: [{
+          description: "Neumático 27,5 ancho mayor a 2,0",
+          productId,
+          quantity: 2,
+          unit: "unit",
+          technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
+          preference: "gama económica",
+          clarification: null,
+          clarificationRequired: false,
+          clarificationPrompts: [],
+        }, {
+          description: "Rayos 27,5",
+          productId: null,
+          quantity: 1,
+          unit: "set",
+          technicalPredicates: [],
+          preference: null,
+          clarification: "¿Medida del rayo o compatibilidad con rueda 27,5?",
+          clarificationRequired: true,
+          clarificationPrompts: [{
+            id: "measurement_meaning",
+            question: "¿La medida pertenece al producto o al contexto donde se instalará?",
+            inputKind: "single_choice",
+            options: [{ value: "product", label: "Al producto" }, {
+              value: "fitment",
+              label: "Al contexto",
+            }],
+            unit: null,
+            allowUnknown: false,
+          }],
+        }],
+        profile: "balanced",
+      }, "opaque product reference is resolved before the ERP executor");
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-16T20:00:01Z",
+        status: "success" as const,
+        items: [{
+          entityId: productId,
+          lineRef: "line-1",
+          description: "Neumático 27,5 ancho mayor a 2,0",
+          productName: "Kenda Kwick 27,5 × 2,10",
+          productSku: "KEN-275-210",
+          identityState: "confirmed",
+          quantity: 2,
+          unit: "unit",
+          technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
+          preference: "gama económica",
+          clarification: null,
+          clarificationRequired: false,
+          clarificationPrompts: [],
+          profile: "balanced",
+        }, {
+          entityId: null,
+          lineRef: "line-2",
+          description: "Rayos 27,5",
+          productName: null,
+          productSku: null,
+          identityState: "unresolved",
+          quantity: 1,
+          unit: "set",
+          technicalPredicates: [],
+          preference: null,
+          clarification: "¿Medida del rayo o compatibilidad con rueda 27,5?",
+          clarificationRequired: true,
+          clarificationPrompts: [{
+            id: "measurement_meaning",
+            question: "¿La medida pertenece al producto o al contexto donde se instalará?",
+            inputKind: "single_choice",
+            options: [{ value: "product", label: "Al producto" }, {
+              value: "fitment",
+              label: "Al contexto",
+            }],
+            unit: null,
+            allowUnknown: false,
+          }],
+          profile: "balanced",
+        }],
+        resultCount: 2,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify({
+        status: "success",
+        items: result.items.map(({ entityId: _privateEntityId, ...item }) => item),
+        resultCount: 2,
+        hasMore: false,
+      });
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  let turns = 0;
+  const response = await executeAgentRun(
+    request({
+      kind: "intelligent_purchasing",
+      jobIds: [],
+      truncated: false,
+    }),
+    authority,
+    {
+      providerRouter: providerRouter((providerRequest) => {
+        providerRequests.push(providerRequest);
+        turns++;
+        assertEquals(
+          providerRequest.tools.some((tool) => tool.name === "prepare_supply_request"),
+          true,
+          "the purchasing workspace advertises its structured terminal",
+        );
+        assertEquals(
+          providerRequest.tools.some((tool) =>
+            tool.name === "rank_purchase_candidates" ||
+            tool.name === "build_purchase_scenarios"
+          ),
+          false,
+          "need capture cannot skip ahead into provider ranking or basket optimization",
+        );
+        if (turns === 1) {
+          return Promise.resolve({
+            text: "Primero revisaré el catálogo y stock.",
+            toolCalls: [{
+              id: "supply-search",
+              name: "search_inventory",
+              arguments: {
+                query: "neumático 27,5 ancho mayor a 2,0",
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                technicalPredicates: [],
+                operationalPredicates: [],
+              },
+            }],
+            usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12 },
+            finishReason: "tool_calls",
+            continuationToken: "opaque-supply-search",
+          });
+        }
+        if (turns === 2) {
+          return Promise.resolve({
+            text: "Prepararé las líneas para revisión.",
+            toolCalls: [{
+              id: "supply-prepare",
+              name: "prepare_supply_request",
+              arguments: {
+                items: [{
+                  catalogItemRef,
+                  description: "Neumático 27,5 ancho mayor a 2,0",
+                  quantity: 2,
+                  unit: "unit",
+                  technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
+                  preference: "gama económica",
+                  clarification: null,
+                  clarificationRequired: false,
+                  clarificationPrompts: [],
+                }, {
+                  catalogItemRef: null,
+                  description: "Rayos 27,5",
+                  quantity: 1,
+                  unit: "set",
+                  technicalPredicates: [],
+                  preference: null,
+                  clarification: "¿Medida del rayo o compatibilidad con rueda 27,5?",
+                  clarificationRequired: true,
+                  clarificationPrompts: [{
+                    id: "measurement_meaning",
+                    question: "¿La medida pertenece al producto o al contexto donde se instalará?",
+                    inputKind: "single_choice",
+                    options: [{ value: "product", label: "Al producto" }, {
+                      value: "fitment",
+                      label: "Al contexto",
+                    }],
+                    unit: null,
+                    allowUnknown: false,
+                  }],
+                }],
+                profile: "balanced",
+              },
+            }],
+            usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12 },
+            finishReason: "tool_calls",
+            continuationToken: "opaque-supply-prepare",
+          });
+        }
+        return Promise.resolve(finalTurn("Revisa las dos necesidades antes de guardarlas."));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+      supportsStructuredClarifications: true,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(executedCalls.map((call) => call.name), [
+    "search_inventory",
+    "prepare_supply_request",
+  ], "the model composes generic inventory search with the structured terminal");
+  assertEquals(
+    turns,
+    2,
+    "the server-owned draft answer does not spend a redundant provider turn",
+  );
+  assertEquals(
+    providerRequests.some((providerRequest) => JSON.stringify(providerRequest).includes(productId)),
+    false,
+    "the product UUID never returns to the model",
+  );
+  const persistedCards = store.completionInputs.at(-1)?.cards ?? [];
+  const persistedDrafts = persistedCards.filter((card) => card.supplyNeedDraft !== undefined);
+  assertEquals(persistedDrafts.length, 1, "one review card is persisted");
+  assertEquals(
+    persistedDrafts[0].supplyNeedDraft?.lines.length,
+    2,
+    "both needs survive the durable run",
+  );
+  assertEquals(
+    "clarificationPrompts" in
+      (persistedDrafts[0].supplyNeedDraft?.lines[1] ?? {}),
+    false,
+    "transient clarification controls never broaden the durable v1 card",
+  );
+  const draftCards = response.cards.filter((card) => card.supplyNeedDraft !== undefined);
+  assertEquals(draftCards.length, 1, "one review card reaches the client");
+  assertEquals(
+    draftCards[0].supplyNeedDraft?.lines[0].productId,
+    productId,
+    "the typed client card retains only the server-verified exact product",
+  );
+  assertEquals(
+    draftCards[0].supplyNeedDraft?.lines[1].clarificationPrompts.length,
+    1,
+    "the negotiated client receives the next category-agnostic question",
+  );
+});
+
+Deno.test("a validated supply draft may close the bounded sixth purchasing round", async () => {
+  const store = new TestRunStore();
+  let providerTurns = 0;
+  let executorCalls = 0;
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      executorCalls++;
+      assertEquals(call.name, "prepare_supply_request", "only the valid terminal executes");
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-16T22:00:00Z",
+        status: "success" as const,
+        items: [{
+          entityId: null,
+          lineRef: "line-1",
+          description: "Cámara 700x28 con válvula Presta de 60 mm",
+          productName: null,
+          productSku: null,
+          identityState: "unresolved",
+          quantity: 4,
+          unit: "unidad",
+          technicalPredicates: [],
+          preference: "buen margen",
+          clarification: "La evidencia disponible no permite confirmar una coincidencia exacta.",
+          clarificationRequired: false,
+          clarificationPrompts: [],
+          profile: "profitability",
+        }],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify({
+        status: "success",
+        items: result.items.map(({ entityId: _privateEntityId, ...item }) => item),
+        resultCount: 1,
+        hasMore: false,
+      });
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+
+  const response = await executeAgentRun(
+    {
+      ...request({ kind: "intelligent_purchasing", jobIds: [], truncated: false }),
+      message: "Busco 4 cámaras 700x28 con válvula Presta de 60 mm, prioriza buen margen.",
+    },
+    authority,
+    {
+      providerRouter: providerRouter((providerRequest) => {
+        providerTurns++;
+        assertEquals(
+          providerRequest.requiredToolName,
+          providerTurns === 6 ? "prepare_supply_request" : undefined,
+          "the final bounded turn is forced to the review terminal",
+        );
+        if (providerTurns <= 5) {
+          return Promise.resolve({
+            text: "Corregiré el borrador estructurado.",
+            toolCalls: [{
+              id: `invalid-supply-draft-${providerTurns}`,
+              name: "prepare_supply_request",
+              arguments: { items: [], profile: "balanced" },
+            }],
+            usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+            finishReason: "tool_calls",
+            continuationToken: `invalid-supply-draft-${providerTurns}`,
+          });
+        }
+        if (providerTurns === 6) {
+          return Promise.resolve({
+            text: "Prepararé la necesidad con la evidencia disponible.",
+            toolCalls: [{
+              id: "valid-terminal-supply-draft",
+              name: "prepare_supply_request",
+              arguments: {
+                items: [{
+                  catalogItemRef: null,
+                  description: "Cámara 700x28 con válvula Presta de 60 mm",
+                  quantity: 4,
+                  unit: "unidad",
+                  technicalPredicates: [],
+                  preference: "buen margen",
+                  clarification:
+                    "La evidencia disponible no permite confirmar una coincidencia exacta.",
+                  clarificationRequired: false,
+                  clarificationPrompts: [],
+                }],
+                profile: "profitability",
+              },
+            }],
+            usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+            finishReason: "tool_calls",
+            continuationToken: "valid-terminal-supply-draft",
+          });
+        }
+        throw new Error("the server must close the validated terminal without a seventh turn");
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+      supportsStructuredClarifications: true,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(providerTurns, 6, "the single validated overflow is bounded to round six");
+  assertEquals(executorCalls, 1, "none of the five invalid repairs reaches the ERP adapter");
+  assertEquals(store.toolReceipts, 6, "every rejected or executed call is receipted");
+  assertEquals(
+    store.toolReceiptInputs.slice(0, 5).map((receipt) => receipt.status),
+    ["rejected", "rejected", "rejected", "rejected", "rejected"],
+    "invalid repairs remain visible in the durable ledger",
+  );
+  assertEquals(response.status, "completed", "the validated terminal closes successfully");
+  assertEquals(
+    response.cards[0].supplyNeedDraft?.lines[0].description,
+    "Cámara 700x28 con válvula Presta de 60 mm",
+    "the literal request survives the bounded repair path",
+  );
+});
+
+Deno.test("need capture rejects a known provider-ranking tool that was not advertised", async () => {
+  const store = new TestRunStore();
+  const executedCalls: AgentToolCall[] = [];
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      executedCalls.push(call);
+      assertEquals(call.name, "prepare_supply_request", "only the capture terminal executes");
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-16T22:03:00Z",
+        status: "success" as const,
+        items: [{
+          entityId: null,
+          lineRef: "line-1",
+          description: "Pastillas semimetálicas para freno hidráulico",
+          productName: null,
+          productSku: null,
+          identityState: "unresolved",
+          quantity: 2,
+          unit: "par",
+          technicalPredicates: [],
+          preference: "buena duración",
+          clarification: null,
+          clarificationRequired: false,
+          clarificationPrompts: [],
+          profile: "balanced",
+        }],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify({
+        status: "success",
+        items: result.items.map(({ entityId: _privateEntityId, ...item }) => item),
+        resultCount: 1,
+        hasMore: false,
+      });
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  let turns = 0;
+  const response = await executeAgentRun(
+    {
+      ...request({ kind: "intelligent_purchasing", jobIds: [], truncated: false }),
+      message: "Necesito dos pares de pastillas semimetálicas con buena duración.",
+    },
+    authority,
+    {
+      providerRouter: providerRouter((providerRequest) => {
+        turns++;
+        assertEquals(
+          providerRequest.tools.some((tool) => tool.name === "build_purchase_scenarios"),
+          false,
+          "basket optimization is absent from the capture capability set",
+        );
+        if (turns === 1) {
+          return Promise.resolve({
+            text: "Compararé proveedores ahora.",
+            toolCalls: [{
+              id: "unadvertised-basket-tool",
+              name: "build_purchase_scenarios",
+              arguments: {
+                items: [{
+                  catalogItemRef: "91919191-9191-4191-8191-919191919191",
+                  quantity: 1,
+                  externalOnly: false,
+                }, {
+                  catalogItemRef: "92929292-9292-4292-8292-929292929292",
+                  quantity: 1,
+                  externalOnly: false,
+                }],
+                profile: "balanced",
+                maxSuppliers: 2,
+                limit: 3,
+              },
+            }],
+            usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+            finishReason: "tool_calls",
+            continuationToken: "unadvertised-basket-tool",
+          });
+        }
+        if (turns === 2) {
+          return Promise.resolve({
+            text: "Conservaré la necesidad para revisión.",
+            toolCalls: [{
+              id: "capture-after-unadvertised-tool",
+              name: "prepare_supply_request",
+              arguments: {
+                items: [{
+                  catalogItemRef: null,
+                  description: "Pastillas semimetálicas para freno hidráulico",
+                  quantity: 2,
+                  unit: "par",
+                  technicalPredicates: [],
+                  preference: "buena duración",
+                  clarification: null,
+                  clarificationRequired: false,
+                  clarificationPrompts: [],
+                }],
+                profile: "balanced",
+              },
+            }],
+            usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+            finishReason: "tool_calls",
+            continuationToken: "capture-after-unadvertised-tool",
+          });
+        }
+        throw new Error("the capture terminal must complete server-side");
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(turns, 2, "one repair reaches the correct workflow terminal");
+  assertEquals(
+    executedCalls.map((call) => call.name),
+    ["prepare_supply_request"],
+    "an unadvertised but registry-known tool never reaches the ERP adapter",
+  );
+  assertEquals(store.toolReceiptInputs[0].status, "rejected", "the drift is receipted");
+  assertEquals(
+    store.toolReceiptInputs[0].failureCode,
+    "invalid_tool_arguments",
+    "the model receives the closed correction path",
+  );
+  assertEquals(response.status, "completed", "the repaired capture still succeeds");
+});
+
+Deno.test("a nonterminal sixth tool round still fails before execution", async () => {
+  const store = new TestRunStore();
+  let providerTurns = 0;
+  let executorCalls = 0;
+  const executor: AgentToolExecutor = {
+    execute() {
+      executorCalls++;
+      const outputText = JSON.stringify({
+        status: "verifiedEmpty",
+        items: [],
+        resultCount: 0,
+        hasMore: false,
+      });
+      return Promise.resolve({
+        result: {
+          authorityTenantId: tenantId,
+          asOf: "2026-08-16T22:05:00Z",
+          status: "verifiedEmpty" as const,
+          items: [],
+          resultCount: 0,
+          hasMore: false,
+        },
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+
+  try {
+    await executeAgentRun(
+      request({ kind: "intelligent_purchasing", jobIds: [], truncated: false }),
+      authority,
+      {
+        providerRouter: providerRouter(() => {
+          providerTurns++;
+          return Promise.resolve({
+            text: "Seguiré buscando.",
+            toolCalls: [{
+              id: `nonterminal-round-${providerTurns}`,
+              name: "search_inventory",
+              arguments: {
+                query: "cámara 700x28 presta 60 mm",
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                technicalPredicates: [],
+                operationalPredicates: [],
+              },
+            }],
+            usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+            finishReason: "tool_calls",
+            continuationToken: `nonterminal-round-${providerTurns}`,
+          });
+        }),
+        toolRegistry: createDefaultAgentToolRegistry(),
+        toolExecutor: executor,
+        runStore: store,
+        auditHmacKey: hmacKey,
+        pricingCatalog,
+      },
+      new AbortController().signal,
+    );
+    throw new Error("expected the general round budget to remain closed");
+  } catch (error) {
+    assert(error instanceof AgentRuntimeError, "the budget failure remains typed");
+    assertEquals(
+      error.code,
+      "provider_invalid_response",
+      "the provider cannot ignore the forced terminal with a sixth read",
+    );
+  }
+
+  assertEquals(providerTurns, 6, "the provider may expose the over-budget sixth turn once");
+  assertEquals(executorCalls, 5, "the sixth nonterminal call never reaches the ERP adapter");
+  assertEquals(store.toolReceipts, 5, "only incurred tools receive ledger receipts");
+});
+
+Deno.test("purchasing preserves a zero-coverage request as an unresolved review draft", async () => {
+  const store = new TestRunStore();
+  const executedCalls: AgentToolCall[] = [];
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      executedCalls.push(call);
+      if (call.name === "inspect_inventory_schema") {
+        const result = {
+          authorityTenantId: tenantId,
+          asOf: "2026-08-16T21:00:00Z",
+          status: "success" as const,
+          items: [{
+            kind: "field",
+            category: "Neumáticos",
+            categoryPath: "Componentes / Ruedas / Neumáticos",
+            technicalFamily: "tire",
+            field: "tire_width_in",
+            label: "Ancho nominal (pulgadas)",
+            dataType: "number",
+            unit: "in",
+            operators: "eq,neq,lt,lte,gt,gte,between,in",
+            allowedValues: null,
+            productCount: 113,
+            populatedCount: 0,
+          }],
+          resultCount: 1,
+          hasMore: false,
+        };
+        const outputText = JSON.stringify(result);
+        return Promise.resolve({
+          result,
+          outputText,
+          outputBytes: new TextEncoder().encode(outputText).byteLength,
+          succeeded: true,
+        });
+      }
+      assertEquals(call.name, "prepare_supply_request", "the request reaches review");
+      assertEquals(call.arguments, {
+        items: [{
+          description: "Neumáticos 27,5 de ancho mayor a 2,0",
+          productId: null,
+          quantity: 2,
+          unit: "unit",
+          technicalPredicates: [{ field: "tire_width_in", operator: "gt", values: [2] }],
+          preference: "económicos con buen margen",
+          clarification: "La ficha técnica aún no permite confirmar un producto exacto.",
+          clarificationRequired: false,
+          clarificationPrompts: [],
+        }],
+        profile: "profitability",
+      }, "the unresolved draft preserves the authorized request evidence");
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-16T21:00:01Z",
+        status: "success" as const,
+        items: [{
+          entityId: null,
+          lineRef: "line-1",
+          description: "Neumáticos 27,5 de ancho mayor a 2,0",
+          productName: null,
+          productSku: null,
+          identityState: "unresolved",
+          quantity: 2,
+          unit: "unit",
+          technicalPredicates: [{ field: "tire_width_in", operator: "gt", values: [2] }],
+          preference: "económicos con buen margen",
+          clarification: "La ficha técnica aún no permite confirmar un producto exacto.",
+          clarificationRequired: false,
+          clarificationPrompts: [],
+          profile: "profitability",
+        }],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify({
+        status: "success",
+        items: result.items.map(({ entityId: _privateEntityId, ...item }) => item),
+        resultCount: 1,
+        hasMore: false,
+      });
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  let turns = 0;
+  const response = await executeAgentRun(
+    {
+      ...request({ kind: "intelligent_purchasing", jobIds: [], truncated: false }),
+      message: "Necesito dos neumáticos 27,5 de ancho mayor a 2,0 económicos.",
+    },
+    authority,
+    {
+      providerRouter: providerRouter((providerRequest) => {
+        turns++;
+        assert(
+          providerRequest.systemInstruction.includes(
+            "no enumeres productos desde nombres ambiguos ni termines la solicitud",
+          ),
+          "the purchasing context explains the non-terminal data gap",
+        );
+        assert(
+          providerRequest.systemInstruction.includes(
+            'no conviertas una medida suelta en "para" una rueda, bicicleta, sistema u otro huésped',
+          ) && providerRequest.systemInstruction.includes(
+            "Nunca pidas repetir un dato explícito porque el sistema no pueda filtrarlo",
+          ),
+          "literal constraints stay distinct from ERP coverage gaps",
+        );
+        if (turns === 1) {
+          return Promise.resolve({
+            text: "Revisaré la ficha autorizada.",
+            toolCalls: [{
+              id: "inspect-zero-coverage-tire",
+              name: "inspect_inventory_schema",
+              arguments: { query: "neumáticos 27,5 ancho mayor a 2,0", category: "Neumáticos" },
+            }],
+            usage: { inputTokens: 6, outputTokens: 3, totalTokens: 9 },
+            finishReason: "tool_calls",
+            continuationToken: "inspect-zero-coverage-tire",
+          });
+        }
+        if (turns === 2) {
+          return Promise.resolve({
+            text: "La ficha no tiene cobertura suficiente.",
+            toolCalls: [{
+              id: "premature-purchasing-gap",
+              name: "report_capability_gap",
+              arguments: {
+                domain: "inventory",
+                operation: "filter",
+                reason: "missing_structured_data",
+                alternative: "broader_search",
+                field: "tire_width_in",
+              },
+            }],
+            usage: { inputTokens: 6, outputTokens: 3, totalTokens: 9 },
+            finishReason: "tool_calls",
+            continuationToken: "premature-purchasing-gap",
+          });
+        }
+        if (turns === 3) {
+          return Promise.resolve({
+            text: "Dejaré la necesidad pendiente de confirmación técnica.",
+            toolCalls: [{
+              id: "prepare-zero-coverage-tire",
+              name: "prepare_supply_request",
+              arguments: {
+                items: [{
+                  catalogItemRef: null,
+                  description: "Neumáticos 27,5 de ancho mayor a 2,0",
+                  quantity: 2,
+                  unit: "unit",
+                  technicalPredicates: [{
+                    field: "tire_width_in",
+                    operator: "gt",
+                    values: [2],
+                  }],
+                  preference: "económicos con buen margen",
+                  clarification: "La ficha técnica aún no permite confirmar un producto exacto.",
+                  clarificationRequired: false,
+                  clarificationPrompts: [],
+                }],
+                profile: "profitability",
+              },
+            }],
+            usage: { inputTokens: 6, outputTokens: 3, totalTokens: 9 },
+            finishReason: "tool_calls",
+            continuationToken: "prepare-zero-coverage-tire",
+          });
+        }
+        return Promise.resolve(finalTurn("Revisa la necesidad antes de guardarla."));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(turns, 3, "the recoverable gap receives one repair round");
+  assertEquals(executedCalls.map((call) => call.name), [
+    "inspect_inventory_schema",
+    "prepare_supply_request",
+  ], "the rejected capability terminal never reaches the executor");
+  assertEquals(
+    store.toolReceiptInputs.find((receipt) => receipt.toolName === "report_capability_gap")
+      ?.failureCode,
+    "supply_draft_required",
+    "the premature terminal is durably rejected",
+  );
+  assertEquals(response.cards[0].kind, "supply_need_draft", "one review draft returns");
+  assertEquals(
+    response.cards[0].supplyNeedDraft?.lines[0].identityState,
+    "unresolved",
+    "missing ficha coverage remains explicit",
+  );
+  assertEquals(
+    response.cards[0].supplyNeedDraft?.lines[0].clarificationRequired,
+    false,
+    "a catalog data limitation does not masquerade as missing operator input",
+  );
+});
+
 function unexpectedExecutor(): AgentToolExecutor {
   return {
     execute: () => Promise.reject(new Error("unexpected tool")),
@@ -4790,3 +5958,215 @@ async function hmacText(rawKey: string, value: string): Promise<string> {
   );
   return [...new Uint8Array(bytes)].map((item) => item.toString(16).padStart(2, "0")).join("");
 }
+
+// ── Ronda de aclaración del Asistente de compras ────────────────────────────
+//
+// El cliente devuelve lo respondido como un mensaje de operador con forma JSON.
+// Antes el servidor no conocía ese formato: el modelo recibía el JSON crudo, lo
+// leía como texto libre y volvía a preguntar lo ya contestado, así que una
+// necesidad con dos datos encadenados nunca llegaba a la segunda pregunta.
+
+function clarificationAnswersPayload(
+  answers: Array<Record<string, unknown>>,
+  originalRequest = "rayos para una rueda 29",
+): string {
+  return JSON.stringify({
+    kind: "supply_need_clarification_answers",
+    originalRequest,
+    answers,
+  });
+}
+
+const purchasingView: AgentGatewayRequest["viewContext"] = {
+  kind: "intelligent_purchasing",
+  jobIds: [],
+  truncated: false,
+};
+
+Deno.test("una ronda de aclaración llega al modelo en prosa, no como JSON crudo", async () => {
+  const payload = clarificationAnswersPayload([
+    {
+      lineRef: "line-1",
+      promptId: "rim_size",
+      question: "¿Para qué aro es la rueda?",
+      answer: "29",
+    },
+    {
+      lineRef: "line-1",
+      promptId: "hub_kind",
+      question: "¿Qué maza lleva?",
+      unknown: true,
+    },
+  ]);
+  const store = new TestRunStore();
+  store.leaseValue = {
+    ...lease(),
+    canonicalMessages: [{ role: "user", content: payload }],
+  };
+  const seen: AgentProviderRequest[] = [];
+
+  await executeAgentRun(
+    { ...request(purchasingView), message: payload },
+    authority,
+    {
+      providerRouter: providerRouter((providerRequest) => {
+        seen.push(providerRequest);
+        return Promise.resolve(finalTurn());
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: unexpectedExecutor(),
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+
+  const text = seen[0].messages.map((message) => message.text).join("\n");
+  assertEquals(
+    text.includes("supply_need_clarification_answers"),
+    false,
+    "el JSON crudo no viaja al modelo",
+  );
+  assertEquals(
+    text.includes("RONDA_DE_ACLARACION_DEL_OPERADOR"),
+    true,
+    "la ronda llega rotulada",
+  );
+  assertEquals(
+    text.includes("«¿Para qué aro es la rueda?» → «29»"),
+    true,
+    "la respuesta viaja junto a su pregunta",
+  );
+  assertEquals(
+    text.includes("«¿Qué maza lleva?» → no lo sé"),
+    true,
+    "«no lo sé» se transmite como tal, nunca como un valor",
+  );
+});
+
+Deno.test("un mensaje que sólo parece JSON se deja intacto", async () => {
+  const message = '{"kind":"supply_need_clarification_answers","answers":"nel"}';
+  const store = new TestRunStore();
+  store.leaseValue = {
+    ...lease(),
+    canonicalMessages: [{ role: "user", content: message }],
+  };
+  const seen: AgentProviderRequest[] = [];
+
+  await executeAgentRun(
+    { ...request(purchasingView), message },
+    authority,
+    {
+      providerRouter: providerRouter((providerRequest) => {
+        seen.push(providerRequest);
+        return Promise.resolve(finalTurn());
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: unexpectedExecutor(),
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+
+  const text = seen[0].messages.map((item) => item.text).join("\n");
+  assertEquals(
+    text.includes(message),
+    true,
+    "una forma inesperada es texto del operador, no una ronda",
+  );
+});
+
+Deno.test("repetir una pregunta ya respondida se rechaza y se pide avanzar", async () => {
+  const payload = clarificationAnswersPayload([
+    {
+      lineRef: "line-1",
+      promptId: "rim_size",
+      question: "¿Para qué aro es la rueda?",
+      answer: "29",
+    },
+  ]);
+  const store = new TestRunStore();
+  store.leaseValue = {
+    ...lease(),
+    canonicalMessages: [{ role: "user", content: payload }],
+  };
+  const executed: AgentToolCall[] = [];
+  let round = 0;
+
+  await executeAgentRun(
+    { ...request(purchasingView), message: payload },
+    authority,
+    {
+      providerRouter: providerRouter((providerRequest) => {
+        round += 1;
+        if (round === 1) {
+          return Promise.resolve({
+            text: "",
+            toolCalls: [{
+              id: "call-1",
+              name: "prepare_supply_request",
+              arguments: {
+                profile: "balanced",
+                items: [{
+                  description: "rayos para una rueda 29",
+                  catalogItemRef: null,
+                  quantity: 36,
+                  unit: "unidad",
+                  technicalPredicates: [],
+                  preference: null,
+                  clarification: "Falta el aro",
+                  clarificationRequired: true,
+                  // El mismo dato que el operador acaba de responder.
+                  clarificationPrompts: [{
+                    id: "rim_size",
+                    question: "¿Para qué aro es la rueda?",
+                    inputKind: "text",
+                    options: [],
+                    unit: null,
+                    allowUnknown: true,
+                  }],
+                }],
+              },
+            }],
+            continuationToken: "token-1",
+            finishReason: "tool_calls",
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          } as AgentProviderTurn);
+        }
+        const toolMessage = providerRequest.messages.findLast(
+          (message) => message.role === "tool",
+        );
+        assertEquals(
+          (toolMessage?.text ?? "").includes("clarification_already_answered"),
+          true,
+          "el servidor devuelve el rechazo tipado al modelo",
+        );
+        assertEquals(
+          (toolMessage?.text ?? "").includes("promptId distinto"),
+          true,
+          "y le dice cómo avanzar",
+        );
+        return Promise.resolve(finalTurn());
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: {
+        execute(call) {
+          executed.push(call);
+          throw new Error("la llamada repetida no debe ejecutarse");
+        },
+        workshopViewContext: () =>
+          Promise.reject(new Error("unexpected view context")),
+      },
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(executed.length, 0, "nada llegó a la base");
+  assertEquals(round, 2, "el modelo recibió la corrección y cerró");
+});

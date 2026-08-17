@@ -100,6 +100,50 @@ El payload crudo capea en **262 144**. Si el conteo da 262 145 es porque el
 comando de extracción del ejemplo (`python3 -c "…print(…)"`) agrega un `\n`
 final; el byte extra es del `print`, no del archivo.
 
+### Corrección 2026-08-17 — un handoff de PNG no trae composición legible
+
+`handoff-t23/` entregó **28 PNG** y un `spec.json`. Ese spec es normativo para
+las **medidas** —geometría por frame, roles semánticos, escala tipográfica— pero
+**no describe la composición**: no dice que el bloque de captura sea un panel, ni
+que la columna vaya centrada. De un PNG no se lee ningún valor, y de una tabla de
+medidas no se deduce un layout.
+
+La composición sí es legible, y está en la página fuente que el propio spec
+nombra en `source.page`. Para t23 es
+`Compras · Asistente inteligente navegable.dc.html` — 207 KB, bajo el cap — y
+trae el bloque escrito literal:
+
+```text
+columna   max-width:780px; margin:0 auto; gap:11px   (contenedor padding:14px)
+panel     background:var(--surface); border:1px solid var(--border);
+          border-radius:10px; padding:12px 13px
+campo     min-height:60px; padding:10px 11px; border-radius:8px;
+          border:1px solid var(--borderStrong); font:400 12.5px/1.55
+acciones  margin-top:9px; flex; gap:12px; «Ejemplos» = texto 600 11px act;
+          spacer flex:1; atajo 400 10px mono inkFaint
+```
+
+Dos niveles de borde —`border` en el panel, `borderStrong` en el campo de
+adentro— son parte del lenguaje, no un detalle.
+
+**Regla: si el handoff más alto son imágenes, la composición se lee de
+`source.page` antes de escribir una línea.** No se deduce del `spec.json`, no se
+mira en el PNG y no se estima.
+
+### Coincidir en los números no es fidelidad visual (2026-08-17)
+
+Un módulo puede tener todas las constantes del spec correctas y no parecerse al
+diseño. Ya pasó: `PurchaseSurfaceGeometry` reproduce medida por medida las
+tablas del t23 —imágenes 38/46/64/76, split pane 420/330/600, columna 780,
+badge 20, subrayado 2— y la pantalla resultante no tiene panel contenedor, no
+centra la columna y usa el tipo ~25% más grande que el diseño.
+
+**Una constante que coincide no es evidencia.** La evidencia de fidelidad visual
+es el **frame real de la app al lado del frame de Design**, en la misma celda de
+tema y host. Declarar una superficie implementada sin ese par de imágenes es
+declarar otra cosa, y fue exactamente lo que costó el rediseño del Asistente de
+compras.
+
 ### When the window is still allowed
 
 Only two cases, and never for reading values:

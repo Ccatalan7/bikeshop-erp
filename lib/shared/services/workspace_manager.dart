@@ -362,6 +362,7 @@ String getRouteTitle(String path) {
     '/purchases/suppliers': 'Proveedores',
     '/purchases/suppliers/new': 'Nuevo Proveedor',
     '/purchases/payments': 'Pagos a Proveedores',
+    '/purchases/assistant': 'Asistente de Compras',
     '/purchases/smart-list': 'Lista Inteligente',
 
     // POS

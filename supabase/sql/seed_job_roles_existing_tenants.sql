@@ -1,5 +1,7 @@
--- Seed job_roles for all existing tenants that don't have them yet
--- Run this ONCE in Supabase SQL Editor after deploying core_schema.sql
+-- HISTORICAL MANUAL HELPER — NOT A DEPLOYMENT PATH.
+-- Do not run this from the SQL Editor or as a follow-up to core_schema.sql.
+-- If the behavior is still required, inspect production first and convert it
+-- into one reviewed standalone migration with executable verification.
 
 do $$
 declare

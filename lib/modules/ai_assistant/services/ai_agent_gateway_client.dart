@@ -85,6 +85,7 @@ class SupabaseAIAgentGatewayTransport implements AIAgentGatewayTransport {
         // Capability negotiation keeps older strict card decoders compatible
         // while desktop, mobile and web clients roll forward independently.
         'x-vinabike-ai-result-lists': '1',
+        'x-vinabike-ai-structured-clarifications': '1',
       })
       ..body = jsonEncode(body);
 

@@ -226,9 +226,9 @@ const String _salesSectionKey = 'sales';
 
 const List<MenuSubItem> _purchasesMenuItems = [
   MenuSubItem(
-    icon: Icons.list_alt,
-    title: 'Lista Inteligente',
-    route: '/purchases/smart-list',
+    icon: Icons.auto_awesome_outlined,
+    title: 'Asistente de compras',
+    route: '/purchases/assistant',
   ),
   MenuSubItem(
     icon: Icons.storefront_outlined,
@@ -237,12 +237,12 @@ const List<MenuSubItem> _purchasesMenuItems = [
   ),
   MenuSubItem(
     icon: Icons.receipt_outlined,
-    title: 'Facturas de compra',
+    title: 'Documentos de compra',
     route: '/purchases',
   ),
   MenuSubItem(
     icon: Icons.note_add_outlined,
-    title: 'Nueva factura',
+    title: 'Nuevo documento',
     route: '/purchases/new',
   ),
   MenuSubItem(

@@ -1,16 +1,16 @@
 -- ============================================================
 -- FORCE CLEANUP: Remove ALL triggers from mechanic_job_tasks
 -- ============================================================
--- Run this BEFORE deploying core_schema.sql
--- This ensures no rogue triggers remain
+-- HISTORICAL RECOVERY EVIDENCE. core_schema.sql is never deployed. Do not run
+-- this file without a newly reviewed incident-specific forward migration.
 -- ============================================================
 
 -- Drop every single trigger on mechanic_job_tasks (no exceptions)
 -- ============================================================
 -- FORCE CLEANUP: Remove ALL triggers from task-related tables
 -- ============================================================
--- Run this BEFORE deploying core_schema.sql
--- This ensures no rogue triggers remain
+-- HISTORICAL RECOVERY EVIDENCE. Inspect live triggers first; any authorized
+-- cleanup belongs to a standalone migration with verification and a stamp.
 -- ============================================================
 
 -- Drop every single trigger on mechanic_job_tasks (no exceptions)

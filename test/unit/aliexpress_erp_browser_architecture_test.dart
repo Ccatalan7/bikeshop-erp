@@ -20,7 +20,13 @@ void main() {
     );
     expect(browser, contains("mimeType: 'application/pdf'"));
     expect(browser, contains('structuredInvoiceData: invoice'));
-    expect(browser, contains('Printing.convertHtml'));
+    expect(browser, contains('HtmlPdfRendererService'));
+    expect(browser, contains("readySelector: '#invoiceRoot'"));
+    expect(
+      browser,
+      contains("readyFlag: '__ALIEXPRESS_INVOICE_READY__'"),
+    );
+    expect(browser, isNot(contains('Printing.convertHtml')));
     expect(browser, isNot(contains('_buildAliExpressFallbackInvoicePdf')));
     expect(
       browser,
@@ -74,6 +80,16 @@ void main() {
     expect(pubspec, contains('assets/browser/aliexpress_invoice_content.js'));
     expect(pubspec, contains('assets/browser/aliexpress_invoice.css'));
     expect(pubspec, contains('assets/browser/aliexpress_invoice.js'));
+
+    final nativeRenderer =
+        File('macos/Runner/HTMLPDFRenderer.swift').readAsStringSync();
+    expect(nativeRenderer, contains('WKNavigationDelegate'));
+    expect(nativeRenderer, contains('didFinish navigation'));
+    expect(nativeRenderer, contains('pollReadiness()'));
+    expect(nativeRenderer, contains('window.orderFront(nil)'));
+    expect(nativeRenderer, contains('webView.createPDF'));
+    expect(nativeRenderer, isNot(contains('WKWebView(frame: .zero')));
+    expect(nativeRenderer, isNot(contains('asyncAfter(deadline: .now() + 1')));
   });
 
   test('AliExpress OCR creation separates internal SKU from supplier code', () {

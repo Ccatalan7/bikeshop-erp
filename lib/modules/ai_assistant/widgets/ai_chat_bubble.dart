@@ -22,6 +22,7 @@ import '../models/ai_assistant_session_state.dart';
 import '../services/ai_assistant_context_service.dart';
 import '../services/ai_assistant_session_service.dart';
 import '../services/ai_service.dart';
+import 'ai_assistant_compact_action_tile.dart';
 
 class AIAssistantButton extends StatelessWidget {
   final List<MechanicJob> jobs;
@@ -777,7 +778,7 @@ class _AssistantActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (card.inventoryListRef != null) {
-      return _buildCompactInventoryResult(context);
+      return AIAssistantCompactActionTile(card: card, onTap: onTap);
     }
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -945,32 +946,6 @@ class _AssistantActionCard extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildCompactInventoryResult(BuildContext context) {
-    final theme = Theme.of(context);
-    final cardKey = 'ai-action-card-${card.kind}-${card.destination.name}';
-    final details = <String>[
-      if ((card.subtitle ?? '').isNotEmpty) card.subtitle!,
-      ...card.chips,
-    ].join(' · ');
-    return Semantics(
-      button: true,
-      label: '${card.ctaLabel}: ${card.title}',
-      child: ListTile(
-        key: ValueKey<String>(cardKey),
-        contentPadding: EdgeInsets.zero,
-        visualDensity: VisualDensity.compact,
-        leading: Icon(
-          Icons.inventory_2_outlined,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-        title: Text(card.title),
-        subtitle: details.isEmpty ? null : Text(details),
-        trailing: const Icon(Icons.arrow_forward_rounded),
-        onTap: onTap,
       ),
     );
   }

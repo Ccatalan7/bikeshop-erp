@@ -18,6 +18,7 @@ class AIAgentGatewayContractException implements Exception {
 enum AIAgentGatewayViewContextKind {
   none('none'),
   workshopJobs('workshop_jobs'),
+  intelligentPurchasing('intelligent_purchasing'),
   rejected('rejected');
 
   const AIAgentGatewayViewContextKind(this.wireValue);
@@ -66,6 +67,13 @@ class AIAgentGatewayViewContext {
 
   factory AIAgentGatewayViewContext.rejected() => AIAgentGatewayViewContext(
         kind: AIAgentGatewayViewContextKind.rejected,
+        jobIds: const <String>[],
+        truncated: false,
+      );
+
+  factory AIAgentGatewayViewContext.intelligentPurchasing() =>
+      AIAgentGatewayViewContext(
+        kind: AIAgentGatewayViewContextKind.intelligentPurchasing,
         jobIds: const <String>[],
         truncated: false,
       );
@@ -378,6 +386,7 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     'entityRef',
     'approvalRef',
     'listRef',
+    'supplyNeedDraft',
   };
   _requireExactKeys(json, <String>{...required, ...optional},
       required: required);
@@ -399,7 +408,9 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
       AIAssistantApprovalAction.addWorkshopItem,
     _ => null,
   };
-  if (expectedKind != kind && previewAction == null) {
+  final isSupplyNeedDraft = destination == AIAssistantDestination.purchases &&
+      kind == 'supply_need_draft';
+  if (expectedKind != kind && previewAction == null && !isSupplyNeedDraft) {
     throw const AIAgentGatewayContractException();
   }
 
@@ -560,6 +571,16 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     );
   }
 
+  AIAssistantSupplyNeedDraft? supplyNeedDraft;
+  if (json.containsKey('supplyNeedDraft')) {
+    if (!isSupplyNeedDraft || entityRef != null || approvalRef != null) {
+      throw const AIAgentGatewayContractException();
+    }
+    supplyNeedDraft = _decodeSupplyNeedDraft(json['supplyNeedDraft']);
+  } else if (isSupplyNeedDraft) {
+    throw const AIAgentGatewayContractException();
+  }
+
   final rawChips = json['chips'];
   if (rawChips is! List || rawChips.length > 4) {
     throw const AIAgentGatewayContractException();
@@ -579,7 +600,305 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     entityRef: entityRef,
     approvalRef: approvalRef,
     inventoryListRef: inventoryListRef,
+    supplyNeedDraft: supplyNeedDraft,
   );
+}
+
+AIAssistantSupplyNeedDraft _decodeSupplyNeedDraft(Object? value) {
+  if (value is! Map) throw const AIAgentGatewayContractException();
+  final json = value.map((key, value) => MapEntry(key.toString(), value));
+  _requireExactKeys(json, const <String>{'profile', 'lines'});
+  final profile = switch (json['profile']) {
+    'balanced' => AIAssistantSupplyNeedProfile.balanced,
+    'profitability' => AIAssistantSupplyNeedProfile.profitability,
+    'urgent_local' => AIAssistantSupplyNeedProfile.urgentLocal,
+    _ => null,
+  };
+  final rawLines = json['lines'];
+  if (profile == null ||
+      rawLines is! List ||
+      rawLines.isEmpty ||
+      rawLines.length > 8) {
+    throw const AIAgentGatewayContractException();
+  }
+
+  final lineRefs = <String>{};
+  final lines = <AIAssistantSupplyNeedDraftLine>[];
+  for (final rawLine in rawLines) {
+    if (rawLine is! Map) throw const AIAgentGatewayContractException();
+    final line = rawLine.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    _requireExactKeys(
+      line,
+      const <String>{
+        'lineRef',
+        'description',
+        'productId',
+        'productName',
+        'productSku',
+        'identityState',
+        'quantity',
+        'unit',
+        'technicalPredicates',
+        'preference',
+        'clarification',
+        'clarificationRequired',
+        'clarificationPrompts',
+      },
+      required: const <String>{
+        'lineRef',
+        'description',
+        'productId',
+        'productName',
+        'productSku',
+        'identityState',
+        'quantity',
+        'unit',
+        'technicalPredicates',
+        'preference',
+        'clarification',
+        'clarificationRequired',
+      },
+    );
+    final lineRef = _requiredBoundedText(line['lineRef'], maxBytes: 6);
+    final productId = line['productId'] == null
+        ? null
+        : _requiredOpaqueId(line['productId']).toLowerCase();
+    final productName = _optionalBoundedText(
+      line['productName'],
+      maxBytes: 500,
+    );
+    final productSku = _optionalBoundedText(
+      line['productSku'],
+      maxBytes: 160,
+    );
+    final identityState = line['identityState'];
+    final quantityValue = line['quantity'];
+    final clarificationRequired = line['clarificationRequired'];
+    final clarification = _optionalBoundedText(
+      line['clarification'],
+      maxBytes: 500,
+    );
+    final clarificationPrompts = _decodeSupplyNeedClarificationPrompts(
+      line['clarificationPrompts'] ?? const <Object?>[],
+    );
+    if (!RegExp(r'^line-[1-8]$').hasMatch(lineRef) ||
+        !lineRefs.add(lineRef) ||
+        (identityState != 'unresolved' && identityState != 'confirmed') ||
+        quantityValue is! num ||
+        !quantityValue.isFinite ||
+        quantityValue < 0.001 ||
+        quantityValue > 999999 ||
+        clarificationRequired is! bool ||
+        (productId == null &&
+            (identityState != 'unresolved' ||
+                productName != null ||
+                productSku != null)) ||
+        (productId != null &&
+            (identityState != 'confirmed' || productName == null)) ||
+        (clarificationRequired &&
+            (clarification == null || productId != null)) ||
+        (!clarificationRequired && clarificationPrompts.isNotEmpty)) {
+      throw const AIAgentGatewayContractException();
+    }
+    final rawPredicates = line['technicalPredicates'];
+    if (rawPredicates is! List || rawPredicates.length > 8) {
+      throw const AIAgentGatewayContractException();
+    }
+    final predicateFields = <String>{};
+    final predicates = <AIAssistantSupplyNeedTechnicalPredicate>[];
+    for (final rawPredicate in rawPredicates) {
+      if (rawPredicate is! Map) {
+        throw const AIAgentGatewayContractException();
+      }
+      final predicate = rawPredicate.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      _requireExactKeys(
+        predicate,
+        const <String>{'field', 'operator', 'values'},
+      );
+      final field = _requiredBoundedText(predicate['field'], maxBytes: 64);
+      final operator = predicate['operator'];
+      final rawValues = predicate['values'];
+      if (!RegExp(r'^[a-z][a-z0-9_]{1,63}$').hasMatch(field) ||
+          !predicateFields.add(field) ||
+          operator is! String ||
+          !const <String>{
+            'eq',
+            'neq',
+            'lt',
+            'lte',
+            'gt',
+            'gte',
+            'between',
+            'in',
+            'contains',
+          }.contains(operator) ||
+          rawValues is! List ||
+          rawValues.isEmpty ||
+          rawValues.length > 10 ||
+          (operator == 'between' && rawValues.length != 2) ||
+          (operator != 'between' &&
+              operator != 'in' &&
+              rawValues.length != 1)) {
+        throw const AIAgentGatewayContractException();
+      }
+      final values = <Object>[];
+      for (final rawValue in rawValues) {
+        if (rawValue is String) {
+          values.add(_requiredBoundedText(rawValue, maxBytes: 160));
+        } else if (rawValue is num && rawValue.isFinite) {
+          values.add(rawValue);
+        } else if (rawValue is bool) {
+          values.add(rawValue);
+        } else {
+          throw const AIAgentGatewayContractException();
+        }
+      }
+      predicates.add(
+        AIAssistantSupplyNeedTechnicalPredicate(
+          field: field,
+          operator: operator,
+          values: List<Object>.unmodifiable(values),
+        ),
+      );
+    }
+
+    lines.add(
+      AIAssistantSupplyNeedDraftLine(
+        lineRef: lineRef,
+        description: _requiredBoundedText(
+          line['description'],
+          maxBytes: 2000,
+        ),
+        productId: productId,
+        productName: productName,
+        productSku: productSku,
+        identityState: identityState as String,
+        quantity: quantityValue.toDouble(),
+        unit: _requiredBoundedText(line['unit'], maxBytes: 32),
+        technicalPredicates:
+            List<AIAssistantSupplyNeedTechnicalPredicate>.unmodifiable(
+          predicates,
+        ),
+        preference: _optionalBoundedText(
+          line['preference'],
+          maxBytes: 240,
+        ),
+        clarification: clarification,
+        clarificationRequired: clarificationRequired,
+        clarificationPrompts: clarificationPrompts,
+      ),
+    );
+  }
+
+  return AIAssistantSupplyNeedDraft(
+    profile: profile,
+    lines: List<AIAssistantSupplyNeedDraftLine>.unmodifiable(lines),
+  );
+}
+
+List<AIAssistantSupplyNeedClarificationPrompt>
+    _decodeSupplyNeedClarificationPrompts(Object? value) {
+  if (value is! List || value.length > 3) {
+    throw const AIAgentGatewayContractException();
+  }
+  final ids = <String>{};
+  final prompts = <AIAssistantSupplyNeedClarificationPrompt>[];
+  for (final rawPrompt in value) {
+    if (rawPrompt is! Map) {
+      throw const AIAgentGatewayContractException();
+    }
+    final prompt = rawPrompt.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    _requireExactKeys(
+      prompt,
+      const <String>{
+        'id',
+        'question',
+        'inputKind',
+        'options',
+        'unit',
+        'allowUnknown',
+      },
+    );
+    final id = _requiredBoundedText(prompt['id'], maxBytes: 32);
+    final question = _requiredBoundedText(
+      prompt['question'],
+      maxBytes: 320,
+    );
+    final inputKind = switch (prompt['inputKind']) {
+      'single_choice' =>
+        AIAssistantSupplyNeedClarificationInputKind.singleChoice,
+      'text' => AIAssistantSupplyNeedClarificationInputKind.text,
+      'number' => AIAssistantSupplyNeedClarificationInputKind.number,
+      _ => null,
+    };
+    final allowUnknown = prompt['allowUnknown'];
+    final unit = _optionalBoundedText(prompt['unit'], maxBytes: 32);
+    final rawOptions = prompt['options'];
+    if (!RegExp(r'^[a-z][a-z0-9_]{1,31}$').hasMatch(id) ||
+        !ids.add(id) ||
+        inputKind == null ||
+        allowUnknown is! bool ||
+        rawOptions is! List ||
+        rawOptions.length > 5 ||
+        (inputKind ==
+                AIAssistantSupplyNeedClarificationInputKind.singleChoice &&
+            (rawOptions.length < 2 || unit != null)) ||
+        (inputKind !=
+                AIAssistantSupplyNeedClarificationInputKind.singleChoice &&
+            rawOptions.isNotEmpty) ||
+        (inputKind != AIAssistantSupplyNeedClarificationInputKind.number &&
+            unit != null)) {
+      throw const AIAgentGatewayContractException();
+    }
+    final optionValues = <String>{};
+    final options = <AIAssistantSupplyNeedClarificationOption>[];
+    for (final rawOption in rawOptions) {
+      if (rawOption is! Map) {
+        throw const AIAgentGatewayContractException();
+      }
+      final option = rawOption.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      _requireExactKeys(option, const <String>{'value', 'label'});
+      final optionValue = _requiredBoundedText(
+        option['value'],
+        maxBytes: 64,
+      );
+      final optionLabel = _requiredBoundedText(
+        option['label'],
+        maxBytes: 160,
+      );
+      if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(optionValue) ||
+          !optionValues.add(optionValue)) {
+        throw const AIAgentGatewayContractException();
+      }
+      options.add(
+        AIAssistantSupplyNeedClarificationOption(
+          value: optionValue,
+          label: optionLabel,
+        ),
+      );
+    }
+    prompts.add(
+      AIAssistantSupplyNeedClarificationPrompt(
+        id: id,
+        question: question,
+        inputKind: inputKind,
+        options: List<AIAssistantSupplyNeedClarificationOption>.unmodifiable(
+          options,
+        ),
+        unit: unit,
+        allowUnknown: allowUnknown,
+      ),
+    );
+  }
+  return List<AIAssistantSupplyNeedClarificationPrompt>.unmodifiable(prompts);
 }
 
 AIAssistantApprovalState? _approvalStateFromWire(Object? value) =>

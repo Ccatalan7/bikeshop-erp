@@ -65,6 +65,30 @@ una orden de conservar su layout. Este límite evita repetir el fallo de OCR:
 una superficie visualmente moderna sustituyó un batch comprensible por un
 panel/accordion que ocultaba la visión conjunta y empeoraba la tarea.
 
+### «Composición» son dos cosas y sólo una es nuestra (precisión 2026-08-17)
+
+La corrección anterior dice que la guía no decide «la composición de un
+módulo». Esa palabra tapa dos cosas distintas, y por ese hueco se perdió un
+módulo entero:
+
+- **Composición de producto — nuestra.** Qué bloques existen, en qué orden, qué
+  decide cada paso, qué palabras y qué CTAs. Un texto o un control propuesto por
+  un frame se descarta si no sirve al objetivo, y se dice por qué.
+- **Composición visual — de Design, y no se negocia.** Que un bloque sea un
+  **panel** (superficie + borde + radio + padding) y no cuatro elementos sueltos
+  sobre el fondo; el ancho de columna y si va centrada; la escala tipográfica; el
+  espaciado entre bloques. Aunque el contenido de adentro sea otro, aunque el
+  botón diga otra cosa y aunque el bloque no exista en ningún frame, se ve con
+  esa gramática.
+
+**El costo real.** En el Asistente de compras se aseguraron las palabras
+literales del frame («Analizar», «Ejemplos», «⌘/Ctrl + Enter») y las tablas de
+medidas del `spec.json` —lo que se puede grepear y exhibir como prueba— y se
+descartó la composición visual: sin panel contenedor, columna pegada a la
+izquierda en vez de 780 centrada, y tipografía en 15-16 px donde el diseño dice
+12,5 / 11 / 10. Se declaró implementado y se discutió con el dueño sobre esa
+base. Él miró la pantalla, no se parecía, y el módulo se rehace completo.
+
 Si el aprendizaje no calza en ninguno, va acá — y si acá crece demasiado, se
 extrae a un documento propio **con su puntero desde acá**.
 
@@ -99,6 +123,19 @@ real `response_too_large` regression into an unrelated transport error. Tests
 for raw UTF-8 limits must use `Response.bytes` or set
 `content-type: application/json; charset=utf-8`; then assert the application
 boundary rather than the mock encoder.
+
+### Model-visible AI tools must close the durable receipt contract
+
+**2026-08-16 — one real provider run was lost to this split contract.** Adding
+an AI tool to the Edge registry and executor is not sufficient. In the same
+change, add its exact risk, policy and result limit to
+`assistant_runtime.assistant_tool_receipt_contract_internal_v1`, exercise the
+receipt registration path, and read the installed contract back before calling
+the tool available. Otherwise the model can select a valid advertised tool and
+the gateway will reject its durable receipt after execution. Any server-owned
+`entityId` emitted with that receipt must be the canonical navigable RFC 4122
+UUID for the entity kind. Opaque hashes or transient candidate keys stay in
+opaque references and must not be projected as entity identity.
 
 # Agent Autonomy And End-To-End Ownership (CRITICAL)
 
@@ -375,9 +412,9 @@ The durable rules are:
   schema-only `public` plus dependency-only `private`, rejects all row/blob
   data, and restores managed post-data only after both exist. Capturing only
   `public` can make current Storage policies fail before candidate SQL runs.
-- Every schema change has a unique idempotent forward migration and the same
-  final objects/logic mirrored in idempotent
-  `supabase/sql/core_schema.sql`.
+- Every schema change has one unique idempotent standalone forward migration;
+  its remote history row is the stamp. `core_schema.sql` is optional historical
+  context only.
 - Agents perform routine preflight, tests, guarded queries, authorized
   deployment, registration, read-back, and health checks themselves. Hand off
   only for the human-only blockers listed in the policy.
@@ -636,6 +673,25 @@ Current reference implementations:
 
 - Browser workspaces: `lib/shared/widgets/webview_module_page.dart`
 - Mail reader WebView: `lib/modules/mail/widgets/email_detail_view_unified.dart`
+
+### macOS HTML-to-PDF needs an attached, ready WebKit document
+
+**2026-08-17 — the fixed-delay renderer failed only on another Mac.** The
+macOS implementation behind `Printing.convertHtml` 5.14.2 loaded HTML in a
+detached, zero-sized `WKWebView`, slept one second and called `createPDF`.
+WebKit sometimes returned `WKErrorUnknown` even though the same app and HTML
+worked on the development Mac. Machine-local success is not evidence for this
+class of renderer.
+
+App-owned macOS HTML-to-PDF rendering must use a non-zero `WKWebView` attached
+to an ordered off-screen `NSWindow`, wait for `WKNavigationDelegate.didFinish`,
+then poll the document's explicit readiness contract: `readyState`, fonts,
+images, required root content and the renderer-owned ready flag. Only then call
+`createPDF`; validate the `%PDF-` header and at least one `PDFDocument` page,
+bound the whole operation with a timeout, and always tear down the window and
+WebView. A regression must execute the native renderer with delayed JavaScript
+content; a Dart mock or source-string assertion alone cannot prove the WebKit
+lifecycle.
 
 Email body `http` / `https` links should open in the ERP browser workspace (`/tools/web?url=...`) instead of the OS browser. Keep users inside the app unless the URL scheme is not a web page (`mailto:`, `tel:`, etc.) or the embedded site refuses to load and the browser workspace itself offers an external-open fallback.
 
@@ -1962,7 +2018,7 @@ end;
 1. Add `v_tenant_id uuid;` to function variables
 2. Get tenant_id from parameter: `v_tenant_id := p_record.tenant_id;`
 3. Add `tenant_id` column to ALL INSERT statements
-4. Deploy updated `core_schema.sql`
+4. Deploy one reviewed standalone migration and verify/stamp its exact version
 
 ## 2. Check RLS Policies
 Symptoms: "new row violates row-level security policy" or empty results
@@ -2122,18 +2178,22 @@ The artifact and execution contract lives in
 `docs/development/SUPABASE_WORKFLOW.md`; production safety and validation live
 in `docs/runbooks/STAGING_SUPABASE.md`.
 
-- `supabase/sql/core_schema.sql` is the mandatory idempotent bootstrap mirror,
-  not the live deployment mechanism and not proof of production state.
-- Every live schema change needs a unique, idempotent forward migration under
-  `supabase/migrations/` and the same final objects/logic mirrored in
-  `core_schema.sql`.
-- Every migration is an active deployment candidate and carries an explicit
-  `NOT DEPLOYED` or verified production deployment status. Keep experiments and
-  superseded SQL out of `supabase/migrations/`.
-- Deploy only the smallest reviewed migration through the guarded repository
-  wrapper. Never deploy the entire canonical snapshot to production.
-- Mark a migration deployed and register its exact version only after live
-  read-back and business-invariant verification succeed.
+- **2026-08-17 authority correction:** `supabase/sql/core_schema.sql` is an
+  incomplete historical and best-effort local reference. It is not canonical,
+  not reproducible, not proof of presence/absence, and never a hosted input.
+  This rule supersedes every older instruction in this file that calls it a
+  source of truth, mandatory mirror, or first/only schema file.
+- Every live schema change is owned by one unique, idempotent standalone forward
+  migration under `supabase/migrations/`. Mirroring it in `core_schema.sql` is
+  optional historical curation and never a deployment gate.
+- Keep experiments and superseded SQL out of `supabase/migrations/`. Never edit
+  an applied migration.
+- Deploy only through `scripts/db/deploy_migration.sh` with executable read-back
+  assertions. The command applies the smallest migration, verifies it, registers
+  the exact version and reads the remote stamp back.
+- Only `supabase_migrations.schema_migrations` in production answers whether a
+  migration is `APPLIED`; use `scripts/db/migration_status.sh`. File comments,
+  Git state, successful SQL exit and local receipts are not deployment status.
 - Migration version prefixes are unique. Search before choosing a timestamp;
   never repair ambiguous history by guessing.
 
@@ -2190,11 +2250,15 @@ alter table my_table add column if not exists new_column text;
 **⚠️ AVOID DUPLICATES!**
 
 **BEFORE creating ANY database object, you MUST:**
-1. 🔍 **READ `core_schema.sql` first** - check the ENTIRE file if needed
-2. 🔍 **SEARCH for existing similar functions/triggers/tables** using grep or semantic search
-3. ❌ **NEVER assume a function/trigger doesn't exist** - ALWAYS verify first
+1. 🔍 **INSPECT THE LIVE CATALOG READ-ONLY FIRST** when production behavior is
+   relevant, then search current standalone migrations and application callers.
+2. 🔍 Use `core_schema.sql` only as secondary historical search context; absence
+   there proves nothing.
+3. ❌ **NEVER assume a function/trigger doesn't exist** - verify the target
+   catalog before creating or replacing it.
 4. 🔄 **UPDATE existing functions** rather than creating new ones with different names
-5. 📝 **BE EXPLICIT:** Always tell user "I modified `core_schema.sql` at line X" or "I updated function Y in `core_schema.sql`"
+5. 📝 **BE EXPLICIT:** Name the standalone migration and the live definition or
+   catalog evidence it changes.
 6. ⚠️ **Example of what NOT to do:**
    - ❌ Creating `handle_purchase_invoice_change()` when `handle_sales_invoice_change()` pattern already exists
    - ❌ Creating `create_purchase_journal_entry()` when similar function already exists
@@ -2205,7 +2269,8 @@ alter table my_table add column if not exists new_column text;
    - ✅ Check how it works and what pattern it uses
    - ✅ Create `handle_purchase_invoice_change()` following the SAME pattern
    - ✅ Reuse existing helper functions like `ensure_account()`, `consume_inventory()`, etc.
-   - ✅ Tell user: "I added `handle_purchase_invoice_change()` to `core_schema.sql` at line 4850, following the same pattern as `handle_sales_invoice_change()`"
+   - ✅ Tell user which versioned migration changes
+     `handle_purchase_invoice_change()` and how the live read-back proves it.
 
 **Common mistakes to AVOID:**
 - ❌ Creating duplicate functions with slightly different names
@@ -2218,19 +2283,18 @@ alter table my_table add column if not exists new_column text;
 - ❌ **Adding "nice to have" columns instead of only "must have"**
 
 **Before making any database changes:**
-1. 🔍 **ALWAYS check `core_schema.sql` first**
-2. 🔍 **SEARCH for existing functions/triggers with similar names or purposes**
-3. 📖 Read the relevant section (tables, functions, triggers)
+1. 🔍 **ALWAYS inspect the target catalog and migration history read-only first**
+2. 🔍 **SEARCH callers and standalone migrations for similar objects/purposes**
+3. 📖 Use `core_schema.sql` only as non-authoritative historical context
 4. 🤔 **Ask: "Does something similar already exist?"**
 5. 🤔 **Ask: "Can this be calculated instead of stored?"**
 6. 🤔 **Ask: "Is this column STRICTLY NECESSARY?"**
-7. ✏️ Make changes directly in `core_schema.sql`
+7. ✏️ Author one unique idempotent migration in `supabase/migrations/`
 8. ✏️ **Add ALTER TABLE if modifying existing table structure**
-9. 💾 Save, deploy the smallest reviewed SQL change with the repository
-   database tooling, and run a live verification query
-10. 📝 **BE EXPLICIT:** Tell user which file and line number you modified
+9. 💾 Deploy with `scripts/db/deploy_migration.sh` and executable live read-back
+10. 📝 **BE EXPLICIT:** Report the migration version and remote `APPLIED` stamp
 
-**This is the ONLY database schema file to edit. The 3-file split is for deployment only.**
+**The standalone migration is the only deployable schema artifact.**
 
 ---
 
@@ -2552,8 +2616,11 @@ This protocol is the preferred way to get back to a trusted app baseline while p
 
 **For ANY database-related task:**
 
-1. ✅ **READ** `supabase/sql/core_schema.sql` first - ENTIRE file if needed
-2. ✅ **SEARCH** for existing tables/functions/triggers with similar names or purposes
+1. ✅ **READ THE LIVE TARGET CATALOG AND MIGRATION HISTORY** through the guarded
+   read-only path when current hosted behavior matters
+2. ✅ **SEARCH** standalone migrations, callers and tests for existing
+   tables/functions/triggers with similar names or purposes; use
+   `core_schema.sql` only as incomplete historical context
 3. ✅ **ASK YOURSELF: "Can I solve this WITHOUT adding new columns?"**
    - Can I use existing columns?
    - Can I calculate this in Dart instead of storing it?
@@ -2563,16 +2630,17 @@ This protocol is the preferred way to get back to a trusted app baseline while p
 6. ✅ **UPDATE** existing code or add new code following EXISTING patterns
 7. ✅ **NEVER** create duplicate functions/triggers with different names
 8. ✅ **NEVER** create columns that are "nice to have" - only STRICTLY NECESSARY ones
-9. ✅ **VERIFY** column names match what's in `core_schema.sql`
+9. ✅ **VERIFY** column names against the live catalog or a fresh
+   production-derived schema snapshot
 10. ✅ **IF YOU ADD A COLUMN:** Also add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statement
 11. ✅ **IF MODIFYING INVENTORY:** Update BOTH `inventory_qty` AND `stock_quantity` columns (see inventory columns section above)
-12. ✅ **INFORM** user: "I modified `core_schema.sql` at line X" or "I added function Y to `core_schema.sql`"
+12. ✅ **INFORM** the user which standalone migration version owns the change
 13. ✅ **DEPLOY IT:** If the requested change requires SQL to become live and
     the repository has the target credentials, execute the smallest reviewed
     migration/query yourself. Do not hand routine deployment back to the user.
-14. ✅ **VERIFY IT:** Query the live target after deployment and record the
-    migration status/result. Provide a snippet only as review evidence or when
-    execution is genuinely blocked.
+14. ✅ **VERIFY AND STAMP IT:** use `scripts/db/deploy_migration.sh` so executable
+    live read-back completes before the exact production version is registered.
+    Confirm it with `scripts/db/migration_status.sh`.
 
 ## Supabase Command Ownership
 
@@ -2598,7 +2666,7 @@ policy.
   - suspicious row
   - related product / invoice / payment
   - timestamps (`transaction_date`, `created_at`, `updated_at`)
-  - trigger/function path in `core_schema.sql`
+  - live trigger/function definition plus its owning standalone migration
 5. ✅ Only after the inspection proves the root cause should you prepare:
   - the code/schema fix
   - audit SQL for historical damage
@@ -2638,6 +2706,11 @@ policy.
 - ✅ A purchase invoice with `received_date` keeps status `received` through partial/full payment and undo. Payment recalculation must not reverse/reapply received inventory.
 - ✅ Multi-bike jobs currently have one shared invoice/payment balance. `job_bike_id` attributes invoice lines and per-bike totals; it does not allocate payments to individual bicycles.
 - ✅ Workshop ERP ownership is explicit: `mechanic_jobs` is operational/reservation state; the linked `sales_invoices` document exclusively owns on-hand stock, revenue, COGS, receivable, and payment posting.
+- ✅ An unmet workshop part is a versioned `supply_needs` record with exact job/bike provenance. Never infer this behavior from a mutable status name, store the unmet need as a billable `mechanic_job_items` row, or hide product identity in an expense note.
+- ✅ Common available-to-promise comes from `inventory_available_quantity_v1`, which protects both online reservations and active workshop commitments. A workshop commitment changes ATP only; the linked sales invoice remains the sole physical stock and accounting consumer.
+- ✅ Intelligent purchasing is stock-first. External comparison requires an actual shortage or an explicit recorded rejection of assignable internal stock; historical supplier purchases never prove current availability.
+- ✅ Local/emergency merchandise is still a canonical purchase document, never a generic expense. Its document behavior comes from `purchase_source_document_kinds`, a seeded line preserves immutable tenant-scoped `purchase_invoice_lines.source_need_id`, and locality requires an explicit effective supplier tag rather than inference from legacy type, name, or receipt kind. Confirmation, payment, receiving, stock, accounting, and need-state transitions remain separate owners.
+- ✅ Measurements and compatibility filters for purchasing come from canonical `product_spec_values`. A product name may not satisfy a range or inequality; zero structured coverage must remain an explicit data gap instead of a guessed match.
 - ✅ Never call or re-expose the legacy job stock/journal writer functions to clients or service APIs. New job-owned movement/journal attempts must surface through the workshop ownership control and must be eliminated before enforce mode is activated.
 - ✅ Existing workshop invoice variances are `legacy_unresolved`; shadow controls and new migrations must never backfill, recalculate, or "repair" them implicitly.
 - ✅ Public checkout must use `create_public_online_order()` with a stable `checkout_idempotency_key`; never restore the client direct-insert fallback.
@@ -2645,7 +2718,7 @@ policy.
 
 ### Testing mindset after inspection
 - ✅ First prove the bug with real rows.
-- ✅ Then verify the trigger/function path in `core_schema.sql`.
+- ✅ Then verify the live trigger/function definition and owning migration.
 - ✅ Then test the exact workflow transition that caused the issue.
 - ✅ Prefer minimal reproduction steps over broad regression testing at first.
 - ✅ For status-driven inventory logic, test transitions explicitly instead of only testing create/update generically.
@@ -2666,18 +2739,21 @@ policy.
 - ✅ Only create if it's ABSOLUTELY ESSENTIAL for the feature to work
 
 **⚠️ CRITICAL: Before creating ANY function/trigger:**
-- 🔍 Search `core_schema.sql` for: `CREATE OR REPLACE FUNCTION public.[function_name]`
+- 🔍 Search the live catalog for the exact signature, then the migration chain
+  and callers; `core_schema.sql` is only optional historical context
 - 🔍 Search for similar patterns (e.g., if creating purchase trigger, look for sales trigger)
 - 🔍 Check what helper functions exist (ensure_account, consume_inventory, etc.)
 - ❌ NEVER create `create_purchase_invoice_journal_entry` if `create_sales_invoice_journal_entry` already exists - study the existing one first!
-- 📝 **BE EXPLICIT:** Tell user "I added `create_purchase_invoice_journal_entry()` to `core_schema.sql` at line 4680"
+- 📝 **BE EXPLICIT:** Name the owning migration version and verified live
+  function signature
 
 **For ANY Flutter code changes:**
 
 1. ✅ Check if database schema needs updating first
-2. ✅ **READ `core_schema.sql`** to verify table/column names
+2. ✅ Verify table/column names against generated types, the live catalog or a
+   current production-derived snapshot; do not trust `core_schema.sql` alone
 3. ✅ Adapt Flutter code to match database schema (not vice versa)
-4. ✅ Use correct column names from `core_schema.sql`
+4. ✅ Use column names proved by the live catalog/current generated contract
 5. ✅ **CHECK EXISTING CODE** for tenant_id handling patterns
 6. ✅ **VERIFY** all queries include `.eq('tenant_id', tenantId)` or use services that filter
 7. ✅ **VERIFY** all inserts include `'tenant_id': tenantId` in data maps
@@ -2692,7 +2768,7 @@ policy.
 
 **For ANY new feature:**
 
-1. ✅ **Database schema first (in `core_schema.sql`)**
+1. ✅ **Database schema first (in one standalone forward migration)**
    - ⚠️ **MUST have `tenant_id` column** (except auth/system tables)
    - ⚠️ **MUST have index on `tenant_id`**
    - ⚠️ **MUST have RLS policies filtering by `tenant_id`**
@@ -2702,7 +2778,7 @@ policy.
    - Check what tables/functions/triggers already exist
    - Follow existing patterns and naming conventions
    - Reuse existing helper functions
-2. ✅ Backend triggers/functions (in `core_schema.sql`)
+2. ✅ Backend triggers/functions (in that standalone migration)
    - ⚠️ **MUST filter by `tenant_id` in WHERE clauses**
    - Search for similar triggers/functions first
    - Use same pattern as existing code
@@ -2715,8 +2791,8 @@ policy.
 
 **REMEMBER:**
 - 🚫 No undocumented/ad hoc SQL-only fixes. Versioned idempotent migration files
-  are required for deployable database changes and must remain mirrored in
-  `core_schema.sql`.
+  are required for deployable database changes. `core_schema.sql` mirroring is
+  optional historical curation and never proof or a deploy gate.
 - 🚫 No duplicate functions/triggers (search first!)
 - 🚫 No markdown guides for simple tasks
 - 🚫 No assumptions about schema - always check first
@@ -2753,11 +2829,11 @@ The executable deployment sequence is centralized in
 `docs/development/SUPABASE_WORKFLOW.md`; its authorization and validation gates
 are in `docs/runbooks/STAGING_SUPABASE.md`.
 
-The invariant is one smallest unique/idempotent migration, the same final
-objects/logic mirrored in `supabase/sql/core_schema.sql`, guarded agent-owned
-execution when authorized, and exact live read-back before marking or
-registering the migration as deployed. A copy/paste snippet is review evidence,
-not a deployment path.
+The invariant is one smallest unique/idempotent standalone migration, guarded
+agent-owned execution when authorized, executable live read-back, and the exact
+remote migration-history stamp. `core_schema.sql` is optional historical
+context and never participates in deployment. A copy/paste snippet is review
+evidence, not a deployment path.
 
 ---
 

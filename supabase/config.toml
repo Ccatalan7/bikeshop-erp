@@ -59,10 +59,13 @@ max_client_conn = 100
 [db.migrations]
 # Historical migrations in this repo are not replayable from an empty local DB:
 # there is no true first baseline, several files share the same version prefix,
-# and the canonical bootstrap schema lives in `supabase/sql/core_schema.sql`.
+# and `supabase/sql/core_schema.sql` is only an incomplete historical/local
+# fixture rather than a canonical or reproducible baseline.
 # `supabase/sql/local_public_baseline.sql` is a historical dump kept only as a
 # reference artifact. Keep CLI migrations disabled locally and use
-# `scripts/reset_local_supabase.sh` to bootstrap the database deterministically.
+# `scripts/reset_local_supabase.sh` only when a best-effort disposable fixture
+# is sufficient. Production-compatible validation starts from a live
+# schema-only capture through scripts/db/production_validation.sh.
 enabled = false
 # Specifies an ordered list of schema files that describe your database.
 # Supports glob patterns relative to supabase directory: "./schemas/*.sql"

@@ -13,6 +13,9 @@ void main() {
     'search_tasks',
     'inspect_inventory_schema',
     'search_inventory',
+    'rank_purchase_candidates',
+    'build_purchase_scenarios',
+    'prepare_supply_request',
     'report_capability_gap',
     'find_inventory_risks',
     'search_customers',
@@ -48,7 +51,7 @@ void main() {
     expect(decoded, isA<List<Object?>>());
     final cases = (decoded as List<Object?>).cast<Map<String, Object?>>();
 
-    expect(cases, hasLength(65));
+    expect(cases, hasLength(73));
     expect(cases.map((item) => item['id']).toSet(), hasLength(cases.length));
 
     final categories = <String>{};
@@ -178,6 +181,38 @@ void main() {
     );
   });
 
+  test(
+      'purchasing capture evals vary products without skipping workflow stages',
+      () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+
+    for (final id in <String>[
+      'purchases-009',
+      'purchases-010',
+      'purchases-011'
+    ]) {
+      final expected = cases[id]!['expected']! as Map<String, Object?>;
+      final tools = (expected['tools']! as List<Object?>).cast<String>();
+      expect(tools, contains('prepare_supply_request'), reason: id);
+      expect(tools, isNot(contains('rank_purchase_candidates')), reason: id);
+      expect(tools, isNot(contains('build_purchase_scenarios')), reason: id);
+    }
+    expect(
+      cases['purchases-009']!['prompt'],
+      contains('BSA'),
+      reason: 'the eval must not collapse back to the tire example',
+    );
+    expect(cases['purchases-010']!['prompt'], contains('Presta de 60 mm'));
+    expect(cases['purchases-011']!['prompt'], contains('Shimano B05S'));
+  });
+
   test('general named-source web research stays model-first', () {
     final decoded = jsonDecode(
       File('test/fixtures/ai_assistant_agent_eval_cases.json')
@@ -266,5 +301,54 @@ void main() {
         cases['sales-003']!['expected']! as Map<String, Object?>;
     expect(salesPeriod['tools'], <String>['analyze_sales_period']);
     expect(salesPeriod['mutation'], 'none');
+  });
+
+  test('purchase evals preserve stock-first, basket and ambiguity boundaries',
+      () {
+    final decoded = jsonDecode(
+      File('test/fixtures/ai_assistant_agent_eval_cases.json')
+          .readAsStringSync(),
+    ) as List<Object?>;
+    final cases = <String, Map<String, Object?>>{
+      for (final value in decoded)
+        (value as Map<String, Object?>)['id']! as String: value,
+    };
+
+    final available =
+        cases['purchases-004']!['expected']! as Map<String, Object?>;
+    expect(
+      available['tools'],
+      <String>[
+        'inspect_inventory_schema',
+        'search_inventory',
+        'prepare_supply_request',
+      ],
+      reason: 'available internal stock must stop before supplier ranking',
+    );
+    final shortage =
+        cases['purchases-005']!['expected']! as Map<String, Object?>;
+    expect(
+      shortage['tools'],
+      <String>['search_inventory', 'rank_purchase_candidates'],
+    );
+    final basket = cases['purchases-006']!['expected']! as Map<String, Object?>;
+    expect(basket['tools'], <String>['build_purchase_scenarios']);
+    final ambiguous =
+        cases['purchases-007']!['expected']! as Map<String, Object?>;
+    expect(ambiguous['tools'], <String>['prepare_supply_request']);
+    expect(ambiguous['navigation'], 'cardOnly');
+    expect(ambiguous['preserveLiteral'], isTrue);
+    expect(
+      ambiguous['clarificationBoundary'],
+      'product_measure_or_fitment',
+      reason:
+          'an ambiguous measure must be disambiguated before downstream fitment details',
+    );
+    final multi = cases['purchases-008']!['expected']! as Map<String, Object?>;
+    expect(
+      multi['tools'],
+      <String>['search_inventory', 'prepare_supply_request'],
+    );
+    expect(multi['mutation'], 'none');
   });
 }

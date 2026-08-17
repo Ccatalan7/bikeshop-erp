@@ -334,13 +334,15 @@ Expected additions later:
   - `createBikeEvent(BikeEvent event)`
   - helper methods for auto-logging profile/job events
 
-## Source Of Truth Rule
+## Source Of Truth Rule — corrected 2026-08-17
 
-If implemented, the schema source of truth must be updated in:
+The original rule below is superseded. The schema change must be implemented as
+one uniquely versioned standalone migration under `supabase/migrations/` and
+verified against the live catalog. The remote migration-history row is its
+deployment stamp.
 
-- `supabase/sql/core_schema.sql`
-
-If a focused deployment file is created, it should also exist as a migration, but `core_schema.sql` remains the master file.
+`supabase/sql/core_schema.sql` may retain a historical reference, but it is
+incomplete, non-reproducible and never the master or a hosted input.
 
 ## Recommended Rollout
 

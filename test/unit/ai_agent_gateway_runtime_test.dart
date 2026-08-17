@@ -78,6 +78,75 @@ Map<String, Object?> _taskPreviewCard({
           },
     };
 
+Map<String, Object?> _supplyNeedDraftCard({Object? draft}) => <String, Object?>{
+      'kind': 'supply_need_draft',
+      'title': '2 necesidades para revisar',
+      'destination': 'purchases',
+      'chips': <String>['Equilibrio', '1 por precisar'],
+      'supplyNeedDraft': draft ??
+          <String, Object?>{
+            'profile': 'balanced',
+            'lines': <Object?>[
+              <String, Object?>{
+                'lineRef': 'line-1',
+                'description': 'Neumático 27,5 ancho mayor a 2,0',
+                'productId': _customerA,
+                'productName': 'Kenda Kwick 27,5 × 2,10',
+                'productSku': 'KEN-275-210',
+                'identityState': 'confirmed',
+                'quantity': 2,
+                'unit': 'unit',
+                'technicalPredicates': <Object?>[
+                  <String, Object?>{
+                    'field': 'tire_width',
+                    'operator': 'gt',
+                    'values': <Object?>[2.0],
+                  },
+                ],
+                'preference': 'gama económica',
+                'clarification': null,
+                'clarificationRequired': false,
+                'clarificationPrompts': <Object?>[],
+              },
+              <String, Object?>{
+                'lineRef': 'line-2',
+                'description': 'Rayos 27,5',
+                'productId': null,
+                'productName': null,
+                'productSku': null,
+                'identityState': 'unresolved',
+                'quantity': 1,
+                'unit': 'set',
+                'technicalPredicates': <Object?>[],
+                'preference': null,
+                'clarification':
+                    '¿Te refieres a rayos de medida 27,5 o para una rueda 27,5?',
+                'clarificationRequired': true,
+                'clarificationPrompts': <Object?>[
+                  <String, Object?>{
+                    'id': 'measurement_meaning',
+                    'question':
+                        '¿La medida pertenece al producto o al contexto donde se instalará?',
+                    'inputKind': 'single_choice',
+                    'options': <Object?>[
+                      <String, Object?>{
+                        'value': 'product',
+                        'label': 'Al producto',
+                      },
+                      <String, Object?>{
+                        'value': 'fitment',
+                        'label': 'Al contexto',
+                      },
+                    ],
+                    'unit': null,
+                    'allowUnknown': false,
+                  },
+                ],
+              },
+            ],
+          },
+    };
+
 Map<String, Object?> _workshopPreviewCard({
   String kind = 'diagnosis_preview',
   String action = 'update_diagnosis',
@@ -254,6 +323,10 @@ void main() {
     expect(captured.headers['authorization'], 'Bearer caller-jwt');
     expect(captured.headers['apikey'], 'public-project-key');
     expect(captured.headers['x-vinabike-ai-result-lists'], '1');
+    expect(
+      captured.headers['x-vinabike-ai-structured-clarifications'],
+      '1',
+    );
     expect(captured.headers.values, isNot(contains('service-role')));
     expect(jsonDecode(captured.body), <String, Object?>{'version': 1});
   });
@@ -504,6 +577,143 @@ void main() {
         ),
         throwsA(isA<AIAgentGatewayContractException>()),
         reason: '$listRef',
+      );
+    }
+  });
+
+  test('supply request draft decodes exact and unresolved lines separately',
+      () {
+    final response = AIAgentGatewayResponse.fromJson(
+      _response(cards: <Object?>[_supplyNeedDraftCard()]),
+    );
+
+    final card = response.cards.single;
+    final draft = card.supplyNeedDraft!;
+    expect(card.kind, 'supply_need_draft');
+    expect(card.destination, AIAssistantDestination.purchases);
+    expect(card.entityRef, isNull);
+    expect(card.inventoryListRef, isNull);
+    expect(card.ctaLabel, 'Revisar petición');
+    expect(draft.profile, AIAssistantSupplyNeedProfile.balanced);
+    expect(draft.lines, hasLength(2));
+    expect(draft.lines.first.hasConfirmedProduct, isTrue);
+    expect(draft.lines.first.productId, _customerA);
+    expect(draft.lines.first.technicalPredicates.single.field, 'tire_width');
+    expect(draft.lines.last.hasConfirmedProduct, isFalse);
+    expect(draft.lines.last.clarificationRequired, isTrue);
+    expect(draft.lines.last.clarificationPrompts, hasLength(1));
+    expect(
+      draft.lines.last.clarificationPrompts.single.inputKind,
+      AIAssistantSupplyNeedClarificationInputKind.singleChoice,
+    );
+    expect(draft.lines.last.toCommandJson(), isNot(contains('productName')));
+  });
+
+  test('supply request draft keeps the negotiated v1 rollout compatible', () {
+    final card = _supplyNeedDraftCard();
+    final draft = card['supplyNeedDraft']! as Map<String, Object?>;
+    final lines = draft['lines']! as List<Object?>;
+    final legacyLines = lines
+        .map(
+          (line) => Map<String, Object?>.from(
+            line! as Map<String, Object?>,
+          )..remove('clarificationPrompts'),
+        )
+        .toList(growable: false);
+    final response = AIAgentGatewayResponse.fromJson(
+      _response(
+        cards: <Object?>[
+          <String, Object?>{
+            ...card,
+            'supplyNeedDraft': <String, Object?>{
+              ...draft,
+              'lines': legacyLines,
+            },
+          },
+        ],
+      ),
+    );
+    expect(
+      response.cards.single.supplyNeedDraft!.lines.last.clarificationPrompts,
+      isEmpty,
+    );
+  });
+
+  test('supply request draft rejects missing or contradictory identity proof',
+      () {
+    final validDraft =
+        _supplyNeedDraftCard()['supplyNeedDraft']! as Map<String, Object?>;
+    final validLines = validDraft['lines']! as List<Object?>;
+    final unresolved = Map<String, Object?>.from(
+      validLines.last! as Map<String, Object?>,
+    );
+    for (final card in <Map<String, Object?>>[
+      <String, Object?>{
+        'kind': 'supply_need_draft',
+        'title': 'Sin contenido',
+        'destination': 'purchases',
+        'chips': <String>[],
+      },
+      _supplyNeedDraftCard(
+        draft: <String, Object?>{
+          ...validDraft,
+          'lines': <Object?>[
+            ...validLines.take(1),
+            <String, Object?>{
+              ...unresolved,
+              'productName': 'Nombre sin identidad',
+            },
+          ],
+        },
+      ),
+      _supplyNeedDraftCard(
+        draft: <String, Object?>{
+          ...validDraft,
+          'lines': <Object?>[
+            <String, Object?>{
+              ...(validLines.first! as Map<String, Object?>),
+              'clarification': 'Pregunta bloqueante',
+              'clarificationRequired': true,
+            },
+          ],
+        },
+      ),
+      _supplyNeedDraftCard(
+        draft: <String, Object?>{
+          ...validDraft,
+          'lines': <Object?>[
+            ...validLines.take(1),
+            <String, Object?>{
+              ...unresolved,
+              'clarificationRequired': false,
+            },
+          ],
+        },
+      ),
+      _supplyNeedDraftCard(
+        draft: <String, Object?>{
+          ...validDraft,
+          'lines': <Object?>[
+            ...validLines.take(1),
+            <String, Object?>{
+              ...unresolved,
+              'clarificationPrompts': <Object?>[
+                <String, Object?>{
+                  ...((unresolved['clarificationPrompts']! as List<Object?>)
+                      .single! as Map<String, Object?>),
+                  'options': <Object?>[],
+                },
+              ],
+            },
+          ],
+        },
+      ),
+    ]) {
+      expect(
+        () => AIAgentGatewayResponse.fromJson(
+          _response(cards: <Object?>[card]),
+        ),
+        throwsA(isA<AIAgentGatewayContractException>()),
       );
     }
   });

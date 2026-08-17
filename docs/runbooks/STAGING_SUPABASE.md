@@ -25,8 +25,9 @@ owner may reactivate it explicitly.
 ## Non-negotiable boundaries
 
 - Production is the compatibility source of truth.
-- `supabase/sql/core_schema.sql` is the required idempotent bootstrap mirror,
-  not proof of the live deployed schema.
+- `supabase/sql/core_schema.sql` is an incomplete historical and best-effort
+  local reference. It is neither reproducible nor proof of the live deployed
+  schema, and it is never applied to a hosted database.
 - All SQL reads and writes use the guarded repository tooling described in
   `docs/development/SUPABASE_WORKFLOW.md`. Do not run raw Supabase CLI SQL or
   direct ad hoc `psql` commands against hosted environments.
@@ -62,9 +63,10 @@ required by the risk and release scope.
 
 1. **Fast local loop:** reuse the prepared local database and run only affected
    pgTAP files. This is the default while editing.
-2. **Canonical bootstrap gate:** rebuild from `core_schema.sql` and run the full
-   pgTAP suite only when the canonical schema changed or at a release/checkpoint
-   boundary. This validates the bootstrap mirror, not production compatibility.
+2. **Legacy local-fixture gate:** when useful, rebuild the disposable local
+   database from `core_schema.sql` and run pgTAP. This checks only the historical
+   fixture's internal consistency; it cannot establish completeness or
+   production compatibility.
 3. **Production-derived compatibility session:** for database behavior intended
    for production, restore a schema-only dump from the verified production
    project into a disposable database, apply only migrations absent from live
@@ -131,8 +133,9 @@ For a production database change:
 1. Inspect the intended target and relevant business evidence read-only.
 2. Search for existing objects and verify the live definition before designing
    a new one.
-3. Create a unique, idempotent forward migration and mirror the same
-   objects/logic in `supabase/sql/core_schema.sql`.
+3. Create one unique, idempotent standalone forward migration under
+   `supabase/migrations/`. Updating `core_schema.sql` is optional historical
+   curation and never part of the deploy gate.
 4. Document forward behavior, recovery behavior, lock/timeout risk, and any
    backfill scope.
 5. Run focused local tests during development.
@@ -140,11 +143,13 @@ For a production database change:
    combine them with live read-only checks.
 7. Immediately before deployment, verify the production ref, migration head,
    candidate checksum, and no-PII business fingerprint.
-8. Apply one smallest guarded migration at a time.
+8. Apply one smallest guarded migration at a time through
+   `scripts/db/deploy_migration.sh`, with executable read-back assertions.
 9. Read back functions, triggers, policies, grants, indexes, constraints, and
    affected business invariants before advancing.
-10. Register the exact migration version only after live read-back succeeds,
-    then run health checks and the relevant application smoke.
+10. Let that guarded command register the exact migration version only after
+    live read-back succeeds; confirm the remote `APPLIED` stamp, then run health
+    checks and the relevant application smoke.
 
 Backfills must be scoped, idempotent, auditable, previewed, and safe to replay.
 Stop on unexplained drift; never guess through a partial repair.

@@ -4,8 +4,10 @@
 
 - `lib/`: Flutter production code organized by business module.
 - `test/`: Flutter unit/widget/integration tests and named fixtures.
-- `supabase/migrations/`: immutable historical migrations.
-- `supabase/sql/core_schema.sql`: idempotent canonical schema snapshot.
+- `supabase/migrations/`: uniquely versioned standalone forward migrations;
+  production migration history is their deployment stamp.
+- `supabase/sql/core_schema.sql`: incomplete historical/best-effort local
+  reference; never a hosted input or source of truth.
 - `supabase/tests/`: pgTAP database contracts.
 - `supabase/functions/`: Edge Functions.
 - `scripts/bootstrap/`: workstation installation.

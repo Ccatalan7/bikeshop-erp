@@ -116,6 +116,110 @@ Deno.test("server cards match every closed Flutter destination-kind pair", () =>
   }
 });
 
+Deno.test("structured supply requests project one strict review card", () => {
+  const draftResult: AgentToolResultEnvelope = {
+    authorityTenantId: tenantId,
+    asOf: "2026-08-16T18:00:00Z",
+    status: "success",
+    items: [{
+      entityId,
+      lineRef: "line-1",
+      description: "Neumático 27,5 ancho mayor a 2,0",
+      productName: "Kenda Kwick 27,5 × 2,10",
+      productSku: "KEN-275-210",
+      identityState: "confirmed",
+      quantity: 2,
+      unit: "unit",
+      technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
+      preference: "gama económica",
+      clarification: null,
+      clarificationRequired: false,
+      clarificationPrompts: [],
+      profile: "balanced",
+    }, {
+      entityId: null,
+      lineRef: "line-2",
+      description: "Rayos 27,5",
+      productName: null,
+      productSku: null,
+      identityState: "unresolved",
+      quantity: 1,
+      unit: "set",
+      technicalPredicates: [],
+      preference: null,
+      clarification: "¿Medida del rayo o compatibilidad con rueda 27,5?",
+      clarificationRequired: true,
+      clarificationPrompts: [{
+        id: "measurement_meaning",
+        question: "¿La medida pertenece al producto o al contexto donde se instalará?",
+        inputKind: "single_choice",
+        options: [{ value: "product", label: "Al producto" }, {
+          value: "fitment",
+          label: "Al contexto",
+        }],
+        unit: null,
+        allowUnknown: false,
+      }],
+      profile: "balanced",
+    }],
+    resultCount: 2,
+    hasMore: false,
+  };
+  const cards = cardsForToolResult("prepare_supply_request", draftResult);
+  assertEquals(cards.length, 1, "one request becomes one review surface");
+  assertEquals(cards[0].kind, "supply_need_draft", "draft kind is closed");
+  assertEquals(cards[0].destination, "purchases", "draft destination is closed");
+  assertEquals(cards[0].entityRef ?? null, null, "draft never invents one selected entity");
+  assertEquals(cards[0].supplyNeedDraft?.lines.length, 2, "every requested line survives");
+  assertEquals(
+    cards[0].supplyNeedDraft?.lines[0].productId,
+    entityId,
+    "only the exact server-resolved product is retained",
+  );
+  assertEquals(
+    cards[0].supplyNeedDraft?.lines[1].clarificationRequired,
+    true,
+    "technical ambiguity remains explicit",
+  );
+  assertEquals(
+    cards[0].supplyNeedDraft?.lines[1].clarificationPrompts.length,
+    1,
+    "the next generic question remains typed",
+  );
+  const legacyCard = cardsForClient(cards, true, false)[0] as unknown as {
+    supplyNeedDraft: { lines: Array<Record<string, unknown>> };
+  };
+  assertEquals(
+    "clarificationPrompts" in legacyCard.supplyNeedDraft.lines[1],
+    false,
+    "capability negotiation preserves the strict v1 wire shape",
+  );
+  assertEquals(
+    cardsForClient(cards, true, true)[0].supplyNeedDraft?.lines[1]
+      .clarificationPrompts.length,
+    1,
+    "negotiated clients receive the structured prompt",
+  );
+  assertNoUndefined(cards, "draft card remains canonical JSON");
+  assertEquals(
+    validateStoredCards(cards)[0].supplyNeedDraft,
+    cards[0].supplyNeedDraft,
+    "the complete typed draft survives persistence",
+  );
+
+  const invalid = structuredClone(cards[0]) as unknown as Record<string, unknown>;
+  const invalidDraft = invalid.supplyNeedDraft as Record<string, unknown>;
+  const invalidLines = invalidDraft.lines as Array<Record<string, unknown>>;
+  invalidLines[1].productName = "Producto no probado";
+  let rejected = false;
+  try {
+    validateStoredCards([invalid]);
+  } catch (_) {
+    rejected = true;
+  }
+  assertEquals(rejected, true, "unresolved lines cannot smuggle confirmed identity text");
+});
+
 Deno.test("inventory search projects one exact compact result set instead of arbitrary rows", () => {
   const inventoryResult: AgentToolResultEnvelope = {
     authorityTenantId: tenantId,

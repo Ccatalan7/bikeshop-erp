@@ -749,6 +749,22 @@ preciosa que afirma algo falso, y un ERP donde cada módulo navega distinto.
 > funcionalidad, UX, lenguaje y reglas; `DesignSync` sigue siendo la fuente
 > literal de cada valor visual.
 
+> **Precisión del dueño, 2026-08-17. Qué significa «el aspecto», y cómo se
+> demuestra.** «De la guía canónica: … anatomía de chips, botones, tablas e
+> inputs» no se agota en el control suelto. También son aspecto, y se copian
+> exactos: la **contención** (que un bloque sea un panel con superficie, borde,
+> radio y padding, no elementos sueltos sobre el fondo), el **ancho y centrado de
+> la columna**, la **escala tipográfica** y el **espaciado entre bloques** —
+> aunque el contenido y las palabras de adentro sean nuestros, y aunque ese
+> bloque no exista en ningún frame. «Layout» del lado de Codex significa **qué
+> bloques hay y en qué orden**, nunca cómo se ven.
+>
+> Y la compuerta **no se cierra con constantes**: se cierra con evidencia
+> pareada, el frame real de la app junto al de Design en la misma celda. El
+> Asistente de compras tenía todas las medidas del `spec.json` correctas en el
+> código y no se parecía; se declaró implementado sobre esa base y hubo que
+> rehacerlo. Ver `DESIGN_HANDOFF_SYNC_CONTRACT.md`, corrección 2026-08-17.
+
 ### Qué hacer con cada resultado
 
 - **Calza** → se adopta la gramática visual; la composición se adopta sólo si

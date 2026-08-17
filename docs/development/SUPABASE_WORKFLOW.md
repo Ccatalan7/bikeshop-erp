@@ -133,26 +133,27 @@ just db-test stock_ledger_continuity sales_credit_note_kernel
 just db-query local "select count(*) from stock_movements"
 ```
 
-`db-start` reuses the running local stack when the recorded canonical-schema
-hash is unchanged. It rebuilds only when the schema inputs changed, required
+`db-start` reuses the running local stack when the recorded historical-fixture
+hash is unchanged. It rebuilds only when the fixture inputs changed, required
 sentinel objects are missing, no verified hash exists, or `--reset` was
 requested.
 
 `db-test` calls `ensure_local.sh`, then runs only the selected pgTAP files.
 Every ordinary pgTAP rerun reuses the already prepared local database. It does
-not copy production and does not rebuild from scratch unless the canonical
-schema inputs actually changed.
+not copy production and does not rebuild from scratch unless the local fixture
+inputs actually changed.
 
-Run the full bootstrap gate only when `core_schema.sql` or an included schema
-input changed, or at a deliberate checkpoint:
+Run the full legacy-fixture gate only when `core_schema.sql` or an included
+fixture input changed, or at a deliberate checkpoint:
 
 ```bash
 just db-gate
 ```
 
 This gate drops and rebuilds the disposable local `public` schema, applies the
-canonical snapshot, and runs all pgTAP files. It proves the bootstrap mirror,
-not compatibility with production.
+incomplete historical fixture, and runs all pgTAP files. It proves only that
+the fixture remains internally usable—not completeness or compatibility with
+production.
 
 ## Guarded SQL reads
 
@@ -233,47 +234,56 @@ Full manifests and verbose output stay under ignored `.tmp/db/`.
 ## Authorized production writes
 
 Production writes must already be in task scope and satisfy the policy
-contract. Preview the live state read-only, then execute the smallest
-idempotent migration:
+contract. A **standalone migration** means one immutable, uniquely versioned
+`supabase/migrations/YYYYMMDDHHMMSS_slug.sql` file containing the complete
+forward change. It never means a fragment copied from `core_schema.sql`, an ad
+hoc SQL Editor paste, or an unversioned file under `supabase/sql/`.
+
+Encode exact definition and business-invariant checks in one or more read-only
+SQL files that fail at SQL level when the expected state is absent. Then use the
+single apply → verify → stamp command:
 
 ```bash
 VINABIKE_DB_WRITE_CONFIRM=production \
-  bash scripts/db/query.sh production \
-  --write \
-  --file supabase/migrations/YYYYMMDDHHMMSS_change_name.sql
+  scripts/db/deploy_migration.sh \
+  --migration supabase/migrations/YYYYMMDDHHMMSS_change_name.sql \
+  --verify supabase/manual_checks/verification/YYYYMMDDHHMMSS_change_name.sql
 ```
 
-Immediately run guarded read-back and business-invariant queries. Only after
-the deployed definition passes verification, register the exact version as
-applied:
+That wrapper refuses non-migration paths and duplicate/legacy version formats,
+applies only the standalone file through `query.sh`, runs every verification
+read-only, registers the exact version through the guarded CLI, reads the stamp
+back, and writes a secondary ignored receipt under
+`.tmp/db/migration-receipts/`. If deployment succeeds but verification fails,
+the version intentionally remains unregistered until the live state is
+diagnosed and this same idempotent path completes.
+
+At any time, ask production—not a file comment—whether one or more candidates
+are stamped:
 
 ```bash
-VINABIKE_DB_WRITE_CONFIRM=production \
-  scripts/supabase_cli.sh migration repair \
-  --linked \
-  --status applied \
-  YYYYMMDDHHMMSS
+scripts/db/migration_status.sh \
+  supabase/migrations/YYYYMMDDHHMMSS_change_name.sql
 ```
 
-Read `supabase_migrations.schema_migrations` back through
-`scripts/db/query.sh` and confirm the one exact version. Migration repair is a
-history-metadata operation, not a schema deployment path. Never run the entire
-`core_schema.sql` against production.
+`APPLIED` means the exact version exists in
+`supabase_migrations.schema_migrations`; `NOT_APPLIED` means it does not. A
+successful SQL exit without that row is an incomplete deployment, not a
+finished migration. Migration repair remains a history-metadata operation, not
+a schema deployment path.
 
-Every schema change needs both:
-
-1. a unique, idempotent forward migration under `supabase/migrations/`; and
-2. the same final objects/logic mirrored in idempotent
-   `supabase/sql/core_schema.sql`.
-
-The migration file must state its deployment status and verification. A local
-pass is not a production deployment.
+Every schema change needs the unique standalone forward migration. Do not edit
+an applied migration. `core_schema.sql` is merely an incomplete historical and
+best-effort local reference; mirroring there is optional and never a deployment
+gate. The migration file may describe intended verification, but its production
+status comes only from remote migration history. A local pass is not a
+production deployment.
 
 Historical migrations are not a replayable baseline, so CLI migrations are
 intentionally disabled in `supabase/config.toml`. Until a clean forward
 migration stream is enabled, deploy the reviewed standalone file through the
-guarded wrapper and repair/register migration history only after exact live
-read-back. `supabase db push` is not the deployment path.
+guarded wrapper above. `supabase db push`, `migration up`, SQL Editor and
+`core_schema.sql` are not deployment paths.
 
 ## Production-derived validation session
 
@@ -297,6 +307,15 @@ dependency-only `private` and the isolated `assistant_runtime` ledger
 definitions because managed Storage/Auth policies can reference private helpers
 and assistant migrations can replace attested runtime functions; managed
 post-data is deferred until those schemas exist.
+
+**Schema-only boundary (clarified 2026-08-16):** the immutable template carries
+definitions, not rows previously inserted by deployed migrations. A focused
+candidate test that depends on an older migration-owned catalog row (for
+example a document kind or a product-spec template) must create an explicit
+synthetic fixture, or prove that existing row separately through a guarded live
+read-only query. Its absence from the scratch clone is not evidence that the
+candidate deleted production data, and rerunning a broad pgTAP set without the
+required fixtures must not be reported as a product regression.
 
 Run and rerun focused pgTAP without a production/network call:
 

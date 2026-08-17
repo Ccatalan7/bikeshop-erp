@@ -1,20 +1,24 @@
--- Vinabike ERP version-controlled bootstrap/reference schema.
+-- VINABIKE ERP HISTORICAL REFERENCE ONLY — NEVER DEPLOY THIS FILE.
 --
 -- TRUST BOUNDARY:
--- This file is NOT proof of the live production schema and MUST NOT be treated
--- as a guaranteed 100% representation of the deployed backend. Historical
--- standalone production changes were not always mirrored here, so this file
--- may still contain omissions or stale definitions until an explicit
--- production-to-bootstrap reconciliation proves parity.
+-- This is an incomplete, non-reproducible guide to a large part of the
+-- backend's history. It is NOT the schema source of truth, NOT a production
+-- baseline, NOT a replayable migration chain, and NOT proof that an object is
+-- present or absent in any hosted environment. Historical standalone changes
+-- were not consistently mirrored here, so omissions and stale definitions are
+-- expected.
 --
--- Production catalogs are authoritative for what is currently deployed. This
--- file remains the repository target for deterministic clean/local bootstrap:
--- every new schema change must have a reviewed idempotent forward migration and
--- the same final objects/logic must be added or updated here.
+-- Production catalogs plus supabase_migrations.schema_migrations are
+-- authoritative for what is deployed. Every new backend change is authored and
+-- deployed as one uniquely versioned, reviewed standalone forward migration in
+-- supabase/migrations/. After exact live read-back succeeds, that version is
+-- registered in migration history; the history row is the deployment stamp.
 --
--- Never run this complete file, or copied fragments from it, against production
--- or in the Supabase SQL Editor. Deploy only the smallest reviewed standalone
--- migration through the guarded workflow in docs/development/SUPABASE_WORKFLOW.md.
+-- Never run this complete file, or copied fragments from it, against production,
+-- staging, or the Supabase SQL Editor. It may be used only as a best-effort
+-- disposable local fixture and as search context. A migration may be mirrored
+-- here when that improves the historical guide, but deployment and verification
+-- never depend on that mirror. See docs/development/SUPABASE_WORKFLOW.md.
 --
 -- UUID columns default to gen_random_uuid(); ensure the extension is enabled first.
 -- Match Supabase's hosted public-schema defaults before provisioning objects.
@@ -75569,6 +75573,69 @@ comment on column public.suppliers.portal_password is
 -- Cash-basis expense drill-down follows each real payment or advance date;
 -- expenses.paid_at remains only the explicit fallback for legacy rows.
 \ir ../migrations/20260815212000_expense_cash_detail_uses_transaction_ledger.sql
+
+-- Intelligent abastecimiento starts from one durable, source-neutral need.
+-- Jobs captures, interpretation, stock decisions and later purchasing all
+-- preserve the same origin, identity state and optimistic version.
+\ir ../migrations/20260816150000_supply_need_kernel.sql
+
+-- Workshop commitments join online reservations in one available-to-promise
+-- authority. Reserving for a need never posts physical stock or accounting.
+\ir ../migrations/20260816151000_supply_need_inventory_commitments.sql
+
+-- Normalized purchase evidence, proportional freight allocation and the
+-- explainable supplier-ranking kernel replace the legacy opaque priority.
+\ir ../migrations/20260816152000_purchase_evidence_ranking_kernel.sql
+\ir ../migrations/20260816152100_harden_purchase_evidence_view_acl.sql
+
+-- Governed assistant projections expose supply reads and ranking without
+-- leaking internal IDs or permitting a model-authored purchase.
+\ir ../migrations/20260816153000_intelligent_purchasing_ai_tools.sql
+
+-- Assistant inventory uses the same ATP semantics as the purchase workspace.
+\ir ../migrations/20260816154000_ai_inventory_available_to_promise.sql
+
+-- Review-only purchase plans freeze selection-time economics and remain
+-- separate from orders, invoices, payments, receipts and stock movement.
+\ir ../migrations/20260816155000_purchase_plan_kernel.sql
+\ir ../migrations/20260816156000_purchase_plan_edit_commands.sql
+
+-- A bounded stock-first basket solver preserves partial coverage and never
+-- invents supplier availability or a freight saving from consolidation.
+\ir ../migrations/20260816157000_purchase_basket_scenarios.sql
+
+-- Accepting a basket scenario composes audited line commands atomically into
+-- the same review-only draft, including hash-derived candidate UUIDs.
+\ir ../migrations/20260816158000_prepare_purchase_plan_scenario.sql
+
+-- Draft quantities remain editable through the same optimistic, idempotent
+-- review-only aggregate and never mutate the source need or stock.
+\ir ../migrations/20260816159000_purchase_plan_quantity_command.sql
+
+-- Tire requests use the same schema-driven ficha layer as the rest of the
+-- workshop. The template is additive and never backfills names as facts.
+\ir ../migrations/20260816160000_tire_product_spec_template.sql
+
+-- Model-visible purchasing reads must be present in the durable receipt
+-- contract, and ranking uses an exact canonical catalog entity identity.
+\ir ../migrations/20260816161000_intelligent_purchasing_ai_runtime_contract.sql
+
+-- Purchase evidence keeps its real document kind. Direct local receipts and
+-- tickets use the canonical purchase/receipt/payment owners without becoming
+-- generic expenses, and locality remains an explicitly reviewed supplier tag.
+\ir ../migrations/20260816162000_purchase_source_document_kinds.sql
+\ir ../migrations/20260816162100_harden_purchase_invoice_list_v2_acl.sql
+\ir ../migrations/20260816162200_link_purchase_lines_to_supply_needs.sql
+
+-- The purchasing assistant decomposes one natural-language request into a
+-- server-validated review draft. One explicit confirmation persists every
+-- reviewed demand line atomically and replay-safely, without purchasing.
+\ir ../migrations/20260816162300_ai_supply_request_drafts.sql
+
+-- The durable assistant-message validator accepts the same closed structured
+-- supply draft that the gateway and Flutter client validate, while retaining
+-- every pre-existing card family and excluding all write authority.
+\ir ../migrations/20260816162400_ai_supply_request_card_contract.sql
 
 -- Bootstrap-wide service-role grants above predate the notification ACL
 -- hardening. Preserve the production end state after every included migration.

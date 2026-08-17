@@ -33,9 +33,13 @@ Every large list/search flow should use this shape:
 5. Verify with the database gauge and focused analysis before calling the slice complete.
 
 ## Phase 1 - Source Of Truth And Guardrails
-- Reconcile the live Supabase schema, recent standalone migrations, and `supabase/sql/core_schema.sql`.
-- Mirror the deployed storefront RPCs, accounting total trigger, policy changes, and helper revokes back into `core_schema.sql`.
-- Keep standalone SQL migrations only as deployment artifacts; `core_schema.sql` must remain the long-term source of truth.
+- Reconcile the live Supabase schema and exact remote migration history with the
+  relevant standalone migrations. Use `core_schema.sql` only as incomplete
+  historical search context.
+- Preserve deployed storefront RPCs, accounting total triggers, policies and
+  helper revokes in uniquely versioned standalone forward migrations.
+- Production catalogs plus migration history remain authoritative;
+  `core_schema.sql` is never the long-term source of truth or a hosted input.
 - Add permanent database smoke tests for public product visibility, storefront cost safety, journal total alignment, and revoked stale helper RPCs.
 - Keep the existing production-safety posture: inspect live database state first, then change the smallest safe surface.
 

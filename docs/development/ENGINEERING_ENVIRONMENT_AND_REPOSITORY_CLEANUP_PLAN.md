@@ -36,7 +36,9 @@ The initial read-only audit found:
 - Flutter 3.38.5 is installed and matches CI, but Flutter/Dart and Android tools are missing from `PATH`; Android licenses are incomplete. Node 26 is an unpinned Current release, not the preferred LTS line.
 - Supabase, Firebase, GitHub, Docker/Colima, PostgreSQL, Xcode, CocoaPods, and Chrome are available and authenticated on this Mac. Supabase production is healthy; the existing staging project is inactive.
 - Existing coverage is valuable: 39 pgTAP files, 29 Flutter test files, analyzer execution, ERP web compilation, and Windows packaging. There are no Playwright tests and no Flutter `integration_test` suite.
-- CI and local Supabase versions drift, migrations are disabled/non-replayable, and `core_schema.sql` is currently the only deterministic database bootstrap.
+- CI and local Supabase versions drift, historical migrations are
+  non-replayable, and `core_schema.sql` is only an incomplete local fixture;
+  production-derived schema capture is the compatibility baseline.
 - The repository tracks 5,204 files, including 235 files in the root: 91 SQL, 51 Markdown, 23 Python, and many temporary outputs. It also tracks a 3,059-file Python virtual environment, Firebase caches, scratch folders, token output, and hundreds of screenshots. Git storage is about 1 GB.
 - The current dirty worktree contains unrelated user changes. They must be preserved throughout this program.
 
@@ -48,7 +50,9 @@ The initial read-only audit found:
 4. **Quarantine uncertainty.** Delete only generated files or files proven unused by references, routes, history, builds, and tests. Ambiguous SQL/data-repair evidence is catalogued and retained.
 5. **Small, single-purpose commits.** Security, tooling, file moves, dead-code removal, schema work, and behavior changes never share one large commit.
 6. **Verify before and after every batch.** Capture the baseline, apply one batch, rerun its gate, and compare results.
-7. **Preserve canonical sources.** `supabase/sql/core_schema.sql` remains idempotent and canonical; applied migration history is never casually edited or deleted.
+7. **Preserve database authority.** Standalone migrations remain immutable and
+   production migration history is never casually edited or deleted.
+   `core_schema.sql` remains historical/local context only.
 8. **Stay current without chasing novelty.** Awareness is continuous; adoption is controlled. Prefer supported stable/LTS releases, prove compatibility in staging, and never auto-promote an untested toolchain or model change into production.
 
 ## Execution plan
@@ -136,7 +140,7 @@ Generate a cleanup inventory containing `path`, `type`, `tracked`, `size`, `last
 
 1. **Confirmed generated/security waste:** remove tracked virtual environments, `.firebase` cache, `.tmp`/`tmp` outputs, token files after rotation, `.DS_Store`, generated Flutter metadata, logs, and local launch credentials; strengthen `.gitignore` and pre-commit guards.
 2. **Screenshots/reports:** remove personal/debug screenshots from Git; keep only small named test fixtures under `test/fixtures`. Store intentional large media outside the source repository or with an explicitly managed artifact system.
-3. **SQL:** never bulk-delete the 91 root SQL files. Establish provenance, then move retained operational checks to `supabase/manual_checks/{diagnostics,recovery,archive}` with safety/tenant/purpose headers. Delete only proven terminal captures or superseded duplicates. Keep migrations, tests, and `core_schema.sql` in their canonical locations.
+3. **SQL:** never bulk-delete the 91 root SQL files. Establish provenance, then move retained operational checks to `supabase/manual_checks/{diagnostics,recovery,archive}` with safety/tenant/purpose headers. Delete only proven terminal captures or superseded duplicates. Keep migrations and tests in their governed locations; retain `core_schema.sql` explicitly as an incomplete historical/local reference.
 4. **Scripts:** retain maintained bootstrap, CI, deploy, diagnostic, and data-migration tools; require purpose/usage/safety headers. Delete one-off mutators and outputs only after reference and historical-purpose review.
 5. **Documentation:** move living docs to `docs/{architecture,development,guides,runbooks,decisions}`; consolidate stale handoffs under `docs/archive/YYYY-MM` with an index; remove dangerous competing schema documents after unique doctrine is merged.
 6. **Dart/assets:** use imports, exports, routes, dynamic entry points, asset references, and builds to validate candidates. Remove dead placeholders/`*_old`/`*_legacy` files in small batches. Treat CLI entry-point Dart files separately. Fix missing asset references before removing unused prototypes.

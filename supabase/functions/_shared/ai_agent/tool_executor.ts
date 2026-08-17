@@ -49,7 +49,7 @@ const toolContracts = {
     maxItems: 40,
   },
   search_inventory: {
-    rpc: "assistant_search_inventory_v6",
+    rpc: "assistant_search_inventory_v7",
     parameters: inventorySearchParameters,
     fields: [
       "entityId",
@@ -72,6 +72,87 @@ const toolContracts = {
       "minimumPrice",
       "maximumPrice",
     ],
+  },
+  rank_purchase_candidates: {
+    rpc: "assistant_rank_purchase_candidates_v1",
+    parameters: purchaseRankingParameters,
+    fields: [
+      "entityId",
+      "rank",
+      "rankingProfile",
+      "rankingVersion",
+      "rankingScore",
+      "productName",
+      "productSku",
+      "brand",
+      "category",
+      "supplierName",
+      "supplierWebsite",
+      "supplierLocation",
+      "isConfirmedLocal",
+      "supplierAvailability",
+      "currency",
+      "latestBaseUnitCostNet",
+      "latestAllocatedFreightNet",
+      "latestLandedUnitCostNet",
+      "catalogSalePriceGross",
+      "catalogSalePriceNet",
+      "projectedUnitGrossProfit",
+      "projectedGrossMarginRatio",
+      "purchaseCount",
+      "purchasedUnits",
+      "lastPurchaseAt",
+      "evidenceAgeDays",
+      "evidenceQuality",
+      "freightEvidence",
+      "economyScore",
+      "historyScore",
+      "recencyScore",
+      "stabilityScore",
+      "evidenceScore",
+    ],
+  },
+  build_purchase_scenarios: {
+    rpc: "assistant_build_purchase_scenarios_v1",
+    parameters: purchaseScenarioParameters,
+    fields: [
+      "scenarioKey",
+      "kind",
+      "label",
+      "coverageLineCount",
+      "externalCoverageLineCount",
+      "totalLineCount",
+      "externalLineCount",
+      "complete",
+      "supplierCount",
+      "historicalSubtotals",
+      "supplierAvailability",
+      "freightAssumption",
+      "lines",
+      "explanationCodes",
+    ],
+    maxItems: 3,
+  },
+  prepare_supply_request: {
+    rpc: "assistant_prepare_supply_request_v1",
+    parameters: supplyRequestParameters,
+    fields: [
+      "entityId",
+      "lineRef",
+      "description",
+      "productName",
+      "productSku",
+      "identityState",
+      "quantity",
+      "unit",
+      "technicalPredicates",
+      "preference",
+      "clarification",
+      "clarificationRequired",
+      "clarificationPrompts",
+      "profile",
+    ],
+    maxItems: 8,
   },
   find_inventory_risks: {
     rpc: "assistant_find_inventory_risks_v1",
@@ -491,6 +572,13 @@ export function createSupabaseAgentToolExecutor(
           : requestedLimit ?? ("maxItems" in contract ? contract.maxItems : 10);
         const result = call.name === "analyze_cash_and_receivables"
           ? validateCashAndReceivablesEnvelope(value, authority, call.arguments)
+          : call.name === "build_purchase_scenarios"
+          ? validatePurchaseScenarioEnvelope(value, authority, call.arguments)
+          : call.name === "prepare_supply_request"
+          ? validateSupplyRequestEnvelope(value, authority, {
+            items: parameters.p_items,
+            profile: parameters.p_profile,
+          }, call.arguments)
           : validateEnvelope(value, authority, contract.fields, maxItems);
         if (call.name === "get_business_snapshot") validateBusinessSnapshot(result, call.arguments);
         validateSpecializedResult(call.name, result, call.arguments);
@@ -727,6 +815,207 @@ function inventorySearchParameters(args: JsonObject): JsonObject {
   };
 }
 
+function purchaseRankingParameters(args: JsonObject): JsonObject {
+  if (
+    !hasExactKeys(args, ["catalogItemId", "query", "profile", "limit"]) ||
+    !(args.catalogItemId === null || validUuidValue(args.catalogItemId)) ||
+    !(args.query === null ||
+      (typeof args.query === "string" && args.query.trim() &&
+        utf8Bytes(args.query.trim()) <= 240)) ||
+    ((args.catalogItemId === null) === (args.query === null)) ||
+    !["balanced", "profitability", "urgent_local"].includes(
+      String(args.profile),
+    ) ||
+    !boundedInteger(args.limit, 1, 10)
+  ) throw new InvalidToolArguments();
+  return {
+    p_query: typeof args.query === "string" ? args.query.trim() : null,
+    p_product_id: args.catalogItemId,
+    p_profile: args.profile,
+    p_limit: args.limit,
+  };
+}
+
+function purchaseScenarioParameters(args: JsonObject): JsonObject {
+  if (
+    !hasExactKeys(args, ["items", "profile", "maxSuppliers", "limit"]) ||
+    !Array.isArray(args.items) || args.items.length < 2 || args.items.length > 8 ||
+    !["balanced", "profitability", "urgent_local"].includes(
+      String(args.profile),
+    ) ||
+    !boundedInteger(args.maxSuppliers, 1, 3) ||
+    !boundedInteger(args.limit, 1, 3)
+  ) throw new InvalidToolArguments();
+
+  const lineReferences = new Set<string>();
+  const items = args.items.map((item) => {
+    if (
+      !isRecord(item) ||
+      !hasExactKeys(item, ["lineRef", "productId", "quantity", "sourcingMode"]) ||
+      typeof item.lineRef !== "string" ||
+      !/^line-[1-8]$/.test(item.lineRef) ||
+      lineReferences.has(item.lineRef) ||
+      !validUuidValue(item.productId) ||
+      !finiteNumber(item.quantity) || (item.quantity as number) < 0.001 ||
+      (item.quantity as number) > 999999 ||
+      !["stock_first", "external_only"].includes(String(item.sourcingMode))
+    ) throw new InvalidToolArguments();
+    lineReferences.add(item.lineRef);
+    return {
+      lineRef: item.lineRef,
+      productId: item.productId,
+      quantity: item.quantity,
+      sourcingMode: item.sourcingMode,
+    };
+  });
+
+  return {
+    p_items: items,
+    p_profile: args.profile,
+    p_max_suppliers: args.maxSuppliers,
+    p_limit: args.limit,
+  };
+}
+
+function supplyRequestParameters(args: JsonObject): JsonObject {
+  if (
+    !hasExactKeys(args, ["items", "profile"]) ||
+    !Array.isArray(args.items) || args.items.length < 1 || args.items.length > 8 ||
+    !["balanced", "profitability", "urgent_local"].includes(String(args.profile))
+  ) throw new InvalidToolArguments();
+
+  const items = args.items.map((item, index) => {
+    const baseFields = [
+      "description",
+      "productId",
+      "quantity",
+      "unit",
+      "technicalPredicates",
+      "preference",
+      "clarification",
+      "clarificationRequired",
+    ] as const;
+    if (
+      !isRecord(item) ||
+      (!hasExactKeys(item, baseFields) &&
+        !hasExactKeys(item, [...baseFields, "clarificationPrompts"])) ||
+      !(item.productId === null || validUuidValue(item.productId)) ||
+      typeof item.description !== "string" || !item.description.trim() ||
+      utf8Bytes(item.description.trim()) > 2000 ||
+      !finiteNumber(item.quantity) || (item.quantity as number) < 0.001 ||
+      (item.quantity as number) > 999999 ||
+      typeof item.unit !== "string" || !item.unit.trim() ||
+      utf8Bytes(item.unit.trim()) > 32 ||
+      !(item.preference === null ||
+        (typeof item.preference === "string" && item.preference.trim() &&
+          utf8Bytes(item.preference.trim()) <= 240)) ||
+      !(item.clarification === null ||
+        (typeof item.clarification === "string" && item.clarification.trim() &&
+          utf8Bytes(item.clarification.trim()) <= 500)) ||
+      typeof item.clarificationRequired !== "boolean" ||
+      (item.clarificationRequired === true && item.clarification === null) ||
+      (item.clarificationRequired === true && item.productId !== null) ||
+      ("clarificationPrompts" in item &&
+        !validSupplyClarificationPrompts(
+          item.clarificationPrompts,
+          item.clarificationRequired === true,
+        ))
+    ) throw new InvalidToolArguments();
+
+    return {
+      lineRef: `line-${index + 1}`,
+      description: item.description.trim(),
+      productId: item.productId,
+      quantity: item.quantity,
+      unit: item.unit.trim(),
+      technicalPredicates: normalizedInventoryTechnicalPredicates(
+        item.technicalPredicates,
+      ),
+      preference: typeof item.preference === "string" ? item.preference.trim() : null,
+      clarification: typeof item.clarification === "string" ? item.clarification.trim() : null,
+      clarificationRequired: item.clarificationRequired,
+    };
+  });
+
+  return { p_items: items, p_profile: args.profile };
+}
+
+function validSupplyClarificationPrompts(
+  value: JsonValue,
+  required: boolean,
+): boolean {
+  if (!Array.isArray(value) || value.length > 3) return false;
+  if (!required) return value.length === 0;
+  if (value.length < 1) return false;
+  const ids = new Set<string>();
+  for (const prompt of value) {
+    if (
+      !isRecord(prompt) ||
+      !hasExactKeys(prompt, [
+        "id",
+        "question",
+        "inputKind",
+        "options",
+        "unit",
+        "allowUnknown",
+      ]) ||
+      typeof prompt.id !== "string" ||
+      !/^[a-z][a-z0-9_]{1,31}$/.test(prompt.id) || ids.has(prompt.id) ||
+      typeof prompt.question !== "string" || !prompt.question.trim() ||
+      utf8Bytes(prompt.question.trim()) > 320 ||
+      !["single_choice", "text", "number"].includes(String(prompt.inputKind)) ||
+      !Array.isArray(prompt.options) || prompt.options.length > 5 ||
+      typeof prompt.allowUnknown !== "boolean" ||
+      !(prompt.unit === null ||
+        (typeof prompt.unit === "string" && prompt.unit.trim() &&
+          utf8Bytes(prompt.unit.trim()) <= 32))
+    ) return false;
+    ids.add(prompt.id);
+    if (prompt.inputKind === "single_choice") {
+      if (prompt.options.length < 2 || prompt.unit !== null) return false;
+      const values = new Set<string>();
+      for (const option of prompt.options) {
+        if (
+          !isRecord(option) || !hasExactKeys(option, ["value", "label"]) ||
+          typeof option.value !== "string" ||
+          !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(option.value) ||
+          values.has(option.value) || typeof option.label !== "string" ||
+          !option.label.trim() || utf8Bytes(option.label.trim()) > 160
+        ) return false;
+        values.add(option.value);
+      }
+    } else if (prompt.options.length !== 0) {
+      return false;
+    } else if (prompt.inputKind !== "number" && prompt.unit !== null) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function normalizedSupplyClarificationPrompts(value: JsonValue): JsonObject[] {
+  if (!Array.isArray(value)) throw new InvalidToolArguments();
+  return value.map((prompt) => {
+    if (!isRecord(prompt) || !Array.isArray(prompt.options)) {
+      throw new InvalidToolArguments();
+    }
+    return {
+      id: String(prompt.id),
+      question: String(prompt.question).trim(),
+      inputKind: String(prompt.inputKind),
+      options: prompt.options.map((option) => {
+        if (!isRecord(option)) throw new InvalidToolArguments();
+        return {
+          value: String(option.value),
+          label: String(option.label).trim(),
+        };
+      }),
+      unit: typeof prompt.unit === "string" ? prompt.unit.trim() : null,
+      allowUnknown: prompt.allowUnknown as boolean,
+    };
+  });
+}
+
 function normalizedInventoryTechnicalPredicates(value: JsonValue): JsonValue[] {
   if (!Array.isArray(value) || value.length > 8) throw new InvalidToolArguments();
   const fields = new Set<string>();
@@ -927,6 +1216,52 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
   }
   if (toolName === "get_workshop_job_context") {
     if (!validUuidValue(parameters.p_job_id)) throw new InvalidToolArguments();
+    return;
+  }
+  if (toolName === "rank_purchase_candidates") {
+    if (
+      !(parameters.p_query === null ||
+        (typeof parameters.p_query === "string" && parameters.p_query.trim() &&
+          utf8Bytes(parameters.p_query) <= 240)) ||
+      !(parameters.p_product_id === null || validUuidValue(parameters.p_product_id)) ||
+      ((parameters.p_query === null) === (parameters.p_product_id === null)) ||
+      !["balanced", "profitability", "urgent_local"].includes(
+        String(parameters.p_profile),
+      ) ||
+      !boundedInteger(parameters.p_limit, 1, 10)
+    ) throw new InvalidToolArguments();
+    return;
+  }
+  if (toolName === "build_purchase_scenarios") {
+    if (
+      !Array.isArray(parameters.p_items) ||
+      parameters.p_items.length < 2 || parameters.p_items.length > 8 ||
+      !["balanced", "profitability", "urgent_local"].includes(
+        String(parameters.p_profile),
+      ) ||
+      !boundedInteger(parameters.p_max_suppliers, 1, 3) ||
+      !boundedInteger(parameters.p_limit, 1, 3)
+    ) throw new InvalidToolArguments();
+    for (const item of parameters.p_items) {
+      if (
+        !isRecord(item) ||
+        !hasExactKeys(item, ["lineRef", "productId", "quantity", "sourcingMode"]) ||
+        typeof item.lineRef !== "string" || !/^line-[1-8]$/.test(item.lineRef) ||
+        !validUuidValue(item.productId) || !finiteNumber(item.quantity) ||
+        (item.quantity as number) < 0.001 || (item.quantity as number) > 999999 ||
+        !["stock_first", "external_only"].includes(String(item.sourcingMode))
+      ) throw new InvalidToolArguments();
+    }
+    return;
+  }
+  if (toolName === "prepare_supply_request") {
+    if (
+      !Array.isArray(parameters.p_items) ||
+      parameters.p_items.length < 1 || parameters.p_items.length > 8 ||
+      !["balanced", "profitability", "urgent_local"].includes(
+        String(parameters.p_profile),
+      )
+    ) throw new InvalidToolArguments();
     return;
   }
   if (toolName === "inspect_diagnosis_schema") {
@@ -1140,6 +1475,280 @@ function validateEnvelope(
     items,
     resultCount: value.resultCount as number,
     hasMore: value.hasMore,
+  });
+}
+
+function validatePurchaseScenarioEnvelope(
+  value: unknown,
+  authority: AgentAuthority,
+  args: JsonObject,
+): AgentToolResultEnvelope {
+  const requestedLimit = args.limit as number;
+  const envelope = validateEnvelopeBase(value, authority, requestedLimit);
+  if (!Array.isArray(args.items)) throw new Error("invalid purchase scenarios");
+  const requestedByRef = new Map<string, JsonObject>();
+  for (const item of args.items) {
+    if (!isRecord(item) || typeof item.lineRef !== "string") {
+      throw new Error("invalid purchase scenarios");
+    }
+    requestedByRef.set(item.lineRef, item);
+  }
+
+  const scenarioFields = [
+    "scenarioKey",
+    "kind",
+    "label",
+    "coverageLineCount",
+    "externalCoverageLineCount",
+    "totalLineCount",
+    "externalLineCount",
+    "complete",
+    "supplierCount",
+    "historicalSubtotals",
+    "supplierAvailability",
+    "freightAssumption",
+    "lines",
+    "explanationCodes",
+  ] as const;
+  const lineFields = new Set([
+    "lineRef",
+    "productName",
+    "productSku",
+    "requestedQuantity",
+    "availableToPromise",
+    "sourcing",
+    "covered",
+    "supplierName",
+    "isConfirmedLocal",
+    "supplierAvailability",
+    "currency",
+    "latestLandedUnitCostNet",
+    "projectedGrossMarginRatio",
+    "purchaseCount",
+    "evidenceAgeDays",
+    "evidenceQuality",
+    "freightEvidence",
+  ]);
+  const projectedItems = envelope.items.map((scenario) => {
+    if (
+      !isRecord(scenario) || !hasExactKeys(scenario, scenarioFields) ||
+      typeof scenario.scenarioKey !== "string" ||
+      !scenario.scenarioKey.trim() || utf8Bytes(scenario.scenarioKey) > 128 ||
+      !["internal_stock", "recommended", "consolidated", "lowest_historical_cost"]
+        .includes(String(scenario.kind)) ||
+      typeof scenario.label !== "string" || !scenario.label.trim() ||
+      utf8Bytes(scenario.label) > 120 ||
+      !Number.isSafeInteger(scenario.coverageLineCount) ||
+      !Number.isSafeInteger(scenario.externalCoverageLineCount) ||
+      !Number.isSafeInteger(scenario.totalLineCount) ||
+      !Number.isSafeInteger(scenario.externalLineCount) ||
+      typeof scenario.complete !== "boolean" ||
+      !Number.isSafeInteger(scenario.supplierCount) ||
+      (scenario.supplierCount as number) < 0 ||
+      (scenario.supplierCount as number) > (args.maxSuppliers as number) ||
+      !["not_applicable", "historical_only_unverified"].includes(
+        String(scenario.supplierAvailability),
+      ) ||
+      ![
+        "not_applicable",
+        "sum_historical_landed_line_costs_no_consolidation_saving",
+      ].includes(String(scenario.freightAssumption)) ||
+      !Array.isArray(scenario.historicalSubtotals) ||
+      scenario.historicalSubtotals.length > 8 ||
+      !Array.isArray(scenario.lines) ||
+      scenario.lines.length !== requestedByRef.size ||
+      !Array.isArray(scenario.explanationCodes) ||
+      scenario.explanationCodes.length < 1 ||
+      scenario.explanationCodes.length > 5
+    ) throw new Error("invalid purchase scenarios");
+
+    for (const subtotal of scenario.historicalSubtotals) {
+      if (
+        !isRecord(subtotal) ||
+        !hasExactKeys(subtotal, ["currency", "historicalLandedSubtotalNet"]) ||
+        typeof subtotal.currency !== "string" || !subtotal.currency.trim() ||
+        utf8Bytes(subtotal.currency) > 8 ||
+        !finiteNumber(subtotal.historicalLandedSubtotalNet) ||
+        (subtotal.historicalLandedSubtotalNet as number) < 0
+      ) throw new Error("invalid purchase scenario subtotal");
+    }
+
+    const seenRefs = new Set<string>();
+    let covered = 0;
+    let external = 0;
+    let coveredExternal = 0;
+    for (const line of scenario.lines) {
+      if (
+        !isRecord(line) ||
+        Object.keys(line).some((key) => !lineFields.has(key)) ||
+        typeof line.lineRef !== "string" || seenRefs.has(line.lineRef) ||
+        typeof line.productName !== "string" || !line.productName.trim() ||
+        !finiteNumber(line.requestedQuantity) ||
+        !Number.isSafeInteger(line.availableToPromise) ||
+        (line.availableToPromise as number) < 0 ||
+        !["internal", "external", "uncovered"].includes(String(line.sourcing)) ||
+        typeof line.covered !== "boolean"
+      ) throw new Error("invalid purchase scenario line");
+      const requested = requestedByRef.get(line.lineRef);
+      if (
+        !requested || requested.quantity !== line.requestedQuantity ||
+        (line.productSku !== undefined &&
+          (typeof line.productSku !== "string" || !line.productSku.trim()))
+      ) throw new Error("purchase scenario line mismatch");
+      seenRefs.add(line.lineRef);
+
+      if (line.covered) covered += 1;
+      if (line.sourcing !== "internal") external += 1;
+      if (line.sourcing === "external") coveredExternal += 1;
+      if (
+        (line.sourcing === "internal" &&
+          (line.covered !== true || requested.sourcingMode === "external_only")) ||
+        (line.sourcing === "uncovered" && line.covered !== false) ||
+        (line.sourcing === "external" &&
+          (line.covered !== true || typeof line.supplierName !== "string" ||
+            !line.supplierName.trim() || line.supplierAvailability !== "unverified" ||
+            typeof line.currency !== "string" || !line.currency.trim() ||
+            !finiteNumber(line.latestLandedUnitCostNet)))
+      ) throw new Error("invalid purchase scenario sourcing");
+    }
+
+    if (
+      seenRefs.size !== requestedByRef.size ||
+      scenario.coverageLineCount !== covered ||
+      scenario.externalLineCount !== external ||
+      scenario.externalCoverageLineCount !== coveredExternal ||
+      scenario.totalLineCount !== requestedByRef.size ||
+      scenario.complete !== (covered === requestedByRef.size) ||
+      (scenario.kind === "internal_stock" &&
+        (external !== 0 || scenario.supplierCount !== 0)) ||
+      scenario.explanationCodes.some((code) =>
+        typeof code !== "string" || ![
+          "stock_first",
+          "external_only",
+          "complete_external_coverage",
+          "partial_external_coverage",
+          "supplier_consolidation",
+          "historical_cost_comparison",
+          "profile_ranked",
+          "historical_availability_unverified",
+          "no_consolidation_freight_saving_assumed",
+        ].includes(code)
+      )
+    ) throw new Error("invalid purchase scenario coverage");
+    return Object.freeze({ ...scenario }) as JsonObject;
+  });
+
+  return Object.freeze({
+    ...envelope,
+    items: Object.freeze(projectedItems),
+  }) as AgentToolResultEnvelope;
+}
+
+function validateSupplyRequestEnvelope(
+  value: unknown,
+  authority: AgentAuthority,
+  args: JsonObject,
+  sourceArgs: JsonObject,
+): AgentToolResultEnvelope {
+  const requestedItems = args.items;
+  const sourceItems = sourceArgs.items;
+  if (
+    !Array.isArray(requestedItems) || !Array.isArray(sourceItems) ||
+    requestedItems.length !== sourceItems.length
+  ) throw new Error("invalid supply request draft");
+  const envelope = validateEnvelopeBase(value, authority, 8);
+  const fields = [
+    "entityId",
+    "lineRef",
+    "description",
+    "productName",
+    "productSku",
+    "identityState",
+    "quantity",
+    "unit",
+    "technicalPredicates",
+    "preference",
+    "clarification",
+    "clarificationRequired",
+    "profile",
+  ] as const;
+  if (
+    envelope.status !== "success" || envelope.hasMore ||
+    envelope.items.length !== requestedItems.length
+  ) throw new Error("invalid supply request draft");
+
+  const projected = envelope.items.map((item, index) => {
+    const requested = requestedItems[index];
+    const source = sourceItems[index];
+    if (
+      !isRecord(requested) || !isRecord(source) || !isRecord(item) ||
+      !hasExactKeys(item, fields) ||
+      !(item.entityId === null ||
+        (typeof item.entityId === "string" && validUuid(item.entityId))) ||
+      item.entityId !== requested.productId ||
+      item.lineRef !== requested.lineRef ||
+      item.description !== requested.description ||
+      item.quantity !== requested.quantity || item.unit !== requested.unit ||
+      item.preference !== requested.preference ||
+      item.clarification !== requested.clarification ||
+      item.clarificationRequired !== requested.clarificationRequired ||
+      item.profile !== args.profile ||
+      !sameTechnicalPredicates(
+        item.technicalPredicates,
+        requested.technicalPredicates,
+      ) ||
+      !["unresolved", "confirmed"].includes(String(item.identityState)) ||
+      (item.entityId === null &&
+        (item.identityState !== "unresolved" || item.productName !== null ||
+          item.productSku !== null)) ||
+      (item.entityId !== null &&
+        (item.identityState !== "confirmed" ||
+          typeof item.productName !== "string" || !item.productName.trim() ||
+          !(item.productSku === null ||
+            (typeof item.productSku === "string" && item.productSku.trim()))))
+    ) throw new Error("invalid supply request draft");
+    const prompts = normalizedSupplyClarificationPrompts(
+      source.clarificationPrompts ?? [],
+    );
+    if (
+      "clarificationPrompts" in source &&
+      !validSupplyClarificationPrompts(
+        prompts,
+        requested.clarificationRequired === true,
+      )
+    ) throw new Error("invalid supply request draft");
+    return Object.freeze({
+      ...item,
+      clarificationPrompts: prompts,
+    }) as JsonObject;
+  });
+
+  return Object.freeze({
+    ...envelope,
+    items: Object.freeze(projected),
+  }) as AgentToolResultEnvelope;
+}
+
+function sameTechnicalPredicates(actual: unknown, expected: unknown): boolean {
+  if (!Array.isArray(actual) || !Array.isArray(expected) || actual.length !== expected.length) {
+    return false;
+  }
+  return actual.every((predicate, index) => {
+    const requested = expected[index];
+    if (
+      !isRecord(predicate) || !isRecord(requested) ||
+      !hasExactKeys(predicate, ["field", "operator", "values"]) ||
+      !hasExactKeys(requested, ["field", "operator", "values"]) ||
+      predicate.field !== requested.field ||
+      predicate.operator !== requested.operator
+    ) return false;
+    const actualValues = predicate.values;
+    const requestedValues = requested.values;
+    if (
+      !Array.isArray(actualValues) || !Array.isArray(requestedValues) ||
+      actualValues.length !== requestedValues.length
+    ) return false;
+    return actualValues.every((value, valueIndex) => value === requestedValues[valueIndex]);
   });
 }
 

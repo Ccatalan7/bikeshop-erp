@@ -17,6 +17,9 @@ const prepareTaskToolName = "prepare_task";
 const prepareDiagnosisUpdateToolName = "prepare_diagnosis_update";
 const prepareWorkshopItemToolName = "prepare_workshop_item";
 const inventorySchemaToolName = "inspect_inventory_schema";
+const purchaseRankingToolName = "rank_purchase_candidates";
+const purchaseScenarioToolName = "build_purchase_scenarios";
+const prepareSupplyRequestToolName = "prepare_supply_request";
 const capabilityGapToolName = "report_capability_gap";
 
 export class ToolRegistryError extends Error {
@@ -115,6 +118,15 @@ export class AgentToolRegistry {
     }
     if (call.name === "analyze_sales_period") {
       validateSalesPeriodProjection(call.arguments, status);
+    }
+    if (call.name === purchaseRankingToolName) {
+      validatePurchaseRankingProjection(call.arguments, status);
+    }
+    if (call.name === purchaseScenarioToolName) {
+      validatePurchaseScenarioProjection(call.arguments, status);
+    }
+    if (call.name === prepareSupplyRequestToolName) {
+      validatePrepareSupplyRequestProjection(call.arguments, status);
     }
   }
 
@@ -298,6 +310,274 @@ const inventorySchemaInspectionSchema: StrictJsonSchema = {
     },
   },
   required: ["query", "category"],
+  additionalProperties: false,
+};
+
+const purchaseRankingSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    catalogItemRef: {
+      type: ["string", "null"],
+      minLength: 36,
+      maxLength: 36,
+      description:
+        "Referencia opaca exacta devuelta por search_inventory. Úsala cuando ya se resolvió un producto del catálogo; nunca copies ni inventes un UUID interno.",
+    },
+    query: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 240,
+      description:
+        "Identidad breve ya descompuesta del producto cuando todavía no existe una referencia exacta. Omite palabras de intención como necesito, comprar o buscar. Debe ser null cuando catalogItemRef está presente.",
+    },
+    profile: enumProperty(
+      ["balanced", "profitability", "urgent_local"],
+      "Perfil explícito del ranking: equilibrio general, mayor rentabilidad o rescate local urgente.",
+    ),
+    limit: integerProperty(1, 10, "Máximo seguro de alternativas históricas."),
+  },
+  required: ["catalogItemRef", "query", "profile", "limit"],
+  additionalProperties: false,
+};
+
+const purchaseScenarioSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      minItems: 2,
+      maxItems: 8,
+      description:
+        "Productos exactos ya resueltos para la canasta, en el mismo orden de la petición. No agregues ni combines líneas que el operador no pidió.",
+      items: {
+        type: "object",
+        properties: {
+          catalogItemRef: {
+            type: "string",
+            minLength: 36,
+            maxLength: 36,
+            description:
+              "Referencia opaca exacta publicada por search_inventory; nunca copies ni inventes un UUID interno.",
+          },
+          quantity: {
+            type: "number",
+            minimum: 0.001,
+            maximum: 999999,
+            description: "Cantidad positiva pedida para esta línea.",
+          },
+          externalOnly: {
+            type: "boolean",
+            description:
+              "Usa true sólo si el operador descartó expresamente el stock interno para esta línea; en todo otro caso usa false.",
+          },
+        },
+        required: ["catalogItemRef", "quantity", "externalOnly"],
+        additionalProperties: false,
+      },
+    },
+    profile: enumProperty(
+      ["balanced", "profitability", "urgent_local"],
+      "Objetivo comercial explícito aplicado a todas las líneas.",
+    ),
+    maxSuppliers: integerProperty(
+      1,
+      3,
+      "Máximo de proveedores permitido en cada escenario externo.",
+    ),
+    limit: integerProperty(1, 3, "Máximo de escenarios materialmente distintos."),
+  },
+  required: ["items", "profile", "maxSuppliers", "limit"],
+  additionalProperties: false,
+};
+
+const prepareSupplyRequestSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      minItems: 1,
+      maxItems: 8,
+      description:
+        "Una línea por producto solicitado, en el orden del operador. No combines categorías distintas en una sola línea ni inventes una línea que no fue pedida.",
+      items: {
+        type: "object",
+        properties: {
+          catalogItemRef: {
+            type: ["string", "null"],
+            minLength: 36,
+            maxLength: 36,
+            description:
+              "Referencia opaca exacta de search_inventory, o null si hay varias alternativas, falta precisión técnica o el producto aún no existe. Nunca inventes un UUID.",
+          },
+          description: {
+            type: "string",
+            minLength: 1,
+            maxLength: 2000,
+            description:
+              "Descripción breve que conserva literalmente medidas, marca, gama, preferencias y relaciones expresadas. No agregues 'para' una rueda, bicicleta o sistema si el operador sólo dio una medida ambigua; elimina únicamente palabras de conversación.",
+          },
+          quantity: {
+            type: "number",
+            minimum: 0.001,
+            maximum: 999999,
+            description:
+              "Cantidad explícita. Usa 1 sólo cuando el operador realmente no indicó otra cantidad.",
+          },
+          unit: {
+            type: "string",
+            minLength: 1,
+            maxLength: 32,
+            description:
+              "Unidad operacional corta en español, por ejemplo unidad, par, juego o metro. Conserva una unidad explícita; no conviertas medidas técnicas en cantidad.",
+          },
+          technicalPredicates: {
+            type: "array",
+            minItems: 0,
+            maxItems: 8,
+            description:
+              "Restricciones técnicas explícitas con las claves y operadores exactos descubiertos por inspect_inventory_schema. Usa [] si la ficha no permite estructurarlas; la descripción conserva el texto.",
+            items: {
+              type: "object",
+              properties: {
+                field: {
+                  type: "string",
+                  minLength: 2,
+                  maxLength: 64,
+                  description: "Clave exacta de spec_definitions.key.",
+                },
+                operator: {
+                  type: "string",
+                  enum: ["eq", "neq", "lt", "lte", "gt", "gte", "between", "in", "contains"],
+                  description: "Operador autorizado para el campo.",
+                },
+                values: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 10,
+                  items: { type: ["string", "number", "boolean"] },
+                  description: "Valores tipados exactos de la restricción.",
+                },
+              },
+              required: ["field", "operator", "values"],
+              additionalProperties: false,
+            },
+          },
+          preference: {
+            type: ["string", "null"],
+            minLength: 1,
+            maxLength: 240,
+            description:
+              "Preferencia comercial breve no representada por la identidad técnica, como gama económica, marca preferida o margen; null si no existe.",
+          },
+          clarification: {
+            type: ["string", "null"],
+            minLength: 1,
+            maxLength: 500,
+            description:
+              "Resumen concreto de la duda del operador cuando clarificationRequired=true, o advertencia de evidencia/datos del sistema cuando es false; null si no hace falta. Nunca presentes una carencia del catálogo como si al operador le faltara responder.",
+          },
+          clarificationRequired: {
+            type: "boolean",
+            description:
+              "true sólo cuando falta una decisión o dato material que el operador no entregó. Debe ser false si la petición es inequívoca y la única carencia pertenece a las fichas o evidencia del ERP.",
+          },
+          clarificationPrompts: {
+            type: "array",
+            minItems: 0,
+            maxItems: 3,
+            description:
+              "Preguntas tipadas y category-agnostic que el operador puede responder ahora. Prefiere sólo la próxima pregunta decisiva. Debe ser [] salvo cuando clarificationRequired=true.",
+            items: {
+              type: "object",
+              properties: {
+                id: {
+                  type: "string",
+                  minLength: 2,
+                  maxLength: 32,
+                  description:
+                    "Identificador semántico estable snake_case dentro de la línea; no contiene nombres de tabla ni UUID.",
+                },
+                question: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 320,
+                  description:
+                    "Una sola pregunta clara sobre el próximo dato material. No combines varias decisiones en una pregunta.",
+                },
+                inputKind: {
+                  type: "string",
+                  enum: ["single_choice", "text", "number"],
+                  description:
+                    "single_choice para lecturas cerradas, number para una magnitud y text para una respuesta libre breve.",
+                },
+                options: {
+                  type: "array",
+                  minItems: 0,
+                  maxItems: 5,
+                  description:
+                    "Entre 2 y 5 alternativas sólo para single_choice; [] para text y number.",
+                  items: {
+                    type: "object",
+                    properties: {
+                      value: {
+                        type: "string",
+                        minLength: 1,
+                        maxLength: 64,
+                      },
+                      label: {
+                        type: "string",
+                        minLength: 1,
+                        maxLength: 160,
+                      },
+                    },
+                    required: ["value", "label"],
+                    additionalProperties: false,
+                  },
+                },
+                unit: {
+                  type: ["string", "null"],
+                  minLength: 1,
+                  maxLength: 32,
+                  description: "Unidad visible sólo para number; null en los demás tipos.",
+                },
+                allowUnknown: {
+                  type: "boolean",
+                  description:
+                    "true cuando el flujo puede avanzar con «No lo sé» y buscar otra forma de resolver; no implica inventar un valor.",
+                },
+              },
+              required: [
+                "id",
+                "question",
+                "inputKind",
+                "options",
+                "unit",
+                "allowUnknown",
+              ],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: [
+          "catalogItemRef",
+          "description",
+          "quantity",
+          "unit",
+          "technicalPredicates",
+          "preference",
+          "clarification",
+          "clarificationRequired",
+          "clarificationPrompts",
+        ],
+        additionalProperties: false,
+      },
+    },
+    profile: enumProperty(
+      ["balanced", "profitability", "urgent_local"],
+      "Objetivo comercial que mejor refleja la petición completa.",
+    ),
+  },
+  required: ["items", "profile"],
   additionalProperties: false,
 };
 
@@ -798,6 +1078,26 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
       operationalRead,
     ),
     readTool(
+      purchaseRankingToolName,
+      "Compara proveedores históricos para un producto exacto o una identidad breve. El servidor calcula costo aterrizado, margen, frecuencia, recencia, estabilidad y calidad de evidencia con una fórmula versionada. La disponibilidad del proveedor siempre queda como no verificada; usa esta herramienta sólo después de revisar primero el stock interno cuando la intención es abastecer.",
+      purchaseRankingSchema,
+      purchasesRead,
+    ),
+    {
+      name: purchaseScenarioToolName,
+      description:
+        "Construye escenarios acotados para una canasta de productos exactos. Consulta ATP, mantiene stock interno primero, limita proveedores, conserva faltantes y compara costo aterrizado histórico sin inventar ahorro de flete ni disponibilidad vigente. Úsala después de resolver cada producto con search_inventory.",
+      parameters: purchaseScenarioSchema,
+      requiredPermissions: [operationalRead, purchasesRead],
+    },
+    {
+      name: prepareSupplyRequestToolName,
+      description:
+        "Estructura una petición real de abastecimiento en una a ocho líneas revisables. Úsala en el Asistente de compras después de descomponer la frase, inspeccionar fichas cuando haya especificaciones y consultar stock para cada identidad. Vincula catalogItemRef sólo ante una coincidencia exacta; conserva dudas como aclaraciones y termina siempre con esta herramienta cuando el operador quiere encontrar, abastecer o comprar productos. No crea necesidades, reservas, compras ni documentos: el usuario revisa y confirma el borrador en la interfaz.",
+      parameters: prepareSupplyRequestSchema,
+      requiredPermissions: [operationalRead, purchasesRead],
+    },
+    readTool(
       "find_inventory_risks",
       "Detecta productos con stock bajo o agotado usando filtros autorizados de inventario.",
       inventoryRisksSchema,
@@ -1009,6 +1309,146 @@ function validatePublicResearchProjection(
   } catch (_) {
     throw invalidPublicResearchArguments(status);
   }
+}
+
+function validatePurchaseRankingProjection(
+  argumentsValue: Readonly<Record<string, JsonValue>>,
+  status: 400 | 502,
+): void {
+  const hasCatalogReference = typeof argumentsValue.catalogItemRef === "string";
+  const hasQuery = typeof argumentsValue.query === "string" &&
+    argumentsValue.query.trim().length > 0;
+  if (hasCatalogReference === hasQuery) {
+    throw new ToolRegistryError(
+      status,
+      "invalid_tool_arguments",
+      "AI tool arguments are invalid",
+    );
+  }
+}
+
+function validatePurchaseScenarioProjection(
+  argumentsValue: Readonly<Record<string, JsonValue>>,
+  status: 400 | 502,
+): void {
+  if (!Array.isArray(argumentsValue.items)) {
+    throw new ToolRegistryError(
+      status,
+      "invalid_tool_arguments",
+      "AI tool arguments are invalid",
+    );
+  }
+  const references = new Set<string>();
+  for (const item of argumentsValue.items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const reference = "catalogItemRef" in item ? item.catalogItemRef : null;
+    if (typeof reference !== "string" || references.has(reference)) {
+      throw new ToolRegistryError(
+        status,
+        "invalid_tool_arguments",
+        "AI tool arguments are invalid",
+      );
+    }
+    references.add(reference);
+  }
+}
+
+function validatePrepareSupplyRequestProjection(
+  argumentsValue: Readonly<Record<string, JsonValue>>,
+  status: 400 | 502,
+): void {
+  if (!Array.isArray(argumentsValue.items)) {
+    throw new ToolRegistryError(
+      status,
+      "invalid_tool_arguments",
+      "AI tool arguments are invalid",
+    );
+  }
+  for (const item of argumentsValue.items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const clarification = "clarification" in item ? item.clarification : null;
+    const required = "clarificationRequired" in item ? item.clarificationRequired : false;
+    const prompts = "clarificationPrompts" in item ? item.clarificationPrompts : null;
+    const catalogItemRef = "catalogItemRef" in item ? item.catalogItemRef : null;
+    if (
+      (required === true && typeof clarification !== "string") ||
+      (required === true && typeof catalogItemRef === "string") ||
+      !validSupplyClarificationPrompts(prompts, required === true)
+    ) {
+      throw new ToolRegistryError(
+        status,
+        "invalid_tool_arguments",
+        "AI tool arguments are invalid",
+      );
+    }
+  }
+}
+
+function validSupplyClarificationPrompts(
+  value: unknown,
+  required: boolean,
+): boolean {
+  if (!Array.isArray(value) || value.length > 3) return false;
+  if (!required) return value.length === 0;
+  if (value.length < 1) return false;
+  const ids = new Set<string>();
+  for (const prompt of value) {
+    if (!prompt || typeof prompt !== "object" || Array.isArray(prompt)) return false;
+    const item = prompt as Record<string, unknown>;
+    if (
+      !hasExactKeys(item, [
+        "id",
+        "question",
+        "inputKind",
+        "options",
+        "unit",
+        "allowUnknown",
+      ]) ||
+      typeof item.id !== "string" || !/^[a-z][a-z0-9_]{1,31}$/.test(item.id) ||
+      ids.has(item.id) || typeof item.question !== "string" ||
+      !item.question.trim() || utf8Bytes(item.question.trim()) > 320 ||
+      !["single_choice", "text", "number"].includes(String(item.inputKind)) ||
+      !Array.isArray(item.options) || item.options.length > 5 ||
+      typeof item.allowUnknown !== "boolean" ||
+      !(item.unit === null ||
+        (typeof item.unit === "string" && item.unit.trim() &&
+          utf8Bytes(item.unit.trim()) <= 32))
+    ) return false;
+    ids.add(item.id);
+    if (item.inputKind === "single_choice") {
+      if (item.options.length < 2 || item.unit !== null) return false;
+      const optionValues = new Set<string>();
+      for (const option of item.options) {
+        if (!option || typeof option !== "object" || Array.isArray(option)) return false;
+        const candidate = option as Record<string, unknown>;
+        if (
+          !hasExactKeys(candidate, ["value", "label"]) ||
+          typeof candidate.value !== "string" ||
+          !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(candidate.value) ||
+          optionValues.has(candidate.value) || typeof candidate.label !== "string" ||
+          !candidate.label.trim() || utf8Bytes(candidate.label.trim()) > 160
+        ) return false;
+        optionValues.add(candidate.value);
+      }
+    } else if (item.options.length !== 0) {
+      return false;
+    } else if (item.inputKind !== "number" && item.unit !== null) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function hasExactKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => key in value);
+}
+
+function utf8Bytes(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
 }
 
 function validatePrepareTaskProjection(

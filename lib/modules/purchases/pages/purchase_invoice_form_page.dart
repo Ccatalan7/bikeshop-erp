@@ -35,6 +35,7 @@ import '../../../shared/widgets/ocr_upload_widget.dart';
 import '../../inventory/pages/product_form_page.dart';
 import '../../bikeshop/widgets/task_form_dialog.dart';
 import '../models/purchase_invoice.dart';
+import '../models/purchase_invoice_draft_seed.dart';
 import '../models/purchase_credit_note.dart';
 import '../models/purchase_receipt.dart';
 import '../models/purchase_receipt_resolution.dart';
@@ -300,6 +301,8 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
   final bool isPrepayment;
   final String? initialSupplierId;
   final List<Map<String, dynamic>>? initialLineItems;
+  final String? initialSourceDocumentKind;
+  final PurchaseInvoiceDraftSeed? initialDraftSeed;
   final bool readOnly; // View-only mode (no editing, no status changes)
 
   const PurchaseInvoiceFormPage({
@@ -308,6 +311,8 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
     this.isPrepayment = false,
     this.initialSupplierId,
     this.initialLineItems,
+    this.initialSourceDocumentKind,
+    this.initialDraftSeed,
     this.readOnly = false,
     this.referrer,
     this.exitGuardScope,
@@ -355,6 +360,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   DateTime? _dueDate;
   PurchaseInvoiceStatus _status = PurchaseInvoiceStatus.draft;
   TaxTreatment _taxTreatment = TaxTreatment.noTax;
+  List<PurchaseSourceDocumentKind> _sourceDocumentKinds = const [];
+  String _sourceDocumentKind = PurchaseSourceDocumentKind.defaultCode;
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -380,6 +387,19 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   /// Defaults to true (prepayment) for new invoices
   late bool _isPrepaymentModel;
 
+  PurchaseSourceDocumentKind? get _selectedSourceDocumentKind {
+    for (final kind in _sourceDocumentKinds) {
+      if (kind.code == _sourceDocumentKind) return kind;
+    }
+    return null;
+  }
+
+  String get _sourceDocumentLabel =>
+      _selectedSourceDocumentKind?.displayName ?? 'Documento de compra';
+
+  bool get _usesDirectPurchaseWorkflow =>
+      _selectedSourceDocumentKind?.isDirectPurchase ?? false;
+
   List<shared_supplier.Supplier> _supplierCache = const [];
   List<Product> _productCache = const [];
 
@@ -403,6 +423,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   @override
   void initState() {
     super.initState();
+    _sourceDocumentKind = widget.initialDraftSeed?.sourceDocumentKind ??
+        widget.initialSourceDocumentKind ??
+        PurchaseSourceDocumentKind.defaultCode;
     final exitGuardScope = widget.exitGuardScope;
     if (exitGuardScope != null) {
       PurchaseInvoiceExitGuard.register(
@@ -416,8 +439,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     // Initialize payment model:
     // - New invoice: default to prepayment (true) unless widget says otherwise
     // - Existing invoice: will be loaded from database in _initialize()
+    final wasSeededAsDirectPurchase = widget.invoiceId == null &&
+        (widget.initialDraftSeed != null ||
+            widget.initialSourceDocumentKind != null);
     _isPrepaymentModel = widget.isPrepayment ||
-        widget.invoiceId == null; // Default to prepayment for new
+        (widget.invoiceId == null && !wasSeededAsDirectPurchase);
 
     // Set initial editing state:
     // - New invoice (invoiceId == null) → editing mode
@@ -495,7 +521,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text(
-            'Espera a que termine la creación y se vinculen los productos a la factura.',
+            'Espera a que termine la creación y se vinculen los productos al documento.',
           ),
         ),
       );
@@ -645,7 +671,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             '$openDifferenceQuantity '
             '${openDifferenceQuantity == 1 ? 'unidad pendiente' : 'unidades pendientes'}. '
             'Quedó disponible en Diferencias y resoluciones dentro de la '
-            'factura para cuando tengas respuesta del proveedor.',
+            'documento para cuando tengas respuesta del proveedor.',
           ),
         ),
       );
@@ -656,7 +682,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         SnackBar(
           content: Text(
             'La recepción ${result.receiptNumber} quedó registrada, pero no '
-            'se pudo actualizar la vista. Vuelve a abrir la factura. '
+            'se pudo actualizar la vista. Vuelve a abrir el documento. '
             'Detalle: $error',
           ),
         ),
@@ -773,7 +799,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'No quedan diferencias pendientes. La factura fue actualizada.',
+            'No quedan diferencias pendientes. El documento fue actualizado.',
           ),
         ),
       );
@@ -1028,7 +1054,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     if (!_canEditFields) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ No se puede escanear en facturas enviadas'),
+          content: Text('No se puede escanear un documento ya enviado'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -1218,7 +1244,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     if (!_canEditFields) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ No se puede escanear en facturas enviadas'),
+          content: Text('No se puede escanear un documento ya enviado'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -1286,7 +1312,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                             ? null
                             : _handleOcrWorkspaceBack,
                         icon: const Icon(Icons.arrow_back),
-                        tooltip: 'Volver a la factura',
+                        tooltip: 'Volver al documento',
                       ),
                       const SizedBox(width: 4),
                       Expanded(
@@ -1295,7 +1321,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'OCR de factura de compra',
+                              'OCR de documento de compra',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1547,7 +1573,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         resolution.supplierId?.toLowerCase() !=
             normalizedSupplierId.toLowerCase()) {
       throw StateError(
-        'La resolución del proveedor no pertenece al proveedor de la factura.',
+        'La resolución del proveedor no pertenece al proveedor del documento.',
       );
     }
     final sourceDate = parsedInvoice.date;
@@ -1944,8 +1970,10 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     }
 
     try {
-      // Load suppliers and products in parallel
-      debugPrint('🔍 Loading data in parallel (suppliers + products)...');
+      // Load suppliers, products and the server-owned document vocabulary in
+      // one initialization round.
+      debugPrint(
+          '🔍 Loading data in parallel (suppliers + products + document kinds)...');
 
       if (_hasReusableProductCache) {
         _replaceProductCache(_inventoryService.products);
@@ -1959,6 +1987,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 page: 0,
                 pageSize: _productPreviewPageSize,
               ),
+        _purchaseService.getSourceDocumentKinds(),
       ];
 
       // Also fetch preview number in parallel if this is a new invoice
@@ -1980,6 +2009,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       }
 
       processProducts(results[1] as List<Product>);
+      _sourceDocumentKinds = results[2] as List<PurchaseSourceDocumentKind>;
+      if (_sourceDocumentKinds.every(
+        (kind) => kind.code != _sourceDocumentKind,
+      )) {
+        _sourceDocumentKind = PurchaseSourceDocumentKind.defaultCode;
+      }
 
       if (!mounted) {
         debugPrint('⚠️ Widget not mounted after loading data');
@@ -1987,8 +2022,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       }
 
       // Handle preview number if loaded
-      if (widget.invoiceId == null && results.length > 2) {
-        _invoiceNumberController.text = results[2] as String;
+      if (widget.invoiceId == null && results.length > 3) {
+        _invoiceNumberController.text = results[3] as String;
       }
 
       if (widget.invoiceId != null) {
@@ -2020,9 +2055,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         final pendingData = _purchaseService.consumePendingSmartPurchaseData();
 
         // Pre-fill from constructor params OR pending data from service
-        final supplierId =
-            widget.initialSupplierId ?? pendingData?['supplierId'] as String?;
+        final draftSeed = widget.initialDraftSeed;
+        final supplierId = widget.initialSupplierId ??
+            draftSeed?.supplierId ??
+            pendingData?['supplierId'] as String?;
         final lineItems = widget.initialLineItems ??
+            draftSeed?.lines.map((line) => line.toFormJson()).toList() ??
             pendingData?['lineItems'] as List<Map<String, dynamic>>?;
 
         await _hydrateProductsByIds(
@@ -2047,7 +2085,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             final productId = item['product_id'] as String?;
             final productName = item['product_name'] as String?;
             final productSku = item['product_sku'] as String?;
-            final suggestedQty = (item['suggested_quantity'] as int?) ?? 1;
+            final suggestedQty =
+                (item['suggested_quantity'] as num?)?.toDouble() ?? 1;
 
             if (productId != null &&
                 productId.isNotEmpty &&
@@ -2060,11 +2099,12 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 // Add line with suggested quantity from database product
                 final entry = _PurchaseLineEntry(
                   line: PurchaseInvoiceItem(
+                    sourceNeedId: item['source_need_id']?.toString(),
                     productId: product.id,
                     productName: product.name,
                     productSku: product.sku,
                     purchaseTreatment: product.purchaseTreatment,
-                    quantity: suggestedQty.toDouble(),
+                    quantity: suggestedQty,
                     unitCost: product.cost > 0 ? product.cost : product.price,
                     discount: 0,
                     ivaRate: _ivaRate,
@@ -2081,13 +2121,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 if (productName != null && productName.isNotEmpty) {
                   final entry = _PurchaseLineEntry(
                     line: PurchaseInvoiceItem(
+                      sourceNeedId: item['source_need_id']?.toString(),
                       productId: '', // Ad-hoc item (empty string)
                       productName: productName,
                       productSku: productSku,
                       purchaseTreatment: parsePurchaseTreatment(
                         item['purchase_treatment'],
                       ),
-                      quantity: suggestedQty.toDouble(),
+                      quantity: suggestedQty,
                       unitCost: 0, // User will fill this
                       discount: 0,
                       ivaRate: _ivaRate,
@@ -2103,13 +2144,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
               // No productId or empty, add as ad-hoc item
               final entry = _PurchaseLineEntry(
                 line: PurchaseInvoiceItem(
+                  sourceNeedId: item['source_need_id']?.toString(),
                   productId: '', // Ad-hoc item (empty string)
                   productName: productName,
                   productSku: productSku,
                   purchaseTreatment: parsePurchaseTreatment(
                     item['purchase_treatment'],
                   ),
-                  quantity: suggestedQty.toDouble(),
+                  quantity: suggestedQty,
                   unitCost: 0, // User will fill this
                   discount: 0,
                   ivaRate: _ivaRate,
@@ -2177,6 +2219,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     _dueDate = invoice.dueDate ?? invoice.date.add(const Duration(days: 30));
     _status = invoice.status;
     _taxTreatment = invoice.taxTreatment;
+    _sourceDocumentKind = invoice.sourceDocumentKind;
     _isPrepaymentModel =
         invoice.prepaymentModel; // Load payment model from invoice
 
@@ -2481,7 +2524,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Factura de compra guardada correctamente'),
+          content: Text('Documento de compra guardado correctamente'),
         ),
       );
       // Navigate back - check if we can pop, otherwise go to list
@@ -2514,7 +2557,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     if (_lineEntries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Agrega al menos un producto a la factura.'),
+          content: const Text('Agrega al menos un producto al documento.'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -2570,13 +2613,13 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         builder: (context) => AlertDialog(
           icon: Icon(Icons.warning_amber_rounded,
               color: VinabikeThemeRoles.of(context).warning.accent, size: 48),
-          title: const Text('Número de factura duplicado'),
+          title: const Text('Número interno duplicado'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Ya existe una factura con el número "$invoiceNumber".',
+                'Ya existe un documento de compra con el número "$invoiceNumber".',
                 style: const TextStyle(fontSize: 15),
               ),
               const SizedBox(height: 12),
@@ -2590,7 +2633,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Factura existente:',
+                      'Documento existente:',
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -2637,6 +2680,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       id: _loadedInvoice?.id,
       tenantId: tenantId,
       invoiceNumber: invoiceNumber,
+      sourceDocumentKind: _sourceDocumentKind,
       supplierId: _selectedSupplier!.id,
       supplierName: _selectedSupplier!.name,
       supplierRut: _selectedSupplier!.rut,
@@ -2680,7 +2724,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       if (showSuccessFeedback) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Factura de compra guardada correctamente'),
+            content: Text('Documento de compra guardado correctamente'),
           ),
         );
       }
@@ -2690,7 +2734,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo guardar la factura: $e'),
+          content: Text('No se pudo guardar el documento de compra: $e'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -2736,16 +2780,18 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       String message;
       switch (newStatus) {
         case PurchaseInvoiceStatus.sent:
-          message = 'Factura enviada al proveedor';
+          message = 'Documento enviado al proveedor';
           break;
         case PurchaseInvoiceStatus.confirmed:
-          message = 'Factura confirmada';
+          message = _usesDirectPurchaseWorkflow
+              ? 'Compra confirmada'
+              : 'Documento confirmado';
           break;
         case PurchaseInvoiceStatus.received:
-          message = 'Factura marcada como recibida. Inventario actualizado.';
+          message = 'Recepción registrada. Inventario actualizado.';
           break;
         case PurchaseInvoiceStatus.draft:
-          message = 'Factura revertida a borrador';
+          message = 'Documento revertido a borrador';
           break;
         default:
           message = 'Estado actualizado';
@@ -2779,7 +2825,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         context: context,
         builder: (context) => AlertDialog(
           icon: const Icon(Icons.account_tree_outlined),
-          title: const Text('La factura no se puede eliminar'),
+          title: const Text('El documento no se puede eliminar'),
           content: const SizedBox(
             width: 560,
             child: Text(
@@ -2809,14 +2855,14 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             Icon(Icons.delete_forever,
                 color: Theme.of(context).colorScheme.error),
             const SizedBox(width: 8),
-            const Text('Eliminar factura'),
+            const Text('Eliminar documento'),
           ],
         ),
         content: Text(
-          '¿Estás seguro de que deseas eliminar la factura '
+          '¿Estás seguro de que deseas eliminar el documento '
           '${_invoiceNumberController.text}?\n\n'
           'Esta acción no se puede deshacer.\n\n'
-          'Nota: Solo se pueden eliminar facturas en estado Borrador.',
+          'Nota: Solo se pueden eliminar documentos en estado Borrador.',
         ),
         actions: [
           TextButton(
@@ -2842,7 +2888,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Factura eliminada correctamente'),
+          content: Text('Documento eliminado correctamente'),
         ),
       );
 
@@ -2915,7 +2961,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         content: Text(
           'Se eliminará el pago de ${ChileanUtils.formatCurrency(lastPayment.amount)} '
           'y su asiento contable asociado.\n\n'
-          'El estado de la factura se revertirá automáticamente. ¿Continuar?',
+          'El estado del documento se revertirá automáticamente. ¿Continuar?',
         ),
         actions: [
           TextButton(
@@ -3178,8 +3224,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
 
   Widget _buildHeader(ThemeData theme) {
     final title = widget.invoiceId == null
-        ? 'Nueva factura de compra'
-        : 'Factura ${_invoiceNumberController.text}';
+        ? 'Nuevo documento de compra'
+        : '$_sourceDocumentLabel ${_invoiceNumberController.text}';
 
     // Helper to build the action buttons (Scanner, OCR, Save)
     List<Widget> buildEditActions() {
@@ -3190,7 +3236,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           key: const Key('purchase-invoice-open-ocr'),
           onPressed: _openOCRScanner,
           icon: const Icon(Icons.document_scanner_outlined),
-          tooltip: 'Escanear Factura (OCR)',
+          tooltip: 'Escanear comprobante (OCR)',
           style: IconButton.styleFrom(
             backgroundColor: theme.colorScheme.surfaceContainerHighest,
           ),
@@ -3344,19 +3390,27 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             ),
           );
           actionButtons.add(const SizedBox(width: 8));
+          final nextStatus = _usesDirectPurchaseWorkflow
+              ? PurchaseInvoiceStatus.confirmed
+              : PurchaseInvoiceStatus.sent;
           actionButtons.add(
             FilledButton.icon(
-              onPressed: _isUpdatingStatus
-                  ? null
-                  : () => _updateStatus(PurchaseInvoiceStatus.sent),
+              onPressed:
+                  _isUpdatingStatus ? null : () => _updateStatus(nextStatus),
               icon: _isUpdatingStatus
                   ? const SizedBox(
                       height: 16,
                       width: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.send_outlined),
-              label: const Text('Enviar'),
+                  : Icon(
+                      _usesDirectPurchaseWorkflow
+                          ? Icons.check_circle_outline
+                          : Icons.send_outlined,
+                    ),
+              label: Text(
+                _usesDirectPurchaseWorkflow ? 'Confirmar compra' : 'Enviar',
+              ),
             ),
           );
         } else if (_status == PurchaseInvoiceStatus.sent) {
@@ -3392,9 +3446,17 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             OutlinedButton.icon(
               onPressed: _isUpdatingStatus
                   ? null
-                  : () => _updateStatus(PurchaseInvoiceStatus.sent),
+                  : () => _updateStatus(
+                        _usesDirectPurchaseWorkflow
+                            ? PurchaseInvoiceStatus.draft
+                            : PurchaseInvoiceStatus.sent,
+                      ),
               icon: const Icon(Icons.undo_outlined),
-              label: const Text('Volver a enviado'),
+              label: Text(
+                _usesDirectPurchaseWorkflow
+                    ? 'Volver a borrador'
+                    : 'Volver a enviado',
+              ),
             ),
           );
           actionButtons.add(const SizedBox(width: 8));
@@ -3931,16 +3993,47 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        DropdownButtonFormField<String>(
+          key: const ValueKey('purchase-source-document-kind'),
+          isExpanded: true,
+          initialValue: _sourceDocumentKinds.any(
+            (kind) => kind.code == _sourceDocumentKind,
+          )
+              ? _sourceDocumentKind
+              : null,
+          decoration: InputDecoration(
+            labelText: 'Tipo de comprobante',
+            helperText: _selectedSourceDocumentKind?.description,
+          ),
+          items: _sourceDocumentKinds
+              .map(
+                (kind) => DropdownMenuItem<String>(
+                  value: kind.code,
+                  child: Text(kind.displayName),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: canEditSupplier
+              ? (value) {
+                  if (value == null || value == _sourceDocumentKind) return;
+                  setState(() => _sourceDocumentKind = value);
+                }
+              : null,
+          validator: (value) =>
+              value == null ? 'Selecciona el tipo de comprobante real' : null,
+        ),
+        const SizedBox(height: 20),
         TextFormField(
           controller: _invoiceNumberController,
           enabled: _canEditFields,
           decoration: const InputDecoration(
-            labelText: 'Número de factura',
-            helperText: 'Puedes modificar el folio si tu numeración es manual',
+            labelText: 'Número interno',
+            helperText:
+                'Identificador del ERP; el folio del proveedor se conserva por separado',
           ),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Ingresa un número de factura';
+              return 'Ingresa un número interno';
             }
             return null;
           },
@@ -3962,7 +4055,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           title: Text(_selectedSupplier?.name ?? 'Selecciona un proveedor'),
           subtitle: _selectedSupplier != null && _selectedSupplier!.rut != null
               ? Text('RUT: ${ChileanUtils.formatRut(_selectedSupplier!.rut!)}')
-              : const Text('Necesario para facturación y reportes'),
+              : const Text('Necesario para trazabilidad y reportes'),
           trailing: FilledButton.tonalIcon(
             onPressed: canEditSupplier ? _openSupplierSelector : null,
             icon: Icon(_selectedSupplier == null ? Icons.search : Icons.edit,
@@ -4009,7 +4102,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.flag_outlined),
-          title: const Text('Estado de la factura'),
+          title: const Text('Estado del documento'),
           subtitle: Text(_statusDisplayName(_status)),
           trailing: _status == PurchaseInvoiceStatus.draft
               ? Text(
@@ -4446,7 +4539,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                         Padding(
                           padding: const EdgeInsets.all(32),
                           child: Text(
-                            'No hay artículos en esta factura de compra',
+                            'No hay artículos en este documento de compra',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),

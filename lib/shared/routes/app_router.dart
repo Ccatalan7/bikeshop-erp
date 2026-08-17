@@ -12,6 +12,7 @@ import '../pages/app_link_landing_page.dart';
 import '../../modules/mail/pages/mail_inbox_page.dart' as mail;
 import '../../modules/storage/pages/storage_page.dart' as storage;
 import '../../modules/hr/payroll/payment_workspace/payroll_payment_workspace_models.dart';
+import '../../modules/purchases/models/purchase_invoice_draft_seed.dart';
 import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../../public_store/widgets/storefront_navigation_guard_scope.dart';
 import '../services/auth_service.dart';
@@ -56,6 +57,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         GoogleSheetsModulePage,
         HierarchicalCategoryPage,
         IncomeStatementPage,
+        IntelligentPurchasingWorkspacePage,
         IntegrationsPage,
         InvoiceFormPage,
         InvoiceListPage,
@@ -2301,6 +2303,10 @@ class AppRouter {
           pageBuilder: (context, state) {
             final prepaymentParam = state.uri.queryParameters['prepayment'];
             final isPrepayment = prepaymentParam == 'true';
+            final documentKind = state.uri.queryParameters['documentKind'];
+            final draftSeed = state.extra is PurchaseInvoiceDraftSeed
+                ? state.extra! as PurchaseInvoiceDraftSeed
+                : null;
             debugPrint(
                 '🔍 DEBUG: prepayment param = "$prepaymentParam", isPrepayment = $isPrepayment');
             return _buildDeferredPageWithNoTransition(
@@ -2308,6 +2314,9 @@ class AppRouter {
               state,
               () => erp.PurchaseInvoiceFormPage(
                 isPrepayment: isPrepayment,
+                initialSourceDocumentKind:
+                    draftSeed?.sourceDocumentKind ?? documentKind,
+                initialDraftSeed: draftSeed,
                 exitGuardScope: purchaseInvoiceExitKey(state),
               ),
             );
@@ -2349,6 +2358,17 @@ class AppRouter {
               () => erp.PurchasePaymentDetailPage(paymentId: id),
             );
           },
+        ),
+        GoRoute(
+          path: '/purchases/assistant',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            () => erp.IntelligentPurchasingWorkspacePage(
+              initialNeedId: state.uri.queryParameters['need'],
+              mechanicJobId: state.uri.queryParameters['job'],
+            ),
+          ),
         ),
         GoRoute(
           path: '/purchases/smart-list',

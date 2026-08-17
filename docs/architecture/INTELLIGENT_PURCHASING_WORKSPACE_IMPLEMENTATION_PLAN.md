@@ -1,19 +1,32 @@
-# Plan de implementación — Workspace inteligente de compras
+# Plan de implementación — Motor inteligente de abastecimiento y compras
 
-- **Estado:** propuesta de producto y arquitectura; no autoriza implementación.
-- **Fecha:** 2026-08-16.
+- **Estado:** primer corte vertical, captura formal de compra local, motor de
+  interpretación stock-first y workspace T23 implementados, desplegados y
+  verificados en producción. La adopción operativa, el backfill revisado y la
+  evidencia comercial vigente siguen abiertos.
+- **Fecha:** 2026-08-17.
 - **Alcance de este documento:** idea, lógica, datos, IA, UI, UX, seguridad,
   validación y secuencia de entrega.
-- **Nombre de trabajo:** `Asistente inteligente de compras` / `Purchase
-  Workspace`.
+- **Nombre de trabajo:** `Asistente inteligente de abastecimiento` / `Supply
+  Workspace`. La etiqueta visible final puede seguir siendo `Asistente de
+  compras` si las pruebas de comprensión demuestran que es más clara.
 
 ## 1. Propósito y límite de esta propuesta
 
-El objetivo es transformar una decisión de compra que hoy depende de la memoria
-de las personas con más experiencia en un proceso asistido, explicable y
-accionable. Una persona debe poder pedir en lenguaje natural uno o varios tipos
-de producto y recibir alternativas técnicamente pertinentes, comercialmente
-razonables y sustentadas por evidencia real del ERP.
+El objetivo es transformar una decisión de abastecimiento que hoy depende de la
+memoria de las personas con más experiencia en un proceso asistido, explicable
+y accionable. Una persona debe poder expresar en lenguaje natural uno o varios
+repuestos o productos necesarios y recibir primero las alternativas internas
+realmente asignables y, sólo para el faltante o para una alternativa interna
+rechazada conscientemente, opciones de compra técnicamente pertinentes,
+comercialmente razonables y sustentadas por evidencia real del ERP.
+
+El problema raíz no comienza en el proveedor. Comienza en una **necesidad de
+abastecimiento** originada, por ejemplo, desde un trabajo de taller, una búsqueda
+ad hoc o una señal de reposición. Esa necesidad puede resolverse con stock
+interno comprometido, compra externa, compra local de emergencia, recepción
+pendiente o una decisión explícita de no continuar. El plan de compra es sólo
+uno de esos resultados.
 
 Este documento no congela las pantallas de los bosquejos, no aprueba cada
 control dibujado y no convierte la propuesta en un wizard rígido. Las imágenes
@@ -21,14 +34,193 @@ creadas durante la conversación son hipótesis visuales para explorar jerarquí
 densidad y flujo. Antes y durante cada fase se puede conservar, cambiar, agregar
 o eliminar cualquier detalle si la evidencia demuestra una solución más clara.
 
-La implementación sólo debe comenzar cuando el dueño lo autorice explícitamente.
-Hasta entonces no se crean tablas, migraciones, rutas, componentes ni cambios de
-producción.
+El dueño autorizó la implementación explícitamente el 2026-08-16. Este
+documento conserva la arquitectura acordada y registra el alcance real de cada
+corte; no convierte los bosquejos en requisitos literales ni permite saltar las
+puertas de datos, seguridad, navegación y validación.
+
+### 1.1 Corte implementado y desplegado al 2026-08-16
+
+El primer corte vertical ya incluye, en código y runtime de producción:
+
+- kernel durable y tenant-scoped de necesidades, revisiones, procedencia y
+  capacidad semántica de estado;
+- ATP común con compromisos de taller y protección frente a reservas online;
+- observaciones históricas, costo aterrizado con flete atribuible, margen y
+  ranking explicable;
+- herramientas gobernadas del agente para ATP, candidatos y escenarios de
+  canasta, usando referencias opacas en el modelo y UUID sólo dentro del
+  servidor;
+- descomposición gobernada de una petición natural en una a ocho líneas
+  tipadas, con producto exacto o identidad pendiente, cantidad, unidad,
+  preferencias, predicados reales del Master Schema y aclaraciones dinámicas;
+  la tarjeta cerrada se revisa y edita antes de que un único comando atómico y
+  replay-safe cree las necesidades, nunca una compra;
+- plan de compra versionado y review-only, con adopción atómica de alternativas
+  externas sin crear pedido, factura, pago, recepción ni movimiento de stock;
+- workspace Flutter responsive para producto único y canastas de dos a ocho
+  necesidades, con máximo tres escenarios, comparación stock-first y
+  divulgación progresiva;
+- captura contextual desde el estado de Jobs, enlazable al workspace sin
+  hardcodear el nombre `REPUESTOS`;
+- captura de compra local/emergencia sobre el documento canónico de compras,
+  con tipo de comprobante server-owned, procedencia durable desde la necesidad,
+  producto o descripción pendiente y pago/recepción separados; y
+- clasificación explícita del proveedor local desde `Bienes y repuestos` con
+  un único select de tres valores, sin exponer tags técnicos ni inferir
+  cercanía. `Proveedor local` deriva `local_workshop` y `Rescate urgente`
+  deriva el par `local_workshop` + `emergency_local`.
+
+El corte quedó instalado mediante las migraciones `20260816150000` a
+`20260816162400`; la aclaración progresiva, el terminal server-owned y la
+frontera de herramientas por etapa quedaron desplegados en
+`ai-agent-gateway` v83, hash
+`fa835d606967b02e65802eabafc85a876064993f6f2304a4bbd2db861f823bea`. La
+lectura exacta de funciones, ACL, contrato de receipts e historial de
+migraciones cerró. La app real verificó stock-first, ranking externo,
+navegación por referencia exacta, Jobs desktop y compacto, el formulario
+contextual y la descomposición de una petición de tres familias sin escribir
+compras, necesidades, planes ni movimientos durante la prueba.
+
+La etapa visible `Necesidad` tiene una frontera deliberada: el modelo puede
+inspeccionar ficha, buscar inventario, declarar una brecha de capacidad y cerrar
+con `prepare_supply_request`; no recibe las tools de ranking de proveedores ni
+de escenarios de canasta en esa etapa. Gama, marca, margen, urgencia y demás
+objetivos comerciales se preservan tipados para `Proveedores` y `Plan`, donde
+recién corresponden esas decisiones. Así se evita que una frase compleja salte
+stock interno o mezcle captura con una compra todavía no revisada.
+
+Siguen fuera del alcance entregado el backfill revisado de gastos antiguos, el
+retiro de `smart_purchase_list`, la evidencia comercial actual desde
+portales/APIs y la conversión atómica del plan completo a documentos de compra.
+La captura local ya crea el borrador correcto, pero no cambia implícitamente el
+estado de la necesidad ni inventa disponibilidad del proveedor. Tampoco se
+declara completa la preparación técnica de
+todas las familias: la primera medición productiva del template de neumáticos
+encontró `0/113` productos con ficha estructurada suficiente. Ese cero se
+conserva como readiness gap visible; no se infirió un backfill desde nombres.
+
+### 1.2 Evidencia de certificación del primer corte
+
+- **Base de datos:** reconstrucción local desechable completa, preflight limpio,
+  353 aserciones pgTAP relacionadas del primer corte y `72/72` aserciones
+  focalizadas actuales sobre una copia derivada de producción para el batch IA,
+  su tarjeta durable y el kernel de necesidades. Todas las migraciones quedaron
+  desplegadas y registradas; el contrato durable acepta el borrador cerrado,
+  conserva las tarjetas anteriores y rechaza identidades o predicados
+  contradictorios.
+- **Runtime IA:** `237/237` pruebas Deno del runtime/gateway actual. El gateway
+  v83 completó canaries reales y variados de cámara 700x28 Presta 60 mm,
+  movimiento central BSA 73/125 y una canasta de cadena, pastillas y cámaras.
+  Los tres cerraron con `prepare_supply_request`, conservaron cantidades,
+  predicados y preferencias, consultaron stock primero y no ejecutaron ninguna
+  mutación. Un `missing_structured_data` y un `schema_discovery_required`
+  quedaron como receipts recuperables dentro de runs exitosos, no como
+  coincidencias inventadas ni errores opacos para el operador.
+- **Frontera JSONB:** la respuesta de `prepare_supply_request` compara cada
+  predicado por `field`, `operator` y valores tipados; ignora únicamente el
+  orden de las claves del objeto. PostgreSQL canonicaliza ese orden al guardar
+  `jsonb`, por lo que `JSON.stringify` no es una prueba válida de igualdad
+  semántica y queda cubierto por una regresión deliberadamente reordenada.
+- **Flutter:** `129/129` pruebas focalizadas combinadas del workspace, handoff
+  T23, contratos visuales, modelos, gateway, evals, acciones y responsive. La
+  integración con la ficha del proveedor suma `38/38` pruebas widget del editor
+  y `8/8` contratos de arquitectura, incluyendo hidratación, retiro explícito y
+  preservación de tags ajenos. El análisis focalizado de los once archivos del
+  corte cierra sin errores ni warnings.
+- **Producto interno:** una petición exacta encontró dos unidades disponibles y
+  abrió Inventario con el único ID resuelto por el servidor.
+- **Petición natural multi-línea:** la app macOS real separó cadena de 9
+  velocidades, pastillas Shimano B05S y cámaras 29 Schrader en tres necesidades
+  editables, con sus cantidades independientes. La ausencia de cobertura o ATP
+  produjo líneas `unresolved`, no coincidencias por nombre ni un falso fallo de
+  fuente. En otra prueba, la medida ambigua conservó literalmente el contexto
+  de rayos para rueda y pidió sólo la magnitud decisiva; al responder 274 mm
+  encontró el producto exacto y reportó una unidad en stock. Ninguna de estas
+  pruebas pulsó Guardar.
+- **Compra externa:** un producto exacto con ATP cero devolvió evidencia de
+  cuatro compras, costo aterrizado histórico, margen proyectado y advertencias
+  explícitas de precio, flete y disponibilidad no verificados actualmente.
+- **Jobs:** el estado configurado para solicitar repuestos abrió la captura sin
+  cambiar el status existente, no mostró un catálogo vacío de 200 filas,
+  conservó el borrador al ir atrás y adelante y cerró con cero necesidades
+  activas en el read-back de producción.
+- **Responsive:** la app real se verificó en `1672x896` y `834x728`; las
+  regresiones widget cubren 390, 834, 1116 y 1440 px. Todas mantuvieron acciones,
+  desplazamiento, retorno semántico y CTA final sin barra de filtros/chips,
+  isla modal centrada, hit-test warning ni overflow visible.
+- **Proveedor local:** la app macOS real abrió Bicicletas Garozzo, mostró un
+  solo `Disponibilidad local` bajo `Bienes y repuestos`, desplegó tres opciones
+  cortas sin chips ni panel adicional y volvió sin guardar. El read-back
+  productivo permaneció en cero asignaciones locales globales y para ese
+  proveedor.
+
+### 1.3 Rediseño del 2026-08-17: qué cambió y por qué
+
+El dueño rechazó el primer corte por dos motivos que conviene separar, porque
+tienen dueños distintos.
+
+**El aspecto no se había copiado.** Las tablas de medidas del `spec.json`
+estaban implementadas al milímetro —imágenes 38/46/64/76, split pane
+420/330/600— y aun así la pantalla no se parecía al diseño: el bloque de
+captura no era un panel sino título, subtítulo, campo y botones sueltos sobre
+el fondo; la columna de 780 estaba fijada arriba a la izquierda en vez de
+centrada; y la tipografía iba en 15-16 px donde el prototipo dice 12,5 / 11 /
+10. La corrección de fondo quedó en `.github/copilot-instructions.md`:
+**«composición» son dos cosas** —la de producto es nuestra, la visual es de
+Design y no se negocia— y **coincidir en los números no es fidelidad visual**.
+
+**El encargo original no se había cumplido.** El prompt pedía que el asistente
+*asignara prioridad de compra* y priorizara *por gama*. Ninguna de las dos
+existía: el módulo sólo rankeaba después de que alguien escribía qué
+necesitaba, y la marca se devolvía como dato sin puntuar.
+
+Lo que entrega este rediseño, todo desplegado y verificado:
+
+- **`purchase_priority_feed_v1`** — la prioridad la levanta el sistema desde
+  trabajos de taller esperando repuesto, quiebres y mínimos. La medición decidió
+  el diseño: hay 907 agotados y 216 bajo mínimo de 1.613 productos, pero
+  cruzándolos con lo que realmente salió por venta en 120 días quedan 70 y 32.
+  Una lista de 1.123 filas no es una prioridad. Cada fila viaja con su razón en
+  palabras, que es lo que transfiere la experiencia.
+- **Gama como dato** — `product_gama_bands_v1` deriva la banda de la posición
+  relativa del costo de cada marca dentro de su categoría, `product_gama_v1`
+  resuelve la corrección explícita del dueño por encima de lo derivado, y
+  `rank_purchase_candidates_v1` acepta `p_gama`. La gama **ordena, nunca
+  elimina**: el contrato de elegibilidad reserva la exclusión para la
+  contradicción técnica demostrada.
+- **Cierre del plan** — totales por moneda que nunca se suman entre sí, margen
+  «sin base» cuando no hay precio vigente, y el paso final inline
+  `Preparar documentos de compra` con sus filas PROVEEDORES / LÍNEAS / QUEDA
+  FUERA. Estaban definidos en `frames[plan].with_lines` del spec y ausentes en
+  `lib/`.
+- **Ronda de corrección server-side** — el gateway reconoce el payload de
+  respuestas del cliente, lo entrega al modelo en prosa en vez de JSON crudo, y
+  rechaza que vuelva a preguntar un `promptId` ya respondido. Sin eso, una
+  necesidad con dos datos encadenados nunca llegaba a la segunda pregunta.
+- **Portal del proveedor dentro del ERP**, con la sesión que sobrevive entre
+  visitas, en vez de expulsar al navegador del sistema.
+- **Recorrido con historial propio** (`PurchaseJourneyController`), que es el
+  `navigation_contract` del spec: salir dejaba de borrar lo trabajado.
+
+**Defecto abierto, diagnosticado hasta el número.** El ranking por *texto
+libre* no cabe en su presupuesto: `tenant_business_date` cuesta ~60 ms porque
+escanea `pg_timezone_names`, la vista la llama tres veces por fila y esas
+columnas se calculan para los 267 candidatos, no para los 29 que sobreviven al
+filtro. No afecta a la aplicación —la pantalla siempre rankea por producto
+exacto— pero bloquea cablear la rama de texto. Reproducción guardada en
+`supabase/manual_checks/diagnostics/ranking_free_text_slow_repro.sql`.
 
 ## 2. Resultado de producto
 
-El workspace debe ayudar a responder, con distintos grados de precisión:
+El sistema debe ayudar a responder, con distintos grados de precisión:
 
+- qué necesita realmente la persona y qué partes de esa interpretación siguen
+  propuestas o ambiguas;
+- si Viñabike ya posee unidades físicamente disponibles **y asignables**, luego
+  de descontar compromisos vigentes de cualquier canal;
+- si conviene asignar explícitamente una unidad interna, buscar otra gama o
+  continuar hacia compra externa;
 - qué productos podrían satisfacer la necesidad expresada;
 - en qué proveedores se han comprado productos iguales, equivalentes o de la
   misma familia;
@@ -42,59 +234,104 @@ El workspace debe ayudar a responder, con distintos grados de precisión:
 - si conviene consolidar una canasta en un proveedor o dividirla;
 - qué alternativa local o urgente existe cuando su mayor precio igualmente
   deja una venta razonable; y
-- qué acción segura puede ejecutar la persona a continuación.
+- qué acción segura puede ejecutar la persona a continuación, conservando el
+  vínculo con el trabajo o señal que originó la necesidad.
 
-El sistema recomienda y explica. La persona decide. No compra, envía pedidos,
-paga ni presume disponibilidad de un proveedor automáticamente.
+El sistema interpreta, consulta, recomienda y explica. La persona decide. No
+asigna stock, compra, envía pedidos, paga, recibe ni presume disponibilidad de
+un proveedor automáticamente. Cada escritura tiene un comando explícito,
+idempotente y auditable.
 
 ## 3. Principios rectores
 
-1. **Lenguaje natural de entrada, estado tipado por debajo.** La IA interpreta
+1. **La necesidad precede a la compra.** Una solicitud no se convierte en línea
+   de compra hasta demostrar un faltante externo o registrar el rechazo
+   consciente de una alternativa interna realmente asignable.
+2. **Lenguaje natural de entrada, estado tipado por debajo.** La IA interpreta
    frases casuales, pero la búsqueda, los cálculos y las acciones usan contratos
    cerrados y verificables.
-2. **Flexible donde ayuda; rígido donde protege.** El sistema admite caminos
+3. **IA para interpretación y composición; servicios para autoridad.** El
+   modelo decide qué información necesita y qué herramientas combinar. El
+   servidor valida esquema, identidad, compatibilidad, stock, economía,
+   permisos y escrituras.
+4. **Esquema relevante bajo demanda.** El modelo no memoriza ni recibe completo
+   `BIKE_WORKSHOP_MASTER_SCHEMA.md`. Inspecciona sólo el fragmento técnico y de
+   negocio necesario mediante herramientas gobernadas.
+5. **Stock disponible no es stock asignado.** Un snapshot positivo no cubre una
+   necesidad. Sólo un compromiso/reserva vigente, creado atómicamente, permite
+   afirmar que una unidad quedó destinada a ella.
+6. **Flexible donde ayuda; rígido donde protege.** El sistema admite caminos
    distintos, correcciones y resultados parciales. Sólo bloquea ante una
-   contradicción técnica material, una ambigüedad que cambiaría sustancialmente
-   la decisión o una acción con efecto real.
-3. **No hay workflows técnicos codificados por ejemplo.** “Rayos 27.5” es un
+   contradicción material, una ambigüedad que cambia sustancialmente la decisión
+   o una acción con efecto real.
+7. **No hay workflows técnicos codificados por ejemplo.** “Rayos 27.5” es un
    caso de evaluación, no una rama especial en Dart ni una herramienta dedicada.
    Las preguntas emergen del esquema técnico, la evidencia disponible y el
    objetivo del usuario.
-4. **Primero se eliminan contradicciones; luego se ordena.** Un margen alto no
+8. **Primero se eliminan contradicciones; luego se ordena.** Un margen alto no
    compensa una incompatibilidad demostrada.
-5. **La historia informa, no inventa el presente.** Haber comprado antes a un
-   proveedor no demuestra precio, stock ni plazo actuales.
-6. **La rentabilidad se calcula, no se adjetiva.** Costo, flete, precio de venta,
-   utilidad y margen muestran base, fecha, fuente y faltantes.
-7. **La categoría organiza; no suplanta la identidad.** Categorías, familias
-   técnicas, marcas, gamas y productos son dimensiones distintas.
-8. **Una sola arquitectura de IA.** El feature extiende el runtime model-first y
-   el registro tipado de herramientas existente; no crea un segundo agente.
-9. **Una sola verdad de dominio.** UI, chat y automatizaciones futuras consumen
-   los mismos read models, reglas y comandos.
-10. **Cada resultado importante es explicable.** La persona puede ver por qué
+9. **Identidad, categoría, especificación, fitment y gama no se mezclan.** Una
+   medida no demuestra un modelo; una categoría no identifica un producto; una
+   coincidencia de búsqueda no prueba compatibilidad de montaje.
+10. **La historia informa, no inventa el presente.** Haber comprado antes a un
+    proveedor no demuestra precio, stock ni plazo actuales.
+11. **La rentabilidad se calcula, no se adjetiva.** Costo, flete, precio de
+    venta, utilidad y margen muestran base, fecha, fuente y faltantes.
+12. **La procedencia nunca se pierde.** Texto original, interpretación,
+    revisiones, trabajo/bicicleta de origen y decisiones humanas permanecen
+    trazables durante stock, compra, recepción e instalación.
+13. **Una sola arquitectura de IA.** El feature extiende el runtime model-first
+    y el registro tipado de herramientas existente; no crea un segundo agente.
+14. **Una sola verdad de dominio.** Jobs Table, workspace, chat y
+    automatizaciones futuras consumen los mismos read models, reglas y comandos.
+15. **Los estados de trabajo disparan experiencia, no almacenan necesidades.**
+    La conducta se configura mediante capacidad semántica del estado, nunca por
+    comparar su nombre con `REPUESTOS`.
+16. **Minimalismo por divulgación progresiva.** La persona ve primero la próxima
+    decisión; evidencia, diagnósticos y controles infrecuentes siguen cerca,
+    pero bajo el recurso UI adecuado y sin ensaladas de chips o cards.
+17. **Cada resultado importante es explicable.** La persona puede ver por qué
     una alternativa aparece, qué la debilita y qué dato permitiría mejorarla.
-11. **Ausencia de evidencia no significa cero.** Una fuente parcial, sin
+18. **Ausencia de evidencia no significa cero.** Una fuente parcial, sin
     cobertura o temporalmente indisponible conserva su estado honesto.
-12. **Los bosquejos son insumo, no especificación.** La composición final se
+19. **Los bosquejos son insumo, no especificación.** La composición final se
     valida contra el trabajo real del operador y el sistema visual canónico.
 
 ## 4. Decisiones ya acordadas
 
 ### 4.1 Forma general del producto
 
-El producto será un workspace continuo con tres superficies que se pueden
-recorrer en ambos sentidos:
+El producto será un motor compartido con varios puntos de entrada y un workspace
+continuo. El workspace conserva tres superficies que se pueden recorrer en ambos
+sentidos:
 
 ```text
-Conversación  <->  Comparar  <->  Plan borrador
+Necesidad / Conversación  <->  Resolver / Comparar  <->  Plan borrador
 ```
 
 No son pasos numerados ni una secuencia obligatoria. Una aclaración puede
 ocurrir desde cualquier superficie y una edición en el plan puede volver a
 calcular la comparación sin perder contexto.
 
-### 4.2 Producto único y canasta
+El flujo no obliga a comprar. Entre `Necesidad` y `Comparar` aparece primero la
+resolución interna cuando existe stock asignable. `Plan borrador` se habilita
+sólo para líneas que requieren abastecimiento externo.
+
+### 4.2 Fuentes de necesidad
+
+El mismo contrato acepta necesidades originadas desde:
+
+- lenguaje natural o controles en el workspace;
+- un trabajo o una bicicleta concreta desde Jobs Table;
+- el alcance intencional `General` de un trabajo;
+- una señal revisable de reposición;
+- una importación o línea pendiente de compra local; y
+- futuros entry points autorizados que mantengan la misma procedencia.
+
+La fuente no cambia la lógica de interpretación, inventario, técnica o ranking.
+Sólo agrega contexto, permisos y una navegación de retorno exacta.
+
+### 4.3 Producto único y canasta
 
 El mismo workspace admite:
 
@@ -104,11 +341,124 @@ El mismo workspace admite:
   urgencia o presupuesto; y
 - una necesidad expresada sin SKU conocido.
 
-La comparación cambia de composición según el problema: candidatos para una
-línea en producto único; escenarios y cobertura por línea para una canasta.
+La comparación cambia de composición según el problema: alternativas internas
+y externas para una línea; escenarios y cobertura por línea para una canasta.
 No se obliga a ambos casos a compartir una tabla idéntica.
 
-### 4.3 `smart_purchase_list` no es la base
+### 4.4 Captura desde Jobs Table
+
+Un estado configurable puede declarar la capacidad semántica
+`prompts_supply_need_capture` —nombre provisional—, visible en administración
+como `Solicitar captura de repuestos`. Al seleccionarlo para un trabajo:
+
+1. se ejecuta primero la transición de estado mediante su comando canónico;
+2. sólo si esa transición confirma éxito, la superficie anclada se transforma
+   en una captura breve dentro del mismo contexto;
+3. la persona puede agregar una o varias necesidades con un único campo que
+   busca productos mientras escribe y ofrece explícitamente guardar el texto
+   como descripción;
+4. cada línea conserva cantidad, alcance, origen y estado de guardado; y
+5. cerrar la captura no revierte el estado ya confirmado.
+
+La conducta no depende del código, nombre, color o fase de `REPUESTOS`. Renombrar
+el estado conserva el comportamiento; desactivar la capacidad detiene la
+invitación futura, sin borrar necesidades existentes.
+
+Si el estado tiene esa capacidad y el trabajo no conserva ninguna necesidad
+activa, Jobs Table deriva `Repuestos sin definir`. No se crea una fila vacía para
+representarlo. El indicador es un cue de atención compacto y filtrable que abre
+la misma captura.
+
+Los cambios masivos de estado no copian una necesidad a múltiples trabajos. En
+bulk sólo cambia el estado; cada fila afectada puede quedar en el filtro de
+atención para captura individual.
+
+### 4.5 Producto de catálogo y descripción libre
+
+La captura no presenta dos modos técnicos al usuario. Un solo autocomplete:
+
+- confirma un producto canónico cuando la persona elige un resultado; o
+- conserva exactamente el texto introducido mediante `Guardar como
+  descripción` cuando el producto aún no está definido.
+
+Seleccionar un producto confirma su identidad de catálogo, SKU y ficha, pero no
+confirma un proveedor único: un mismo producto puede tener múltiples fuentes
+históricas o vigentes.
+
+El texto libre permanece verbatim. La IA puede proponer categoría, identidad y
+restricciones revisionadas, pero no vincula silenciosamente un producto exacto.
+La adjudicación humana sigue el contrato `eliminar -> rankear`, separa identidad
+de fitment y registra la evidencia usada.
+
+### 4.6 Alcance de trabajo y bicicleta
+
+- Desde el estado de una bicicleta específica, la necesidad conserva ese
+  `mechanic_job_bikes.id` exacto.
+- En un trabajo de una bicicleta, la captura puede preseleccionar ese alcance.
+- En trabajos con varias bicicletas, la persona elige una bicicleta concreta o
+  `General` antes de guardar si el origen no lo determina.
+- `job_bike_id = NULL` puede representar el alcance intencional `General`; no se
+  rellena automáticamente.
+- Una recepción de componente sin bicicleta usa el sujeto/procedencia canónica
+  de ese intake; no inventa una fila de bicicleta.
+
+Existe una asimetría actual que la implementación debe resolver: el comando
+`transition_mechanic_job_status` y su receipt cubren el trabajo, pero el status
+de `mechanic_job_bikes` hoy se persiste por otra ruta sin `operation_key`. La
+captura disparada desde un status de bicicleta no se activa hasta que esa
+transición tenga comando canónico auditable —dirección preferida— o Fase 0
+limite explícitamente el primer corte al status del trabajo.
+
+La necesidad no se guarda en `mechanic_job_items`: esas líneas representan
+trabajo ejecutado/facturable. Tampoco se duplica verdad técnica en
+`diagnosis_sheet_data`; los hechos técnicos durables se promueven por las rutas
+canónicas de ficha o perfil de bicicleta.
+
+### 4.7 Stock interno, compromiso y consumo
+
+Antes de buscar proveedores, el motor consulta disponibilidad interna
+reservation-aware:
+
+```text
+available_to_promise = existencia física - compromisos internos vigentes
+```
+
+La proyección debe incluir todos los orígenes de reserva, incluido online. La
+tabla actual `online_order_inventory_reservations` ya posee un ciclo robusto y
+no se reemplaza a ciegas. Fase 0 decidirá entre generalizarla de forma compatible
+o agregar un ledger de compromisos de taller que alimente la misma autoridad de
+ATP. No son negociables una sola proyección de ATP, comandos atómicos y ausencia
+de doble contabilidad de disponibilidad.
+
+`Asignar del stock` es una acción humana explícita, reversible, tenant-scoped,
+idempotente, versionada y con read-back. Reduce ATP, pero no existencia
+contable. Dos trabajos que compiten por la última unidad se resuelven en el
+servidor: uno obtiene el compromiso y el otro recibe el ATP actualizado y un
+camino a compra.
+
+La factura de venta vinculada sigue siendo dueña de stock físico, COGS, ingreso
+y cuentas por cobrar. Cambiar estado, crear necesidad, asignar o instalar nunca
+crea un movimiento de stock por sí mismo. Si una pieza queda físicamente
+instalada antes de facturar, el sistema debe representar el riesgo operacional
+`installed_pending_invoice` y exigir conciliación posterior con la factura, sin
+simular consumo contable.
+
+### 4.8 Necesidad cubierta versus pieza instalada
+
+La identidad, el abastecimiento y el uso son dimensiones ortogonales:
+
+- una necesidad puede estar interpretada o aún sin resolver;
+- puede estar disponible, reservada internamente, en compra, recibida o
+  cancelada; y
+- la pieza puede seguir pendiente, estar instalada pendiente de factura o
+  consumida por la factura.
+
+“Recibida”, “cubierta” e “instalada” no son sinónimos. Cambiar el estado del
+trabajo no elimina necesidades. Cancelar o archivar un trabajo libera/cancela
+compromisos mediante un comando con motivo y evento auditable, nunca mediante
+hard delete.
+
+### 4.9 `smart_purchase_list` no es la base
 
 La tabla, trigger, servicio y página actuales de `smart_purchase_list` se
 consideran legado. Contienen señales recuperables —mínimos de stock, rotación,
@@ -128,7 +478,7 @@ pero no copiará el score, el trigger ni la página como arquitectura. La retira
 del legado se hará sólo después de demostrar paridad funcional y preservar su
 evidencia histórica útil.
 
-### 4.4 Costo más reciente y flete
+### 4.10 Costo más reciente y flete
 
 El “costo actual” de un candidato será la observación elegible más reciente que
 exista, no un promedio arbitrario ni un valor sin fecha. Debe indicar si es una
@@ -140,22 +490,26 @@ su costo neto en el subtotal neto de mercadería de la factura. IVA y el propio
 flete quedan fuera del denominador. La distribución debe reconciliar al peso
 total exacto del flete mediante redondeo determinístico.
 
-### 4.5 Compras locales
+### 4.11 Compras locales
 
 Una compra real de repuestos a un taller local no se registrará como un gasto
-con el producto escondido en notas. La solución objetivo es un ingreso rápido de
-compra local/emergencia que preserve proveedor, documento verdadero, producto o
-línea pendiente de resolución, cantidad, costo, tratamiento tributario, pago y
-recepción. Luego alimenta el mismo historial de compras y puede ser sugerida por
-el asistente.
+con el producto escondido en notas. Desde `20260816162000`, el ingreso rápido
+usa `purchase_invoices` y un catálogo server-owned para factura, boleta, ticket,
+sin documento tributario u otro comprobante. Desde `20260816162200`, cada línea
+abierta desde una necesidad conserva además su `source_need_id` tenant-scoped e
+inmutable después de la normalización. Producto confirmado o descripción
+pendiente, cantidad, costo y tratamiento tributario siguen siendo editables;
+pago y recepción permanecen en sus dueños separados. Así la compra alimenta el
+mismo historial sin convertirse en `expense`.
 
-### 4.6 Disponibilidad
+### 4.12 Disponibilidad
 
 La disponibilidad del proveedor sólo puede mostrarse como vigente si proviene
 de una cotización, API, portal o confirmación manual con fecha y fuente. En los
 demás casos se muestra `No verificada`, junto con la edad de la evidencia de
-precio o compra. El stock interno de Viñabike y el stock del proveedor son hechos
-distintos.
+precio o compra. El stock interno de Viñabike, su ATP, una unidad comprometida y
+el stock del proveedor son hechos distintos y se presentan con vocabulario
+distinto.
 
 ## 5. Realidad arquitectónica que se debe reutilizar
 
@@ -224,13 +578,56 @@ límites, auditoría y política. El modelo interpreta y compone; el servidor
 calcula, filtra, autoriza y verifica.
 
 El diseño debe respetar los límites actuales, no asumir que se ampliarán para
-este feature: máximo de cinco rondas de tools y 96 KiB de output acumulado por
-run. El camino normal de lectura debe consumir idealmente dos o tres rondas y
-dejar margen para recuperación. Una aclaración material termina ese turno y el
+este feature: máximo de cinco rondas exploratorias, ocho llamadas y 96 KiB de
+output acumulado por run. Una ronda puede contener llamadas de lectura
+acotadas en paralelo, por eso el ordinal de receipts no equivale al número de
+rondas. En captura de necesidades se permite una sexta ronda sólo cuando
+contiene exactamente un `prepare_supply_request` validado; al consumir las
+cinco rondas exploratorias el servidor exige ese terminal. Su resultado se
+persiste y devuelve directamente, sin pagar otro turno de prosa del modelo. El
+camino normal de lectura debe consumir idealmente dos o tres rondas y dejar
+margen para recuperación. Una aclaración material termina ese turno y el
 análisis continúa en el siguiente; preparar el plan ocurre en otra acción
 explícita, no al final obligatorio del mismo run de búsqueda.
 
-### 5.4 Proveedores, portales y secretos
+Las tools visibles también dependen de la etapa. `Necesidad` anuncia sólo
+`inspect_inventory_schema`, `search_inventory`, `report_capability_gap` y
+`prepare_supply_request`; cualquier tool registrada pero no anunciada se
+rechaza antes del ejecutor. `rank_purchase_candidates` y
+`build_purchase_scenarios` pertenecen a las etapas posteriores. La tarjeta
+durable nunca conserva `clarificationPrompts`: esa metadata es transitoria y
+sólo viaja en la respuesta inmediata compatible con la capacidad del cliente.
+
+El runtime no se alimentará con todo el master schema como un prompt estático.
+El modelo recibe propósito, contratos de herramientas y contexto acotado; cuando
+necesita conocer atributos, categorías, bike context o reglas disponibles,
+inspecciona el esquema efectivo y llama las herramientas pertinentes. Así puede
+resolver familias nuevas sin añadir un workflow por producto.
+
+La calidad no queda a elección de Flutter ni a un nombre de modelo hardcodeado.
+El routing server-side existente selecciona proveedor/modelo por rol lógico. Las
+tareas con descomposición técnica, ambigüedad, canasta o replanning usan el rol
+`deep`; `fast` se reserva para trabajo liviano que haya superado evals, como
+normalización simple o síntesis de resultados ya calculados. Un fallo del rol
+profundo no se oculta degradando a una recomendación heurística: el sistema
+continúa manualmente o declara análisis parcial. Los modelos concretos pueden
+mejorar por configuración/allowlist sin cambiar contratos ni UI.
+
+### 5.4 Taller, estados y autoridad de stock
+
+El taller ya posee estados configurables por tenant, transiciones canónicas,
+trabajos con una o varias bicicletas y alcance `General`. La implementación debe
+extender ese modelo con una capacidad semántica explícita en el estado, no con
+comparaciones de texto ni un segundo selector de estados.
+
+`mechanic_jobs` es un documento operacional y de reserva. La factura de venta
+vinculada conserva la autoridad económica y de consumo de inventario. Las
+reservas online existentes prueban el patrón `active -> consuming -> consumed |
+released | expired`, con eventos append-only y consumo dentro de la transacción
+de factura. El taller puede requerir expiración más larga o revisión humana,
+pero debe respetar la misma frontera económica.
+
+### 5.5 Proveedores, portales y secretos
 
 Los metadatos públicos del proveedor, sus relaciones comerciales y sus
 criterios contables pertenecen al dominio de proveedores. Las credenciales son
@@ -248,9 +645,14 @@ de la acción y exige confirmación específica.
 
 - entrada casual en español, tolerante a abreviaciones, errores y orden libre;
 - solicitudes de una o varias líneas;
+- captura contextual de necesidades desde Jobs Table;
+- necesidades enlazadas a trabajo, bicicleta concreta o alcance `General`;
+- producto formal o descripción libre preservada y revisable;
 - identificación de categoría, familia técnica, marca, gama, rango de precio,
   cantidad, urgencia y restricciones técnicas;
 - aclaraciones dinámicas sólo cuando aportan valor;
+- búsqueda interna reservation-aware antes de proveedores;
+- asignación y liberación explícitas de stock mediante comandos seguros;
 - búsqueda histórica por proveedor y producto/categoría;
 - ranking explicable de candidatos;
 - costo aterrizado histórico y rentabilidad proyectada;
@@ -264,6 +666,8 @@ de la acción y exige confirmación específica.
 ### 6.2 Fuera del primer alcance
 
 - compra automática;
+- reserva automática de stock sólo por interpretar una frase o cambiar estado;
+- movimiento de stock provocado por estado, necesidad o instalación operacional;
 - envío automático de una orden o mensaje;
 - pago o asiento contable automático;
 - disponibilidad actual inferida desde compras históricas;
@@ -275,7 +679,26 @@ de la acción y exige confirmación específica.
 
 ## 7. Casos de uso canónicos
 
-### 7.1 Producto único con restricciones técnicas
+### 7.1 Trabajo con producto exacto disponible
+
+Una persona cambia el trabajo a un estado configurado para solicitar repuestos,
+busca un producto formal y guarda cantidad 1. El motor muestra dos unidades
+físicas, una ya comprometida y una asignable. La persona elige `Asignar del
+stock`; el servidor crea el compromiso para ese trabajo y la fila queda como
+`1 repuesto asignado`. No se abre una búsqueda de proveedores ni se mueve stock
+contable.
+
+### 7.2 Trabajo con descripción libre
+
+> “motor sellado BSA, caja 73, eje 125; gama media o mejor”
+
+El texto queda guardado exactamente como fue escrito. La IA inspecciona el
+esquema relevante, propone familia y restricciones, consulta stock y muestra la
+interpretación para corregirla. Si no hay unidad interna asignable, abre la
+comparación externa conservando el retorno al mismo trabajo. Ningún ejemplo
+específico de motor queda codificado.
+
+### 7.3 Producto único con restricciones técnicas
 
 > “Necesito neumáticos 27.5, de ancho mayor a 2.0, económicos pero con buen
 > margen.”
@@ -287,7 +710,12 @@ revisión las que carecen de datos decisivos y excluye contradicciones
 estructuradas. Cada fila muestra proveedor, costo aterrizado, utilidad/margen,
 historia y edad/calidad de evidencia.
 
-### 7.2 Ambigüedad técnica dinámica
+Antes de presentar proveedores, se muestran productos internos que cumplen y su
+estado de compromiso. La persona puede asignar uno, pedir una gama distinta o
+continuar a compra externa con un motivo cuando rechaza stock realmente
+asignable.
+
+### 7.4 Ambigüedad técnica dinámica
 
 > “Necesito rayos 27.5.”
 
@@ -304,17 +732,18 @@ Pregunta cuál intención corresponde.
 La implementación no contiene un `if rayos`. Este caso se conserva como prueba
 de regresión de desambiguación genérica basada en esquema.
 
-### 7.3 Canasta de varias familias
+### 7.5 Canasta de varias familias
 
 > “Necesito piñones, rayos, neumáticos y llantas.”
 
-El sistema crea cuatro líneas, muestra qué proveedores han cubierto histórica o
-actualmente todas, varias o sólo una, y construye escenarios útiles. Para cada
-proveedor muestra los productos principales observados por categoría, marca,
-gama, costo y fecha. Una línea sin candidato no desaparece: queda visible como
-faltante del escenario.
+El sistema crea cuatro necesidades, descuenta primero las que pueden cubrirse
+con stock interno y construye escenarios sólo para el faltante externo. Muestra
+qué proveedores han cubierto histórica o actualmente todas, varias o sólo una,
+y para cada proveedor los productos principales observados por categoría,
+marca, gama, costo y fecha. Una línea sin candidato no desaparece: queda visible
+como faltante del escenario.
 
-### 7.4 Compra local de rescate
+### 7.6 Compra local de rescate
 
 > “Necesito hoy un piñón Shimano; revisa también talleres locales.”
 
@@ -323,24 +752,51 @@ tiene disponibilidad confirmada o evidencia reciente y todavía deja utilidad
 aceptable. El ranking explica el intercambio entre costo, urgencia y margen; no
 oculta la alternativa por no ser la más barata.
 
-### 7.5 Reposición sugerida
+### 7.7 Reposición sugerida
 
-Una señal de stock bajo puede abrir un request prellenado. El usuario revisa la
-necesidad y el nuevo motor busca alternativas. El trigger legado no decide por
-sí solo el proveedor ni la prioridad final.
+Una señal de stock bajo puede abrir una necesidad prellenada. El usuario revisa
+la demanda, el ATP y las alternativas. El trigger legado no decide por sí solo
+el proveedor ni la prioridad final.
 
 ## 8. Modelo de interacción
 
-### 8.1 Superficie `Conversación`
+### 8.1 Entry point contextual de Jobs Table
+
+La selección de estado y la captura forman una microtarea continua:
+
+1. la lista de estados muestra su composición normal;
+2. al confirmar un estado con `prompts_supply_need_capture`, el encabezado
+   conserva el estado elegido y ofrece `Cambiar`;
+3. el cuerpo se reemplaza por `¿Qué repuestos necesita?`, un autocomplete con
+   opción de descripción, cantidad y la lista breve de líneas;
+4. cada línea confirmada muestra claramente `Guardando`, `Guardada` o `Error —
+   reintentar`, sin perder el texto local; y
+5. `Cerrar` devuelve a la misma fila, scroll y filtros. `Resolver
+   abastecimiento` abre el workspace filtrado a esas necesidades sólo por acción
+   explícita.
+
+En desktop no se conserva por inercia el diálogo actual de 320 px. Al mutar, la
+superficie anclada adopta el ancho canónico necesario para el campo y una lista
+corta. Si la cantidad de líneas supera esa tarea breve, `Ver todas` continúa en
+un sheet lateral/workspace preservando el ancla, en vez de comprimir o producir
+scroll anidado. En teléfono y otros anchos táctiles se recompone como bottom
+sheet o workspace compacto. Los valores y umbrales finales vienen de
+DesignSync/pruebas reales; el dominio y el estado local son los mismos.
+
+La transición de estado y la captura son operaciones separadas. Si falla el
+estado, no se abre la captura. Si falla una línea, el estado confirmado no se
+finge revertido y la línea conserva retry.
+
+### 8.2 Superficie `Necesidad / Conversación`
 
 Responsabilidades:
 
-- recibir la necesidad en lenguaje natural;
+- recibir la necesidad en lenguaje natural o desde una fuente existente;
 - mostrar la interpretación como restricciones editables;
 - formular aclaraciones bloqueantes o recomendadas;
 - narrar brevemente qué fuente falta o falló;
 - permitir agregar, quitar o reformular líneas; y
-- ofrecer el salto a resultados parciales tan pronto como sean útiles.
+- ofrecer resultados parciales tan pronto como sean útiles.
 
 La conversación no es una animación que esconde el dominio. Junto a ella existe
 un **ledger de restricciones** persistente y tipado. Cada restricción indica
@@ -348,11 +804,25 @@ origen (`usuario`, `derivada`, `confirmada por ficha`, `sugerida`), alcance
 (línea o canasta) y estado. La persona puede editarla sin reescribir todo el
 prompt.
 
-### 8.2 Superficie `Comparar`
+La primera respuesta útil es stock interno, no proveedor. La UI diferencia:
+
+- disponible físicamente;
+- comprometido para otras necesidades;
+- asignable ahora;
+- asignado a esta necesidad; y
+- no suficiente o no aplicable.
+
+Sólo cuando existe stock realmente asignable y la persona decide no usarlo se
+solicita un motivo breve tipado —gama/condición inadecuada, cantidad
+insuficiente, reservado para otro propósito u otro con nota— antes de continuar
+a compra. Si el sistema nunca pudo asignarlo, no exige justificar su ausencia.
+
+### 8.3 Superficie `Resolver / Comparar`
 
 Para producto único, la composición inicial candidata es:
 
-- tabla/lista de candidatos como centro estable;
+- stock interno elegible como bloque de decisión previo;
+- tabla/lista de candidatos externos como centro estable;
 - inspector contextual del candidato seleccionado;
 - orden y filtros explícitos;
 - disclosure de descartados y razón; y
@@ -364,6 +834,7 @@ utilidad/margen, historia y edad/calidad de evidencia.
 
 Para canasta, el centro cambia a escenarios:
 
+- cobertura interna confirmada;
 - proveedor único/consolidado;
 - división balanceada;
 - menor costo aterrizado estimado;
@@ -373,9 +844,9 @@ Para canasta, el centro cambia a escenarios:
 No se muestran cinco escenarios por obligación. Se eliminan duplicados y
 escenarios dominados; se presenta sólo lo que cambia una decisión.
 
-### 8.3 Superficie `Plan borrador`
+### 8.4 Superficie `Plan borrador`
 
-El plan agrupa líneas por proveedor y permite:
+El plan agrupa por proveedor sólo las necesidades externas y permite:
 
 - cambiar producto o alternativa;
 - editar cantidad;
@@ -389,7 +860,11 @@ Agregar al plan no compra. Convertir el plan crea únicamente artefactos
 revisables mediante el comando canónico que se defina; ordenar, enviar o pagar
 queda fuera y requiere su propio límite de riesgo.
 
-### 8.4 Navegación y continuidad
+Cada línea conserva `source_need_id`; recibir o convertir un documento no borra
+su procedencia de trabajo. Agregar al plan no compra ni marca una pieza como
+instalada.
+
+### 8.5 Navegación y continuidad
 
 - El workspace se abre con `push` y cierra con `ReturnNavigation.close`.
 - La selección, consulta, restricciones, filtros, orden, ancho del inspector,
@@ -398,26 +873,46 @@ queda fuera y requiere su propio límite de riesgo.
 - `Atrás` visible, Back del sistema y navegador respetan el mismo contrato.
 - Una edición pendiente no puede desmontarse al cruzar `899/900`; se conserva o
   exige descarte explícito.
+- Volver desde el workspace a Jobs Table restaura el trabajo, alcance de
+  bicicleta, fila, scroll, filtros y selección que originaron la navegación.
+- Guardar una necesidad no navega por sorpresa; asignar o agregar al plan
+  actualiza la proyección y deja visible la siguiente decisión lógica.
 
 ## 9. Modelo de intención y restricciones
 
-El modelo lógico provisional es independiente de la frase original:
+El modelo lógico provisional es independiente de la frase original y separa
+demanda, interpretación, abastecimiento y compra:
 
 ```text
-PurchaseRequest
-  requestId
+WorkspaceConstraintLedger     # revisión de sesión/thread; no tabla V1
   objectiveProfile
   currencyContext
   urgency / neededBy
   budget
   maximumSuppliers
   supplierPreferences / exclusions
-  lines[]
+  needRefs[]
 
-PurchaseRequestLine
-  lineId
-  originalUtterance
+SupplyNeed                     # demanda durable y source-neutral
+  needId / tenantId / version
+  originKind / createdBy
+  mechanicJobId?
+  jobBikeId?                   # NULL puede ser General intencional
+  replenishmentSignalId?
+  localPurchaseLineId?
+  assistantThreadId?
+  originalText                 # verbatim
   quantity + unit
+  catalogProductId?
+  identityState
+  sourcingState
+  useState
+  externalDisposition / rejectionReason?
+  activeInterpretationRevision?
+  createdAt / updatedAt
+
+NeedInterpretationRevision
+  revision
   categoryCandidates[]
   selectedCategoryLeaf?
   technicalFamily?
@@ -439,6 +934,12 @@ Constraint
   provenance: user | inferred | schema | record
   confirmation: confirmed | proposed | unresolved
   revision
+
+PurchasePlanLine
+  sourceNeedId
+  selectedProductId / supplierId
+  quantity
+  evidenceSnapshot / formulaVersions
 ```
 
 Reglas:
@@ -451,7 +952,36 @@ Reglas:
 - todas las unidades se normalizan y se conserva la expresión original;
 - categoría candidata y categoría confirmada no son equivalentes; y
 - las revisiones son monotónicas para impedir que una respuesta asíncrona vieja
-  sobrescriba la intención nueva.
+  sobrescriba la intención nueva;
+- el texto original nunca se reemplaza con la interpretación;
+- `catalogProductId` sólo se fija por selección humana o autoridad equivalente
+  confirmada;
+- el estado de identidad no se deduce del estado de abastecimiento;
+- reservar, recibir, instalar y consumir son eventos/estados diferentes;
+- `originKind` exige mediante `CHECK` la FK tipada correspondiente; no existe un
+  `originRef` polimórfico libre; y
+- una línea entra a `PurchasePlan` sólo si necesita compra externa.
+
+Los enums exactos se cierran en Fase 0. No se diseñará un único status lineal ni
+se persistirán estados de cálculo. Como mínimo se separan estas dimensiones:
+
+```text
+identidad:      unresolved_text | proposed_match | catalog_confirmed
+abastecimiento: open | committed | in_purchase | received | covered | cancelled
+uso:            pending | installed_pending_invoice | reconciled | cancelled
+```
+
+`evaluating`, `internal_assignable` y `external_required` son resultados del read
+model sobre ATP, evidencia y decisiones; no estados durables. La necesidad puede
+conservar un disposition/motivo externo mientras sigue `open`. Los nombres son
+ilustrativos; los invariantes son obligatorios. Compromiso, plan, recepción y
+factura conservan sus lifecycles autoritativos; Fase 0 debe preferir derivar el
+estado visible desde esos enlaces antes que duplicarlo en `SupplyNeed`.
+
+Glosario obligatorio para Fase 0: `consumed` se reserva al lifecycle del
+compromiso/movimiento producido por factura; `reconciled` describe que la
+necesidad quedó conciliada con ese hecho. La UI puede usar lenguaje natural, pero
+los contratos no llaman “consumida” a la necesidad y al ledger indistintamente.
 
 ## 10. Política de aclaraciones dinámicas
 
@@ -468,6 +998,14 @@ Es **recomendada pero no bloqueante** cuando mejora el orden, la gama, el margen
 o la cobertura. En ese caso el sistema muestra resultados parciales y permite
 responder después.
 
+Una carencia de fichas, cobertura o evidencia del ERP **nunca** se transforma
+por sí sola en una pregunta al operador. Si la persona ya expresó un requisito
+sin ambigüedad, la línea conserva ese texto, queda `unresolved` cuando la
+identidad no puede demostrarse y publica una advertencia no bloqueante. Sólo se
+usa `clarificationRequired=true` cuando falta un hecho o una decisión humana
+material; ese estado lleva entre una y tres `clarificationPrompts` tipadas. Una
+línea no bloqueante siempre lleva la lista de prompts vacía.
+
 La pregunta se construye desde:
 
 1. la interpretación del modelo;
@@ -480,6 +1018,38 @@ La pregunta se construye desde:
 La IA puede redactar la pregunta en lenguaje natural. No puede inventar claves,
 unidades ni opciones que el runtime no haya validado.
 
+El contrato de interacción es general, no una colección de subwizards por
+producto:
+
+- cada prompt tiene un `id` local a la línea, una pregunta, `inputKind`
+  (`single_choice`, `number` o `text`), opciones cerradas cuando corresponda,
+  unidad visible opcional y `allowUnknown`;
+- la UI presenta una sola pregunta activa, mantiene la petición original
+  visible/editable y resume las respuestas anteriores con una acción para
+  cambiarlas; una elección cerrada usa radios, una magnitud usa un campo con
+  sufijo y el texto libre queda acotado a la excepción que lo necesita;
+- `No lo sé` es una respuesta explícita, nunca un valor por defecto ni una
+  inferencia silenciosa;
+- una tarjeta publica normalmente sólo la próxima pregunta decisiva y como
+  máximo tres prompts para líneas independientes. El cliente admite como
+  máximo tres rondas confirmadas en el mismo hilo; un fallo de transporte no
+  consume una ronda, y al alcanzar el límite ofrece corregir o guardar la
+  necesidad pendiente en vez de abrir un cuarto interrogatorio;
+- `Continuar` no guarda una necesidad ni ejecuta una compra. Envía en el mismo
+  `threadId` un mensaje ordinario del operador, JSON y autocontenido, con la
+  petición original y sólo `lineRef`, `promptId`, pregunta y respuesta o
+  `unknown`. Ese sobre sigue siendo entrada no confiable del modelo: no se
+  convierte en autoridad de servidor ni se concatena como instrucción; y
+- `clarificationPrompts` es metadata transitoria del turno. Se negocia mediante
+  capability header, se elimina antes del RPC SQL durable y también se omite
+  para clientes v1 estrictos. Las tarjetas v1 que bloquean sin prompts conservan
+  una salida manual compatible.
+
+La prosa extensa del modelo queda plegada bajo `Ver explicación del análisis`.
+La línea, su estado y la próxima decisión permanecen visibles; advertencias de
+evidencia viven junto a la línea y no compiten con la pregunta mediante otra
+CTA.
+
 ## 11. Responsabilidad de IA y responsabilidad determinística
 
 | Tarea | IA | Servicio determinístico |
@@ -489,52 +1059,81 @@ unidades ni opciones que el runtime no haya validado.
 | Detectar ambigüedad | Propone y explica | Mide impacto y ofrece esquema válido |
 | Descubrir claves técnicas | Decide cuándo consultar | Inspector es la autoridad |
 | Buscar productos/proveedores | Compone herramientas | Filtra por tenant y ejecuta |
+| Consultar ATP y compromisos | Decide cuándo consultar | Proyección server-side autoritativa |
+| Elegir si usar stock interno | Propone tradeoffs | La persona decide |
+| Asignar/liberar stock | No implícitamente | Comando atómico, idempotente y auditable |
 | Calcular costo/flete/margen | No | Sí, fórmula versionada |
 | Determinar contradicción técnica | No por prosa | Sí, ficha/compatibilidad |
 | Ordenar candidatos | Elige objetivo autorizado | Calcula componentes y orden |
 | Crear escenarios de canasta | Explica y puede elegir perfil | Optimiza de forma acotada |
 | Afirmar stock del proveedor | No | Sólo fuente vigente verificable |
 | Preparar plan | Puede proponer | Comando tipado e idempotente |
+| Mover stock/COGS | No | Factura/recepción canónica dentro de transacción |
 | Comprar/enviar/pagar | No | Capacidad separada y confirmada |
 
 La respuesta útil no depende de que el modelo conozca un workflow particular.
 Depende de que pueda componer primitivas generales y de que el runtime ofrezca
 un camino manual tipado cuando el modelo falle.
 
-## 12. Primitivas nuevas propuestas
+## 12. Herramientas y comandos propuestos
 
-Los nombres son provisionales y deben validarse contra el registro existente.
-No representan una herramienta por pantalla ni por frase.
+### 12.1 Tools de lectura/orquestación para IA
 
-1. `inspect_purchase_search_schema`
-   - amplía la inspección de inventario con dimensiones comerciales y fuentes
-     de evidencia disponibles para compras;
-   - devuelve claves, tipos, unidades, operadores y cobertura, no SQL.
-2. `search_purchase_candidates`
-   - recibe líneas y restricciones tipadas;
+Los nombres finales se deciden contra el registro actual; se prefiere extender
+una primitiva general antes de duplicarla por pantalla. No se crea una
+herramienta por familia de bicicleta, ejemplo o vista.
+
+1. `inspect_inventory_schema`
+   - amplía el inspector actual con dimensiones técnicas,
+     comerciales, de ATP y fuentes de evidencia disponibles;
+   - devuelve claves, tipos, unidades, operadores y cobertura, no SQL ni el
+     master schema completo.
+2. `search_inventory`
+   - conserva el dueño existente, pero su proyección para abastecimiento debe
+     distinguir on-hand, comprometido y ATP;
+   - acepta un `needRef` opaco y resuelve server-side su contexto autorizado para
+     evitar gastar otra ronda en una tool de lectura previa;
+   - nunca presenta un snapshot como reserva ya realizada.
+3. `search_purchase_candidates`
+   - recibe necesidades y restricciones tipadas que requieren salida externa;
    - aplica el perfil de objetivo, elimina contradicciones y devuelve un
      shortlist ya ordenado con componentes explicables y referencias cerradas
      a evidencia;
    - no necesita una segunda tool de comparación que consuma otra ronda.
-3. `build_purchase_scenarios`
+4. `build_purchase_scenarios`
    - para canastas, subsume búsqueda, ranking y combinación de shortlists bajo
      máximo de proveedores, urgencia, presupuesto y demás restricciones
      representables.
-4. `prepare_purchase_plan`
-   - congela un borrador revisable con la selección y evidencia usada;
-   - se ejecuta en una acción/run posterior al análisis;
-   - no crea compra, orden, pago ni recepción.
-5. `convert_purchase_plan_to_drafts`
-   - fase posterior;
-   - crea los documentos canónicos en estado borrador, agrupados por proveedor,
-     con idempotencia y read-back.
+Las necesidades que la persona seleccionó se entregan al run como referencias
+opacas y resumen mínimo autorizado; no necesitan una tool `list_*` adicional en
+el camino normal. Si una automatización futura debe descubrir necesidades, usa
+un read model/tool de atención separado, no infla el flujo interactivo.
+
+### 12.2 Comandos de aplicación
+
+Las escrituras no son herramientas autónomas que el modelo pueda disparar por
+redacción. UI o flujo aprobado invocan comandos server-side con permisos,
+`operation_key`, versión esperada, receipt y read-back:
+
+- crear/editar/cancelar `SupplyNeed`;
+- confirmar o desvincular una identidad propuesta;
+- asignar, liberar o reasignar un compromiso de stock;
+- registrar el motivo de continuar a compra pese a stock asignable;
+- `prepare_purchase_plan`, que congela selección y evidencia en un borrador
+  revisable; y
+- `convert_purchase_plan_to_drafts`, que crea documentos canónicos en borrador,
+  agrupados por proveedor, con preview, idempotencia y read-back.
+
+Una futura exposición de alguno de estos comandos a la IA debe usar la política
+de riesgo y aprobación del runtime; no se obtiene por existir el endpoint.
 
 Puede resultar correcto fusionar o dividir primitivas después de medir payloads
 y límites. Lo no negociable es conservar schemas cerrados, outputs acotados,
 autoridad server-side, receipts y ausencia de SQL/model-driven writes.
-La Fase 0 debe fijar un presupuesto por tool y una regresión que demuestre que
-producto único y canasta con una aclaración caben dentro de los límites actuales
-sin elevar el radio de impacto del runtime completo.
+La Fase 0 debe fijar un presupuesto por tool y regresiones que demuestren que
+producto único, canasta y el camino `needRef -> ATP -> aclaración -> candidatos`
+caben o continúan honestamente dentro de los límites actuales, sin elevar el
+radio de impacto del runtime completo.
 
 ## 13. Construcción de evidencia histórica
 
@@ -865,12 +1464,25 @@ Esta ruta puede ser rápida, pero no una escritura directa a `expenses`. Los
 gastos siguen siendo correctos para servicios y consumos operacionales que no
 representan mercadería/repuesto comprado.
 
-La dirección por defecto es un adaptador sobre el kernel canónico de compras,
-con `source_document_kind` y un comando orquestador que preserven la naturaleza
-real de boleta/ticket/sin documento sin convertir la operación en `expense`.
-La auditoría contable de Fase 0 valida esa dirección y sólo la reemplaza si
-demuestra que el agregado vigente no puede representar el hecho sin falsearlo.
-No se resuelve agregando una etiqueta sólo en Flutter.
+La dirección validada es un adaptador sobre el kernel canónico de compras.
+`purchase_source_document_kinds` gobierna el vocabulario y el comportamiento;
+`purchase_invoices.source_document_kind` conserva el comprobante real; y
+`purchase_invoice_lines.source_need_id` preserva la procedencia durable. La
+boleta/ticket/sin documento usa un workflow directo que confirma la compra sin
+simular un envío al proveedor. No fusiona pago, recepción, stock ni contabilidad
+y no cambia el estado de la necesidad implícitamente. La clasificación local
+del proveedor también exige una asignación explícita `local_workshop` o
+`emergency_local`: el sistema no la deduce del documento, nombre ni campo
+legacy.
+
+Esa evidencia ya tiene un escritor operativo en la ficha del proveedor. Sólo
+la relación `Bienes y repuestos` muestra `Disponibilidad local`, mediante el
+select canónico corto: `Sin confirmar`, `Proveedor local` o `Rescate urgente`.
+El primer valor no asigna nada; el segundo asigna `local_workshop`; el tercero
+asigna además `emergency_local`. La adaptación preserva tags no representados,
+hidrata relaciones existentes y oculta el control si el catálogo no publica
+ambas definiciones. La UI no muestra códigos, chips ni otra taxonomía, y
+declara que el dato orienta sugerencias pero no genera compras.
 
 El bootstrap también contiene `purchase_orders` / `purchase_order_items`, pero
 su mera existencia no los vuelve canónicos: el modelo Flutter actual difiere en
@@ -881,71 +1493,176 @@ se moderniza, se migra o se retira ese kernel.
 
 ## 20. Modelo durable provisional
 
-La conversación y el artefacto de compra tienen dueños distintos:
+La conversación, la necesidad, el compromiso de stock y el artefacto de compra
+tienen dueños distintos:
 
 - `assistant_threads`, `assistant_runs`, `assistant_tool_receipts` y
   `assistant_approvals` conservan interacción, ejecución y aprobaciones de IA;
-- `purchase_requests` conserva la necesidad vigente;
-- `purchase_request_lines` conserva líneas y cantidades;
-- revisiones tipadas conservan el ledger de restricciones y su procedencia;
-- `purchase_plans` conserva el borrador de decisión; y
-- `purchase_plan_lines` conserva selecciones, cantidades y snapshot de la
-  evidencia usada.
+- `supply_needs` —nombre provisional— conserva la demanda durable,
+  source-neutral y su procedencia;
+- una revisión tipada conserva cada interpretación y ledger de restricciones
+  sin sobrescribir el texto original;
+- una proyección/ledger de compromisos conserva reservas de inventario y sus
+  eventos, separada del estado de la necesidad;
+- `purchase_plans` conserva el borrador de decisión externa; y
+- `purchase_plan_lines` conserva `source_need_id`, selección, cantidad y
+  snapshot de la evidencia usada.
 
-Los nombres y la normalización son provisionales. La implementación debe
-preferir el modelo mínimo que cumpla:
+### 20.1 Contrato mínimo de `SupplyNeed`
 
-- `tenant_id` obligatorio, índices y RLS;
-- versión optimista;
-- actor y timestamps;
-- idempotencia de comandos;
-- vínculo opcional al thread de IA;
-- revisión/auditoría sin guardar razonamiento privado; y
-- separación entre plan y documento de compra real.
+La normalización final se decide en Fase 0, pero debe representar sin pérdida:
 
-Estados candidatos:
+- `tenant_id`, ID, versión, actor y timestamps;
+- `origin_kind` y FKs específicas nullable a los dueños V1, como
+  `mechanic_job_id`, `replenishment_signal_id` o línea importada/local;
+- vínculo opcional al trabajo y alcance exacto de bicicleta/`General`;
+- descripción original verbatim;
+- producto canónico opcional, cantidad y unidad;
+- estado/revisión de identidad;
+- estado de resolución de abastecimiento;
+- estado operacional de uso/instalación cuando aplique;
+- motivo tipado y nota cuando se rechaza stock asignable;
+- vínculo opcional al thread/run de IA; y
+- cancelación lógica con motivo, nunca hard delete como operación normal.
+
+Un `CHECK` exige exactamente la FK compatible con `origin_kind`; para origen ad
+hoc no exige un documento y puede conservar `assistant_thread_id`. `job_bike_id`
+es alcance opcional dentro del origen de taller, no un origen alternativo. Fase
+0 confirma nombres y dueños reales, pero no reabre una pareja polimórfica libre
+que permita referencias inexistentes. Agregar una nueva clase de origen requiere
+una migración consciente.
+
+### 20.2 Capacidad de estado y atención derivada
+
+El estado configurable del taller requiere una capacidad equivalente a
+`prompts_supply_need_capture`. Su nombre, columna y edición administrativa son
+provisionales; su semántica no lo es. Debe formar parte del mismo agregado y
+comando que actualiza la definición de `job_statuses`, con RLS y auditoría.
+
+`Repuestos sin definir` es una proyección derivada cuando se cumplen ambas
+condiciones:
+
+1. el estado vigente solicita captura; y
+2. no existe una necesidad activa/no cancelada para el alcance consultado.
+
+No se persiste como estado adicional, necesidad vacía ni texto en la fila. La
+proyección alimenta Jobs Table, filtros y herramientas de atención. Cambiar el
+estado no borra necesidades previas; la UI debe distinguirlas si ya no son
+coherentes con el estado vigente.
+
+### 20.3 Compromisos de inventario
+
+La solución final debe preservar:
+
+- una única autoridad de ATP que incluya reservas online, taller y futuras
+  fuentes;
+- cantidad, producto, tenant, fuente/necesidad, estado y versión;
+- `operation_key` idempotente;
+- creación/adjudicación atómica bajo concurrencia;
+- transición explícita entre activo, liberado, consumiendo y consumido;
+- expiración/política de revisión apropiada al taller, no copiada ciegamente de
+  un checkout de 30 minutos;
+- invoice/movement IDs cuando la factura consuma la unidad; y
+- eventos append-only con actor, razón y timestamps.
+
+La factura vinculada del trabajo consume por identidad los compromisos de ese
+trabajo/necesidad. Si factura una línea sin compromiso, consume on-hand libre y
+no modifica reservas ajenas. No puede publicar el movimiento y dejar su propio
+compromiso `active`: la transición `consuming -> consumed` y los movimientos
+ocurren en la misma transacción.
+
+La compatibilidad con `online_order_inventory_reservations` se conserva. La
+fase de diseño de datos puede generalizar el ledger, agregar una tabla de taller
+que contribuya a una proyección ATP común o proponer otra migración segura. No
+puede mantener dos fórmulas de disponibilidad que diverjan. Antes de sumar
+taller, la nueva proyección debe reproducir exactamente
+`online_product_available_quantity` para el subconjunto online mediante fixture
+dorado y datos de producción saneados.
+
+### 20.4 Planes y documentos
+
+Estados candidatos del artefacto de compra:
 
 ```text
-PurchaseRequest: draft -> comparable -> planned | cancelled
-PurchasePlan:    draft -> ready -> converted | cancelled
+PurchasePlan: draft -> ready -> converted | cancelled
 ```
 
 `ordered`, `received` y `paid` pertenecen al documento/orden/recepción, no al
 plan. No se persistirá cada candidato efímero como verdad. Al elegir una línea,
-el plan congela IDs, métricas, fórmula/versiones, fecha y referencias de
-evidencia suficientes para reconstruir la decisión.
+el plan congela IDs, métricas, versiones de fórmula, fecha y referencias de
+evidencia suficientes para reconstruir la decisión. Una necesidad puede
+participar en revisiones de plan, pero la cantidad cubierta total no puede
+superar su cantidad pendiente sin una decisión explícita.
+
+### 20.5 Invariantes de escritura
+
+- `tenant_id` obligatorio, índices y RLS en toda entidad nueva.
+- Versión optimista y latest-eligible-wins en read models asíncronos.
+- Comandos idempotentes y read-back autoritativo.
+- Estado de trabajo y necesidad no se actualizan como una falsa transacción
+  única desde Flutter.
+- Ninguna reserva se crea sólo por seleccionar un status o por una inferencia de
+  IA.
+- Ningún cambio de status publica stock.
+- Ninguna instalación operacional sustituye el consumo por factura.
+- Retry/doble clic no duplica necesidad, compromiso, plan ni documento.
+- No se guarda razonamiento privado; sí entradas/outputs saneados, decisiones y
+  evidencia reproducible.
 
 ## 21. Arquitectura técnica objetivo
 
 ```mermaid
-flowchart LR
-    U["Operador: lenguaje natural o controles"] --> W["Purchase Workspace"]
-    W --> C["PurchaseRequest + ledger tipado"]
-    C --> A["ai-agent-gateway model-first"]
-    A --> T["Registro de tools filtrado por autoridad"]
-    T --> S["Inspector de esquema tecnico"]
-    T --> E["Kernel de evidencia de compras"]
-    T --> R["Ranking y escenarios deterministas"]
-    S --> D[("Catalogo + fichas + compatibilidad")]
-    E --> P[("Facturas + lineas + gastos vinculados")]
-    R --> V["Resultados explicables"]
-    V --> W
-    W --> B["PurchasePlan borrador"]
-    B --> X["Preview tipado"]
-    X --> Y["Documentos de compra en borrador"]
+flowchart TD
+    J["Jobs Table / estado configurado"] --> N["SupplyNeed + procedencia"]
+    U["Lenguaje natural / controles"] --> N
+    Q["Señal de reposición"] --> N
+
+    N --> A["Gateway IA model-first"]
+    A <--> T["Registro de tools tipadas"]
+    T --> S["Esquema técnico relevante"]
+    T --> C["Catálogo + fichas + compatibilidad"]
+    T --> H["Historial de compras + proveedores"]
+
+    N --> I["Resolver determinístico de abastecimiento"]
+    S --> I
+    C --> I
+    I --> ATP["ATP único: on-hand - compromisos"]
+    ATP --> D{"¿Stock interno asignable?"}
+
+    D -->|"Sí"| UI["Decisión humana"]
+    UI -->|"Asignar"| R["Compromiso de stock auditable"]
+    UI -->|"Rechazar con motivo"| E["Abastecimiento externo"]
+    D -->|"No"| E
+
+    H --> E
+    E --> K["Elegibilidad + costo + ranking determinísticos"]
+    K --> V["Resultados explicables"]
+    V --> P["PurchasePlan borrador con source_need_id"]
+    P --> X["Documentos de compra en borrador"]
+
+    R --> F["Factura de venta vinculada"]
+    X --> RC["Recepción canónica"]
+    RC --> N
+    F --> M["Movimiento de stock + COGS"]
 ```
 
 Capas:
 
-1. **Flutter / presentación:** shell, navegación, controles, estados parciales y
-   controller con latest-eligible-wins.
-2. **Dominio de aplicación:** request, ledger, plan, selección y comandos.
-3. **Gateway IA:** interpretación, planificación de tools, explicación y
-   receipts.
-4. **Servicios determinísticos:** evidencia, cálculo, ranking, compatibilidad y
-   solver de canasta.
-5. **PostgreSQL/Supabase:** autoridad, RLS, proyecciones, datos canónicos,
-   idempotencia y read-back.
+1. **Flutter / presentación:** Jobs Table, workspace, navegación, controles,
+   estados parciales y controller con latest-eligible-wins.
+2. **Dominio de aplicación:** necesidad, interpretación, compromiso, selección,
+   plan y comandos.
+3. **Gateway IA:** interpretación, planificación de tools, replanning,
+   explicación y receipts.
+4. **Servicios determinísticos:** identidad, esquema, ATP, evidencia, cálculo,
+   ranking, compatibilidad y solver de canasta.
+5. **PostgreSQL/Supabase:** autoridad, RLS, proyecciones, eventos, datos
+   canónicos, idempotencia y read-back.
+
+El modelo puede decidir que necesita inspeccionar esquema, buscar inventario,
+leer contexto de necesidad y consultar proveedores; también puede replantear el
+camino si una tool devuelve cobertura parcial. No puede saltarse las etapas de
+elegibilidad ni transformar una explicación en escritura.
 
 Si una regla necesita existir en Flutter y en el gateway, se define un contrato
 compartido con fixtures dorados y un solo dueño conceptual. No se mantienen dos
@@ -953,7 +1670,25 @@ scores parecidos que puedan divergir.
 
 ## 22. UI y UX adaptable
 
-### 22.1 Escritorio (`>=900px`)
+### 22.1 Captura contextual en Jobs Table
+
+- La lista de estados conserva su lectura normal hasta confirmar la transición.
+- La captura ocupa el mismo contexto en lugar de abrir una segunda ventana
+  desconectada.
+- Un campo principal busca catálogo y ofrece guardar descripción; no hay dos
+  formularios ni un selector de “modo”.
+- Cantidad, alcance y agregar son controles compactos y explícitos.
+- Las necesidades guardadas forman una lista de texto estable con edición y
+  eliminación secundaria; no una nube de chips multicolor.
+- La fila resume `2 repuestos pendientes`, `1 asignado · 1 por comprar` o
+  `Repuestos sin definir`. El detalle aparece al abrir, no permanentemente en la
+  tabla.
+- Un error de guardado permanece junto a la línea afectada con retry; no se
+  mezcla con el resultado de la transición de estado.
+- `Resolver abastecimiento` es secundaria mientras se captura y primaria sólo
+  cuando ya existen líneas válidas y la intención es continuar.
+
+### 22.2 Escritorio (`>=900px`)
 
 - shell global y superficie de comando canónicos;
 - comparación estable en el centro;
@@ -963,7 +1698,7 @@ scores parecidos que puedan divergir.
 - teclado, hover, foco y atajos para alta frecuencia; y
 - plan agrupado por proveedor con edición inline acotada.
 
-### 22.2 Tablet (`600-899px`)
+### 22.3 Tablet (`600-899px`)
 
 - shell compacto, sin workspace strip ni rail derecho persistente;
 - tabla reducida o lista enriquecida según ancho útil real;
@@ -972,7 +1707,7 @@ scores parecidos que puedan divergir.
   selección; y
 - objetivos táctiles de al menos 48 px.
 
-### 22.3 Teléfono (`<600px`)
+### 22.4 Teléfono (`<600px`)
 
 - candidatos como lista vertical escaneable, no tabla horizontal encogida;
 - identidad, proveedor, cumplimiento y economía principal en primera lectura;
@@ -982,10 +1717,16 @@ scores parecidos que puedan divergir.
 - una acción primaria alcanzable sobre teclado y SafeArea; y
 - retorno exacto a filtros, selección y scroll.
 
-### 22.4 Reglas de jerarquía
+### 22.5 Reglas de jerarquía y densidad
 
 - un solo primary action por decisión;
+- texto normal para hechos normales; chips/badges sólo para estado o acción
+  compacta que realmente lo requiera;
+- máximo una familia visual de status por zona; no mezclar chips, pills,
+  etiquetas y texto coloreado para representar el mismo tipo de información;
 - status técnico no se mezcla con badges de precio, gama o evidencia;
+- los cuatro o cinco hechos que cambian la decisión quedan visibles; metadata,
+  telemetría, fuentes y diagnósticos se agrupan bajo disclosure/inspector;
 - avisos persistentes sólo para hechos que cambian la decisión;
 - paneles y overlays se eligen por duración/alcance, no por parecerse al
   bosquejo;
@@ -995,14 +1736,80 @@ scores parecidos que puedan divergir.
   DesignSync desde `GUÍA GENERAL Viñabike - Componentes`; y
 - claro, oscuro, presets, densidad y escalas 0.8/1.0 comparten roles semánticos.
 
+La implementación usa el autocomplete y los servicios de dominio canónicos,
+pero no trasplanta automáticamente todo overlay/filtro de un buscador grande al
+popover estrecho. El componente compartido debe permitir una composición breve
+sin crear un segundo contrato de identidad.
+
+### 22.6 Navegación guiada
+
+- Estado confirmado -> captura contextual, sólo si la capacidad está activa.
+- Necesidad guardada -> la persona permanece en la fila con confirmación clara.
+- `Asignar del stock` -> actualiza el estado de esa necesidad y enfoca la
+  siguiente pendiente.
+- `Continuar a compra` -> abre comparación externa preservando la necesidad.
+- `Agregar al plan` -> mantiene contexto y ofrece revisar el plan, sin navegar
+  obligatoriamente.
+- `Convertir a borradores` -> muestra read-back y destino explícito.
+- Cerrar/Back -> siempre vuelve al dueño anterior mediante el contrato de
+  retorno, no a una ruta hardcodeada.
+
+### 22.7 Composición validada del workspace
+
+La primera composición funcional montaba simultáneamente el composer, el texto
+extenso del modelo, el borrador, un índice vacío y un panel de decisión vacío.
+Aunque el motor y las acciones existían, esa suma no expresaba un flujo y
+convertía el espacio disponible en infraestructura visible. La corrección no
+es cosmética: el workspace se divide por la decisión que la persona está
+tomando.
+
+- `Buscar` contiene la petición natural y su borrador revisable. No monta la
+  lista de necesidades ni el resolver debajo.
+- `Resolver` contiene necesidades ya guardadas, ATP, alternativas y escenarios.
+  Sin necesidades muestra un aviso compacto con salida hacia una nueva
+  búsqueda; no dibuja un split pane vacío.
+- `Plan borrador` nace sólo cuando existe un plan real y vuelve a `Resolver`
+  conservando canasta, selección y evidencia.
+- Cambiar de sección no destruye el borrador sin guardar. La ida y vuelta
+  `Buscar -> Resolver -> Buscar` conserva contenido, cantidades y ediciones.
+- El razonamiento largo del modelo permanece bajo disclosure. La revisión
+  visible usa filas ordenadas con descripción, cantidad, un solo estado
+  semántico y la aclaración material; `Editar` queda directo y criterios o
+  eliminación son secundarios.
+- Una aclaración tipada aparece en el mismo flujo, no en un modal: una pregunta
+  activa, progreso textual, respuestas previas resumidas y corregibles, y
+  `Continuar` sólo después de contestar o marcar explícitamente `No lo sé`. Una
+  limitación del ERP se presenta en secundario junto a la línea y jamás usa el
+  encabezado de precisión ni bloquea el guardado pendiente.
+- En compacto el app bar global es el único dueño del título del módulo. Las
+  secciones usan `T-04`, las acciones mantienen objetivos táctiles canónicos y
+  el guardado sigue alcanzable mediante scroll sin quedar fijo sobre contenido.
+- En escritorio el índice + decisión aparece sólo cuando hay necesidades
+  reales que comparar repetidamente. El ancho extra no justifica paneles,
+  tarjetas, KPIs ni diagnósticos permanentes.
+
+La regresión mínima cubre `599/600/899/900`, ausencia del split vacío durante
+la revisión, conservación del borrador al cambiar de sección, edición directa y
+alcance del CTA en compacto. La aceptación visual requiere además un frame real
+de macOS en ancho escritorio y teléfono; una prueba widget verde no sustituye
+esa lectura.
+
 ## 23. Estados de experiencia y degradación
 
-El workspace no puede depender de un único “cargando” global.
+La captura y el workspace no pueden depender de un único “cargando” global.
 
 Estados mínimos:
 
+- transición de estado en curso/confirmada/fallida;
+- necesidad local sin guardar/guardando/guardada/fallida;
 - interpretando intención;
 - esperando aclaración bloqueante;
+- respondiendo una aclaración en el mismo hilo;
+- reintentando una respuesta sin perder petición, borrador ni respuestas;
+- límite de tres rondas de aclaración confirmado;
+- buscando stock interno;
+- stock asignable, comprometido, insuficiente o cambiado por concurrencia;
+- compromiso en curso/confirmado/liberado/fallido;
 - resultados parciales;
 - comparación lista;
 - refinando/recalculando;
@@ -1020,6 +1827,12 @@ Comportamiento:
 
 - se conserva el último resultado válido mientras llega una revisión;
 - una respuesta vieja nunca reemplaza una intención nueva;
+- un fallo de transporte no consume una ronda de aclaración, y un reintento
+  confirmado sí la consume exactamente una vez;
+- cada ronda nueva limpia sólo las respuestas ya enviadas; la petición original
+  y el borrador anterior sobreviven hasta recibir un reemplazo válido;
+- si otro trabajo toma la última unidad, la UI conserva la necesidad, explica
+  el cambio y ofrece actualizar o continuar a compra;
 - los errores de una fuente no vacían otras fuentes válidas;
 - la UI nombra qué falló y ofrece retry acotado;
 - si falla la IA, el ledger y los controles tipados permiten continuar
@@ -1031,12 +1844,26 @@ Comportamiento:
 - al reconectar se reconcilia autoridad, request key y versión antes de
   publicar.
 
+Si el estado se confirmó pero guardar la necesidad falló, la fila puede quedar
+en `Repuestos sin definir`; no se comunica que el estado falló. Si el cliente
+desconoce el resultado de una reserva o plan por timeout, primero consulta el
+`operation_key` antes de permitir retry.
+
 ## 24. Seguridad, permisos y privacidad
 
 - Cada entidad nueva incluye `tenant_id`; índices, unique constraints, RLS y
   consultas se acotan por tenant.
 - El servidor deriva tenant, usuario, rol y permisos; el cliente no los declara
   como autoridad.
+- La transición de estado del trabajo usa `transition_mechanic_job_status`; la
+  de bicicleta requiere un comando equivalente con `operation_key` y receipt
+  antes de activar su captura. La nueva UI no escribe status directamente.
+- No se diseña un workflow distinto por rol. Cualquier usuario con acceso al
+  taller usa la misma experiencia; el backend agrupa el riesgo en capacidades
+  simples, por ejemplo `write.supply` para necesidad/compromiso y el permiso de
+  compras vigente para plan/documentos, sin un permiso ceremonial por botón.
+- ATP, adjudicación de la última unidad y liberación se calculan en servidor
+  dentro de comandos atómicos.
 - Las herramientas no anunciadas al usuario tampoco pueden ejecutarse por
   nombre.
 - El modelo recibe sólo evidencia acotada y saneada, no facturas completas ni
@@ -1050,13 +1877,17 @@ Comportamiento:
   reversible y auditable; enviar/comprar/pagar es `sensitiveWrite` separado.
 - Cualquier mutación usa operación idempotente, preview cuando corresponda,
   protección de concurrencia y read-back.
+- Ninguna herramienta obtiene credenciales de portal ni acceso a notas completas
+  del trabajo por conveniencia.
 
 ## 25. Observabilidad y explicación
 
 Cada análisis registra, sin secretos:
 
-- request y revisión de intención;
+- necesidad, procedencia y revisión de intención;
 - tools y versiones invocadas;
+- lecturas de ATP y versión usada;
+- receipts de asignación/liberación y motivo;
 - fuentes consultadas y cobertura;
 - candidatos evaluados/descartados;
 - motivo estructurado de descarte;
@@ -1073,18 +1904,40 @@ Cada análisis registra, sin secretos:
 - proyecta 54,1% de margen con el precio de venta indicado; y
 - disponibilidad actual no verificada.
 
+Para stock interno la explicación debe distinguir, por ejemplo:
+
+- 2 unidades físicas, 1 comprometida, 1 asignable al momento de consultar;
+- 1 unidad asignada a este trabajo mediante el receipt indicado; o
+- la última unidad fue adjudicada a otra operación antes de confirmar.
+
 La explicación no expone chain-of-thought ni sustituye la tabla de componentes.
 
 ## 26. Estrategia de implementación por fases
 
 ### Fase 0 — Contratos y auditoría de datos, sin feature visible
 
-Objetivo: saber qué puede afirmarse con datos reales antes de diseñar fórmulas y
-columnas definitivas.
+Objetivo: cerrar los invariantes y saber qué puede afirmarse con datos reales
+antes de crear entidades, fórmulas o superficies.
 
 Trabajo:
 
 - verificar esquema y migraciones efectivas de producción;
+- enumerar todas las superficies actuales que cambian estado de trabajo:
+  desktop, compacta, bicicleta específica, bulk y accesos relacionados;
+- verificar el comando canónico de transición, receipts, error/read-back y
+  comportamiento de estados configurables;
+- registrar que la transición per-bike carece hoy de comando/receipt y decidir
+  si se crea su equivalente o se excluye del primer corte visible;
+- definir semántica exacta de `SupplyNeed`, sus tres dimensiones de estado,
+  procedencia, alcance de bicicleta/`General`, cancelación y retención;
+- decidir el nombre/contrato de la capacidad semántica del estado sin heurística
+  por texto;
+- auditar on-hand, reservas online, consumidores POS/online/taller, facturación
+  vinculada y cálculo actual de disponibilidad;
+- elegir la estrategia compatible de ATP/compromisos y su modelo de
+  concurrencia, expiración, liberación y consumo;
+- fijar `online_product_available_quantity` como referencia inicial del subconjunto
+  online para la prueba de paridad ATP;
 - medir 12–24 meses de líneas de compra por estado, proveedor y moneda;
 - medir cobertura de `product_id`, categoría, familia y fichas;
 - medir sets, packs, líneas expandidas por el grafo de proveedor y cobertura de
@@ -1096,25 +1949,66 @@ Trabajo:
 - auditar el estado real de `purchase_orders` / `purchase_order_items`, sus
   consumidores y su incompatibilidad actual entre modelo Flutter y esquema;
 - verificar despliegue/cobertura de aliases y grafo de variantes de proveedor;
+- inventariar tools reales del runtime y decidir cuáles se extienden, reutilizan
+  o agregan sin duplicar responsabilidades;
 - fijar presupuestos por tool dentro de cinco rondas y 96 KiB por run;
+- simular dentro de ese presupuesto el camino
+  `needRef -> ATP -> aclaración -> candidatos externos`, además de producto
+  único y canasta;
 - fijar el comportamiento multi-moneda sin FX y el contrato futuro de una
   fuente de cambio autoritativa;
 - elegir el harness de evals sobre los tests Deno/provider simulado y fixtures
   existentes;
 - construir corpus anonimizables de consultas y decisiones reales; y
-- acordar presupuesto de latencia y tamaño de resultados desde una línea base.
+- acordar presupuesto de latencia, densidad de UI y tamaño de resultados desde
+  una línea base con usuarios expertos y novatos.
 
 Salida/puerta:
 
 - informe de cobertura y calidad;
+- contrato de `SupplyNeed`, status capability, ATP y comandos aceptado;
+- decisión explícita entre generalizar reservas o sumar un ledger compatible;
+- decisión y contrato de transición per-bike o exclusión explícita del corte;
+- matriz de superficies y contrato de navegación/retorno;
 - diccionario de fuentes elegibles;
 - fórmula económica validada con facturas reales;
-- decisión de qué datos necesitan backfill revisado; y
+- decisión de qué datos necesitan backfill revisado;
 - decisión fundada sobre modernizar, migrar o retirar el kernel antiguo de
   órdenes de compra; y
 - ningún dato de producción modificado en esta fase salvo autorización aparte.
 
-### Fase 1 — Kernel determinístico de evidencia y economía
+### Fase 1A — Kernel de necesidades, procedencia y atención
+
+Puede avanzar en paralelo a 1B después de cerrar Fase 0. No incorpora todavía
+interpretación por IA ni compra automática.
+
+Trabajo:
+
+- migraciones forward-only para el modelo mínimo de necesidad y revisiones;
+- estructura durable de `NeedInterpretationRevision` desde el primer corte,
+  aunque al inicio sólo la alimenten controles/manual y Fase 3 incorpore IA;
+- capacidad semántica del estado y edición administrativa canónica;
+- comandos idempotentes de crear/editar/cancelar necesidad;
+- read models de necesidades por trabajo, bicicleta, `General` y origen;
+- proyección derivada `Repuestos sin definir` y filtro de atención;
+- invariantes de multi-bike, component intake y bulk;
+- RLS, índices, eventos, versionado y receipts; y
+- actualización simultánea de `BIKE_WORKSHOP_MASTER_SCHEMA.md` y del registro de
+  superficies al cambiar esquema/data flow real.
+
+Puerta:
+
+- renombrar un estado no rompe la conducta;
+- seleccionar el estado no crea una necesidad vacía;
+- bulk nunca duplica una descripción en varios trabajos;
+- texto libre se conserva byte-for-byte y una propuesta no se vuelve identidad
+  confirmada;
+- `General` intencional sobrevive sin backfill automático;
+- retries no duplican líneas ni cruzan tenant; y
+- la transición per-bike pasa por comando con receipt o su captura permanece
+  desactivada explícitamente.
+
+### Fase 1B — Kernel determinístico de evidencia y economía
 
 Trabajo:
 
@@ -1138,32 +2032,72 @@ Puerta:
 - cancelled/draft no contaminan el último costo comprado; y
 - ninguna consulta cruza tenant.
 
-### Fase 2A — Corte vertical read-only de producto único
+### Fase 2A — ATP y compromisos internos
 
 Trabajo:
 
-- `PurchaseRequest` y ledger tipado;
-- integración con inspector de fichas y búsquedas actuales;
-- aclaración dinámica;
-- ranking inicial explicable;
-- `Conversación` y `Comparar` para una línea;
-- inspector contextual y navegación exacta;
-- composición desktop/tablet/phone; y
-- fallback manual sin IA.
+- proyección autoritativa de ATP sobre todas las fuentes vigentes;
+- comando atómico `Asignar del stock` con idempotencia y expected version;
+- liberación, reasignación, cancelación y política de expiración/revisión;
+- eventos append-only y read-back;
+- integración transaccional con el dueño vigente de consumo por factura;
+- vínculo por necesidad/identidad para consumir el compromiso propio del trabajo
+  sin tocar reservas ajenas;
+- protección del reserved floor en consumidores existentes; y
+- pruebas de competencia por última unidad, retry y recuperación.
 
 Puerta:
 
-- conjunto de evals reales y adversariales aprobado;
-- cálculo económico contrastado manualmente;
-- ninguna disponibilidad histórica se presenta como actual;
-- continuidad en `599/600` y `899/900`; y
-- sin escrituras de compra.
+- `on_hand`, comprometido y ATP reconcilian en todos los canales;
+- la proyección nueva reproduce el resultado online vigente antes de sumar
+  taller;
+- exactamente un competidor obtiene la última unidad;
+- una asignación jamás crea movimiento contable;
+- liberar devuelve ATP una sola vez;
+- consumo y evento de factura permanecen atómicos;
+- facturar un trabajo con compromiso activo lo lleva a `consumed`, nunca lo
+  deja `active`; y
+- online/POS no sufren regresión de disponibilidad.
 
-### Fase 2B — Captura local mínima temprana
+### Fase 2B — Corte vertical Jobs Table -> stock interno
 
-Esta línea puede avanzar en paralelo a 2A tan pronto como cierre la puerta
+Trabajo:
+
+- morph de la superficie de estado tras transición confirmada;
+- autocomplete único de producto/descripción, cantidad y alcance;
+- guardado línea por línea con receipts y retry local;
+- resumen compacto y `Repuestos sin definir` en Jobs Table;
+- `Resolver abastecimiento` con retorno exacto;
+- consulta manual/tipada de stock y acción explícita de asignar;
+- motivo para rechazar stock realmente asignable; y
+- composición desktop/tablet/phone mediante los dueños UI canónicos.
+
+Puerta:
+
+- fallo de estado no abre captura;
+- fallo de línea no finge rollback del estado ni pierde texto;
+- cerrar vacío deja la atención derivada correcta;
+- no aparece compra externa mientras exista una asignación aceptada suficiente;
+- una persona novata completa captura y asignación sin ayuda;
+- continuidad en `599/600` y `899/900`, teclado, lector y touch; y
+- la pantalla no excede el presupuesto de información definido en Fase 0; y
+- la variante per-bike sólo se habilita si su transición canónica con receipt
+  cerró; de lo contrario el alcance inicial queda declarado en UI y tests.
+
+### Fase 2C — Captura local mínima temprana
+
+**Estado 2026-08-16:** entregada y activa. El adapter reutiliza
+`/purchases/new`, el catálogo y workflow son server-owned, el borrador tipado
+preserva cantidad decimal y procedencia `source_need_id`, y el read-back
+productivo demostró cero escrituras colaterales en pagos, recepciones, stock o
+asientos. La ficha del proveedor ya puede confirmar la cobertura local o de
+rescate con el catálogo server-owned, pero ninguna asignación productiva fue
+inferida ni creada durante la certificación. La evidencia adjunta especializada
+y el rescate histórico siguen en Fase 6B; no se declaran parte de este corte.
+
+Esta línea puede avanzar en paralelo a 2A/2B tan pronto como cierre la puerta
 contable de Fase 0 y exista un adaptador seguro al kernel canónico de compras.
-No depende conceptualmente del kernel de evidencia de Fase 1: si éste se
+No depende conceptualmente del kernel de evidencia de 1B: si éste se
 demora, la captura puede activarse primero y conectarse al análisis después,
 siempre que conserve identificadores, procedencia y revisión suficientes. Su
 propósito es empezar a acumular evidencia desde temprano; no espera al solver
@@ -1184,12 +2118,43 @@ Puerta:
 - stock cambia sólo mediante recepción; y
 - el corpus local empieza a crecer aunque su ranking todavía no esté activo.
 
-### Fase 3 — Plan borrador y acciones seguras
+### Fase 3 — IA y comparación externa de producto único
+
+Depende de 1A, 1B y de la lectura ATP de 2A. La escritura de compromiso puede
+seguir feature-flagged mientras se valida el corte read-only.
 
 Trabajo:
 
-- persistencia mínima de request/plan;
+- ledger tipado de sesión/thread sobre `SupplyNeed`, sin tabla `SupplyRequest`
+  en V1;
+- referencias opacas de necesidades seleccionadas y `search_inventory`
+  reservation-aware con `needRef`;
+- integración con inspector de fichas y búsquedas actuales;
+- interpretación, descomposición, aclaración dinámica y replanning;
+- ranking inicial explicable para una línea externa;
+- `Necesidad` y `Resolver/Comparar`;
+- inspector contextual y navegación exacta;
+- composición desktop/tablet/phone; y
+- fallback manual tipado sin IA.
+
+Puerta:
+
+- conjunto de evals reales y adversariales aprobado;
+- familias no incluidas en ejemplos se resuelven sin código nuevo;
+- producto interno se ofrece antes que proveedor;
+- cálculo económico se contrasta manualmente;
+- ninguna disponibilidad histórica se presenta como actual;
+- una identidad propuesta requiere adjudicación cuando corresponde;
+- respeta cinco rondas/96 KiB y continúa en un nuevo run si se agota; y
+- sin escrituras de compra implícitas.
+
+### Fase 4 — Plan borrador y acciones seguras
+
+Trabajo:
+
+- persistencia mínima de agregado/plan;
 - selección, cantidad, alternativas y grupos por proveedor;
+- `source_need_id` y reconciliación de cantidad pendiente/cubierta;
 - preview congelado;
 - comando idempotente para plan; y
 - más tarde, conversión explícita a documentos de compra en borrador.
@@ -1201,7 +2166,7 @@ Puerta:
 - doble clic/retry no duplica documentos; y
 - no existe camino implícito a ordenar, pagar o recibir.
 
-### Fase 4 — Canastas y escenarios
+### Fase 5 — Canastas y escenarios
 
 Trabajo:
 
@@ -1220,7 +2185,23 @@ Puerta:
 - `Urgente/local` sólo aparece si existe un corpus mínimo definido en Fase 0;
   de lo contrario la UI declara que aún no hay cobertura suficiente.
 
-### Fase 5 — Madurez local, recomendación y backfill revisado
+### Fase 6A — Reposición y retiro del legado
+
+Trabajo:
+
+- convertir mínimos/rotación en señales de entrada a `SupplyNeed`;
+- comparar resultados contra `smart_purchase_list` en sombra;
+- migrar entry points y estados útiles;
+- desactivar trigger/score legado sólo después del corte; y
+- conservar snapshots históricos para auditoría.
+
+Puerta:
+
+- paridad y mejora demostradas;
+- no hay doble escritor ni recomendaciones contradictorias; y
+- rollback de entrada disponible durante el despliegue.
+
+### Fase 6B — Madurez local y backfill revisado
 
 Trabajo:
 
@@ -1236,22 +2217,6 @@ Puerta:
 - ya no necesita registrarse como gasto genérico; y
 - el asistente puede compararlo sin leer notas libres como verdad.
 
-### Fase 6 — Integración de reposición y retiro del legado
-
-Trabajo:
-
-- convertir mínimos/rotación en señales de entrada al request;
-- comparar resultados contra `smart_purchase_list` en sombra;
-- migrar entry points y estados útiles;
-- desactivar trigger/score legado sólo después del corte; y
-- conservar snapshots históricos para auditoría.
-
-Puerta:
-
-- paridad y mejora demostradas;
-- no hay doble escritor ni recomendaciones contradictorias; y
-- rollback de entrada disponible durante el despliegue.
-
 ### Fase 7 — Evidencia comercial vigente y portales
 
 Trabajo posible:
@@ -1266,7 +2231,19 @@ Esta fase no se usa para bloquear el valor de las fases anteriores.
 
 ## 27. Estrategia de migración y convivencia
 
-- El nuevo workspace nace detrás de un feature flag/permiso controlado.
+- El nuevo dominio y workspace nacen detrás de feature flags/permisos
+  controlados separados para lectura, captura, compromiso y planificación.
+- La capacidad de status se agrega por migración forward-only con default
+  seguro; no se activa buscando nombres existentes.
+- Necesidades y atención pueden desplegarse antes que IA/ranking, siempre que el
+  flujo manual permanezca completo.
+- ATP se despliega en sombra y reconcilia con online/POS antes de permitir
+  adjudicación desde taller.
+- Para el subconjunto online, la sombra debe reproducir primero
+  `online_product_available_quantity` mediante fixture dorado; sólo entonces se
+  agregan compromisos de taller.
+- La estrategia de reservas preserva IDs, estados y eventos online; cualquier
+  generalización requiere compatibilidad y backfill verificable.
 - `smart_purchase_list` permanece operativo durante la comparación en sombra.
 - No se dual-writea estado de plan a la lista legada.
 - Señales de reposición pueden leerse mediante un adaptador de sólo lectura.
@@ -1276,12 +2253,42 @@ Esta fase no se usa para bloquear el valor de las fases anteriores.
   distinta experiencia.
 - El trigger legado se retira mediante migración forward-only, nunca editando
   una migración aplicada.
-- `core_schema.sql` se actualiza como mirror sólo cuando exista una migración
-  autorizada y verificada.
+- `core_schema.sql` puede recibir una referencia histórica después de una
+  migración autorizada y verificada, pero es incompleto, no reproducible y no
+  participa del despliegue ni de su aceptación.
+- `BIKE_WORKSHOP_MASTER_SCHEMA.md` y `canonical-ui-surfaces.md` se actualizan en
+  la misma fase que cambie comportamiento/data flow y superficies reales.
 
 ## 28. Plan de pruebas y evaluación
 
-### 28.1 Dominio y economía
+### 28.1 Necesidades, estados y compromisos
+
+- status con capacidad activa, inactiva y renombrada;
+- transición fallida no abre captura;
+- transición confirmada + captura fallida produce atención derivada correcta;
+- cero, una y múltiples necesidades por trabajo;
+- trabajo con una bicicleta, varias bicicletas y alcance `General` intencional;
+- estado de bicicleta específica conserva `job_bike_id` exacto;
+- status per-bike usa comando con `operation_key`/receipt o la captura está
+  explícitamente desactivada;
+- component intake sin bicicleta no inventa una;
+- bulk status no replica necesidades;
+- descripción verbatim y producto formal;
+- propuesta de IA no confirma identidad;
+- cambio/cancelación de status no borra necesidades;
+- cancelación de trabajo libera compromisos con razón;
+- retry/doble clic no duplica necesidad ni reserva;
+- dos trabajos compiten por última unidad;
+- ATP reconcilia on-hand menos todos los compromisos activos;
+- la proyección nueva reproduce `online_product_available_quantity` antes de
+  sumar taller;
+- liberación, expiración/revisión, consumo y recovery de timeout;
+- factura vinculada consume exactamente una vez;
+- factura del trabajo consume su compromiso propio y nunca uno ajeno; y
+- `installed_pending_invoice` no mueve stock y permanece visible hasta
+  conciliación.
+
+### 28.2 Dominio económico
 
 - asignación proporcional de flete;
 - mayores restos, empates y cantidades fraccionarias;
@@ -1298,7 +2305,7 @@ Esta fase no se usa para bloquear el valor de las fases anteriores.
 - margen y utilidad con base comparable; y
 - degradación por dato faltante.
 
-### 28.2 Identidad y técnica
+### 28.3 Identidad y técnica
 
 - producto exacto y alias de proveedor;
 - líneas sin `product_id`;
@@ -1309,17 +2316,17 @@ Esta fase no se usa para bloquear el valor de las fases anteriores.
 - contexto de bicicleta parcial; y
 - marca comercial que no prueba plataforma técnica.
 
-### 28.3 Ranking
+### 28.4 Ranking
 
 - incompatibles siempre excluidos;
 - preferencia blanda no elimina;
 - mejorar costo sin empeorar otra dimensión no baja el orden;
 - cambio de perfil produce explicación coherente;
-- evidencia antigua/partial no aparenta certeza;
+- evidencia antigua/parcial no aparenta certeza;
 - empate determinístico; y
 - candidata local urgente visible aunque no sea la más barata.
 
-### 28.4 Canastas
+### 28.5 Canastas
 
 - un proveedor cubre todo;
 - varios proveedores cubren subconjuntos;
@@ -1331,7 +2338,7 @@ Esta fase no se usa para bloquear el valor de las fases anteriores.
 - timeout y resultado parcial; y
 - recálculo después de editar una cantidad.
 
-### 28.5 Evals de IA
+### 28.6 Evals de IA
 
 El dataset usa lenguaje real y sus prompts nunca se convierten en reglas:
 
@@ -1339,16 +2346,25 @@ El dataset usa lenguaje real y sus prompts nunca se convierten en reglas:
 - “rayos 27.5” y sus dos interpretaciones;
 - “algo barato pero que deje margen”;
 - canasta con cuatro familias;
+- descripción libre originada desde un trabajo con contexto de bicicleta;
+- producto formal ya disponible, parcialmente comprometido y sin ATP;
+- rechazo consciente de gama interna y continuación a compra;
 - abreviaciones, errores ortográficos y referencias previas;
 - contradicciones entre frase y ledger;
 - intento de inventar una clave técnica;
 - cero cobertura de ficha;
 - proveedor histórico sin stock verificado;
-- petición de comprar/enviar/pagar; y
-- caída de una herramienta con otras fuentes disponibles.
+- petición de comprar/enviar/pagar;
+- caída de una herramienta con otras fuentes disponibles; y
+- camino `needRef -> ATP -> aclaración -> candidatos` dentro del presupuesto o
+  con continuación honesta;
+- routing `deep` para descomposición/replanning y `fast` sólo en tareas livianas
+  evaluadas, sin downgrade heurístico silencioso.
 
-Se evalúa selección/composición de tools, restricciones tipadas, candidatos,
-explicación, límites y acciones, no coincidencia literal de la respuesta.
+Se evalúa selección/composición de tools, replanning, restricciones tipadas,
+stock-first, candidatos, explicación, límites y acciones, no coincidencia
+literal de la respuesta. El modelo debe resolver consultas fuera del corpus sin
+pedir una tool o branch nueva por familia.
 
 El harness inicial extiende los tests Deno del runtime con proveedor simulado y
 el fixture conversacional existente. Debe validar rondas, bytes, tools, receipts,
@@ -1356,7 +2372,35 @@ estado terminal y continuidad del ledger. Los canaries contra un proveedor real
 son una puerta separada: no sustituyen las regresiones determinísticas ni se
 ejecutan como suite masiva durante cada iteración.
 
-### 28.6 UI, navegación y accesibilidad
+#### 28.6.1 Variación obligatoria en cada ronda manual
+
+El ejemplo de neumáticos 27,5 sirve como regresión histórica, pero no puede ser
+el canary repetido con el que se declare que el motor generaliza. Cada ronda de
+app real usa solicitudes nuevas y cubre al menos cuatro clases distintas sin
+añadir una rama por producto:
+
+- especificación exacta con vocabulario técnico distinto, por ejemplo un
+  movimiento central sellado BSA con caja/eje y preferencia de gama;
+- medida directa que no necesita cálculo de fitment, por ejemplo rayos de largo
+  explícito, versus una petición de rayos para una rueda que sí necesita
+  contexto técnico progresivo;
+- producto con especificaciones dimensionales y de interfaz, por ejemplo cámara
+  700×28 con tipo/largo de válvula;
+- canasta de familias relacionadas, por ejemplo cadena, cassette y pastillas,
+  con consolidación sólo si no sacrifica restricciones duras ni rentabilidad;
+- urgencia/localidad que cambia el perfil pero no inventa disponibilidad;
+- frase vaga o contradictoria que debe aclararse en vez de fabricar identidad;
+  y
+- stock interno compatible pero de gama rechazada conscientemente, continuando
+  a proveedores sin perder la decisión anterior.
+
+No se reutiliza la misma frase en dos rondas consecutivas. Se registra para cada
+caso: intención descompuesta, tools llamadas, aclaraciones, resultado stock-first,
+ranking/explicación, acciones ofrecidas y navegación de retorno. Un caso conocido
+que sigue pasando es una regresión útil; no es evidencia suficiente de
+generalización.
+
+### 28.7 UI, navegación y accesibilidad
 
 - desktop aproximado `1440x900`;
 - teléfono `384x824` y bordes `599/600`;
@@ -1368,12 +2412,20 @@ ejecutan como suite masiva durante cada iteración.
 - SafeArea y teclado virtual;
 - loading, vacío, error, offline y evidencia parcial;
 - back/forward, ruta relacionada y retorno exacto;
+- popover anclado de estado -> captura -> cierre a la misma fila;
+- sheet/compact sin pérdida de borrador ni foco;
+- autocomplete de producto/descripción con teclado y lector;
+- estados guardando/guardado/error por línea;
+- resumen `Repuestos sin definir` y filtros de atención;
+- presupuesto visual: sin proliferación de chips/cards/status redundantes;
 - selección/scroll/filtros/plan preservados; y
 - inspector/pane sin perder estado al recomponer.
 
-### 28.7 Prueba real antes de cierre
+### 28.8 Prueba real antes de cierre
 
 - corpus de facturas históricas reales revisado fila a fila;
+- al menos un trabajo real recorre captura formal, descripción libre, asignación
+  interna, liberación y compra externa;
 - al menos una solicitud de producto único y una canasta comparadas contra la
   decisión de una persona experimentada;
 - una persona con menor conocimiento técnico completa la tarea sin ayuda;
@@ -1386,26 +2438,37 @@ ejecutan como suite masiva durante cada iteración.
 
 El feature está listo para adopción cuando:
 
-1. una petición casual se convierte en restricciones visibles y corregibles;
+1. una petición casual o necesidad de trabajo se convierte en una
+   `SupplyNeed` trazable con restricciones visibles y corregibles;
 2. puede resolver familias no incluidas en los ejemplos sin agregar código por
    producto;
 3. no mezcla identidad, categoría, especificación y fitment;
-4. ningún incompatible demostrado encabeza un ranking;
-5. costo, flete y margen reconcilian con evidencia auditable;
-6. precio o disponibilidad histórica nunca se presentan como vigentes;
-7. producto único y canasta terminan en un plan accionable;
-8. una fuente o la IA pueden fallar sin bloquear todo el trabajo;
-9. la explicación permite a una persona cuestionar y cambiar la decisión;
-10. la persona controla toda escritura y ninguna acción externa es automática;
-11. desktop, tablet y teléfono preservan el mismo estado/efecto canónico; y
-12. usuarios con distinta experiencia pueden completar tareas reales con menos
-    dependencia de conocimiento tribal.
+4. stock interno reservation-aware se evalúa antes de proveedores;
+5. sólo un compromiso confirmado permite afirmar que stock cubrió una necesidad;
+6. ningún cambio de estado/necesidad/instalación mueve inventario contable;
+7. ningún incompatible demostrado encabeza un ranking;
+8. costo, flete y margen reconcilian con evidencia auditable;
+9. precio o disponibilidad histórica nunca se presentan como vigentes;
+10. producto único y canasta pueden terminar en cobertura interna, faltante
+    explícito o plan externo accionable;
+11. una fuente o la IA pueden fallar sin bloquear todo el trabajo;
+12. la explicación permite a una persona cuestionar y cambiar la decisión;
+13. la persona controla toda escritura y ninguna acción externa es automática;
+14. Jobs Table conserva estado, fila y retorno durante captura/resolución;
+15. desktop, tablet y teléfono preservan el mismo estado/efecto canónico; y
+16. usuarios con distinta experiencia pueden completar tareas reales con menos
+    dependencia de conocimiento tribal y sin saturación visual.
 
 ## 30. Métricas de éxito
 
 Las metas numéricas se fijan después de la línea base, pero se medirán:
 
 - tiempo desde petición hasta primer resultado útil;
+- porcentaje de estados configurados que terminan con necesidad definida;
+- tiempo desde cambio de estado hasta primera necesidad válida;
+- necesidades cubiertas con stock interno versus compra externa;
+- conflictos de ATP y tasa de resolución/retry;
+- tiempo en `installed_pending_invoice` y conciliaciones vencidas;
 - tiempo hasta plan aceptable;
 - cantidad de aclaraciones bloqueantes;
 - porcentaje de búsquedas con resultados parciales útiles;
@@ -1417,32 +2480,47 @@ Las metas numéricas se fijan después de la línea base, pero se medirán:
 - tasa de alternativas cambiadas por el usuario y motivo;
 - reducción de compras registradas como gasto genérico;
 - concentración versus división de proveedores;
-- margen proyectado versus observado; y
-- tasa de afirmaciones corregidas por evidencia insuficiente.
+- margen proyectado versus observado;
+- tasa de afirmaciones corregidas por evidencia insuficiente;
+- tasa de abandono/error por superficie y breakpoint;
+- número de elementos de status/acciones simultáneos por pantalla; y
+- éxito sin ayuda de usuarios nuevos versus experimentados.
 
 No se optimiza sólo el click-through del primer candidato: aceptar ciegamente
 una recomendación opaca sería una señal de riesgo, no necesariamente de éxito.
 
 ## 31. Decisiones abiertas que deben resolverse con evidencia
 
-1. semántica exacta de `confirmed` versus compra efectivamente realizada;
-2. fuente canónica del precio de venta neto y su vigencia;
-3. tratamiento de descuentos globales antes de repartir flete;
-4. vocabulario final de `source_document_kind` para compra local sin factura;
-5. clasificación revisable de `additional_costs` y `expense_links`;
-6. si/cuándo se incorpora FX y qué fuente autoritativa lo respalda; hasta
+1. nombre final, ubicación y permisos de la capacidad semántica de status;
+2. normalización mínima de `SupplyNeed` y sus revisiones;
+3. estrategia de compatibilidad para ATP: ledger generalizado o ledger de taller
+   con proyección única;
+4. expiración/revisión y liberación terminal de compromisos de taller;
+5. owner y SLA de `installed_pending_invoice` hasta la factura vinculada;
+6. semántica exacta de `confirmed` versus compra efectivamente realizada;
+7. fuente canónica del precio de venta neto y su vigencia;
+8. tratamiento de descuentos globales antes de repartir flete;
+9. clasificación revisable de `additional_costs` y `expense_links`;
+10. si/cuándo se incorpora FX y qué fuente autoritativa lo respalda; hasta
    entonces no hay conversión;
-7. pesos iniciales de los tres perfiles de ranking de V1;
-8. si el kernel antiguo `purchase_orders` se moderniza como destino del plan o
+11. pesos iniciales de los tres perfiles de ranking de V1;
+12. si el kernel antiguo `purchase_orders` se moderniza como destino del plan o
    se retira y el plan crea `purchase_invoices` draft mediante el dueño vigente;
-9. qué métricas de recepción/discrepancia son justas para comparar proveedores;
-10. qué disponibilidad puede verificarse manualmente y por cuánto tiempo vale;
-11. qué partes del motor de compatibilidad necesitan dueño server-side;
-12. qué entry point reemplaza al legado durante el corte; y
-13. qué política se aplica a sets cuyos ratios de costo no están completos.
+13. qué métricas de recepción/discrepancia son justas para comparar proveedores;
+14. qué disponibilidad puede verificarse manualmente y por cuánto tiempo vale;
+15. qué partes del motor de compatibilidad necesitan dueño server-side;
+16. qué entry point reemplaza al legado durante el corte;
+17. qué política se aplica a sets cuyos ratios de costo no están completos;
+18. etiqueta visible final: `compras`, `abastecimiento` o combinación validada; y
+19. firma/alcance del comando per-bike o exclusión explícita de esa variante en
+    el primer corte.
 
 Estas decisiones no se resolverán por estética ni por una frase de ejemplo.
 Cada una tiene una fase, evidencia y puerta de aceptación arriba.
+
+El guardado por línea sí queda cerrado como default: cada confirmación produce
+su propio receipt y retry visible. La medición de errores puede justificar un
+cambio posterior, pero no deja dos contratos contradictorios para V1.
 
 ## 32. Mapa probable de ownership y archivos
 
@@ -1450,12 +2528,18 @@ La ubicación exacta se confirma al implementar. Dirección inicial:
 
 - arquitectura y contratos: este documento, runtime de IA, identidad de
   producto, fichas, proveedores y registro de superficies;
-- migraciones forward-only: `supabase/migrations/` y mirror posterior en
-  `supabase/sql/core_schema.sql`;
+- migraciones forward-only: `supabase/migrations/`; cada versión se despliega,
+  verifica y estampa mediante el workflow gobernado. El histórico
+  `supabase/sql/core_schema.sql` es contexto opcional, no un segundo owner;
 - tools/orquestación: `supabase/functions/ai-agent-gateway/`;
-- dominio Flutter: nuevo submódulo dentro de `lib/modules/purchases/`;
-- UI: workspace, controller y composiciones responsive, reutilizando
-  componentes compartidos;
+- dominio de demanda/ATP: owner server-side compartido por taller, inventario y
+  compras; su carpeta exacta se decide por ownership, no por la primera pantalla;
+- integración taller: modelo/servicio de estados y Jobs Table, sin convertir la
+  página en dueña del dominio;
+- dominio Flutter de comparación/plan: submódulo dentro de
+  `lib/modules/purchases/` o sucesor que refleje el agregado acordado;
+- UI: captura contextual, workspace, controller y composiciones responsive,
+  reutilizando componentes compartidos;
 - lógica técnica: adaptadores a los dueños canónicos, no regex locales;
 - tests: unitarios de dominio, DB/RLS, fixtures de IA, widgets, navegación y
   visuales focalizados; y
@@ -1463,58 +2547,115 @@ La ubicación exacta se confirma al implementar. Dirección inicial:
   una superficie real exista.
 
 No se edita `BIKE_WORKSHOP_MASTER_SCHEMA.md` durante esta planificación porque
-no cambió comportamiento, esquema ni data flow. Si la implementación modifica
-el significado de fichas o compatibilidad, se actualizará en la misma tarea.
+no cambió comportamiento, esquema ni data flow real. La primera fase que cree
+necesidades, capacidades de status, compromisos o nuevos enlaces de factura debe
+actualizarlo en la misma tarea, incluso si no cambia fichas o compatibilidad.
 
 ## 33. Revisión independiente con Claude y conciliación
 
-El 2026-08-16 Claude revisó este plan en el chat `Asistente de compras
-inteligente`, con preflight visible `Code` + repo `bikeshop-erp` + `Fable 5` +
-`Effort: Ultracode`, y permaneció read-only.
+Las primeras revisiones ocurrieron el 2026-08-16 en el chat `Asistente de
+compras inteligente`, con preflight visible `Code` + repo `bikeshop-erp` +
+`Fable 5` + `Effort: Ultracode`, y permanecieron read-only. La auditoría visual
+final del 2026-08-17 usó `Code` + `Opus 5` + `Effort: Ultracode` en el chat
+`UI Asistente de compras con Design`; esa ronda tuvo permiso acotado para
+corregir únicamente el workspace y sus regresiones de UI.
 
-Aportes incorporados después de verificarlos contra el repositorio:
+### 33.1 Revisión 1 — motor histórico/económico
 
-- fusionar búsqueda/ranking y presupuestar el flujo contra cinco rondas y 96
-  KiB, sin ampliar por comodidad los límites globales del agente;
-- cubrir sets, componentes y asignaciones de variantes sin duplicar costos;
-- fijar elegibilidad económica por `line_nature`, no sólo por status;
-- auditar el kernel existente pero aparentemente obsoleto de
-  `purchase_orders` antes de elegir el destino del plan;
-- adelantar una captura local mínima para no seguir perdiendo evidencia;
-- reducir V1 a tres perfiles de ranking;
-- fijar el default multi-moneda sin FX inventado;
-- incorporar continuación tras agotar presupuesto, harness de evals y métrica
-  de honestidad de evidencia; y
-- tratar `source_document_kind` sobre el kernel de compras como dirección por
-  defecto sujeta a validación contable, no como una opción estética abierta.
+Sobre la versión previa orientada sólo a compras se incorporaron, después de
+contrastarlos con el repositorio:
 
-Observaciones de Claude que se corrigieron al conciliar:
+- búsqueda/ranking dentro de cinco rondas y 96 KiB;
+- sets/componentes sin duplicar costos;
+- elegibilidad por `line_nature`;
+- auditoría de `purchase_orders` antes de elegirlo como destino;
+- captura local temprana, tres perfiles de ranking y default sin FX inventado;
+- continuación honesta al agotar presupuesto y harness de evals; y
+- `source_document_kind` sobre el kernel canónico como dirección sujeta a
+  validación contable.
 
-- los aliases/listings no requieren una entidad nueva: ya existen
-  `supplier_product_aliases` y el grafo revisionado de variantes en migraciones;
-- `assistant_threads`, `assistant_runs`, `assistant_tool_receipts` y
-  `assistant_approvals` también existen en migraciones, aunque no aparezcan en
-  el fragmento antiguo de bootstrap que se inspeccione; y
-- que `purchase_orders` exista en `core_schema.sql` no demuestra que sea el
-  owner usable: el modelo Flutter usa tipos/nombres incompatibles y el form es
-  placeholder. Por eso se aceptó la auditoría, no su adopción automática.
+Se corrigieron tres supuestos de esa revisión: aliases y grafo de variantes ya
+existen; las entidades del runtime también existen en migraciones; y la mera
+presencia de `purchase_orders` en bootstrap no demuestra ownership usable.
 
-En una segunda lectura de conciliación, Claude verificó que los doce hallazgos
-quedaron resueltos, corregidos o convertidos en decisiones con fase y puerta,
-y reportó **cero bloqueos restantes para este documento de planificación**.
-También observó que la captura local temprana no necesita esperar al kernel de
-evidencia si la puerta contable y el adaptador canónico ya están cerrados; esa
-flexibilidad quedó incorporada en Fase 2B.
+### 33.2 Revisión 2 — taller, necesidad y ATP
 
-La revisión concluyó que no queda una preferencia humana bloqueante para una
-futura Fase 0 read-only. Eso no autoriza iniciarla: sigue siendo necesario que
-el dueño indique cuándo pasar de este plan a ejecución.
+Al incorporar Jobs Table, Claude aportó cuatro correcciones estructurales:
+
+- el status invita la captura mediante capacidad semántica; no almacena la
+  necesidad ni depende del texto `REPUESTOS`;
+- un autocomplete unificado permite producto formal o descripción verbatim;
+- `SupplyNeed` precede a cualquier artefacto de compra; y
+- stock sólo cubre mediante compromiso activo, con ATP único y consumo por la
+  factura vinculada.
+
+La conciliación no copió literalmente sus nombres o supuestos. Se conservó
+`General` como alcance válido en vez de exigir siempre `job_bike_id`; la capacidad
+se expresa como `prompts_supply_need_capture`; y Fase 0 decide la migración de
+reservas sin reemplazar a ciegas el ledger online.
+
+### 33.3 Revisión 3 — auditoría del plan consolidado
+
+Claude auditó las 2.000+ líneas contra Master Schema, contrato de identidad,
+runtime, superficies reales de status y ATP online. Detectó y se conciliaron:
+
+- ausencia actual de comando/receipt per-bike y su gate obligatorio;
+- creación de `NeedInterpretationRevision` desde Fase 1A;
+- procedencia mediante FKs tipadas + `CHECK`, sin `originRef` libre;
+- retiro de `SupplyRequest` como agregado V1 innecesario;
+- consumo del compromiso propio del trabajo y paridad dorada online;
+- `search_inventory(needRef)` y regresión completa del presupuesto de tools;
+- separación de Fases 6A/6B;
+- fallback real del popover sin encoger la captura;
+- eliminación de estados calculados persistidos;
+- guardado por línea como default; y
+- simplificación de permisos a capacidades de negocio, no por botón.
+
+En la relectura final del diff, Claude reportó **cero P0/P1**, ninguna
+contradicción material introducida y ningún P2 capaz de romper implementación.
+La única nota terminológica —`consumed` para compromiso y `reconciled` para
+necesidad— quedó fijada en el glosario de §9. También confirmó que no modificó
+archivos, código, DB, Design ni la sesión Flutter.
+
+Ese resultado cerró la coherencia de la propuesta previa a la ejecución. El
+dueño autorizó después la implementación; los contratos conciliados siguen
+siendo las puertas de aceptación del corte, no una promesa de que todos los
+detalles visuales del bosquejo deban sobrevivir.
+
+### 33.4 Revisión 4 — DesignSync T23 y recorrido interactivo completo
+
+Claude leyó mediante DesignSync el proyecto `ERP Bikeshop UI Mockups`, handoff
+`handoff-t23`, y conservó un mirror verificable de 28 frames y notas. El handoff
+se trató como propuesta, no como autoridad de producto: se contrastó con datos,
+navegación, componentes canónicos, claro/oscuro/compacto y acciones que el ERP
+realmente puede ejecutar. Se conservaron el stepper
+`Necesidad -> Stock interno -> Proveedores -> Plan`, la divulgación progresiva,
+las imágenes en filas/inspector cuando existe media y los acentos de acción; se
+descartaron paneles vacíos, diagnósticos permanentes, chips decorativos y
+editores centrados sobre scrim.
+
+La auditoría final recorrió composer, loading, aclaración, revisión de una y
+varias líneas, stock, proveedor, inspector, escenarios, plan, vacíos, errores y
+anchos compactos. Encontró y corrigió tres defectos concretos:
+
+- dos indicadores de carga simultáneos al responder una aclaración;
+- repetición de la petición original dentro del control de aclaración; y
+- un vacío de proveedores centrado, sin salida directa al selector de
+  necesidad.
+
+La conciliación dejó un indicador de carga, una sola copia literal de la
+petición y un vacío inline con `Elegir necesidad`. Claude modificó sólo
+`intelligent_purchasing_workspace_page.dart` y sus dos contratos de prueba; no
+tocó backend, SQL, rutas, servicios ni la sesión Flutter. Codex releyó el diff,
+recargó la sesión canónica, verificó macOS real en escritorio/compacto y cerró
+la suite combinada en `129/129`.
 
 ## 34. Regla final de implementación
 
 Cada fase puede cambiar la forma de las pantallas y simplificar el modelo si
 mantiene los invariantes. Ningún componente del bosquejo se implementa sólo
 porque aparece dibujado. Toda decisión debe justificar cómo ayuda a la persona a
-encontrar el producto correcto, en el lugar correcto, a un precio justo, con
-características precisas o alternativas conscientemente parecidas, y convertir
-esa conclusión en una acción segura.
+definir la necesidad, aprovechar primero stock realmente asignable, encontrar el
+producto correcto en el lugar correcto a un precio justo, comparar
+características precisas o alternativas conscientemente parecidas y convertir
+esa conclusión en una acción segura, trazable y reversible donde corresponda.
