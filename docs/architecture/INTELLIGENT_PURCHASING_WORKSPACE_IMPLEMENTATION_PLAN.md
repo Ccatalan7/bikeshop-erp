@@ -3611,3 +3611,28 @@ declararlos correctos porque «no contradicen» sería la misma trampa de
 `03/04-single-providers`, `05-single-inspector`, `06/07-plan`, y sus variantes
 de teléfono. Un frame por superficie, la app al lado, y sólo entonces se declara
 la superficie lista.
+
+### 33.19 Los frames no se leen como la guía: vuelven en base64 al contexto
+
+Trampa que cuesta una ventana entera si se descubre tarde. `get_file` **no se
+comporta igual** según el archivo:
+
+- **HTML grande** (la guía de 260 KB) → se guarda a disco y sólo entra un
+  preview de ~2 KB. Se greppea desde el archivo. Barato.
+- **PNG de frame** (`handoff-t23/frames/*.png`) → vuelve **inline como base64
+  en el contexto**, con `isBase64:true`. Un frame de ~180 KB cuesta su base64
+  completo, y no queda en disco para decodificar después.
+
+**Consecuencia práctica:** la comparación frame-a-frame se planifica por
+presupuesto. Un frame por vuelta, y sólo el de la superficie que se está
+verificando. Pedir varios «para tenerlos» agota la ventana antes de mirar
+ninguno — que es exactamente lo que pasó al final de esta sesión.
+
+**El orden que queda pendiente**, un frame por vuelta, decodificando y mirando
+antes de pedir el siguiente: `02-single-stock-desktop-light` (donde se
+corrigieron dos roles), `01-single-need`, `03/04-single-providers`,
+`05-single-inspector`, `06/07-plan`, y después las variantes `-phone` y `-dark`.
+
+Con `§33.15`–`§33.18` esa comparación es lo **único** que le queda a la
+condición (5): el `projectId`, la escala autoritativa, los cinco defectos
+cerrados y el método de auditoría por `surface` ya están.
