@@ -3215,13 +3215,22 @@ borrador que la abriría nunca sobrevive a la validación. Una petición bien
 especificada (`4 cámaras 29 válvula Schrader`) cierra sin problema; la
 ambigüedad, que es justo el caso para el que se diseñó la aclaración, no.
 
-**Dónde mirar.** `validateSupplyRequestItems` en `tool_executor.ts` lanza
-`InvalidToolArguments` desde un booleano de una treintena de condiciones
-encadenadas. Las candidatas para una línea que pregunta son las reglas
-apareadas: `clarificationRequired = true` exige **además** un `clarification`
-no nulo, exige `productId` nulo, y exige que `clarificationPrompts` valide con
-al menos un prompt. Un modelo que manda la pregunta en los prompts pero deja
-`clarification` en null cae por la primera y no hay forma de saberlo.
+**Dónde ocurre, con precisión.** No es el ejecutor. `providerArgumentRejections`
+(`runtime.ts`) llama a `registry.validateProviderCall` **antes** de ejecutar
+nada, y cualquier `ToolRegistryError` con código `invalid_tool_arguments` mete
+la llamada en `rejectedToolCallIds`; el recibo se escribe después con ese código
+fijo, escrito como literal en dos sitios. Es decir: el borrador muere contra el
+**esquema declarado** de la herramienta, no contra las reglas de negocio de
+`validateSupplyRequestItems`, que ni siquiera llega a correr.
+
+Eso descarta las reglas apareadas de negocio como causa —`clarificationRequired`
+con su glosa, sin producto exacto y con prompts válidos— y deja el foco en el
+esquema de `prepare_supply_request` frente a lo que el modelo emite para una
+línea que pregunta. La corrección de observabilidad va, entonces, en
+`providerArgumentRejections`: hoy devuelve un `Set<string>` de ids y tira el
+motivo del `ToolRegistryError`; debe conservarlo por id y publicarlo en
+`failure_code` en vez del literal. Instrumentar `tool_executor.ts` no sirve: se
+midió y ese código no se alcanza en este camino.
 
 **Lo que hay que hacer primero, y es la misma lección que ya costó dos rondas
 hoy: que el rechazo diga cuál comprobación falló.** Un validador que sólo
