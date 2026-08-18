@@ -3576,3 +3576,38 @@ le asigna es un defecto, no una interpretación.
 método, y después la comparación frame contra frame en la misma celda de tema y
 host, con los 28 PNG del handoff —`frames/01…28-*.png`, con sus variantes
 `-dark`, `-phone` y `-tablet`—, que ya son accesibles por `projectId`.
+
+### 33.18 Hasta dónde llega la auditoría por `surface`, y dónde empiezan los frames
+
+Barrido completo de los roles que el spec **sí** ata a una superficie:
+
+| rol | superficie del spec | estado tras la auditoría |
+|---|---|---|
+| `module_title` | banda de proceso | 1 uso, correcto (corregido) |
+| `surface_title` | Stock interno | 1 uso, correcto |
+| `panel_title` | inspector, criterios, compra local | correcto (corregido «criterios») |
+| `card_title` | cards de candidato y de stock en phone | correcto (agregado) |
+| `metric_lg` | inspector | 1 uso, correcto |
+| `metric_md` | cards phone | correcto (corregida la fila de escritorio) |
+| `metric_sm` | celdas de tabla, totales de grupo | 6 usos, correctos |
+
+**Los cinco defectos que existían están cerrados. Ese método ya no encuentra
+más**, y conviene decir por qué: los roles restantes —`section_title`,
+`row_title`, `body`, `meta`, `label`— **no declaran superficie** en la escala,
+sólo una descripción genérica («encabezados de bloque», «filas de tabla, filas
+de plan»). Doce usos de `row_title`, por ejemplo, caen todos en filas de stock,
+filas de plan, pasos de la banda, la pregunta de aclaración y el título de
+«Evidencia consultada»: ninguno contradice al spec, y ninguno queda **probado**
+por él.
+
+**Ahí empieza lo que sólo el frame resuelve.** Para esos usos la evidencia es la
+comparación del frame real contra el PNG del handoff, en la misma celda de tema
+y host — `frames/01…28-*.png` con sus variantes `-dark`, `-phone` y `-tablet`,
+accesibles con el `projectId` de §33.15. No se pueden cerrar por grep, y
+declararlos correctos porque «no contradicen» sería la misma trampa de
+«coincidir con los números» que costó rehacer el módulo.
+
+**Orden para quien siga:** frames `01-single-need`, `02-single-stock`,
+`03/04-single-providers`, `05-single-inspector`, `06/07-plan`, y sus variantes
+de teléfono. Un frame por superficie, la app al lado, y sólo entonces se declara
+la superficie lista.
