@@ -3587,7 +3587,9 @@ class _IntelligentPurchasingWorkspacePageState
               Expanded(
                 child: Text(
                   'Criterios interpretados',
-                  style: PurchaseType.sectionTitle,
+                  // `panel_title` en el spec: «inspector, criterios, compra
+                  // local». Es un panel, no un encabezado de bloque.
+                  style: PurchaseType.panelTitle,
                 ),
               ),
               TextButton(

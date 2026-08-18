@@ -3540,3 +3540,33 @@ la fuente.** Es la prueba de por qué el contrato exige DesignSync y no la
 pantalla. El trabajo restante: agregar `cardTitle` y `moduleTitle` a
 `PurchaseType` con sus valores del spec, reasignar los usos de card de teléfono
 y el título del módulo, y recién entonces comparar frame contra frame.
+
+### 33.17 Auditoría de roles contra la columna `surface` del spec (2026-08-18)
+
+La escala del `spec.json` no sólo da tamaños: **cada rol declara a qué
+superficie pertenece**. Eso convierte la verificación en algo mecánico y
+barato, sin cargar un solo frame — y es lo que había que hacer desde el
+principio en vez de razonar la jerarquía en pantalla.
+
+Resultado de auditar los tres archivos del módulo:
+
+- `surface_title` («Stock interno» en el spec) aparece **exactamente una vez**,
+  en «Stock interno primero». Correcto.
+- `panel_title` («inspector, criterios, compra local») cubre bien el inspector
+  y la hoja de compra local.
+- **Tercer error encontrado:** «Criterios interpretados» llevaba
+  `sectionTitle`. El spec nombra «criterios» dentro de `panel_title`: es un
+  panel, no un encabezado de bloque. Corregido.
+
+Con los tres de §33.16 y éste, **cuatro asignaciones estaban mal** y las cuatro
+se veían razonables en pantalla. Ninguna se habría encontrado mirando la app.
+
+**El método que sirve, para la próxima:** leer `typography.scale`, tomar su
+columna `surface`, y grepear cada rol en el módulo comprobando que sólo aparezca
+donde el spec lo autoriza. Un rol que aparece en una superficie que el spec no
+le asigna es un defecto, no una interpretación.
+
+**Lo que queda de la condición (5):** el barrido de los usos restantes con ese
+método, y después la comparación frame contra frame en la misma celda de tema y
+host, con los 28 PNG del handoff —`frames/01…28-*.png`, con sus variantes
+`-dark`, `-phone` y `-tablet`—, que ya son accesibles por `projectId`.
