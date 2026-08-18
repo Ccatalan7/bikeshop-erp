@@ -196,6 +196,12 @@ export interface AgentSupplyNeedDraftLine {
   productName: string | null;
   productSku: string | null;
   identityState: "unresolved" | "confirmed";
+  /// Procedencia de categoría resuelta por el servidor. Sobrevive al turno
+  /// dentro de la tarjeta cerrada y vuelve intacta al comando durable; la
+  /// familia técnica se deriva en cada lectura y no se guarda.
+  categoryId: string | null;
+  categoryPath: string | null;
+  technicalFamily: string | null;
   quantity: number;
   unit: string;
   technicalPredicates: readonly AgentSupplyNeedTechnicalPredicate[];

@@ -15,6 +15,18 @@ void main() {
       );
     });
 
+    test('archived workshop activity opens the surviving jobs module', () {
+      expect(
+        resolveErpNotificationRoute({
+          'type': 'mechanic_job_archived',
+          'entity_type': 'mechanic_job',
+          'entity_id': 'archived-job-42',
+          'route': '/taller/pegas',
+        }),
+        '/taller/pegas',
+      );
+    });
+
     test('opens the exact sales payment', () {
       expect(
         resolveErpNotificationRoute({
@@ -24,6 +36,26 @@ void main() {
           'route': '/sales/payments',
         }),
         '/sales/payments?paymentId=payment-42',
+      );
+    });
+
+    test('opens the surviving invoice for a voided sales payment', () {
+      expect(
+        resolveErpNotificationRoute({
+          'type': 'sales_payment_voided',
+          'entity_type': 'sales_payment',
+          'entity_id': 'deleted-payment-42',
+          'route': '/sales/invoices/invoice-42',
+          'data': {'invoice_id': 'invoice/42'},
+        }),
+        '/sales/invoices/invoice%2F42',
+      );
+      expect(
+        withNotificationOpenRequest(
+          '/sales/invoices/invoice-42',
+          requestId: 'request-voided',
+        ),
+        '/sales/invoices/invoice-42?openRequest=request-voided',
       );
     });
 
@@ -39,6 +71,26 @@ void main() {
       );
     });
 
+    test('expense lifecycle routes only target records that still exist', () {
+      expect(
+        resolveErpNotificationRoute({
+          'type': 'expense_voided',
+          'entity_type': 'expense',
+          'entity_id': 'expense/voided',
+        }),
+        '/accounting/expenses/expense%2Fvoided',
+      );
+      expect(
+        resolveErpNotificationRoute({
+          'type': 'expense_deleted',
+          'entity_type': 'expense',
+          'entity_id': 'expense/deleted',
+          'route': '/accounting/expenses',
+        }),
+        '/accounting/expenses',
+      );
+    });
+
     test('opens the exact online order and catalog product', () {
       expect(
         resolveErpNotificationRoute({
@@ -46,6 +98,13 @@ void main() {
           'data': {'order_id': 'order-42'},
         }),
         '/website/orders?order=order-42',
+      );
+      expect(
+        resolveErpNotificationRoute({
+          'type': 'online_order_cancelled',
+          'data': {'order_id': 'cancelled-order-42'},
+        }),
+        '/website/orders?order=cancelled-order-42',
       );
       expect(
         resolveErpNotificationRoute({

@@ -63,10 +63,20 @@ hand the user a query, a test, or a migration the repository can execute.
 | The smallest reviewed `--write` required by an implementation/fix/ship request, with exact read-back | Destructive deletion/repair, broad corrective backfill, credential rotation, or an unrelated pending migration |
 | `just db-test`, `just db-gate`, pgTAP | Mutating probes on production, even in `BEGIN`/`ROLLBACK` |
 | Registration of the exact deployed migration after successful live read-back | Arbitrary migration-history repair or registration without a verified matching deployment |
-| `db-trace`, `db-fingerprint`, `db-drift`, `db-health`, `db-smoke` | `production_validation.sh refresh` (forced redump) |
-| `production_validation.sh prepare/reuse/test` | Secret removal or function deletion |
+| `db-trace`, `db-fingerprint`, `db-drift`, `db-health`, `db-smoke` | Secret removal or function deletion |
 | Control-plane reads and deployment of an in-scope reviewed Edge Function | `--allow-pii` (star projection over a sensitive table) |
 | Reading a hosted PII column by explicit name | Anything on `staging`; staging is dormant until the owner reactivates it |
+
+**Decisión del dueño, 2026-08-17 — las copias de esquema dejan de ser gate.**
+No ejecutar `production_validation.sh` ni presentar un restore `schema-only`
+como evidencia de compatibilidad. Una copia omite filas de catálogo sembradas,
+estado de vistas materializadas, historia efectiva y comportamiento administrado
+por el proveedor; los falsos verdes y falsos rojos cuestan más que lo que
+detectan. La división válida es: pgTAP con rollback en local para la lógica,
+lecturas guardadas directamente sobre producción para su estado actual y,
+cuando el cambio está autorizado, deploy mínimo más read-back ejecutable en la
+base real. Si una propiedad del SQL nuevo no puede observarse antes de
+desplegarlo, queda declarada como gate pendiente; no se sustituye por un clon.
 
 ### Production completion is part of database ownership
 
@@ -103,7 +113,7 @@ In Claude Code this boundary is also mechanical: `.claude/settings.json` — the
 committed, machine-shared file, not the git-ignored `settings.local.json` —
 pre-approves the guarded read and test commands so they never interrupt the
 user, and denies the bypass paths (`supabase db …`, ad hoc `psql`, forced
-redump). An in-scope write is always prefixed with
+redump and `production_validation.sh`). An in-scope write is always prefixed with
 `VINABIKE_DB_WRITE_CONFIRM=…`; this is a deliberate, task-bound execution
 marker, not a request for another owner confirmation. If Claude's permission
 surface cannot execute it, Claude hands the reviewed operation and evidence to
@@ -316,6 +326,14 @@ La base local con datos de fixture **no reproduce** un problema de volumen:
 1,5 ms contra 32 s. Una hipótesis de rendimiento que sólo se puede validar en
 producción se documenta y se espera; no se despliega para ver qué pasa.
 
+**Cómo terminó, para que la lección no quede colgando.** El `EXPLAIN` señaló la
+causa real —`tenant_business_date` escaneaba `pg_timezone_names`, 1.194 filas
+sin índice, en cada llamada— y el arreglo fue dejar que `at time zone` valide la
+zona y capturar `invalid_parameter_value`:
+`20260817130000_tenant_business_date_cheap_validation.sql`, ~67 ms → ~6 ms por
+llamada. Está APPLIED y su read-back de producción pasa completo. La lección de
+arriba sigue vigente; el defecto que la produjo, no.
+
 ## Schema changes
 
 One required deployable artifact: a uniquely versioned, idempotent forward
@@ -326,6 +344,13 @@ reference. Mirroring a final definition there can improve search context, but
 it is not required for deployment, is not a reproducible baseline, and must
 never be used to decide whether a production object exists. Never delay or
 reinterpret a migration because the historical guide differs.
+
+`just db-gate` rebuilds the disposable local `public` schema from that
+historical file; it does **not** replay pending standalone migrations. Running
+it after applying local candidate migrations removes those definitions from the
+test database. Use it only as the explicitly named legacy-fixture check, never
+as a production-compatibility gate, and reapply the exact pending forward stack
+before any focused contract that depends on it.
 
 The authoritative deployment stamp is the exact version row in
 `supabase_migrations.schema_migrations`, read from production after deployment.

@@ -56,13 +56,37 @@ String resolveErpNotificationRoute(Map<String, dynamic> row) {
     return storedRoute;
   }
 
+  // The payment row no longer exists after an audited reversal. Its durable
+  // activity therefore opens the surviving invoice instead of constructing a
+  // dead exact-payment destination from `entity_id`.
+  if (type == 'sales_payment_voided') {
+    final invoiceId = _firstText([data['invoice_id']]);
+    if (invoiceId != null) {
+      return '/sales/invoices/${Uri.encodeComponent(invoiceId)}';
+    }
+    return storedRoute.isEmpty ? '/sales/invoices' : storedRoute;
+  }
+
+  // Archived jobs and physically deleted expenses no longer have a live
+  // exact-detail destination. Their durable activity opens the canonical
+  // module projection instead of manufacturing a dead entity route.
+  if (type == 'mechanic_job_archived') {
+    return storedRoute.isEmpty ? '/taller/pegas' : storedRoute;
+  }
+  if (type == 'expense_deleted') {
+    return storedRoute.isEmpty ? '/accounting/expenses' : storedRoute;
+  }
+
   final entityId = _firstText([
     row['entity_id'],
     switch (type) {
-      'mechanic_job_created' => data['job_id'],
+      'mechanic_job_created' || 'mechanic_job_archived' => data['job_id'],
       'sales_payment_received' => data['payment_id'],
-      'expense_recorded' => data['expense_id'],
-      'online_order_created' => data['order_id'],
+      'expense_recorded' ||
+      'expense_voided' ||
+      'expense_deleted' =>
+        data['expense_id'],
+      'online_order_created' || 'online_order_cancelled' => data['order_id'],
       'whatsapp_catalog_approved' => data['product_id'],
       _ => null,
     },
@@ -81,12 +105,16 @@ String resolveErpNotificationRoute(Map<String, dynamic> row) {
     ).toString();
   }
 
-  if ((type == 'expense_recorded' || entityType == 'expense') &&
+  if ((type == 'expense_recorded' ||
+          type == 'expense_voided' ||
+          entityType == 'expense') &&
       entityId != null) {
     return '/accounting/expenses/${Uri.encodeComponent(entityId)}';
   }
 
-  if ((type == 'online_order_created' || entityType == 'online_order') &&
+  if ((type == 'online_order_created' ||
+          type == 'online_order_cancelled' ||
+          entityType == 'online_order') &&
       entityId != null) {
     return Uri(
       path: '/website/orders',
@@ -145,6 +173,7 @@ bool _hasConcreteNotificationTarget(Uri uri) {
   };
   if (uri.queryParameters.keys.any(identityKeys.contains)) return true;
   if (RegExp(r'^/taller/pegas/[^/]+$').hasMatch(uri.path)) return true;
+  if (RegExp(r'^/sales/invoices/[^/]+$').hasMatch(uri.path)) return true;
   if (RegExp(r'^/accounting/expenses/[^/]+$').hasMatch(uri.path)) return true;
   return RegExp(r'^/inventory/products/[^/]+/edit$').hasMatch(uri.path);
 }

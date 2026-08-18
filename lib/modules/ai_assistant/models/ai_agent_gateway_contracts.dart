@@ -638,6 +638,9 @@ AIAssistantSupplyNeedDraft _decodeSupplyNeedDraft(Object? value) {
         'productName',
         'productSku',
         'identityState',
+        'categoryId',
+        'categoryPath',
+        'technicalFamily',
         'quantity',
         'unit',
         'technicalPredicates',
@@ -653,6 +656,9 @@ AIAssistantSupplyNeedDraft _decodeSupplyNeedDraft(Object? value) {
         'productName',
         'productSku',
         'identityState',
+        'categoryId',
+        'categoryPath',
+        'technicalFamily',
         'quantity',
         'unit',
         'technicalPredicates',
@@ -672,6 +678,19 @@ AIAssistantSupplyNeedDraft _decodeSupplyNeedDraft(Object? value) {
     final productSku = _optionalBoundedText(
       line['productSku'],
       maxBytes: 160,
+    );
+    // Procedencia de categoría. Es identidad server-owned: se transporta y se
+    // devuelve intacta al comando, nunca se edita ni se adivina en el cliente.
+    final categoryId = line['categoryId'] == null
+        ? null
+        : _requiredOpaqueId(line['categoryId']).toLowerCase();
+    final categoryPath = _optionalBoundedText(
+      line['categoryPath'],
+      maxBytes: 240,
+    );
+    final technicalFamily = _optionalBoundedText(
+      line['technicalFamily'],
+      maxBytes: 120,
     );
     final identityState = line['identityState'];
     final quantityValue = line['quantity'];
@@ -697,6 +716,10 @@ AIAssistantSupplyNeedDraft _decodeSupplyNeedDraft(Object? value) {
                 productSku != null)) ||
         (productId != null &&
             (identityState != 'confirmed' || productName == null)) ||
+        // Ruta o familia sin identidad detrás sería una glosa que nada
+        // respalda: se rechaza la tarjeta entera.
+        (categoryId == null &&
+            (categoryPath != null || technicalFamily != null)) ||
         (clarificationRequired &&
             (clarification == null || productId != null)) ||
         (!clarificationRequired && clarificationPrompts.isNotEmpty)) {
@@ -777,6 +800,9 @@ AIAssistantSupplyNeedDraft _decodeSupplyNeedDraft(Object? value) {
         productName: productName,
         productSku: productSku,
         identityState: identityState as String,
+        categoryId: categoryId,
+        categoryPath: categoryPath,
+        technicalFamily: technicalFamily,
         quantity: quantityValue.toDouble(),
         unit: _requiredBoundedText(line['unit'], maxBytes: 32),
         technicalPredicates:

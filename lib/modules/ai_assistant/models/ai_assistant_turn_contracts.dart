@@ -255,6 +255,9 @@ class AIAssistantSupplyNeedDraftLine {
     required this.preference,
     required this.clarification,
     required this.clarificationRequired,
+    this.categoryId,
+    this.categoryPath,
+    this.technicalFamily,
     this.clarificationPrompts = const [],
   });
 
@@ -264,6 +267,19 @@ class AIAssistantSupplyNeedDraftLine {
   final String? productName;
   final String? productSku;
   final String identityState;
+
+  /// Procedencia de categoría resuelta por el servidor.
+  ///
+  /// Con producto exacto la deriva de la ficha; sin producto, viene de la
+  /// categoría que el modelo resolvió con el inspector. El cliente **no la
+  /// edita ni la infiere**: la transporta desde la tarjeta cerrada hasta el
+  /// comando durable, que la persiste en la revisión de interpretación.
+  ///
+  /// [technicalFamily] es derivada —su dueño es `category_tech_mappings`— y
+  /// viaja sólo para poder rotularla; no se guarda.
+  final String? categoryId;
+  final String? categoryPath;
+  final String? technicalFamily;
   final double quantity;
   final String unit;
   final List<AIAssistantSupplyNeedTechnicalPredicate> technicalPredicates;
@@ -275,18 +291,27 @@ class AIAssistantSupplyNeedDraftLine {
   bool get hasConfirmedProduct =>
       identityState == 'confirmed' && productId != null && productName != null;
 
+  /// Ajustes que **no** tocan la identidad de la línea.
+  ///
+  /// Cantidad y unidad no cambian qué es el producto, así que la procedencia
+  /// —producto, categoría y predicados— sobrevive. Editar la descripción sí la
+  /// cambia, y eso no se hace acá: se construye una línea nueva sin
+  /// procedencia, porque conservar la anterior sería atribuirle al operador una
+  /// identidad que ya no pidió.
   AIAssistantSupplyNeedDraftLine copyWith({
-    String? description,
     double? quantity,
     String? unit,
   }) =>
       AIAssistantSupplyNeedDraftLine(
         lineRef: lineRef,
-        description: description ?? this.description,
+        description: description,
         productId: productId,
         productName: productName,
         productSku: productSku,
         identityState: identityState,
+        categoryId: categoryId,
+        categoryPath: categoryPath,
+        technicalFamily: technicalFamily,
         quantity: quantity ?? this.quantity,
         unit: unit ?? this.unit,
         technicalPredicates: technicalPredicates,
@@ -296,10 +321,41 @@ class AIAssistantSupplyNeedDraftLine {
         clarificationPrompts: clarificationPrompts,
       );
 
+  /// La línea reescrita a mano: descripción nueva, procedencia en blanco.
+  ///
+  /// Producto, categoría y predicados venían de interpretar **la frase
+  /// anterior**. Si el operador la reescribe, arrastrarlos afirmaría algo que
+  /// nadie dijo, y el ranking posterior heredaría una familia equivocada sin
+  /// que nada lo delate.
+  AIAssistantSupplyNeedDraftLine withRewrittenDescription({
+    required String description,
+    required double quantity,
+    required String unit,
+    required String clarification,
+  }) =>
+      AIAssistantSupplyNeedDraftLine(
+        lineRef: lineRef,
+        description: description,
+        productId: null,
+        productName: null,
+        productSku: null,
+        identityState: 'unresolved',
+        categoryId: null,
+        categoryPath: null,
+        technicalFamily: null,
+        quantity: quantity,
+        unit: unit,
+        technicalPredicates: const [],
+        preference: null,
+        clarification: clarification,
+        clarificationRequired: true,
+      );
+
   Map<String, Object?> toCommandJson() => <String, Object?>{
         'lineRef': lineRef,
         'description': description,
         'productId': productId,
+        'categoryId': categoryId,
         'quantity': quantity,
         'unit': unit,
         'technicalPredicates': technicalPredicates

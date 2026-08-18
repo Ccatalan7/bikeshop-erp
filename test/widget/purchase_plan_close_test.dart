@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:vinabike_erp/modules/purchases/models/intelligent_purchasing_models.dart';
 import 'package:vinabike_erp/modules/purchases/widgets/purchase_plan_close.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
@@ -54,6 +55,12 @@ Future<void> _pump(WidgetTester tester, List<PurchasePlanLine> lines,
 }
 
 void main() {
+  // La escala del asistente resuelve sus familias con `google_fonts`. En las
+  // pruebas se prohíbe la descarga en tiempo de ejecución: sin esto el
+  // resultado dependería de la red y del caché de la máquina, que es
+  // exactamente lo contrario de una regresión.
+  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+
   testWidgets('CLP y USD viajan separados y el segundo se rotula no sumado',
       (tester) async {
     await _pump(tester, [
@@ -63,8 +70,12 @@ void main() {
 
     expect(find.text('SUBTOTAL CLP'), findsOneWidget);
     expect(find.text('SUBTOTAL USD'), findsOneWidget);
-    expect(find.text('CLP 20000'), findsOneWidget);
-    expect(find.text('USD 50'), findsOneWidget);
+    // El peso se escribe como en el resto del ERP —con signo y separador de
+    // miles—, y la moneda extranjera con su código y dos decimales. Antes esto
+    // decía `CLP 20000`: la cifra más importante del plan era la única del
+    // módulo sin separador de miles.
+    expect(find.text('\$20.000'), findsOneWidget);
+    expect(find.text('USD 50.00'), findsOneWidget);
     expect(find.text('no se suma'), findsOneWidget);
   });
 

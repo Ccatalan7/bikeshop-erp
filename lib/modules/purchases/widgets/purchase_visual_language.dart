@@ -13,8 +13,10 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/widgets/vb_money_text.dart';
 
 /// Los nombres del prototipo, resueltos contra los roles montados del tema.
 ///
@@ -155,98 +157,116 @@ abstract final class PurchaseMetrics {
   static const Duration riseDuration = Duration(milliseconds: 140);
 }
 
-/// Escala tipográfica del handoff. Las familias vienen de `typography.families`.
+/// Escala tipográfica del handoff.
+///
+/// Las familias son las de `typography.families`: Poppins para identidad de
+/// superficie, IBM Plex Sans para lectura operativa e IBM Plex Mono para
+/// números comparables.
+///
+/// **Se resuelven con las APIs específicas de `google_fonts`, no por nombre.**
+/// Antes esto declaraba `fontFamily: 'Poppins'` a secas, y el proyecto sólo
+/// registra Oswald y Barlow en `pubspec.yaml`: la familia resolvía únicamente
+/// si otra superficie —`vb_short_select`, los tokens de nómina— ya la había
+/// cargado en esa sesión. El módulo se veía distinto según por dónde hubiera
+/// pasado el operador antes. Con `GoogleFonts.poppins()` y compañía el pedido
+/// deja de ser **dependiente del orden**: cada estilo carga la familia que
+/// nombra, haya pasado o no el operador por otra pantalla. Es el mismo patrón
+/// que `PayrollTokens`.
+///
+/// **Eso no es disponibilidad garantizada.** El proyecto no empaqueta Poppins
+/// ni IBM Plex en `assets/fonts`, así que `google_fonts` las descarga la
+/// primera vez y las cachea en el dispositivo: sin red y sin caché el sistema
+/// cae a la fuente por defecto. Lo que este cambio arregla es la dependencia
+/// del recorrido previo, no el acceso a la red. Si en algún momento hace falta
+/// que el módulo se vea igual sin conexión, el arreglo es empaquetar las
+/// familias, no tocar este archivo.
+///
+/// Nunca `GoogleFonts.getFont(nombre)`: la variante dinámica impide que el
+/// tree-shaking descarte lo que no se usa y esconde la familia real detrás de
+/// una cadena.
+///
+/// Los tamaños, pesos, alturas y espaciados son exactamente los del t23; lo
+/// único que cambia es cómo se resuelve la familia. Los estilos dejan de ser
+/// `const` porque la fuente se resuelve en tiempo de ejecución.
 abstract final class PurchaseType {
-  static const String _display = 'Poppins';
-  static const String _text = 'IBM Plex Sans';
-  static const String _numeric = 'IBM Plex Mono';
-
-  static const TextStyle panelTitle = TextStyle(
-    fontFamily: _display,
+  static final TextStyle panelTitle = GoogleFonts.poppins(
     fontWeight: FontWeight.w600,
     fontSize: 13.5,
   );
 
-  static const TextStyle surfaceTitle = TextStyle(
-    fontFamily: _display,
+  static final TextStyle surfaceTitle = GoogleFonts.poppins(
     fontWeight: FontWeight.w600,
     fontSize: 14,
   );
 
-  static const TextStyle sectionTitle = TextStyle(
-    fontFamily: _text,
+  static final TextStyle sectionTitle = GoogleFonts.ibmPlexSans(
     fontWeight: FontWeight.w600,
     fontSize: 12.5,
   );
 
-  static const TextStyle rowTitle = TextStyle(
-    fontFamily: _text,
+  static final TextStyle rowTitle = GoogleFonts.ibmPlexSans(
     fontWeight: FontWeight.w600,
     fontSize: 12,
   );
 
-  static const TextStyle body = TextStyle(
-    fontFamily: _text,
+  static final TextStyle body = GoogleFonts.ibmPlexSans(
     fontWeight: FontWeight.w400,
     fontSize: 11.5,
     height: 1.55,
   );
 
-  static const TextStyle meta = TextStyle(
-    fontFamily: _text,
+  static final TextStyle meta = GoogleFonts.ibmPlexSans(
     fontWeight: FontWeight.w400,
     fontSize: 10.5,
     height: 1.45,
   );
 
   /// Texto que se escribe: el campo del prototipo es 12,5, no el body de 11,5.
-  static const TextStyle input = TextStyle(
-    fontFamily: _text,
+  static final TextStyle input = GoogleFonts.ibmPlexSans(
     fontWeight: FontWeight.w400,
     fontSize: 12.5,
     height: 1.55,
   );
 
   /// CTA textual dentro de un panel («Ejemplos» en el prototipo).
-  static const TextStyle inlineAction = TextStyle(
-    fontFamily: _text,
+  static final TextStyle inlineAction = GoogleFonts.ibmPlexSans(
     fontWeight: FontWeight.w600,
     fontSize: 11,
   );
 
   /// Etiqueta de columna: mono 9, versalitas espaciadas.
-  static const TextStyle label = TextStyle(
-    fontFamily: _numeric,
+  static final TextStyle label = GoogleFonts.ibmPlexMono(
     fontWeight: FontWeight.w600,
     fontSize: 9,
     letterSpacing: 0.7,
   );
 
   /// Pistas prescindibles, como el atajo de teclado.
-  static const TextStyle hint = TextStyle(
-    fontFamily: _numeric,
+  static final TextStyle hint = GoogleFonts.ibmPlexMono(
     fontWeight: FontWeight.w400,
     fontSize: 10,
   );
 
   /// Números comparables. Siempre mono, para que la columna alinee.
-  static const TextStyle metricLarge = TextStyle(
-    fontFamily: _numeric,
+  static final TextStyle metricLarge = GoogleFonts.ibmPlexMono(
     fontWeight: FontWeight.w700,
     fontSize: 21,
   );
 
-  static const TextStyle metricMedium = TextStyle(
-    fontFamily: _numeric,
+  static final TextStyle metricMedium = GoogleFonts.ibmPlexMono(
     fontWeight: FontWeight.w700,
     fontSize: 15,
   );
 
-  static const TextStyle metricSmall = TextStyle(
-    fontFamily: _numeric,
+  static final TextStyle metricSmall = GoogleFonts.ibmPlexMono(
     fontWeight: FontWeight.w700,
     fontSize: 13,
   );
+
+  /// Cifras que se comparan en columna llevan ancho fijo de dígito.
+  static const List<FontFeature> tabular = <FontFeature>[
+    FontFeature.tabularFigures(),
+  ];
 }
 
 /// Por qué un panel se destaca. Cambia el borde, nunca el relleno.
@@ -441,4 +461,43 @@ class PurchaseStage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Cómo escriben plata el inspector de candidato, el plan y su cierre.
+///
+/// **Por qué existe.** El plan mostraba `CLP 17450` donde el resto del ERP dice
+/// `$17.450`: la misma cifra con dos caras, y la del plan además sin separador
+/// de miles, que es justo la que hay que leer rápido para decidir. La forma
+/// canónica de peso chileno la fija `VbMoneyText.formatClp`; acá se reutiliza
+/// esa función en vez de reimplementarla, para que un cambio de formato no se
+/// bifurque.
+///
+/// **Alcance real, hoy.** Lo usan el inspector de candidato, la línea y el pie
+/// del plan, y el cierre del plan. La canasta y los escenarios siguen
+/// formateando por su dueño anterior —`VbMoneyText` más una rama local para la
+/// moneda extranjera—: hoy producen las mismas formas visibles, pero son un
+/// segundo dueño que puede divergir. No se movieron porque ninguna razón de
+/// producto lo pidió; cuando alguien las toque, este es el sitio al que deben
+/// entrar.
+///
+/// **Ninguna moneda se convierte.** No hay tipo de cambio autorizado en este
+/// sistema, así que un monto en USD se muestra con su código y dos decimales y
+/// se queda ahí. Escribirlo con `$` lo haría pasar por pesos, y sumarlo a un
+/// total en CLP sería inventar una tasa.
+abstract final class PurchaseMoney {
+  /// `$17.450` en CLP; `USD 129.90` en cualquier otra moneda.
+  ///
+  /// `null` es «no hay cifra», y se dice con la raya —nunca con un cero, que
+  /// se leería como gratis.
+  static String format(double? amount, String currency) {
+    if (amount == null) return '—';
+    if (isClp(currency)) return VbMoneyText.formatClp(amount);
+    return '${currency.trim().toUpperCase()} ${amount.toStringAsFixed(2)}';
+  }
+
+  /// El precio de una unidad: la misma cifra con el sufijo `c/u`.
+  static String perUnit(double? amount, String currency) =>
+      '${format(amount, currency)} c/u';
+
+  static bool isClp(String currency) => currency.trim().toUpperCase() == 'CLP';
 }

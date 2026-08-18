@@ -952,6 +952,36 @@ después lo toque necesita un `pump()` entre las dos acciones. Un toque sobre un
 botón deshabilitado es silencioso: no lanza, y el diagnóstico aparece a varios
 pasos de distancia.
 
+### Un control repetido por fila necesita nombrar su sujeto (2026-08-17)
+
+En el Plan borrador cada línea traía cuatro controles de icono —menos, más,
+escribir cantidad, quitar— y los cuatro se rotulaban igual en todas las filas:
+«Editar cantidad», «Quitar del plan». Con tres productos en pantalla eso son
+doce controles y **cero identificables**: un lector de pantalla lee el mismo
+rótulo tres veces, una prueba tiene que tocar «el primero» y confiar en el
+orden, y la herramienta de control de la app no puede resolver ninguno.
+
+La regla: **si un control se repite por fila, su rótulo accesible nombra la
+fila** —«Quitar Neumático Maxxis del plan»—, y su `key` lleva el id del
+registro. El tooltip puede seguir explicando la consecuencia («Retira la línea
+del plan; la necesidad sigue abierta») cuando esa consecuencia no es obvia; lo
+que no puede es ser lo único que identifica el control.
+
+Dos trampas mecánicas que costaron una vuelta cada una:
+
+- **`Semantics(label:)` alrededor de un `Text` no reemplaza: fusiona.** El
+  rótulo resultante concatena los dos y no lo encuentra ni
+  `find.bySemanticsLabel` ni la herramienta. Para que gane el que nombra la
+  fila hay que pasar `excludeSemantics: true`.
+- **Una prueba de contrato que grepea `IconButton(` también cuenta
+  `_MiWrapperIconButton(`.** Si el envoltorio es justamente el que garantiza el
+  rótulo, la prueba lo cuenta como infracción. El patrón se ancla con
+  `(?<![A-Za-z0-9_])IconButton\(`.
+
+**Regresión mínima:** con dos filas montadas, cada rótulo accesible aparece
+exactamente una vez, y cada control se alcanza por su `key` con el id del
+registro.
+
 ### Reusable learning rule
 
 When a UI requires several iterations to reach a satisfactory result, document

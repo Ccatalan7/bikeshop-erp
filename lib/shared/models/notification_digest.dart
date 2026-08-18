@@ -211,8 +211,32 @@ class NotificationDigestSnapshot {
     var catalogApprovalCount = 0;
     var unreadAlertCount = 0;
 
+    // Every ribbon metric is a projection of unique, currently active source
+    // entities. Lifecycle rows remain in the activity timeline, but an
+    // archived/voided/deleted/cancelled identity must suppress any stale
+    // active-shaped row observed during a mixed-version realtime refresh.
+    final inactiveEntityKeys = <String>{};
     for (final row in notifications) {
       final type = row['type']?.toString() ?? '';
+      final data = _notificationPayload(row);
+      if (!_isInactiveNotification(type, data)) continue;
+      final key = _notificationEntityKey(row, type, data);
+      if (key != null) inactiveEntityKeys.add(key);
+    }
+
+    final seenJobKeys = <String>{};
+    final seenPaymentKeys = <String>{};
+    final seenExpenseKeys = <String>{};
+    final seenOrderKeys = <String>{};
+    final seenCatalogKeys = <String>{};
+    final seenUnreadIds = <String>{};
+
+    for (final row in notifications) {
+      final type = row['type']?.toString() ?? '';
+      final data = _notificationPayload(row);
+      final entityKey = _notificationEntityKey(row, type, data);
+      final isInactive = _isInactiveNotification(type, data) ||
+          (entityKey != null && inactiveEntityKeys.contains(entityKey));
       final createdAt = DateTime.tryParse(
         row['created_at']?.toString() ?? '',
       );
@@ -227,33 +251,56 @@ class NotificationDigestSnapshot {
 
       // Attention belongs to when the durable alert reached the operator.
       // Financial metrics belong to the date of the underlying transaction.
-      if (wasRecordedInWindow && row['read_at'] == null) unreadAlertCount++;
+      if (wasRecordedInWindow && row['read_at'] == null) {
+        final notificationId = row['id']?.toString().trim() ?? '';
+        if (notificationId.isEmpty || seenUnreadIds.add(notificationId)) {
+          unreadAlertCount++;
+        }
+      }
 
       switch (type) {
         case 'mechanic_job_created':
-          if (wasRecordedInWindow) jobCount++;
+          if (!isInactive &&
+              wasRecordedInWindow &&
+              _acceptMetricEntity(seenJobKeys, entityKey)) {
+            jobCount++;
+          }
           break;
         case 'sales_payment_received':
-          if (!occurredInWindow) break;
+          if (isInactive ||
+              !occurredInWindow ||
+              !_acceptMetricEntity(seenPaymentKeys, entityKey)) {
+            break;
+          }
           paymentCount++;
-          final data = row['data'];
-          if (data is Map && data['amount'] is num) {
+          if (data['amount'] is num) {
             paymentTotal += (data['amount'] as num).toDouble();
           }
           break;
         case 'expense_recorded':
-          if (!occurredInWindow) break;
+          if (isInactive ||
+              !occurredInWindow ||
+              !_acceptMetricEntity(seenExpenseKeys, entityKey)) {
+            break;
+          }
           expenseCount++;
-          final data = row['data'];
-          if (data is Map && data['total_amount'] is num) {
+          if (data['total_amount'] is num) {
             expenseTotal += (data['total_amount'] as num).toDouble();
           }
           break;
         case 'online_order_created':
-          if (wasRecordedInWindow) onlineOrderCount++;
+          if (!isInactive &&
+              wasRecordedInWindow &&
+              _acceptMetricEntity(seenOrderKeys, entityKey)) {
+            onlineOrderCount++;
+          }
           break;
         case 'whatsapp_catalog_approved':
-          if (wasRecordedInWindow) catalogApprovalCount++;
+          if (!isInactive &&
+              wasRecordedInWindow &&
+              _acceptMetricEntity(seenCatalogKeys, entityKey)) {
+            catalogApprovalCount++;
+          }
           break;
       }
     }
@@ -298,3 +345,68 @@ class NotificationDigestSnapshot {
     return !instant.isBefore(startsAt) && instant.isBefore(endsAt);
   }
 }
+
+Map<String, dynamic> _notificationPayload(Map<String, dynamic> row) {
+  final data = row['data'];
+  return data is Map
+      ? Map<String, dynamic>.from(data)
+      : const <String, dynamic>{};
+}
+
+bool _isInactiveNotification(
+  String type,
+  Map<String, dynamic> data,
+) {
+  const inactiveTypes = <String>{
+    'mechanic_job_archived',
+    'sales_payment_voided',
+    'expense_voided',
+    'expense_deleted',
+    'online_order_cancelled',
+  };
+  return inactiveTypes.contains(type) ||
+      _payloadBool(data['is_inactive']) ||
+      _payloadBool(data['is_voided']);
+}
+
+bool _payloadBool(dynamic value) =>
+    value == true || value?.toString().trim().toLowerCase() == 'true';
+
+String? _notificationEntityKey(
+  Map<String, dynamic> row,
+  String type,
+  Map<String, dynamic> data,
+) {
+  final entityType = row['entity_type']?.toString().trim() ?? '';
+  final rowEntityId = row['entity_id']?.toString().trim() ?? '';
+  if (entityType.isNotEmpty && rowEntityId.isNotEmpty) {
+    return '$entityType:$rowEntityId';
+  }
+
+  final fallback = switch (type) {
+    'mechanic_job_created' || 'mechanic_job_archived' => data['job_id'],
+    'sales_payment_received' || 'sales_payment_voided' => data['payment_id'],
+    'expense_recorded' ||
+    'expense_voided' ||
+    'expense_deleted' =>
+      data['expense_id'],
+    'online_order_created' || 'online_order_cancelled' => data['order_id'],
+    'whatsapp_catalog_approved' => data['product_id'],
+    _ => null,
+  };
+  final fallbackId = fallback?.toString().trim() ?? '';
+  if (fallbackId.isEmpty) return null;
+
+  final fallbackType = switch (type) {
+    'mechanic_job_created' || 'mechanic_job_archived' => 'mechanic_job',
+    'sales_payment_received' || 'sales_payment_voided' => 'sales_payment',
+    'expense_recorded' || 'expense_voided' || 'expense_deleted' => 'expense',
+    'online_order_created' || 'online_order_cancelled' => 'online_order',
+    'whatsapp_catalog_approved' => 'product',
+    _ => type,
+  };
+  return '$fallbackType:$fallbackId';
+}
+
+bool _acceptMetricEntity(Set<String> seen, String? entityKey) =>
+    entityKey == null || seen.add(entityKey);

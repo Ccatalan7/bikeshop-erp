@@ -203,13 +203,25 @@ Lo que entrega este rediseño, todo desplegado y verificado:
 - **Recorrido con historial propio** (`PurchaseJourneyController`), que es el
   `navigation_contract` del spec: salir dejaba de borrar lo trabajado.
 
-**Defecto abierto, diagnosticado hasta el número.** El ranking por *texto
-libre* no cabe en su presupuesto: `tenant_business_date` cuesta ~60 ms porque
-escanea `pg_timezone_names`, la vista la llama tres veces por fila y esas
-columnas se calculan para los 267 candidatos, no para los 29 que sobreviven al
-filtro. No afecta a la aplicación —la pantalla siempre rankea por producto
-exacto— pero bloquea cablear la rama de texto. Reproducción guardada en
-`supabase/manual_checks/diagnostics/ranking_free_text_slow_repro.sql`.
+**Defecto de rendimiento: CERRADO (2026-08-17).** El ranking por texto libre
+tardaba ~32 s porque `tenant_business_date` escaneaba `pg_timezone_names` en
+cada llamada y la vista la invoca tres veces por fila.
+`20260817130000_tenant_business_date_cheap_validation.sql` dejó que `at time
+zone` valide la zona (~67 ms → ~6 ms por llamada); la migración está APPLIED y
+el read-back de producción pasa completo. La reproducción histórica sigue en
+`supabase/manual_checks/diagnostics/ranking_free_text_slow_repro.sql`, marcada
+como cerrada: se conserva porque documenta cómo se midió, no porque el defecto
+siga vivo.
+
+**Lo que sí sigue abierto es otra cosa, y no es presupuesto.** Sondas variadas
+sobre producción el 2026-08-17: `camara` responde en 522 ms con 5 resultados,
+pero `cadena 10 velocidades` (104 ms), `pastillas shimano` (80 ms) y `cassette
+9 velocidades` (61 ms) devuelven `verifiedEmpty`. La causa es la semántica del
+filtro: `p_query` exige que **todos** los tokens aparezcan como subcadena de un
+blob de nombre/SKU/marca/categoría/proveedor, así que «velocidades» —que ningún
+nombre del catálogo contiene— vacía el resultado, y el plural de «pastillas» no
+casa con «pastilla». Es un problema de recuperación, no de tiempo, y su arreglo
+es el contrato tipado de la Fase A y siguientes, no ampliar `p_query`.
 
 ## 2. Resultado de producto
 
@@ -2649,6 +2661,456 @@ petición y un vacío inline con `Elegir necesidad`. Claude modificó sólo
 tocó backend, SQL, rutas, servicios ni la sesión Flutter. Codex releyó el diff,
 recargó la sesión canónica, verificó macOS real en escritorio/compacto y cerró
 la suite combinada en `129/129`.
+
+### 33.5 Refinación 2026-08-17 — inspector, tipografía y Plan borrador
+
+**Estado: en working tree, probada localmente, NO publicada ni desplegada.**
+Nada de esta sección está en `origin` ni en un entorno hospedado. Las secciones
+33.1–33.4 describen cortes anteriores ya desplegados y no se tocan.
+
+Lo que entró en esta refinación:
+
+- **Inspector de candidato.** Métricas grandes con valor preformateado, unidad
+  tomada del vocabulario real de la necesidad —no una «U.» fija—, gama como
+  banda derivada y no como marca, conteo de compras dicho una sola vez, y un
+  pie que conserva su fila horizontal desde 330 px sin apilarse.
+- **Resolución tipográfica independiente del orden.** `PurchaseType` pasó de
+  nombrar familias por cadena a pedirlas con las APIs específicas de
+  `google_fonts`, igual que `PayrollTokens`. Esto elimina la dependencia del
+  recorrido previo del operador —antes la familia sólo resolvía si otra
+  pantalla la había cargado en esa sesión—, **pero no garantiza el aspecto sin
+  conexión**: el proyecto no empaqueta Poppins ni IBM Plex en `assets/fonts`,
+  así que `google_fonts` las descarga y cachea, y sin red y sin caché el
+  sistema cae a su fuente por defecto. Si algún día hace falta paridad offline,
+  el arreglo es empaquetar las familias.
+- **Plan borrador por proveedor.** Cada proveedor es una tarjeta cerrada:
+  cabecera con nombre y estado de evidencia, una fila por línea, pie hundido
+  con el subtotal de su moneda y sus advertencias (flete y disponibilidad por
+  confirmar). Evidencia y subtotal dejaron de compartir fila, que era el
+  defecto reportado («evidencia completa$17.450»).
+- **Imágenes en el plan por instrucción explícita del dueño.** Cada línea
+  muestra la foto de su ficha con la geometría `table_row` (38 px) del contrato
+  de imagen. Esto **contradice** `handoff-t23/spec.json`, que en
+  `image_contract` dice «el plan no repite imágenes: ya no aportan a la
+  decisión». La anulación es del dueño, del 2026-08-17, y queda registrada como
+  tal —no como si el spec la hubiera pedido— en `PurchasePlanLine.media` y en
+  `canonical-ui-surfaces.md`. La razón de producto: las líneas llegan desde
+  candidato, canasta y compra local, y el nombre solo no distingue dos
+  variantes. La ficha se resuelve ampliando la proyección de la consulta a
+  `products` que `fetchPlan` ya hacía —mismo viaje, cinco columnas en vez de
+  dos—, sin SQL ni migración.
+- **Dinero multimoneda.** `PurchaseMoney` fija una sola forma: `$17.450` /
+  `$3.490 c/u` en CLP, código y dos decimales en otra moneda, sin convertir y
+  sin sumar entre monedas. Lo usan el inspector, el plan y el cierre. La
+  canasta y los escenarios conservan su dueño anterior (`VbMoneyText` más una
+  rama local); hoy coinciden en lo visible, pero son un segundo dueño y no se
+  movieron porque ninguna razón de producto lo pidió.
+- **Semántica y reflow.** Los cinco controles de cada línea —menos, más,
+  escribir cantidad, quitar, disclosure de evidencia— llevan `key` con el id de
+  la línea y rótulo accesible que nombra el producto. Antes todas las filas
+  exponían el mismo rótulo genérico y ninguna era alcanzable por identidad. El
+  reflow se verificó a 1200/900/700/560/430/360 px, claro y oscuro, exigiendo
+  cero excepciones: ningún desbordamiento se declara esperado.
+
+**Evidencia y su límite.** El plan de producción está en 0 líneas y el dueño
+prohibió crear líneas reales para mirar la pantalla, así que la superficie se
+verificó con datos fixture: 28 regresiones de widget sobre `PurchasePlanGroup`
+y 5 conductuales sobre `fetchPlan` con transporte falso, que fallan tanto si se
+recorta la proyección de `products` como si se pierde el enriquecimiento de
+`ProductMedia`. La app real se abrió contra producción para confirmar que el
+módulo monta sin excepciones; el paso `Plan` aparece deshabilitado, que es lo
+correcto con cero líneas. Suites focalizadas del módulo en verde y analizador
+sin errores en el momento de escribir esto.
+
+### 33.6 Fase A del contrato tipado — procedencia de categoría
+
+**Estado: en working tree, probada localmente, NO publicada ni desplegada.**
+Nada de esto está en `origin` ni en ningún entorno hospedado. Sólo cubre la
+Fase A: **no** toca ranking, `p_query`, el conjunto candidato interno ni la UI
+visual.
+
+**El hueco que cierra.** El inspector ya resolvía una categoría canónica desde
+la frase del operador, y esa resolución se perdía: `prepare_supply_request` no
+la aceptaba y `create_supply_need_batch_v1` no la escribía, aunque
+`supply_need_interpretation_revisions.category_id` existía desde el kernel y
+estaba vacío en todas las filas. Los predicados técnicos sí sobrevivían, en
+`constraints`.
+
+**Qué entró** (`20260817150000_supply_request_category_provenance.sql`,
+forward-only, `*_v1` intactas):
+
+- `assistant_inspect_inventory_schema_v3` publica `entityId` por fila de
+  categoría; las filas operativas —«Inventario»— van con identidad nula porque
+  no son categorías del catálogo.
+- `supply_request_category_scope_internal_v1` resuelve identidad, ruta, familia
+  derivada y plantilla activa dentro de un tenant, e `internal` de verdad: no
+  tiene grant para `authenticated`.
+- `normalize_supply_request_items_internal_v2` acepta `categoryId` y fija la
+  autoridad: **con producto exacto la categoría la deriva el servidor de la
+  ficha**, y una enviada que la contradiga es `23514`, no una preferencia. Sin
+  producto, la categoría del modelo gobierna y **un criterio técnico exige
+  fundamento completo**: categoría resuelta, plantilla activa para ella, y
+  pertenencia de cada `field` a esa plantilla.
+- `assistant_prepare_supply_request_v2` y `create_supply_need_batch_v2`, que
+  por fin llenan `category_id` en la revisión.
+
+**Cómo viaja la identidad sin que el modelo la vea.** El inspector expone
+`entityId`; el proyector lo canjea por una `categoryRef` opaca del turno y lo
+borra de la salida visible; el runtime la vuelve a canjear por el UUID real
+antes de ejecutar. Es el mismo mecanismo que ya protegía `catalogItemRef`. La
+ruta legible y la familia sí se muestran: son texto, no una identidad
+reutilizable.
+
+**Decisión registrada — `categoryRef` nace sólo en `inspect_inventory_schema`.**
+Es el único paso que resuelve categoría desde la frase, y ocurre **antes** de
+que existan productos, que es justo el caso a rescatar: «cadena 10 velocidades»
+hoy devuelve cero productos y aun así tiene categoría. Tomarla de
+`search_inventory` haría que la categoría de una necesidad dependiera de qué
+producto casó por texto, que es un segundo dueño de identidad.
+
+**Las etiquetas derivadas no entran a nada durable.** `technical_family` y
+`categoryPath` se derivan de `category_tech_mappings` y `product_categories`, y
+cambian cuando alguien reorganiza el árbol sin que la petición del operador
+haya cambiado. Por eso el comando las descarta antes de construir cualquier
+snapshot: no están en `evidence_snapshot`, ni en el evento, ni en
+`supply_need_batch_receipts.request_snapshot`. **El snapshot de idempotencia
+descansa sobre identidades estables**; guardar una glosa ahí rompería el replay
+en cuanto alguien renombrara una categoría. Viajan sólo de forma transitoria en
+la tarjeta cerrada, para poder rotular, y `toCommandJson` manda únicamente
+`categoryId`.
+
+**El corte duro, y por qué no hay repliegue.** Si la categoría no tiene mapeo
+activo, o el mapeo no resuelve plantilla, la línea **sólo se admite con
+`technicalPredicates` vacíos**. La necesidad y su categoría sobreviven —el
+taller que aún no mapeó su árbol sigue pudiendo pedir—, pero ningún criterio
+técnico entra sin fundamento. Se eliminó el repliegue a `is_filterable` global
+que existía en la primera versión de esta fase: dejaba pasar cualquier
+definición filtrable del catálogo, incluida la de otra familia, así que
+`tire_width` podía acotar una cadena. Un criterio así habría gobernado después
+un ranking y nadie recordaría de dónde salió.
+
+**Editar la descripción limpia la procedencia.** Producto, categoría y
+predicados salieron de interpretar la frase anterior; si el operador la
+reescribe, arrastrarlos afirmaría algo que nadie dijo y el ranking posterior
+heredaría una familia equivocada sin que nada lo delate. Cambiar sólo cantidad
+o unidad no toca nada.
+
+**Un defecto que sólo apareció al probar el runtime real.**
+`registerToolEntityReferences` valida la especie de cada referencia contra una
+lista cerrada, y esa lista no conocía `product_category`: **ninguna
+`categoryRef` se habría podido canjear jamás**. Las pruebas del executor no
+podían verlo porque entran con el `categoryId` ya resuelto. Lo destapó el
+control positivo del runtime, y es la razón de que ese control exista.
+
+**Verificación local.** 35 pgTAP (`supply_request_category_provenance`), con
+una mutación que confirma que el corte duro es portante; 223 Deno del gateway,
+con el control positivo del canje y dos negativos —referencia inventada y
+especie equivocada— que entran por el runtime real; 10 pruebas Dart de
+procedencia más las suites del módulo. Cero errores de analizador. Sin
+producción, credenciales, commit, push, deploy ni release.
+
+### 33.7 Fase B1 — del stock de la familia a un producto confirmado
+
+**Estado: en working tree, probada localmente, NO publicada ni desplegada.**
+Cubre stock y convergencia. **No** hay scoring externo, preferencia comercial
+tipada ni UI; `rank_purchase_candidates_v1`, `p_query` y
+`build_purchase_scenarios_v1` quedan intactos.
+
+**El nudo que desatasca, dicho con su causa.**
+`reject_supply_need_internal_stock_v1` exige `product_id is not null and
+identity_state = 'confirmed'`. Una necesidad del carril familia es `unresolved`
+por definición, así que no podía registrar el rechazo de stock interno —que es
+justo la puerta que habilita mirar proveedores—. La necesidad quedaba encerrada:
+ni stock ni compra. La Fase A resolvía la categoría y ahí se detenía todo.
+
+**Qué entró** (`20260817160000_supply_need_family_resolution_b1.sql`,
+forward-only, v1 sin tocar):
+
+- `supply_need_resolution_context_internal_v1`: único dueño de qué revisión
+  manda —el `revision_no` más alto, no el reloj más reciente—.
+- `supply_need_eligible_products_internal_v1`: elegibilidad sobre productos
+  activos de la categoría y descendientes **activos**, no sobre
+  `purchase_candidate_metrics_v1`, que sólo conoce lo ya comprado. Evalúa el
+  universo **entero antes de cortar**; si supera el techo explícito responde
+  `needs_refinement` con conteos y los campos de la plantilla que sirven para
+  acotar, nunca una lista parcial que parece completa.
+- `get_supply_need_stock_resolution_v1`: ATP por producto, cobertura contra la
+  cantidad, conteos completos junto a una página acotada, imágenes, y **una**
+  regla de bloqueo.
+- `reject_supply_need_internal_stock_v2` y
+  `confirm_supply_need_family_choice_v1`, ambos replay-safe y atados a versión
+  **y** revisión vigente.
+
+**Las tres decisiones que valen más que el código.**
+
+1. **`unverified` no bloquea.** «No lo sé» no es «no cumple». Exigir que el
+   operador descarte algo que el sistema no pudo verificar sería cobrarle una
+   carencia del ERP; se muestra rotulado y se sigue.
+2. **El agregado de familia no prueba cobertura.** Dos unidades de dos variantes
+   no cubren una necesidad de dos: mezclarlas es una decisión del taller. El
+   número viaja como informativo y con un campo que lo dice.
+3. **Confirmar copia la procedencia.** `update_supply_need_v1` escribe su
+   revisión manual con `constraints '[]'` y **sin** `category_id`; converger por
+   ahí habría borrado la Fase A y dejado ciego al siguiente cálculo de familia.
+   Por eso la convergencia es un comando propio y no un parámetro del genérico.
+
+**Una plantilla retirada no ofrece criterios.** `needs_refinement` resolvía la
+plantilla con `coalesce(mapping.template_id, …)`, así que un mapeo que nombraba
+explícitamente una plantilla **inactiva** publicaba sus campos: se le proponía
+al operador refinar por criterios que el taller ya había descartado. La
+resolución delega ahora en `supply_request_category_scope_internal_v1`, el dueño
+de la Fase A, en vez de una variante local.
+
+**Verificación local.** 60 pgTAP nuevos, con cinco mutaciones que confirman que
+muerden: hacer que `unverified` bloquee rompe cuatro pruebas; dejar de copiar
+`category_id` rompe la de procedencia; volver al `coalesce` publica la plantilla
+inactiva; quitar la comparación de petición deja que una clave de operación
+sirva para confirmar otro producto; y hacer que v2 registre siempre la acción de
+familia rompe el carril exacto. Regresiones del kernel (`supply_need_kernel`,
+`supply_need_inventory_commitments`) y de la Fase A en verde: **191 en total**.
+Sin producción, credenciales, commit, push, deploy ni release.
+
+**Lo que queda abierto y con nombre.** El scoring externo por familia (Fase B2)
+necesita que `rank_purchase_candidates_v1` consuma el conjunto elegible, lo que
+exige extraer su kernel de scoring a un único dueño y probar salida idéntica en
+sus tres caminos. Y **la preferencia comercial sigue sin existir tipada**:
+`commercial_preference` es texto libre que nadie lee, y `p_gama` sólo lo alimenta
+un selector de la UI. Ninguna de las dos cosas se resolvió aquí.
+
+### 33.8 Fase B2, cortes 0–6 — kernel, objetivo comercial y candidatos externos
+
+**Estado: en working tree, probado localmente, NO publicado ni desplegado.**
+Cubre la fontanería del ranking, la fundación durable de la preferencia
+comercial, la primera lectura externa stock-first por necesidad y su consumo
+tipado en Dart/UI. **No** hay todavía integración Deno/agente ni despliegue de
+las migraciones B2 en producción.
+
+**Corte 0 — identidad de marca en la vista de candidatos.**
+`purchase_candidate_metrics_v1` publicaba `brand` como texto. Una preferencia
+por marca tiene que casar por identidad: el nombre cambia y la preferencia
+guardada quedaría apuntando a nada. Se agregó `brand_id` **al final** de la
+proyección, único sitio que `create or replace view` admite, sobre el cuerpo de
+`20260817129000` —la definición **vigente**, que es un revert—. Esa precisión
+importa: la vista se redefine en cinco migraciones, y partir de una anterior
+podría deshacer en silencio la corrección que el revert restauró.
+
+**Corte 1 — un solo dueño del scoring.**
+`purchase_candidate_scores_internal_v1` recibe **identidades de candidato**, no
+productos. La razón es medible: `p_query` casa contra un blob que incluye
+`supplier_name`, así que «zafiro» selecciona candidatos de ese proveedor;
+colapsar a `product_ids` y reexpandir agregaría proveedores que la consulta
+nunca trajo. `rank_purchase_candidates_v1` conserva firma, permisos y envelope,
+y ahora resuelve su universo y delega. El kernel devuelve el **item JSON
+canónico** ya armado, así que la proyección tiene un solo dueño y nadie
+reescanea la vista cara para construir la respuesta.
+
+**Corte 2 — la medición, que refutó la intuición.** Sobre producción, lecturas
+gobernadas, 268 candidatos: barrido completo 35,0 ms; `= any(1)` 13,8;
+`= any(50)` 17,2; `= any(268)` 35,7. Y lo que decidía el diseño: **baseline de
+una pasada 97,7 ms contra 56,5 ms del wrapper de dos pasadas** — 42 % menos, el
+1,3 % del presupuesto. Filtrar por `candidate_id` es selectivo; filtrar por
+subárbol de categoría obliga a materializar la vista entera. La intuición decía
+lo contrario y estaba equivocada.
+
+La medición encontró además una trampa: derivar los ids **desde la misma vista
+dentro de la misma sentencia** cuesta **6.494 ms**, porque el planificador
+evalúa la vista una vez por fila. Queda prohibida y documentada en
+`purchase_candidate_any_shape_probe.sql`.
+
+**Corte 3 — bundle stock-first y envelope explícito.**
+`supply_need_stock_bundle_internal_v1` es dueño único de ATP, cobertura y
+bloqueo sobre **una** evaluación técnica **por invocación RPC** —no por sesión:
+la RPC externa llamará al bundle una vez dentro de su propia invocación, no
+reutiliza la lectura que la interfaz hizo antes—. La lectura pública se quedó
+con paginar y proyectar, y su envelope se construye **clave por clave**: la
+primera versión restaba del bundle y filtró tres claves que la rama no-ok nunca
+había publicado.
+
+**Corte 4 — objetivo comercial tipado, en su propio flujo.**
+`supply_need_commercial_revisions` es append-only y separado de las revisiones
+de interpretación. La razón está demostrada en este repositorio:
+`update_supply_need_v1` escribe su revisión manual con `constraints '[]'` y sin
+`category_id`. Un writer que ignora campos ya existe; colgar columnas anulables
+de esa tabla obligaría a cada writer a copiarlas, y el primero que no lo haga
+borra la preferencia en silencio. Un flujo con un solo escritor no tiene esa
+superficie.
+
+- Campos: `gama`, `preferredBrandId` (marca **activa y visible**: global o del
+  tenant; ajena o retirada se **rechaza**, no se ignora), `maxLandedUnitCostNet`
+  (0 exclusivo, techo 999.999.999) y `minGrossMarginRatio` (0..1). Los rangos
+  también rechazan `NaN` e `Infinity`, que `numeric` acepta como válidos.
+- **La moneda es server-owned** desde `tenants.currency` y **no es
+  representable en la entrada**: una carga con `currencyCode` se rechaza. Sin
+  FX, guardar la moneda del taller es lo único honesto; la evaluación futura
+  declarará `unknown` ante un candidato en otra moneda.
+- Semántica de la carga, sin ambigüedad: clave ausente **conserva**, clave en
+  `null` **limpia ese campo**, `p_target` SQL null **limpia todo** y deja una
+  revisión marcada `cleared` —que no es lo mismo que «nunca hubo target»—.
+- Concurrencia optimista **doble**: versión de la necesidad y revisión
+  comercial. Un cambio efectivo sube la versión para invalidar lecturas en
+  curso; un no-op no escribe ni mueve nada.
+- `commercial_preference` legado viaja como **nota** con `drivesRanking:false`.
+  No se parsea y no rankea. La afirmación anterior de que «la gama estaba
+  resuelta» era falsa y queda corregida.
+- `create_supply_need_batch_v3` crea necesidades y su primer target de forma
+  atómica, delegando todas las reglas en v2, que queda intacta. Una línea sin
+  target accionable **no** escribe una revisión vacía, y su lectura igual
+  devuelve la moneda del taller y `targetRevisionNo = 0`.
+
+**Dos auditorías independientes rechazaron este corte antes de aceptarlo**, y
+lo que encontraron está incorporado en la migración única
+`20260817210000` —no en un parche encima: una migración nacida rota seguida de
+su arreglo deja el defecto en la historia y obliga a leer dos archivos para
+saber qué hace uno—.
+
+1. **La clave de operación de v3 no cubría el objetivo.** Llamaba a v2 con
+   `commercialTarget` removido, así que la misma clave con otro objetivo era un
+   replay válido y el `on conflict do nothing` conservaba el viejo mientras la
+   respuesta contaba el nuevo. v3 tiene recibo propio en el **mismo espacio de
+   nombres** que v2 —una clave usada por cualquiera bloquea al otro— con el
+   request **normalizado**: los ítems tal como v2 los deja, sin las glosas
+   derivadas que envejecen, más sólo los objetivos accionables. Así un espacio
+   de más o un `9000.0` replayan, y una diferencia real colisiona.
+2. **El objetivo se mapeaba por posición.** v2 acepta `line-1..line-8` en
+   cualquier orden, así que `[line-2, line-1]` lo ponía en la línea equivocada.
+   Se indexa por el `lineRef` real y un objetivo que no encuentra su línea es
+   un error.
+3. **Un no-op no era replay-safe**: retornaba sin consumir la clave. Ahora deja
+   recibo con `changed = false`, sin revisión ni cambio de versión, y las dos
+   ramas devuelven la misma forma.
+4. **La moneda se guardaba y se leía distinto.** La lectura devolvía la del
+   tenant: con el taller pasando de CLP a USD, un tope de 12.000 se
+   reinterpretaba como dólares. Ahora la lectura usa la moneda **de su
+   revisión**, informa aparte la del taller, y un parche que no reemplace ni
+   limpie el tope **falla**.
+5. **La lectura no era autocontenida**: el comando exige la versión y la
+   lectura no la traía. Ahora devuelve `needVersion` y `needSupplyState`, y el
+   comando rechaza necesidades cubiertas o canceladas.
+
+**Y un defecto que introdujo la primera corrección**, encontrado en la segunda
+pasada: re-denominar con el **mismo número** quedaba como no-op. Con el tope en
+CLP 12.000, el taller en USD y el operador reingresando 12.000 de forma
+explícita, la guarda pasaba pero `v_changed` comparaba sólo los números: sin
+revisión, y la lectura seguía diciendo CLP. El acto explícito es lo que cambia
+el significado —deja de ser pesos y pasa a ser dólares—, así que ahora fuerza
+revisión nueva y sube la versión aunque el número coincida. Ningún número se
+convierte: no hay tipo de cambio.
+
+**Y dos de integridad que una tercera pasada encontró.** El comando leía su
+recibo **antes** de serializar: dos peticiones idénticas simultáneas pasaban las
+dos, y la segunda terminaba en `40001` o en una violación de unicidad cruda en
+vez de ver `replay = true`. El `pg_advisory_xact_lock` —con ámbito de tenant— se
+toma ahora antes de leer. Y la clave interna de v3 se derivaba de la pública con
+`md5(tenant:clave)`: **presembrable**. Cualquiera del mismo taller podía llamar
+antes a v2 con esa clave exacta y una petición base; v3 habría encontrado ese
+recibo, replayado necesidades ajenas y colgado los objetivos nuevos sobre ellas.
+La semilla se genera ahora dentro de la transacción, después del lock externo, y
+además es la identidad del recibo, así que las claves internas se rastrean hasta
+él sin poder adivinarse. Hay una regresión que **siembra la fórmula vieja** y
+demuestra que v3 crea su propio lote.
+
+Además, el límite público de `operation_key` **se conserva en 160 bytes**: las
+claves internas son de tamaño fijo (`v3-core:<md5>`, `v3-target:<md5>:<line>`)
+en vez de sufijos que obligarían a recortar el contrato público.
+
+**Corte 5 — candidatos externos gobernados por la necesidad.**
+`get_supply_need_external_candidates_v1` ya no pide al cliente reconstruir la
+familia, el stock ni el objetivo comercial. La función pública resuelve el
+tenant desde la sesión y delega en un único orquestador interno, que llama al
+bundle técnico/ATP exactamente una vez. Si existe una alternativa interna que
+cubre la cantidad y nadie registró por qué no sirve, levanta
+`P0001 stock_first_required` **antes de tocar el kernel**. Una lista vacía habría
+sido peligrosa: una interfaz podría traducirla como «no hay proveedores» y
+hacer comprar lo que ya está en bodega.
+
+Los caminos sin ranking quedan separados por causa y próxima acción:
+`supply_closed`, `identity_unresolved`, `needs_refinement`,
+`technical_conflict`, `no_eligible_products`, `no_historical_candidates` y
+`analysis_too_broad`. En particular, historial vacío no se llama
+`verifiedEmpty`: aquí no se verificó disponibilidad externa. La disponibilidad
+de cada proveedor también permanece `unverified`; es evidencia histórica, no
+stock actual del portal.
+
+El universo se forma con todos los productos técnicamente elegibles y sus
+identidades `candidate_id` —producto + proveedor + moneda—. La vista histórica
+se lee una vez para resolver ids y metadata; luego el kernel se llama una sola
+vez con el conjunto completo. El techo server-owned de 600 candidatos impide
+que una necesidad demasiado amplia consuma el presupuesto entero. Nunca se
+derivan ids desde la vista dentro de la misma sentencia que invoca el kernel:
+esa forma ya midió 6.494 ms y constituye una evaluación correlacionada cara.
+
+El objetivo comercial reordena, no filtra. Marca, techo de costo aterrizado y
+piso de margen entregan `met`, `missed` o `unknown`; sólo las señales conocidas
+entran en el promedio. Gama se delega al kernel para no contarla dos veces. Sin
+señales conocidas el puntaje heredado se conserva **exactamente**; con alguna,
+el blend es 75 % kernel + 25 % promedio conocido. El orden usa precisión
+completa y sólo la proyección se redondea, evitando que dos candidatos separados
+por menos de seis decimales se inviertan por un desempate prematuro.
+
+La economía tampoco inventa comparabilidad. Costo y techo requieren la moneda
+de la revisión; margen requiere que costo y precio de catálogo compartan
+moneda; y ambos requieren evidencia de flete `complete` o `none`. Sin FX o con
+flete incompleto el componente económico queda neutral/`unknown`, el margen y
+la utilidad proyectados son nulos y no se entrega el premio de evidencia de un
+precio de venta que no puede compararse. Los candidatos con ficha fuerte,
+débil o sin criterios son accionables; los técnicamente `unverified` viajan en
+una lista y paginación separadas para que sigan disponibles sin mezclarse con
+afirmaciones demostradas. El envelope se arma clave por clave y publica conteos,
+alcance del score, fuente del perfil, páginas y señales explicables.
+
+**Verificación local.** 252 casos de equivalencia idénticos, capturados
+inmediatamente antes y después de la extracción del kernel; pgTAP nuevos: 15
+del contrato kernel/wrapper, 111 del objetivo comercial y 110 de candidatos
+externos. El conjunto focal de procedencia, B1, stock, kernel, objetivo y RPC
+externa pasa **439/439**. Mutaciones que muerden: colapsar a
+producto, cortar antes de puntuar, restar el envelope, reintroducir la segunda
+evaluación técnica, aceptar la moneda del cliente, soltar la visibilidad de
+marca, hacer que el parche reemplace, devolver siempre la moneda de hoy, quitar
+el rebase explícito, omitir `needVersion`, tratar la re-denominación como no-op,
+guardar el payload crudo en el recibo de v3 y recortar el límite público de la
+clave; además, cruzar monedas, aceptar flete parcial como aterrizado y redondear
+antes de ordenar rompen pruebas del corte 5. Una lectura directa y read-only de
+producción confirma que las migraciones `20260817150000`–`20260817220000`
+siguen pendientes. Sin producción escrita, commit, push, deploy ni release.
+
+**Corte 6 — consumo Dart y una sola decisión visible.** Los modelos y el
+servicio consumen las lecturas de stock, objetivo comercial y candidatos
+externos sin volver a derivar familia, ATP, moneda ni score en el cliente. La
+superficie sólo compromete el conjunto cuando sus envelopes coinciden en
+necesidad, versión, estado, revisión técnica y revisión comercial. Si una
+escritura ocurre entre lecturas se presenta un conflicto recuperable con
+`Recargar`; nunca se arma un collage de momentos distintos.
+
+La ausencia de una decisión coherente tiene un solo dueño de estado y un solo
+dueño visual. Un fallo inicial genérico muestra una superficie de lectura
+fallida; un conflicto inicial muestra su aviso de recarga; una recarga
+incremental o un comando fallido conserva los resultados ya comprometidos y
+agrega sólo el aviso correspondiente. Ninguno de esos casos cae a «no hay
+compras históricas comparables», abre la confirmación de identidad ni duplica
+bandas. `P0001 stock_first_required` sólo se acepta como paso del flujo cuando
+la resolución ya leída corrobora que existe cobertura bloqueante; si no, es
+otra lectura incoherente y se recarga.
+
+La UI mantiene las dos autoridades separadas: `matchState` decide el veredicto
+técnico y el filtro de compatibilidad; `evidenceQuality` describe la calidad de
+la evidencia económica/histórica. Por eso una factura completa no convierte a
+un candidato técnicamente no verificado en «Cumple». Los grupos accionable y
+no verificado conservan paginación independiente, el objetivo comercial se
+edita anclado y validado, y Stock y Proveedores exponen los mismos estados y
+salidas sin esconder fallos de comando.
+
+**Verificación del cliente.** Formato sin cambios pendientes, análisis focal
+sin hallazgos, `git diff --check` limpio y **231/231** pruebas de modelos,
+contrato, workspace y superficies adyacentes en verde. Es evidencia local del
+contrato y de sus estados/mutaciones; no sustituye una prueba real contra las
+RPC desplegadas.
+
+**Lo que sigue abierto.** Contratos y herramientas del agente, `brandRef` opaca
+para que la IA elija marca sin ver UUIDs, integración Deno, conexión de
+`create_supply_need_batch_v3` al borrador generado por IA y el rendimiento del
+kernel **sobre la función desplegada**: lo medido es la forma equivalente en
+línea, no la función real. La app de producción no puede demostrar todavía el
+flujo B2 completo porque esa cadena de migraciones continúa ausente allí.
 
 ## 34. Regla final de implementación
 

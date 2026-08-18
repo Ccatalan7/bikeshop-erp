@@ -655,6 +655,7 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
   const modelArguments = {
     items: [{
       catalogItemRef,
+      categoryRef: null,
       description: "Neumático 27,5 ancho mayor a 2,0",
       quantity: 2,
       unit: "unit",
@@ -665,6 +666,7 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
       clarificationPrompts: [],
     }, {
       catalogItemRef: null,
+      categoryRef: null,
       description: "Rayos 27,5",
       quantity: 1,
       unit: "set",
@@ -728,6 +730,9 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
         productName: "Kenda Kwick 27,5 × 2,10",
         productSku: "KEN-275-210",
         identityState: "confirmed",
+        categoryId: null,
+        categoryPath: null,
+        technicalFamily: null,
         quantity: 2,
         unit: "unit",
         // PostgreSQL jsonb canonicalizes object-key order. Validation must
@@ -744,6 +749,9 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
         productName: null,
         productSku: null,
         identityState: "unresolved",
+        categoryId: "62626262-6262-4262-8262-626262626262",
+        categoryPath: "Componentes / Ruedas / Rayos",
+        technicalFamily: "spoke",
         quantity: 1,
         unit: "set",
         technicalPredicates: [],
@@ -762,6 +770,7 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
         items: [{
           description: "Neumático 27,5 ancho mayor a 2,0",
           productId,
+          categoryId: null,
           quantity: 2,
           unit: "unit",
           technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
@@ -772,6 +781,7 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
         }, {
           description: "Rayos 27,5",
           productId: null,
+          categoryId: "62626262-6262-4262-8262-626262626262",
           quantity: 1,
           unit: "set",
           technicalPredicates: [],
@@ -788,12 +798,13 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
   );
   assertEquals(execution.succeeded, true, "validated supply draft executes");
   assertEquals(calls, [{
-    name: "assistant_prepare_supply_request_v1",
+    name: "assistant_prepare_supply_request_v2",
     parameters: {
       p_items: [{
         lineRef: "line-1",
         description: "Neumático 27,5 ancho mayor a 2,0",
         productId,
+        categoryId: null,
         quantity: 2,
         unit: "unit",
         technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
@@ -804,6 +815,7 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
         lineRef: "line-2",
         description: "Rayos 27,5",
         productId: null,
+        categoryId: "62626262-6262-4262-8262-626262626262",
         quantity: 1,
         unit: "set",
         technicalPredicates: [],
@@ -818,6 +830,28 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
     execution.outputText.includes(productId),
     false,
     "exact catalog UUID never returns to the model",
+  );
+  // La categoría resuelta viaja a la tarjeta cerrada; su identidad no vuelve
+  // al modelo, que sólo ve la ruta legible.
+  assertEquals(
+    execution.outputText.includes("62626262-6262-4262-8262-626262626262"),
+    false,
+    "resolved category UUID never returns to the model",
+  );
+  assertEquals(
+    execution.outputText.includes("Componentes / Ruedas / Rayos"),
+    true,
+    "the readable category path stays visible to the model",
+  );
+  assertEquals(
+    execution.result.items[1].categoryId,
+    "62626262-6262-4262-8262-626262626262",
+    "the closed card keeps the category identity for the durable command",
+  );
+  assertEquals(
+    execution.result.items[1].technicalFamily,
+    "spoke",
+    "the derived technical family travels with the card",
   );
   assertEquals(
     execution.result.items[1].identityState,
@@ -1094,9 +1128,10 @@ Deno.test("inventory schema discovery and typed comparisons are composable primi
   const executor = createSupabaseAgentToolExecutor({
     rpc(name, parameters) {
       calls.push({ name, parameters });
-      if (name === "assistant_inspect_inventory_schema_v2") {
+      if (name === "assistant_inspect_inventory_schema_v3") {
         return Promise.resolve(envelope([{
           kind: "field",
+          entityId: "62626262-6262-4262-8262-626262626262",
           category: "Motor",
           categoryPath: "Componentes / Transmisión / Motores / Motor",
           technicalFamily: "bottom_bracket",
@@ -1131,6 +1166,33 @@ Deno.test("inventory schema discovery and typed comparisons are composable primi
     true,
     "canonical field is model-visible",
   );
+  // La identidad de la categoría se publica como referencia opaca del turno:
+  // el modelo puede reutilizarla en el borrador sin ver jamás el UUID.
+  assertEquals(
+    inspection.outputText.includes("62626262-6262-4262-8262-626262626262"),
+    false,
+    "category UUID never reaches the model",
+  );
+  assertEquals(
+    inspection.outputText.includes("categoryRef"),
+    true,
+    "the model receives an opaque category reference instead",
+  );
+  assertEquals(
+    inspection.entityReferences?.length,
+    1,
+    "one turn-scoped category reference is published",
+  );
+  assertEquals(
+    inspection.entityReferences?.[0].kind,
+    "product_category",
+    "the reference is typed as a category, not a catalog item",
+  );
+  assertEquals(
+    inspection.entityReferences?.[0].entityId,
+    "62626262-6262-4262-8262-626262626262",
+    "the server keeps the real category identity",
+  );
 
   const search = await executor.execute(
     {
@@ -1157,7 +1219,7 @@ Deno.test("inventory schema discovery and typed comparisons are composable primi
   );
   assertEquals(search.succeeded, true, "typed range search executes");
   assertEquals(calls, [{
-    name: "assistant_inspect_inventory_schema_v2",
+    name: "assistant_inspect_inventory_schema_v3",
     parameters: {
       p_query: "motores con eje de menos de 125 mm",
       p_category: "Motores",

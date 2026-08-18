@@ -91,6 +91,65 @@ class _IntelligentPurchasingWorkspacePageState
   SupplyNeed? _selectedNeed;
   SupplyInventorySnapshot? _inventorySnapshot;
   PurchaseRanking? _ranking;
+
+  /// Lectura stock-first de la fase B1. Es la autoridad de `needVersion` y
+  /// `revisionNo`: `supply_needs` no guarda la revisión que gobierna, así que
+  /// ningún comando de esta fase toma esos números de `SupplyNeed`.
+  SupplyStockResolution? _stockResolution;
+
+  /// Candidatos externos de la fase B2, con sus dos grupos.
+  SupplyExternalCandidates? _externalCandidates;
+
+  /// El servidor cerró el paso externo hasta que alguien decida el stock.
+  /// Es un estado del flujo, no un fallo de red.
+  bool _stockFirstRequired = false;
+
+  /// Objetivo comercial tipado vigente.
+  SupplyCommercialTarget? _commercialTarget;
+
+  /// La necesidad cambió bajo los pies: se relee, no se reintenta con la
+  /// versión vieja.
+  bool _needsReload = false;
+
+  /// Corte vigente de cada grupo. Son dos páginas independientes en el
+  /// servidor, así que también son dos estados acá: pedir más no verificados
+  /// no puede recortar los accionables.
+  int _candidateOffset = 0;
+  int _unverifiedLimit = _unverifiedBaseLimit;
+  int _unverifiedOffset = 0;
+
+  /// Corte de la bodega del carril familia. Es una tercera página, distinta de
+  /// las dos externas: ampliarla no toca ni reordena los candidatos.
+  int _stockLimit = _stockBaseLimit;
+
+  /// El editor del objetivo comercial está abierto.
+  bool _editingCommercialTarget = false;
+
+  /// Una recarga incremental está en vuelo. **No** vacía la pantalla: sólo
+  /// apaga los controles que piden más.
+  bool _refreshingResults = false;
+
+  /// Reintento de la última recarga incremental fallida, si la hubo.
+  VoidCallback? _retryIncremental;
+
+  /// **No hay una decisión coherente cargada todavía.**
+  ///
+  /// Una sola noción, derivada del único hecho que la define: ninguna lectura
+  /// llegó a comprometerse. `_stockResolution` sólo se asigna en el `setState`
+  /// final, después de que los cuatro envelopes concuerdan; mientras sea nulo
+  /// no hubo decisión, sea porque la lectura falló o porque hubo conflicto.
+  ///
+  /// Antes esto vivía en un `bool` propio que sólo cubría el fallo genérico:
+  /// un conflicto inicial lo dejaba en `false` con todas las lecturas nulas, y
+  /// la pantalla volvía a concluir «no hay compras comparables» y a ofrecer
+  /// confirmar identidad sobre datos que nunca tuvo.
+  bool get _decisionUnavailable =>
+      _stockResolution == null && !_loadingDecision;
+
+  /// Y su dueño visual: el conflicto lo dice su aviso con «Recargar»; el fallo
+  /// genérico, la superficie de lectura fallida con su reintento. Nunca los
+  /// dos, y nunca dos bandas del mismo problema.
+  bool get _showsLoadFailure => _decisionUnavailable && !_needsReload;
   PurchaseScenarioResult? _scenarioResult;
   PurchasePlanDraft? _plan;
   ProductSelection? _identitySelection;
@@ -290,44 +349,175 @@ class _IntelligentPurchasingWorkspacePageState
     /// El corte vuelve a su base al cambiar de necesidad, no en cada recarga:
     /// «Continuar análisis» recarga a propósito con el corte ampliado.
     bool resetRankingLimit = true,
+
+    /// **Recarga incremental**: el operador pidió *más* de algo que ya está en
+    /// pantalla. Vaciar los resultados y montar un spinner haría desaparecer
+    /// la tabla, el candidato abierto y el panel del objetivo durante toda la
+    /// petición, para volver a dibujar lo mismo más un par de filas. Se
+    /// conserva lo visible, se apaga el control que disparó la carga y el
+    /// reemplazo ocurre de una sola vez al llegar la respuesta.
+    bool incremental = false,
   }) async {
     if (!mounted || _selectedNeed?.id != need.id) return;
-    setState(() {
-      _loadingDecision = true;
-      _decisionError = null;
-      _inventorySnapshot = null;
-      _ranking = null;
-      if (resetRankingLimit) _rankingLimit = _rankingBaseLimit;
-    });
-    try {
-      SupplyInventorySnapshot? snapshot;
-      PurchaseRanking? ranking;
-      if (need.hasConfirmedProduct) {
-        snapshot = await _service.inventorySnapshot(need.id);
-        final canShowExternal = need.supplyState == 'open' &&
-            (!snapshot.assignable || need.internalStockRejectionReason != null);
-        if (canShowExternal) {
-          ranking = await _service.rankCandidates(
-            productId: need.productId,
-            profile: _rankingProfile,
-            limit: _rankingLimit,
-          );
+    if (incremental) {
+      setState(() {
+        _refreshingResults = true;
+        _decisionError = null;
+        _retryIncremental = null;
+      });
+    } else {
+      setState(() {
+        _loadingDecision = true;
+        _decisionError = null;
+        _retryIncremental = null;
+        _inventorySnapshot = null;
+        _ranking = null;
+        _stockResolution = null;
+        _externalCandidates = null;
+        _commercialTarget = null;
+        _stockFirstRequired = false;
+        _needsReload = false;
+        _inspectedCandidateId = null;
+        // El editor del objetivo pertenece a **una** necesidad: dejarlo
+        // abierto al cambiar de fila mostraría —y guardaría— los números de
+        // la anterior.
+        _editingCommercialTarget = false;
+        if (resetRankingLimit) {
+          _rankingLimit = _rankingBaseLimit;
+          _candidateOffset = 0;
+          _unverifiedLimit = _unverifiedBaseLimit;
+          _unverifiedOffset = 0;
+          _stockLimit = _stockBaseLimit;
         }
+      });
+    }
+    try {
+      // **El carril lo decide el servidor, no `hasConfirmedProduct`.** La
+      // lectura de stock responde en los dos carriles y trae la versión y la
+      // revisión que los comandos siguientes exigen; sin ella una necesidad de
+      // familia no tenía ninguna superficie y quedaba encerrada.
+      final resolution = await _service.stockResolution(
+        need.id,
+        limit: _stockLimit,
+      );
+      SupplyInventorySnapshot? snapshot;
+      if (need.hasConfirmedProduct) {
+        // El carril exacto conserva su vista de componentes y sets: dice cosas
+        // que la resolución por familia no conoce.
+        snapshot = await _service.inventorySnapshot(need.id);
+      }
+      final target = await _service.commercialTarget(need.id);
+
+      // **La lectura externa se llama siempre.** Condicionarla a `isOk` y a
+      // `open` dejaba inalcanzables tres estados que sólo ella sabe nombrar
+      // —`supply_closed`, `identity_unresolved` y `needs_refinement`—: la
+      // interfaz decidía por su cuenta que no había nada que preguntar y el
+      // operador se quedaba sin la causa ni la acción.
+      SupplyExternalCandidates? candidates;
+      var stockFirst = false;
+      try {
+        candidates = await _service.externalCandidates(
+          need.id,
+          limit: _rankingLimit,
+          offset: _candidateOffset,
+          unverifiedLimit: _unverifiedLimit,
+          unverifiedOffset: _unverifiedOffset,
+        );
+      } on SupplyStockFirstRequired {
+        // **El P0001 tiene que cuadrar con la resolución que ya se leyó.**
+        // El servidor lo levanta a partir de su propia evaluación; si la
+        // resolución que esta pantalla va a mostrar dice que el paso externo
+        // está abierto, las dos lecturas describen momentos distintos y montar
+        // «primero decide el stock» sobre una bodega que no bloquea sería
+        // afirmar algo que la propia pantalla desmiente. Eso es un conflicto,
+        // y se recarga.
+        if (!(resolution.isOk &&
+            resolution.blocksExternal &&
+            !resolution.externalAllowed)) {
+          throw SupplyConcurrencyConflict(need.id);
+        }
+        stockFirst = true;
       }
       if (!mounted || _selectedNeed?.id != need.id) return;
+      // **Tres lecturas separadas pueden describir tres momentos distintos.**
+      // Si alguien escribió entremedio, montarlas juntas produce una pantalla
+      // que no existió nunca: stock de antes, objetivo de después y un ranking
+      // calculado sobre otra revisión. No se presenta esa mezcla; se ofrece
+      // releer, que es la única salida honesta.
+      if (!_envelopesAgree(need, resolution, target, candidates)) {
+        throw SupplyConcurrencyConflict(need.id);
+      }
       setState(() {
+        _stockResolution = resolution;
         _inventorySnapshot = snapshot;
-        _ranking = ranking;
+        _commercialTarget = target;
+        _externalCandidates = candidates;
+        _stockFirstRequired = stockFirst;
+        // La superficie ya refactorizada sigue consumiendo el ranking; sólo el
+        // grupo accionable entra, porque los no verificados tienen su propio
+        // bloque rotulado y no se mezclan.
+        _ranking = candidates?.asRanking;
         _loadingDecision = false;
+        _refreshingResults = false;
+        _retryIncremental = null;
+        // El candidato abierto puede haber desaparecido del corte nuevo.
+        if (_inspectedCandidate == null) _inspectedCandidateId = null;
+      });
+    } on SupplyConcurrencyConflict {
+      if (!mounted || _selectedNeed?.id != need.id) return;
+      setState(() {
+        _loadingDecision = false;
+        _refreshingResults = false;
+        _needsReload = true;
+        _decisionError = _concurrencyMessage;
       });
     } catch (_) {
       if (!mounted || _selectedNeed?.id != need.id) return;
       setState(() {
         _loadingDecision = false;
-        _decisionError =
-            'No se pudo completar el análisis. Puedes reintentar sin perder la necesidad.';
+        _refreshingResults = false;
+        if (incremental) {
+          // Lo que ya estaba en pantalla sigue siendo cierto: pedir más y
+          // fallar no invalida lo comparado hasta aquí.
+          _decisionError = 'No se pudo traer el resto. Lo comparado sigue '
+              'en pantalla.';
+          _retryIncremental = () => unawaited(
+                _loadDecision(
+                  need,
+                  resetRankingLimit: false,
+                  incremental: true,
+                ),
+              );
+        } else {
+          _decisionError =
+              'No se pudo completar el análisis. Puedes reintentar sin perder la necesidad.';
+        }
       });
     }
+  }
+
+  /// Los cuatro envelopes hablan de la misma necesidad, versión y revisión.
+  ///
+  /// `needVersion` y `supplyState` los publican las tres lecturas; `revisionNo`
+  /// lo comparten resolución y candidatos, y `targetRevisionNo`, objetivo y
+  /// candidatos. Cualquier desacuerdo significa que hubo una escritura entre
+  /// medio y que la pantalla armada sería un collage de dos estados.
+  bool _envelopesAgree(
+    SupplyNeed need,
+    SupplyStockResolution resolution,
+    SupplyCommercialTarget target,
+    SupplyExternalCandidates? candidates,
+  ) {
+    if (resolution.needId != need.id || target.needId != need.id) return false;
+    if (resolution.needVersion != need.version) return false;
+    if (target.needVersion != need.version) return false;
+    if (target.needSupplyState != need.supplyState) return false;
+    if (candidates == null) return true;
+    return candidates.needId == need.id &&
+        candidates.needVersion == need.version &&
+        candidates.needSupplyState == need.supplyState &&
+        candidates.revisionNo == resolution.revisionNo &&
+        candidates.targetRevisionNo == target.targetRevisionNo;
   }
 
   Future<void> _askAssistant({
@@ -635,22 +825,17 @@ class _IntelligentPurchasingWorkspacePageState
       );
       return;
     }
+    // Reescribir la descripción cambia qué se está pidiendo, así que la
+    // procedencia entera —producto, categoría y predicados— se limpia. Cambiar
+    // sólo cantidad o unidad no la toca.
     final identityChanged = description != line.description;
     final edited = identityChanged
-        ? AIAssistantSupplyNeedDraftLine(
-            lineRef: line.lineRef,
+        ? line.withRewrittenDescription(
             description: description,
-            productId: null,
-            productName: null,
-            productSku: null,
-            identityState: 'unresolved',
             quantity: quantity,
             unit: unit,
-            technicalPredicates: const [],
-            preference: null,
             clarification:
                 'Confirma el producto exacto antes de comparar proveedores.',
-            clarificationRequired: true,
           )
         : line.copyWith(quantity: quantity, unit: unit);
 
@@ -734,31 +919,218 @@ class _IntelligentPurchasingWorkspacePageState
     }
   }
 
+  /// Registra por qué el stock interno no sirve, en el carril que corresponda.
+  ///
+  /// v2 y no v1: v1 exige un producto confirmado, así que en el carril familia
+  /// nunca podía registrarse el rechazo — y sin rechazo el paso externo queda
+  /// cerrado para siempre. La versión y la revisión salen de la lectura, no de
+  /// `supply_needs`.
   Future<void> _rejectInternalStock() async {
     final need = _selectedNeed;
+    final resolution = _stockResolution;
     final reason = _stockReasonController.text.trim();
-    if (need == null || reason.isEmpty || _runningCommand) return;
+    if (need == null ||
+        resolution == null ||
+        reason.isEmpty ||
+        _runningCommand) {
+      return;
+    }
     setState(() => _runningCommand = true);
     try {
-      final updated = await _service.rejectInternalStock(
-        need,
+      await _service.rejectInternalStockForLane(
+        resolution: resolution,
         reason: reason,
       );
       if (!mounted) return;
       setState(() {
-        _selectedNeed = updated;
         _runningCommand = false;
         _showStockRejection = false;
-        _needs = _needs
-            .map((item) => item.id == updated.id ? updated : item)
-            .toList(growable: false);
       });
-      await _loadDecision(updated);
+      // Releer: el rechazo subió la versión y abrió el paso externo.
+      await _loadNeeds(selectId: need.id);
+    } on SupplyConcurrencyConflict {
+      if (!mounted) return;
+      setState(() {
+        _runningCommand = false;
+        _needsReload = true;
+        _decisionError = _concurrencyMessage;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _runningCommand = false;
         _decisionError = 'No se pudo guardar el motivo. Inténtalo otra vez.';
+      });
+    }
+  }
+
+  /// El perfil que el servidor resolvió, dicho como dato.
+  ///
+  /// No es un control: la lectura externa lo toma de la revisión que gobierna
+  /// la necesidad. Ofrecerlo como menú prometía un cambio que nunca llegaba.
+  String get _serverProfileLabel {
+    final external = _externalCandidates;
+    final profile = external?.rankingProfile ?? _rankingProfile;
+    final label = _rankingProfileOptions[profile] ?? profile;
+    if (external == null) return 'Prioridad · $label';
+    return external.rankingProfileSource == 'revision'
+        ? 'Prioridad · $label'
+        : 'Prioridad · $label (por omisión)';
+  }
+
+  /// Guarda el objetivo comercial y vuelve a leer.
+  ///
+  /// La moneda **no** viaja: es del servidor y una carga que la traiga se
+  /// rechaza. El parche es explícito, así que un campo vacío limpia ese
+  /// objetivo en vez de conservarlo por descuido.
+  Future<void> _saveCommercialTarget(Map<String, Object?> values) async {
+    final target = _commercialTarget;
+    final need = _selectedNeed;
+    if (target == null || need == null || _runningCommand) return;
+    setState(() {
+      _runningCommand = true;
+      _decisionError = null;
+    });
+    try {
+      await _service.setCommercialTarget(current: target, values: values);
+      if (!mounted) return;
+      setState(() {
+        _runningCommand = false;
+        _editingCommercialTarget = false;
+      });
+      await _loadNeeds(selectId: need.id);
+    } on SupplyConcurrencyConflict {
+      if (!mounted) return;
+      setState(() {
+        _runningCommand = false;
+        _needsReload = true;
+        _decisionError = _concurrencyMessage;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _runningCommand = false;
+        _decisionError =
+            'No se pudo guardar el objetivo. Recarga e inténtalo otra vez.';
+      });
+    }
+  }
+
+  /// Amplía el corte del grupo sin verificar, y sólo ése.
+  Future<void> _showMoreUnverified() async {
+    final need = _selectedNeed;
+    if (need == null || _loadingDecision || _refreshingResults) return;
+    setState(() => _unverifiedLimit += _unverifiedStep);
+    await _loadDecision(need, resetRankingLimit: false, incremental: true);
+  }
+
+  /// Amplía el corte de la bodega del carril familia, y sólo ése.
+  Future<void> _showMoreFamilyStock() async {
+    final need = _selectedNeed;
+    if (need == null || _loadingDecision || _refreshingResults) return;
+    setState(() => _stockLimit += _stockStep);
+    await _loadDecision(need, resetRankingLimit: false, incremental: true);
+  }
+
+  /// El aviso del paso activo: **uno solo**, con la acción que corresponde.
+  ///
+  /// Hay cuatro clases de fallo y cada una tiene su salida: una escritura ajena
+  /// se recarga, una recarga incremental se reintenta sin perder lo comparado,
+  /// una lectura inicial fallida se reintenta entera, y un comando que falló
+  /// sólo se dice —la decisión que sigue disponible está justo debajo—.
+  List<Widget>? _decisionNotice() {
+    final message = _decisionError;
+    if (message == null) return null;
+    // El fallo genérico sin datos lo dice **sólo** su superficie: dos bandas
+    // con el mismo problema en la misma columna es ruido, no información.
+    if (_showsLoadFailure) return null;
+    final Widget? action;
+    if (_needsReload) {
+      action = TextButton(
+        key: const ValueKey('reload-after-conflict'),
+        onPressed: _reloadAfterConflict,
+        child: const Text('Recargar la necesidad'),
+      );
+    } else if (_retryIncremental != null) {
+      action = TextButton(
+        key: const ValueKey('retry-incremental-load'),
+        onPressed: _refreshingResults ? null : _retryIncremental,
+        child: const Text('Reintentar'),
+      );
+    } else {
+      action = null;
+    }
+    return [
+      VbNotice(
+        key: const ValueKey('decision-recoverable-error'),
+        title: message,
+        tone: VbNoticeTone.warning,
+        action: action,
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  /// Reintenta la lectura completa de la decisión tras un fallo inicial.
+  Future<void> _retryDecisionLoad() async {
+    final need = _selectedNeed;
+    if (need == null || _loadingDecision) return;
+    await _loadDecision(need, resetRankingLimit: false);
+  }
+
+  /// Vuelve a leer la necesidad tras un choque de concurrencia.
+  Future<void> _reloadAfterConflict() async {
+    final need = _selectedNeed;
+    setState(() {
+      _needsReload = false;
+      _decisionError = null;
+    });
+    await _loadNeeds(selectId: need?.id);
+  }
+
+  /// Carril familia, primera escritura: fijar la identidad desde el candidato.
+  ///
+  /// **No agrega nada al plan.** `prepare_purchase_plan_line_v1` exige un
+  /// producto confirmado, así que sin este paso la línea sería imposible; y
+  /// unir los dos en un botón escondería dos escrituras bajo una palabra y
+  /// dejaría al operador sin saber cuál falló.
+  Future<void> _chooseFamilyProduct(PurchaseCandidate candidate) =>
+      _chooseFamilyProductId(candidate.productId);
+
+  Future<void> _chooseFamilyProductId(String productId) async {
+    final need = _selectedNeed;
+    final resolution = _stockResolution;
+    if (need == null || resolution == null || _runningCommand) return;
+    setState(() {
+      _runningCommand = true;
+      _decisionError = null;
+    });
+    try {
+      await _service.confirmFamilyChoice(
+        needId: need.id,
+        expectedVersion: resolution.needVersion,
+        expectedRevisionNo: resolution.revisionNo,
+        productId: productId,
+      );
+      if (!mounted) return;
+      setState(() => _runningCommand = false);
+      // Releer necesidad, stock y candidatos: la convergencia cambió la
+      // identidad, la versión y la revisión, y el conjunto elegible ya no es
+      // el mismo.
+      await _loadNeeds(selectId: need.id);
+    } on SupplyConcurrencyConflict {
+      if (!mounted) return;
+      setState(() {
+        _runningCommand = false;
+        _needsReload = true;
+        _decisionError = _concurrencyMessage;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _runningCommand = false;
+        _decisionError =
+            'No se pudo fijar el producto de la necesidad. Recarga e inténtalo otra vez.';
       });
     }
   }
@@ -831,7 +1203,7 @@ class _IntelligentPurchasingWorkspacePageState
     final sheet = LocalPurchaseSheet(
       productLabel: need.productName ?? need.description,
       suggestedQuantity: need.quantity,
-      unitLabel: _supplyUnitLabel(need.unit, need.quantity),
+      unitLabel: purchaseUnitLabel(need.unit, need.quantity),
       onCancel: _closeLocalPurchaseCapture,
       onContinue: ({
         required String documentKind,
@@ -1269,7 +1641,9 @@ class _IntelligentPurchasingWorkspacePageState
     final need = _selectedNeed;
     return {
       PurchaseStep.need,
-      if (need != null && need.hasConfirmedProduct) PurchaseStep.stock,
+      // El paso de stock existe en los dos carriles: el conjunto elegible de
+      // una necesidad de familia también tiene bodega que revisar.
+      if (need != null) PurchaseStep.stock,
       if (need != null) PurchaseStep.providers,
       if (_plan != null) PurchaseStep.plan,
     };
@@ -1277,6 +1651,7 @@ class _IntelligentPurchasingWorkspacePageState
 
   Map<PurchaseStep, String> get _stepMeta {
     final snapshot = _inventorySnapshot;
+    final resolution = _stockResolution;
     final ranking = _ranking;
     return {
       // Frames 01/19/22/26: el paso 1 describe la actividad, no un recuento.
@@ -1289,6 +1664,14 @@ class _IntelligentPurchasingWorkspacePageState
           snapshot.availableToPromise ?? 0,
           'disponible',
           'disponibles',
+        )
+      // Carril familia: no hay un ATP único que mostrar —sumar variantes no
+      // prueba cobertura—, así que el paso cuenta alternativas elegibles.
+      else if (resolution != null && resolution.isOk)
+        PurchaseStep.stock: _countLabel(
+          resolution.counts.eligible,
+          'alternativa',
+          'alternativas',
         ),
       if (ranking != null)
         PurchaseStep.providers:
@@ -1332,8 +1715,11 @@ class _IntelligentPurchasingWorkspacePageState
     final need = _selectedNeed!;
     return SupplyNeedBar(
       title: need.productName ?? need.description,
-      quantityLabel:
-          '${_formatSupplyQuantity(need.quantity)} ${need.unit == 'unit' ? 'unidades' : need.unit}',
+      // La barra pluralizaba a mano —«1 unidades» con una llanta suelta— y
+      // dejaba pasar crudo cualquier otra unidad. El vocabulario tiene un dueño
+      // único en este módulo y es el mismo que recibe el inspector.
+      quantityLabel: '${_formatSupplyQuantity(need.quantity)} '
+          '${purchaseUnitLabel(need.unit, need.quantity)}',
       // La barra ya imprime la cantidad en su propia columna: repetirla en el
       // resumen dejaba «2 unidades · 2 unidades · Solicitud directa».
       criteriaSummary: _needOrigin(need),
@@ -1428,9 +1814,109 @@ class _IntelligentPurchasingWorkspacePageState
   Widget _buildStockStep() {
     final need = _selectedNeed;
     final snapshot = _inventorySnapshot;
+    final resolution = _stockResolution;
+    final external = _externalCandidates;
     if (need == null) return const SizedBox.shrink();
     if (_loadingDecision) {
       return const Center(child: CircularProgressIndicator());
+    }
+    // Reservar o rechazar stock puede fallar, y el aviso vivía en otro paso:
+    // el operador tocaba «Usar este stock», no pasaba nada visible y creía que
+    // había quedado reservado.
+    final notice = _decisionNotice();
+    // **El mismo contrato que Proveedores.** Sin decisión cargada, este paso
+    // no puede afirmar «no fue posible verificar el stock interno»: eso culpa
+    // a la bodega de un fallo que puede ser de la lectura entera o de una
+    // escritura ajena, y además pisaba «Recargar la necesidad» con un
+    // reintento genérico que reintenta lo que no corresponde.
+    if (_decisionUnavailable) {
+      return ListView(
+        key: const ValueKey('stock-step-no-decision'),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        children: [
+          ...?notice,
+          if (_showsLoadFailure)
+            DecisionLoadFailedSurface(
+              busy: _loadingDecision,
+              onRetry: () => unawaited(_retryDecisionLoad()),
+            ),
+        ],
+      );
+    }
+    // La evaluación técnica no dejó un conjunto que mirar. El estado y su
+    // acción los publica la lectura externa, que es su dueña; repetirlos acá
+    // con otras palabras sería una segunda verdad.
+    if (resolution != null && !resolution.isOk) {
+      if (external != null) {
+        return ListView(
+          key: const ValueKey('stock-step-state'),
+          children: [
+            ...?notice,
+            ExternalCandidatesStateSurface(
+              result: external,
+              onEditNeed: () => setState(() => _step = PurchaseStep.need),
+              onRegisterLocalPurchase: _openLocalPurchaseCapture,
+            ),
+          ],
+        );
+      }
+      return SingleChildScrollView(
+        child: VbNotice(
+          title: 'La necesidad todavía no define un conjunto que revisar',
+          body: 'Edita la necesidad para dejarla dentro de una categoría.',
+          tone: VbNoticeTone.neutral,
+          action: TextButton(
+            onPressed: () => setState(() => _step = PurchaseStep.need),
+            child: const Text('Editar la necesidad'),
+          ),
+        ),
+      );
+    }
+    // **Carril familia: la bodega del conjunto elegible.** Depender del
+    // snapshot exacto dejaba esta pantalla diciendo «no fue posible verificar
+    // el stock interno» cuando el servidor sí había respondido.
+    if (snapshot == null && resolution != null && resolution.isFamilyLane) {
+      if (notice != null) {
+        // El aviso va arriba y la decisión conserva su propio scroll: anidar
+        // dos viewports verticales revienta el layout.
+        return Column(
+          key: const ValueKey('family-stock-with-notice'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: notice,
+              ),
+            ),
+            // La decisión sigue disponible debajo del aviso: un fallo de
+            // comando no borra la bodega que sí se leyó.
+            Expanded(
+              child: FamilyStockOptions(
+                resolution: resolution,
+                busy: _runningCommand || _refreshingResults,
+                onChooseProduct: (option) => unawaited(
+                  _chooseFamilyProductId(option.productId),
+                ),
+                onShowMore: () => unawaited(_showMoreFamilyStock()),
+                onCompareProviders: () =>
+                    setState(() => _step = PurchaseStep.providers),
+              ),
+            ),
+          ],
+        );
+      }
+      return FamilyStockOptions(
+        resolution: resolution,
+        busy: _runningCommand || _refreshingResults,
+        onChooseProduct: (option) => unawaited(
+          _chooseFamilyProductId(option.productId),
+        ),
+        onShowMore: () => unawaited(_showMoreFamilyStock()),
+        onCompareProviders: () =>
+            setState(() => _step = PurchaseStep.providers),
+      );
     }
     if (snapshot == null) {
       return SingleChildScrollView(
@@ -1447,7 +1933,7 @@ class _IntelligentPurchasingWorkspacePageState
     }
     final compact = MediaQuery.sizeOf(context).width <
         ResponsiveBreakpoints.phoneMaxExclusive;
-    return InternalStockSurface(
+    final stockSurface = InternalStockSurface(
       components: snapshot.components,
       requestedQuantity: need.quantity,
       compact: compact,
@@ -1458,6 +1944,21 @@ class _IntelligentPurchasingWorkspacePageState
       rejectionReason: need.internalStockRejectionReason,
       onAssign: _assignStock,
       onCompareProviders: () => setState(() => _step = PurchaseStep.providers),
+    );
+    if (notice == null) return stockSurface;
+    return Column(
+      key: const ValueKey('exact-stock-with-notice'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: notice,
+          ),
+        ),
+        Expanded(child: stockSurface),
+      ],
     );
   }
 
@@ -1811,12 +2312,18 @@ class _IntelligentPurchasingWorkspacePageState
     );
   }
 
+  /// El candidato abierto, **de cualquiera de los dos grupos**.
+  ///
+  /// Buscar sólo en el ranking accionable dejaba a los no verificados sin
+  /// inspector: se listaban, se podían tocar, y no pasaba nada. Un grupo que
+  /// se muestra pero no se puede abrir es peor que no mostrarlo.
   PurchaseCandidate? get _inspectedCandidate {
     final id = _inspectedCandidateId;
+    if (id == null) return null;
     final ranking = _ranking;
-    if (id == null || ranking == null) return null;
+    final unverified = _externalCandidates?.unverifiedItems ?? const [];
     return _firstWhereOrNull(
-      ranking.items,
+      [...?ranking?.items, ...unverified],
       (candidate) => candidate.candidateId == id,
     );
   }
@@ -1829,13 +2336,23 @@ class _IntelligentPurchasingWorkspacePageState
             _plan!.lines,
             (line) => line.sourceNeedId == need.id,
           );
+    final quantity = need?.quantity ?? 1;
     return CandidateInspectorPanel(
       candidate: candidate,
-      quantity: need?.quantity ?? 1,
+      quantity: quantity,
+      // El vocabulario de unidades tiene un dueño único en este módulo; el
+      // inspector lo recibe concordado en vez de asumir «u.».
+      unitLabel: purchaseUnitLabel(need?.unit ?? 'unit', quantity),
       adding: _addingCandidateId == candidate.candidateId,
       alreadyInPlan: plannedLine?.candidateId == candidate.candidateId,
       onClose: () => setState(() => _inspectedCandidateId = null),
       onAddToPlan: () => _addCandidateToPlan(candidate),
+      // Carril familia: la necesidad no tiene identidad, así que el pie ofrece
+      // «Elegir producto». «Agregar al plan» aparece recién después de
+      // confirmar y releer, porque son dos escrituras distintas.
+      onChooseProduct: need != null && !need.hasConfirmedProduct
+          ? () => unawaited(_chooseFamilyProduct(candidate))
+          : null,
       onOpenSupplier: candidate.supplierWebsite == null
           ? null
           : () => _openSupplier(
@@ -2121,7 +2638,7 @@ class _IntelligentPurchasingWorkspacePageState
         .map(
           (line) =>
               '${line.description} (${_formatSupplyQuantity(line.quantity)} '
-              '${_supplyUnitLabel(line.unit, line.quantity)})',
+              '${purchaseUnitLabel(line.unit, line.quantity)})',
         )
         .join('; ');
     return 'Entendí $parts. Priorizando ${_supplyProfileLabel(draft.profile)}.';
@@ -3180,7 +3697,7 @@ class _IntelligentPurchasingWorkspacePageState
               const SizedBox(width: 12),
               Text(
                 '${_formatSupplyQuantity(line.quantity)} '
-                '${_supplyUnitLabel(line.unit, line.quantity)}',
+                '${purchaseUnitLabel(line.unit, line.quantity)}',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontFamily: 'IBM Plex Mono',
                   color: theme.colorScheme.onSurfaceVariant,
@@ -3284,7 +3801,7 @@ class _IntelligentPurchasingWorkspacePageState
               ? 'sin SKU exacto: se comparará por descripción'
               : need.description,
           quantity: need.quantity.round(),
-          unitLabel: _supplyUnitLabel(need.unit, need.quantity),
+          unitLabel: purchaseUnitLabel(need.unit, need.quantity),
           precisionBlocker: need.hasConfirmedProduct
               ? null
               : 'falta confirmar el producto exacto',
@@ -3584,25 +4101,53 @@ class _IntelligentPurchasingWorkspacePageState
     if (_loadingDecision) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (!need.hasConfirmedProduct) {
-      // Antes se estiraba de borde a borde: una decisión de una sola cosa
-      // ocupando 1.300 px de ancho. Va en la columna angosta, centrada, igual
-      // que el resto del recorrido.
-      return ListView(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: PurchaseSurfaceGeometry.narrowColumnMax,
-              ),
-              child: _buildIdentityResolution(need),
-            ),
-          ),
-        ],
-      );
+    // **El carril familia resuelve la identidad eligiendo un candidato.**
+    // Este paso solía cortar en seco ante cualquier necesidad sin producto
+    // confirmado, y ése era el gate que dejaba a la familia sin ninguna
+    // superficie externa. Cuando hay candidatos que comparar, se comparan: el
+    // pie de cada uno ofrece «Elegir producto», que es la misma decisión de
+    // identidad, tomada con la evidencia a la vista.
+    final external = _externalCandidates;
+    final hasChoosableCandidates =
+        external != null && external.isSuccess && external.hasAnyCandidate;
+    //
+    // La vía manual no se pierde: cuando no hay ningún candidato que elegir,
+    // el panel de identidad viaja al final de la misma columna, debajo del
+    // estado que el servidor devolvió.
+    return _buildCandidateSection(
+      phone: phone,
+      identityFallback:
+          _identityFallbackApplies(need, external) && !hasChoosableCandidates
+              ? _buildIdentityResolution(need)
+              : null,
+    );
+  }
+
+  /// Fijar el producto exacto sólo es una salida donde de verdad lo es.
+  ///
+  /// Una necesidad **cerrada** no se resuelve eligiendo producto: ya está
+  /// cubierta o cancelada, y ofrecer «Falta confirmar qué producto es» debajo
+  /// de «Esta necesidad ya está resuelta» son dos afirmaciones que se
+  /// contradicen en la misma pantalla. Y con `no_eligible_products` el
+  /// catálogo entero quedó fuera por contradecir la ficha: lo que falla son
+  /// los criterios, no la identidad.
+  ///
+  /// En los demás estados abiertos sí se conserva, porque mientras no exista
+  /// el refinador técnico es la única salida que le queda al operador.
+  bool _identityFallbackApplies(
+    SupplyNeed need,
+    SupplyExternalCandidates? external,
+  ) {
+    if (need.hasConfirmedProduct) return false;
+    if (need.supplyState != 'open') return false;
+    // Una decisión que no se cargó no autoriza a proponer resolver la
+    // identidad: da igual si faltó por fallo o por conflicto.
+    if (_decisionUnavailable) return false;
+    const closedToIdentity = {'supply_closed', 'no_eligible_products'};
+    if (external != null && closedToIdentity.contains(external.status)) {
+      return false;
     }
-    return _buildCandidateSection(phone: phone);
+    return true;
   }
 
   /// Confirmar qué producto es: **un** panel con la explicación, las dos vías
@@ -3697,19 +4242,30 @@ class _IntelligentPurchasingWorkspacePageState
     );
   }
 
-  bool _shouldShowCandidates(SupplyNeed need) {
-    if (need.supplyState != 'open') return false;
-    final snapshot = _inventorySnapshot;
-    return snapshot != null &&
-        (!snapshot.assignable || need.internalStockRejectionReason != null);
-  }
+  /// Un choque de concurrencia se recupera releyendo, nunca reintentando con
+  /// la versión vieja: esa versión ya describe otra cosa.
+  static const String _concurrencyMessage =
+      'La necesidad cambió mientras la revisabas. Recárgala para trabajar '
+      'sobre la versión vigente.';
 
-  Widget _buildCandidateSection({required bool phone}) {
+  Widget _buildCandidateSection({
+    required bool phone,
+    Widget? identityFallback,
+  }) {
     final ranking = _ranking;
     final need = _selectedNeed;
-    final snapshot = _inventorySnapshot;
-    final blockedByStock =
-        need != null && snapshot != null && !_shouldShowCandidates(need);
+    final external = _externalCandidates;
+    final resolution = _stockResolution;
+    // **Bloqueo de stock significa stock, y nada más.** Antes esto era «no se
+    // muestran candidatos», así que `needs_refinement`, `identity_unresolved`
+    // y `supply_closed` se rotulaban como «el stock interno todavía puede
+    // cubrir esta necesidad» —una afirmación falsa sobre la bodega y, peor,
+    // la acción equivocada—. Ahora cada estado llega a su propia superficie.
+    final blockedByStock = need != null &&
+        resolution != null &&
+        resolution.isOk &&
+        resolution.blocksExternal &&
+        !resolution.externalAllowed;
     final width = MediaQuery.sizeOf(context).width;
     final usableWidth =
         width - (_inspectedCandidate != null ? _inspectorWidth : 0);
@@ -3760,10 +4316,8 @@ class _IntelligentPurchasingWorkspacePageState
             // Frames 03/26 en ancho, 16/20 en teléfono.
             ProviderResultControls(
               compact: phone,
-              enabled: !_loadingDecision,
-              profileValue: _rankingProfile,
-              profileOptions: _rankingProfileOptions,
-              onProfileChanged: _changeRankingProfile,
+              enabled: !_loadingDecision && !_refreshingResults,
+              profileLabel: _serverProfileLabel,
               viewValue: _tableView,
               viewOptions: _tableViewOptions,
               onViewChanged: (view) => setState(() => _tableView = view),
@@ -3778,6 +4332,43 @@ class _IntelligentPurchasingWorkspacePageState
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
         ),
+        // Qué objetivo está reordenando la lista. Sin esto, un candidato que
+        // sube por la marca preferida se ve como un ranking caprichoso.
+        if (_commercialTarget != null) ...[
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 10,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                _commercialTargetSentence ??
+                    'Sin objetivo del taller: manda el ranking histórico.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              PurchaseInlineAction(
+                key: const ValueKey('edit-commercial-target'),
+                label: _commercialTarget!.hasTarget
+                    ? 'Cambiar objetivo'
+                    : 'Fijar objetivo',
+                onPressed: _loadingDecision || _runningCommand
+                    ? null
+                    : () => setState(() => _editingCommercialTarget = true),
+              ),
+            ],
+          ),
+        ],
+        if (_editingCommercialTarget && _commercialTarget != null) ...[
+          const SizedBox(height: 10),
+          CommercialTargetEditor(
+            target: _commercialTarget!,
+            busy: _runningCommand,
+            onCancel: () => setState(() => _editingCommercialTarget = false),
+            onSave: (values) => unawaited(_saveCommercialTarget(values)),
+          ),
+        ],
         const SizedBox(height: 12),
         // Frame 09 — el análisis quedó a medias. Va antes de los resultados y
         // conserva lo ya revisado.
@@ -3790,7 +4381,7 @@ class _IntelligentPurchasingWorkspacePageState
                 .map((candidate) => candidate.supplierName)
                 .toSet()
                 .toList(growable: false),
-            busy: _loadingDecision,
+            busy: _loadingDecision || _refreshingResults,
             onContinue: () => unawaited(_continueAnalysis()),
             technicalDetail: ranking?.hasMore == true
                 ? 'El ranking se cortó en $_rankingLimit opciones y el servidor '
@@ -3799,7 +4390,40 @@ class _IntelligentPurchasingWorkspacePageState
                 : 'Las opciones sin evaluar conservan su evidencia previa; '
                     'continuar no descarta lo ya comparado.',
           ),
-        if (blockedByStock) ...[
+        // **Todo error del paso activo se ve, y una sola vez.** Antes el aviso
+        // sólo aparecía para conflicto o recarga incremental: un comando que
+        // fallaba —fijar el producto, guardar el objetivo, agregar al plan—
+        // dejaba el mensaje escrito en el estado y ninguna pantalla lo
+        // mostraba, así que el operador veía la decisión intacta y creía que
+        // su acción había pasado.
+        ...?_decisionNotice(),
+        // **Sin decisión cargada no se concluye nada.** Ni «no hay compras
+        // comparables», ni «falta confirmar qué producto es»: las dos son
+        // afirmaciones sobre datos que esta pantalla nunca tuvo. El fallo
+        // genérico trae su propia superficie con su reintento; el conflicto ya
+        // se dijo arriba con «Recargar la necesidad» y no necesita una segunda
+        // banda que repita el mismo problema.
+        if (_showsLoadFailure)
+          DecisionLoadFailedSurface(
+            busy: _loadingDecision,
+            onRetry: () => unawaited(_retryDecisionLoad()),
+          )
+        else if (_decisionUnavailable)
+          const SizedBox.shrink()
+        // El servidor cerró el paso externo. Es un estado con su acción, no
+        // «no se pudo completar el análisis».
+        else if (_stockFirstRequired) ...[
+          StockFirstRequiredSurface(
+            busy: _runningCommand,
+            onExplainRejection: () =>
+                setState(() => _showStockRejection = true),
+            onReviewStock: () => setState(() => _step = PurchaseStep.stock),
+          ),
+          if (_showStockRejection) ...[
+            const SizedBox(height: 12),
+            _buildStockRejectionInline(),
+          ],
+        ] else if (blockedByStock) ...[
           VbNotice(
             title: 'El stock interno todavía puede cubrir esta necesidad',
             body:
@@ -3814,7 +4438,21 @@ class _IntelligentPurchasingWorkspacePageState
             const SizedBox(height: 12),
             _buildStockRejectionInline(),
           ],
-        ] else if (ranking == null || ranking.items.isEmpty)
+        ]
+        // Los siete estados en que no se propone comprar tienen cada uno su
+        // causa y su acción. Colapsarlos en «sin resultados» le quitaría al
+        // operador justamente lo que tiene que hacer después.
+        else if (external != null && !external.isSuccess)
+          ExternalCandidatesStateSurface(
+            result: external,
+            onEditNeed: () => setState(() => _step = PurchaseStep.need),
+            onRegisterLocalPurchase: _openLocalPurchaseCapture,
+          )
+        // El vacío legado sólo aplica cuando **tampoco** hay sin verificar:
+        // un conjunto que sólo trae opciones por verificar no es «no hay
+        // compras comparables», y su grupo se dibuja más abajo.
+        else if ((ranking == null || ranking.items.isEmpty) &&
+            (external == null || external.unverifiedItems.isEmpty))
           // Superficie de decisión alineada a la izquierda, sin isla flotante.
           Container(
             width: double.infinity,
@@ -3871,8 +4509,93 @@ class _IntelligentPurchasingWorkspacePageState
               () => _inspectedCandidateId = candidate.candidateId,
             ),
           ),
+        // **Grupo aparte, rotulado.** «No lo sé» no es «no cumple»: los
+        // candidatos que el ERP no pudo verificar se muestran, con su propia
+        // página, y nunca mezclados con los accionables.
+        if (!_stockFirstRequired &&
+            external != null &&
+            external.unverifiedItems.isNotEmpty) ...[
+          UnverifiedCandidatesBand(
+            count: external.counts.unverified,
+            page: external.unverifiedPage,
+            busy: _loadingDecision || _refreshingResults,
+            // Su propia página: pedir más no verificados no recorta ni
+            // reordena el grupo accionable, igual que en el servidor.
+            onShowMore:
+                external.unverifiedPage.hasMore ? _showMoreUnverified : null,
+          ),
+          if (useCards)
+            for (final candidate in external.unverifiedItems)
+              ProviderCandidateCard(
+                candidate: candidate,
+                selected: _inspectedCandidateId == candidate.candidateId,
+                onSelect: () => setState(
+                  () => _inspectedCandidateId = candidate.candidateId,
+                ),
+              )
+          else
+            ProviderCandidatesTable(
+              candidates: external.unverifiedItems,
+              selectedCandidateId: _inspectedCandidateId,
+              showOptionalColumns: showOptionalColumns,
+              onSelect: (candidate) => setState(
+                () => _inspectedCandidateId = candidate.candidateId,
+              ),
+            ),
+        ],
+        // La vía manual de identidad, cuando no hay candidato que elegir. Va
+        // en la columna angosta y centrada, igual que el resto del recorrido:
+        // una decisión de una sola cosa no ocupa 1.300 px.
+        if (identityFallback != null) ...[
+          const SizedBox(height: 14),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: PurchaseSurfaceGeometry.narrowColumnMax,
+              ),
+              child: identityFallback,
+            ),
+          ),
+        ],
       ],
     );
+  }
+
+  /// El objetivo comercial vigente, dicho en una línea.
+  ///
+  /// La moneda es la **de la revisión** que fijó el tope, no la del taller de
+  /// hoy: si el taller cambió de moneda, releer el tope en la de hoy lo
+  /// reinterpretaría y nadie lo notaría.
+  String? get _commercialTargetSentence {
+    final target = _commercialTarget;
+    if (target == null || !target.hasTarget) return null;
+    final parts = <String>[];
+    final values = target.target;
+    if (values.gama != null) parts.add('gama ${values.gama}');
+    if (values.preferredBrandId != null) {
+      parts.add(
+        target.preferredBrandAvailable == false
+            ? 'marca preferida (ya no disponible)'
+            : 'marca preferida',
+      );
+    }
+    if (values.maxLandedUnitCostNet != null) {
+      parts.add(
+        'tope ${target.currencyCode} '
+        '${values.maxLandedUnitCostNet!.toStringAsFixed(0)}',
+      );
+    }
+    if (values.minGrossMarginRatio != null) {
+      parts.add(
+        'margen mínimo '
+        '${(values.minGrossMarginRatio! * 100).toStringAsFixed(0)}%',
+      );
+    }
+    if (parts.isEmpty) return null;
+    final rebased = target.currencyRebased
+        ? ' El taller opera hoy en ${target.tenantCurrencyCode}.'
+        : '';
+    return 'Objetivo del taller: ${parts.join(' · ')}.$rebased';
   }
 
   /// Corte base del ranking, el mismo que usa el servicio por omisión.
@@ -3880,6 +4603,17 @@ class _IntelligentPurchasingWorkspacePageState
 
   /// Corte ampliado que pide «Continuar análisis» (frame 09).
   static const int _rankingExtendedLimit = 25;
+
+  /// Corte base del grupo sin verificar. Es su propia página: ampliarla no
+  /// toca la de los accionables, igual que en el servidor.
+  static const int _unverifiedBaseLimit = 5;
+
+  /// Corte base de la bodega del carril familia, y cuánto crece cada vez.
+  static const int _stockBaseLimit = 12;
+  static const int _stockStep = 12;
+
+  /// Cuánto crece ese grupo cada vez que el operador pide ver más.
+  static const int _unverifiedStep = 5;
 
   /// Candidatos que el servidor devolvió sin evaluar.
   ///
@@ -3905,13 +4639,45 @@ class _IntelligentPurchasingWorkspacePageState
   List<PurchaseCandidate> get _visibleCandidates {
     final items = _ranking?.items ?? const <PurchaseCandidate>[];
     if (!_hidingUnconfirmedCompatibility) return items;
-    // «Compatibilidad confirmada» significa evidencia completa. `partial`
-    // («Revisar»), `weak` y `unevaluated` son justamente los estados en que la
-    // compatibilidad está por confirmar: dejar pasar `partial` haría que el
-    // filtro no cumpliera lo que su rótulo promete.
-    return items
-        .where((candidate) => candidate.evidenceQuality == 'complete')
-        .toList(growable: false);
+    return items.where(_compatibilityIsConfirmed).toList(growable: false);
+  }
+
+  /// **«Compatibilidad confirmada» es una pregunta técnica.**
+  ///
+  /// El filtro leía `evidenceQuality`, que mide qué tan firme es el historial
+  /// económico —costo, flete, recencia—. Con eso, un candidato con factura
+  /// impecable pasaba el filtro de compatibilidad sin que nadie hubiera
+  /// comprobado que calza, y uno que la ficha confirma quedaba fuera por tener
+  /// una compra vieja. Son dos preguntas distintas y el rótulo promete la
+  /// técnica.
+  ///
+  /// Para el candidato de la fase B2 sólo `strong` está confirmado contra la
+  /// ficha: `weak` coincide por el nombre, `no_criteria` no tuvo nada que
+  /// comparar y `unverified` no se pudo verificar —y además viaja en su propio
+  /// grupo—. El candidato histórico, que no sabe nada de `matchState`,
+  /// conserva su lectura económica de siempre, dicha por separado.
+  static bool _compatibilityIsConfirmed(PurchaseCandidate candidate) {
+    if (candidate is SupplyExternalCandidate) {
+      return candidate.matchState == 'strong';
+    }
+    return candidate.evidenceQuality == 'complete';
+  }
+
+  /// Por qué **este** candidato queda fuera del filtro, en su propio idioma.
+  static String _hiddenReason(PurchaseCandidate candidate) {
+    if (candidate is SupplyExternalCandidate) {
+      return switch (candidate.matchState) {
+        'weak' => 'coincide por el nombre, no por la ficha',
+        'no_criteria' => 'la petición no traía criterios que comparar',
+        'unverified' => 'la ficha no alcanza para verificarlo',
+        _ => 'sin confirmación técnica',
+      };
+    }
+    return switch (candidate.evidenceQuality) {
+      'partial' => 'evidencia económica por revisar',
+      'unevaluated' => 'sin evaluar',
+      _ => 'evidencia económica débil',
+    };
   }
 
   /// Existen opciones, pero el filtro activo las esconde todas (frame 10).
@@ -3922,22 +4688,16 @@ class _IntelligentPurchasingWorkspacePageState
   String get _noMatchCause {
     final total = _ranking?.items.length ?? 0;
     return 'Existen $total ${total == 1 ? 'opción' : 'opciones'}, pero el filtro '
-        'activo las esconde todas: «sólo compatibilidad confirmada» descarta a '
-        'quien no tiene evidencia suficiente. Los criterios de la petición no '
+        'activo las esconde todas: «sólo compatibilidad confirmada» deja pasar '
+        'únicamente lo que la ficha confirma. Los criterios de la petición no '
         'cambiaron y ninguna opción quedó descartada por incompatibilidad '
         'técnica.';
   }
 
   List<String> get _noMatchExplanations => (_ranking?.items ?? const [])
-      .where((candidate) => candidate.evidenceQuality != 'complete')
-      .map(
-        (candidate) =>
-            '${candidate.productName} — ${switch (candidate.evidenceQuality) {
-          'partial' => 'por revisar',
-          'unevaluated' => 'sin evaluar',
-          _ => 'evidencia débil',
-        }}',
-      )
+      .where((candidate) => !_compatibilityIsConfirmed(candidate))
+      .map((candidate) => '${candidate.productName} — '
+          '${_hiddenReason(candidate)}')
       .toList(growable: false);
 
   /// «Continuar análisis» (frame 09): vuelve a pedir el ranking con el corte
@@ -3945,10 +4705,12 @@ class _IntelligentPurchasingWorkspacePageState
   /// y paso; no descarta lo ya revisado.
   Future<void> _continueAnalysis() async {
     final need = _selectedNeed;
-    if (need == null || _loadingDecision) return;
+    if (need == null || _loadingDecision || _refreshingResults) return;
     if (_rankingLimit >= _rankingExtendedLimit && !_analysisIsPartial) return;
     setState(() => _rankingLimit = _rankingExtendedLimit);
-    await _loadDecision(need, resetRankingLimit: false);
+    // Incremental: continuar el análisis amplía lo comparado, no lo reemplaza
+    // por un spinner.
+    await _loadDecision(need, resetRankingLimit: false, incremental: true);
   }
 
   /// «Quitar filtros» (frame 10): devuelve la vista a su estado sin filtrar.
@@ -4051,7 +4813,16 @@ class _IntelligentPurchasingWorkspacePageState
         if (_decisionError != null) ...[
           VbNotice(
             title: _decisionError!,
-            tone: VbNoticeTone.danger,
+            tone: _needsReload ? VbNoticeTone.warning : VbNoticeTone.danger,
+            // Un 40001 no se reintenta con la versión vieja: se relee. La
+            // acción está en el aviso porque es la única salida.
+            action: _needsReload
+                ? TextButton(
+                    key: const ValueKey('reload-after-conflict'),
+                    onPressed: _reloadAfterConflict,
+                    child: const Text('Recargar la necesidad'),
+                  )
+                : null,
           ),
           const SizedBox(height: 12),
         ],
@@ -4069,7 +4840,11 @@ class _IntelligentPurchasingWorkspacePageState
                 )
               : ListView.separated(
                   itemCount: plan.supplierGroups.length,
-                  separatorBuilder: (_, __) => const Divider(height: 24),
+                  // Cada proveedor ya es una tarjeta cerrada; una raya entre
+                  // dos tarjetas es un borde de más. La separación es la del
+                  // prototipo (`gap:11px`).
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: PurchaseMetrics.stageGap),
                   itemBuilder: (context, index) {
                     final group = plan.supplierGroups[index];
                     final lines = plan.lines
@@ -4077,7 +4852,7 @@ class _IntelligentPurchasingWorkspacePageState
                             line.supplierName == group.supplierName &&
                             line.currency == group.currency)
                         .toList(growable: false);
-                    return _PurchasePlanGroup(
+                    return PurchasePlanGroup(
                       group: group,
                       lines: lines,
                       removingLineId: _removingPlanLineId,
@@ -4366,287 +5141,6 @@ class _ScenarioSubtotalText extends StatelessWidget {
   }
 }
 
-class _PurchasePlanGroup extends StatelessWidget {
-  const _PurchasePlanGroup({
-    required this.group,
-    required this.lines,
-    required this.removingLineId,
-    required this.updatingLineId,
-    required this.editingLineId,
-    required this.quantityController,
-    required this.quantityError,
-    required this.onEditQuantity,
-    required this.onCancelQuantity,
-    required this.onCommitQuantity,
-    required this.onStepQuantity,
-    required this.onRemove,
-  });
-
-  /// Línea cuya cantidad se edita en su propia fila, sin superficie flotante.
-  final String? editingLineId;
-  final TextEditingController quantityController;
-  final String? quantityError;
-  final VoidCallback onCancelQuantity;
-  final ValueChanged<PurchasePlanLine> onCommitQuantity;
-
-  final PurchasePlanSupplierGroup group;
-  final List<PurchasePlanLine> lines;
-  final String? removingLineId;
-  final String? updatingLineId;
-  final ValueChanged<PurchasePlanLine> onEditQuantity;
-  final ValueChanged<PurchasePlanLine> onRemove;
-
-  /// Frame 24 — el stepper `− n +` corrige la cantidad sin abrir el editor.
-  final void Function(PurchasePlanLine line, int quantity) onStepQuantity;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Expanded(
-                        child: Text(group.supplierName,
-                            style: Theme.of(context).textTheme.titleMedium),
-                      ),
-                      const SizedBox(width: 10),
-                      // Frames 07/24: el estado de evidencia del grupo va como
-                      // texto a la derecha del proveedor, nunca como cápsula.
-                      // Una línea sin costo aterrizado es evidencia incompleta:
-                      // no se puede comparar como cifra firme.
-                      PlanGroupEvidenceText(
-                        complete: lines.isNotEmpty &&
-                            lines.every(
-                              (line) => line.landedUnitCostNet != null,
-                            ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${group.lineCount} ${group.lineCount == 1 ? 'producto' : 'productos'} · disponibilidad por confirmar',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            if (group.currency == 'CLP')
-              VbMoneyText(group.historicalLandedSubtotalNet)
-            else
-              Text(
-                '${group.currency} ${group.historicalLandedSubtotalNet?.toStringAsFixed(2) ?? '—'}',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ...lines.map(
-          (line) => editingLineId == line.id
-              ? _PlanQuantityInlineEditor(
-                  key: ValueKey('plan-quantity-inline-${line.id}'),
-                  line: line,
-                  controller: quantityController,
-                  error: quantityError,
-                  onCancel: onCancelQuantity,
-                  onCommit: () => onCommitQuantity(line),
-                )
-              : _PlanLineRow(
-                  line: line,
-                  busy: removingLineId != null || updatingLineId != null,
-                  updating: updatingLineId == line.id,
-                  removing: removingLineId == line.id,
-                  onEditQuantity: () => onEditQuantity(line),
-                  onStepQuantity: (quantity) => onStepQuantity(line, quantity),
-                  onRemove: () => onRemove(line),
-                ),
-        ),
-        Text(
-          'Subtotal histórico con fletes ya atribuidos por línea; no supone ahorro adicional por consolidar.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Línea del plan — frames 07 y 24.
-///
-/// Reemplaza al `ListTile` que ponía precio y dos `IconButton` dentro de
-/// `trailing`: ese bloque tiene ancho intrínseco y desbordaba el panel en
-/// cuanto el nombre del producto crecía o el inspector estrechaba la columna.
-/// Aquí la identidad es la única pieza elástica y el resto reflowa.
-class _PlanLineRow extends StatelessWidget {
-  const _PlanLineRow({
-    required this.line,
-    required this.busy,
-    required this.updating,
-    required this.removing,
-    required this.onEditQuantity,
-    required this.onStepQuantity,
-    required this.onRemove,
-  });
-
-  final PurchasePlanLine line;
-  final bool busy;
-  final bool updating;
-  final bool removing;
-  final VoidCallback onEditQuantity;
-  final ValueChanged<int> onStepQuantity;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    // El ancho que manda es el del panel del plan, no el de la ventana: con el
-    // inspector abierto la columna se estrecha muy por debajo del breakpoint de
-    // teléfono y la fila tiene que apilarse igual.
-    return LayoutBuilder(
-      builder: (context, constraints) =>
-          _build(context, compact: constraints.maxWidth < 520),
-    );
-  }
-
-  Widget _build(BuildContext context, {required bool compact}) {
-    final theme = Theme.of(context);
-    final subtotal = line.landedUnitCostNet == null
-        ? null
-        : line.landedUnitCostNet! * line.quantity;
-
-    final identity = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          line.productName ?? 'Producto del plan',
-          style: theme.textTheme.titleSmall,
-        ),
-        const SizedBox(height: 2),
-        Text(
-          line.landedUnitCostNet == null
-              // Sin costo aterrizado la línea no tiene evidencia comparable:
-              // se dice, no se rellena con un número.
-              ? 'evidencia incompleta · sin costo aterrizado'
-              : 'evidencia completa',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        PlanLineEvidenceNote(
-          lineId: line.id,
-          supplierAvailability: line.supplierAvailability,
-          currency: line.currency,
-          landedUnitCostNet: line.landedUnitCostNet,
-          projectedGrossMarginRatio: line.projectedGrossMarginRatio,
-        ),
-      ],
-    );
-
-    final quantity = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        PurchaseQuantityStepper(
-          value: line.quantity.round(),
-          enabled: !busy,
-          unitLabel: _supplyUnitLabel(line.unit, line.quantity),
-          semanticsLabel:
-              'Cantidad de ${line.productName ?? 'la línea del plan'}',
-          onChanged: onStepQuantity,
-        ),
-        IconButton(
-          tooltip: 'Editar cantidad',
-          visualDensity: VisualDensity.compact,
-          onPressed: busy ? null : onEditQuantity,
-          icon: updating
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.edit_outlined, size: 16),
-        ),
-      ],
-    );
-
-    final money = Column(
-      crossAxisAlignment:
-          compact ? CrossAxisAlignment.start : CrossAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (line.currency == 'CLP')
-          VbMoneyText(subtotal)
-        else
-          Text(
-            '${line.currency} ${subtotal?.toStringAsFixed(2) ?? '—'}',
-            style: theme.textTheme.titleSmall,
-          ),
-        if (line.landedUnitCostNet != null)
-          Text(
-            line.currency == 'CLP'
-                ? '\$${line.landedUnitCostNet!.round()} c/u'
-                : '${line.currency} ${line.landedUnitCostNet!.toStringAsFixed(2)} c/u',
-            style: PurchaseType.label.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-      ],
-    );
-
-    final remove = IconButton(
-      tooltip: 'Quitar del plan',
-      visualDensity: VisualDensity.compact,
-      onPressed: busy ? null : onRemove,
-      icon: removing
-          ? const SizedBox.square(
-              dimension: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.close, size: 16),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: compact
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [Expanded(child: identity), remove],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [quantity, money],
-                ),
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: identity),
-                const SizedBox(width: 12),
-                quantity,
-                const SizedBox(width: 12),
-                money,
-                remove,
-              ],
-            ),
-    );
-  }
-}
-
 T? _firstWhereOrNull<T>(Iterable<T> values, bool Function(T) test) {
   for (final value in values) {
     if (test(value)) return value;
@@ -4657,27 +5151,6 @@ T? _firstWhereOrNull<T>(Iterable<T> values, bool Function(T) test) {
 String _formatSupplyQuantity(double value) {
   if (value == value.truncateToDouble()) return value.toInt().toString();
   return value.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '');
-}
-
-String _supplyUnitLabel(String raw, double quantity) {
-  final singular = quantity == 1;
-  return switch (raw.trim().toLowerCase()) {
-    'unit' ||
-    'units' ||
-    'unidad' ||
-    'unidades' =>
-      singular ? 'unidad' : 'unidades',
-    'pair' || 'pairs' || 'par' || 'pares' => singular ? 'par' : 'pares',
-    'set' || 'sets' || 'juego' || 'juegos' => singular ? 'juego' : 'juegos',
-    'meter' ||
-    'meters' ||
-    'metre' ||
-    'metres' ||
-    'metro' ||
-    'metros' =>
-      singular ? 'metro' : 'metros',
-    _ => raw.trim(),
-  };
 }
 
 String _supplyUnitEditorValue(String raw) => switch (raw.trim().toLowerCase()) {
@@ -4849,96 +5322,3 @@ class _OpenNeedRow extends StatelessWidget {
 ///
 /// Sustituye la fila en su sitio y a su mismo ancho: no hay tarjeta flotante,
 /// ni centrado, ni bloqueo de la navegación mientras se corrige un número.
-class _PlanQuantityInlineEditor extends StatelessWidget {
-  const _PlanQuantityInlineEditor({
-    super.key,
-    required this.line,
-    required this.controller,
-    required this.error,
-    required this.onCancel,
-    required this.onCommit,
-  });
-
-  final PurchasePlanLine line;
-  final TextEditingController controller;
-  final String? error;
-  final VoidCallback onCancel;
-  final VoidCallback onCommit;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final compact = MediaQuery.sizeOf(context).width <
-        ResponsiveBreakpoints.phoneMaxExclusive;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        border: Border(
-          left: BorderSide(color: theme.colorScheme.primary, width: 3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            line.productName ?? 'Producto del plan',
-            style: theme.textTheme.titleSmall,
-          ),
-          const SizedBox(height: 10),
-          Flex(
-            direction: compact ? Axis.vertical : Axis.horizontal,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: compact ? double.infinity : 160,
-                child: TextField(
-                  key: const ValueKey('purchase-plan-quantity-field'),
-                  controller: controller,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Cantidad',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  onSubmitted: (_) => onCommit(),
-                ),
-              ),
-              SizedBox(width: compact ? 0 : 12, height: compact ? 10 : 0),
-              SizedBox(
-                height: 40,
-                width: compact ? double.infinity : null,
-                child: FilledButton(
-                  key: const ValueKey('save-purchase-plan-quantity'),
-                  onPressed: onCommit,
-                  child: const Text('Guardar'),
-                ),
-              ),
-              SizedBox(width: compact ? 0 : 8, height: compact ? 8 : 0),
-              SizedBox(
-                height: 40,
-                width: compact ? double.infinity : null,
-                child: TextButton(
-                  key: const ValueKey('cancel-purchase-plan-quantity'),
-                  onPressed: onCancel,
-                  child: const Text('Cancelar'),
-                ),
-              ),
-            ],
-          ),
-          if (error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              error!,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}

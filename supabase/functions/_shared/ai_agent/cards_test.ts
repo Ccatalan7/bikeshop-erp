@@ -283,12 +283,12 @@ Deno.test("inventory search projects one exact compact result set instead of arb
   );
   assertEquals(
     autoOpenListAnswer(cards, true),
-    'Abrí 2 resultados coincidentes en Inventario con el filtro “En stock · 29"”.',
+    'Abrí 2 resultados coincidentes para “camara 29” en Inventario con el filtro “En stock · 29"”.',
     "model prose cannot diverge from an explicit list action",
   );
   assertEquals(
     autoOpenListAnswer(cards, false),
-    'Encontré 2 resultados coincidentes en Inventario con el filtro “En stock · 29"”. Usa la tarjeta para abrirlos.',
+    'Encontré 2 resultados coincidentes para “camara 29” en Inventario con el filtro “En stock · 29"”. Usa la tarjeta para abrirlos.',
     "an older client gets truthful server-owned click guidance",
   );
   validateStoredCards(cards);
@@ -336,7 +336,7 @@ Deno.test("inventory cards preserve operational thresholds in the visible filter
   );
   assertEquals(
     autoOpenListAnswer(cards, true),
-    'Abrí 1 resultado coincidente en Inventario con el filtro “En stock · 29" · Stock > 5”.',
+    'Abrí 1 resultado coincidente para “Cámaras” en Inventario con el filtro “En stock · 29" · Stock > 5”.',
     "the server-owned answer cannot hide or weaken an exact numeric threshold",
   );
 
@@ -412,7 +412,7 @@ Deno.test("inventory empty and truncated result sets remain truthful", () => {
   assertEquals(emptyCard.listRef?.entityIds, [], "verified empty is an exact empty selection");
   assertEquals(
     autoOpenListAnswer([emptyCard], true),
-    'No encontré resultados con el filtro “En stock · 31"”. Abrí Inventario para que puedas revisarlo o ajustarlo.',
+    'No encontré resultados para “camara 31” con el filtro “En stock · 31"”. Abrí Inventario para que puedas revisarlo o ajustarlo.',
     "empty output is not rewritten as source failure",
   );
 

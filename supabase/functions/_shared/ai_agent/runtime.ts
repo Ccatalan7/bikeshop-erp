@@ -40,6 +40,7 @@ const MAX_TOOL_CALLS = 8;
 const MAX_TOOL_OUTPUT_BYTES_PER_RUN = 96 * 1024;
 const MAX_TOOL_RECEIPT_OUTPUT_BYTES = 48 * 1024;
 const MAX_VISIBLE_HISTORY_BYTES = 64 * 1024;
+const MAX_VISIBLE_INVENTORY_HISTORY_LISTS = 2;
 const MAX_FINAL_TEXT_BYTES = 16 * 1024;
 const MAX_CONTINUATION_BYTES = 128 * 1024;
 const MAX_GROUNDED_ADDITIONAL_SOURCE_COUNT = 5;
@@ -200,6 +201,11 @@ export async function executeAgentRun(
       | undefined;
     let groundedTerminalRecoveryRequired = false;
     let inventorySchemaSnapshot: InventorySchemaSnapshot | undefined;
+    // `open_list` owns a deterministic acknowledgement. A mixed request such
+    // as "open the filtered list and tell me what to inspect first" must keep
+    // that acknowledgement *and* the grounded model analysis; otherwise the
+    // interactive action silently erases half of the operator's objective.
+    let inventoryListNarrativeRequested = false;
     let lastCapabilityFailureCode: string | undefined;
     const entityReferences = new Map<string, AgentToolEntityReference>();
     const usage: AgentUsage = {
@@ -410,13 +416,17 @@ export async function executeAgentRun(
             "AI provider response is invalid",
           );
         }
+        const autoOpenAnswer = publicSourceUrls.length === 0
+          ? autoOpenListAnswer(cards, options.supportsResultLists === true)
+          : undefined;
         const text = lastCapabilityFailureCode
           ? renderToolExecutionFailure(lastCapabilityFailureCode)
           : publicSourceUrls.length === 0
-          ? autoOpenListAnswer(cards, options.supportsResultLists === true) ??
-            turn.text.trim()
+          ? inventoryListNarrativeRequested && autoOpenAnswer
+            ? `${autoOpenAnswer}\n\n${turn.text.trim()}`.trim()
+            : autoOpenAnswer ?? turn.text.trim()
           : withPublicSourceCitations(turn.text.trim(), publicSourceUrls);
-        if (!text || turn.finishReason !== "stop") {
+        if (!text || utf8Bytes(text) > MAX_FINAL_TEXT_BYTES || turn.finishReason !== "stop") {
           throw new AgentRuntimeError(
             502,
             "provider_invalid_response",
@@ -793,6 +803,10 @@ export async function executeAgentRun(
             inventorySchemaSnapshot = inventorySchemaSnapshotFromResult(
               execution.result,
             );
+          }
+          if (call.name === INVENTORY_SEARCH_TOOL_NAME) {
+            inventoryListNarrativeRequested =
+              call.arguments.presentation === "open_list_with_analysis";
           }
           cards = mergeCards(
             cards,
@@ -1784,9 +1798,10 @@ function boundedVisibleHistory(lease: AgentRunLease): AgentMessage[] {
   let bytes = 0;
   for (let index = lease.canonicalMessages.length - 1; index >= 0; index--) {
     const message = lease.canonicalMessages[index];
-    const next = new TextEncoder().encode(message.content).byteLength;
+    const visibleText = visibleCanonicalMessageText(message);
+    const next = new TextEncoder().encode(visibleText).byteLength;
     if (bytes + next > MAX_VISIBLE_HISTORY_BYTES) break;
-    output.unshift({ role: message.role, text: message.content });
+    output.unshift({ role: message.role, text: visibleText });
     bytes += next;
   }
   // A last-N SQL window can begin with the assistant half of an older turn.
@@ -1806,6 +1821,43 @@ function boundedVisibleHistory(lease: AgentRunLease): AgentMessage[] {
   return output;
 }
 
+/**
+ * Restores the safe, server-owned part of an interactive result card to the
+ * next provider turn. The ledger has always stored cards, but history used to
+ * discard them and retain only prose such as "Abrí 10 resultados". That made
+ * deictic follow-ups lose the active query and availability even though the
+ * operator could still see them on screen.
+ *
+ * Product UUIDs, approval payloads and routes are intentionally absent. This
+ * state is a refinement hint only: stock is reread by the next tool call.
+ */
+function visibleCanonicalMessageText(
+  message: AgentRunLease["canonicalMessages"][number],
+): string {
+  if (message.role !== "assistant" || !message.cards?.length) {
+    return message.content;
+  }
+  const inventoryLists = message.cards
+    .flatMap((card) => {
+      const list = card.listRef;
+      if (!list || list.kind !== "inventory") return [];
+      return [{
+        kind: "inventory_result_list",
+        query: list.query,
+        subject: card.subtitle ?? list.query,
+        availability: list.availability,
+        resultCount: list.resultCount,
+        hasMore: list.hasMore,
+        filters: [...card.chips],
+      }];
+    })
+    .slice(-MAX_VISIBLE_INVENTORY_HISTORY_LISTS);
+  if (inventoryLists.length === 0) return message.content;
+  return `${message.content}\n\nESTADO_INTERACTIVO_SERVER_OWNED:${
+    JSON.stringify({ inventoryLists })
+  }`;
+}
+
 function buildSystemInstruction(
   configured: string | undefined,
   purchasingDraftMode = false,
@@ -1814,15 +1866,15 @@ function buildSystemInstruction(
     ? "Si la inspección encuentra la categoría pero no devuelve ningún kind=field pertinente para una restricción técnica explícita, no repitas el inspector ni inventes una clave: conserva la descripción literal en una línea unresolved de prepare_supply_request, sin technicalPredicates inventados. Si el operador ya expresó el requisito sin ambigüedad, usa clarificationRequired=false, clarification como advertencia del sistema y clarificationPrompts=[]; sólo pregunta cuando realmente falte una decisión humana."
     : "Si la inspección encuentra la categoría pero no devuelve ningún kind=field pertinente para una restricción técnica explícita, no repitas el inspector ni inventes una clave: termina con report_capability_gap, reason=unsupported_filter, alternative=broader_search y field=null.";
   const missingStructuredDataRule = purchasingDraftMode
-    ? "Si la inspección muestra populatedCount=0 para el dato necesario, no enumeres productos desde nombres ambiguos ni termines la solicitud: usa prepare_supply_request con ese field autorizado sólo como criterio de una línea unresolved, conserva cantidad y preferencias, usa clarificationRequired=false y explica en clarification que la ficha no permite confirmar todavía un producto exacto. clarificationPrompts debe ser []. La carencia del ERP nunca convierte por sí sola una petición inequívoca en una pregunta al operador."
-    : "Si la inspección muestra populatedCount=0 para el dato necesario, no enumeres productos desde nombres ambiguos: llama report_capability_gap con missing_structured_data y field igual a la clave exacta inspeccionada.";
+    ? "Si la inspección muestra populatedCount=0, una igualdad o membresía exacta (eq/in) todavía puede consultar search_inventory: PostgreSQL la comprueba sólo contra identidad curada de nombre/modelo y rotula cada fila identity_fallback. No la presentes como ficha técnica poblada. Para rangos, desigualdades, contains u otra comparación sin cobertura, no uses nombres: conserva el criterio en prepare_supply_request como línea unresolved, con clarificationRequired=false, una advertencia de cobertura y clarificationPrompts=[]. La carencia del ERP nunca convierte por sí sola una petición inequívoca en una pregunta al operador."
+    : "Si la inspección muestra populatedCount=0, una igualdad o membresía exacta (eq/in) todavía puede consultar search_inventory: PostgreSQL la comprueba sólo contra identidad curada de nombre/modelo y rotula cada fila identity_fallback. Explica esa procedencia y no la presentes como ficha técnica poblada. Para rangos, desigualdades, contains u otra comparación sin cobertura, no uses nombres: llama report_capability_gap con missing_structured_data y field igual a la clave exacta inspeccionada.";
   const supplyWorkflowRule = purchasingDraftMode
     ? "Este workspace está en la etapa de capturar y revisar necesidades, no en la etapa de elegir proveedor. Después de inspeccionar la ficha y consultar inventario, termina siempre con una única llamada prepare_supply_request: enlaza catalogItemRef sólo si search_inventory demostró una identidad exacta y deja unresolved cualquier alternativa o carencia. Conserva margen, gama, marca, urgencia y demás objetivos comerciales en preference/profile para que los pasos posteriores calculen el ranking. No compares proveedores ni construyas escenarios de canasta durante esta etapa, aunque el operador mencione rentabilidad o varios productos; prepara una línea por producto y deja que el flujo guiado revise primero el stock."
     : "Si existe stock interno suficiente, preséntalo antes de proveedores. Sólo compara compra externa cuando el stock sea insuficiente, esté agotado o el operador descarte explícitamente una alternativa interna. rank_purchase_candidates acepta una catalogItemRef exacta o una identidad breve, nunca ambas; sus proveedores son alternativas históricas con disponibilidad no verificada. Para una canasta, resuelve primero cada producto exacto y luego usa build_purchase_scenarios con sus referencias, cantidades y un máximo de proveedores; externalOnly sólo puede ser true por descarte explícito del operador. Explica costo aterrizado, margen, historial, recencia, cobertura y calidad de evidencia sin presentar el score como certeza, esconder líneas faltantes ni crear una compra.";
   let base = configured?.trim() ||
     "Eres el agente operativo general de Viñabike. Interpreta el objetivo del operador desde lenguaje libre y el contexto visible, planifica los pasos necesarios y usa cualquier combinación de herramientas anunciadas que aporte evidencia útil. Puedes encadenar múltiples lecturas ERP e investigación pública en un mismo turno para comparar, priorizar, diagnosticar y conectar ideas; no exijas frases exactas ni supongas una sola intención. Si el operador pide explícitamente consultar la web, información actual, opiniones públicas o una fuente o sitio nombrado, y research_public_web está anunciada, debes usarla: no digas que careces de esa capacidad. Sintetiza conclusiones accionables y ofrece las tarjetas pertinentes, sin afirmar acciones que no ejecutaste. Una herramienta de preparación sólo crea una propuesta: nunca digas que la acción fue ejecutada y deja su confirmación al operador en la tarjeta. Responde con la menor extensión que complete bien el objetivo; para investigación pública usa como máximo 800 palabras, no copies JSON ni repitas el payload de fuentes. Cita cada fuente web con su URL HTTPS exacta. No inventes datos, permisos, resultados ni fuentes. Distingue un resultado vacío de una fuente parcial o no disponible.";
   base +=
-    " Para inventario, conserva también el orden y la cantidad pedidos. Si el operador pide los mayores, menores o una cantidad N, usa sort, limit y selectionMode=top_n; no reordenes ni recortes una lista en prosa. Para conteos o resúmenes usa presentation=answer y las métricas verificadas del conjunto completo devueltas por search_inventory; nunca calcules un total desde una página truncada.";
+    " Para inventario, conserva también el orden y la cantidad pedidos. Si el operador pide los mayores, menores o una cantidad N, usa sort, limit y selectionMode=top_n; no reordenes ni recortes una lista en prosa. Para conteos o resúmenes usa presentation=answer y las métricas verificadas del conjunto completo devueltas por search_inventory; nunca calcules un total desde una página truncada. Usa presentation=open_list sólo cuando abrir la lista sea toda la respuesta pedida. Si además solicita explicar, comparar, priorizar o recomendar sobre esa misma selección, usa open_list_with_analysis y reserva la prosa final para esa explicación: el servidor agregará por separado la confirmación de apertura.";
   base +=
     ` Para abastecimiento, trabaja stock-first: descompón la petición en identidad, categoría, especificaciones, cantidad y preferencias. Distingue siempre dos causas: una ambigüedad del operador requiere clarificationRequired=true; una ficha, cobertura o evidencia incompleta del ERP requiere clarificationRequired=false y sólo una advertencia. Nunca pidas repetir un dato explícito porque el sistema no pueda filtrarlo. Si una palabra o medida admite significados técnicos materialmente distintos, no elijas uno por costumbre: en prepare_supply_request formula la próxima pregunta decisiva mediante clarificationPrompts. Esos prompts son generales y dinámicos: normalmente uno por turno, máximo tres si corresponden a líneas independientes; cada prompt pregunta un solo hecho, y una respuesta «No lo sé» debe abrir otra vía útil o dejar la línea pendiente, nunca repetir el mismo bloqueo. No codifiques árboles por producto ni solicites de golpe todos los datos de un cálculo. Un mensaje que empieza con RONDA_DE_ACLARACION_DEL_OPERADOR no es una petición nueva: reconstruye la necesidad desde la petición original citada y aplica cada respuesta a la línea y al dato que nombra, en la descripción o en un predicado autorizado, sin copiar nunca ese texto dentro de description. No vuelvas a preguntar un promptId ya respondido en ninguna ronda. Una respuesta «no lo sé» no es un valor: no la conviertas en dato; busca otra vía y, si no queda ninguna, deja la línea con clarificationRequired=false y una advertencia. Si tras aplicar todas las respuestas todavía falta un dato material del operador, formula la próxima pregunta con un promptId distinto; si no falta ninguno, cierra el borrador sin preguntas. Conserva literalmente las relaciones que expresó el operador: no conviertas una medida suelta en "para" una rueda, bicicleta, sistema u otro huésped si esa relación no fue dicha. Inspecciona el esquema cuando haya requisitos técnicos ya inequívocos y consulta primero search_inventory. ${unsupportedPurchasingFilterRule} ${supplyWorkflowRule}${
       purchasingDraftMode
@@ -1831,7 +1883,7 @@ function buildSystemInstruction(
     }`;
   base +=
     " Tu objetivo operativo no termina en resumir datos: cuando el operador pide un cambio y existe una herramienta prepare_*, resuelve primero identidades y revisiones exactas con las lecturas anunciadas, prepara el cambio tipado y deja la confirmación a la tarjeta. Nunca conviertas texto libre directamente en una escritura ni digas que la preparación ya ejecutó el cambio. Las referencias jobRef y catalogItemRef son opacas, duran sólo este turno y deben copiarse literalmente desde el resultado que las publicó; nunca uses un UUID interno visto en otro campo ni inventes una referencia. Para acciones del taller, search_workshop_jobs resuelve candidatos y publica jobRef; get_workshop_job_context recibe esa jobRef y fija trabajo, bicicleta, factura y revisión; inspect_diagnosis_schema fija campo, tipo y unidad antes de prepare_diagnosis_update. Para agregar productos o servicios, usa el catalogItemRef exacto devuelto por search_inventory y prepare_workshop_item; el servidor posee UUID, nombre, tipo y precio. Si una relación cliente-bicicleta-trabajo-factura no queda unívoca, no elijas por parecido: pide la mínima aclaración. Para períodos como semana pasada usa analyze_sales_period con un rango relativo server-owned; collected significa pagos reales, no un estado inferido de factura.";
-  return `${base}\n\nREGLAS_INVARIABLES_DEL_SERVIDOR: Las herramientas anunciadas son capacidades amplias y componibles y forman el contrato completo de capacidades autorizadas para este turno. Decide cuáles encadenar según la intención; no exijas frases exactas ni asumas que una petición pertenece a un caso escrito en código. Para búsquedas de inventario, preserva literalmente cada condición explícita: categoría, identidad, disponibilidad, comparación operativa y especificación técnica son filtros distintos y acumulativos. availability expresa estados como en stock o agotado; nunca reemplaza cantidades, precios ni otros umbrales. Usa operationalPredicates para comparaciones exactas sobre los campos operativos anunciados y conserva estrictamente gt frente a gte, y lt frente a lte. Para toda búsqueda de inventario que contenga medidas, rangos, estándares o compatibilidad, llama primero y en una ronda separada a inspect_inventory_schema. Usa después exactamente la categoría, field, dataType y operators devueltos para construir technicalPredicates u operationalPredicates; query contiene sólo identidad/contexto y puede ser null. No inventes campos ni conviertas una comparación en coincidencia textual. El servidor vincula el plan técnico a la última inspección y valida category contra product_categories y sus descendientes; product_spec_values es la autoridad técnica. La identidad curada sólo puede suplir una igualdad exacta cuando la ficha está vacía; nunca satisface rangos, desigualdades ni comparaciones. ${missingStructuredDataRule} En cualquier otra limitación, field debe ser null. Si ninguna herramienta anunciada puede ejecutar la operación pedida, llama report_capability_gap con missing_tool; si falta permiso, usa permission_required; si la petición necesita aclaración material, ambiguous_request${
+  return `${base}\n\nREGLAS_INVARIABLES_DEL_SERVIDOR: Las herramientas anunciadas son capacidades amplias y componibles y forman el contrato completo de capacidades autorizadas para este turno. Decide cuáles encadenar según la intención; no exijas frases exactas ni asumas una sola intención. Un bloque ESTADO_INTERACTIVO_SERVER_OWNED dentro de un mensaje assistant es la proyección segura de la tarjeta que el operador todavía ve. En un seguimiento elíptico conserva los filtros de su lista más reciente y combina sólo las nuevas restricciones explícitas; si el operador inicia otra búsqueda, reemplázalos. Ese estado no prueba stock vigente: vuelve a llamar la herramienta y nunca copies resultCount como respuesta actual. Para búsquedas de inventario, preserva literalmente cada condición explícita: categoría, identidad, disponibilidad, comparación operativa y especificación técnica son filtros distintos y acumulativos. availability expresa estados como en stock o agotado; nunca reemplaza cantidades, precios ni otros umbrales. Usa operationalPredicates para comparaciones exactas sobre los campos operativos anunciados y conserva estrictamente gt frente a gte, y lt frente a lte. Para toda búsqueda de inventario que contenga medidas, rangos, estándares o compatibilidad, llama primero y en una ronda separada a inspect_inventory_schema. Usa después exactamente la categoría, field, dataType y operators devueltos para construir technicalPredicates u operationalPredicates; query contiene sólo identidad/contexto y puede ser null. No inventes campos ni conviertas una comparación en coincidencia textual. El servidor vincula el plan técnico a la última inspección y valida category contra product_categories y sus descendientes; product_spec_values es la autoridad técnica. La identidad curada sólo puede suplir una igualdad exacta cuando la ficha está vacía; nunca satisface rangos, desigualdades ni comparaciones. ${missingStructuredDataRule} En cualquier otra limitación, field debe ser null. Si ninguna herramienta anunciada puede ejecutar la operación pedida, llama report_capability_gap con missing_tool; si falta permiso, usa permission_required; si la petición necesita aclaración material, ambiguous_request${
     purchasingDraftMode
       ? ", salvo en este workspace: aquí conserva la ambigüedad como una línea unresolved con clarificationRequired=true, clarification no nula y al menos una clarificationPrompt válida en prepare_supply_request; si sólo falta evidencia del sistema usa clarificationRequired=false y prompts vacíos"
       : ""
@@ -2078,10 +2130,16 @@ function firstUnpopulatedTechnicalField(
       continue;
     }
     const field = "field" in predicate ? predicate.field : undefined;
+    const operator = "operator" in predicate ? predicate.operator : undefined;
     if (typeof field !== "string") continue;
     const coverage = snapshot.fields.get(field);
     if (
-      coverage && coverage.productCount > 0 && coverage.populatedCount === 0
+      coverage && coverage.productCount > 0 && coverage.populatedCount === 0 &&
+      // The database owns this narrow fallback and labels every returned row
+      // `identity_fallback`: exact equality/membership may be proved by the
+      // curated name/model surface when the ficha is empty. Ranges,
+      // inequalities and substring filters still require structured values.
+      operator !== "eq" && operator !== "in"
     ) {
       return field;
     }
@@ -2162,6 +2220,17 @@ function resolveToolEntityReferences(
           item.catalogItemRef,
           "catalog_item",
         ),
+        // La categoría nace en `inspect_inventory_schema` y su referencia dura
+        // sólo este turno: acá se cambia por la identidad real, que el modelo
+        // nunca vio. Una referencia inventada, caducada o de otra especie no
+        // resuelve: `resolveEntityReference` lanza.
+        categoryId: item.categoryRef === null || item.categoryRef === undefined
+          ? null
+          : resolveEntityReference(
+            references,
+            item.categoryRef,
+            "product_category",
+          ),
         quantity: item.quantity,
         unit: item.unit,
         technicalPredicates: item.technicalPredicates,
@@ -2196,7 +2265,11 @@ function registerToolEntityReferences(
     if (
       !isEntityReferenceUuid(reference.ref) ||
       !isEntityReferenceUuid(reference.entityId) ||
-      !["workshop_job", "catalog_item"].includes(reference.kind) ||
+      // La lista es cerrada a propósito: una especie desconocida no se
+      // registra, así que un `ref` de tipo inventado nunca se puede canjear.
+      !["workshop_job", "catalog_item", "product_category"].includes(
+        reference.kind,
+      ) ||
       !execution.outputText.includes(reference.ref) ||
       execution.outputText.includes(reference.entityId)
     ) {

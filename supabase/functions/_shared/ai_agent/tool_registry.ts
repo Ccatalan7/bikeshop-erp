@@ -176,8 +176,8 @@ const inventorySearchSchema: StrictJsonSchema = {
       "Filtro de disponibilidad pedido: in_stock incluye stock bajo; any sólo cuando el operador no condicionó disponibilidad.",
     ),
     presentation: enumProperty(
-      ["answer", "open_list"],
-      "Usa open_list sólo cuando abrir el listado filtrado completa una petición explícita de buscar, mostrar, listar o abrir productos. Usa answer para preguntas, conteos, comparaciones o resúmenes.",
+      ["answer", "open_list", "open_list_with_analysis"],
+      "Usa open_list cuando abrir el listado filtrado completa por sí solo una petición explícita de buscar, mostrar, listar o abrir productos. Usa open_list_with_analysis cuando el operador además pide explicar, comparar, priorizar o recomendar sobre esa misma selección; el servidor confirma la apertura y conserva tu análisis grounded. Usa answer cuando no debe abrirse la lista, por ejemplo para conteos o resúmenes.",
     ),
     sort: {
       type: "object",
@@ -409,6 +409,13 @@ const prepareSupplyRequestSchema: StrictJsonSchema = {
             description:
               "Referencia opaca exacta de search_inventory, o null si hay varias alternativas, falta precisión técnica o el producto aún no existe. Nunca inventes un UUID.",
           },
+          categoryRef: {
+            type: ["string", "null"],
+            minLength: 36,
+            maxLength: 36,
+            description:
+              "Referencia opaca de la categoría devuelta por inspect_inventory_schema. Úsala cuando la línea no tenga producto exacto pero sí una categoría resuelta, para que la revisión conserve de qué familia se trata. Con catalogItemRef presente el servidor deriva la categoría de la ficha y esta debe ser null. Nunca inventes ni copies un UUID.",
+          },
           description: {
             type: "string",
             minLength: 1,
@@ -560,6 +567,7 @@ const prepareSupplyRequestSchema: StrictJsonSchema = {
         },
         required: [
           "catalogItemRef",
+          "categoryRef",
           "description",
           "quantity",
           "unit",
@@ -1370,9 +1378,14 @@ function validatePrepareSupplyRequestProjection(
     const required = "clarificationRequired" in item ? item.clarificationRequired : false;
     const prompts = "clarificationPrompts" in item ? item.clarificationPrompts : null;
     const catalogItemRef = "catalogItemRef" in item ? item.catalogItemRef : null;
+    const categoryRef = "categoryRef" in item ? item.categoryRef : null;
     if (
       (required === true && typeof clarification !== "string") ||
       (required === true && typeof catalogItemRef === "string") ||
+      // La ficha exacta manda sobre la categoría: si la línea trae producto,
+      // el servidor deriva su categoría y una enviada por el modelo sólo
+      // podría contradecirla.
+      (typeof catalogItemRef === "string" && typeof categoryRef === "string") ||
       !validSupplyClarificationPrompts(prompts, required === true)
     ) {
       throw new ToolRegistryError(

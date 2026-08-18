@@ -26,6 +26,33 @@ void main() {
     );
   });
 
+  test('la sesión canónica usa el gateway moderno salvo rollback explícito',
+      () {
+    final body = script.readAsStringSync();
+    expect(
+      body,
+      contains(r'${NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED:-true}'),
+      reason: 'un flag ausente no puede degradar silenciosamente al asistente '
+          'legado durante una sesión canónica',
+    );
+    expect(
+      body,
+      contains('--dart-define=AI_AGENT_GATEWAY_ENABLED=true'),
+    );
+    expect(
+      body,
+      contains('--dart-define=AI_AGENT_GATEWAY_ENABLED=false'),
+      reason: 'el rollback debe quedar explícito en los argumentos del proceso',
+    );
+    expect(body, contains('Vinabike ERP Supabase publishable key'));
+    expect(body, contains('El gateway IA requiere la publishable key'));
+    expect(
+      body.indexOf('El gateway IA requiere la publishable key'),
+      lessThan(body.indexOf('\ncase "\${1:-}" in')),
+      reason: 'la sesión debe fallar antes de entrar a la rama start y compilar',
+    );
+  });
+
   test('stop captura TODOS los hijos directos de screen, no sólo el primero',
       () {
     final body = _stopBranch(script.readAsStringSync());

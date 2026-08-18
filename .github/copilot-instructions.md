@@ -403,15 +403,12 @@ The durable rules are:
 - Guarded repository wrappers are the canonical SQL and pgTAP path. Supabase
   CLI use is control-plane/metadata-only and goes through
   `scripts/supabase_cli.sh` on Bash/macOS/Linux.
-- Reuse the prepared local database for focused pgTAP. A production-derived
-  validation session uses `scripts/db/production_validation.sh` to reuse one
-  provenance-recorded dump while the live migration head/fingerprint is
-  unchanged; never redump merely to rerun tests.
-- A production-derived clone must fingerprint and restore every schema needed
-  by provider-managed policy definitions. The canonical manager captures
-  schema-only `public` plus dependency-only `private`, rejects all row/blob
-  data, and restores managed post-data only after both exist. Capturing only
-  `public` can make current Storage policies fail before candidate SQL runs.
+- Reuse the prepared local database for focused pgTAP. Do not use
+  `production_validation.sh` or any schema-only production clone as a
+  compatibility/completion gate: it omits seeded rows, materialized state,
+  effective history and provider-managed behavior. Pair local logic tests with
+  guarded direct live read-only inspection, then authorized deploy and exact
+  live read-back when the task includes production completion.
 - Every schema change has one unique idempotent standalone forward migration;
   its remote history row is the stamp. `core_schema.sql` is optional historical
   context only.
@@ -1734,8 +1731,8 @@ Supabase policy and commands are intentionally centralized:
 - `docs/runbooks/STAGING_SUPABASE.md` is authoritative for environment use,
   production validation, write safety, and valid human handoffs.
 - `docs/development/SUPABASE_WORKFLOW.md` is authoritative for current
-  preflight, credentials, guarded queries, tests, production-derived clone
-  reuse, deployment, and verification commands.
+  preflight, credentials, guarded queries, local tests, deployment, and live
+  verification commands.
 - `docs/runbooks/DATABASE_BACKUP_AND_RESTORE.md` governs backup/recovery.
 - `docs/development/SECURITY_REMEDIATION_2026-07-12.md` governs legacy-key
   migration and rotation.
@@ -1771,10 +1768,9 @@ policy status or authorize agents to use it.
   deployment, migration registration, read-back, and health checks themselves.
   Do not ask the user to run a query or paste a migration that the repository
   can execute.
-- Schema-only production dumps are reusable validation-session inputs. Do not
-  redump merely because pgTAP is rerun; use
-  `scripts/db/production_validation.sh` and follow the runbook's provenance and
-  refresh rules.
+- Schema-only production dumps are deprecated as validation inputs. Read the
+  real target through guarded read-only queries; never convert a clone result
+  into a production-readiness claim.
 - Historical migrations are not replayable from an empty database, so
   `[db.migrations].enabled = false` is intentional. Use a unique idempotent
   forward migration, the guarded deployment path, exact read-back, and explicit
@@ -2630,8 +2626,7 @@ This protocol is the preferred way to get back to a trusted app baseline while p
 6. ✅ **UPDATE** existing code or add new code following EXISTING patterns
 7. ✅ **NEVER** create duplicate functions/triggers with different names
 8. ✅ **NEVER** create columns that are "nice to have" - only STRICTLY NECESSARY ones
-9. ✅ **VERIFY** column names against the live catalog or a fresh
-   production-derived schema snapshot
+9. ✅ **VERIFY** column names against the guarded live catalog
 10. ✅ **IF YOU ADD A COLUMN:** Also add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statement
 11. ✅ **IF MODIFYING INVENTORY:** Update BOTH `inventory_qty` AND `stock_quantity` columns (see inventory columns section above)
 12. ✅ **INFORM** the user which standalone migration version owns the change
@@ -2750,8 +2745,8 @@ policy.
 **For ANY Flutter code changes:**
 
 1. ✅ Check if database schema needs updating first
-2. ✅ Verify table/column names against generated types, the live catalog or a
-   current production-derived snapshot; do not trust `core_schema.sql` alone
+2. ✅ Verify table/column names against generated types and the guarded live
+   catalog; do not trust `core_schema.sql` or a schema-only clone
 3. ✅ Adapt Flutter code to match database schema (not vice versa)
 4. ✅ Use column names proved by the live catalog/current generated contract
 5. ✅ **CHECK EXISTING CODE** for tenant_id handling patterns
@@ -3597,6 +3592,18 @@ server-owned actor column on the source record. Persist its tenant-safe display
 name in the notification's durable `data` payload at insert time; timeline rows
 must not issue per-record identity reads. Legacy rows without authoritative
 actor evidence remain unknown and must never be named by inference.
+
+Daily Briefing counters are active-source projections, not raw notification
+row counts. Each job, received payment, recorded expense, online order, and
+stored file contributes at most once by stable source identity and only while
+its canonical source remains active. Archive, reversal, deletion, or
+cancellation must convert the existing durable `erp_notifications` identity to
+its inactive lifecycle type in place, preserving `id`, `created_at`, `read_at`,
+and audit payload. The inactive row stays truthful timeline history but never
+contributes to the active count or financial total; a reversible restore moves
+that same identity back. Keep a shared client-side identity/inactive guard for
+mixed-version realtime windows, and backfill stale active types from source
+truth rather than hiding duplicates in the widget.
 
 ---
 

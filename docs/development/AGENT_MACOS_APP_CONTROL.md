@@ -58,14 +58,25 @@ scripts/dev/native_session.sh status
 scripts/dev/native_session.sh stop
 ```
 
-Para una sesión nueva del rollout del agente IA, el owner acepta sólo los dos
-defines cerrados; no acepta un fragmento arbitrario de shell. La clave pública
-se resuelve en el proceso que lanza la sesión y no se escribe en el repositorio
-ni en el log:
+La sesión canónica usa por defecto el mismo gateway moderno del release. El
+owner acepta sólo los defines cerrados; no acepta un fragmento arbitrario de
+shell. La clave pública se resuelve en el proceso que lanza la sesión, primero
+desde `NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY` y luego desde el Keychain
+aprobado, y no se escribe en el repositorio ni en el log. Por eso el arranque
+normal es simplemente:
 
 ```bash
-NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED=true \
-NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY="$PUBLIC_KEY" \
+scripts/dev/native_session.sh start
+```
+
+Si la entrada de Keychain no existe, el launcher falla antes de compilar en vez
+de abrir una sesión cuyo primer mensaje inevitablemente fallará. Un valor de
+entorno explícito sigue siendo válido para una sesión acotada.
+
+El asistente legado queda disponible sólo como rollback explícito y visible:
+
+```bash
+NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED=false \
   scripts/dev/native_session.sh start
 ```
 

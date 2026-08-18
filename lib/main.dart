@@ -1363,6 +1363,8 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     final id = record['id']?.toString() ?? '';
     if (type == 'online_order_created') {
       notificationService.recordOnlineOrderAlert(id, notification: record);
+    } else if (type == 'online_order_cancelled') {
+      notificationService.removeOnlineOrderAlert(id);
     }
     if (!allowPresentation || record['read_at'] != null) return;
     if (!ErpNotificationGate.shared.claimPresentation('erp:$id')) return;
@@ -1386,11 +1388,12 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
       route: resolveErpNotificationRoute(record),
       category:
           isMail ? NotificationCategory.email : NotificationCategory.general,
-      suppressRoutePrefix: type == 'online_order_created'
-          ? '/website/orders'
-          : isMail
-              ? '/mail'
-              : null,
+      suppressRoutePrefix:
+          type == 'online_order_created' || type == 'online_order_cancelled'
+              ? '/website/orders'
+              : isMail
+                  ? '/mail'
+                  : null,
       showSystemNotification: !_isWorkspaceForeground && !kIsWeb,
       notificationId: 'erp:$id'.hashCode,
     );
@@ -1408,12 +1411,21 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     switch (type) {
       case 'mechanic_job_created':
         return Icons.build_outlined;
+      case 'mechanic_job_archived':
+        return Icons.remove_circle_outline;
       case 'sales_payment_received':
         return Icons.payments_outlined;
+      case 'sales_payment_voided':
+        return Icons.money_off_outlined;
       case 'expense_recorded':
         return Icons.receipt_long_outlined;
+      case 'expense_voided':
+      case 'expense_deleted':
+        return Icons.money_off_outlined;
       case 'online_order_created':
         return Icons.shopping_cart_checkout_outlined;
+      case 'online_order_cancelled':
+        return Icons.remove_shopping_cart_outlined;
       case 'whatsapp_catalog_approved':
         return Icons.verified_outlined;
       case 'mail':

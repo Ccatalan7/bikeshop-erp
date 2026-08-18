@@ -49,6 +49,15 @@ void main() {
       expect(find.text('FV-00917 · \$30.000 · Transferencia'), findsOneWidget);
     });
 
+    testWidgets('a voided payment remains truthful historical activity', (
+      tester,
+    ) async {
+      await _pumpBriefing(tester, rows: [_voidedPaymentRow()]);
+
+      expect(find.text('Pago anulado'), findsOneWidget);
+      expect(find.text('FV-00917 · \$30.000 · Transferencia'), findsOneWidget);
+    });
+
     testWidgets('a payment without a method leaves no dangling separator', (
       tester,
     ) async {
@@ -310,6 +319,37 @@ void main() {
       final expenseRoute = Uri.parse(workspace.routes.last);
       expect(expenseRoute.path, '/accounting/expenses/expense-1');
       expect(expenseRoute.queryParameters['openRequest'], isNotEmpty);
+    });
+
+    testWidgets('a voided payment opens its invoice and names both actors', (
+      tester,
+    ) async {
+      final workspace = _RecordingWorkspaceManager();
+      addTearDown(workspace.dispose);
+
+      await _pumpBriefing(
+        tester,
+        rows: [_voidedPaymentRow()],
+        workspace: workspace,
+      );
+
+      await tester.tap(find.text('Pago anulado'));
+      await _settle(tester);
+
+      expect(find.text('REGISTRÓ'), findsOneWidget);
+      expect(find.text('Guille'), findsOneWidget);
+      expect(find.text('ANULÓ'), findsOneWidget);
+      expect(find.text('Vicente Díaz'), findsOneWidget);
+      expect(find.text('Abrir factura'), findsOneWidget);
+      expect(find.text('Abrir pago'), findsNothing);
+
+      await tester.tap(find.text('Abrir factura'));
+      await _settle(tester);
+
+      expect(workspace.routes, hasLength(1));
+      final invoiceRoute = Uri.parse(workspace.routes.single);
+      expect(invoiceRoute.path, '/sales/invoices/invoice-1');
+      expect(invoiceRoute.queryParameters['openRequest'], isNotEmpty);
     });
 
     testWidgets('a payment disclosure omits every field the payload lacks', (
@@ -1081,6 +1121,26 @@ Map<String, dynamic> _paymentRow({
           'customer_name': 'Claudia Arcos',
           'recorded_by_name': 'Guille',
         },
+  );
+}
+
+Map<String, dynamic> _voidedPaymentRow({String id = 'payment-voided-1'}) {
+  return _row(
+    id: id,
+    type: 'sales_payment_voided',
+    title: 'Pago anulado',
+    body: 'FV-00917 · \$30.000',
+    entityId: id,
+    data: {
+      'payment_id': id,
+      'invoice_id': 'invoice-1',
+      'invoice_reference': 'FV-00917',
+      'payment_method': 'Transferencia',
+      'customer_name': 'Claudia Arcos',
+      'recorded_by_name': 'Guille',
+      'voided_by_name': 'Vicente Díaz',
+      'is_voided': true,
+    },
   );
 }
 

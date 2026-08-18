@@ -4,12 +4,21 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late String workspace;
+
+  /// El «Plan borrador» y el detalle de candidato viven en
+  /// `intelligent_purchasing_decision_surfaces.dart`.
+  late String planSurface;
   late String jobs;
   late String routes;
   late String menu;
   late String purchaseForm;
   late String purchaseService;
   late String purchaseDraftSeed;
+
+  /// El servicio del asistente de compras: acá se afirma **qué RPC** usa el
+  /// carril familia, porque llamar a la v1 equivocada no rompe ninguna
+  /// pantalla y sí deja la necesidad encerrada.
+  late String supplyService;
 
   setUpAll(() {
     // El recorrido dejó de vivir en un solo archivo: el bloque de captura y la
@@ -21,6 +30,12 @@ void main() {
       'lib/modules/purchases/widgets/purchase_composer.dart',
       'lib/modules/purchases/widgets/purchase_visual_language.dart',
     ].map((path) => File(path).readAsStringSync()).join('\n');
+    planSurface = File(
+      'lib/modules/purchases/pages/intelligent_purchasing_decision_surfaces.dart',
+    ).readAsStringSync();
+    supplyService = File(
+      'lib/modules/purchases/services/intelligent_purchasing_service.dart',
+    ).readAsStringSync();
     jobs = File(
       'lib/modules/bikeshop/pages/pegas_table_page.dart',
     ).readAsStringSync();
@@ -104,7 +119,11 @@ void main() {
     expect(workspace, isNot(contains('_AnchoredSheetBody')));
     // Los tres editores viven dentro de su fila.
     expect(workspace, contains('supply-draft-inline-editor-'));
-    expect(workspace, contains('plan-quantity-inline-'));
+    // El editor de cantidad del plan se mudó con su superficie a
+    // `intelligent_purchasing_decision_surfaces.dart`; el contrato es que siga
+    // siendo inline, no en qué archivo está.
+    expect(planSurface, contains('plan-quantity-inline-'));
+    expect(planSurface, contains('class PurchasePlanQuantityEditor'));
     expect(workspace, contains('supply-draft-criteria-'));
     // La necesidad se edita en su propia fila.
     expect(workspace, contains("ValueKey('need-inline-description')"));
@@ -182,13 +201,31 @@ void main() {
     expect(workspace, contains('PurchaseSurfaceGeometry.narrowColumnMax'));
     expect(workspace, contains('ReturnNavigation.close'));
     expect(workspace, isNot(contains('ChoiceChip(')));
+    // **El guard cubría sólo el workspace.** La ensalada de chips entró igual
+    // por las superficies de decisión, que es donde viven los controles del
+    // paso 3: un valor excluyente se elige en el desplegable anclado del
+    // módulo, no en una fila de chips.
+    expect(planSurface, isNot(contains('ChoiceChip(')));
     expect(workspace, isNot(contains('FilterChip(')));
     expect(workspace, isNot(contains('InputChip(')));
   });
 
   test('the review-only plan keeps its core corrections actionable', () {
-    expect(workspace, contains("tooltip: 'Editar cantidad'"));
-    expect(workspace, contains("tooltip: 'Quitar del plan'"));
+    // Cada control de la línea se alcanza por `key` y se nombra con su
+    // producto. El rótulo genérico anterior —«Editar cantidad», repetido en
+    // cada fila— no identificaba ninguna línea.
+    expect(planSurface, contains("ValueKey('plan-line-edit-quantity-"));
+    expect(planSurface, contains("ValueKey('plan-line-remove-"));
+    expect(planSurface, contains(r"ValueKey('$keyPrefix-decrease')"));
+    expect(planSurface, contains(r"ValueKey('$keyPrefix-increase')"));
+    expect(planSurface, isNot(contains("tooltip: 'Editar cantidad'")));
+    expect(planSurface, isNot(contains("tooltip: 'Quitar del plan'")));
+    // Y el tooltip dice la consecuencia, que es lo que la persona necesita
+    // antes de tocar: la línea sale, la necesidad no.
+    expect(
+      planSurface,
+      contains("'Retira la línea del plan; la necesidad sigue abierta'"),
+    );
     expect(workspace, contains('_service.updatePlanLineQuantity'));
     // Frames 07/18/21/24: la vuelta al paso anterior es una acción rotulada de
     // la cabecera del plan, no un icono con tooltip. La corrección directa de
@@ -199,7 +236,7 @@ void main() {
     expect(decision, contains("ValueKey('plan-back-to-compare')"));
     expect(decision, contains('Plan borrador'));
     expect(decision, contains('class PurchaseQuantityStepper'));
-    expect(workspace, contains('PurchaseQuantityStepper('));
+    expect(planSurface, contains('PurchaseQuantityStepper('));
     expect(workspace, contains('_setPlanQuantity'));
     // La losa tonal «Borrador para revisar» quedó fuera: el estado del plan se
     // dice en la meta de su cabecera.
@@ -215,10 +252,15 @@ void main() {
     ).readAsStringSync();
     for (final source in [workspace, decision, surfaces]) {
       // Todo `IconButton` dice qué hace, también cuando está deshabilitado.
-      final iconButtons = 'IconButton('.allMatches(source).length;
-      final tooltips = RegExp(r'IconButton\((?:[^)]|\)(?!;))*?tooltip:')
-          .allMatches(source)
-          .length;
+      // `(?<![A-Za-z0-9_])` para no contar envoltorios cuyo nombre termina en
+      // IconButton —`_PlanLineIconButton`—, que son justamente los que
+      // garantizan el rótulo por construcción.
+      final iconButtons =
+          RegExp(r'(?<![A-Za-z0-9_])IconButton\(').allMatches(source).length;
+      final tooltips =
+          RegExp(r'(?<![A-Za-z0-9_])IconButton\((?:[^)]|\)(?!;))*?tooltip:')
+              .allMatches(source)
+              .length;
       expect(
         tooltips,
         iconButtons,
@@ -263,7 +305,7 @@ void main() {
     // …así que tampoco existe el editor que fingía guardarla.
     expect(decision, isNot(contains('PlanLineAlternativeNote')));
     expect(decision, contains('class PlanLineEvidenceNote'));
-    expect(workspace, contains('PlanLineEvidenceNote('));
+    expect(planSurface, contains('PlanLineEvidenceNote('));
   });
 
   test('el oscuro sale de roles, nunca de un color literal del feature', () {
@@ -374,5 +416,142 @@ void main() {
       contains('_selectedSourceDocumentKind?.isDirectPurchase'),
     );
     expect(purchaseForm, contains('Confirmar compra'));
+  });
+
+  test('el carril familia llama la v2 del rechazo y ata versión y revisión',
+      () {
+    // v1 exige un producto confirmado: con ella, una necesidad de familia no
+    // puede registrar su rechazo y el paso externo queda cerrado para siempre.
+    expect(supplyService, contains("'reject_supply_need_internal_stock_v2'"));
+    expect(supplyService, contains("'confirm_supply_need_family_choice_v1'"));
+    expect(
+      supplyService,
+      contains("'get_supply_need_stock_resolution_v1'"),
+    );
+    expect(
+      supplyService,
+      contains("'get_supply_need_external_candidates_v1'"),
+    );
+    // Los dos números de concurrencia viajan en cada comando de la fase.
+    expect(supplyService, contains("'p_expected_revision_no': "));
+    expect(
+      supplyService,
+      contains("'p_expected_target_revision_no': current.targetRevisionNo"),
+    );
+  });
+
+  test('la revisión sale del envelope de la lectura, no de la necesidad', () {
+    // `supply_needs` no guarda la revisión que gobierna: tomarla de ahí sería
+    // escribir sobre una interpretación que ya cambió.
+    expect(
+      supplyService,
+      contains("'p_expected_revision_no': resolution.revisionNo"),
+    );
+    expect(
+      supplyService,
+      contains("'p_expected_version': resolution.needVersion"),
+    );
+  });
+
+  test('la moneda del objetivo no se envía nunca desde el cliente', () {
+    // El servidor la posee, y una carga que la traiga se rechaza.
+    expect(supplyService, isNot(contains('currencyCode')));
+  });
+
+  test('los siete estados de la lectura externa tienen superficie propia', () {
+    for (final status in <String>[
+      'supply_closed',
+      'identity_unresolved',
+      'needs_refinement',
+      'technical_conflict',
+      'analysis_too_broad',
+      'no_eligible_products',
+      'no_historical_candidates',
+    ]) {
+      expect(
+        File('lib/modules/purchases/models/intelligent_purchasing_models.dart')
+            .readAsStringSync(),
+        contains("case '$status':"),
+      );
+    }
+    // Y la superficie los rotula por su nombre, no como «sin resultados».
+    expect(planSurface, contains('ExternalCandidatesStateSurface'));
+    expect(planSurface, contains("ValueKey('external-state-"));
+  });
+
+  test('stock-first es un estado accionable y los grupos no se mezclan', () {
+    expect(planSurface, contains("ValueKey('stock-first-required')"));
+    expect(planSurface, contains("ValueKey('unverified-candidates-band')"));
+    // Las dos escrituras del carril familia son dos acciones distintas.
+    expect(planSurface, contains("ValueKey('choose-family-product')"));
+    expect(planSurface, contains("ValueKey('add-candidate-to-plan')"));
+    // Un conflicto de concurrencia se recupera releyendo.
+    expect(workspace, contains("ValueKey('reload-after-conflict')"));
+  });
+
+  test('el estado desconocido no se dibuja como un cero', () {
+    final models =
+        File('lib/modules/purchases/models/intelligent_purchasing_models.dart')
+            .readAsStringSync();
+    expect(models, contains("case 'unknown':\n      return 'No verificable'"));
+    expect(models, contains('currency_mismatch_no_fx'));
+    expect(models, contains('incomplete_landed_cost'));
+  });
+
+  test('el veredicto técnico sale de matchState, no de la evidencia económica',
+      () {
+    // `evidenceQuality` mide qué tan firme es el historial de compra. Decidir
+    // «Cumple» con eso deja pasar un candidato que el ERP no pudo verificar.
+    expect(planSurface, contains('if (candidate is SupplyExternalCandidate)'));
+    expect(planSurface, contains("case 'strong':"));
+    expect(planSurface, contains('CandidateCompliance.meetsByName'));
+    expect(planSurface, contains('CandidateCompliance.noCriteria'));
+    expect(planSurface, contains('CandidateCompliance.unverified'));
+  });
+
+  test('el editor del objetivo valida antes de llamar al comando', () {
+    expect(planSurface, contains('_parseDecimal'));
+    expect(planSurface, contains("replaceAll(',', '.')"));
+    expect(planSurface, contains('TextInputType.numberWithOptions'));
+    expect(planSurface, contains('errorText: _costError'));
+    expect(planSurface, contains('errorText: _marginError'));
+    // Y reconstruye su estado cuando el objetivo que edita es otro.
+    expect(planSurface, contains('didUpdateWidget'));
+    expect(planSurface, contains('_targetIdentity'));
+  });
+
+  test('las tres lecturas se comprueban antes de presentarse juntas', () {
+    expect(workspace, contains('_envelopesAgree'));
+    expect(
+        workspace, contains('candidates.revisionNo == resolution.revisionNo'));
+    expect(
+      workspace,
+      contains('candidates.targetRevisionNo == target.targetRevisionNo'),
+    );
+    expect(workspace, contains('throw SupplyConcurrencyConflict(need.id)'));
+  });
+
+  test('las recargas incrementales no vacían la pantalla', () {
+    expect(workspace, contains('bool incremental = false'));
+    expect(workspace, contains('_refreshingResults'));
+    expect(workspace, contains("ValueKey('retry-incremental-load')"));
+    // Los dos controles de «ver más» son incrementales.
+    expect(
+      workspace,
+      contains(
+          '_loadDecision(need, resetRankingLimit: false, incremental: true)'),
+    );
+  });
+
+  test('cada página tiene su propio corte y su propia salida', () {
+    expect(planSurface, contains("ValueKey('show-more-unverified')"));
+    expect(planSurface, contains("ValueKey('show-more-family-stock')"));
+    expect(workspace, contains('_stockLimit'));
+    expect(workspace, contains('_unverifiedLimit'));
+  });
+
+  test('fijar producto sólo se ofrece donde es una salida real', () {
+    expect(workspace, contains('_identityFallbackApplies'));
+    expect(workspace, contains("{'supply_closed', 'no_eligible_products'}"));
   });
 }

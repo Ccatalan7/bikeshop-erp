@@ -181,8 +181,12 @@ class _PurchasePlanCloseState extends State<PurchasePlanClose> {
     );
   }
 
+  /// El cierre escribe plata como el resto del ERP: `$17.450` en pesos, código
+  /// y dos decimales en cualquier otra moneda. Antes decía `CLP 17450` —sin
+  /// separador de miles y con el código por delante—, o sea el total del plan
+  /// era justo la cifra más difícil de leer de la pantalla.
   static String _money(String currency, double value) =>
-      '$currency ${value.toStringAsFixed(0)}';
+      PurchaseMoney.format(value, currency);
 }
 
 class _TotalRow extends StatelessWidget {

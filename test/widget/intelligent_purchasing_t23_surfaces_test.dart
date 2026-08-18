@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:vinabike_erp/modules/purchases/models/intelligent_purchasing_models.dart';
 import 'package:vinabike_erp/modules/purchases/pages/intelligent_purchasing_decision_surfaces.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
@@ -29,6 +31,12 @@ Future<void> _pump(WidgetTester tester, Widget child, {double width = 900}) {
 }
 
 void main() {
+  // La escala del asistente resuelve sus familias con `google_fonts`. En las
+  // pruebas se prohíbe la descarga en tiempo de ejecución: sin esto el
+  // resultado dependería de la red y del caché de la máquina, que es
+  // exactamente lo contrario de una regresión.
+  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+
   // Un tap que no alcanza a su objetivo es un fallo, no un aviso: si el centro
   // del finder no es hit-testable la prueba estaba pasando sin tocar nada.
   setUpAll(() => WidgetController.hitTestWarningShouldBeFatal = true);
@@ -373,48 +381,43 @@ void main() {
   });
 
   group('frames 03/16/26 · controles de resultados', () {
-    testWidgets('en ancho ofrece perfil y vista anclados', (tester) async {
-      var profile = 'balanced';
-      await _pump(
-        tester,
-        ProviderResultControls(
-          compact: false,
-          profileValue: profile,
-          profileOptions: const {
-            'balanced': 'Equilibrado',
-            'profitability': 'Mayor rentabilidad',
-          },
-          onProfileChanged: (value) => profile = value,
-          viewValue: 'auto',
-          viewOptions: const {'auto': 'Automática', 'compact': 'Esenciales'},
-          onViewChanged: (_) {},
-        ),
-      );
+    testWidgets(
+      'en ancho el perfil es un dato del servidor y la vista un control',
+      (tester) async {
+        // **El perfil dejó de ser un menú.** La lectura externa lo toma de la
+        // revisión que gobierna la necesidad, así que elegir otro acá no
+        // cambiaba nada del backend: el resultado llegaba idéntico y el
+        // control prometía algo que no podía cumplir.
+        await _pump(
+          tester,
+          ProviderResultControls(
+            compact: false,
+            profileLabel: 'Prioridad · Equilibrado',
+            viewValue: 'auto',
+            viewOptions: const {'auto': 'Automática', 'compact': 'Esenciales'},
+            onViewChanged: (_) {},
+          ),
+        );
 
-      expect(find.text('Perfil · Equilibrado'), findsOneWidget);
-      expect(find.text('Vista'), findsOneWidget);
+        expect(find.text('Prioridad · Equilibrado'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('server-ranking-profile')),
+          findsOneWidget,
+        );
+        expect(find.text('Vista'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('provider-profile-menu')),
+          findsNothing,
+        );
+      },
+    );
 
-      await tester.tap(find.byKey(const ValueKey('provider-profile-menu')));
-      await tester.pumpAndSettle();
-      // Se toca la opción por su key, no el `Text`: dentro de un
-      // `CheckedPopupMenuItem` el centro del texto no es lo que recibe el tap.
-      await tester.tap(
-        find.byKey(
-          const ValueKey('provider-profile-menu-option-profitability'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(profile, 'profitability');
-    });
-
-    testWidgets('en teléfono queda un solo control', (tester) async {
+    testWidgets('en teléfono queda el dato y un solo control', (tester) async {
       await _pump(
         tester,
         ProviderResultControls(
           compact: true,
-          profileValue: 'balanced',
-          profileOptions: const {'balanced': 'Equilibrado'},
-          onProfileChanged: (_) {},
+          profileLabel: 'Prioridad · Equilibrado',
           viewValue: 'auto',
           viewOptions: const {'auto': 'Automática'},
           onViewChanged: (_) {},
@@ -422,12 +425,71 @@ void main() {
         width: 390,
       );
 
-      expect(find.text('Orden y filtros'), findsOneWidget);
-      expect(find.text('Vista'), findsNothing);
+      expect(find.text('Prioridad · Equilibrado'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('provider-sort-and-filters')),
         findsOneWidget,
       );
+    });
+  });
+
+  group('cumplimiento técnico · el veredicto sale de la ficha', () {
+    SupplyExternalCandidate candidate(String matchState, String evidence) =>
+        SupplyExternalCandidate.fromJson(<String, dynamic>{
+          'candidateId': 'c-$matchState',
+          'rank': 1,
+          'baseRank': 1,
+          'overallRank': 1,
+          'rankingScore': 0.5,
+          'baseRankingScore': 0.5,
+          'group': matchState == 'unverified' ? 'unverified' : 'actionable',
+          'matchState': matchState,
+          'productId': 'p-1',
+          'productName': 'Cadena',
+          'supplierName': 'Andes',
+          'supplierAvailability': 'unverified',
+          'evidenceQuality': evidence,
+          'purchaseCount': 3,
+          'evidenceAgeDays': 10,
+        });
+
+    testWidgets('un match débil COINCIDE por nombre, no «cumple»',
+        (tester) async {
+      // «Cumple por nombre» sobreafirmaba: la ficha no lo dice, sólo el
+      // nombre se parece.
+      await _pump(
+        tester,
+        ComplianceLabel(
+            compliance: complianceOf(candidate('weak', 'complete'))),
+      );
+
+      expect(find.text('Coincide por nombre'), findsOneWidget);
+      expect(find.text('Cumple por nombre'), findsNothing);
+      expect(find.text('Cumple'), findsNothing);
+    });
+
+    testWidgets('la factura completa no convierte un sin verificar en «Cumple»',
+        (tester) async {
+      await _pump(
+        tester,
+        ComplianceLabel(
+          compliance: complianceOf(candidate('unverified', 'complete')),
+        ),
+      );
+
+      expect(find.text('Sin verificar'), findsOneWidget);
+      expect(find.text('Cumple'), findsNothing);
+    });
+
+    testWidgets('y una factura débil no rebaja lo que la ficha confirma',
+        (tester) async {
+      await _pump(
+        tester,
+        ComplianceLabel(compliance: complianceOf(candidate('strong', 'weak'))),
+      );
+
+      expect(find.text('Cumple'), findsOneWidget);
+      expect(find.text('Evidencia débil'), findsNothing);
     });
   });
 }

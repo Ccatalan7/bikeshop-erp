@@ -1,0 +1,203 @@
+-- La vista de candidatos publica la identidad de marca, no sólo su nombre.
+--
+-- **Por qué.** `purchase_candidate_metrics_v1` expone `coalesce(product.brand,
+-- brand.name) as brand`: un texto. Una preferencia comercial por marca tiene
+-- que casar por **identidad**, porque el nombre cambia cuando alguien renombra
+-- la ficha y la preferencia guardada quedaría apuntando a nada. El catálogo
+-- real conserva además legado: de 1.613 productos activos, 1.217 tienen
+-- `brand_id`, 62 sólo el texto de `products.brand` y 334 ninguna marca
+-- (lectura de producción del dueño, 2026-08-17). Sin la identidad no se puede
+-- distinguir «coincide» de «coincide por texto», y ese 4 % se degradaría.
+--
+-- **Qué cambia y qué no.** Se agrega **una columna al final** de la proyección
+-- —único sitio que `create or replace view` admite— y **nada más**: el cuerpo
+-- es carácter por carácter el de
+-- `20260817129000_purchase_metrics_revert_to_known_good.sql`, que es la
+-- **definición vigente**. Esa precisión no es cosmética: la vista se redefine
+-- en cinco migraciones y la última es un revert. Partir de una anterior
+-- —`20260816170000`— habría podido deshacer en silencio la corrección que ese
+-- revert restauró. Aquí las dos coinciden, y se comprobó con un diff; si
+-- alguna vez dejan de coincidir, la base es la vigente.
+--
+-- Esta es la vista del incidente de los 32 s: su forma no se reestructura por
+-- conveniencia. La primera versión de esta migración se descartó justamente
+-- porque reconstruirla a mano perdía seis columnas y cambiaba el cálculo de
+-- impuesto.
+--
+-- **Ninguna salida cambia.** `rank_purchase_candidates_v1` arma su proyección
+-- con `jsonb_build_object` nombrando cada campo, así que una columna nueva no
+-- aparece en su respuesta. El arnés
+-- `supabase/manual_checks/verification/purchase_ranking_equivalence_golden.sql`
+-- lo demuestra capturando la salida antes y después.
+
+begin;
+
+create or replace view public.purchase_candidate_metrics_v1
+with (security_invoker = true)
+as
+with exact_observations as (
+  select observation.*
+  from public.purchase_line_landed_cost_observations_v1 observation
+  where observation.product_id is not null
+), aggregates as (
+  select
+    tenant_id,
+    product_id,
+    supplier_id,
+    supplier_name,
+    currency_code,
+    count(distinct purchase_invoice_id)::integer as purchase_count,
+    count(*)::integer as observation_count,
+    sum(quantity)::numeric(18,4) as purchased_units,
+    min(economic_date) as first_purchase_at,
+    max(economic_date) as last_purchase_at,
+    avg(landed_unit_cost_net)::numeric(18,6) as average_landed_unit_cost_net,
+    stddev_samp(landed_unit_cost_net)::numeric(18,6)
+      as landed_cost_standard_deviation,
+    count(*) filter (
+      where freight_evidence_status in ('complete', 'none')
+    )::integer as complete_cost_observation_count
+  from exact_observations
+  group by tenant_id, product_id, supplier_id, supplier_name, currency_code
+), latest as (
+  select distinct on (
+    tenant_id, product_id, supplier_id, supplier_name, currency_code
+  )
+    tenant_id,
+    product_id,
+    supplier_id,
+    supplier_name,
+    currency_code,
+    purchase_invoice_id as latest_purchase_invoice_id,
+    purchase_invoice_line_id as latest_purchase_invoice_line_id,
+    economic_date as latest_purchase_at,
+    base_unit_cost_net as latest_base_unit_cost_net,
+    allocated_freight_net as latest_allocated_freight_net,
+    landed_unit_cost_net as latest_landed_unit_cost_net,
+    freight_evidence_status as latest_freight_evidence_status,
+    identity_quality as latest_identity_quality
+  from exact_observations
+  order by tenant_id, product_id, supplier_id, supplier_name, currency_code,
+    economic_date desc, purchase_invoice_line_id desc
+)
+select
+  aggregate.tenant_id,
+  md5(
+    aggregate.product_id::text || ':' ||
+    coalesce(aggregate.supplier_id::text, aggregate.supplier_name, '') || ':' ||
+    aggregate.currency_code
+  )::uuid as candidate_id,
+  aggregate.product_id,
+  product.name as product_name,
+  product.sku as product_sku,
+  product.category_id,
+  coalesce(category.full_path, category.name, product.category_name,
+    product.category) as category_path,
+  coalesce(product.brand, brand.name) as brand,
+  aggregate.supplier_id,
+  aggregate.supplier_name,
+  supplier.website as supplier_website,
+  nullif(concat_ws(', ', supplier.comuna, supplier.city), '')
+    as supplier_location,
+  exists (
+    select 1
+    from public.supplier_relationship_tags tag
+    where tag.tenant_id = aggregate.tenant_id
+      and tag.supplier_id = aggregate.supplier_id
+      and tag.tag_code in ('local', 'local_workshop', 'emergency_local')
+      and tag.valid_from <= public.tenant_business_date(aggregate.tenant_id)
+      and (tag.valid_to is null
+        or tag.valid_to >= public.tenant_business_date(aggregate.tenant_id))
+  ) as is_confirmed_local,
+  aggregate.currency_code,
+  aggregate.purchase_count,
+  aggregate.observation_count,
+  aggregate.purchased_units,
+  aggregate.first_purchase_at,
+  aggregate.last_purchase_at,
+  latest.latest_purchase_invoice_id,
+  latest.latest_purchase_invoice_line_id,
+  latest.latest_base_unit_cost_net,
+  latest.latest_allocated_freight_net,
+  latest.latest_landed_unit_cost_net,
+  aggregate.average_landed_unit_cost_net,
+  aggregate.landed_cost_standard_deviation,
+  latest.latest_freight_evidence_status,
+  latest.latest_identity_quality,
+  aggregate.complete_cost_observation_count,
+  product.price::numeric(18,4) as catalog_sale_price_gross,
+  case
+    when product.price is null or product.price <= 0 then null
+    when coalesce(product.tax_rate, 19) > 1
+      then (product.price / (1 + coalesce(product.tax_rate, 19) / 100))
+    else (product.price / (1 + greatest(coalesce(product.tax_rate, 0.19), 0)))
+  end::numeric(18,6) as catalog_sale_price_net,
+  case
+    when product.price is null or product.price <= 0 then null
+    else (
+      (case
+        when coalesce(product.tax_rate, 19) > 1
+          then product.price / (1 + coalesce(product.tax_rate, 19) / 100)
+        else product.price / (1 + greatest(coalesce(product.tax_rate, 0.19), 0))
+      end) - latest.latest_landed_unit_cost_net
+    )::numeric(18,6)
+  end as projected_unit_gross_profit,
+  case
+    when product.price is null or product.price <= 0 then null
+    else (
+      ((case
+        when coalesce(product.tax_rate, 19) > 1
+          then product.price / (1 + coalesce(product.tax_rate, 19) / 100)
+        else product.price / (1 + greatest(coalesce(product.tax_rate, 0.19), 0))
+      end) - latest.latest_landed_unit_cost_net)
+      / nullif((case
+        when coalesce(product.tax_rate, 19) > 1
+          then product.price / (1 + coalesce(product.tax_rate, 19) / 100)
+        else product.price / (1 + greatest(coalesce(product.tax_rate, 0.19), 0))
+      end), 0)
+    )::numeric(12,8)
+  end as projected_gross_margin_ratio,
+  greatest(
+    public.tenant_business_date(aggregate.tenant_id)
+      - latest.latest_purchase_at::date,
+    0
+  )::integer as evidence_age_days,
+  product.updated_at as sale_price_updated_at,
+  'unverified'::text as supplier_availability,
+  latest.latest_purchase_at,
+  -- CREATE OR REPLACE VIEW only permits additive columns at the end of the
+  -- existing projection. Keeping the media triple here preserves every
+  -- previously published ordinal/name and makes this migration forward-only.
+  nullif(btrim(product.image_url_optimized), '') as image_url_optimized,
+  nullif(btrim(product.image_url), '') as image_url,
+  coalesce(product.image_urls, array[]::text[]) as image_urls,
+  -- Identidad de marca, al final de la proyección porque
+  -- `create or replace view` sólo admite columnas aditivas ahí. La glosa
+  -- `brand` de más arriba se conserva intacta: hay productos cuya única
+  -- marca es ese texto legado.
+  product.brand_id
+from aggregates aggregate
+join latest
+  on latest.tenant_id = aggregate.tenant_id
+ and latest.product_id = aggregate.product_id
+ and latest.supplier_id is not distinct from aggregate.supplier_id
+ and latest.supplier_name is not distinct from aggregate.supplier_name
+ and latest.currency_code = aggregate.currency_code
+join public.products product
+  on product.tenant_id = aggregate.tenant_id
+ and product.id = aggregate.product_id
+left join public.product_categories category
+  on category.tenant_id = product.tenant_id
+ and category.id = product.category_id
+left join public.product_brands brand
+  on brand.tenant_id = product.tenant_id
+ and brand.id = product.brand_id
+left join public.suppliers supplier
+  on supplier.tenant_id = aggregate.tenant_id
+ and supplier.id = aggregate.supplier_id
+where product.is_active is true;
+
+comment on view public.purchase_candidate_metrics_v1 is
+  'Historical purchase candidates per product, supplier and currency, with landed cost, freight evidence, catalog margin base, product media and brand identity. brand_id is the durable identity a commercial preference matches on; brand stays the readable gloss, including legacy free text for products without one.';
+
+commit;

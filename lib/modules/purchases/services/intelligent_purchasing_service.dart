@@ -84,7 +84,9 @@ class IntelligentPurchasingService {
     String? assistantThreadId,
   }) async {
     final response = await _client.rpc(
-      'create_supply_need_batch_v1',
+      // v2 persiste la categoría resuelta en la revisión de interpretación.
+      // La línea la trae desde la tarjeta cerrada; el cliente no la inventa.
+      'create_supply_need_batch_v2',
       params: {
         'p_original_request': originalRequest.trim(),
         'p_items': draft.lines
@@ -232,6 +234,162 @@ class IntelligentPurchasingService {
       },
     );
     return _needFromCommand(response);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Fase B1/B2 — el carril familia, de punta a punta.
+  //
+  // Las cuatro lecturas y los tres comandos que el flujo guiado necesita. Cada
+  // comando exige la **versión** de la necesidad y la **revisión** que la
+  // gobierna, y ninguno de los dos números sale de `supply_needs`: vienen del
+  // envelope autocontenido de la lectura inmediatamente anterior.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Stock interno del conjunto elegible, en cualquiera de los dos carriles.
+  Future<SupplyStockResolution> stockResolution(
+    String needId, {
+    int limit = 12,
+    int offset = 0,
+  }) async {
+    final response = await _client.rpc(
+      'get_supply_need_stock_resolution_v1',
+      params: {
+        'p_need_id': needId,
+        'p_limit': limit,
+        'p_offset': offset,
+      },
+    );
+    return SupplyStockResolution.fromJson(_map(response));
+  }
+
+  /// Registra por qué el stock interno no sirve, en el carril que corresponda.
+  ///
+  /// v2 y no v1: v1 exige un producto confirmado, así que una necesidad de
+  /// familia nunca podía registrar su rechazo — el nudo que dejaba la
+  /// necesidad encerrada entre stock y compra.
+  Future<void> rejectInternalStockForLane({
+    required SupplyStockResolution resolution,
+    required String reason,
+  }) async {
+    await _runNeedCommand(
+      needId: resolution.needId,
+      rpc: 'reject_supply_need_internal_stock_v2',
+      params: {
+        'p_need_id': resolution.needId,
+        'p_expected_version': resolution.needVersion,
+        'p_expected_revision_no': resolution.revisionNo,
+        'p_reason': reason.trim(),
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+  }
+
+  /// Converge el carril familia a un producto exacto.
+  ///
+  /// Es un comando propio y no `update_supply_need_v1` porque ese writer deja
+  /// la revisión sin categoría ni criterios: converger por ahí borraría la
+  /// procedencia y el siguiente cálculo quedaría ciego.
+  Future<void> confirmFamilyChoice({
+    required String needId,
+    required int expectedVersion,
+    required int expectedRevisionNo,
+    required String productId,
+  }) async {
+    await _runNeedCommand(
+      needId: needId,
+      rpc: 'confirm_supply_need_family_choice_v1',
+      params: {
+        'p_need_id': needId,
+        'p_expected_version': expectedVersion,
+        'p_expected_revision_no': expectedRevisionNo,
+        'p_product_id': productId,
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+  }
+
+  /// Candidatos externos del conjunto elegible, con sus dos grupos paginados
+  /// por separado.
+  ///
+  /// Levanta [SupplyStockFirstRequired] cuando el servidor exige decidir
+  /// primero el stock interno. Ese caso es un estado del flujo, no un fallo.
+  Future<SupplyExternalCandidates> externalCandidates(
+    String needId, {
+    int limit = 10,
+    int offset = 0,
+    int unverifiedLimit = 5,
+    int unverifiedOffset = 0,
+  }) async {
+    try {
+      final response = await _client.rpc(
+        'get_supply_need_external_candidates_v1',
+        params: {
+          'p_need_id': needId,
+          'p_limit': limit,
+          'p_offset': offset,
+          'p_unverified_limit': unverifiedLimit,
+          'p_unverified_offset': unverifiedOffset,
+        },
+      );
+      return SupplyExternalCandidates.fromJson(_map(response));
+    } on PostgrestException catch (error) {
+      throw _translateSupplyError(needId, error);
+    }
+  }
+
+  /// Objetivo comercial vigente.
+  Future<SupplyCommercialTarget> commercialTarget(String needId) async {
+    final response = await _client.rpc(
+      'get_supply_need_commercial_target_v1',
+      params: {'p_need_id': needId},
+    );
+    return SupplyCommercialTarget.fromJson(_map(response));
+  }
+
+  /// Fija o limpia el objetivo comercial.
+  ///
+  /// El parche es explícito: una clave ausente conserva, una clave en `null`
+  /// limpia ese campo y `values` nulo limpia todo. La moneda **no** se envía:
+  /// el servidor la posee y una carga que la traiga se rechaza.
+  Future<void> setCommercialTarget({
+    required SupplyCommercialTarget current,
+    required Map<String, Object?>? values,
+  }) async {
+    await _runNeedCommand(
+      needId: current.needId,
+      rpc: 'set_supply_need_commercial_target_v1',
+      params: {
+        'p_need_id': current.needId,
+        'p_expected_version': current.needVersion,
+        'p_expected_target_revision_no': current.targetRevisionNo,
+        'p_target': values,
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+  }
+
+  Future<void> _runNeedCommand({
+    required String needId,
+    required String rpc,
+    required Map<String, Object?> params,
+  }) async {
+    try {
+      await _client.rpc(rpc, params: params);
+    } on PostgrestException catch (error) {
+      throw _translateSupplyError(needId, error);
+    }
+  }
+
+  /// `P0001 stock_first_required` es un paso pendiente y `40001` es una lectura
+  /// vencida; cualquier otro error sigue siendo lo que era y sube tal cual.
+  /// La regla vive en el modelo, donde una prueba puede afirmarla sin red.
+  Object _translateSupplyError(String needId, PostgrestException error) {
+    return supplyCommandFailure(
+          needId,
+          code: error.code,
+          message: error.message,
+        ) ??
+        error;
   }
 
   Future<PurchaseRanking> rankCandidates({
@@ -401,18 +559,29 @@ class IntelligentPurchasingService {
         .toSet()
         .toList(growable: false);
     if (productIds.isNotEmpty) {
+      // **Mismo viaje, proyección ampliada.** La consulta a `products` ya
+      // existía para resolver el nombre; acá se le agregan tres columnas que la
+      // tabla ya publica —`image_url_optimized`, `image_url`, `image_urls`—,
+      // que son exactamente las que `ProductMedia` sabe encadenar. Lo que no
+      // cambia es el número de consultas: sigue siendo una sola para todas las
+      // líneas del plan, no una por fila.
       final rawProducts = await _client
           .from('products')
-          .select('id,name')
+          .select('id,name,image_url_optimized,image_url,image_urls')
           .inFilter('id', productIds);
-      final names = <String, String>{
+      final products = <String, Map<String, dynamic>>{
         for (final row in (rawProducts as List).whereType<Map>())
-          if (row['id'] != null && row['name'] != null)
-            row['id'].toString(): row['name'].toString(),
+          if (row['id'] != null)
+            row['id'].toString(): Map<String, dynamic>.from(row),
       };
-      lines = lines
-          .map((line) => line.withProductName(names[line.productId]))
-          .toList(growable: false);
+      lines = lines.map((line) {
+        final product = products[line.productId];
+        if (product == null) return line;
+        return line.withProduct(
+          name: product['name']?.toString(),
+          media: ProductMedia.fromJson(product),
+        );
+      }).toList(growable: false);
     }
 
     final rawGroups = await _client

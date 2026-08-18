@@ -65,9 +65,9 @@ select ok(
       and trigger_row.tgname = 'trg_sales_payment_erp_notification'
       and not trigger_row.tgisinternal
       and pg_get_triggerdef(trigger_row.oid)
-        like '%AFTER INSERT OR UPDATE OF date ON public.sales_payments%'
+        like '%AFTER INSERT OR DELETE OR UPDATE OF date, deleted_at ON public.sales_payments%'
   ),
-  'sales-payment notifications synchronize when the payment date changes'
+  'sales-payment notifications synchronize dates and payment cancellation state'
 );
 
 select ok(

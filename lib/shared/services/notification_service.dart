@@ -638,6 +638,18 @@ class NotificationService {
     return true;
   }
 
+  /// Removes a previously active order alert when that same durable
+  /// notification identity transitions to a cancelled lifecycle type.
+  void removeOnlineOrderAlert(String notificationId) {
+    final id = notificationId.trim();
+    if (id.isEmpty) return;
+    _seenOnlineOrderAlertIds.remove(id);
+    _onlineOrderAlertRows.removeWhere(
+      (row) => row['id']?.toString() == id,
+    );
+    onlineOrderAlertCount.value = _onlineOrderAlertRows.length;
+  }
+
   Future<void> markOnlineOrderAlertReadForOrder(String orderId) async {
     final tenantId =
         _onlineOrderTenantId ?? await TenantService().getTenantId();

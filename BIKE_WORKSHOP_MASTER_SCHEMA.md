@@ -1217,12 +1217,208 @@ a reason through `reject_supply_need_internal_stock_v1` before external
 alternatives become eligible. The reason is workflow evidence, not technical
 truth about the bicycle or product.
 
+**Family-lane resolution (Fase B1, 2026-08-17 — in the working tree, tested
+locally, NOT deployed).** `reject_supply_need_internal_stock_v1` requires a
+confirmed exact product, so a need resolved only to a category could never
+record the rejection that opens external alternatives: it was stuck with
+neither stock nor purchase.
+`20260817160000_supply_need_family_resolution_b1.sql` closes that lane without
+touching v1. `supply_need_resolution_context_internal_v1` is the single owner of
+which interpretation revision governs — the highest `revision_no`, never the
+latest clock time. `supply_need_eligible_products_internal_v1` resolves
+technical eligibility over **active catalog products of the category and its
+active descendants**, not over `purchase_candidate_metrics_v1`, which only knows
+what the shop already bought; it evaluates every predicate through the shared
+inventory evaluator **before any cut**, because cutting first would let a run of
+contradictions hide the valid product behind them, and it answers
+`needs_refinement` with counts and the template fields that can narrow the set
+rather than truncating silently. Evidence aggregates strictest-wins: a
+contradiction excludes the product entirely, ficha evidence is strong, a value
+read from the name is weak, and an unanswerable criterion is `unverified` —
+unknown, never compatible. `get_supply_need_stock_resolution_v1` is the
+stock-first read: per-product ATP through `inventory_available_quantity_v1`,
+coverage against the need's quantity, full counts beside a bounded page, and one
+blocking rule — only a full candidate with usable evidence forces the operator
+to look before comparing suppliers. `unverified` is shown but never blocks,
+since charging the operator for a gap in the ERP would invent a decision. The
+family ATP aggregate is informational and explicitly does not prove coverage:
+combining two variants is a workshop decision, not a property of inventory.
+`reject_supply_need_internal_stock_v2` keeps v1 semantics for the exact lane and
+adds the family one, bound to both the need version and the governing revision.
+`confirm_supply_need_family_choice_v1` converges an explicitly chosen
+non-contradicting alternative — `unverified` included, because the choice is a
+person's — revalidating tenant, category and eligibility under lock, and copying
+`category_id`, `constraints` and `clarifications` into the new interpretation.
+That copy is the point: `update_supply_need_v1` writes its manual revision with
+empty constraints and no category, so converging through it would have erased
+the Fase A provenance and left the next family calculation blind. The new
+revision stores only stable match evidence, keeps an earlier family rejection
+standing, adds a typed ledger action, and neither assigns stock nor creates a
+plan. External scoring, typed commercial preference and the UI are not part of
+this cut.
+
 The linked `sales_invoices` document remains the only owner of physical
 consumption and accounting. Its posting path transitions matching commitments
 `active -> consuming -> consumed` around the exact invoice-owned stock
 movements; reopening the invoice reactivates the commitment. A mismatch or
 partial consumption aborts the transaction instead of leaving ATP and on-hand
 truth divergent.
+
+**Category provenance on the interpretation revision (Fase A, 2026-08-17 — in
+the working tree, tested locally, NOT deployed).**
+`supply_need_interpretation_revisions.category_id` existed from the kernel and
+was never written: a category the assistant had already resolved from the
+operator's phrase died at capture, so a need without an exact product carried no
+family at all. `20260817150000_supply_request_category_provenance.sql` closes
+that: `assistant_inspect_inventory_schema_v3` publishes the resolved category
+identity, `assistant_prepare_supply_request_v2` accepts it as a turn-scoped
+opaque reference, and `create_supply_need_batch_v2` persists it.
+
+Authority is explicit and does not change the layers above. **An exact catalog
+product owns its category**, derived server-side from the ficha; a category sent
+alongside it that disagrees is an error, not a preference. Only a line without a
+product may carry a model-resolved category, and **a technical predicate needs
+complete grounding**: a resolved category, an active spec template for it, and
+membership of every field in that template. With no active mapping or no
+resolvable template the line is admitted only with empty predicates — the need
+and its category survive, no unfounded criterion does. There is no fallback to a
+global `is_filterable` rule: that let any filterable definition of the catalog
+bound any category, so a tyre width could constrain a chain, and such a criterion
+would later govern a ranking with nobody able to say where it came from.
+
+Derived labels never reach durable storage. `technical_family` and the category
+path come from `category_tech_mappings` and `product_categories` and move when
+someone reorganizes the tree, so the command strips them before building any
+snapshot: they are absent from the interpretation evidence, from the durable
+event, and from `supply_need_batch_receipts.request_snapshot`. **The idempotency
+snapshot rests on stable identities**, because a glossed one would break replay
+the moment a category is renamed. They travel transiently inside the closed card
+so a surface can label them, and the durable command sends only `category_id`.
+Rewriting a line's description clears product, category, family and predicates
+together, because all of them came from interpreting the previous phrase.
+
+Nothing here reaches ranking: `rank_purchase_candidates_v1` and its `p_query`
+lexical fallback are untouched, and the purchasing capture stage still advertises
+only schema inspection, inventory search, capability gap and supply-request
+preparation.
+
+**Typed commercial target (Fase B2 cut, 2026-08-17 — in the working tree, tested
+locally, NOT deployed).** A supply need's commercial preference used to be a
+free-text `commercial_preference` entry inside `constraints` that nothing read
+and nothing validated, and the ranking's `gama` argument was fed only by a UI
+selector, never by the need. `supply_need_commercial_revisions` replaces that
+with an append-only stream of typed preferences: band, preferred brand identity,
+maximum landed unit cost and minimum gross margin ratio.
+
+It is a **separate stream, not columns on the interpretation revision**, and the
+reason is demonstrated in this schema: `update_supply_need_v1` writes its manual
+revision with empty constraints and no category. A writer that drops fields
+already exists, so nullable columns there would force every writer to copy them
+forward and the first one that forgets erases the preference silently. One
+stream, one writer, no such surface — proven by regressions that run the generic
+update and the family confirmation and assert the target survives both.
+
+The currency is **server-owned** from `tenants.currency` and is not
+representable in the input: a payload carrying `currencyCode` is rejected rather
+than ignored. It is also **denominated per revision, not per read**: a target
+reads back in the currency it was set in, with today's shop currency reported
+separately, so a shop that switches from CLP to USD cannot silently reinterpret
+a stored ceiling. When the currency did change and a ceiling exists, an edit
+that does not explicitly replace or clear that ceiling is refused, and
+explicitly re-entering it **re-denominates even when the number is identical**,
+because the explicit act is what changes what the number means. No number is
+ever converted: there is no exchange rate to convert it with. There is no FX in this system, so a target only ever states the
+shop's own currency, and comparing it against a candidate in another one is a
+question the future evaluation answers `unknown` — never a conversion. A
+preferred brand must be **active and visible** to the tenant, global or its own;
+a foreign or retired brand is refused, because the operator believes they chose
+something. No derived gloss is stored: brand names and category paths are
+resolved at read time from their owners.
+
+A payload is a patch: an absent key preserves, an explicit null clears that
+field, and a null target clears everything and leaves a revision marked
+`cleared`, which is not the same fact as never having had one. Setting serializes on its
+operation key before reading its receipt, so two identical concurrent requests
+end in a replay rather than a version conflict or a raw unique violation. It is
+optimistic on both the need version and the commercial revision, an effective
+change bumps the need version so in-flight reads are invalidated, and a no-op
+writes no revision and moves no version but still **consumes its operation
+key**, so replay and collision keep meaning. The read is self-contained: it
+carries the need version and supply state the command demands, and a covered or
+cancelled need takes no further commercial decisions. `create_supply_need_batch_v3` creates needs and their
+first target atomically while delegating every existing rule to v2. Its internal delegation key is derived from a
+seed generated inside the transaction after the external lock — never from the
+public key, which a same-tenant actor could pre-seed to make v3 replay someone
+else's batch and hang new targets on it — and that seed is the receipt identity,
+so internal keys trace back without being guessable. It owns its
+receipt in the shared batch namespace, keyed on the **normalized** request —
+v2-normalized items without derived glosses, plus only actionable targets
+indexed by the real line reference — so a cosmetic difference replays and a real
+one collides, and its internal keys are fixed size so the public 160-byte
+operation-key limit is untouched. a line with
+no actionable target writes no empty revision and still reads back the
+server-owned currency with revision zero. Targets are soft preferences: none of
+them removes a candidate, which stays reserved for demonstrated technical
+contradiction.
+
+**External supply candidates (Fase B2 cut 5, 2026-08-17 — in the working tree,
+tested locally, NOT deployed).** `get_supply_need_external_candidates_v1` is the
+first server-owned read that carries one `SupplyNeed` from its governing
+technical interpretation and ATP state into historical supplier alternatives.
+It calls `supply_need_stock_bundle_internal_v1` exactly once. If a known internal
+alternative covers the requested quantity and no operator has recorded why it
+is unsuitable, the read raises `P0001 stock_first_required` before scoring; an
+empty list must never let a UI describe that case as “no suppliers”. Closed,
+unresolved, refinement, technical-conflict, no-eligible-product, no-history and
+excessive-fanout states remain distinct because they require different next
+actions. Historical purchase evidence never claims current supplier
+availability.
+
+Candidate identity remains product + supplier + currency. The orchestrator
+resolves the complete historical candidate set for every non-conflicting
+eligible product in one view read, then calls the shared scoring kernel once and
+scores before reranking, splitting or pagination. A server-owned fanout ceiling
+protects the analysis budget. Strong/weak/no-criteria candidates are actionable;
+technically unverified ones remain visible in a separately counted and paged
+lane. This preserves access to plausible alternatives without presenting an
+unknown ficha result as compatibility.
+
+Commercial targets only rerank. Preferred brand, landed-cost ceiling and gross
+margin floor contribute only when their evidence is known; `gama` is already
+owned by the kernel and is not counted twice. With no known signal, the legacy
+score is returned exactly. With known signals, the blend is 75% kernel and 25%
+their mean, ordered at full precision before the public number is rounded.
+Currency mismatch has no FX fallback. Landed cost, projected profit and margin
+are not considered comparable unless purchase cost and catalog price share a
+currency and freight evidence is `complete` or `none`; incomplete freight makes
+the economic signal unknown rather than optimistic. This cut changes neither
+bike truth, ficha authority, visit diagnosis nor stock. Its focused database
+regressions pass 110/110, and the seven-file supply suite passes 439/439; the
+entire migration chain remains undeployed at this checkpoint.
+
+**Client decision coherence (Fase B2 cut 6, 2026-08-17 — in the working tree,
+tested locally, NOT deployed).** The purchasing workspace consumes the stock
+resolution, commercial target and external-candidate envelopes as one decision,
+but it does not pretend they were one database snapshot. It commits them to the
+visible state only when need identity, need version, supply state, technical
+revision and commercial revision agree. A mismatch is a recoverable concurrency
+conflict; an initial conflict owns one reload notice, while an incremental
+conflict preserves the last coherent decision. A generic initial read failure
+owns one dedicated failure surface. Neither condition may fall through to an
+empty-history conclusion or an identity-confirmation action, because no coherent
+evidence was committed.
+
+`stock_first_required` is accepted as a workflow state only when the stock
+resolution already read by the client independently corroborates blocking
+coverage and a closed external lane. Otherwise the two reads describe different
+moments and the client reloads. Technical compatibility is always derived from
+the server-authored `matchState`; purchase/freight evidence quality remains a
+separate economic axis and can never promote an unverified technical match to
+compatible. Stock, supplier and target commands are optimistic, and a failed
+command preserves the last coherent read while exposing its own retry path.
+The focused client suite passes 231/231 tests, but this does not constitute a
+production smoke: migrations `20260817150000` through `20260817220000` remain
+undeployed at this checkpoint.
 
 This addition strengthens the existing backbone without moving facts between
 its technical layers:
@@ -1414,6 +1610,16 @@ Registration authorship is part of that visit container's audit boundary:
   source graph; older jobs without equivalent evidence remain unknown.
 - this audit projection changes no bicycle/profile truth, visit diagnosis,
   executed-work metadata, invoice ownership, or derived bike-memory state.
+- the Right Toolbar notification is also a lifecycle projection of this same
+  visit identity, not a second job record. An active row is
+  `mechanic_job_created`; the audited `set_mechanic_job_archived` transition
+  converts that exact notification in place to `mechanic_job_archived` / `Trabajo
+  eliminado`, and restore converts it back without changing the original
+  notification `id`, `created_at`, or `read_at`. The briefing's `Trabajos`
+  counter therefore counts unique active job IDs only. Historical notification
+  rows whose source job is archived or no longer exists are reconciled to the
+  inactive type; no workshop, bicycle, invoice, stock, accounting, diagnosis,
+  or bike-memory fact is rewritten by that repair.
 
 ### `mechanic_job_bikes`
 

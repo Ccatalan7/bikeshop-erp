@@ -20,9 +20,52 @@ import 'intelligent_purchasing_surfaces.dart';
 /// - la disponibilidad del proveedor nunca se afirma desde el historial.
 
 /// Estado técnico visible de un candidato.
-enum CandidateCompliance { meets, review, weakEvidence, unevaluated }
+///
+/// **Los cuatro primeros valores son compatibilidad técnica; los tres últimos,
+/// calidad de la evidencia económica.** No son la misma pregunta y venían
+/// mezclados: `evidenceQuality` mide qué tan firme es el historial de compra
+/// —costo, flete, recencia—, no si el producto calza con lo que se pidió. Un
+/// candidato que el ERP **no pudo verificar** contra los criterios llegaba a
+/// pantalla como «Cumple» sólo porque su factura estaba completa. Eso es
+/// exactamente lo que el contrato de esta fase prohíbe: no saber no es cumplir.
+enum CandidateCompliance {
+  /// `matchState = strong`: la ficha del producto confirma los criterios.
+  meets,
+
+  /// `matchState = weak`: coincide por el nombre, no por la ficha.
+  meetsByName,
+
+  /// `matchState = no_criteria`: no había criterios técnicos que comparar.
+  noCriteria,
+
+  /// `matchState = unverified`: el ERP no pudo verificarlo. Nunca «Cumple».
+  unverified,
+
+  /// Legado del candidato histórico: evidencia económica parcial.
+  review,
+
+  /// Legado: evidencia económica débil.
+  weakEvidence,
+
+  /// Legado: el ranking devolvió la opción sin alcanzar a compararla.
+  unevaluated,
+}
 
 CandidateCompliance complianceOf(PurchaseCandidate candidate) {
+  // El candidato de la fase B2 sabe cómo calzó con la petición; el histórico
+  // no, y conserva su lectura de siempre.
+  if (candidate is SupplyExternalCandidate) {
+    switch (candidate.matchState) {
+      case 'strong':
+        return CandidateCompliance.meets;
+      case 'weak':
+        return CandidateCompliance.meetsByName;
+      case 'no_criteria':
+        return CandidateCompliance.noCriteria;
+      default:
+        return CandidateCompliance.unverified;
+    }
+  }
   switch (candidate.evidenceQuality) {
     case 'complete':
       return CandidateCompliance.meets;
@@ -52,6 +95,23 @@ class ComplianceLabel extends StatelessWidget {
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         );
+      case CandidateCompliance.meetsByName:
+        // No es una excepción, es una evidencia más floja: texto, no cápsula.
+        return Text(
+          // «Cumple» sobreafirma: el nombre coincide, la ficha no lo dice.
+          'Coincide por nombre',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        );
+      case CandidateCompliance.noCriteria:
+        return Text(
+          'Sin criterios',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        );
+      case CandidateCompliance.unverified:
+        // Sí es la excepción que hay que ver: el ERP no pudo comprobarlo.
+        return _ExceptionCapsule(tone: roles.warning, label: 'Sin verificar');
       case CandidateCompliance.unevaluated:
         return Text(
           'Sin evaluar',
@@ -517,7 +577,8 @@ class ProviderCandidateCard extends StatelessWidget {
                   ),
                   // Cápsula sólo si es excepción.
                   if (compliance == CandidateCompliance.review ||
-                      compliance == CandidateCompliance.weakEvidence) ...[
+                      compliance == CandidateCompliance.weakEvidence ||
+                      compliance == CandidateCompliance.unverified) ...[
                     const SizedBox(width: 8),
                     ComplianceLabel(compliance: compliance),
                   ],
@@ -612,18 +673,31 @@ class CandidateInspectorPanel extends StatelessWidget {
     super.key,
     required this.candidate,
     required this.quantity,
+    required this.unitLabel,
     required this.onClose,
     required this.onAddToPlan,
     required this.onOpenSupplier,
     required this.adding,
     required this.alreadyInPlan,
+    this.onChooseProduct,
   });
 
   final PurchaseCandidate candidate;
   final double quantity;
+
+  /// Unidad ya concordada por el dueño canónico del vocabulario
+  /// (`_supplyUnitLabel` del workspace): «par», «juego», «metros»… Esta
+  /// superficie no pluraliza por su cuenta ni asume «u.»: una necesidad de dos
+  /// pares no se lee «2 U.».
+  final String unitLabel;
   final VoidCallback onClose;
   final VoidCallback onAddToPlan;
   final VoidCallback? onOpenSupplier;
+
+  /// Carril familia: la necesidad todavía no tiene producto confirmado, así
+  /// que la primera acción es **elegir producto**, no agregar al plan. Son dos
+  /// escrituras distintas y el pie las muestra en su orden real.
+  final VoidCallback? onChooseProduct;
   final bool adding;
   final bool alreadyInPlan;
 
@@ -633,6 +707,11 @@ class CandidateInspectorPanel extends StatelessWidget {
     final roles = VinabikeThemeRoles.of(context);
     final compliance = complianceOf(candidate);
     final cost = candidate.latestLandedUnitCostNet;
+    // El candidato externo trae la evaluación por señal; el histórico no.
+    // Se copia a una local porque un campo del widget no promociona su tipo.
+    final inspected = candidate;
+    final targetMatch =
+        inspected is SupplyExternalCandidate ? inspected.requestMatch : null;
 
     return Material(
       color: theme.colorScheme.surface,
@@ -657,8 +736,13 @@ class CandidateInspectorPanel extends StatelessWidget {
                     children: [
                       Text(
                         candidate.productName,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontFamily: 'Poppins'),
+                        // `typography.scale.panel_title` del handoff nombra al
+                        // inspector explícitamente: 600 13.5 Poppins. Con
+                        // `titleMedium` (16) un nombre real como «Cambio
+                        // Saiguan HG43A Index Apernado» partía en dos líneas y
+                        // empujaba la cápsula de cumplimiento fuera de vista.
+                        style: PurchaseType.panelTitle
+                            .copyWith(color: PurchaseTokens.of(context).ink),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -695,8 +779,9 @@ class CandidateInspectorPanel extends StatelessWidget {
                 Expanded(
                   child: _BigMetric(
                     label: 'COSTO ATERRIZADO',
-                    value: cost == null ? 'sin evaluar' : null,
-                    money: cost,
+                    value: cost == null
+                        ? 'sin evaluar'
+                        : _inspectorMoney(cost, candidate.currency),
                   ),
                 ),
                 Expanded(
@@ -708,7 +793,13 @@ class CandidateInspectorPanel extends StatelessWidget {
               ],
             ),
           ),
-          if (compliance != CandidateCompliance.meets ||
+          // La banda de advertencia sólo aparece cuando hay algo que advertir.
+          // `no_criteria` no es una carencia: la petición no traía criterios
+          // técnicos, y decir «falta evidencia» ahí sería inventar un problema.
+          if (compliance == CandidateCompliance.unverified ||
+              compliance == CandidateCompliance.review ||
+              compliance == CandidateCompliance.weakEvidence ||
+              compliance == CandidateCompliance.unevaluated ||
               candidate.currency != 'CLP') ...[
             const SizedBox(height: 12),
             Padding(
@@ -725,9 +816,11 @@ class CandidateInspectorPanel extends StatelessWidget {
                 child: Text(
                   candidate.currency != 'CLP'
                       ? 'El costo está en ${candidate.currency}. Sin una fuente de cambio autorizada no se convierte ni se suma con CLP.'
-                      : 'El cumplimiento todavía está por confirmar: falta evidencia estructurada para comparar esta opción como cifra firme.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: roles.warning.onContainer),
+                      : compliance == CandidateCompliance.unverified
+                          ? 'La ficha no alcanza para confirmar que cumple los criterios de la petición. Se muestra igual: no saber no es lo mismo que no calzar.'
+                          : 'El cumplimiento todavía está por confirmar: falta evidencia estructurada para comparar esta opción como cifra firme.',
+                  style: PurchaseType.body
+                      .copyWith(color: roles.warning.onContainer),
                 ),
               ),
             ),
@@ -748,7 +841,13 @@ class CandidateInspectorPanel extends StatelessWidget {
                     _InspectorRow(
                       label: 'Cumple los criterios de la petición',
                       value: switch (compliance) {
-                        CandidateCompliance.meets => 'sí',
+                        CandidateCompliance.meets => 'sí, según la ficha',
+                        CandidateCompliance.meetsByName =>
+                          'coincide por el nombre, no por la ficha',
+                        CandidateCompliance.noCriteria =>
+                          'no había criterios que comparar',
+                        CandidateCompliance.unverified =>
+                          'no se pudo verificar',
                         CandidateCompliance.review => 'por revisar',
                         CandidateCompliance.weakEvidence => 'evidencia débil',
                         CandidateCompliance.unevaluated => 'sin evaluar',
@@ -756,6 +855,22 @@ class CandidateInspectorPanel extends StatelessWidget {
                     ),
                     if (candidate.brand != null)
                       _InspectorRow(label: 'Marca', value: candidate.brand!),
+                    // La gama ya es un dato del motor —banda derivada del costo
+                    // relativo de cada marca dentro de su categoría— y decidía
+                    // el ranking sin aparecer nunca en el detalle.
+                    _InspectorRow(
+                      label: 'Gama',
+                      // La banda poco firme NO se apaga: apagarla escondería
+                      // un dato que decide detrás de un gris. La reserva se
+                      // dice con palabras y el valor conserva su tinta.
+                      // «poca evidencia» chocaba con la fila «Calidad de
+                      // evidencia» de la sección de abajo, que habla del costo.
+                      // La reserva de la banda es sobre la MARCA, no sobre el
+                      // costo, y se dice con esas palabras.
+                      value: candidate.gama == null || candidate.gamaIsConfident
+                          ? _gamaLabel(candidate)
+                          : '${_gamaLabel(candidate)} · pocas compras de la marca',
+                    ),
                     if (candidate.category != null)
                       _InspectorRow(
                         label: 'Categoría',
@@ -775,8 +890,11 @@ class CandidateInspectorPanel extends StatelessWidget {
                   children: [
                     _InspectorRow(
                       label: 'Costo aterrizado unitario',
-                      value: cost == null ? 'sin evaluar' : null,
-                      money: cost,
+                      // Mismo contrato que la métrica grande y que el total:
+                      // una sola forma de escribir dinero en esta superficie.
+                      value: cost == null
+                          ? 'sin evaluar'
+                          : _inspectorMoney(cost, candidate.currency),
                     ),
                     _InspectorRow(
                       label: 'Moneda',
@@ -802,56 +920,187 @@ class CandidateInspectorPanel extends StatelessWidget {
                     ),
                   ],
                 ),
+                // Objetivo comercial: qué se pidió y qué se pudo comprobar.
+                // Una señal sin evidencia se dice «No verificable» con su
+                // causa; nunca baja a cero, porque eso castigaría al candidato
+                // por una carencia del dato.
+                if (targetMatch != null &&
+                    targetMatch.requestedSignals.isNotEmpty)
+                  _InspectorSection(
+                    title: 'Objetivo comercial',
+                    meta: targetMatch.blendApplied
+                        ? '${targetMatch.knownSignalCount} verificadas'
+                        : 'sin verificar',
+                    children: [RequestMatchEvidence(match: targetMatch)],
+                  ),
                 _InspectorSection(
                   title: 'Historial y evidencia',
                   meta: candidate.evidenceAgeDays > 0
                       ? '${candidate.evidenceAgeDays} días'
                       : 'sin fecha',
                   children: [
+                    // La marca vivía también acá, repetida. Y el conteo de
+                    // compras pertenece a «Por qué aparece aquí», que explica
+                    // el ranking: repetirlo acá era la misma cifra dos veces
+                    // con dos nombres distintos. Historial guarda la fecha
+                    // exacta —el «hace 140 días» de la cabecera es relativo— y
+                    // la disponibilidad, que nunca se afirma.
+                    _InspectorRow(
+                      label: 'Última compra',
+                      value: candidate.lastPurchaseAt == null
+                          ? 'sin registro'
+                          : _spanishDate(candidate.lastPurchaseAt!),
+                    ),
                     const _InspectorRow(
                       label: 'Disponibilidad del proveedor',
                       value: 'no verificada',
                     ),
-                    if (candidate.brand != null)
-                      _InspectorRow(label: 'Marca', value: candidate.brand!),
                   ],
                 ),
               ],
             ),
           ),
-          Container(
-            color: theme.colorScheme.surfaceContainerLow,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Row(
-              children: [
-                Expanded(
+          _InspectorFooter(
+            quantity: quantity,
+            unitLabel: unitLabel,
+            unitCost: cost,
+            currency: candidate.currency,
+            adding: adding,
+            alreadyInPlan: alreadyInPlan,
+            onAddToPlan: onAddToPlan,
+            onChooseProduct: onChooseProduct,
+            onOpenSupplier: onOpenSupplier,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pie del inspector: cuánto, cuánto sale, y las dos salidas reales.
+///
+/// El handoff pide «cantidad con stepper + total». El total **sí** se agrega:
+/// era el dato que faltaba para decidir —cinco unidades a $3.490 son $17.450, y
+/// eso no estaba en ninguna parte de la pantalla—.
+///
+/// **El stepper se descarta, y queda dicho por qué.** La cantidad pertenece a la
+/// necesidad, y la necesidad ya tiene un editor con dueño único: la barra
+/// superior, con su `Editar necesidad`. Un segundo editor del mismo dato en el
+/// inspector crearía dos dueños para una sola cifra —qué gana si difieren, cuál
+/// manda al guardar— que es justo el defecto que la guía prohíbe. Aquí la
+/// cantidad se **muestra**, no se edita.
+class _InspectorFooter extends StatelessWidget {
+  const _InspectorFooter({
+    required this.quantity,
+    required this.unitLabel,
+    required this.unitCost,
+    required this.currency,
+    required this.adding,
+    required this.alreadyInPlan,
+    required this.onAddToPlan,
+    required this.onOpenSupplier,
+    this.onChooseProduct,
+  });
+
+  final double quantity;
+  final String unitLabel;
+  final double? unitCost;
+  final String currency;
+  final bool adding;
+  final bool alreadyInPlan;
+  final VoidCallback onAddToPlan;
+  final VoidCallback? onOpenSupplier;
+  final VoidCallback? onChooseProduct;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final total = unitCost == null ? null : unitCost! * quantity;
+    final quantityLabel = quantity == quantity.roundToDouble()
+        ? quantity.toStringAsFixed(0)
+        : quantity.toStringAsFixed(2);
+
+    return Container(
+      color: tokens.sunken,
+      padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'TOTAL POR $quantityLabel ${unitLabel.toUpperCase()}',
+                      style:
+                          PurchaseType.label.copyWith(color: tokens.inkFaint),
+                    ),
+                    const SizedBox(height: 3),
+                    if (total == null)
+                      Text(
+                        // Sin costo aterrizado no se inventa un total: se dice.
+                        'sin evaluar',
+                        style: PurchaseType.metricSmall
+                            .copyWith(color: tokens.inkMuted),
+                      )
+                    else
+                      Text(
+                        _inspectorMoney(total, currency),
+                        style: PurchaseType.metricSmall.copyWith(
+                          color: tokens.ink,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (currency != 'CLP')
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 2),
                   child: Text(
-                    '${quantity.toStringAsFixed(quantity == quantity.roundToDouble() ? 0 : 2)} u.',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontFamily: 'IBM Plex Mono',
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                    // La cifra ya lleva su código de moneda; lo que falta decir
+                    // es que no se convirtió ni se puede sumar con pesos.
+                    'sin convertir',
+                    style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
                   ),
                 ),
-                if (onOpenSupplier != null)
-                  TextButton(
-                    onPressed: onOpenSupplier,
-                    child: const Text('Abrir proveedor'),
-                  ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 36,
-                  // Único botón sólido del panel.
-                  child: FilledButton(
-                    key: const ValueKey('add-candidate-to-plan'),
-                    onPressed: adding || alreadyInPlan ? null : onAddToPlan,
-                    child: Text(
-                      alreadyInPlan ? 'Ya está en el plan' : 'Agregar al plan',
-                    ),
-                  ),
+            ],
+          ),
+          const SizedBox(height: PurchaseMetrics.actionsTopGap),
+          // Alternativa a la izquierda y acción principal a la derecha, en una
+          // sola fila en todo el rango del panel (330–600).
+          //
+          // El desborde que apareció no era del layout: era de la **palabra**.
+          // El estado deshabilitado decía «Ya está en el plan» y estiraba el
+          // botón 31 px más de lo que cabía. Apilar por eso habría convertido
+          // una excepción —un candidato ya agregado— en la composición
+          // permanente del ancho normal. Se acorta el estado a «En el plan»,
+          // que además es lo que un rótulo de estado debe ser: corto.
+          Row(
+            children: [
+              if (onOpenSupplier != null)
+                PurchaseInlineAction(
+                  key: const ValueKey('open-supplier-from-inspector'),
+                  label: 'Abrir proveedor',
+                  onPressed: onOpenSupplier,
                 ),
-              ],
-            ),
+              const Spacer(),
+              if (onChooseProduct != null)
+                PurchasePrimaryButton(
+                  key: const ValueKey('choose-family-product'),
+                  label: 'Elegir producto',
+                  onPressed: adding ? null : onChooseProduct,
+                )
+              else
+                PurchasePrimaryButton(
+                  key: const ValueKey('add-candidate-to-plan'),
+                  label: alreadyInPlan ? 'En el plan' : 'Agregar al plan',
+                  onPressed: adding || alreadyInPlan ? null : onAddToPlan,
+                ),
+            ],
           ),
         ],
       ),
@@ -860,42 +1109,42 @@ class CandidateInspectorPanel extends StatelessWidget {
 }
 
 class _BigMetric extends StatelessWidget {
-  const _BigMetric({required this.label, this.value, this.money});
+  const _BigMetric({required this.label, this.value});
 
   final String label;
+
+  /// Ya formateado por la superficie: el dinero pasa por `_inspectorMoney`, que
+  /// dice la moneda cuando no es CLP en vez de disfrazarla de peso.
   final String? value;
-  final double? money;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
+    // `typography.scale.metric_lg` nombra esta superficie: «inspector: costo
+    // aterrizado y margen», 700 21px mono. Las dos métricas usaban
+    // `headlineSmall`, que además cambia de tamaño según el tema del host: en
+    // la app real el margen se veía notoriamente más grande que el costo,
+    // lado a lado. Un par de cifras comparables no puede tener dos tamaños.
+    final metric = PurchaseType.metricLarge.copyWith(
+      color: tokens.ink,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: PurchaseType.label.copyWith(
-            letterSpacing: 0.7,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+          style: PurchaseType.label.copyWith(color: tokens.inkFaint),
         ),
         const SizedBox(height: 4),
-        if (money != null)
-          DefaultTextStyle.merge(
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontFamily: 'IBM Plex Mono',
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-            child: VbMoneyText(money!),
-          )
-        else
-          Text(
-            value ?? '—',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontFamily: 'IBM Plex Mono',
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
+        // `VbMoneyText` fija su tamaño por dentro (14) e ignora el estilo
+        // ambiente, así que envolverlo no cambiaba nada: por eso el costo se
+        // veía más chico que el margen, lado a lado. La cifra llega ya
+        // formateada y la escala la pone esta superficie.
+        Text(
+          value ?? '—',
+          style: metric,
+        ),
       ],
     );
   }
@@ -941,8 +1190,8 @@ class _InspectorSection extends StatelessWidget {
               child: Text(
                 meta,
                 textAlign: TextAlign.end,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: PurchaseType.meta
+                    .copyWith(color: PurchaseTokens.of(context).inkMuted),
               ),
             ),
           ],
@@ -954,15 +1203,21 @@ class _InspectorSection extends StatelessWidget {
 }
 
 class _InspectorRow extends StatelessWidget {
-  const _InspectorRow({required this.label, this.value, this.money});
+  /// Sólo texto ya formateado. Antes había un atajo `money:` que pintaba con
+  /// `VbMoneyText`, y ése asume peso chileno: una fila en USD salía con `$` y
+  /// se leía como pesos. La plata entra por `PurchaseMoney.format`, que sabe
+  /// de la moneda de la línea.
+  const _InspectorRow({
+    required this.label,
+    this.value,
+  });
 
   final String label;
   final String? value;
-  final double? money;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       // El valor también flexiona: con el inspector en su ancho mínimo (330)
@@ -974,26 +1229,51 @@ class _InspectorRow extends StatelessWidget {
             flex: 5,
             child: Text(
               label,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              // La etiqueta es la mitad prescindible de la fila; el valor es
+              // el que se lee. Estaban en el mismo gris.
+              style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
             ),
           ),
           const SizedBox(width: 8),
-          if (money != null)
-            VbMoneyText(money!)
-          else
-            Expanded(
-              flex: 4,
-              child: Text(
-                value ?? '—',
-                textAlign: TextAlign.end,
-                style: theme.textTheme.bodyMedium,
-              ),
+          Expanded(
+            flex: 4,
+            child: Text(
+              value ?? '—',
+              textAlign: TextAlign.end,
+              // Siempre tinta plena: un valor incierto se matiza con
+              // palabras, nunca escondiéndolo tras un gris pálido.
+              style: PurchaseType.body.copyWith(color: tokens.ink),
             ),
+          ),
         ],
       ),
     );
   }
+}
+
+/// Dinero del inspector. Delega en el contrato del módulo: una sola forma de
+/// escribir plata para el inspector, el plan y el cierre.
+String _inspectorMoney(double amount, String currency) =>
+    PurchaseMoney.format(amount, currency);
+
+/// Fecha corta en castellano, sin dependencias de formato del host.
+String _spanishDate(DateTime value) {
+  const months = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
+  final local = value.toLocal();
+  return '${local.day} ${months[local.month - 1]} ${local.year}';
 }
 
 /// Estado vacío del plan: inline y anclado arriba, en la misma superficie.
@@ -1133,6 +1413,12 @@ class PlanEmptyInline extends StatelessWidget {
 /// No es un campo de texto disfrazado: el valor se muestra centrado en mono y
 /// los dos controles tienen área táctil propia. El teclado sigue funcionando
 /// porque cada botón es un `IconButton` real con tooltip.
+///
+/// **`subject` y `keyPrefix` existen porque el plan repite el control.** Con
+/// tres líneas en pantalla, tres botones rotulados «Quitar una unidad» son
+/// indistinguibles: ni una persona con lector de pantalla ni una prueba pueden
+/// decir cuál es cuál. Nombrando el producto, cada control vuelve a ser único.
+/// Geometría del prototipo: botones 28×28 radio 7, casilla 52×28.
 class PurchaseQuantityStepper extends StatelessWidget {
   const PurchaseQuantityStepper({
     super.key,
@@ -1143,6 +1429,8 @@ class PurchaseQuantityStepper extends StatelessWidget {
     this.enabled = true,
     this.unitLabel,
     this.semanticsLabel,
+    this.subject,
+    this.keyPrefix,
   });
 
   final int value;
@@ -1153,11 +1441,26 @@ class PurchaseQuantityStepper extends StatelessWidget {
   final String? unitLabel;
   final String? semanticsLabel;
 
+  /// Qué se está contando, para que los dos botones se puedan nombrar.
+  final String? subject;
+
+  /// Raíz de las `key` de los dos botones, cuando hay más de un stepper.
+  final String? keyPrefix;
+
+  static const double _button = 28;
+  static const double _box = 52;
+  static const double _radius = 7;
+
+  String _label(String action) =>
+      subject == null ? action : '$action de $subject';
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
     final canDecrease = enabled && onChanged != null && value > min;
     final canIncrease = enabled && onChanged != null && value < max;
+    final decreaseLabel = _label('Quitar una unidad');
+    final increaseLabel = _label('Agregar una unidad');
 
     return Semantics(
       label: semanticsLabel ?? 'Cantidad',
@@ -1165,45 +1468,89 @@ class PurchaseQuantityStepper extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: canDecrease ? 'Quitar una unidad' : 'Ya está en el mínimo',
+          _StepperButton(
+            buttonKey:
+                keyPrefix == null ? null : ValueKey('$keyPrefix-decrease'),
+            label: decreaseLabel,
+            tooltip: canDecrease ? decreaseLabel : 'Ya está en el mínimo',
+            icon: Icons.remove,
             onPressed: canDecrease ? () => onChanged!(value - 1) : null,
-            icon: const Icon(Icons.remove, size: 16),
           ),
+          const SizedBox(width: 5),
           Container(
-            constraints: const BoxConstraints(minWidth: 52),
+            width: _box,
+            height: _button,
             alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(8),
+              color: tokens.surface,
+              border: Border.all(color: tokens.borderStrong),
+              borderRadius: BorderRadius.circular(_radius),
             ),
             child: Text(
               '$value',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontFamily: 'IBM Plex Mono',
-                fontFeatures: const [FontFeature.tabularFigures()],
+              style: PurchaseType.metricSmall.copyWith(
+                fontSize: 12,
+                color: tokens.ink,
+                fontFeatures: PurchaseType.tabular,
               ),
             ),
           ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip:
-                canIncrease ? 'Agregar una unidad' : 'Ya está en el máximo',
+          const SizedBox(width: 5),
+          _StepperButton(
+            buttonKey:
+                keyPrefix == null ? null : ValueKey('$keyPrefix-increase'),
+            label: increaseLabel,
+            tooltip: canIncrease ? increaseLabel : 'Ya está en el máximo',
+            icon: Icons.add,
             onPressed: canIncrease ? () => onChanged!(value + 1) : null,
-            icon: const Icon(Icons.add, size: 16),
           ),
           if (unitLabel != null) ...[
-            const SizedBox(width: 2),
+            const SizedBox(width: 5),
             Text(
               unitLabel!,
-              style: PurchaseType.label.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              style: PurchaseType.hint.copyWith(color: tokens.inkFaint),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _StepperButton extends StatelessWidget {
+  const _StepperButton({
+    required this.buttonKey,
+    required this.label,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final Key? buttonKey;
+  final String label;
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return SizedBox.square(
+      dimension: PurchaseQuantityStepper._button,
+      child: IconButton(
+        key: buttonKey,
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(PurchaseQuantityStepper._radius),
+            side: BorderSide(color: tokens.borderStrong),
+          ),
+        ),
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16, semanticLabel: label),
       ),
     );
   }
@@ -1218,9 +1565,7 @@ class ProviderResultControls extends StatelessWidget {
   const ProviderResultControls({
     super.key,
     required this.compact,
-    required this.profileValue,
-    required this.profileOptions,
-    required this.onProfileChanged,
+    required this.profileLabel,
     required this.viewValue,
     required this.viewOptions,
     required this.onViewChanged,
@@ -1228,9 +1573,12 @@ class ProviderResultControls extends StatelessWidget {
   });
 
   final bool compact;
-  final String profileValue;
-  final Map<String, String> profileOptions;
-  final ValueChanged<String> onProfileChanged;
+
+  /// **El perfil es un dato, no un control.** La lectura externa lo toma de la
+  /// revisión que gobierna la necesidad, así que un menú acá no cambiaba nada
+  /// del backend: ofrecía tres opciones y el resultado llegaba idéntico. Se
+  /// muestra lo que el servidor resolvió y se dice de dónde salió.
+  final String profileLabel;
   final String viewValue;
   final Map<String, String> viewOptions;
   final ValueChanged<String> onViewChanged;
@@ -1244,22 +1592,24 @@ class ProviderResultControls extends StatelessWidget {
       // filtro de compatibilidad: el control existía pero la mitad de su
       // promesa no. Se ancla al propio botón; `showModalBottomSheet` pinta velo
       // y este módulo no lo admite.
-      return _AnchoredMenuButton(
-        menuId: 'provider-sort-and-filters',
-        label: 'Orden y filtros',
-        enabled: enabled,
-        sections: [
-          _MenuSection(
-            title: 'Perfil',
-            value: profileValue,
-            options: profileOptions,
-            onSelected: onProfileChanged,
-          ),
-          _MenuSection(
-            title: 'Vista',
-            value: viewValue,
-            options: viewOptions,
-            onSelected: onViewChanged,
+      return Wrap(
+        spacing: 10,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _ServerProfileLabel(label: profileLabel),
+          _AnchoredMenuButton(
+            menuId: 'provider-sort-and-filters',
+            label: 'Vista',
+            enabled: enabled,
+            sections: [
+              _MenuSection(
+                title: 'Vista',
+                value: viewValue,
+                options: viewOptions,
+                onSelected: onViewChanged,
+              ),
+            ],
           ),
         ],
       );
@@ -1267,19 +1617,9 @@ class ProviderResultControls extends StatelessWidget {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _AnchoredMenuButton(
-          menuId: 'provider-profile-menu',
-          label: 'Perfil · ${profileOptions[profileValue] ?? profileValue}',
-          enabled: enabled,
-          sections: [
-            _MenuSection(
-              value: profileValue,
-              options: profileOptions,
-              onSelected: onProfileChanged,
-            ),
-          ],
-        ),
+        _ServerProfileLabel(label: profileLabel),
         _AnchoredMenuButton(
           menuId: 'provider-view-menu',
           label: 'Vista',
@@ -1293,6 +1633,25 @@ class ProviderResultControls extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// El perfil que el servidor resolvió, como texto secundario.
+///
+/// Nunca un menú: este módulo no ofrece opciones que no lleguen al backend.
+class _ServerProfileLabel extends StatelessWidget {
+  const _ServerProfileLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      key: const ValueKey('server-ranking-profile'),
+      label,
+      style: PurchaseType.meta
+          .copyWith(color: PurchaseTokens.of(context).inkMuted),
     );
   }
 }
@@ -1697,10 +2056,17 @@ class PlanGroupEvidenceText extends StatelessWidget {
 /// una promesa falsa, así que el disclosure conserva su sitio y su rótulo
 /// verdadero —«Evidencia de la línea»— y muestra los datos que la línea sí
 /// trae: disponibilidad declarada, moneda, costo unitario y base del margen.
-class PlanLineEvidenceNote extends StatelessWidget {
+///
+/// **No es un `ExpansionTile`.** Ése ocupa el ancho de la identidad y cuelga
+/// su chevron en el extremo derecho, a media fila del texto que abre: en el
+/// plan quedaba un cuadrito suelto en mitad de la línea, sin nada que lo
+/// explicara. El prototipo lo resuelve como lo que es —un botón de texto en el
+/// color de acción, con la evidencia debajo—, y así queda.
+class PlanLineEvidenceNote extends StatefulWidget {
   const PlanLineEvidenceNote({
     super.key,
     required this.lineId,
+    required this.productName,
     required this.supplierAvailability,
     required this.currency,
     required this.landedUnitCostNet,
@@ -1708,47 +2074,74 @@ class PlanLineEvidenceNote extends StatelessWidget {
   });
 
   final String lineId;
+
+  /// El disclosure se nombra con su producto por el mismo motivo que los
+  /// botones de la línea: con varias líneas abiertas, «Evidencia de la línea»
+  /// repetido no identifica ninguna.
+  final String productName;
   final String supplierAvailability;
   final String currency;
   final double? landedUnitCostNet;
   final double? projectedGrossMarginRatio;
 
   @override
+  State<PlanLineEvidenceNote> createState() => _PlanLineEvidenceNoteState();
+}
+
+class _PlanLineEvidenceNoteState extends State<PlanLineEvidenceNote> {
+  bool _open = false;
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Theme(
-      data: theme.copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        key: PageStorageKey<String>('plan-line-evidence-$lineId'),
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(bottom: 8),
-        title: Text(
-          'Evidencia de la línea',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.primary),
+    final tokens = PurchaseTokens.of(context);
+    final unitCost =
+        PurchaseMoney.format(widget.landedUnitCostNet, widget.currency);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 7),
+        Semantics(
+          button: true,
+          expanded: _open,
+          label: 'Evidencia de ${widget.productName}',
+          // El texto visible se repite en todas las líneas; el rótulo que se
+          // busca es el que nombra el producto, así que el del `Text` se
+          // excluye en vez de fundirse con él.
+          excludeSemantics: true,
+          child: InkWell(
+            key: ValueKey('plan-line-evidence-${widget.lineId}'),
+            onTap: () => setState(() => _open = !_open),
+            child: Text(
+              _open ? 'Ocultar evidencia' : 'Evidencia de la línea',
+              style: PurchaseType.inlineAction
+                  .copyWith(fontSize: 10, color: tokens.act),
+            ),
+          ),
         ),
-        children: [
+        if (_open) ...[
+          const SizedBox(height: 4),
           _InspectorRow(
             label: 'Disponibilidad declarada',
-            value: supplierAvailability.isEmpty
+            value: widget.supplierAvailability.isEmpty
                 ? 'no verificada'
-                : supplierAvailability,
+                : widget.supplierAvailability,
           ),
-          _InspectorRow(label: 'Moneda', value: currency),
+          _InspectorRow(label: 'Moneda', value: widget.currency),
           _InspectorRow(
             label: 'Costo aterrizado unitario',
-            value: landedUnitCostNet == null ? 'sin evaluar' : null,
-            money: landedUnitCostNet,
+            value: unitCost == '—' ? 'sin evaluar' : unitCost,
           ),
           _InspectorRow(
             label: 'Margen proyectado',
-            value: projectedGrossMarginRatio == null
+            value: widget.projectedGrossMarginRatio == null
                 // Sin precio vigente el margen no es cero: no tiene base.
                 ? 'sin base'
-                : '${(projectedGrossMarginRatio! * 100).toStringAsFixed(1)}%',
+                : '${(widget.projectedGrossMarginRatio! * 100).toStringAsFixed(1)}%',
           ),
+          const SizedBox(height: 4),
         ],
-      ),
+      ],
     );
   }
 }
@@ -2249,6 +2642,1319 @@ class _LocalPurchaseSheetState extends State<LocalPurchaseSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Plan borrador — grupo por proveedor y línea.
+//
+// La composición está leída de la página `Compras · Asistente inteligente
+// navegable.dc.html`, bloque `planGroups`. Lo que trae de allí, verbatim:
+//
+//   tarjeta:   surface · 1px border · radio 10 · overflow hidden
+//   cabecera:  padding 10/12 · borde inferior `hair` · flex gap 9
+//              proveedor 600 12.5 sans ink · evidencia 400 10.5 sans
+//              (`inkFaint` completa, `wnFg` parcial)
+//   fila:      padding 10/12 · borde superior `hair`
+//              identidad flex:1 min 150 · stepper 28/52/28 gap 5
+//              total 700 13 mono · unitario 400 9 mono inkFaint
+//              retirar 28×28 radio 7 · disclosure 600 10 sans act
+//   pie:       padding 9/12 · fondo `sunken` · borde superior `hair`
+//              etiqueta 500 11 sans inkMuted · cifra 700 13 mono ink
+//              nota de flete 400 10/1.45 sans inkFaint
+//
+// **El subtotal vive en el pie, no junto a la evidencia.** Antes ambos
+// colgaban del mismo `Row` de cabecera y se leían pegados —«evidencia
+// completa$17.450»—: dos cosas distintas que la vista fundía en una. La
+// separación no es una preferencia, es la del prototipo.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Un proveedor del plan con sus líneas, su evidencia y su subtotal.
+class PurchasePlanGroup extends StatelessWidget {
+  const PurchasePlanGroup({
+    super.key,
+    required this.group,
+    required this.lines,
+    required this.removingLineId,
+    required this.updatingLineId,
+    required this.editingLineId,
+    required this.quantityController,
+    required this.quantityError,
+    required this.onEditQuantity,
+    required this.onCancelQuantity,
+    required this.onCommitQuantity,
+    required this.onStepQuantity,
+    required this.onRemove,
+  });
+
+  final PurchasePlanSupplierGroup group;
+  final List<PurchasePlanLine> lines;
+  final String? removingLineId;
+  final String? updatingLineId;
+
+  /// Línea cuya cantidad se edita en su propia fila, sin superficie flotante.
+  final String? editingLineId;
+  final TextEditingController quantityController;
+  final String? quantityError;
+  final VoidCallback onCancelQuantity;
+  final ValueChanged<PurchasePlanLine> onCommitQuantity;
+  final ValueChanged<PurchasePlanLine> onEditQuantity;
+  final ValueChanged<PurchasePlanLine> onRemove;
+
+  /// El stepper `− n +` corrige la cantidad sin abrir el editor.
+  final void Function(PurchasePlanLine line, int quantity) onStepQuantity;
+
+  bool get _evidenceComplete =>
+      lines.isNotEmpty && lines.every((line) => line.landedUnitCostNet != null);
+
+  /// Lo que el subtotal **no** dice, en la ranura de nota del pie.
+  ///
+  /// Son dos advertencias distintas y las dos tienen que sobrevivir. La del
+  /// flete es del prototipo. La de disponibilidad estaba en la cabecera vieja
+  /// —«N productos · disponibilidad por confirmar»— y no puede desaparecer al
+  /// mudarse: el contrato de datos prohíbe afirmar que el proveedor tiene
+  /// stock, porque lo único que hay es historial de compra. Enterrarla dentro
+  /// del disclosure de cada línea sería quitarla.
+  String get _footerCaveat {
+    final unverified = lines.any(
+      (line) => line.supplierAvailability != 'confirmed',
+    );
+    final freight = _evidenceComplete
+        ? 'Flete ya atribuido por línea; consolidar no agrega descuento.'
+        : 'Falta el costo aterrizado de al menos una línea: el subtotal cubre '
+            'sólo las que sí lo tienen.';
+    if (!unverified) return freight;
+    return '$freight La disponibilidad del proveedor está por confirmar: el '
+        'historial dice que se compró, no que hoy haya.';
+  }
+
+  double? get _subtotal {
+    if (lines.isEmpty) return null;
+    // Una línea sin costo aterrizado no se cuenta como cero: el subtotal
+    // quedaría más barato que la compra real. Se suma lo que hay y el pie dice
+    // que la evidencia está incompleta.
+    final priced = lines.where((line) => line.landedUnitCostNet != null);
+    if (priced.isEmpty) return null;
+    return priced.fold<double>(
+      0,
+      (total, line) => total + line.landedUnitCostNet! * line.quantity,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final complete = _evidenceComplete;
+
+    return PurchasePanel(
+      key: ValueKey('plan-group-${group.supplierName}-${group.currency}'),
+      padded: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Cabecera: identidad del proveedor y estado de su evidencia. Nada
+          // de plata acá.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: tokens.hair)),
+            ),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 9,
+              runSpacing: 4,
+              children: [
+                Text(
+                  group.supplierName,
+                  style: PurchaseType.sectionTitle.copyWith(color: tokens.ink),
+                ),
+                Text(
+                  complete ? 'evidencia completa' : 'evidencia parcial',
+                  style: PurchaseType.meta.copyWith(
+                    fontSize: 10.5,
+                    color: complete ? tokens.inkFaint : roles.warning.accent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (final line in lines)
+            editingLineId == line.id
+                ? PurchasePlanQuantityEditor(
+                    key: ValueKey('plan-quantity-inline-${line.id}'),
+                    line: line,
+                    controller: quantityController,
+                    error: quantityError,
+                    onCancel: onCancelQuantity,
+                    onCommit: () => onCommitQuantity(line),
+                  )
+                : PurchasePlanLineRow(
+                    key: ValueKey('plan-line-${line.id}'),
+                    line: line,
+                    busy: removingLineId != null || updatingLineId != null,
+                    updating: updatingLineId == line.id,
+                    removing: removingLineId == line.id,
+                    onEditQuantity: () => onEditQuantity(line),
+                    onStepQuantity: (quantity) =>
+                        onStepQuantity(line, quantity),
+                    onRemove: () => onRemove(line),
+                  ),
+          // Pie hundido: el subtotal, rotulado con su moneda, y la nota de
+          // flete que impide leerlo como precio final.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: tokens.sunken,
+              border: Border(top: BorderSide(color: tokens.hair)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Subtotal mercadería ${group.currency}',
+                        style: PurchaseType.body.copyWith(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
+                          color: tokens.inkMuted,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      PurchaseMoney.format(_subtotal, group.currency),
+                      style: PurchaseType.metricSmall.copyWith(
+                        color: tokens.ink,
+                        fontFeatures: PurchaseType.tabular,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  _footerCaveat,
+                  style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Una línea del plan: foto, identidad, cantidad, plata y retirar.
+///
+/// La identidad es la única pieza elástica. Cuando el ancho disponible no
+/// alcanza para la fila completa —el inspector abierto estrecha esta columna
+/// muy por debajo del ancho de la ventana— los controles caen bajo la
+/// identidad, que es el reflow del prototipo (`flex-wrap:wrap` con la
+/// identidad en `min-width:150px`), no una vista de teléfono aparte.
+class PurchasePlanLineRow extends StatelessWidget {
+  const PurchasePlanLineRow({
+    super.key,
+    required this.line,
+    required this.busy,
+    required this.updating,
+    required this.removing,
+    required this.onEditQuantity,
+    required this.onStepQuantity,
+    required this.onRemove,
+  });
+
+  final PurchasePlanLine line;
+  final bool busy;
+  final bool updating;
+  final bool removing;
+  final VoidCallback onEditQuantity;
+  final ValueChanged<int> onStepQuantity;
+  final VoidCallback onRemove;
+
+  /// El ancho mínimo de la fila en una sola línea, sumado de sus piezas leídas
+  /// del prototipo. No es un número redondo elegido a ojo: si alguna pieza
+  /// cambia de tamaño, este umbral cambia con ella.
+  static const double _singleRowMinWidth = 12 + // padding izquierdo
+      PurchaseSurfaceGeometry.mediaTableRow + // foto 38
+      10 + // gap
+      150 + // identidad, mínimo del prototipo
+      10 +
+      _stepperWidth +
+      28 + // editar cantidad
+      10 +
+      _moneyColumnWidth +
+      28 + // retirar
+      12; // padding derecho
+
+  static const double _stepperWidth = 28 + 5 + 52 + 5 + 28;
+  static const double _moneyColumnWidth = 100;
+
+  String get _productLabel => line.productName ?? 'Producto del plan';
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => _build(
+        context,
+        stacked: constraints.maxWidth < _singleRowMinWidth,
+      ),
+    );
+  }
+
+  Widget _build(BuildContext context, {required bool stacked}) {
+    final tokens = PurchaseTokens.of(context);
+    final subtotal = line.landedUnitCostNet == null
+        ? null
+        : line.landedUnitCostNet! * line.quantity;
+
+    // Anulación del contrato de imagen registrada en `PurchasePlanLine.media`:
+    // el t23 no pone foto en el plan, el dueño sí. Geometría prestada de
+    // `image_contract.geometry.table_row`, la superficie más parecida.
+    final photo = ProductMediaTile(
+      key: ValueKey('plan-line-media-${line.id}'),
+      media: line.media,
+      name: _productLabel,
+      size: PurchaseSurfaceGeometry.mediaTableRow,
+    );
+
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(_productLabel,
+            style: PurchaseType.rowTitle.copyWith(color: tokens.ink)),
+        const SizedBox(height: 2),
+        Text(
+          line.landedUnitCostNet == null
+              // Sin costo aterrizado la línea no tiene evidencia comparable:
+              // se dice, no se rellena con un número.
+              ? 'evidencia incompleta · sin costo aterrizado'
+              : 'evidencia completa',
+          style: PurchaseType.body.copyWith(
+            fontSize: 11,
+            height: 1.2,
+            color: tokens.inkMuted,
+          ),
+        ),
+        PlanLineEvidenceNote(
+          lineId: line.id,
+          productName: _productLabel,
+          supplierAvailability: line.supplierAvailability,
+          currency: line.currency,
+          landedUnitCostNet: line.landedUnitCostNet,
+          projectedGrossMarginRatio: line.projectedGrossMarginRatio,
+        ),
+      ],
+    );
+
+    final quantity = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PurchaseQuantityStepper(
+          value: line.quantity.round(),
+          enabled: !busy,
+          unitLabel: purchaseUnitLabel(line.unit, line.quantity),
+          semanticsLabel: 'Cantidad de $_productLabel',
+          subject: _productLabel,
+          keyPrefix: 'plan-line-${line.id}',
+          onChanged: onStepQuantity,
+        ),
+        _PlanLineIconButton(
+          buttonKey: ValueKey('plan-line-edit-quantity-${line.id}'),
+          label: 'Escribir la cantidad de $_productLabel',
+          onPressed: busy ? null : onEditQuantity,
+          busy: updating,
+          icon: Icons.edit_outlined,
+        ),
+      ],
+    );
+
+    final money = SizedBox(
+      width: stacked ? null : _moneyColumnWidth,
+      child: Column(
+        crossAxisAlignment:
+            stacked ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            PurchaseMoney.format(subtotal, line.currency),
+            key: ValueKey('plan-line-total-${line.id}'),
+            style: PurchaseType.metricSmall.copyWith(
+              color: tokens.ink,
+              fontFeatures: PurchaseType.tabular,
+            ),
+          ),
+          if (line.landedUnitCostNet != null)
+            Text(
+              PurchaseMoney.perUnit(line.landedUnitCostNet, line.currency),
+              key: ValueKey('plan-line-unit-${line.id}'),
+              style: PurchaseType.hint.copyWith(
+                fontSize: 9,
+                color: tokens.inkFaint,
+                fontFeatures: PurchaseType.tabular,
+              ),
+            ),
+        ],
+      ),
+    );
+
+    final remove = _PlanLineIconButton(
+      buttonKey: ValueKey('plan-line-remove-${line.id}'),
+      label: 'Quitar $_productLabel del plan',
+      tooltip: 'Retira la línea del plan; la necesidad sigue abierta',
+      onPressed: busy ? null : onRemove,
+      busy: removing,
+      icon: Icons.close,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: stacked
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    photo,
+                    const SizedBox(width: 10),
+                    Expanded(child: identity),
+                    remove,
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [quantity, money],
+                ),
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                photo,
+                const SizedBox(width: 10),
+                Expanded(child: identity),
+                const SizedBox(width: 10),
+                quantity,
+                const SizedBox(width: 10),
+                money,
+                remove,
+              ],
+            ),
+    );
+  }
+}
+
+/// Botón de icono de una línea del plan, con nombre propio.
+///
+/// **Por qué no es un `IconButton` suelto.** Los iconos de las líneas no se
+/// podían alcanzar por identidad: todas las filas exponían el mismo rótulo
+/// genérico —«Editar cantidad», «Quitar del plan»— y con tres productos en el
+/// plan no había forma de decir cuál. Acá el rótulo nombra el producto, así
+/// que cada control es único en la pantalla, y la `key` permite alcanzarlo sin
+/// depender del texto.
+class _PlanLineIconButton extends StatelessWidget {
+  const _PlanLineIconButton({
+    required this.buttonKey,
+    required this.label,
+    required this.onPressed,
+    required this.busy,
+    required this.icon,
+    this.tooltip,
+  });
+
+  final Key buttonKey;
+  final String label;
+  final String? tooltip;
+  final VoidCallback? onPressed;
+  final bool busy;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      key: buttonKey,
+      // El tooltip explica la consecuencia cuando la hay; el rótulo accesible
+      // siempre nombra el producto, que es lo que se busca por identidad.
+      tooltip: tooltip ?? label,
+      visualDensity: VisualDensity.compact,
+      onPressed: onPressed,
+      icon: busy
+          ? const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(icon, size: 16, semanticLabel: label),
+    );
+  }
+}
+
+/// Editor de cantidad de una línea, en el sitio de la línea.
+class PurchasePlanQuantityEditor extends StatelessWidget {
+  const PurchasePlanQuantityEditor({
+    super.key,
+    required this.line,
+    required this.controller,
+    required this.error,
+    required this.onCancel,
+    required this.onCommit,
+  });
+
+  final PurchasePlanLine line;
+  final TextEditingController controller;
+  final String? error;
+  final VoidCallback onCancel;
+  final VoidCallback onCommit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 380;
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: tokens.sunken,
+            border: Border(
+              top: BorderSide(color: tokens.hair),
+              left: BorderSide(color: tokens.act, width: 3),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                line.productName ?? 'Producto del plan',
+                style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+              ),
+              const SizedBox(height: 10),
+              Flex(
+                direction: stacked ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: stacked ? double.infinity : 160,
+                    child: TextField(
+                      key: const ValueKey('purchase-plan-quantity-field'),
+                      controller: controller,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Cantidad',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onSubmitted: (_) => onCommit(),
+                    ),
+                  ),
+                  SizedBox(width: stacked ? 0 : 12, height: stacked ? 10 : 0),
+                  SizedBox(
+                    height: 40,
+                    width: stacked ? double.infinity : null,
+                    child: FilledButton(
+                      key: const ValueKey('save-purchase-plan-quantity'),
+                      onPressed: onCommit,
+                      child: const Text('Guardar'),
+                    ),
+                  ),
+                  SizedBox(width: stacked ? 0 : 8, height: stacked ? 8 : 0),
+                  SizedBox(
+                    height: 40,
+                    width: stacked ? double.infinity : null,
+                    child: TextButton(
+                      key: const ValueKey('cancel-purchase-plan-quantity'),
+                      onPressed: onCancel,
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                ],
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  error!,
+                  style: PurchaseType.meta
+                      .copyWith(color: theme.colorScheme.error),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// El vocabulario de unidades del módulo, en un solo sitio.
+///
+/// Vive acá y no en la página porque las superficies del plan y del inspector
+/// lo necesitan sin arrastrar el workspace entero. Antes una copia decía «1
+/// unidades».
+String purchaseUnitLabel(String raw, double quantity) {
+  final singular = quantity == 1;
+  return switch (raw.trim().toLowerCase()) {
+    'unit' ||
+    'units' ||
+    'unidad' ||
+    'unidades' =>
+      singular ? 'unidad' : 'unidades',
+    'pair' || 'pairs' || 'par' || 'pares' => singular ? 'par' : 'pares',
+    'set' || 'sets' || 'juego' || 'juegos' => singular ? 'juego' : 'juegos',
+    'meter' ||
+    'meters' ||
+    'metre' ||
+    'metres' ||
+    'metro' ||
+    'metros' =>
+      singular ? 'metro' : 'metros',
+    _ => raw.trim(),
+  };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Fase B1/B2 — el carril familia en la superficie.
+//
+// Todas estas bandas reutilizan la gramática que el módulo ya fijó: ancho
+// completo, `surfaceContainerLow`, filete arriba y abajo, `titleSmall` para el
+// hecho y `bodySmall` para la causa, y las acciones en una fila. Ninguna es
+// una tarjeta centrada con sombra, y ninguna repite el estado como cápsula.
+// ───────────────────────────────────────────────────────────────────────────
+
+/// Banda base de estado. Un solo dueño de la composición para que los siete
+/// estados no diverjan en siete layouts.
+class _DecisionStateBand extends StatelessWidget {
+  const _DecisionStateBand({
+    super.key,
+    required this.title,
+    required this.body,
+    this.actions = const <Widget>[],
+  });
+
+  final String title;
+  final String body;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      width: double.infinity,
+      color: theme.colorScheme.surfaceContainerLow,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      foregroundDecoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: tokens.hair),
+          bottom: BorderSide(color: tokens.hair),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: theme.textTheme.titleSmall),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: actions,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// El servidor exige decidir primero el stock interno.
+///
+/// **No es un error.** El paso externo está cerrado porque hay una alternativa
+/// interna que cubre entera la necesidad y nadie dijo por qué no sirve. La
+/// única acción que lo abre está acá, no en un mensaje de reintento.
+class StockFirstRequiredSurface extends StatelessWidget {
+  const StockFirstRequiredSurface({
+    super.key,
+    required this.onExplainRejection,
+    required this.onReviewStock,
+    this.busy = false,
+  });
+
+  final VoidCallback onExplainRejection;
+  final VoidCallback onReviewStock;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DecisionStateBand(
+      key: const ValueKey('stock-first-required'),
+      title: 'Primero decide el stock interno',
+      body: 'Hay una alternativa en bodega que cubre entera esta necesidad. '
+          'Para comparar proveedores, usa ese stock o explica por qué no sirve.',
+      actions: [
+        FilledButton(
+          key: const ValueKey('stock-first-explain'),
+          onPressed: busy ? null : onExplainRejection,
+          child: const Text('Explicar por qué no sirve'),
+        ),
+        TextButton(
+          key: const ValueKey('stock-first-review'),
+          onPressed: busy ? null : onReviewStock,
+          child: const Text('Revisar el stock interno'),
+        ),
+      ],
+    );
+  }
+}
+
+/// La lectura de la decisión falló y no hay nada que mostrar todavía.
+///
+/// **No es un conjunto vacío.** Sin esta superficie, un fallo de red dejaba la
+/// pantalla afirmando dos cosas falsas a la vez: «no hay compras históricas
+/// comparables» —que es una conclusión sobre los datos, no sobre la red— y
+/// «falta confirmar qué producto es», que invita a resolver una identidad que
+/// nadie pudo evaluar. Un error de lectura no autoriza ninguna conclusión.
+class DecisionLoadFailedSurface extends StatelessWidget {
+  const DecisionLoadFailedSurface({
+    super.key,
+    required this.onRetry,
+    this.busy = false,
+  });
+
+  final VoidCallback onRetry;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DecisionStateBand(
+      key: const ValueKey('decision-load-failed'),
+      title: 'No se pudo leer esta necesidad',
+      body: 'La consulta no llegó a responder, así que todavía no sabemos si '
+          'hay stock ni qué proveedores comparar. La necesidad no cambió.',
+      actions: [
+        FilledButton(
+          key: const ValueKey('retry-decision-load'),
+          onPressed: busy ? null : onRetry,
+          child: const Text('Reintentar'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Los siete estados en que la lectura externa no propone comprar.
+///
+/// Cada uno tiene su causa y su acción propia; colapsarlos en «sin resultados»
+/// le quitaría al operador justamente lo que tiene que hacer después.
+class ExternalCandidatesStateSurface extends StatelessWidget {
+  const ExternalCandidatesStateSurface({
+    super.key,
+    required this.result,
+    this.onEditNeed,
+    this.onRegisterLocalPurchase,
+  });
+
+  final SupplyExternalCandidates result;
+  final VoidCallback? onEditNeed;
+  final VoidCallback? onRegisterLocalPurchase;
+
+  @override
+  Widget build(BuildContext context) {
+    final copy = supplyExternalStatusCopy(result);
+    final actions = <Widget>[];
+    if (copy.actionLabel != null) {
+      final onPressed = result.status == 'no_historical_candidates'
+          ? onRegisterLocalPurchase
+          : onEditNeed;
+      if (onPressed != null) {
+        actions.add(
+          FilledButton(
+            key: ValueKey('external-state-action-${result.status}'),
+            onPressed: onPressed,
+            child: Text(copy.actionLabel!),
+          ),
+        );
+      }
+    }
+    return _DecisionStateBand(
+      key: ValueKey('external-state-${result.status}'),
+      title: copy.title,
+      body: copy.body,
+      actions: actions,
+    );
+  }
+}
+
+/// Cabecera del grupo de candidatos que el ERP no pudo verificar.
+///
+/// «No lo sé» no es «no cumple»: van en su propio grupo, rotulados, y nunca
+/// mezclados con los accionables ni escondidos.
+class UnverifiedCandidatesBand extends StatelessWidget {
+  const UnverifiedCandidatesBand({
+    super.key,
+    required this.count,
+    required this.page,
+    this.onShowMore,
+    this.busy = false,
+  });
+
+  final int count;
+  final SupplyPage page;
+  final VoidCallback? onShowMore;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
+    return Padding(
+      key: const ValueKey('unverified-candidates-band'),
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            count == 1
+                ? '1 opción sin verificar'
+                : '$count opciones sin verificar',
+            style: theme.textTheme.titleSmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'La ficha no alcanza para confirmar que cumplen los criterios. '
+            'Se muestran igual: no saber no es lo mismo que no calzar.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          if (page.hasMore) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Mostrando ${page.returned} de ${page.total}.',
+              style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+            ),
+            if (onShowMore != null)
+              PurchaseInlineAction(
+                key: const ValueKey('show-more-unverified'),
+                label: 'Ver más sin verificar',
+                onPressed: busy ? null : onShowMore,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Evidencia del objetivo comercial para un candidato, señal por señal.
+///
+/// Una señal `unknown` se dice como «No verificable» **con su causa**, nunca
+/// como un cero: un costo en otra moneda o un flete irreproducible son una
+/// carencia del dato, no un defecto del candidato.
+class RequestMatchEvidence extends StatelessWidget {
+  const RequestMatchEvidence({super.key, required this.match});
+
+  final SupplyRequestMatch match;
+
+  @override
+  Widget build(BuildContext context) {
+    final signals = match.requestedSignals;
+    if (signals.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
+    return Column(
+      key: const ValueKey('request-match-evidence'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final entry in signals)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${supplySignalLabel(entry.key)} · '
+                  '${supplySignalVerdict(entry.value)}',
+                  style: theme.textTheme.bodySmall,
+                ),
+                Text(
+                  supplySignalReasonLabel(entry.value.reason),
+                  style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                ),
+              ],
+            ),
+          ),
+        if (match.blendApplied)
+          Text(
+            match.knownSignalCount == 1
+                ? 'El puntaje mezcla 1 señal verificada con el ranking.'
+                : 'El puntaje mezcla ${match.knownSignalCount} señales '
+                    'verificadas con el ranking.',
+            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+          )
+        else
+          Text(
+            'Ninguna señal pudo verificarse: el puntaje es el del ranking, sin '
+            'cambios.',
+            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+          ),
+      ],
+    );
+  }
+}
+
+/// Paso de stock del **carril familia**: las alternativas internas elegibles.
+///
+/// El carril exacto tiene su vista de componentes y sets; una necesidad de
+/// familia no tiene un solo producto, tiene un conjunto. Antes esta pantalla
+/// dependía del snapshot exacto y, sin él, decía «no fue posible verificar el
+/// stock interno» aunque el servidor sí hubiera respondido: se afirmaba una
+/// falla que no existía y se escondía la bodega que sí había.
+class FamilyStockOptions extends StatelessWidget {
+  const FamilyStockOptions({
+    super.key,
+    required this.resolution,
+    required this.onChooseProduct,
+    required this.onCompareProviders,
+    required this.busy,
+    this.onShowMore,
+  });
+
+  final SupplyStockResolution resolution;
+
+  /// Amplía el corte de **bodega**, que es su propia página y no tiene nada
+  /// que ver con la de candidatos externos. Sin esto, una alternativa interna
+  /// más allá del corte quedaba invisible y sin salida: el servidor decía
+  /// `hasMore` y la pantalla no lo mencionaba.
+  final VoidCallback? onShowMore;
+
+  /// Fija la identidad de la necesidad desde una alternativa interna. Es una
+  /// escritura propia, y por eso tiene su propio botón.
+  final ValueChanged<SupplyStockOption> onChooseProduct;
+  final VoidCallback onCompareProviders;
+  final bool busy;
+
+  static String _coverageLabel(SupplyStockOption option, double requested) {
+    switch (option.coverage) {
+      case 'full':
+        return 'cubre la necesidad completa';
+      case 'partial':
+        return 'cubre ${option.availableToPromise} de '
+            '${requested.toStringAsFixed(0)}';
+      default:
+        return 'sin stock disponible';
+    }
+  }
+
+  static String _matchLabel(String matchState) {
+    switch (matchState) {
+      case 'strong':
+        return 'cumple los criterios según la ficha';
+      case 'weak':
+        return 'coincide por el nombre, no por la ficha';
+      case 'no_criteria':
+        return 'sin criterios técnicos que comparar';
+      default:
+        return 'no se pudo verificar contra los criterios';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
+    final rejection = resolution.internalStockRejectionReason;
+    return ListView(
+      key: const ValueKey('family-stock-options'),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+      children: [
+        Text(
+          resolution.counts.eligible == 1
+              ? '1 alternativa interna elegible'
+              : '${resolution.counts.eligible} alternativas internas elegibles',
+          style: theme.textTheme.titleSmall,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          // El agregado de familia no prueba cobertura: sumar dos variantes
+          // distintas es una decisión del taller, no una propiedad del stock.
+          'Elegir una fija qué producto es la necesidad. Sumar varias no '
+          'demuestra cobertura: cada alternativa se evalúa por separado.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        if (rejection != null && rejection.trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Ya registraste por qué no sirve: «$rejection».',
+            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+          ),
+        ],
+        const SizedBox(height: 12),
+        for (final option in resolution.items) ...[
+          PurchasePanel(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ProductMediaTile(
+                  media: option.media,
+                  name: option.name,
+                  size: PurchaseSurfaceGeometry.mediaStockPhoneCard,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        option.name,
+                        style:
+                            PurchaseType.panelTitle.copyWith(color: tokens.ink),
+                      ),
+                      if (option.sku != null)
+                        Text(
+                          option.sku!,
+                          style: PurchaseType.meta
+                              .copyWith(color: tokens.inkMuted),
+                        ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${option.availableToPromise} disponibles · '
+                        '${_coverageLabel(option, resolution.quantity)}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      Text(
+                        // «No lo sé» no es «no cumple»: se rotula y se sigue.
+                        _matchLabel(option.matchState),
+                        style:
+                            PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                      ),
+                      const SizedBox(height: 9),
+                      PurchasePrimaryButton(
+                        key: ValueKey(
+                            'choose-stock-product-${option.productId}'),
+                        label: 'Elegir producto',
+                        onPressed: busy ? null : () => onChooseProduct(option),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: PurchaseMetrics.stageGap),
+        ],
+        if (resolution.page.hasMore) ...[
+          Text(
+            'Mostrando ${resolution.page.returned} de '
+            '${resolution.page.total} alternativas en bodega.',
+            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PurchaseInlineAction(
+              key: const ValueKey('show-more-family-stock'),
+              label: 'Ver más en bodega',
+              onPressed: busy ? null : onShowMore,
+            ),
+          ),
+          const SizedBox(height: PurchaseMetrics.stageGap),
+        ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PurchaseInlineAction(
+            key: const ValueKey('family-stock-compare-providers'),
+            label: 'Comparar proveedores',
+            onPressed: busy ? null : onCompareProviders,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Editor compacto del objetivo comercial tipado.
+///
+/// **Existe porque el control anterior mentía.** El menú «Perfil» cambiaba una
+/// cadena del cliente y volvía a pedir la misma lectura: el servidor toma el
+/// perfil de la revisión, así que el resultado llegaba idéntico. Lo que sí
+/// mueve el ranking es este objetivo, y hasta ahora no había forma de fijarlo.
+///
+/// **La moneda se muestra antes de guardar y no se envía.** Es del servidor, y
+/// una carga que la traiga se rechaza; enseñarla es lo que impide que alguien
+/// escriba 12.000 pensando en otra.
+class CommercialTargetEditor extends StatefulWidget {
+  const CommercialTargetEditor({
+    super.key,
+    required this.target,
+    required this.onSave,
+    required this.onCancel,
+    required this.busy,
+  });
+
+  final SupplyCommercialTarget target;
+
+  /// Parche explícito: clave ausente conserva, clave en `null` limpia.
+  final ValueChanged<Map<String, Object?>> onSave;
+  final VoidCallback onCancel;
+  final bool busy;
+
+  @override
+  State<CommercialTargetEditor> createState() => _CommercialTargetEditorState();
+}
+
+class _CommercialTargetEditorState extends State<CommercialTargetEditor> {
+  /// «Sin preferencia» es un valor del control, no la ausencia de control: sin
+  /// él no habría forma de quitar una gama ya fijada.
+  static const Map<String, String> _gamaOptions = {
+    '': 'Sin preferencia',
+    'economica': 'Económica',
+    'media': 'Media',
+    'alta': 'Alta',
+  };
+
+  /// Techo del servidor (`999999999`), repetido acá para atajar el error antes
+  /// de gastar una llamada que el backend rechazaría igual.
+  static const double _maxCost = 999999999;
+
+  late String? _gama;
+  late TextEditingController _cost;
+  late TextEditingController _margin;
+  String? _costError;
+  String? _marginError;
+
+  @override
+  void initState() {
+    super.initState();
+    _adoptTarget();
+  }
+
+  @override
+  void didUpdateWidget(CommercialTargetEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // **Otro objetivo es otro estado.** El editor conservaba los controllers de
+    // la primera necesidad: abrirlo en A y cambiar a B mostraba —y guardaba—
+    // los números de A sobre B. La identidad de un objetivo es la necesidad
+    // más su revisión y la versión de la necesidad; si cualquiera cambia, este
+    // formulario ya no habla de lo mismo.
+    if (_targetIdentity(oldWidget.target) != _targetIdentity(widget.target)) {
+      _cost.dispose();
+      _margin.dispose();
+      _adoptTarget();
+    }
+  }
+
+  static String _targetIdentity(SupplyCommercialTarget target) =>
+      '${target.needId}:${target.targetRevisionNo}:${target.needVersion}';
+
+  void _adoptTarget() {
+    final values = widget.target.target;
+    _gama = values.gama;
+    _costError = null;
+    _marginError = null;
+    _cost = TextEditingController(
+      text: values.maxLandedUnitCostNet == null
+          ? ''
+          : values.maxLandedUnitCostNet!.toStringAsFixed(0),
+    );
+    _margin = TextEditingController(
+      text: values.minGrossMarginRatio == null
+          ? ''
+          : (values.minGrossMarginRatio! * 100).toStringAsFixed(0),
+    );
+  }
+
+  @override
+  void dispose() {
+    _cost.dispose();
+    _margin.dispose();
+    super.dispose();
+  }
+
+  /// Acepta coma o punto: el taller escribe «12,5» y eso no es un error suyo.
+  static double? _parseDecimal(String raw) =>
+      double.tryParse(raw.replaceAll(',', '.'));
+
+  void _save() {
+    final costText = _cost.text.trim();
+    final marginText = _margin.text.trim();
+    String? costError;
+    String? marginError;
+    double? cost;
+    double? margin;
+
+    // **Un texto inválido no se convierte en nada.** Antes un tope ilegible
+    // caía a `null` y borraba el tope en silencio, y un margen ilegible caía a
+    // `0`, que es un piso legítimo: dos pérdidas mudas de la decisión del
+    // operador. Vacío sigue significando limpiar, porque eso sí lo dijo.
+    if (costText.isNotEmpty) {
+      cost = _parseDecimal(costText);
+      if (cost == null || !cost.isFinite) {
+        costError = 'Escribe un número, con coma o punto.';
+      } else if (cost <= 0) {
+        costError = 'El tope tiene que ser mayor que cero.';
+      } else if (cost > _maxCost) {
+        costError = 'El tope máximo es 999.999.999.';
+      }
+    }
+    if (marginText.isNotEmpty) {
+      margin = _parseDecimal(marginText);
+      if (margin == null || !margin.isFinite) {
+        marginError = 'Escribe un número, con coma o punto.';
+      } else if (margin < 0 || margin > 100) {
+        marginError = 'El margen va entre 0 y 100.';
+      }
+    }
+    if (costError != null || marginError != null) {
+      setState(() {
+        _costError = costError;
+        _marginError = marginError;
+      });
+      return;
+    }
+
+    setState(() {
+      _costError = null;
+      _marginError = null;
+    });
+    widget.onSave(<String, Object?>{
+      'gama': _gama,
+      // Un campo vacío **limpia** ese objetivo: `null` explícito, que es
+      // distinto de omitir la clave.
+      'maxLandedUnitCostNet': cost,
+      'minGrossMarginRatio': margin == null ? null : margin / 100,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
+    final brandId = widget.target.target.preferredBrandId;
+    return PurchasePanel(
+      key: const ValueKey('commercial-target-editor'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Objetivo del taller',
+            style: PurchaseType.panelTitle.copyWith(color: tokens.ink),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'Reordena las opciones sin descartar ninguna. Los montos van en '
+            '${widget.target.currencyCode}, la moneda que el servidor fija.',
+            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+          ),
+          if (widget.target.currencyRebased) ...[
+            const SizedBox(height: 4),
+            Text(
+              'El taller opera hoy en ${widget.target.tenantCurrencyCode}: un '
+              'tope guardado en ${widget.target.currencyCode} hay que '
+              'reingresarlo para que signifique lo de hoy.',
+              style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+            ),
+          ],
+          const SizedBox(height: 11),
+          // El desplegable anclado es el control de este módulo para un valor
+          // excluyente. Una fila de chips no pertenece a su vocabulario.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _AnchoredMenuButton(
+              menuId: 'commercial-target-gama',
+              label: 'Gama · ${_gamaOptions[_gama ?? ''] ?? 'Sin preferencia'}',
+              enabled: !widget.busy,
+              sections: [
+                _MenuSection(
+                  value: _gama ?? '',
+                  options: _gamaOptions,
+                  onSelected: (value) =>
+                      setState(() => _gama = value.isEmpty ? null : value),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 11),
+          TextField(
+            key: const ValueKey('commercial-target-cost'),
+            controller: _cost,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText:
+                  'Tope de costo aterrizado (${widget.target.currencyCode})',
+              helperText: 'Vacío quita el tope.',
+              errorText: _costError,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 9),
+          TextField(
+            key: const ValueKey('commercial-target-margin'),
+            controller: _margin,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Margen mínimo (%)',
+              helperText: 'Vacío quita el piso.',
+              errorText: _marginError,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          if (brandId != null) ...[
+            const SizedBox(height: 9),
+            Text(
+              // La marca se conserva tal cual: sin un selector no se puede
+              // ofrecer cambiarla, y un campo de UUID no es una opción.
+              widget.target.preferredBrandAvailable == false
+                  ? 'Marca preferida guardada · ya no está disponible. Se '
+                      'conserva hasta que exista un selector de marcas.'
+                  : 'Marca preferida guardada. Se conserva hasta que exista un '
+                      'selector de marcas.',
+              style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+            ),
+          ],
+          const SizedBox(height: PurchaseMetrics.actionsTopGap),
+          Row(
+            children: [
+              PurchaseInlineAction(
+                key: const ValueKey('commercial-target-cancel'),
+                label: 'Cancelar',
+                onPressed: widget.busy ? null : widget.onCancel,
+              ),
+              const Spacer(),
+              PurchasePrimaryButton(
+                key: const ValueKey('commercial-target-save'),
+                label: 'Guardar objetivo',
+                onPressed: widget.busy ? null : _save,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Guardar vuelve a pedir las opciones al servidor.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ],
       ),
     );
   }

@@ -25,6 +25,15 @@ export class RunBeginError extends Error {
 export interface CanonicalVisibleMessage {
   role: "user" | "assistant";
   content: string;
+  /**
+   * Closed server-owned presentation state persisted with an assistant turn.
+   * The runtime projects only the safe conversational subset it needs; raw
+   * entity IDs and approval payloads never enter provider history.
+   *
+   * Optional keeps in-memory test stores and rolling callers source-compatible.
+   * The production admission RPC always publishes this field.
+   */
+  cards?: readonly AgentActionCard[];
 }
 
 export interface AgentRunLease {
@@ -161,7 +170,9 @@ export function createSupabaseAgentRunStore(
         if ((role !== "user" && role !== "assistant") || content === null) {
           throw invalidStoreResponse();
         }
-        return { role, content } as CanonicalVisibleMessage;
+        const cards = validateStoredCards(record.cards ?? []);
+        if (role === "user" && cards.length !== 0) throw invalidStoreResponse();
+        return { role, content, cards } as CanonicalVisibleMessage;
       });
       const leaseToken = optionalUuid(value.leaseToken);
       const fenceToken = optionalSafeInteger(value.fenceToken);

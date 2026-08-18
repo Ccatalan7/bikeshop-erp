@@ -30,9 +30,13 @@ const workshopViewFields = [
 
 const toolContracts = {
   inspect_inventory_schema: {
-    rpc: "assistant_inspect_inventory_schema_v2",
+    // v3 publica `entityId` con la identidad de la categoría que el inspector
+    // ya resolvía. El proyector la convierte en una `categoryRef` opaca del
+    // turno y quita el UUID: el modelo nunca lo ve.
+    rpc: "assistant_inspect_inventory_schema_v3",
     parameters: inventorySchemaInspectionParameters,
     fields: [
+      "entityId",
       "kind",
       "category",
       "categoryPath",
@@ -134,7 +138,7 @@ const toolContracts = {
     maxItems: 3,
   },
   prepare_supply_request: {
-    rpc: "assistant_prepare_supply_request_v1",
+    rpc: "assistant_prepare_supply_request_v2",
     parameters: supplyRequestParameters,
     fields: [
       "entityId",
@@ -508,7 +512,7 @@ export interface AgentToolExecution {
 
 export interface AgentToolEntityReference {
   ref: string;
-  kind: "workshop_job" | "catalog_item";
+  kind: "workshop_job" | "catalog_item" | "product_category";
   entityId: string;
 }
 
@@ -579,7 +583,13 @@ export function createSupabaseAgentToolExecutor(
             items: parameters.p_items,
             profile: parameters.p_profile,
           }, call.arguments)
-          : validateEnvelope(value, authority, contract.fields, maxItems);
+          : validateEnvelope(
+            value,
+            authority,
+            contract.fields,
+            maxItems,
+            call.name === "inspect_inventory_schema",
+          );
         if (call.name === "get_business_snapshot") validateBusinessSnapshot(result, call.arguments);
         validateSpecializedResult(call.name, result, call.arguments);
         const projection = modelVisibleResult(call.name, result);
@@ -785,7 +795,9 @@ function inventorySearchParameters(args: JsonObject): JsonObject {
     !["any", "in_stock", "low_stock", "out_of_stock"].includes(
       String(args.availability),
     ) ||
-    !["answer", "open_list"].includes(String(args.presentation)) ||
+    !["answer", "open_list", "open_list_with_analysis"].includes(
+      String(args.presentation),
+    ) ||
     !isRecord(args.sort) ||
     !hasExactKeys(args.sort, ["field", "direction"]) ||
     !["relevance", "name", "stock", "minimum_stock", "price"].includes(
@@ -885,9 +897,12 @@ function supplyRequestParameters(args: JsonObject): JsonObject {
   ) throw new InvalidToolArguments();
 
   const items = args.items.map((item, index) => {
+    // `categoryId` llega ya resuelto por el runtime desde una `categoryRef`
+    // opaca; el modelo nunca escribe un UUID aquí.
     const baseFields = [
       "description",
       "productId",
+      "categoryId",
       "quantity",
       "unit",
       "technicalPredicates",
@@ -900,6 +915,7 @@ function supplyRequestParameters(args: JsonObject): JsonObject {
       (!hasExactKeys(item, baseFields) &&
         !hasExactKeys(item, [...baseFields, "clarificationPrompts"])) ||
       !(item.productId === null || validUuidValue(item.productId)) ||
+      !(item.categoryId === null || validUuidValue(item.categoryId)) ||
       typeof item.description !== "string" || !item.description.trim() ||
       utf8Bytes(item.description.trim()) > 2000 ||
       !finiteNumber(item.quantity) || (item.quantity as number) < 0.001 ||
@@ -926,6 +942,7 @@ function supplyRequestParameters(args: JsonObject): JsonObject {
       lineRef: `line-${index + 1}`,
       description: item.description.trim(),
       productId: item.productId,
+      categoryId: item.categoryId,
       quantity: item.quantity,
       unit: item.unit.trim(),
       technicalPredicates: normalizedInventoryTechnicalPredicates(
@@ -1416,6 +1433,11 @@ function validateEnvelope(
   authority: AgentAuthority,
   allowedFields: readonly string[],
   maxItems: number,
+  // Una fila puede carecer legítimamente de identidad —el inspector publica
+  // campos operativos que no pertenecen a ninguna categoría del catálogo—. El
+  // permiso se pide explícitamente y el invariante de cuándo puede faltar lo
+  // hace cumplir el validador del propio resultado, no éste.
+  optionalEntityId = false,
 ): AgentToolResultEnvelope {
   if (
     !isRecord(value) || !hasExactKeys(value, [
@@ -1462,7 +1484,11 @@ function validateEnvelope(
         throw new Error("tool field too long");
       }
       if (typeof field === "number" && !Number.isFinite(field)) throw new Error("invalid number");
-      if (key === "entityId" && (typeof field !== "string" || !validUuid(field))) {
+      if (
+        key === "entityId" &&
+        !(optionalEntityId && field === null) &&
+        (typeof field !== "string" || !validUuid(field))
+      ) {
         throw new Error("invalid entity id");
       }
     }
@@ -1664,6 +1690,12 @@ function validateSupplyRequestEnvelope(
     "productName",
     "productSku",
     "identityState",
+    // Procedencia de categoría: `categoryId` viaja a la tarjeta cerrada y se
+    // quita de la proyección visible; ruta y familia sí se muestran, porque
+    // son texto legible y no una identidad reutilizable.
+    "categoryId",
+    "categoryPath",
+    "technicalFamily",
     "quantity",
     "unit",
     "technicalPredicates",
@@ -1686,6 +1718,18 @@ function validateSupplyRequestEnvelope(
       !(item.entityId === null ||
         (typeof item.entityId === "string" && validUuid(item.entityId))) ||
       item.entityId !== requested.productId ||
+      !(item.categoryId === null ||
+        (typeof item.categoryId === "string" && validUuid(item.categoryId))) ||
+      !(item.categoryPath === null || typeof item.categoryPath === "string") ||
+      !(item.technicalFamily === null ||
+        typeof item.technicalFamily === "string") ||
+      // El servidor puede DERIVAR la categoría de un producto exacto, así que
+      // no se exige igualdad con lo pedido; lo que no puede es inventar una
+      // categoría para una línea que no pidió ninguna y no trae producto.
+      (item.categoryId !== null && requested.categoryId === null &&
+        requested.productId === null) ||
+      (item.categoryId === null &&
+        (item.categoryPath !== null || item.technicalFamily !== null)) ||
       item.lineRef !== requested.lineRef ||
       item.description !== requested.description ||
       item.quantity !== requested.quantity || item.unit !== requested.unit ||
@@ -1977,6 +2021,14 @@ function validateInventorySchemaInspection(result: AgentToolResultEnvelope): voi
   for (const item of result.items) {
     if (
       !["category", "field", "operational_field"].includes(String(item.kind)) ||
+      // Identidad de categoría: las filas del catálogo la tienen y las
+      // operativas no pueden fingirla. «Inventario» no es una categoría, y una
+      // referencia opaca sobre ella acabaría fijando la familia de una línea
+      // con algo que no existe en el árbol del tenant.
+      !(item.entityId === null ||
+        (typeof item.entityId === "string" && validUuid(item.entityId))) ||
+      (item.kind === "operational_field" && item.entityId !== null) ||
+      (item.kind !== "operational_field" && item.entityId === null) ||
       typeof item.category !== "string" || !item.category.trim() ||
       typeof item.categoryPath !== "string" || !item.categoryPath.trim() ||
       !nullableString(item.technicalFamily) ||
@@ -2451,11 +2503,18 @@ function modelVisibleResult(
     ? "workshop_job"
     : toolName === "search_inventory"
     ? "catalog_item"
+    // La identidad de categoría nace **sólo** acá: es el único paso que la
+    // resuelve desde la frase, y ocurre antes de que haya productos, que es
+    // justo el caso que hay que rescatar.
+    : toolName === "inspect_inventory_schema"
+    ? "product_category"
     : null;
   const referenceField = referenceKind === "workshop_job"
     ? "jobRef"
     : referenceKind === "catalog_item"
     ? "catalogItemRef"
+    : referenceKind === "product_category"
+    ? "categoryRef"
     : null;
   const referencesByEntityId = new Map<string, AgentToolEntityReference>();
   const entityReferences: AgentToolEntityReference[] = [];
@@ -2465,6 +2524,10 @@ function modelVisibleResult(
     items: result.items.map((item) => {
       const {
         entityId: _serverOwnedEntityId,
+        // La categoría resuelta viaja a la tarjeta cerrada, nunca al modelo:
+        // una identidad reutilizable fuera del turno es exactamente lo que
+        // las referencias opacas existen para impedir.
+        categoryId: _serverOwnedCategoryId,
         approvalId: _serverOwnedApprovalId,
         action: _serverOwnedApprovalAction,
         contextEntityId: _serverOwnedContextEntityId,

@@ -6,6 +6,7 @@ import type {
   AgentToolCall,
   JsonObject,
 } from "./contracts.ts";
+import { cardsForToolResult } from "./cards.ts";
 import { createDefaultAgentToolRegistry } from "./tool_registry.ts";
 import { AgentProviderRouter } from "./providers/provider.ts";
 import { ProviderError } from "./providers/provider.ts";
@@ -590,7 +591,7 @@ Deno.test("explicit inventory listing has one server-owned answer, result set an
 
   assertEquals(
     response.text,
-    'Abrí 2 resultados coincidentes en Inventario con el filtro “En stock · 29"”.',
+    'Abrí 2 resultados coincidentes para “Cámaras” en Inventario con el filtro “En stock · 29"”.',
     "server projection replaces divergent model prose",
   );
   assertEquals(response.cards.length, 1, "only one compact result-set action is returned");
@@ -604,6 +605,242 @@ Deno.test("explicit inventory listing has one server-owned answer, result set an
     secondProductId,
   ], "UI receives the exact verified result IDs");
   assertEquals(response.cards[0].listRef?.autoOpen, true, "explicit list request may auto-open");
+});
+
+Deno.test("inventory follow-up restores the interactive list, uses exact sparse identity and keeps requested analysis", async () => {
+  const store = new TestRunStore();
+  const previousProductId = "89898989-8989-4989-8989-898989898989";
+  const previousCards = cardsForToolResult("search_inventory", {
+    authorityTenantId: tenantId,
+    asOf: "2026-08-17T20:00:00Z",
+    status: "success",
+    items: [{
+      entityId: previousProductId,
+      name: "Producto Shimano agotado",
+      technicalMatch: "not_applicable",
+    }],
+    resultCount: 1,
+    hasMore: true,
+  }, {
+    query: "Shimano",
+    category: null,
+    availability: "out_of_stock",
+    presentation: "open_list",
+    sort: { field: "minimum_stock", direction: "desc" },
+    limit: 10,
+    selectionMode: "all_matches",
+    technicalPredicates: [],
+    operationalPredicates: [],
+  });
+  store.leaseValue = {
+    ...store.leaseValue,
+    canonicalMessages: [
+      {
+        role: "user",
+        content: "Busca productos de la marca Shimano con stock bajo y ordénalos por urgencia.",
+      },
+      {
+        role: "assistant",
+        content:
+          "Abrí 10 resultados coincidentes para “Shimano” en Inventario con el filtro “Stock bajo”.",
+      },
+      {
+        role: "user",
+        content: "Ahora deja solamente los que están sin stock y explícame cuál revisar primero.",
+      },
+      {
+        role: "assistant",
+        content:
+          "Abrí 10 resultados coincidentes para “Shimano” en Inventario con el filtro “Agotados”.",
+        cards: previousCards,
+      },
+      { role: "user", content: "piñones de 7v" },
+    ],
+  };
+
+  let providerCalls = 0;
+  const executed: AgentToolCall[] = [];
+  const resultProductId = "90909090-9090-4090-8090-909090909090";
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      executed.push(call);
+      if (call.name === "inspect_inventory_schema") {
+        const result = {
+          authorityTenantId: tenantId,
+          asOf: "2026-08-17T20:01:00Z",
+          status: "success" as const,
+          items: [{
+            kind: "field",
+            category: "Piñones",
+            categoryPath: "Componentes / Transmisión / Piñones",
+            technicalFamily: "cassette",
+            field: "speeds",
+            label: "Velocidades",
+            dataType: "number",
+            unit: null,
+            operators: "eq,neq,lt,lte,gt,gte,between,in",
+            allowedValues: null,
+            productCount: 12,
+            populatedCount: 0,
+          }],
+          resultCount: 1,
+          hasMore: false,
+        };
+        const outputText = JSON.stringify(result);
+        return Promise.resolve({
+          result,
+          outputText,
+          outputBytes: new TextEncoder().encode(outputText).byteLength,
+          succeeded: true,
+        });
+      }
+      assertEquals(call.name, "search_inventory", "the follow-up rereads inventory");
+      assertEquals(call.arguments, {
+        query: "Shimano",
+        category: "Piñones",
+        availability: "out_of_stock",
+        presentation: "open_list_with_analysis",
+        sort: { field: "minimum_stock", direction: "desc" },
+        limit: 10,
+        selectionMode: "top_n",
+        technicalPredicates: [{ field: "speeds", operator: "eq", values: [7] }],
+        operationalPredicates: [],
+      }, "category, identity, availability, order and speed remain cumulative");
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-17T20:01:01Z",
+        status: "success" as const,
+        items: [{
+          entityId: resultProductId,
+          name: "Piñón Shimano 7V",
+          sku: "SH-7V",
+          brand: "Shimano",
+          category: "Piñones",
+          price: 19_990,
+          stock: 0,
+          minimumStock: 3,
+          availability: "out_of_stock",
+          tracksInventory: true,
+          location: "A-1",
+          technicalMatch: "identity_fallback",
+          matchedCount: 1,
+          trackedCount: 1,
+          totalStock: 0,
+          inventoryRetailValue: 0,
+          averagePrice: 19_990,
+          minimumPrice: 19_990,
+          maximumPrice: 19_990,
+        }],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify(result);
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+
+  const response = await executeAgentRun(
+    {
+      ...request(),
+      threadId,
+      message: "piñones de 7v",
+    },
+    authority,
+    {
+      providerRouter: providerRouter((providerRequest) => {
+        providerCalls++;
+        if (providerCalls === 1) {
+          const interactiveHistory = providerRequest.messages.find((message) =>
+            message.role === "assistant" &&
+            message.text.includes("ESTADO_INTERACTIVO_SERVER_OWNED")
+          );
+          assert(interactiveHistory, "the visible card state reaches the follow-up planner");
+          assert(
+            interactiveHistory.text.includes('"query":"Shimano"') &&
+              interactiveHistory.text.includes('"availability":"out_of_stock"'),
+            "the latest identity and availability survive as closed state",
+          );
+          assertEquals(
+            interactiveHistory.text.includes(previousProductId),
+            false,
+            "product UUIDs never enter provider history",
+          );
+          return Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: [{
+              id: "inspect-seven-speed-cassette",
+              name: "inspect_inventory_schema",
+              arguments: { query: "piñones de 7 velocidades", category: "Piñones" },
+            }],
+            usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+            finishReason: "tool_calls",
+            continuationToken: "inspect-seven-speed-cassette-1",
+          });
+        }
+        if (providerCalls === 2) {
+          return Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: [{
+              id: "search-seven-speed-cassette",
+              name: "search_inventory",
+              arguments: {
+                query: "Shimano",
+                category: "Piñones",
+                availability: "out_of_stock",
+                presentation: "open_list_with_analysis",
+                sort: { field: "minimum_stock", direction: "desc" },
+                limit: 10,
+                selectionMode: "top_n",
+                technicalPredicates: [{ field: "speeds", operator: "eq", values: [7] }],
+                operationalPredicates: [],
+              },
+            }],
+            usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+            finishReason: "tool_calls",
+            continuationToken: "search-seven-speed-cassette-2",
+          });
+        }
+        return Promise.resolve(finalTurn(
+          "Revisa primero Piñón Shimano 7V: está agotado y su mínimo configurado es 3. La velocidad se comprobó por su identidad de catálogo, no por una ficha técnica poblada.",
+        ));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+      supportsResultLists: true,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(executed.map((call) => call.name), [
+    "inspect_inventory_schema",
+    "search_inventory",
+  ], "zero structured coverage no longer blocks exact identity evidence");
+  assert(
+    response.text.startsWith(
+      "Abrí 1 resultado coincidente para “Shimano” en Inventario con el filtro “Agotados · 7 · Top 10 · Mayor stock mínimo”.",
+    ),
+    "the server still owns the interactive opening acknowledgement",
+  );
+  assert(
+    response.text.includes("Revisa primero Piñón Shimano 7V") &&
+      response.text.includes("no por una ficha técnica poblada"),
+    "the mixed request keeps its grounded explanation",
+  );
+  assertEquals(
+    response.cards[0].subtitle,
+    "Piñones · Shimano · 1 por identidad",
+    "the card exposes category, identity and sparse-catalog evidence together",
+  );
+  assertEquals(response.cards[0].listRef?.autoOpen, true, "the exact list remains interactive");
 });
 
 Deno.test("technical inventory search cannot skip schema discovery or fake an outage", async () => {
@@ -5136,6 +5373,7 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
         items: [{
           description: "Neumático 27,5 ancho mayor a 2,0",
           productId,
+          categoryId: null,
           quantity: 2,
           unit: "unit",
           technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
@@ -5146,6 +5384,7 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
         }, {
           description: "Rayos 27,5",
           productId: null,
+          categoryId: null,
           quantity: 1,
           unit: "set",
           technicalPredicates: [],
@@ -5177,6 +5416,9 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
           productName: "Kenda Kwick 27,5 × 2,10",
           productSku: "KEN-275-210",
           identityState: "confirmed",
+          categoryId: null,
+          categoryPath: null,
+          technicalFamily: null,
           quantity: 2,
           unit: "unit",
           technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
@@ -5192,6 +5434,9 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
           productName: null,
           productSku: null,
           identityState: "unresolved",
+          categoryId: null,
+          categoryPath: null,
+          technicalFamily: null,
           quantity: 1,
           unit: "set",
           technicalPredicates: [],
@@ -5286,6 +5531,7 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
               arguments: {
                 items: [{
                   catalogItemRef,
+                  categoryRef: null,
                   description: "Neumático 27,5 ancho mayor a 2,0",
                   quantity: 2,
                   unit: "unit",
@@ -5296,6 +5542,7 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
                   clarificationPrompts: [],
                 }, {
                   catalogItemRef: null,
+                  categoryRef: null,
                   description: "Rayos 27,5",
                   quantity: 1,
                   unit: "set",
@@ -5396,6 +5643,9 @@ Deno.test("a validated supply draft may close the bounded sixth purchasing round
           productName: null,
           productSku: null,
           identityState: "unresolved",
+          categoryId: null,
+          categoryPath: null,
+          technicalFamily: null,
           quantity: 4,
           unit: "unidad",
           technicalPredicates: [],
@@ -5460,6 +5710,7 @@ Deno.test("a validated supply draft may close the bounded sixth purchasing round
               arguments: {
                 items: [{
                   catalogItemRef: null,
+                  categoryRef: null,
                   description: "Cámara 700x28 con válvula Presta de 60 mm",
                   quantity: 4,
                   unit: "unidad",
@@ -5524,6 +5775,9 @@ Deno.test("need capture rejects a known provider-ranking tool that was not adver
           productName: null,
           productSku: null,
           identityState: "unresolved",
+          categoryId: null,
+          categoryPath: null,
+          technicalFamily: null,
           quantity: 2,
           unit: "par",
           technicalPredicates: [],
@@ -5601,6 +5855,7 @@ Deno.test("need capture rejects a known provider-ranking tool that was not adver
               arguments: {
                 items: [{
                   catalogItemRef: null,
+                  categoryRef: null,
                   description: "Pastillas semimetálicas para freno hidráulico",
                   quantity: 2,
                   unit: "par",
@@ -5767,6 +6022,7 @@ Deno.test("purchasing preserves a zero-coverage request as an unresolved review 
         items: [{
           description: "Neumáticos 27,5 de ancho mayor a 2,0",
           productId: null,
+          categoryId: null,
           quantity: 2,
           unit: "unit",
           technicalPredicates: [{ field: "tire_width_in", operator: "gt", values: [2] }],
@@ -5788,6 +6044,9 @@ Deno.test("purchasing preserves a zero-coverage request as an unresolved review 
           productName: null,
           productSku: null,
           identityState: "unresolved",
+          categoryId: null,
+          categoryPath: null,
+          technicalFamily: null,
           quantity: 2,
           unit: "unit",
           technicalPredicates: [{ field: "tire_width_in", operator: "gt", values: [2] }],
@@ -5880,6 +6139,7 @@ Deno.test("purchasing preserves a zero-coverage request as an unresolved review 
               arguments: {
                 items: [{
                   catalogItemRef: null,
+                  categoryRef: null,
                   description: "Neumáticos 27,5 de ancho mayor a 2,0",
                   quantity: 2,
                   unit: "unit",
@@ -6113,6 +6373,7 @@ Deno.test("repetir una pregunta ya respondida se rechaza y se pide avanzar", asy
                 items: [{
                   description: "rayos para una rueda 29",
                   catalogItemRef: null,
+                  categoryRef: null,
                   quantity: 36,
                   unit: "unidad",
                   technicalPredicates: [],
@@ -6169,4 +6430,262 @@ Deno.test("repetir una pregunta ya respondida se rechaza y se pide avanzar", asy
 
   assertEquals(executed.length, 0, "nada llegó a la base");
   assertEquals(round, 2, "el modelo recibió la corrección y cerró");
+});
+
+// ── La categoría opaca sólo vale dentro de su turno ─────────────────────────
+//
+// `catalogItemRef` ya estaba protegida así; `categoryRef` es una identidad más,
+// y su valor entero depende de que no se pueda fabricar. Estas dos pruebas
+// entran por el runtime real —no por el executor con un UUID a mano— porque el
+// canje ocurre ahí: si alguien lo mueve o lo relaja, el ERP recibiría una
+// categoría que nadie resolvió.
+
+/// Un turno de captura que inspecciona el esquema y después prepara el
+/// borrador con la `categoryRef` que se le indique.
+function purchasingDraftTurns(
+  categoryRef: string | null,
+  publishedReference?: {
+    ref: string;
+    kind: "catalog_item" | "product_category";
+    entityId: string;
+  },
+): {
+  executor: AgentToolExecutor;
+  executedNames: string[];
+  resolvedCategoryIds: unknown[];
+  store: TestRunStore;
+  turnCount: () => number;
+  run: () => Promise<unknown>;
+} {
+  const store = new TestRunStore();
+  const executedNames: string[] = [];
+  const resolvedCategoryIds: unknown[] = [];
+  const executor: AgentToolExecutor = {
+    execute(call) {
+      executedNames.push(call.name);
+      if (call.name === "inspect_inventory_schema") {
+        const outputText = JSON.stringify({
+          status: "success",
+          items: [{
+            kind: "category",
+            categoryRef: publishedReference?.ref ?? null,
+            category: "Cadenas",
+            categoryPath: "Transmisión / Cadenas",
+            technicalFamily: "chain",
+          }],
+          resultCount: 1,
+          hasMore: false,
+        });
+        return Promise.resolve({
+          result: {
+            authorityTenantId: tenantId,
+            asOf: "2026-08-17T12:00:00Z",
+            status: "success" as const,
+            items: [{
+              kind: "category",
+              entityId: publishedReference?.entityId ?? null,
+              category: "Cadenas",
+              categoryPath: "Transmisión / Cadenas",
+              technicalFamily: "chain",
+            }],
+            resultCount: 1,
+            hasMore: false,
+          },
+          outputText,
+          outputBytes: new TextEncoder().encode(outputText).byteLength,
+          succeeded: true,
+          entityReferences: publishedReference ? [publishedReference] : [],
+        });
+      }
+      assertEquals(call.name, "prepare_supply_request", "sólo el terminal ejecuta");
+      resolvedCategoryIds.push(
+        (call.arguments.items as JsonObject[])[0].categoryId,
+      );
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-17T12:00:01Z",
+        status: "success" as const,
+        items: [{
+          entityId: null,
+          lineRef: "line-1",
+          description: "Cadena de 10 velocidades",
+          productName: null,
+          productSku: null,
+          identityState: "unresolved",
+          categoryId: (call.arguments.items as JsonObject[])[0].categoryId,
+          categoryPath: "Transmisión / Cadenas",
+          technicalFamily: "chain",
+          quantity: 1,
+          unit: "unit",
+          technicalPredicates: [],
+          preference: null,
+          clarification: null,
+          clarificationRequired: false,
+          clarificationPrompts: [],
+          profile: "balanced",
+        }],
+        resultCount: 1,
+        hasMore: false,
+      };
+      const outputText = JSON.stringify({
+        status: "success",
+        items: result.items.map((
+          { entityId: _id, categoryId: _categoryId, ...item },
+        ) => item),
+        resultCount: 1,
+        hasMore: false,
+      });
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+
+  let turns = 0;
+  const run = () =>
+    executeAgentRun(
+      {
+        ...request({ kind: "intelligent_purchasing", jobIds: [], truncated: false }),
+        message: "Necesito una cadena de 10 velocidades.",
+      },
+      authority,
+      {
+        providerRouter: providerRouter(() => {
+          turns++;
+          if (turns === 1) {
+            return Promise.resolve({
+              text: "Reviso el esquema del catálogo.",
+              toolCalls: [{
+                id: `inspect-${turns}`,
+                name: "inspect_inventory_schema",
+                arguments: { query: "cadena 10 velocidades", category: null },
+              }],
+              usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+              finishReason: "tool_calls",
+              continuationToken: "after-inspect",
+            });
+          }
+          if (turns > 2) return Promise.resolve(finalTurn("Listo para revisar."));
+          return Promise.resolve({
+            text: "Preparo la necesidad.",
+            toolCalls: [{
+              id: "prepare",
+              name: "prepare_supply_request",
+              arguments: {
+                items: [{
+                  catalogItemRef: null,
+                  categoryRef,
+                  description: "Cadena de 10 velocidades",
+                  quantity: 1,
+                  unit: "unit",
+                  technicalPredicates: [],
+                  preference: null,
+                  clarification: null,
+                  clarificationRequired: false,
+                  clarificationPrompts: [],
+                }],
+                profile: "balanced",
+              },
+            }],
+            usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+            finishReason: "tool_calls",
+            continuationToken: "after-prepare",
+          });
+        }),
+        toolRegistry: createDefaultAgentToolRegistry(),
+        toolExecutor: executor,
+        runStore: store,
+        auditHmacKey: hmacKey,
+        pricingCatalog,
+        supportsStructuredClarifications: true,
+      },
+      new AbortController().signal,
+    );
+
+  return {
+    executor,
+    executedNames,
+    resolvedCategoryIds,
+    store,
+    turnCount: () => turns,
+    run,
+  };
+}
+
+Deno.test("una categoryRef legítima sí se canjea por la identidad real", async () => {
+  // Control positivo: sin esto, las dos pruebas negativas de abajo podrían
+  // estar pasando porque la ronda falla por cualquier otro motivo.
+  const ref = "51515151-5151-4151-8151-515151515151";
+  const categoryId = "31313131-3131-4131-8131-313131313131";
+  const scenario = purchasingDraftTurns(ref, {
+    ref,
+    kind: "product_category",
+    entityId: categoryId,
+  });
+
+  await scenario.run();
+
+  assertEquals(
+    scenario.executedNames,
+    ["inspect_inventory_schema", "prepare_supply_request"],
+    "la ronda completa llega al terminal",
+  );
+  assertEquals(
+    scenario.resolvedCategoryIds,
+    [categoryId],
+    "el runtime cambia la referencia opaca por la identidad real",
+  );
+});
+
+Deno.test("una categoryRef inventada nunca llega al ERP", async () => {
+  // El inspector no publicó ninguna referencia, así que la que trae el modelo
+  // no existe en el registro del turno: fabricada, o sobrante de otra ronda.
+  const scenario = purchasingDraftTurns("61616161-6161-4161-8161-616161616161");
+
+  await scenario.run();
+
+  assertEquals(
+    scenario.executedNames.includes("prepare_supply_request"),
+    false,
+    "el borrador nunca se ejecuta con una categoría que nadie resolvió",
+  );
+  assertEquals(
+    scenario.store.toolReceiptInputs.some((receipt) =>
+      receipt.failureCode === "entity_reference_invalid"
+    ),
+    true,
+    "el rechazo queda receptado y el modelo recibe la vía de corrección",
+  );
+});
+
+Deno.test("una referencia de otra especie no sirve como categoría", async () => {
+  // La referencia existe y es de este turno, pero la publicó `search_inventory`
+  // como producto. Confundir las especies dejaría que un producto fije la
+  // familia de una necesidad, que es justo el segundo dueño de identidad que
+  // este contrato evita.
+  const ref = "71717171-7171-4171-8171-717171717171";
+  const scenario = purchasingDraftTurns(ref, {
+    ref,
+    kind: "catalog_item",
+    entityId: "81818181-8181-4181-8181-818181818181",
+  });
+
+  await scenario.run();
+
+  assertEquals(
+    scenario.executedNames.includes("prepare_supply_request"),
+    false,
+    "el borrador no se ejecuta con la especie equivocada",
+  );
+  assertEquals(
+    scenario.store.toolReceiptInputs.some((receipt) =>
+      receipt.failureCode === "entity_reference_invalid"
+    ),
+    true,
+    "una referencia de producto no se canjea como categoría",
+  );
 });

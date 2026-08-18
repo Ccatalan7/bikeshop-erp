@@ -27,12 +27,12 @@ which must not be persisted in `.env` or shell startup files.
 | Authorized hosted SQL write | `scripts/db/query.sh ... --write` with the exact write confirmation |
 | Local pgTAP | `scripts/db/test.sh` / `just db-test` |
 | Canonical bootstrap gate | `just db-gate` |
-| Production-derived compatibility tests | `scripts/db/production_validation.sh` |
+| Production compatibility | Guarded direct read-only queries, then authorized deploy plus live read-back |
 | Trace, fingerprint, drift, health | Guarded recipes under `scripts/db/` |
 | Project status, secrets, functions, backups | `scripts/supabase_cli.sh` with explicit project ref |
 | Verified migration-history registration | `scripts/supabase_cli.sh migration repair --linked` after exact read-back |
 | Authenticated REST/RLS behavior | Publishable key and a synthetic authenticated user; privileged secret key only when the test explicitly requires admin behavior |
-| Production schema capture | `scripts/db/production_validation.sh prepare` / explicit `refresh` |
+| Production schema capture | Deprecated; do not use as compatibility evidence |
 
 Do not use raw `supabase db query`, `supabase db push`, ad hoc remote `psql`, or
 the Supabase SQL Editor as an agent SQL path. The database wrapper supplies the
@@ -285,72 +285,17 @@ migration stream is enabled, deploy the reviewed standalone file through the
 guarded wrapper above. `supabase db push`, `migration up`, SQL Editor and
 `core_schema.sql` are not deployment paths.
 
-## Production-derived validation session
+## Production compatibility: no schema-copy substitute
 
-Use this layer for SQL/schema behavior intended for production. Follow the
-reuse and redump rules in `docs/runbooks/STAGING_SUPABASE.md`.
-
-Prepare once for a task:
-
-```bash
-bash scripts/db/production_validation.sh prepare \
-  --task expense-notifications \
-  --migration supabase/migrations/YYYYMMDDHHMMSS_change_name.sql
-```
-
-`prepare` performs one cheap live read-only identity check using the production
-catalog fingerprint, migration head, and PostgreSQL version. It reuses the
-matching immutable local template and downloads a new schema-only capture only
-on an exact cache miss. Captures exclude production rows and validate the
-archive contents before use. The capture fingerprints and restores `public`,
-dependency-only `private` and the isolated `assistant_runtime` ledger
-definitions because managed Storage/Auth policies can reference private helpers
-and assistant migrations can replace attested runtime functions; managed
-post-data is deferred until those schemas exist.
-
-**Schema-only boundary (clarified 2026-08-16):** the immutable template carries
-definitions, not rows previously inserted by deployed migrations. A focused
-candidate test that depends on an older migration-owned catalog row (for
-example a document kind or a product-spec template) must create an explicit
-synthetic fixture, or prove that existing row separately through a guarded live
-read-only query. Its absence from the scratch clone is not evidence that the
-candidate deleted production data, and rerunning a broad pgTAP set without the
-required fixtures must not be reported as a product regression.
-
-Run and rerun focused pgTAP without a production/network call:
-
-```bash
-bash scripts/db/production_validation.sh test \
-  --task expense-notifications \
-  --migration supabase/migrations/YYYYMMDDHHMMSS_change_name.sql \
-  --test expense_notifications
-```
-
-`test` requires a prior `prepare` or `reuse`. It reuses the task scratch
-database. If the local candidate file, hash, or application order changes after
-it was applied to that scratch, the wrapper rebuilds only the scratch database
-from the cached immutable local template; it does not redownload production.
-
-Use the last cached baseline explicitly when offline:
-
-```bash
-bash scripts/db/production_validation.sh reuse \
-  --task expense-notifications \
-  --migration supabase/migrations/YYYYMMDDHHMMSS_change_name.sql
-```
-
-Inspect cache/task state or clean only the task scratch:
-
-```bash
-bash scripts/db/production_validation.sh status --task expense-notifications
-bash scripts/db/production_validation.sh cleanup --task expense-notifications
-```
-
-Evidence and caches live under ignored
-`.tmp/db/production-validation/`. `cleanup --task` retains immutable templates
-and schema captures for later tasks. Use `refresh --task ...` only when policy
-requires a forced new capture. Do not use `cleanup --all --include-templates`
-as routine cleanup.
+Do not run `scripts/db/production_validation.sh` as an implementation or
+release gate. It is retained only so old evidence remains interpretable. Run
+focused pgTAP against the disposable local database, then inspect the live
+production target directly with bounded read-only queries through
+`scripts/db/query.sh production`. Confirm migration history, exact signatures,
+columns, dependencies, effective ACLs, reference catalogs, materialized state
+and relevant invariants. A property introduced by an undeployed migration stays
+explicitly unverified until authorized deploy plus executable live read-back;
+never replace that gap with a schema-only restore.
 
 ## Supabase CLI: wrapped control plane/metadata only
 
@@ -403,7 +348,6 @@ Agents complete these steps themselves when they are in scope and authorized:
 - credential-presence checks;
 - local startup and affected tests;
 - guarded production inspection;
-- production-derived validation without repeated redumps;
 - guarded deployment and migration registration;
 - exact live read-back, health checks, and application smoke; and
 - cleanup of disposable databases/processes while retaining ignored evidence.

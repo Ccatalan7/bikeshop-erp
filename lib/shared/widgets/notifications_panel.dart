@@ -845,13 +845,18 @@ String _erpActivitySubtitle(
 ) {
   switch (type) {
     case 'mechanic_job_created':
+    case 'mechanic_job_archived':
       return _joinActivitySegments([body, _payloadText(data, 'bike_label')]);
     case 'sales_payment_received':
+    case 'sales_payment_voided':
     case 'expense_recorded':
+    case 'expense_voided':
+    case 'expense_deleted':
       return _joinActivitySegments(
         [body, _payloadText(data, 'payment_method')],
       );
     case 'online_order_created':
+    case 'online_order_cancelled':
       final deliveryType = _payloadText(data, 'delivery_type');
       return _joinActivitySegments([
         body,
@@ -891,7 +896,10 @@ String _economicDateContext({
           '${_briefingMonthShort[recorded.month - 1]}';
   final economicNoun = switch (type) {
     'sales_payment_received' => 'pago',
+    'sales_payment_voided' => 'pago',
     'expense_recorded' => 'gasto',
+    'expense_voided' => 'gasto',
+    'expense_deleted' => 'gasto',
     _ => 'corresponde',
   };
   final occurrenceLabel =
@@ -946,6 +954,23 @@ _ActivityDetail? _erpActivityDetail(
         actionLabel: 'Abrir trabajo',
         fields: fields,
       );
+    case 'mechanic_job_archived':
+      final fields = <_ActivityDetailField>[
+        ..._optionalField(
+          'SOLICITUD DEL CLIENTE',
+          _payloadText(data, 'client_request'),
+          maxLines: 4,
+        ),
+        ..._optionalField('REGISTRÓ', _payloadText(data, 'recorded_by_name')),
+        ..._optionalField('ELIMINÓ', _payloadText(data, 'removed_by_name')),
+        ..._optionalField('MOTIVO', _payloadText(data, 'archive_reason')),
+      ];
+      if (fields.isEmpty) return null;
+      return _ActivityDetail(
+        noun: 'el trabajo eliminado',
+        actionLabel: 'Ver eliminados',
+        fields: fields,
+      );
     case 'sales_payment_received':
       final fields = <_ActivityDetailField>[
         ..._optionalField('CLIENTE', _payloadText(data, 'customer_name')),
@@ -964,6 +989,27 @@ _ActivityDetail? _erpActivityDetail(
       return _ActivityDetail(
         noun: 'el detalle del pago',
         actionLabel: 'Abrir pago',
+        fields: fields,
+      );
+    case 'sales_payment_voided':
+      final fields = <_ActivityDetailField>[
+        ..._optionalField('CLIENTE', _payloadText(data, 'customer_name')),
+        ..._optionalField('REGISTRÓ', _payloadText(data, 'recorded_by_name')),
+        ..._optionalField('ANULÓ', _payloadText(data, 'voided_by_name')),
+        ..._optionalField(
+          'REFERENCIA',
+          _payloadText(data, 'reference'),
+        ),
+        ..._divergentDateField(
+          'FECHA DEL PAGO',
+          _payloadText(data, 'payment_date'),
+          createdAt,
+        ),
+      ];
+      if (fields.isEmpty) return null;
+      return _ActivityDetail(
+        noun: 'el pago anulado',
+        actionLabel: 'Abrir factura',
         fields: fields,
       );
     case 'expense_recorded':
@@ -987,6 +1033,35 @@ _ActivityDetail? _erpActivityDetail(
       return _ActivityDetail(
         noun: 'el detalle del gasto',
         actionLabel: 'Abrir gasto',
+        fields: fields,
+      );
+    case 'expense_voided':
+    case 'expense_deleted':
+      final deleted = type == 'expense_deleted';
+      final fields = <_ActivityDetailField>[
+        ..._optionalField('CATEGORÍA', _payloadText(data, 'category_name')),
+        ..._optionalField(
+          'N° DE DOCUMENTO',
+          _payloadText(data, 'document_number'),
+        ),
+        ..._optionalField('REGISTRÓ', _payloadText(data, 'recorded_by_name')),
+        ..._optionalField(
+          deleted ? 'ELIMINÓ' : 'ANULÓ',
+          _payloadText(
+            data,
+            deleted ? 'deleted_by_name' : 'voided_by_name',
+          ),
+        ),
+        ..._divergentDateField(
+          'FECHA DEL DOCUMENTO',
+          _payloadText(data, 'issue_date'),
+          createdAt,
+        ),
+      ];
+      if (fields.isEmpty) return null;
+      return _ActivityDetail(
+        noun: deleted ? 'el gasto eliminado' : 'el gasto anulado',
+        actionLabel: deleted ? 'Ver gastos' : 'Abrir gasto',
         fields: fields,
       );
     default:
@@ -4287,12 +4362,21 @@ IconData _iconForNotificationType(String type) {
   switch (type) {
     case 'mechanic_job_created':
       return Icons.build_outlined;
+    case 'mechanic_job_archived':
+      return Icons.remove_circle_outline;
     case 'sales_payment_received':
       return Icons.payments_outlined;
+    case 'sales_payment_voided':
+      return Icons.money_off_outlined;
     case 'expense_recorded':
       return Icons.receipt_long_outlined;
+    case 'expense_voided':
+    case 'expense_deleted':
+      return Icons.money_off_outlined;
     case 'online_order_created':
       return Icons.shopping_bag_outlined;
+    case 'online_order_cancelled':
+      return Icons.remove_shopping_cart_outlined;
     case 'whatsapp_catalog_approved':
       return Icons.verified_outlined;
     default:
@@ -4309,12 +4393,17 @@ String? _platformKeyForNotificationType(String type) {
 _BriefingActivityKind _kindForNotificationType(String type) {
   switch (type) {
     case 'mechanic_job_created':
+    case 'mechanic_job_archived':
       return _BriefingActivityKind.job;
     case 'sales_payment_received':
+    case 'sales_payment_voided':
       return _BriefingActivityKind.payment;
     case 'expense_recorded':
+    case 'expense_voided':
+    case 'expense_deleted':
       return _BriefingActivityKind.expense;
     case 'online_order_created':
+    case 'online_order_cancelled':
       return _BriefingActivityKind.order;
     default:
       return _BriefingActivityKind.alert;
@@ -4331,12 +4420,21 @@ Color _accentForNotificationType(String type) {
   switch (type) {
     case 'mechanic_job_created':
       return _jobsAccent;
+    case 'mechanic_job_archived':
+      return _warningAccent;
     case 'sales_payment_received':
       return _paymentsAccent;
+    case 'sales_payment_voided':
+      return _warningAccent;
     case 'expense_recorded':
       return _expensesAccent;
+    case 'expense_voided':
+    case 'expense_deleted':
+      return _warningAccent;
     case 'online_order_created':
       return _ordersAccent;
+    case 'online_order_cancelled':
+      return _warningAccent;
     case 'whatsapp_catalog_approved':
       return _paymentsAccent;
     default:

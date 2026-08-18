@@ -1,9 +1,25 @@
--- Reproducción del ranking por texto libre que no cabe en su presupuesto.
+-- CERRADO (2026-08-17). Se conserva como evidencia de cómo se midió.
 --
--- Defecto abierto (2026-08-17): `rank_purchase_candidates_v1` con `p_query`
--- tarda ~32 s contra un `statement_timeout` de 4,5 s, con los 267 candidatos
--- del taller real. La app NO lo usa —siempre rankea por producto exacto, que
--- responde en ~2 s— pero bloquea cablear la rama de texto.
+-- Este archivo reprodujo un defecto que **ya no existe**:
+-- `20260817130000_tenant_business_date_cheap_validation.sql` quitó el escaneo
+-- de `pg_timezone_names` que costaba ~67 ms por llamada, y el ranking por
+-- texto libre volvió a caber en su presupuesto. La migración está APPLIED y su
+-- read-back de producción pasa completo.
+--
+-- No se borra porque el valor que queda es el método: es el cuerpo de la
+-- función con los parámetros sustituidos, así que sigue sirviendo para
+-- investigar con EXPLAIN ANALYZE cualquier hipótesis futura sobre esta
+-- consulta, sin tocar la definición.
+--
+-- Lo que sí sigue abierto es **otra cosa**: la semántica AND-token de
+-- `p_query` deja vacías consultas legítimas («cadena 10 velocidades»). Es
+-- recuperación, no rendimiento, y no se arregla acá.
+--
+-- Diagnóstico histórico, para leer lo de abajo en contexto:
+-- `rank_purchase_candidates_v1` con `p_query` tardaba ~32 s contra un
+-- `statement_timeout` de 4,5 s, con los 267 candidatos del taller real. La app
+-- NO lo usaba —siempre rankea por producto exacto, que responde en ~2 s— pero
+-- bloqueaba cablear la rama de texto.
 --
 -- Este archivo es el cuerpo de la función con sus parámetros ya sustituidos:
 -- reproduce los 32 s como consulta plana, así que se puede investigar con

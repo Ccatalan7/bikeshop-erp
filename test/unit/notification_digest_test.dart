@@ -299,6 +299,204 @@ void main() {
       expect(economicDay.expenseTotal, 52000);
       expect(economicDay.unreadAlertCount, 0);
     });
+
+    test('voided payments stay activity but never reach payment metrics', () {
+      final digest = NotificationDigestSnapshot.fromRows(
+        period: NotificationDigestPeriod.today,
+        now: DateTime.utc(2026, 7, 25, 16),
+        notifications: [
+          _row(
+            'sales_payment_received',
+            DateTime.utc(2026, 7, 25, 13),
+            amount: 10000,
+          ),
+          _row(
+            'sales_payment_voided',
+            DateTime.utc(2026, 7, 25, 14),
+            amount: 82000,
+            voided: true,
+          ),
+          // Defensive mixed-version shape: even before the server-side type
+          // update is observed, the explicit state cannot inflate the metric.
+          _row(
+            'sales_payment_received',
+            DateTime.utc(2026, 7, 25, 15),
+            amount: 6000,
+            voided: true,
+          ),
+        ],
+      );
+
+      expect(digest.paymentCount, 1);
+      expect(digest.paymentTotal, 10000);
+      expect(digest.unreadAlertCount, 3);
+    });
+
+    test('every ribbon metric counts one active source entity only', () {
+      final now = DateTime.utc(2026, 7, 25, 16);
+      final recordedAt = DateTime.utc(2026, 7, 25, 13);
+      final notifications = <Map<String, dynamic>>[
+        _row(
+          'mechanic_job_created',
+          recordedAt,
+          id: 'job-live-notification',
+          entityType: 'mechanic_job',
+          entityId: 'job-live',
+        ),
+        _row(
+          'mechanic_job_created',
+          recordedAt,
+          id: 'job-live-notification',
+          entityType: 'mechanic_job',
+          entityId: 'job-live',
+        ),
+        _row(
+          'mechanic_job_created',
+          recordedAt,
+          id: 'job-stale-created',
+          entityType: 'mechanic_job',
+          entityId: 'job-archived',
+        ),
+        _row(
+          'mechanic_job_archived',
+          recordedAt,
+          id: 'job-stale-archived',
+          entityType: 'mechanic_job',
+          entityId: 'job-archived',
+          inactive: true,
+        ),
+        _row(
+          'sales_payment_received',
+          recordedAt,
+          id: 'payment-live-notification',
+          entityType: 'sales_payment',
+          entityId: 'payment-live',
+          amount: 12000,
+        ),
+        _row(
+          'sales_payment_received',
+          recordedAt,
+          id: 'payment-live-notification',
+          entityType: 'sales_payment',
+          entityId: 'payment-live',
+          amount: 12000,
+        ),
+        _row(
+          'expense_recorded',
+          recordedAt,
+          id: 'expense-live-notification',
+          entityType: 'expense',
+          entityId: 'expense-live',
+          totalAmount: 9000,
+        ),
+        _row(
+          'expense_recorded',
+          recordedAt,
+          id: 'expense-live-notification',
+          entityType: 'expense',
+          entityId: 'expense-live',
+          totalAmount: 9000,
+        ),
+        _row(
+          'expense_recorded',
+          recordedAt,
+          id: 'expense-stale-recorded',
+          entityType: 'expense',
+          entityId: 'expense-deleted',
+          totalAmount: 7000,
+        ),
+        _row(
+          'expense_deleted',
+          recordedAt,
+          id: 'expense-stale-deleted',
+          entityType: 'expense',
+          entityId: 'expense-deleted',
+          totalAmount: 7000,
+          inactive: true,
+        ),
+        _row(
+          'online_order_created',
+          recordedAt,
+          id: 'order-live-notification',
+          entityType: 'online_order',
+          entityId: 'order-live',
+        ),
+        _row(
+          'online_order_created',
+          recordedAt,
+          id: 'order-live-notification',
+          entityType: 'online_order',
+          entityId: 'order-live',
+        ),
+        _row(
+          'online_order_created',
+          recordedAt,
+          id: 'order-stale-created',
+          entityType: 'online_order',
+          entityId: 'order-cancelled',
+        ),
+        _row(
+          'online_order_cancelled',
+          recordedAt,
+          id: 'order-stale-cancelled',
+          entityType: 'online_order',
+          entityId: 'order-cancelled',
+          inactive: true,
+        ),
+      ];
+
+      final digest = NotificationDigestSnapshot.fromRows(
+        period: NotificationDigestPeriod.today,
+        now: now,
+        notifications: notifications,
+      );
+
+      expect(digest.jobCount, 1);
+      expect(digest.paymentCount, 1);
+      expect(digest.paymentTotal, 12000);
+      expect(digest.expenseCount, 1);
+      expect(digest.expenseTotal, 9000);
+      expect(digest.onlineOrderCount, 1);
+      expect(digest.unreadAlertCount, 10);
+    });
+
+    test('mixed-version inactive payloads suppress every active event type',
+        () {
+      final digest = NotificationDigestSnapshot.fromRows(
+        period: NotificationDigestPeriod.today,
+        now: DateTime.utc(2026, 7, 25, 16),
+        notifications: [
+          _row(
+            'mechanic_job_created',
+            DateTime.utc(2026, 7, 25, 12),
+            entityType: 'mechanic_job',
+            entityId: 'job-inactive',
+            inactive: true,
+          ),
+          _row(
+            'expense_recorded',
+            DateTime.utc(2026, 7, 25, 12),
+            entityType: 'expense',
+            entityId: 'expense-inactive',
+            totalAmount: 3500,
+            inactive: true,
+          ),
+          _row(
+            'online_order_created',
+            DateTime.utc(2026, 7, 25, 12),
+            entityType: 'online_order',
+            entityId: 'order-inactive',
+            inactive: true,
+          ),
+        ],
+      );
+
+      expect(digest.jobCount, 0);
+      expect(digest.expenseCount, 0);
+      expect(digest.expenseTotal, 0);
+      expect(digest.onlineOrderCount, 0);
+      expect(digest.unreadAlertCount, 3);
+    });
   });
 }
 
@@ -318,18 +516,28 @@ Map<String, dynamic> _row(
   num? amount,
   num? totalAmount,
   bool read = false,
+  bool voided = false,
+  bool inactive = false,
+  String? id,
+  String? entityType,
+  String? entityId,
 }) {
   return {
+    if (id != null) 'id': id,
     'type': type,
+    if (entityType != null) 'entity_type': entityType,
+    if (entityId != null) 'entity_id': entityId,
     'created_at': createdAt.toIso8601String(),
     'occurred_at': (occurredAt ?? createdAt).toIso8601String(),
     'read_at': read
         ? createdAt.add(const Duration(minutes: 1)).toIso8601String()
         : null,
-    if (amount != null || totalAmount != null)
+    if (amount != null || totalAmount != null || voided || inactive)
       'data': {
         if (amount != null) 'amount': amount,
         if (totalAmount != null) 'total_amount': totalAmount,
+        if (voided) 'is_voided': true,
+        if (inactive) 'is_inactive': true,
       },
   };
 }

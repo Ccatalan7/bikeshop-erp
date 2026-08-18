@@ -141,7 +141,9 @@ function inventorySearchCards(
     !agentInventoryAvailabilityFilters.includes(
       argumentsValue.availability as AgentInventoryAvailabilityFilter,
     ) ||
-    !["answer", "open_list"].includes(String(argumentsValue.presentation)) ||
+    !["answer", "open_list", "open_list_with_analysis"].includes(
+      String(argumentsValue.presentation),
+    ) ||
     technicalFilterChips === null || operationalFilterChips === null || orderChips === null ||
     category === undefined || technicalMatchSummary === null
   ) return [];
@@ -161,8 +163,16 @@ function inventorySearchCards(
     : `${resultCount}${result.hasMore ? "+" : ""} ${
       resultCount === 1 ? "resultado" : "resultados"
     }`;
-  const filterLabel = category ??
-    (typeof argumentsValue.query === "string" ? argumentsValue.query.trim() : "Inventario");
+  const identityQuery = typeof argumentsValue.query === "string"
+    ? argumentsValue.query.trim()
+    : null;
+  const filterLabel = [category, identityQuery]
+    .filter((value): value is string => Boolean(value))
+    .join(" · ") || "Inventario";
+  // For a truncated result the client still needs one useful local search
+  // string. Prefer the explicit identity query; complete structured results
+  // navigate by exact IDs and therefore never place this text in the field.
+  const navigationQuery = identityQuery ?? category ?? "Inventario";
   return [card({
     kind: "inventory",
     eyebrow: "Inventario",
@@ -179,12 +189,13 @@ function inventorySearchCards(
     ],
     listRef: Object.freeze({
       kind: "inventory",
-      query: filterLabel,
+      query: navigationQuery,
       availability,
       resultCount,
       hasMore: result.hasMore,
       entityIds: result.hasMore ? null : Object.freeze(entityIds),
-      autoOpen: argumentsValue.presentation === "open_list",
+      autoOpen: argumentsValue.presentation === "open_list" ||
+        argumentsValue.presentation === "open_list_with_analysis",
     }),
   })];
 }
@@ -344,18 +355,19 @@ export function autoOpenListAnswer(
   const listRef = cards[0].listRef;
   if (!listRef?.autoOpen || listRef.kind !== "inventory") return undefined;
   const filter = cards[0].chips.join(" · ") || inventoryAvailabilityLabel(listRef.availability);
+  const subject = listRef.query;
   if (listRef.resultCount === 0) {
     return supportsResultLists
-      ? `No encontré resultados con el filtro “${filter}”. Abrí Inventario para que puedas revisarlo o ajustarlo.`
-      : `No encontré resultados con el filtro “${filter}”. Usa la tarjeta para revisar o ajustar la búsqueda en Inventario.`;
+      ? `No encontré resultados para “${subject}” con el filtro “${filter}”. Abrí Inventario para que puedas revisarlo o ajustarlo.`
+      : `No encontré resultados para “${subject}” con el filtro “${filter}”. Usa la tarjeta para revisar o ajustar la búsqueda en Inventario.`;
   }
   const count = listRef.hasMore
     ? `${listRef.resultCount} o más resultados`
     : `${listRef.resultCount} ${listRef.resultCount === 1 ? "resultado" : "resultados"}`;
   const agreement = !listRef.hasMore && listRef.resultCount === 1 ? "coincidente" : "coincidentes";
   return supportsResultLists
-    ? `Abrí ${count} ${agreement} en Inventario con el filtro “${filter}”.`
-    : `Encontré ${count} ${agreement} en Inventario con el filtro “${filter}”. Usa la tarjeta para abrirlos.`;
+    ? `Abrí ${count} ${agreement} para “${subject}” en Inventario con el filtro “${filter}”.`
+    : `Encontré ${count} ${agreement} para “${subject}” en Inventario con el filtro “${filter}”. Usa la tarjeta para abrirlos.`;
 }
 
 /** Keeps rolling client updates compatible with the strict v1 card decoder. */
@@ -719,6 +731,11 @@ function preparedSupplyRequestCards(
     productName: item.productName,
     productSku: item.productSku,
     identityState: item.identityState,
+    // Procedencia de categoría: la tarjeta es cerrada y viaja al cliente, que
+    // la devuelve intacta al comando durable. El modelo no la ve.
+    categoryId: item.categoryId ?? null,
+    categoryPath: item.categoryPath ?? null,
+    technicalFamily: item.technicalFamily ?? null,
     quantity: item.quantity,
     unit: item.unit,
     technicalPredicates: item.technicalPredicates,
@@ -945,6 +962,9 @@ function validateSupplyNeedDraft(
       "productName",
       "productSku",
       "identityState",
+      "categoryId",
+      "categoryPath",
+      "technicalFamily",
       "quantity",
       "unit",
       "technicalPredicates",
@@ -962,6 +982,15 @@ function validateSupplyNeedDraft(
         (typeof line.productId === "string" && validUuid(line.productId))) ||
       !(line.productName === null || typeof line.productName === "string") ||
       !(line.productSku === null || typeof line.productSku === "string") ||
+      !(line.categoryId === null ||
+        (typeof line.categoryId === "string" && validUuid(line.categoryId))) ||
+      !(line.categoryPath === null || typeof line.categoryPath === "string") ||
+      !(line.technicalFamily === null ||
+        typeof line.technicalFamily === "string") ||
+      // Sin categoría no hay ruta ni familia: una glosa sin identidad detrás
+      // sería una afirmación que nada respalda.
+      (line.categoryId === null &&
+        (line.categoryPath !== null || line.technicalFamily !== null)) ||
       !["unresolved", "confirmed"].includes(String(line.identityState)) ||
       typeof line.quantity !== "number" || !Number.isFinite(line.quantity) ||
       line.quantity < 0.001 || line.quantity > 999999 ||
@@ -1044,6 +1073,11 @@ function validateSupplyNeedDraft(
       productName,
       productSku,
       identityState: line.identityState as "unresolved" | "confirmed",
+      categoryId: typeof line.categoryId === "string" ? line.categoryId.toLowerCase() : null,
+      categoryPath: line.categoryPath === null ? null : bounded(line.categoryPath, 240, true),
+      technicalFamily: line.technicalFamily === null
+        ? null
+        : bounded(line.technicalFamily, 120, true),
       quantity: line.quantity,
       unit,
       technicalPredicates: Object.freeze(technicalPredicates),

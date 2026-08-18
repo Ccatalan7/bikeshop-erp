@@ -13,9 +13,11 @@ import '../../sales/services/sales_service.dart';
 import '../../tasks/services/task_service.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../config/ai_assistant_runtime_config.dart';
+import '../models/ai_agent_gateway_contracts.dart';
 import '../models/ai_assistant_destination.dart';
 import '../models/ai_assistant_session_state.dart';
 import '../models/ai_agent_tool.dart';
+import 'ai_agent_gateway_client.dart';
 import 'gateway_ai_assistant_turn_engine.dart';
 import 'ai_assistant_turn_engine.dart';
 import 'ai_service.dart';
@@ -434,9 +436,18 @@ class AIAssistantSessionService extends ChangeNotifier {
           permissions: _authorityPermissions,
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (!kReleaseMode) {
-        debugPrint('[AIAssistantSession] Turn failed.');
+        final failure = switch (error) {
+          AIAgentGatewayException() =>
+            'gateway:${error.code}:${error.statusCode ?? '-'}',
+          AIAgentGatewayContractException() => 'gateway_contract',
+          _ => error.runtimeType.toString(),
+        };
+        // Keep prompts, provider bodies and identifiers out of the debug log.
+        // The closed failure class is enough to distinguish transport,
+        // admission and client/server contract regressions during a real run.
+        debugPrint('[AIAssistantSession] Turn failed ($failure).');
       }
       response = const AIAssistantResponse(
         text: 'No pude procesar esa solicitud ahora. Intenta de nuevo en unos '

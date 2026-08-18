@@ -36,25 +36,46 @@ FLUTTER="$REPO_ROOT/.fvm/flutter_sdk/bin/flutter"
 TARGET="${NATIVE_SESSION_TARGET:-lib/main.dart}"
 DEBUG_APP_GLOB="build/macos/Build/Products/Debug/vinabike_erp.app/Contents/MacOS/vinabike_erp"
 
-# Optional compile-time rollout inputs. They are intentionally explicit instead
-# of accepting a free-form shell fragment: the canonical owner must preserve
-# argument boundaries and must never eval caller-controlled text. The modern
-# Supabase key is public, but it is still kept out of this script and its logs.
+# Closed compile-time rollout inputs. The canonical development session runs the
+# same modern AI gateway as release builds by default; legacy is available only
+# as an explicit rollback with `NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED=false`.
+# Both values are emitted as dart-defines so the selected runtime is visible in
+# the process arguments instead of being inferred from an absent flag. The
+# owner must preserve argument boundaries and never eval caller-controlled text.
+# The modern Supabase key is public, but it is still kept out of this script and
+# its logs.
 FLUTTER_ROLLOUT_ARGS=()
-case "${NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED:-false}" in
+AI_AGENT_GATEWAY_MODE="${NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED:-true}"
+case "$AI_AGENT_GATEWAY_MODE" in
   true) FLUTTER_ROLLOUT_ARGS+=(--dart-define=AI_AGENT_GATEWAY_ENABLED=true) ;;
-  false|'') ;;
+  false) FLUTTER_ROLLOUT_ARGS+=(--dart-define=AI_AGENT_GATEWAY_ENABLED=false) ;;
+  '') echo "NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED no puede estar vacío" >&2; exit 64 ;;
   *) echo "NATIVE_SESSION_AI_AGENT_GATEWAY_ENABLED debe ser true o false" >&2; exit 64 ;;
 esac
-if [ -n "${NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY:-}" ]; then
-  case "$NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY" in
+
+# The public client key is process configuration, not repository state. Prefer
+# an explicit per-launch value, otherwise use the approved Keychain entry. A
+# gateway launch without it used to compile successfully and fail only after
+# the operator sent a message, which made a broken session look healthy.
+NATIVE_PUBLISHABLE_KEY="${NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY:-}"
+if [ -z "$NATIVE_PUBLISHABLE_KEY" ] && [ "$AI_AGENT_GATEWAY_MODE" = true ] \
+   && command -v security >/dev/null 2>&1; then
+  NATIVE_PUBLISHABLE_KEY="$(security find-generic-password \
+    -s 'Vinabike ERP Supabase publishable key' \
+    -a supabase -w 2>/dev/null || true)"
+fi
+if [ -n "$NATIVE_PUBLISHABLE_KEY" ]; then
+  case "$NATIVE_PUBLISHABLE_KEY" in
     sb_publishable_*)
       FLUTTER_ROLLOUT_ARGS+=(
-        "--dart-define=SUPABASE_PUBLISHABLE_KEY=$NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY"
+        "--dart-define=SUPABASE_PUBLISHABLE_KEY=$NATIVE_PUBLISHABLE_KEY"
       )
       ;;
     *) echo "NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY no es una publishable key válida" >&2; exit 64 ;;
   esac
+elif [ "$AI_AGENT_GATEWAY_MODE" = true ]; then
+  echo "El gateway IA requiere la publishable key en Keychain o NATIVE_SESSION_SUPABASE_PUBLISHABLE_KEY." >&2
+  exit 64
 fi
 
 app_pid() { pgrep -f "$DEBUG_APP_GLOB" | head -1; }
