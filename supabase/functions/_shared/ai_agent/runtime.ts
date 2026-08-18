@@ -526,7 +526,9 @@ export async function executeAgentRun(
               status: "rejected",
               failureCode: "invalid_tool_arguments",
               retryable: true,
-              message: "Corrige los argumentos usando exactamente el esquema declarado.",
+              message: `Corrige los argumentos usando exactamente el esquema declarado. ${
+                rejectedToolCallIds.get(call.id) ?? ""
+              }`.trim(),
             }),
           );
           await options.runStore.recordToolReceipt({
@@ -1506,12 +1508,25 @@ function assertRequiredProviderToolTurn(
   }
 }
 
+/// Las llamadas que no pasan validación, **con lo que hay que corregir**.
+///
+/// Antes devolvía sólo ids, y al modelo se le respondía «corrige los argumentos
+/// usando exactamente el esquema declarado». El 2026-08-18 eso costó la vía
+/// conversacional para toda petición ambigua: ante `necesito 2 cadenas` el
+/// modelo llamó a `prepare_supply_request` tres veces, las tres se rechazaron
+/// con ese texto, y la corrida murió en `agent_budget_exhausted` sin que el
+/// operador llegara nunca a la pregunta que le habría desbloqueado la compra.
+/// Un reintento a ciegas gasta presupuesto y no converge.
+///
+/// El mensaje del registro es un literal del servidor —describe el esquema, no
+/// los datos del taller—, así que puede viajar al modelo tal cual. El
+/// `failure_code` del recibo **no se toca**: es contrato afirmado por pruebas.
 function providerArgumentRejections(
   calls: AgentProviderTurn["toolCalls"],
   authority: AgentAuthority,
   registry: AgentToolRegistry,
   advertisedToolNames: ReadonlySet<string>,
-): ReadonlySet<string> {
+): ReadonlyMap<string, string> {
   if (calls.length > MAX_TOOL_CALLS) {
     throw new AgentRuntimeError(
       502,
@@ -1520,7 +1535,7 @@ function providerArgumentRejections(
     );
   }
   const ids = new Set<string>();
-  const rejected = new Set<string>();
+  const rejected = new Map<string, string>();
   for (const call of calls) {
     if (!call.id || call.id.length > 256 || ids.has(call.id)) {
       throw new AgentRuntimeError(
@@ -1531,7 +1546,10 @@ function providerArgumentRejections(
     }
     ids.add(call.id);
     if (!advertisedToolNames.has(call.name)) {
-      rejected.add(call.id);
+      rejected.set(
+        call.id,
+        "Esa herramienta no está disponible en este turno. Usa una de las declaradas.",
+      );
       continue;
     }
     try {
@@ -1541,7 +1559,7 @@ function providerArgumentRejections(
         error instanceof ToolRegistryError &&
         error.code === "invalid_tool_arguments"
       ) {
-        rejected.add(call.id);
+        rejected.set(call.id, error.message);
         continue;
       }
       throw new AgentRuntimeError(

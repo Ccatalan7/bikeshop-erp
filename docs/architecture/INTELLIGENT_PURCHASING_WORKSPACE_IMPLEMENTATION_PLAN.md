@@ -3232,6 +3232,25 @@ motivo del `ToolRegistryError`; debe conservarlo por id y publicarlo en
 `failure_code` en vez del literal. Instrumentar `tool_executor.ts` no sirve: se
 midió y ese código no se alcanza en este camino.
 
+**CERRADO el mismo día, y el arreglo no era observabilidad sino realimentación.**
+Al modelo se le respondía «Corrige los argumentos usando exactamente el esquema
+declarado», sin decirle qué estaba mal. Reintentaba a ciegas —tres veces— y la
+corrida moría en el presupuesto. `providerArgumentRejections` tenía el mensaje
+del `ToolRegistryError` en la mano y lo tiraba. Ahora lo conserva por id y lo
+adjunta a la respuesta de rechazo que el modelo lee.
+
+El resultado sobre producción, con la misma petición `necesito 2 cadenas`: la
+corrida cierra en **dos** llamadas —`inspect_inventory_schema` y
+`prepare_supply_request`, aceptada a la primera— y la interfaz muestra la
+pregunta que faltaba: «¿De cuántas velocidades es la transmisión de tu
+bicicleta?», con su campo, su confirmación y su «No lo sé». La superficie de
+aclaración quedó vista en el frame real.
+
+La lección general: **un rechazo sin motivo no es una guarda, es un bucle.**
+Quien recibe el rechazo —modelo o persona— necesita saber qué corregir, o
+gastará sus intentos repitiendo el mismo error. El `failure_code` del recibo no
+se tocó, y esa distinción es la que hizo el arreglo posible.
+
 **Y `failure_code` es contrato, no bitácora.** Se implementó el cambio
 —`Map<id, motivo>` y un slug acotado al dominio del recibo,
 `^[a-z][a-z0-9_]{0,63}$`— y compiló limpio, pero puso rojas dos pruebas que
