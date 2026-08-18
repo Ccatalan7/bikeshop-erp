@@ -3483,3 +3483,60 @@ celda de tema y host. Las conversiones no están mal *por definición* —el
 analizador y las pruebas pasan, y la jerarquía se lee bien en pantalla— pero
 **no están verificadas contra su fuente**, que es lo único que el contrato
 acepta.
+
+### 33.15 DesignSync sí estaba disponible: `list_projects` era la pista falsa (2026-08-18)
+
+**Corrige a §33.14, que declaró un bloqueo que no existía.**
+
+`DesignSync list_projects` devuelve `{"projects":[]}` **por diseño**: lista sólo
+proyectos de tipo *design-system* y filtra a los escribibles.
+`ERP Bikeshop UI Mockups` es un proyecto normal (`PROJECT_TYPE_PROJECT`), así
+que **jamás aparece ahí**. Dos sesiones concluyeron «falta autorización» del
+mismo síntoma, y las dos se equivocaron.
+
+**La receta: nunca uses `list_projects` para este proyecto. Pasa el `projectId`
+explícito `a0fa3196-6315-4b96-bde7-7cc801e7a74e`** a `get_project`,
+`list_files` y `get_file`. Verificado: `get_project` devuelve el nombre y
+`canEdit:true`.
+
+Confirmado también el cap: la guía de componentes se corta en **262.144 bytes
+exactos** y `truncated` no lo dice. Se extrae a disco y se greppea.
+
+### 33.16 La escala tipográfica autoritativa, y los errores que destapó
+
+`handoff-t23/spec.json` → `typography.scale`, que es el contrato:
+
+| rol | fuente | superficie |
+|---|---|---|
+| `module_title` | 600 16px/1.2 Poppins | banda de proceso (oculto en phone) |
+| `panel_title` | 600 13.5px Poppins | inspector, criterios, compra local |
+| `surface_title` | 600 14px Poppins | **Stock interno** |
+| `section_title` | 600 12.5px IBM Plex Sans | encabezados de bloque |
+| `row_title` | 600 12px IBM Plex Sans | filas de tabla, filas de plan |
+| `card_title` | 600 13–13.5px IBM Plex Sans | **cards de candidato y de stock en phone** |
+| `body` | 400 11.5px/1.55 IBM Plex Sans | |
+| `meta` | 400 10.5px/1.45 IBM Plex Sans | |
+| `label` | 600 9px IBM Plex Mono · ls .7 · uppercase | |
+| `metric_lg` / `metric_md` / `metric_sm` | 700 21 / 15 / 13px IBM Plex Mono | inspector / cards phone / celdas y totales |
+
+**Dos roles del contrato NO existen en `PurchaseType`:**
+
+1. **`cardTitle` (600 13–13.5px IBM Plex Sans).** El encargo del dueño ya lo
+   nombraba —«según la superficie son `sectionTitle`, `rowTitle` o
+   `cardTitle`»— y no está implementado. Las conversiones mandaron el nombre
+   de producto de las **cards de teléfono** a `rowTitle` (12px). El contrato
+   dice 13–13.5. **Mal.**
+2. **`moduleTitle` (600 16px/1.2 Poppins).** «Asistente de compras» en la banda
+   de proceso se convirtió a `surfaceTitle` (14px Poppins), pero `surface_title`
+   está reservado en el spec para **Stock interno**. **Mal.**
+
+Lo que sí calza exacto con el contrato: `body` 11.5, `meta` 10.5, `label` 9 mono,
+`row_title` 12 para filas de tabla y de plan, `section_title` 12.5 para
+encabezados de bloque, y las tres métricas mono.
+
+**Conclusión honesta: las 94 conversiones no eran «plausibles pero sin
+verificar» — al menos dos familias estaban equivocadas, y sólo se supo al leer
+la fuente.** Es la prueba de por qué el contrato exige DesignSync y no la
+pantalla. El trabajo restante: agregar `cardTitle` y `moduleTitle` a
+`PurchaseType` con sus valores del spec, reasignar los usos de card de teléfono
+y el título del módulo, y recién entonces comparar frame contra frame.
