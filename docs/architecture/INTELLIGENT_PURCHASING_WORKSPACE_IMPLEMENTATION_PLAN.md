@@ -3326,3 +3326,45 @@ ejecutable; el de `20260818190000` sirve de molde. Y antes de tocar cualquier
 código de error de este camino, buscar quién lo afirma: en un solo día,
 `assistant_unavailable`, `invalid_tool_arguments` y `failure_code` resultaron
 ser los tres contrato verificado por pruebas.
+
+### 33.12 `brandRef` no tiene de dónde nacer (2026-08-18)
+
+**Las dos piezas de base del objetivo comercial están desplegadas y
+verificadas**: `20260818200000` enseñó al validador de tarjetas a aceptar
+`commercialTarget`, y `20260818210000` dio al borrador una `_v3` que lo acepta
+y lo devuelve delegando todo su dominio en
+`normalize_commercial_target_internal_v1`. El read-back de la segunda además
+exige que la tarjeta que ese borrador produce **pase** el validador de la
+primera, para que la interfaz no pueda mostrar un borrador que la persistencia
+va a rechazar — que es exactamente lo que hizo la fase A.
+
+**Lo que falta se detuvo contra un muro de diseño, no de esfuerzo.** Se
+implementó la rebanada Deno —`commercialTarget` con `brandRef` opaca en el
+esquema de `prepare_supply_request`, y su resolución en
+`resolveToolEntityReferences`— y se revirtió al comprobar que **ninguna
+herramienta acuña referencias de marca**. El minteo en `tool_executor.ts` es de
+**un tipo por herramienta**: `search_inventory` acuña `catalog_item`,
+`inspect_inventory_schema` acuña `product_category`, y la función deriva un
+único `referenceKind`/`referenceField` del nombre de la herramienta. No hay
+`product_brand`, y `AgentToolEntityReference.kind` tampoco lo admite.
+
+Declarar `brandRef` sin resolver eso es **peor que no declararlo**: el modelo
+emitiría referencias que siempre fallan al resolver y se llevaría por delante
+el camino que hoy funciona.
+
+**La decisión que hay que tomar antes de escribir más código**, y es de
+producto, no de implementación:
+
+- **Opción A — un tipo más por herramienta ya existente.**
+  `inspect_inventory_schema` ya resuelve la categoría; podría publicar además
+  las marcas presentes en ella con su `entityId`. Obliga a que el minteo
+  soporte **dos tipos desde una herramienta**, que hoy no soporta, y a decidir
+  qué marcas son «las de la categoría» cuando hay decenas.
+- **Opción B — una herramienta propia de marcas.** Más limpia para el minteo y
+  para la ACL, pero suma un turno al presupuesto, y el presupuesto de turnos ya
+  demostró hoy ser el recurso escaso de este flujo.
+
+Mientras no exista la fuente, el objetivo comercial puede llegar **sin marca**:
+gama, techo de costo y piso de margen no necesitan referencia opaca y ya están
+soportados de extremo a extremo en la base. Ése es el corte siguiente más
+barato y no bloquea a ninguna de las dos opciones.
