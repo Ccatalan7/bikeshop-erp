@@ -380,3 +380,21 @@ tipográfica:
 ```bash
 grep -rn "fontFamily: '" lib/modules/<módulo>/ | grep -v visual_language
 ```
+
+
+## Una acción que falta no se ve mirando la pantalla (2026-08-18)
+
+`frames[clarification].blocks.acciones` declaraba `secondary: "Responder
+después"` desde el primer handoff. No se implementó nunca, y **ninguna ronda de
+barrido visual lo notó**: el bloque de la pregunta se veía completo —cabecera,
+pregunta, opciones, botón y su motivo—, así que nada saltaba a la vista.
+
+Lo que se veía en su lugar era un primario **apagado** con un texto explicando
+por qué. Desde la pregunta, la única lectura posible era «esto no avanza», y el
+dueño lo reportó con esas palabras. La salida existía a treinta líneas de scroll,
+fuera de pantalla en teléfono.
+
+**Regla:** al comparar una superficie contra su frame, recorre `blocks` y
+`acciones` del `spec.json` **entrada por entrada**, y marca las que no
+encuentres. Un bloque presente con una acción de menos se ve bien y se comporta
+mal, y eso no lo detecta ningún ojo mirando la captura.

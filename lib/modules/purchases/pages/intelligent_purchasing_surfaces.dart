@@ -986,7 +986,11 @@ class _StockCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               height: PurchaseSurfaceGeometry.phoneStepControl,
-              child: FilledButton(
+              // Secundario, igual que su gemela de escritorio: el único sólido
+              // de la superficie es el cierre («Comparar proveedores»). Esta
+              // rama había quedado sólida y ponía dos primarios en la misma
+              // pantalla de teléfono.
+              child: OutlinedButton(
                 onPressed: busy ? null : onAssign,
                 child: Text('Usar ${component.coverable} de bodega'),
               ),

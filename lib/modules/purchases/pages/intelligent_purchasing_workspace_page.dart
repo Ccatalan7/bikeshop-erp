@@ -3218,6 +3218,33 @@ class _IntelligentPurchasingWorkspacePageState
             child: const Text('No lo sé'),
           ),
         ),
+      // **La segunda vía, en el punto de la decisión.**
+      //
+      // El contrato del frame 08 la declara desde el principio —«secundaria:
+      // Responder después»— y no estaba: al pie de la pregunta sólo había un
+      // «Continuar» apagado y un texto diciendo por qué. La salida existía,
+      // pero vivía al final de todo el borrador, pasada la evidencia
+      // consultada y fuera de pantalla en teléfono. Desde la pregunta, la
+      // única lectura posible era «no puedo seguir hasta contestar esto».
+      //
+      // Sigue con lo que el asistente entendió: la precisión queda pendiente
+      // en la línea y se resuelve en el paso siguiente, que es exactamente lo
+      // que la CTA del borrador ya hacía.
+      if (!busy) ...[
+        PurchaseInlineAction(
+          key: const ValueKey('clarification-answer-later'),
+          label: 'Responder después',
+          onPressed:
+              _runningCommand ? null : () => unawaited(_saveSupplyNeedDraft()),
+        ),
+        Text(
+          'Sigue con lo que el asistente entendió; la línea queda con su '
+          'precisión pendiente.',
+          key: const ValueKey('clarification-answer-later-hint'),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ],
     ];
 
     return Container(

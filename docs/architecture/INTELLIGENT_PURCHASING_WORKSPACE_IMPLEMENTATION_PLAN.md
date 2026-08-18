@@ -3714,3 +3714,45 @@ Después del despliegue, el smoke es una petición natural con objetivo explíci
 creada trae su revisión de objetivo. Hasta que eso ocurra, la vía conversacional
 sigue corriendo contra el esquema anterior: **el código está entero y verde, y
 no está en vivo**.
+
+
+### 33.21 La pregunta necesitaba su segunda vía, y el contrato ya la pedía (2026-08-18)
+
+**Reporte del dueño, en vivo: «nada de lo que le pregunto a este wizard
+funciona».** El diagnóstico separó tres cosas que se veían como una:
+
+1. **Una caída de plataforma.** 15 respuestas
+   `503 SUPABASE_EDGE_RUNTIME_SERVICE_DEGRADED` en una ventana del día, que se
+   llevaron también Gmail, Zoho y la mensajería. En ese tramo las corridas del
+   asistente murieron con `provider_rejected`, `assistant_unavailable` —una con
+   detalle `_supabase_caller_scoped_rpc_failed`, código que **no existe en este
+   checkout**: viene de la función desplegada— y una con
+   `agent_budget_exhausted`, que **no es plata** sino el tope de
+   `MAX_TOOL_ROUNDS` 5 / `MAX_TOOL_CALLS` 8.
+2. **La copia que él vio no era el defecto.** «La fuente autorizada respondió
+   como no disponible» la escribe `runtime.ts` cuando el modelo llama a
+   `report_capability_gap`: es honestidad ante una fuente caída. Reproducida la
+   misma frase con el servicio sano, la vía conversacional respondió entera.
+3. **Y un defecto real de flujo, que sí era nuestro.** Al pie de cada pregunta
+   sólo había un «Continuar» **apagado** y un texto diciendo por qué. La salida
+   existía —la CTA del borrador— pero al final de toda la columna, pasada la
+   evidencia consultada y fuera de pantalla en teléfono. Desde la pregunta, la
+   lectura inevitable era «esto no avanza».
+
+`frames[clarification].blocks.acciones` **ya declaraba** la secundaria
+«Responder después». Estaba en el contrato desde el primer handoff y nunca se
+implementó; el barrido de superficies no la echó de menos porque el bloque se
+veía completo. **Lo que delata una acción que falta no es mirar la pantalla: es
+recorrer el contrato control por control.**
+
+El dueño autorizó el cambio explícitamente («cambialo nomás»). Implementado como
+`clarification-answer-later`, con su meta diciendo qué deja pendiente,
+verificado en la app —guarda y avanza sin contestar— y guardado por una prueba
+que muerde.
+
+**Lo que destapó, y pertenece a producto:** avanzar sin precisar deja la
+necesidad en Proveedores contra otras dos preguntas, «Falta decir qué categoría
+es» y «Falta confirmar qué producto es». Eso no es UI —sin categoría el servidor
+no tiene conjunto que comparar—, así que la vía directa está limitada por el
+dato. Encadenadas, esas preguntas son exactamente la experiencia que el dueño
+describió.

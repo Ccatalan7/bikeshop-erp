@@ -926,6 +926,21 @@ void main() {
             .onPressed,
         isNull,
       );
+      // **Los dos caminos, en el punto de la decisión.** Con sólo el primario
+      // apagado y su motivo, la pregunta se lee como un muro: la salida existía
+      // pero vivía al final del borrador, pasada la evidencia consultada y
+      // fuera de pantalla en teléfono. El contrato del frame 08 declara esta
+      // secundaria desde el principio.
+      expect(
+        find.byKey(const ValueKey('clarification-answer-later')),
+        findsOneWidget,
+        reason: 'Seguir con lo entendido es la segunda vía del frame 08.',
+      );
+      expect(
+        find.byKey(const ValueKey('clarification-answer-later-hint')),
+        findsOneWidget,
+        reason: 'Una salida que no dice qué deja pendiente no es una salida.',
+      );
       expect(tester.takeException(), isNull);
     });
 
