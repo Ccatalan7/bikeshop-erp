@@ -3383,19 +3383,28 @@ precedente ya existía en el mismo archivo —`clarificationPrompts` es opcional
 su comprobación enumera las dos combinaciones a mano—, y con dos claves
 opcionales enumerar a mano son cuatro: conviene derivarlas de las presentes.
 
-**Cambiar la RPC del ejecutor a `_v3` rompe ochenta y una.** `tool_executor.ts`
-declara `rpc: "assistant_prepare_supply_request_v2"` y una parte grande del
-arnés afirma ese nombre. **El cambio de RPC no es una línea: es un corte con su
-propia migración de expectativas**, y hay que hacerlo aparte del cambio de
-contrato, no en el mismo movimiento. Ése fue el error de este intento.
+**Y opcional en el esquema es imposible: rompe ochenta y una.** Un tercer
+intento lo aisló —sin tocar la RPC— y el error dice exactamente por qué:
+`Every object property must be required`. El validador de esquemas del registro
+(`invalidSchema`, `tool_registry.ts`) **exige que toda propiedad declarada esté
+en `required`**, y una violación no falla la herramienta: falla la carga del
+registro, y con ella todo el arnés. De ahí los 81 contra los 12.
+
+**Eso corrige la atribución anterior de este mismo documento**, que culpaba al
+cambio de RPC a `_v3`. No era la RPC. La regla del registro es deliberada: es
+cómo se garantiza que el modelo emita siempre todos los campos y no invente
+omisiones. Con ella, la única forma válida es **`commercialTarget` obligatorio
+y anulable**, que es justo lo que hace `categoryRef`.
 
 **Orden recomendado para retomar, ya medido:**
 
-1. `commercialTarget` **opcional** en el esquema y en el ejecutor, con la
-   comprobación de claves derivada de las opcionales presentes. Sin tocar la
-   RPC. Las pruebas que fallen aquí son las que de verdad hay que actualizar.
-2. El cambio de `_v2` a `_v3` **solo**, con su migración de expectativas del
-   arnés. `_v3` ya está desplegada y verificada.
+1. `commercialTarget` **obligatorio y anulable** —`type: ["object","null"]` y
+   dentro de `required`, como `categoryRef`— más su forma en el ejecutor. Eso
+   pone rojas doce pruebas que construyen líneas sin la clave: actualizarlas es
+   el trabajo real de este corte, no un daño colateral.
+2. El cambio de `_v2` a `_v3` **solo**, después. `_v3` ya está desplegada y
+   verificada. No está medido cuánto arnés afirma el nombre `_v2`; el número 81
+   que este documento le atribuyó era del esquema, no suyo.
 3. `createNeedBatch → create_supply_need_batch_v3` en Dart, con el campo en
    `AIAssistantSupplyNeedDraftLine.toCommandJson`.
 4. `brandRef` cuando el dueño decida su fuente (§33.12).
