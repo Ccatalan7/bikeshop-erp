@@ -3368,3 +3368,37 @@ Mientras no exista la fuente, el objetivo comercial puede llegar **sin marca**:
 gama, techo de costo y piso de margen no necesitan referencia opaca y ya están
 soportados de extremo a extremo en la base. Ése es el corte siguiente más
 barato y no bloquea a ninguna de las dos opciones.
+
+### 33.13 La rebanada Deno del objetivo, medida (2026-08-18)
+
+Se implementó la variante **sin marca** —`commercialTarget` con `gama`,
+`maxLandedUnitCostNet` y `minGrossMarginRatio`, que no necesitan referencia
+opaca— y se revirtió. Lo que midió, para que nadie repita los dos intentos:
+
+**Obligatorio rompe doce pruebas; opcional es lo correcto igual.** Declarar
+`commercialTarget` en el `required` del esquema y en el `hasExactKeys` del
+ejecutor puso rojas doce pruebas que construyen líneas sin él. No es sólo
+compatibilidad: una línea sin objetivo no tiene por qué mandar `null`. El
+precedente ya existía en el mismo archivo —`clarificationPrompts` es opcional y
+su comprobación enumera las dos combinaciones a mano—, y con dos claves
+opcionales enumerar a mano son cuatro: conviene derivarlas de las presentes.
+
+**Cambiar la RPC del ejecutor a `_v3` rompe ochenta y una.** `tool_executor.ts`
+declara `rpc: "assistant_prepare_supply_request_v2"` y una parte grande del
+arnés afirma ese nombre. **El cambio de RPC no es una línea: es un corte con su
+propia migración de expectativas**, y hay que hacerlo aparte del cambio de
+contrato, no en el mismo movimiento. Ése fue el error de este intento.
+
+**Orden recomendado para retomar, ya medido:**
+
+1. `commercialTarget` **opcional** en el esquema y en el ejecutor, con la
+   comprobación de claves derivada de las opcionales presentes. Sin tocar la
+   RPC. Las pruebas que fallen aquí son las que de verdad hay que actualizar.
+2. El cambio de `_v2` a `_v3` **solo**, con su migración de expectativas del
+   arnés. `_v3` ya está desplegada y verificada.
+3. `createNeedBatch → create_supply_need_batch_v3` en Dart, con el campo en
+   `AIAssistantSupplyNeedDraftLine.toCommandJson`.
+4. `brandRef` cuando el dueño decida su fuente (§33.12).
+
+La base ya no bloquea nada: `20260818200000` y `20260818210000` están APPLIED y
+verificadas, y aceptan el objetivo completo, marca incluida, el día que llegue.
