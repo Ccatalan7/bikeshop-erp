@@ -237,7 +237,6 @@ class _PurchaseProcessBandState extends State<PurchaseProcessBand> {
   @override
   Widget build(BuildContext context) {
     final roles = VinabikeThemeRoles.of(context).shell;
-    final theme = Theme.of(context);
     return Container(
       color: roles.canvas,
       padding: const EdgeInsets.only(left: 16, right: 16, top: 12),
@@ -249,7 +248,7 @@ class _PurchaseProcessBandState extends State<PurchaseProcessBand> {
               if (!widget.compact) ...[
                 Text(
                   'Asistente de compras',
-                  style: theme.textTheme.titleSmall?.copyWith(
+                  style: PurchaseType.surfaceTitle.copyWith(
                     fontFamily: 'Poppins',
                     color: roles.foreground,
                   ),
@@ -261,8 +260,8 @@ class _PurchaseProcessBandState extends State<PurchaseProcessBand> {
                   'Revisa primero la bodega y, si falta, encuentra dónde comprarlo con evidencia.',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: roles.mutedForeground),
+                  style:
+                      PurchaseType.meta.copyWith(color: roles.mutedForeground),
                 ),
               ),
               if (widget.statusLabel != null) ...[
@@ -279,8 +278,8 @@ class _PurchaseProcessBandState extends State<PurchaseProcessBand> {
                 const SizedBox(width: 6),
                 Text(
                   widget.statusLabel!,
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: roles.mutedForeground),
+                  style:
+                      PurchaseType.label.copyWith(color: roles.mutedForeground),
                 ),
               ],
             ],
@@ -317,7 +316,6 @@ class _PurchaseProcessBandState extends State<PurchaseProcessBand> {
 
   Widget _buildPhoneStepper(BuildContext context) {
     final roles = VinabikeThemeRoles.of(context).shell;
-    final theme = Theme.of(context);
     const steps = PurchaseStep.values;
     final index = steps.indexOf(widget.active);
     final previous = index > 0 ? steps[index - 1] : null;
@@ -369,8 +367,8 @@ class _PurchaseProcessBandState extends State<PurchaseProcessBand> {
                         widget.active.label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelLarge
-                            ?.copyWith(color: roles.foreground),
+                        style: PurchaseType.rowTitle
+                            .copyWith(color: roles.foreground),
                       ),
                       if (widget.meta[widget.active] != null)
                         Text(
@@ -433,7 +431,6 @@ class _WideStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final roles = VinabikeThemeRoles.of(context).shell;
-    final theme = Theme.of(context);
     return Semantics(
       button: true,
       selected: active,
@@ -466,7 +463,7 @@ class _WideStep extends StatelessWidget {
                 children: [
                   Text(
                     step.label,
-                    style: theme.textTheme.labelLarge?.copyWith(
+                    style: PurchaseType.rowTitle.copyWith(
                       color: enabled ? roles.foreground : roles.mutedForeground,
                     ),
                   ),
@@ -565,10 +562,10 @@ class SupplyNeedBar extends StatelessWidget {
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(title, style: theme.textTheme.titleSmall),
+                Text(title, style: PurchaseType.sectionTitle),
                 Text(
                   quantityLabel,
-                  style: theme.textTheme.labelMedium?.copyWith(
+                  style: PurchaseType.meta.copyWith(
                     fontFamily: 'IBM Plex Mono',
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -802,7 +799,7 @@ class _StockRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(component.name, style: theme.textTheme.titleSmall),
+                Text(component.name, style: PurchaseType.rowTitle),
                 const SizedBox(height: 2),
                 Text(
                   [
@@ -810,8 +807,8 @@ class _StockRow extends StatelessWidget {
                     'comprometido ${component.onlineCommitted + component.workshopCommitted}',
                     if (countedAtLabel != null) countedAtLabel!,
                   ].join(' · '),
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  style: PurchaseType.meta
+                      .copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -829,7 +826,7 @@ class _StockRow extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       '${component.availableToPromise}',
-                      style: theme.textTheme.titleSmall?.copyWith(
+                      style: PurchaseType.metricMedium.copyWith(
                         fontFamily: 'IBM Plex Mono',
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
@@ -838,8 +835,8 @@ class _StockRow extends StatelessWidget {
                 ),
                 Text(
                   'necesitas ${component.requiredQuantity}',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  style: PurchaseType.meta
+                      .copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -903,7 +900,7 @@ class _StockCard extends StatelessWidget {
                       component.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall,
+                      style: PurchaseType.rowTitle,
                     ),
                     if (component.sku != null) ...[
                       const SizedBox(height: 2),
@@ -928,7 +925,7 @@ class _StockCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Disponible ${component.availableToPromise} · necesitas ${component.requiredQuantity}',
-                  style: theme.textTheme.titleSmall,
+                  style: PurchaseType.body,
                 ),
               ),
             ],
@@ -937,8 +934,8 @@ class _StockCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               countedAtLabel!,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: PurchaseType.meta
+                  .copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
           if (assignable && onAssign != null) ...[
