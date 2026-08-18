@@ -92,22 +92,22 @@ class ComplianceLabel extends StatelessWidget {
       case CandidateCompliance.meets:
         return Text(
           'Cumple',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         );
       case CandidateCompliance.meetsByName:
         // No es una excepción, es una evidencia más floja: texto, no cápsula.
         return Text(
           // «Cumple» sobreafirma: el nombre coincide, la ficha no lo dice.
           'Coincide por nombre',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         );
       case CandidateCompliance.noCriteria:
         return Text(
           'Sin criterios',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         );
       case CandidateCompliance.unverified:
         // Sí es la excepción que hay que ver: el ERP no pudo comprobarlo.
@@ -115,8 +115,8 @@ class ComplianceLabel extends StatelessWidget {
       case CandidateCompliance.unevaluated:
         return Text(
           'Sin evaluar',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         );
       case CandidateCompliance.review:
         return _ExceptionCapsule(tone: roles.warning, label: 'Revisar');
@@ -172,7 +172,7 @@ class EvidenceAgeLabel extends StatelessWidget {
     }
     return Text(
       text,
-      style: theme.textTheme.bodySmall?.copyWith(
+      style: PurchaseType.meta.copyWith(
         fontFamily: 'IBM Plex Mono',
         color: theme.colorScheme.onSurfaceVariant,
       ),
@@ -381,7 +381,7 @@ class _CandidateTableRow extends StatelessWidget {
                                 candidate.productName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall,
+                                style: PurchaseType.rowTitle,
                               ),
                               Text(
                                 candidate.supplierName,
@@ -417,7 +417,7 @@ class _CandidateTableRow extends StatelessWidget {
                 child: Text(
                   marginLabel(candidate),
                   textAlign: TextAlign.end,
-                  style: theme.textTheme.titleSmall?.copyWith(
+                  style: PurchaseType.metricSmall.copyWith(
                     fontFamily: 'IBM Plex Mono',
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
@@ -444,7 +444,7 @@ class _CandidateTableRow extends StatelessWidget {
                       _gamaLabel(candidate),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      style: PurchaseType.meta.copyWith(
                         color:
                             candidate.gama == null || !candidate.gamaIsConfident
                                 ? PurchaseTokens.of(context).inkFaint
@@ -458,7 +458,7 @@ class _CandidateTableRow extends StatelessWidget {
                   child: Text(
                     '${candidate.purchaseCount} compras',
                     textAlign: TextAlign.end,
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    style: PurchaseType.meta.copyWith(
                       fontFamily: 'IBM Plex Mono',
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -485,8 +485,8 @@ class _LandedCostText extends StatelessWidget {
     if (cost == null) {
       return Text(
         'sin evaluar',
-        style: theme.textTheme.bodySmall
-            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        style: PurchaseType.meta
+            .copyWith(color: theme.colorScheme.onSurfaceVariant),
       );
     }
     return Column(
@@ -497,8 +497,8 @@ class _LandedCostText extends StatelessWidget {
         if (candidate.currency != 'CLP')
           Text(
             candidate.currency,
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.label
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
       ],
     );
@@ -563,7 +563,7 @@ class ProviderCandidateCard extends StatelessWidget {
                           candidate.productName,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall,
+                          style: PurchaseType.rowTitle,
                         ),
                         Text(
                           candidate.supplierName,
@@ -601,7 +601,7 @@ class ProviderCandidateCard extends StatelessWidget {
                       alignEnd: true,
                       child: Text(
                         marginLabel(candidate),
-                        style: theme.textTheme.titleMedium?.copyWith(
+                        style: PurchaseType.metricMedium.copyWith(
                           fontFamily: 'IBM Plex Mono',
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
@@ -620,8 +620,8 @@ class ProviderCandidateCard extends StatelessWidget {
                   '${candidate.purchaseCount} compras',
                   'stock no verificado',
                 ].join(' · '),
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: PurchaseType.meta
+                    .copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -1369,7 +1369,7 @@ class PlanEmptyInline extends StatelessWidget {
                   children: [
                     Text(
                       'Todavía no hay productos elegidos',
-                      style: theme.textTheme.titleSmall,
+                      style: PurchaseType.sectionTitle,
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -1748,7 +1748,7 @@ class _AnchoredMenuButton extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelLarge,
+                style: PurchaseType.label,
               ),
             ),
             const SizedBox(width: 4),
@@ -1810,8 +1810,7 @@ class PartialAnalysisNotice extends StatelessWidget {
           Text(
             'Evaluamos $evaluated de $total opciones.$_pendingSentence '
             'Puedes continuar sin perder lo ya revisado.',
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: roles.warning.onContainer),
+            style: PurchaseType.body.copyWith(color: roles.warning.onContainer),
           ),
           const SizedBox(height: 10),
           Align(
@@ -1832,16 +1831,16 @@ class PartialAnalysisNotice extends StatelessWidget {
                 childrenPadding: const EdgeInsets.only(bottom: 8),
                 title: Text(
                   'Detalle técnico',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: roles.warning.onContainer),
+                  style: PurchaseType.meta
+                      .copyWith(color: roles.warning.onContainer),
                 ),
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       technicalDetail!,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: roles.warning.onContainer),
+                      style: PurchaseType.meta
+                          .copyWith(color: roles.warning.onContainer),
                     ),
                   ),
                 ],
@@ -1892,13 +1891,13 @@ class NoMatchSurface extends StatelessWidget {
         children: [
           Text(
             'Ninguna opción cumple todos los filtros',
-            style: theme.textTheme.titleSmall,
+            style: PurchaseType.sectionTitle,
           ),
           const SizedBox(height: 4),
           Text(
             causeSentence,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.meta
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -1928,7 +1927,7 @@ class NoMatchSurface extends StatelessWidget {
                 tilePadding: EdgeInsets.zero,
                 title: Text(
                   'Qué filtro oculta cada candidato',
-                  style: theme.textTheme.bodySmall,
+                  style: PurchaseType.meta,
                 ),
                 children: [
                   for (final explanation in perCandidateExplanations)
@@ -2000,8 +1999,8 @@ class PlanDraftHeader extends StatelessWidget {
         ),
         Text(
           '$lineCount ${lineCount == 1 ? 'línea' : 'líneas'} · $purchasedLabel',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
       ],
     );
@@ -2042,8 +2041,8 @@ class PlanGroupEvidenceText extends StatelessWidget {
     final theme = Theme.of(context);
     return Text(
       complete ? 'evidencia completa' : 'evidencia parcial',
-      style: theme.textTheme.bodySmall
-          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      style:
+          PurchaseType.meta.copyWith(color: theme.colorScheme.onSurfaceVariant),
     );
   }
 }
@@ -2186,7 +2185,7 @@ class BasketSectionTabs extends StatelessWidget {
             ),
             child: Text(
               label,
-              style: theme.textTheme.titleSmall?.copyWith(
+              style: PurchaseType.label.copyWith(
                 color: selected
                     ? theme.colorScheme.primary
                     : theme.colorScheme.onSurfaceVariant,
@@ -2281,7 +2280,7 @@ class BasketRequestLinesCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Líneas de la petición',
-                    style: theme.textTheme.titleSmall,
+                    style: PurchaseType.sectionTitle,
                   ),
                 ),
                 TextButton(
@@ -2306,8 +2305,8 @@ class BasketRequestLinesCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               child: Text(
                 'La canasta todavía no tiene líneas.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: PurchaseType.meta
+                    .copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
         ],
@@ -2342,13 +2341,13 @@ class _BasketRequestLineRow extends StatelessWidget {
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(line.name, style: theme.textTheme.titleSmall),
+        Text(line.name, style: PurchaseType.rowTitle),
         if (line.description.isNotEmpty) ...[
           const SizedBox(height: 2),
           Text(
             line.description,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.meta
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
       ],
@@ -2382,8 +2381,8 @@ class _BasketRequestLineRow extends StatelessWidget {
               Flexible(
                 child: Text(
                   'Requiere precisión · $blocker',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: roles.warning.accent),
+                  style:
+                      PurchaseType.meta.copyWith(color: roles.warning.accent),
                 ),
               ),
               const SizedBox(width: 8),
@@ -2526,8 +2525,8 @@ class _LocalPurchaseSheetState extends State<LocalPurchaseSheet> {
                   Expanded(
                     child: Text(
                       'Registrar compra local',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontFamily: 'Poppins'),
+                      style: PurchaseType.panelTitle
+                          .copyWith(fontFamily: 'Poppins'),
                     ),
                   ),
                   IconButton(
@@ -2545,17 +2544,17 @@ class _LocalPurchaseSheetState extends State<LocalPurchaseSheet> {
                 children: [
                   Text(
                     widget.productLabel,
-                    style: theme.textTheme.titleSmall,
+                    style: PurchaseType.rowTitle,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Esto no compra ni recibe nada: prepara el documento para '
                     'que lo completes y lo confirmes tú.',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    style: PurchaseType.meta
+                        .copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 16),
-                  Text('Tipo de documento', style: theme.textTheme.labelLarge),
+                  Text('Tipo de documento', style: PurchaseType.label),
                   const SizedBox(height: 6),
                   for (final entry in _documentKinds.entries)
                     RadioListTile<String>(
@@ -2588,7 +2587,7 @@ class _LocalPurchaseSheetState extends State<LocalPurchaseSheet> {
                   const SizedBox(height: 16),
                   Text(
                     'Tratamiento tributario',
-                    style: theme.textTheme.labelLarge,
+                    style: PurchaseType.label,
                   ),
                   const SizedBox(height: 6),
                   for (final entry in _treatments.entries)
@@ -2614,8 +2613,8 @@ class _LocalPurchaseSheetState extends State<LocalPurchaseSheet> {
                     'El proveedor local, el costo unitario neto y la moneda se '
                     'eligen en el documento, con sus buscadores reales. El '
                     'stock sólo cambia con una recepción válida.',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    style: PurchaseType.meta
+                        .copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -3266,12 +3265,12 @@ class _DecisionStateBand extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: theme.textTheme.titleSmall),
+          Text(title, style: PurchaseType.sectionTitle),
           const SizedBox(height: 4),
           Text(
             body,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.meta
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           if (actions.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -3438,14 +3437,14 @@ class UnverifiedCandidatesBand extends StatelessWidget {
             count == 1
                 ? '1 opción sin verificar'
                 : '$count opciones sin verificar',
-            style: theme.textTheme.titleSmall,
+            style: PurchaseType.sectionTitle,
           ),
           const SizedBox(height: 4),
           Text(
             'La ficha no alcanza para confirmar que cumplen los criterios. '
             'Se muestran igual: no saber no es lo mismo que no calzar.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.meta
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           if (page.hasMore) ...[
             const SizedBox(height: 6),
@@ -3480,7 +3479,6 @@ class RequestMatchEvidence extends StatelessWidget {
   Widget build(BuildContext context) {
     final signals = match.requestedSignals;
     if (signals.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
     final tokens = PurchaseTokens.of(context);
     return Column(
       key: const ValueKey('request-match-evidence'),
@@ -3495,7 +3493,7 @@ class RequestMatchEvidence extends StatelessWidget {
                 Text(
                   '${supplySignalLabel(entry.key)} · '
                   '${supplySignalVerdict(entry.value)}',
-                  style: theme.textTheme.bodySmall,
+                  style: PurchaseType.meta,
                 ),
                 Text(
                   supplySignalReasonLabel(entry.value.reason),
@@ -3592,7 +3590,7 @@ class FamilyStockOptions extends StatelessWidget {
           resolution.counts.eligible == 1
               ? '1 alternativa interna elegible'
               : '${resolution.counts.eligible} alternativas internas elegibles',
-          style: theme.textTheme.titleSmall,
+          style: PurchaseType.sectionTitle,
         ),
         const SizedBox(height: 4),
         Text(
@@ -3600,8 +3598,8 @@ class FamilyStockOptions extends StatelessWidget {
           // distintas es una decisión del taller, no una propiedad del stock.
           'Elegir una fija qué producto es la necesidad. Sumar varias no '
           'demuestra cobertura: cada alternativa se evalúa por separado.',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         if (rejection != null && rejection.trim().isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -3641,7 +3639,7 @@ class FamilyStockOptions extends StatelessWidget {
                       Text(
                         '${option.availableToPromise} disponibles · '
                         '${_coverageLabel(option, resolution.quantity)}',
-                        style: theme.textTheme.bodySmall,
+                        style: PurchaseType.meta,
                       ),
                       Text(
                         // «No lo sé» no es «no cumple»: se rotula y se sigue.
@@ -3951,8 +3949,8 @@ class _CommercialTargetEditorState extends State<CommercialTargetEditor> {
           const SizedBox(height: 4),
           Text(
             'Guardar vuelve a pedir las opciones al servidor.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.meta
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
       ),
