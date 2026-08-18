@@ -3196,26 +3196,39 @@ adivinar, que es exactamente el costo que esta sección documenta dos veces.**
 
 ### 33.10 Lo que la vía conversacional todavía no hace (2026-08-18)
 
-**Una petición ambigua muere en el presupuesto en vez de preguntar.**
-`necesito 2 cadenas` —sin velocidades, que es el dato que decide el producto—
-consume los cinco turnos exploratorios y termina en `agent_budget_exhausted`,
-con los seis intentos de proveedor en `succeeded`. El operador ve «No pude
-cerrar el análisis con evidencia suficiente», que es cierto pero inútil: la
-pregunta que faltaba —«¿de cuántas velocidades?»— es exactamente la que el
-contrato de aclaración existe para hacer.
+**El borrador de una petición ambigua se rechaza tres veces y la corrida se
+queda sin presupuesto.** `necesito 2 cadenas` —sin velocidades, que es el dato
+que decide el producto— termina en `agent_budget_exhausted` con los seis
+intentos de proveedor en `succeeded`. El operador ve «No pude cerrar el análisis
+con evidencia suficiente».
 
-La consecuencia práctica es que **la superficie de aclaración no se alcanza**:
-`clarificationPrompts` sólo llega si el modelo la emite antes de agotar
-`MAX_TOOL_ROUNDS`, y hoy prefiere seguir buscando. Una petición bien
+**La primera lectura de este síntoma fue equivocada y conviene decirlo**: no es
+que el modelo no pregunte. `assistant_tool_receipts` muestra que llamó a
+`prepare_supply_request` **tres veces** y que las tres quedaron `rejected`; sólo
+después se agotó el presupuesto. El modelo hace su trabajo; su respuesta se
+descarta. Sin mirar los recibos de herramienta, el `agent_budget_exhausted` de
+la corrida invita a culpar al presupuesto o al prompt, que es donde no está el
+defecto.
+
+La consecuencia es que **la superficie de aclaración no se alcanza**: el
+borrador que la abriría nunca sobrevive a la validación. Una petición bien
 especificada (`4 cámaras 29 válvula Schrader`) cierra sin problema; la
 ambigüedad, que es justo el caso para el que se diseñó la aclaración, no.
 
-No es un defecto de transporte ni de contrato: es de política. El siguiente
-turno debe decidir si la ambigüedad se detecta antes de explorar —una regla que
-obligue a preguntar cuando falta un dato que cambia el producto, no cuando ya
-se gastó el presupuesto— o si el presupuesto reserva un turno para la pregunta.
-Medir primero cuántos turnos gasta el modelo antes de emitir su primer prompt
-en peticiones reales; ajustar el prompt sin ese número es adivinar.
+**Dónde mirar.** `validateSupplyRequestItems` en `tool_executor.ts` lanza
+`InvalidToolArguments` desde un booleano de una treintena de condiciones
+encadenadas. Las candidatas para una línea que pregunta son las reglas
+apareadas: `clarificationRequired = true` exige **además** un `clarification`
+no nulo, exige `productId` nulo, y exige que `clarificationPrompts` valide con
+al menos un prompt. Un modelo que manda la pregunta en los prompts pero deja
+`clarification` en null cae por la primera y no hay forma de saberlo.
+
+**Lo que hay que hacer primero, y es la misma lección que ya costó dos rondas
+hoy: que el rechazo diga cuál comprobación falló.** Un validador que sólo
+responde «argumentos inválidos» obliga a reproducir con instrumentación cada
+vez, y aquí ya se pagó dos veces —primero con `assistant_unavailable`
+genérico, después con esto—. Recién con el nombre de la regla en el recibo se
+decide si el defecto es del prompt, del contrato o del presupuesto.
 
 **Superficies vistas en el frame real: cuatro de cinco.** Inspector del
 candidato, compra local, canasta y escenarios, todas con la tipografía por roles
