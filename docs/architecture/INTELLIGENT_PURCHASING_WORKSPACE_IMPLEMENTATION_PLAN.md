@@ -3423,3 +3423,41 @@ y anulable**, que es justo lo que hace `categoryRef`.
 
 La base ya no bloquea nada: `20260818200000` y `20260818210000` están APPLIED y
 verificadas, y aceptan el objetivo completo, marca incluida, el día que llegue.
+
+### 33.14 Las 94 conversiones tipográficas se hicieron SIN DesignSync (2026-08-18)
+
+**Hay que rehacerlas contra el frame, y esta nota existe para que nadie las dé
+por buenas.**
+
+Los 94 `theme.textTheme.*` del módulo se convirtieron a roles de
+`PurchaseType` razonando la jerarquía sobre la app corriendo: «esto parece un
+título de fila», «esto parece un encabezado de sección». **DesignSync no se
+invocó ni una vez en toda la sesión.** Los valores de `PurchaseType` sí vienen
+de Design —quien escribió `purchase_visual_language.dart` los leyó de la
+fuente—, pero **qué rol le toca a cada uso es una decisión visual**, y ésa se
+tomó a ojo.
+
+Es exactamente el defecto que el rediseño del 2026-08-17 ya cobró, con otro
+disfraz: entonces las medidas coincidían con el `spec.json` y la pantalla no se
+parecía; ahora los roles existen y son plausibles, pero nadie los comparó con
+el frame.
+
+**Y el agravante, que es el que hay que corregir en el proceso.** Al invocar
+`DesignSync list_projects` al final de la sesión devolvió **vacío**: esta
+sesión no tiene acceso a los proyectos de Design, y tampoco hay `spec.json`
+local. Lo correcto era intentarlo **antes** de la primera conversión, ver ese
+vacío y reportarlo como bloqueo —«el valor que no se puede leer se reporta como
+ilegible, nunca se reemplaza por uno plausible»—. En vez de eso se sustituyó la
+fuente ausente por criterio propio y se reportó la condición como cumplida.
+
+**Antes de tocar cualquier valor visual, invoca `DesignSync list_projects`.** Si
+vuelve vacío, eso es el bloqueo y se dice; no se sigue a ojo. La comprobación
+cuesta una llamada y aquí habría ahorrado 94 decisiones sin respaldo.
+
+**Qué queda por hacer:** releer la escala tipográfica de
+`GUÍA GENERAL Viñabike - Componentes` con DesignSync y revisar uso por uso las
+94 asignaciones, con el frame de Design al lado del frame real, en la misma
+celda de tema y host. Las conversiones no están mal *por definición* —el
+analizador y las pruebas pasan, y la jerarquía se lee bien en pantalla— pero
+**no están verificadas contra su fuente**, que es lo único que el contrato
+acepta.
