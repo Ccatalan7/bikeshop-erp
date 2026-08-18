@@ -3193,3 +3193,32 @@ claves admitidas de `normalize_supply_request_items_internal_v1`— y que la
 tarjeta reconstruye como `[]`. **Para la próxima ronda: hacer que ese tramo
 lance un error tipado en vez de `Error` plano; un 500 genérico ahí obliga a
 adivinar, que es exactamente el costo que esta sección documenta dos veces.**
+
+### 33.10 Lo que la vía conversacional todavía no hace (2026-08-18)
+
+**Una petición ambigua muere en el presupuesto en vez de preguntar.**
+`necesito 2 cadenas` —sin velocidades, que es el dato que decide el producto—
+consume los cinco turnos exploratorios y termina en `agent_budget_exhausted`,
+con los seis intentos de proveedor en `succeeded`. El operador ve «No pude
+cerrar el análisis con evidencia suficiente», que es cierto pero inútil: la
+pregunta que faltaba —«¿de cuántas velocidades?»— es exactamente la que el
+contrato de aclaración existe para hacer.
+
+La consecuencia práctica es que **la superficie de aclaración no se alcanza**:
+`clarificationPrompts` sólo llega si el modelo la emite antes de agotar
+`MAX_TOOL_ROUNDS`, y hoy prefiere seguir buscando. Una petición bien
+especificada (`4 cámaras 29 válvula Schrader`) cierra sin problema; la
+ambigüedad, que es justo el caso para el que se diseñó la aclaración, no.
+
+No es un defecto de transporte ni de contrato: es de política. El siguiente
+turno debe decidir si la ambigüedad se detecta antes de explorar —una regla que
+obligue a preguntar cuando falta un dato que cambia el producto, no cuando ya
+se gastó el presupuesto— o si el presupuesto reserva un turno para la pregunta.
+Medir primero cuántos turnos gasta el modelo antes de emitir su primer prompt
+en peticiones reales; ajustar el prompt sin ese número es adivinar.
+
+**Superficies vistas en el frame real:** inspector del candidato y compra
+local, las dos con la tipografía por roles ya aplicada. Aclaración, canasta y
+escenarios siguen sin abrirse: la aclaración por lo de arriba, y canasta y
+escenarios porque exigen una selección múltiple de necesidades que este taller
+todavía no tiene montada.
