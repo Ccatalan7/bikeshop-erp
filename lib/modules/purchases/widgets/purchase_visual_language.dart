@@ -189,6 +189,17 @@ abstract final class PurchaseMetrics {
 /// único que cambia es cómo se resuelve la familia. Los estilos dejan de ser
 /// `const` porque la fuente se resuelve en tiempo de ejecución.
 abstract final class PurchaseType {
+  /// `module_title` del spec: la identidad del módulo en la banda de proceso.
+  ///
+  /// Faltaba, y su ausencia empujó «Asistente de compras» a [surfaceTitle],
+  /// que el spec reserva para **Stock interno**. Leído de
+  /// `handoff-t23/spec.json` → `typography.scale`, no de la pantalla.
+  static final TextStyle moduleTitle = GoogleFonts.poppins(
+    fontWeight: FontWeight.w600,
+    fontSize: 16,
+    height: 1.2,
+  );
+
   static final TextStyle panelTitle = GoogleFonts.poppins(
     fontWeight: FontWeight.w600,
     fontSize: 13.5,
@@ -207,6 +218,17 @@ abstract final class PurchaseType {
   static final TextStyle rowTitle = GoogleFonts.ibmPlexSans(
     fontWeight: FontWeight.w600,
     fontSize: 12,
+  );
+
+  /// `card_title` del spec: cards de candidato y de stock **en teléfono**.
+  ///
+  /// El spec lo declara como un rango, `600 13–13.5px IBM Plex Sans`; se toma
+  /// el extremo alto, que es el que usa el prototipo en la card de stock.
+  /// Faltaba, y su ausencia mandó los nombres de producto de esas cards a
+  /// [rowTitle], que es 12 y pertenece a las filas de tabla y de plan.
+  static final TextStyle cardTitle = GoogleFonts.ibmPlexSans(
+    fontWeight: FontWeight.w600,
+    fontSize: 13.5,
   );
 
   static final TextStyle body = GoogleFonts.ibmPlexSans(

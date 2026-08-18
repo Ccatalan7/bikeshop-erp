@@ -563,7 +563,7 @@ class ProviderCandidateCard extends StatelessWidget {
                           candidate.productName,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: PurchaseType.rowTitle,
+                          style: PurchaseType.cardTitle,
                         ),
                         Text(
                           candidate.supplierName,

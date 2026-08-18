@@ -248,7 +248,7 @@ class _PurchaseProcessBandState extends State<PurchaseProcessBand> {
               if (!widget.compact) ...[
                 Text(
                   'Asistente de compras',
-                  style: PurchaseType.surfaceTitle.copyWith(
+                  style: PurchaseType.moduleTitle.copyWith(
                     fontFamily: 'Poppins',
                     color: roles.foreground,
                   ),
@@ -900,7 +900,7 @@ class _StockCard extends StatelessWidget {
                       component.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: PurchaseType.rowTitle,
+                      style: PurchaseType.cardTitle,
                     ),
                     if (component.sku != null) ...[
                       const SizedBox(height: 2),
