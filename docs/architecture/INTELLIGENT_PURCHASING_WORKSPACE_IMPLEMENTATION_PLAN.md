@@ -3283,3 +3283,46 @@ La única que sigue sin verse es la **aclaración**, y no por falta de intentos:
 hoy el producto no la alcanza, por lo documentado arriba. Verla exige antes
 resolver la política de turnos; abrirla a la fuerza desde una ruta artificial
 demostraría que el widget renderiza, no que el operador puede llegar a ella.
+
+### 33.11 El objetivo comercial por IA: el corte exacto que falta (2026-08-18)
+
+**No está empezado, y el mapa importa más que un comienzo parcial.** Es una
+rebanada vertical que cruza tres capas, y dejarla a medio cablear es
+exactamente la forma del defecto que costó esta sesión entera: la fase A amplió
+la tarjeta y no migró a su validador, y el síntoma no se parecía a la causa.
+Un `commercialTarget` que viaje en la mitad del camino se comportaría igual.
+
+El estado real, comprobado en el código:
+
+1. **Deno — esquema y referencia opaca.** `prepare_supply_request` no declara
+   `commercialTarget`. La marca tiene que viajar como `brandRef`, del mismo
+   modo que `catalogItemRef` y `categoryRef`: se acuña en el resultado de una
+   herramienta y se resuelve en `resolveToolEntityReferences` (`runtime.ts`),
+   que hoy mapea esas dos y habría que extender con `kind: 'product_brand'`.
+   El modelo nunca ve un UUID; ése es el punto.
+2. **SQL — el borrador no lo devuelve.** `assistant_prepare_supply_request_v2`
+   proyecta la línea normalizada más `entityId` y `profile`. Aceptar y devolver
+   el objetivo exige una `_v3` de esa función, no un parche: `_v2` está
+   desplegada y sirve al camino vigente.
+3. **SQL — el validador de tarjetas, otra vez.** `assistant_cards_valid_v1`
+   tiene un allowlist cerrado por línea. Sumar `commercialTarget` sin migrarlo
+   reproduce el defecto de la fase A al pie de la letra. La migración
+   `20260818190000` es el precedente de cómo hacerlo: claves opcionales para no
+   invalidar tarjetas ya persistidas, tipadas y coherentes cuando están.
+4. **Dart — el modelo y el comando.**
+   `AIAssistantSupplyNeedDraftLine.toCommandJson` (`ai_assistant_turn_contracts.dart`)
+   emite once claves y ninguna es el objetivo. `createNeedBatch`
+   (`intelligent_purchasing_service.dart:89`) llama a
+   `create_supply_need_batch_v2`; `_v3` ya está desplegada y verificada y crea
+   necesidad y primer objetivo de forma atómica, así que el cambio de llamada
+   es la **última** pieza, no la primera: hacerlo antes sólo mueve la llamada
+   sin que viaje ningún objetivo.
+5. **Gateway — el tercer capability header**, junto a `ai.read.purchases` y
+   `ai.read.operational` que `assistant_prepare_supply_request_v2` ya exige.
+
+**Orden recomendado:** 3 primero (el validador, que es donde el fallo es mudo),
+después 2, después 1, después 5, y 4 al final. Cada paso con su read-back
+ejecutable; el de `20260818190000` sirve de molde. Y antes de tocar cualquier
+código de error de este camino, buscar quién lo afirma: en un solo día,
+`assistant_unavailable`, `invalid_tool_arguments` y `failure_code` resultaron
+ser los tres contrato verificado por pruebas.
