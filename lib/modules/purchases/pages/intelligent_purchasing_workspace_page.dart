@@ -2067,8 +2067,8 @@ class _IntelligentPurchasingWorkspacePageState
           ),
           child: Text(
             message,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: theme.colorScheme.onPrimaryContainer),
+            style: PurchaseType.body
+                .copyWith(color: theme.colorScheme.onPrimaryContainer),
           ),
         ),
       ),
@@ -2089,8 +2089,8 @@ class _IntelligentPurchasingWorkspacePageState
         Expanded(
           child: Text(
             'Interpretando tu petición…',
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.body
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ),
       ],
@@ -2178,8 +2178,8 @@ class _IntelligentPurchasingWorkspacePageState
             need.hasConfirmedProduct
                 ? 'La bodega se revisa antes de cotizar.'
                 : 'Falta confirmar el producto exacto antes de comparar.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.meta
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 8),
           SizedBox(
@@ -2563,7 +2563,7 @@ class _IntelligentPurchasingWorkspacePageState
         Text(
           _derivedInterpretationSummary(draft),
           key: const ValueKey('assistant-interpretation'),
-          style: theme.textTheme.bodyLarge,
+          style: PurchaseType.sectionTitle,
         ),
         if (_hasDistinctAssistantExplanation(draft)) ...[
           const SizedBox(height: 4),
@@ -2585,15 +2585,15 @@ class _IntelligentPurchasingWorkspacePageState
             Text(
               _assistantText!.trim(),
               key: const ValueKey('assistant-explanation-body'),
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: PurchaseType.meta
+                  .copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
         ],
         const SizedBox(height: 6),
         Text(
           'Los costos vienen del historial de compras; la disponibilidad del proveedor no se afirma sin una fuente vigente.',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 14),
 
@@ -2619,8 +2619,7 @@ class _IntelligentPurchasingWorkspacePageState
           const SizedBox(height: 12),
           Text(
             _supplyNeedSaveError!,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.error),
+            style: PurchaseType.meta.copyWith(color: theme.colorScheme.error),
           ),
         ],
 
@@ -2817,7 +2816,7 @@ class _IntelligentPurchasingWorkspacePageState
       children: [
         Text(
           'Antes de comparar hace falta una precisión',
-          style: theme.textTheme.titleSmall,
+          style: PurchaseType.sectionTitle,
         ),
         const SizedBox(height: 6),
         _buildOriginalRequestLine(),
@@ -2930,8 +2929,8 @@ class _IntelligentPurchasingWorkspacePageState
                       key: ValueKey<String>(
                         'clarification-answered-${entry.prompt.id}',
                       ),
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      style: PurchaseType.meta
+                          .copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ),
                   TextButton(
@@ -2989,8 +2988,7 @@ class _IntelligentPurchasingWorkspacePageState
           child: Text(
             'No se pudo enviar la respuesta. Reintenta: lo que marcaste sigue aquí.',
             key: const ValueKey('clarification-send-error'),
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.error),
+            style: PurchaseType.meta.copyWith(color: theme.colorScheme.error),
           ),
         ),
         TextButton(
@@ -3031,8 +3029,8 @@ class _IntelligentPurchasingWorkspacePageState
           Text(
             'Listo para enviar tus respuestas. Puedes cambiar cualquiera antes '
             'de continuar.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.meta
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -3196,8 +3194,8 @@ class _IntelligentPurchasingWorkspacePageState
                   ? 'Responde la pregunta para continuar'
                   : 'Faltan $remaining respuestas para continuar',
           key: const ValueKey('clarification-continue-hint'),
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
       if (prompt.allowUnknown)
         SizedBox(
@@ -3230,13 +3228,13 @@ class _IntelligentPurchasingWorkspacePageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(prompt.question, style: theme.textTheme.bodyLarge),
+          Text(prompt.question, style: PurchaseType.rowTitle),
           if (draft.lines.length > 1) ...[
             const SizedBox(height: 2),
             Text(
               'Para «${line.description}»',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: PurchaseType.meta
+                  .copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
           const SizedBox(height: 10),
@@ -3282,7 +3280,7 @@ class _IntelligentPurchasingWorkspacePageState
       children: [
         Text(
           'Seguimos sin la precisión necesaria',
-          style: theme.textTheme.titleSmall,
+          style: PurchaseType.sectionTitle,
         ),
         const SizedBox(height: 6),
         _buildOriginalRequestLine(),
@@ -3290,8 +3288,8 @@ class _IntelligentPurchasingWorkspacePageState
           'Ya respondiste $_clarificationRoundCap veces y el dato sigue sin '
           'cerrarse. Puedes corregir la petición o guardarla pendiente y '
           'confirmar el producto en el paso siguiente.',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 10),
         if (first.isNotEmpty)
@@ -3322,7 +3320,7 @@ class _IntelligentPurchasingWorkspacePageState
       children: [
         Text(
           'Antes de comparar hace falta una precisión',
-          style: theme.textTheme.titleSmall,
+          style: PurchaseType.sectionTitle,
         ),
         const SizedBox(height: 6),
         _buildOriginalRequestLine(),
@@ -3332,7 +3330,7 @@ class _IntelligentPurchasingWorkspacePageState
             child: Text(
               line.clarification ??
                   'Falta confirmar el producto exacto de «${line.description}».',
-              style: theme.textTheme.bodyMedium,
+              style: PurchaseType.body,
             ),
           ),
         const SizedBox(height: 2),
@@ -3352,8 +3350,8 @@ class _IntelligentPurchasingWorkspacePageState
             Text(
               'o guárdala como pendiente con la acción de abajo y confirma el '
               'producto en el paso siguiente',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: PurchaseType.meta
+                  .copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -3376,16 +3374,16 @@ class _IntelligentPurchasingWorkspacePageState
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         title: Text(
           'Evidencia consultada',
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.rowTitle
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         children: [
           Text(
             'Catálogo y fichas técnicas del tenant, e historial de compras para '
             'costo y proveedor. El detalle por fuente de este análisis todavía '
             'no se publica; no se muestran recuentos estimados.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.meta
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -3426,8 +3424,8 @@ class _IntelligentPurchasingWorkspacePageState
           // nunca la promesa de que no se compra nada.
           '${allConfirmed ? 'Guardar crea la necesidad para trabajarla' : 'Se guarda con la identidad pendiente y podrás confirmar el producto en el paso siguiente'}; '
           'no compra, no reserva stock y no emite ningún documento.',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: PurchaseType.meta
+              .copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
       ],
     );
@@ -3457,7 +3455,7 @@ class _IntelligentPurchasingWorkspacePageState
         children: [
           Text(
             'Editar necesidad ${index + 1}',
-            style: theme.textTheme.titleSmall,
+            style: PurchaseType.sectionTitle,
           ),
           const SizedBox(height: 10),
           TextField(
@@ -3508,8 +3506,7 @@ class _IntelligentPurchasingWorkspacePageState
             const SizedBox(height: 8),
             Text(
               _draftEditError!,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error),
+              style: PurchaseType.meta.copyWith(color: theme.colorScheme.error),
             ),
           ],
           const SizedBox(height: 12),
@@ -3590,7 +3587,7 @@ class _IntelligentPurchasingWorkspacePageState
               Expanded(
                 child: Text(
                   'Criterios interpretados',
-                  style: theme.textTheme.titleSmall,
+                  style: PurchaseType.sectionTitle,
                 ),
               ),
               TextButton(
@@ -3604,24 +3601,24 @@ class _IntelligentPurchasingWorkspacePageState
             const SizedBox(height: 6),
             Text(
               'Preferencia: ${line.preference}',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: PurchaseType.meta
+                  .copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
           for (final predicate in line.technicalPredicates) ...[
             const SizedBox(height: 4),
             Text(
               _predicateLabel(predicate),
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: PurchaseType.meta
+                  .copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
           if (line.preference == null && line.technicalPredicates.isEmpty) ...[
             const SizedBox(height: 6),
             Text(
               'La IA no dedujo criterios adicionales para esta línea.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: PurchaseType.meta
+                  .copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
         ],
@@ -3691,14 +3688,14 @@ class _IntelligentPurchasingWorkspacePageState
               Expanded(
                 child: Text(
                   line.description,
-                  style: theme.textTheme.titleSmall,
+                  style: PurchaseType.rowTitle,
                 ),
               ),
               const SizedBox(width: 12),
               Text(
                 '${_formatSupplyQuantity(line.quantity)} '
                 '${purchaseUnitLabel(line.unit, line.quantity)}',
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: PurchaseType.meta.copyWith(
                   fontFamily: 'IBM Plex Mono',
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -3722,8 +3719,8 @@ class _IntelligentPurchasingWorkspacePageState
               Expanded(
                 child: Text(
                   identity,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  style: PurchaseType.meta
+                      .copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ),
             ],
@@ -3734,8 +3731,8 @@ class _IntelligentPurchasingWorkspacePageState
               padding: const EdgeInsets.only(left: 15),
               child: Text(
                 criteria.join(' · '),
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: PurchaseType.meta
+                    .copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
           ],
@@ -3749,8 +3746,8 @@ class _IntelligentPurchasingWorkspacePageState
               child: Text(
                 line.clarification!,
                 key: ValueKey('supply-draft-coverage-note-${line.lineRef}'),
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: PurchaseType.meta
+                    .copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
           ],
@@ -4079,12 +4076,12 @@ class _IntelligentPurchasingWorkspacePageState
         key: const ValueKey('provider-results-needs-empty'),
         padding: const EdgeInsets.only(top: 14),
         children: [
-          Text('Selecciona una necesidad', style: theme.textTheme.titleSmall),
+          Text('Selecciona una necesidad', style: PurchaseType.sectionTitle),
           const SizedBox(height: 4),
           Text(
             'Verás primero el stock interno y luego las opciones de compra.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: PurchaseType.meta
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           Align(
