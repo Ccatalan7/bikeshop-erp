@@ -25,7 +25,11 @@ import type {
   AgentToolExecutor,
 } from "./tool_executor.ts";
 import { AgentToolRegistry, ToolRegistryError } from "./tool_registry.ts";
-import { AgentProviderRouter, ProviderError } from "./providers/provider.ts";
+import {
+  AgentProviderRouter,
+  providerAttemptErrorCode,
+  ProviderError,
+} from "./providers/provider.ts";
 import type { AgentPricingCatalog } from "./pricing.ts";
 import {
   type PublicResearchEvidenceCompleteness,
@@ -1637,8 +1641,10 @@ async function generateWithOneRetry(input: {
             : "failed",
           estimatedCostMicrousd: 0,
           requestHash,
-          errorCode: abortError?.code ?? providerError?.code ??
-            "provider_unavailable",
+          errorCode: abortError?.code ??
+            (providerError
+              ? providerAttemptErrorCode(providerError)
+              : "provider_unavailable"),
           startedAt,
           completedAt,
         }, freshAdminSignal());

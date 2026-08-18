@@ -3121,3 +3121,75 @@ definir la necesidad, aprovechar primero stock realmente asignable, encontrar el
 producto correcto en el lugar correcto a un precio justo, comparar
 características precisas o alternativas conscientemente parecidas y convertir
 esa conclusión en una acción segura, trazable y reversible donde corresponda.
+
+### 33.9 Despliegue B2 y la vía conversacional (2026-08-18)
+
+**La cadena B2 está desplegada y verificada.** `20260817150000`–`20260817220000`
+responden `APPLIED` con read-back ejecutable sobre producción. El recorrido
+determinista se comprobó en la app real contra producción: necesidad →
+stock interno (0 disponibles) → proveedores (1 candidato, Comercial Ciclo,
+$3.490 con flete, 58,5 % de margen, evidencia de 141 días, gama económica) →
+plan por proveedor. La RPC nueva gobierna la pantalla; no es una afirmación
+sobre constantes.
+
+**Un read-back que sólo puede pasar el día de su migración no es una guarda.**
+El de `20260817180000` exigía que `brand_id` fuera la **última** columna de
+`purchase_candidate_metrics_v1`. Era cierto ese día y dejó de serlo cuando
+`20260817220000` agregó `price_currency` detrás. Se fijó a la **posición 41**,
+que prueba exactamente lo mismo —la columna se agregó al final y nadie reordenó
+la vista— y sigue siendo verdad después. La evidencia de «última columna» vive
+ahora en el read-back de quien la agregó al final.
+
+Y una invariante no se escribe de memoria: el read-back del kernel exigía que
+`purchase_candidate_scores_internal_v1` nunca proyectara `metric.*`. El kernel
+**sí** lo hace, dentro de su CTE, y es correcto: la regla del contrato era sobre
+la respuesta del wrapper. Se reemplazó por lo que de verdad importa —que la
+vista cara se lea una sola vez, acotada por `candidate_id`, sin resolver
+subárbol de categoría—.
+
+**El proveedor de la IA no es Anthropic, y ninguna hipótesis de modelo servía.**
+`AI_AGENT_{FAST,DEEP,VISION}_PROVIDER` valen los tres `gemini`; no existe
+`ANTHROPIC_API_KEY` ni ninguna variable `AI_AGENT_ANTHROPIC_*`. Los defaults
+`claude-sonnet-5`/`claude-opus-5` del código son configuración muerta en este
+proyecto. Buscar «una variable `AI_AGENT_*_MODEL` que pisa el default» no podía
+encontrar nada porque la ruta a Anthropic nunca se toma. Los modelos vigentes
+son `gemini-3.1-pro-preview` (deep) y `gemini-3.6-flash` (fast/vision).
+
+**`provider_rejected` era determinista, no de entorno, y estaba en la sexta
+llamada.** Con `MAX_TOOL_ROUNDS = 5`, la sexta es la única que fuerza
+`prepare_supply_request` con `functionCallingConfig.mode = "ANY"`.
+`gemini-3.1-pro-preview` rechaza esa restricción con 4xx y con ella se perdía la
+corrida entera: los cinco turnos anteriores respondían `tool_calls` sin
+problema. Los cuatro `provider_rejected` de todo el ledger histórico son
+exactamente esa llamada. **Ningún borrador conversacional podía cerrarse nunca.**
+
+Forzar la herramienta es una **pista de transporte**, no el contrato: quien
+garantiza que el turno traiga esa herramienta y sólo esa es
+`assertRequiredProviderToolTurn` en el runtime. Por eso, cuando el proveedor
+rechaza la restricción con un status no reintentable, se reintenta una vez sin
+`toolConfig` en vez de tirar la corrida. Un 5xx **no** degrada la pista: eso
+enmascararía una caída del proveedor. Con el arreglo desplegado,
+`prepare_supply_request` ejecutó con éxito por primera vez.
+
+**Un rechazo sin status no se puede diagnosticar.** El gateway hacía
+`discardProviderBody` y guardaba sólo `provider_rejected`, con lo que un 400,
+un 401 y un 404 son el mismo hecho en el ledger. Costó una ronda entera. Ahora
+`assistant_provider_attempts.error_code` lleva el status y el **enum de estado**
+del proveedor (`provider_rejected_400_INVALID_ARGUMENT`); el texto libre se
+sigue descartando porque puede contener eco del prompt, y el código del *run*
+no cambia, porque hay consumidores que lo comparan por igualdad.
+
+**Lo que sigue abierto en la vía conversacional.** Con la sexta llamada ya
+resuelta, la corrida falla inmediatamente después con `assistant_unavailable`
+(500), que es el mapeo genérico de un `Error` **plano** e inesperado. Las seis
+herramientas —incluida `prepare_supply_request`— quedan `succeeded` en
+`assistant_tool_receipts`, así que el fallo está entre construir la tarjeta del
+borrador y cerrar la corrida. Los únicos que lanzan `Error` plano en ese tramo
+son `preparedSupplyRequestCards` y `validateSupplyNeedDraft` en `cards.ts`;
+`renderPreparedSupplyDraftAnswer` lanza `AgentRuntimeError` 502 y los RPC de
+cierre no validan el interior de la tarjeta. Sospecha principal: el
+round-trip de `clarificationPrompts`, que la RPC no devuelve —no está en las
+claves admitidas de `normalize_supply_request_items_internal_v1`— y que la
+tarjeta reconstruye como `[]`. **Para la próxima ronda: hacer que ese tramo
+lance un error tipado en vez de `Error` plano; un 500 genérico ahí obliga a
+adivinar, que es exactamente el costo que esta sección documenta dos veces.**

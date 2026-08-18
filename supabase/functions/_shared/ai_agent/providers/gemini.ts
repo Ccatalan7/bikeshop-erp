@@ -11,7 +11,11 @@ import {
   type LogicalModelRole,
 } from "../contracts.ts";
 import { type AgentModelProvider, ProviderError, requiredToolNameFor } from "./provider.ts";
-import { discardProviderBody, readProviderJson } from "./http.ts";
+import {
+  discardProviderBody,
+  providerRejectionReason,
+  readProviderJson,
+} from "./http.ts";
 
 const defaultModels: Readonly<Record<LogicalModelRole, string>> = {
   fast: "gemini-3.6-flash",
@@ -60,7 +64,7 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
       const endpoint = new URL(`models/${encodeURIComponent(model)}:generateContent`, endpointBase);
       const continuation = decodeGeminiContinuation(request.continuationToken);
       const requiredToolName = requiredToolNameFor(request);
-      const payload = {
+      const buildPayload = (forcedToolName: string | undefined) => ({
         systemInstruction: { parts: [{ text: request.systemInstruction }] },
         contents: geminiContents(request.messages, continuation.groups),
         tools: request.tools.length === 0 ? undefined : [{
@@ -70,40 +74,74 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
             parametersJsonSchema: tool.parameters,
           })),
         }],
-        toolConfig: requiredToolName
+        toolConfig: forcedToolName
           ? {
             functionCallingConfig: {
               mode: "ANY",
-              allowedFunctionNames: [requiredToolName],
+              allowedFunctionNames: [forcedToolName],
             },
           }
           : undefined,
         generationConfig: { maxOutputTokens: request.maxOutputTokens },
+      });
+
+      const send = async (forcedToolName: string | undefined): Promise<Response> => {
+        try {
+          return await fetchImpl(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey,
+            },
+            body: JSON.stringify(buildPayload(forcedToolName)),
+            signal,
+          });
+        } catch (_) {
+          throw new ProviderError("provider_unavailable", 503, !signal.aborted);
+        }
       };
 
-      let response: Response;
-      try {
-        response = await fetchImpl(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: JSON.stringify(payload),
-          signal,
-        });
-      } catch (_) {
-        throw new ProviderError("provider_unavailable", 503, !signal.aborted);
+      const rejectionIsRetryable = (status: number) =>
+        status === 408 || status === 429 || status >= 500;
+
+      let response = await send(requiredToolName);
+
+      // **Forzar la herramienta es una pista, no el contrato.**
+      //
+      // `functionCallingConfig.mode = "ANY"` le pide al modelo que la llamada
+      // terminal sea sí o sí una función concreta. Un modelo que no admite esa
+      // restricción rechaza la petición entera con 4xx, y entonces se pierde no
+      // la pista sino la conversación completa: el 2026-08-18 el Asistente de
+      // compras fallaba SIEMPRE en la sexta llamada —las cinco anteriores
+      // respondían `tool_calls` sin problema— porque esa sexta es la única que
+      // fuerza `prepare_supply_request`. Ningún borrador podía cerrarse nunca.
+      //
+      // Quien de verdad garantiza el contrato es `assertRequiredProviderToolTurn`
+      // en el runtime, que exige que el turno traiga esa herramienta y sólo esa.
+      // Por eso degradar la pista es seguro: si el modelo no la llama, sigue
+      // fallando con su error tipado de siempre; lo que ya no ocurre es tirar la
+      // corrida por una restricción de transporte que el proveedor no acepta.
+      if (
+        !response.ok && requiredToolName !== undefined &&
+        !rejectionIsRetryable(response.status)
+      ) {
+        await discardProviderBody(response);
+        response = await send(undefined);
       }
 
       if (!response.ok) {
+        const retryable = rejectionIsRetryable(response.status);
+        // Un rechazo no reintentable es el único que hay que poder diagnosticar
+        // después: se rescata su enum de estado y se descarta el resto.
+        const reason = retryable
+          ? undefined
+          : await providerRejectionReason(response);
         await discardProviderBody(response);
-        const retryable = response.status === 408 || response.status === 429 ||
-          response.status >= 500;
         throw new ProviderError(
           retryable ? "provider_unavailable" : "provider_rejected",
           response.status,
           retryable,
+          reason,
         );
       }
 

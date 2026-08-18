@@ -13,10 +13,31 @@ export class ProviderError extends Error {
     readonly code: "provider_unavailable" | "provider_invalid_response" | "provider_rejected",
     readonly status: number,
     readonly retryable: boolean,
+    /// Motivo tipado del upstream, cuando existe: sólo el enum de estado del
+    /// proveedor, jamás su texto libre. Alimenta el ledger de intentos para
+    /// que un rechazo sea diagnosticable después; no participa del control de
+    /// flujo, que sigue mirando `code`.
+    readonly upstreamReason?: string,
   ) {
     super("AI provider request failed");
     this.name = "ProviderError";
   }
+}
+
+/// El código con el que un intento fallido queda en el ledger.
+///
+/// `code` solo dice «el proveedor rechazó». El status HTTP es lo que separa la
+/// clave (401), el modelo (404) y la petición inválida (400), y sin él un
+/// rechazo no se puede diagnosticar sin volver a reproducirlo. El código del
+/// run **no** cambia: esto es evidencia, no control de flujo.
+export function providerAttemptErrorCode(error: ProviderError): string {
+  if (error.code !== "provider_rejected") return error.code;
+  const status = Number.isInteger(error.status) &&
+      error.status >= 400 && error.status < 600
+    ? `_${error.status}`
+    : "";
+  const reason = error.upstreamReason ? `_${error.upstreamReason}` : "";
+  return `${error.code}${status}${reason}`;
 }
 
 export function requiredToolNameFor(request: AgentProviderRequest): string | undefined {
