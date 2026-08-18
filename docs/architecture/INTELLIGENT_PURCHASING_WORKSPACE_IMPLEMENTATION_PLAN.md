@@ -3454,6 +3454,28 @@ fuente ausente por criterio propio y se reportó la condición como cumplida.
 vuelve vacío, eso es el bloqueo y se dice; no se sigue a ojo. La comprobación
 cuesta una llamada y aquí habría ahorrado 94 decisiones sin respaldo.
 
+**Corroborado por una segunda sesión el mismo día.** Otra sesión de Claude en
+este repositorio verificó `list_projects` de forma independiente y obtuvo el
+mismo `{"projects":[]}`. **La autorización de Design falta a nivel de login de
+la cuenta, no de disciplina del agente**, y por eso ninguna sesión puede leer
+la guía ahora mismo. Distinguirlo importa: el remedio es que el dueño autorice
+Design, no que el siguiente agente «se esfuerce más» — y desbloquearse
+inventando roles plausibles sería exactamente lo prohibido.
+
+**Cuando llegue la autorización, cuatro cosas que ya se saben del camino:**
+
+- La página es `GUÍA GENERAL Viñabike - Componentes`, proyecto
+  `ERP Bikeshop UI Mockups`.
+- `get_file` sobre >50 KB guarda a disco y sólo devuelve un preview: la guía se
+  **greppea desde el archivo**, no se carga al contexto. Una guía de 260 KB
+  cuesta ~2 KB de preview y queda entera buscable.
+- **La guía ya cruzó el cap de 256 KiB** y se corta en 262.144 bytes exactos
+  **sin avisar**. Si algo de las últimas secciones no aparece, no es que no
+  exista: quedó fuera del corte. Ése es el único caso en que la ventana de
+  Design sirve para leer.
+- Un control que ya existe se implementa **bajo su id** (`S-05`, `O-02`,
+  `I-01`…) y atado a roles del tema. Hex literal en un widget es defecto.
+
 **Qué queda por hacer:** releer la escala tipográfica de
 `GUÍA GENERAL Viñabike - Componentes` con DesignSync y revisar uso por uso las
 94 asignaciones, con el frame de Design al lado del frame real, en la misma
