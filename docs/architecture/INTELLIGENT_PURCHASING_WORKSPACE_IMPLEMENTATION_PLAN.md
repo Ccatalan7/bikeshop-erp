@@ -3217,8 +3217,14 @@ se gastó el presupuesto— o si el presupuesto reserva un turno para la pregunt
 Medir primero cuántos turnos gasta el modelo antes de emitir su primer prompt
 en peticiones reales; ajustar el prompt sin ese número es adivinar.
 
-**Superficies vistas en el frame real:** inspector del candidato y compra
-local, las dos con la tipografía por roles ya aplicada. Aclaración, canasta y
-escenarios siguen sin abrirse: la aclaración por lo de arriba, y canasta y
-escenarios porque exigen una selección múltiple de necesidades que este taller
-todavía no tiene montada.
+**Superficies vistas en el frame real: cuatro de cinco.** Inspector del
+candidato, compra local, canasta y escenarios, todas con la tipografía por roles
+ya aplicada. La canasta se alcanza con «Armar canasta» → tocar dos necesidades →
+«Comparar canasta (2)»; el escenario «Mejor equilibrio» resolvió 2 de 2 con 2
+proveedores y su pie dice lo que corresponde: el total suma costos aterrizados
+históricos por línea y **no supone ahorro de flete por consolidar**.
+
+La única que sigue sin verse es la **aclaración**, y no por falta de intentos:
+hoy el producto no la alcanza, por lo documentado arriba. Verla exige antes
+resolver la política de turnos; abrirla a la fuerza desde una ruta artificial
+demostraría que el widget renderiza, no que el operador puede llegar a ella.
