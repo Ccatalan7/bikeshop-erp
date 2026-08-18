@@ -812,10 +812,32 @@ export async function executeAgentRun(
             inventoryListNarrativeRequested =
               call.arguments.presentation === "open_list_with_analysis";
           }
-          cards = mergeCards(
-            cards,
-            cardsForToolResult(call.name, execution.result, call.arguments),
-          );
+          // **Un borrador que no valida no puede caer en un 500 genérico.**
+          //
+          // `cards.ts` rechaza con `Error` planos —«Invalid supply need draft
+          // line» y compañía—, que el mapeo de errores convierte en
+          // `assistant_unavailable`. El 2026-08-18 eso dejó la vía
+          // conversacional del Asistente de compras fallando sin decir qué
+          // comprobación falló: las seis herramientas quedaban `succeeded` y el
+          // único síntoma era «El análisis no pudo completarse».
+          //
+          // El mensaje que se propaga es el literal fijo de la comprobación,
+          // nunca el contenido de la tarjeta: no lleva datos del taller.
+          try {
+            cards = mergeCards(
+              cards,
+              cardsForToolResult(call.name, execution.result, call.arguments),
+            );
+          } catch (error) {
+            if (error instanceof AgentRuntimeError) throw error;
+            throw new AgentRuntimeError(
+              502,
+              "tool_card_invalid",
+              `${call.name}: ${
+                error instanceof Error ? error.message : "unknown card failure"
+              }`,
+            );
+          }
           if (call.name === PUBLIC_RESEARCH_TOOL_NAME) {
             if (
               execution.result.status === "success" ||

@@ -64,28 +64,43 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
       const endpoint = new URL(`models/${encodeURIComponent(model)}:generateContent`, endpointBase);
       const continuation = decodeGeminiContinuation(request.continuationToken);
       const requiredToolName = requiredToolNameFor(request);
-      const buildPayload = (forcedToolName: string | undefined) => ({
-        systemInstruction: { parts: [{ text: request.systemInstruction }] },
-        contents: geminiContents(request.messages, continuation.groups),
-        tools: request.tools.length === 0 ? undefined : [{
-          functionDeclarations: request.tools.map((tool) => ({
-            name: tool.name,
-            description: tool.description,
-            parametersJsonSchema: tool.parameters,
-          })),
-        }],
-        toolConfig: forcedToolName
-          ? {
-            functionCallingConfig: {
-              mode: "ANY",
-              allowedFunctionNames: [forcedToolName],
-            },
-          }
-          : undefined,
-        generationConfig: { maxOutputTokens: request.maxOutputTokens },
-      });
+      // `narrowToolName` deja declarada **sólo** esa herramienta. Es el
+      // repliegue cuando el proveedor rechaza `mode: ANY`: si la restricción no
+      // se puede expresar en el transporte, se expresa en el catálogo, porque
+      // un modelo no puede llamar a una función que no ve.
+      const buildPayload = (
+        forcedToolName: string | undefined,
+        narrowToolName: string | undefined,
+      ) => {
+        const declared = narrowToolName === undefined
+          ? request.tools
+          : request.tools.filter((tool) => tool.name === narrowToolName);
+        return {
+          systemInstruction: { parts: [{ text: request.systemInstruction }] },
+          contents: geminiContents(request.messages, continuation.groups),
+          tools: declared.length === 0 ? undefined : [{
+            functionDeclarations: declared.map((tool) => ({
+              name: tool.name,
+              description: tool.description,
+              parametersJsonSchema: tool.parameters,
+            })),
+          }],
+          toolConfig: forcedToolName
+            ? {
+              functionCallingConfig: {
+                mode: "ANY",
+                allowedFunctionNames: [forcedToolName],
+              },
+            }
+            : undefined,
+          generationConfig: { maxOutputTokens: request.maxOutputTokens },
+        };
+      };
 
-      const send = async (forcedToolName: string | undefined): Promise<Response> => {
+      const send = async (
+        forcedToolName: string | undefined,
+        narrowToolName?: string,
+      ): Promise<Response> => {
         try {
           return await fetchImpl(endpoint, {
             method: "POST",
@@ -93,7 +108,7 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
               "Content-Type": "application/json",
               "x-goog-api-key": apiKey,
             },
-            body: JSON.stringify(buildPayload(forcedToolName)),
+            body: JSON.stringify(buildPayload(forcedToolName, narrowToolName)),
             signal,
           });
         } catch (_) {
@@ -104,7 +119,7 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
       const rejectionIsRetryable = (status: number) =>
         status === 408 || status === 429 || status >= 500;
 
-      let response = await send(requiredToolName);
+      let response = await send(requiredToolName, undefined);
 
       // **Forzar la herramienta es una pista, no el contrato.**
       //
@@ -126,7 +141,7 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
         !rejectionIsRetryable(response.status)
       ) {
         await discardProviderBody(response);
-        response = await send(undefined);
+        response = await send(undefined, requiredToolName);
       }
 
       if (!response.ok) {

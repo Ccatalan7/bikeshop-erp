@@ -18,12 +18,24 @@ const draftTool: AgentToolDefinition = {
   requiredPermissions: ["purchases.read"],
 };
 
+const otherTool: AgentToolDefinition = {
+  name: "search_inventory",
+  description: "Searches the authorized tenant inventory.",
+  parameters: {
+    type: "object",
+    properties: { query: { type: "string" } },
+    required: ["query"],
+    additionalProperties: false,
+  },
+  requiredPermissions: ["inventory.read"],
+};
+
 function forcedRequest(): AgentProviderRequest {
   return {
     modelRole: "deep",
     systemInstruction: "Server-owned policy",
     messages: [{ role: "user", text: "necesito 4 cámaras 29 con válvula Schrader" }],
-    tools: [draftTool],
+    tools: [draftTool, otherTool],
     requiredToolName: draftTool.name,
     maxOutputTokens: 512,
     continuationToken: undefined,
@@ -52,6 +64,13 @@ function toolConfigOf(init: RequestInit | undefined): unknown {
   return JSON.parse(String(init?.body ?? "{}")).toolConfig;
 }
 
+function declaredToolsOf(init: RequestInit | undefined): readonly string[] {
+  const tools = JSON.parse(String(init?.body ?? "{}")).tools ?? [];
+  return (tools[0]?.functionDeclarations ?? []).map(
+    (declaration: { name: string }) => declaration.name,
+  );
+}
+
 // **El defecto del 2026-08-18.** El Asistente de compras fallaba SIEMPRE en su
 // sexta llamada: las cinco anteriores respondían `tool_calls` y la sexta es la
 // única que fuerza `prepare_supply_request` con
@@ -60,10 +79,12 @@ function toolConfigOf(init: RequestInit | undefined): unknown {
 // conversacional podía cerrarse nunca.
 Deno.test("a rejected forced-tool constraint degrades instead of losing the run", async () => {
   const sent: unknown[] = [];
+  const declared: (readonly string[])[] = [];
   const provider = createGeminiAgentProvider({
     apiKey: "gemini-test-key",
     fetchImpl: (_input, init) => {
       sent.push(toolConfigOf(init));
+      declared.push(declaredToolsOf(init));
       return Promise.resolve(
         sent.length === 1
           ? new Response(
@@ -84,6 +105,11 @@ Deno.test("a rejected forced-tool constraint degrades instead of losing the run"
     "el primer intento sí fuerza la herramienta",
   );
   assertEquals(sent[1], undefined, "el reintento suelta la restricción de transporte");
+  // Y la expresa en el catálogo: si el modelo no ve otra función, no puede
+  // llamar otra. Sin esto el reintento llamaba a `search_inventory` y el turno
+  // moría en `assertRequiredProviderToolTurn`.
+  assertEquals(declared[0], [draftTool.name, otherTool.name], "el primero declara todo");
+  assertEquals(declared[1], [draftTool.name], "el reintento declara sólo la requerida");
   // Y la herramienta sigue llegando: quien garantiza el contrato es
   // `assertRequiredProviderToolTurn` en el runtime, no la pista del transporte.
   assertEquals(turn.toolCalls?.[0]?.name, draftTool.name);
