@@ -172,10 +172,8 @@ class EvidenceAgeLabel extends StatelessWidget {
     }
     return Text(
       text,
-      style: PurchaseType.meta.copyWith(
-        fontFamily: 'IBM Plex Mono',
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
+      style: PurchaseType.metaNumeric
+          .copyWith(color: theme.colorScheme.onSurfaceVariant),
     );
   }
 }
@@ -205,6 +203,10 @@ class ProviderCandidatesTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Una tabla sin filas no tiene nada que encabezar. Este widget se instancia
+    // dos veces —los verificados y el grupo por confirmar—, así que con cero
+    // verificados la pantalla dibujaba la fila de encabezados dos veces.
+    if (candidates.isEmpty) return const SizedBox.shrink();
     final tokens = PurchaseTokens.of(context);
     // La comparación es un objeto: cabecera hundida y filas separadas por su
     // línea interna, todo dentro del mismo borde. Suelta sobre el fondo, la
@@ -418,7 +420,6 @@ class _CandidateTableRow extends StatelessWidget {
                   marginLabel(candidate),
                   textAlign: TextAlign.end,
                   style: PurchaseType.metricSmall.copyWith(
-                    fontFamily: 'IBM Plex Mono',
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
@@ -458,8 +459,7 @@ class _CandidateTableRow extends StatelessWidget {
                   child: Text(
                     '${candidate.purchaseCount} compras',
                     textAlign: TextAlign.end,
-                    style: PurchaseType.meta.copyWith(
-                      fontFamily: 'IBM Plex Mono',
+                    style: PurchaseType.metaNumeric.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
@@ -602,7 +602,6 @@ class ProviderCandidateCard extends StatelessWidget {
                       child: Text(
                         marginLabel(candidate),
                         style: PurchaseType.metricMedium.copyWith(
-                          fontFamily: 'IBM Plex Mono',
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
@@ -2525,8 +2524,7 @@ class _LocalPurchaseSheetState extends State<LocalPurchaseSheet> {
                   Expanded(
                     child: Text(
                       'Registrar compra local',
-                      style: PurchaseType.panelTitle
-                          .copyWith(fontFamily: 'Poppins'),
+                      style: PurchaseType.panelTitle,
                     ),
                   ),
                   IconButton(
@@ -3535,6 +3533,7 @@ class FamilyStockOptions extends StatelessWidget {
     required this.onChooseProduct,
     required this.onCompareProviders,
     required this.busy,
+    this.compact = false,
     this.onShowMore,
   });
 
@@ -3551,6 +3550,10 @@ class FamilyStockOptions extends StatelessWidget {
   final ValueChanged<SupplyStockOption> onChooseProduct;
   final VoidCallback onCompareProviders;
   final bool busy;
+
+  /// Teléfono: cards apiladas y CTA a lo ancho, como `frames[single-stock]`
+  /// declara para 390. En escritorio manda la fila dentro de un solo panel.
+  final bool compact;
 
   static String _coverageLabel(SupplyStockOption option, double requested) {
     switch (option.coverage) {
@@ -3582,108 +3585,271 @@ class FamilyStockOptions extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = PurchaseTokens.of(context);
     final rejection = resolution.internalStockRejectionReason;
-    return ListView(
-      key: const ValueKey('family-stock-options'),
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-      children: [
+    final header = <Widget>[
+      Text(
+        // La identidad de la superficie, no un encabezado de bloque: es el
+        // rol `surface_title` que el spec reserva para Stock interno.
+        resolution.counts.eligible == 1
+            ? '1 alternativa interna elegible'
+            : '${resolution.counts.eligible} alternativas internas elegibles',
+        style: PurchaseType.surfaceTitle.copyWith(color: tokens.ink),
+      ),
+      const SizedBox(height: 3),
+      Text(
+        // El agregado de familia no prueba cobertura: sumar dos variantes
+        // distintas es una decisión del taller, no una propiedad del stock.
+        'Elegir una fija qué producto es la necesidad. Sumar varias no '
+        'demuestra cobertura: cada alternativa se evalúa por separado.',
+        style: PurchaseType.meta
+            .copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+      if (rejection != null && rejection.trim().isNotEmpty) ...[
+        const SizedBox(height: 8),
         Text(
-          resolution.counts.eligible == 1
-              ? '1 alternativa interna elegible'
-              : '${resolution.counts.eligible} alternativas internas elegibles',
-          style: PurchaseType.sectionTitle,
+          'Ya registraste por qué no sirve: «$rejection».',
+          style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
         ),
-        const SizedBox(height: 4),
-        Text(
-          // El agregado de familia no prueba cobertura: sumar dos variantes
-          // distintas es una decisión del taller, no una propiedad del stock.
-          'Elegir una fija qué producto es la necesidad. Sumar varias no '
-          'demuestra cobertura: cada alternativa se evalúa por separado.',
-          style: PurchaseType.meta
-              .copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ],
+    ];
+
+    // `frames[single-stock].geometry`: en 1440 y 1116 la columna es 840 y las
+    // existencias viven en UN panel con filas separadas por hairline. Esta
+    // pantalla las dibujaba como cards sueltas a todo el ancho de la ventana
+    // —1.716 px medidos—, que es otra superficie.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: PurchaseSurfaceGeometry.stockColumnMax,
         ),
-        if (rejection != null && rejection.trim().isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Ya registraste por qué no sirve: «$rejection».',
-            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+        child: ListView(
+          key: const ValueKey('family-stock-options'),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          children: [
+            ...header,
+            const SizedBox(height: 12),
+            if (compact)
+              for (final option in resolution.items) ...[
+                PurchasePanel(
+                  child: _FamilyStockCard(
+                    option: option,
+                    requested: resolution.quantity,
+                    busy: busy,
+                    onChoose: () => onChooseProduct(option),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ]
+            else
+              PurchasePanel(
+                padded: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const StockPanelHeader(
+                      left: 'ALTERNATIVA INTERNA',
+                      right: 'DISPONIBLE',
+                    ),
+                    for (final option in resolution.items)
+                      _FamilyStockRow(
+                        option: option,
+                        requested: resolution.quantity,
+                        busy: busy,
+                        onChoose: () => onChooseProduct(option),
+                      ),
+                  ],
+                ),
+              ),
+            if (resolution.page.hasMore) ...[
+              const SizedBox(height: PurchaseMetrics.stageGap),
+              Text(
+                'Mostrando ${resolution.page.returned} de '
+                '${resolution.page.total} alternativas en bodega.',
+                style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PurchaseInlineAction(
+                  key: const ValueKey('show-more-family-stock'),
+                  label: 'Ver más en bodega',
+                  onPressed: busy ? null : onShowMore,
+                ),
+              ),
+            ],
+            const SizedBox(height: PurchaseMetrics.stageGap),
+            // El único botón sólido de la superficie es el cierre, como en
+            // `frames[single-stock].blocks.cta`. Elegir producto es la acción
+            // de una fila y va como secundaria: treinta y cuatro sólidos en
+            // una lista no dejan ver cuál es la salida del paso.
+            Align(
+              alignment: compact ? Alignment.center : Alignment.centerLeft,
+              child: SizedBox(
+                width: compact ? double.infinity : null,
+                height: compact ? 44 : 36,
+                child: FilledButton(
+                  key: const ValueKey('family-stock-compare-providers'),
+                  onPressed: busy ? null : onCompareProviders,
+                  child: const Text('Comparar proveedores'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Fila de escritorio de una alternativa interna.
+///
+/// Misma anatomía que la del carril exacto (`frames[single-stock]`): media 38,
+/// identidad elástica, la cifra comparable en su columna de 104 y la acción
+/// **secundaria** al final. Antes esto era una card con la acción metida bajo
+/// el texto y una foto de 64 —la medida que el contrato de imagen reserva
+/// para la card de teléfono—.
+class _FamilyStockRow extends StatelessWidget {
+  const _FamilyStockRow({
+    required this.option,
+    required this.requested,
+    required this.busy,
+    required this.onChoose,
+  });
+
+  final SupplyStockOption option;
+  final double requested;
+  final bool busy;
+  final VoidCallback onChoose;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ProductMediaTile(
+            media: option.media,
+            name: option.name,
+            size: PurchaseSurfaceGeometry.mediaStockRow,
           ),
-        ],
-        const SizedBox(height: 12),
-        for (final option in resolution.items) ...[
-          PurchasePanel(
-            child: Row(
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ProductMediaTile(
-                  media: option.media,
-                  name: option.name,
-                  size: PurchaseSurfaceGeometry.mediaStockPhoneCard,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        option.name,
-                        style:
-                            PurchaseType.panelTitle.copyWith(color: tokens.ink),
-                      ),
-                      if (option.sku != null)
-                        Text(
-                          option.sku!,
-                          style: PurchaseType.meta
-                              .copyWith(color: tokens.inkMuted),
-                        ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${option.availableToPromise} disponibles · '
-                        '${_coverageLabel(option, resolution.quantity)}',
-                        style: PurchaseType.meta,
-                      ),
-                      Text(
-                        // «No lo sé» no es «no cumple»: se rotula y se sigue.
-                        _matchLabel(option.matchState),
-                        style:
-                            PurchaseType.meta.copyWith(color: tokens.inkMuted),
-                      ),
-                      const SizedBox(height: 9),
-                      PurchasePrimaryButton(
-                        key: ValueKey(
-                            'choose-stock-product-${option.productId}'),
-                        label: 'Elegir producto',
-                        onPressed: busy ? null : () => onChooseProduct(option),
-                      ),
-                    ],
-                  ),
+                Text(option.name, style: PurchaseType.rowTitle),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    if (option.sku != null) option.sku!,
+                    FamilyStockOptions._coverageLabel(option, requested),
+                    // «No lo sé» no es «no cumple»: se rotula y se sigue.
+                    FamilyStockOptions._matchLabel(option.matchState),
+                  ].join(' · '),
+                  style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: PurchaseMetrics.stageGap),
-        ],
-        if (resolution.page.hasMore) ...[
-          Text(
-            'Mostrando ${resolution.page.returned} de '
-            '${resolution.page.total} alternativas en bodega.',
-            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: PurchaseInlineAction(
-              key: const ValueKey('show-more-family-stock'),
-              label: 'Ver más en bodega',
-              onPressed: busy ? null : onShowMore,
+          const SizedBox(width: 11),
+          SizedBox(
+            width: PurchaseSurfaceGeometry.stockQuantityColumn,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${option.availableToPromise}',
+                  style: PurchaseType.metricSmall.copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                Text(
+                  'necesitas ${requested.round()}',
+                  textAlign: TextAlign.end,
+                  style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: PurchaseMetrics.stageGap),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            key: ValueKey('choose-stock-product-${option.productId}'),
+            onPressed: busy ? null : onChoose,
+            child: const Text('Elegir producto'),
+          ),
         ],
-        Align(
-          alignment: Alignment.centerLeft,
-          child: PurchaseInlineAction(
-            key: const ValueKey('family-stock-compare-providers'),
-            label: 'Comparar proveedores',
-            onPressed: busy ? null : onCompareProviders,
+      ),
+    );
+  }
+}
+
+/// Card de teléfono: media 64 y CTA a lo ancho (`frames[single-stock].390`).
+class _FamilyStockCard extends StatelessWidget {
+  const _FamilyStockCard({
+    required this.option,
+    required this.requested,
+    required this.busy,
+    required this.onChoose,
+  });
+
+  final SupplyStockOption option;
+  final double requested;
+  final bool busy;
+  final VoidCallback onChoose;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ProductMediaTile(
+              media: option.media,
+              name: option.name,
+              size: PurchaseSurfaceGeometry.mediaStockPhoneCard,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    option.name,
+                    style: PurchaseType.cardTitle.copyWith(color: tokens.ink),
+                  ),
+                  if (option.sku != null)
+                    Text(
+                      option.sku!,
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${option.availableToPromise} disponibles · '
+                    '${FamilyStockOptions._coverageLabel(option, requested)}',
+                    style: PurchaseType.meta,
+                  ),
+                  Text(
+                    FamilyStockOptions._matchLabel(option.matchState),
+                    style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 9),
+        SizedBox(
+          height: PurchaseMetrics.touchTarget,
+          child: OutlinedButton(
+            key: ValueKey('choose-stock-product-${option.productId}'),
+            onPressed: busy ? null : onChoose,
+            child: const Text('Elegir producto'),
           ),
         ),
       ],

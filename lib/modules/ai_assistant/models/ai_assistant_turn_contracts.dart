@@ -240,6 +240,44 @@ class AIAssistantSupplyNeedClarificationPrompt {
       };
 }
 
+/// Objetivo comercial que la IA leyó en la petición, **sin marca**.
+///
+/// Tres claves, y las tres son las que el esquema de `prepare_supply_request`
+/// declara: gama, techo de costo aterrizado neto por unidad y piso de margen
+/// bruto. `preferredBrandId` **no** viaja: ninguna herramienta acuña
+/// referencias de marca todavía, así que el modelo no puede nombrarla y
+/// declararla acá sólo produciría referencias que nunca resuelven.
+///
+/// La moneda es del servidor y no aparece: el techo se guarda en la moneda de
+/// la revisión que lo fijó, y el cliente nunca la escribe.
+@immutable
+class AIAssistantSupplyNeedCommercialTarget {
+  const AIAssistantSupplyNeedCommercialTarget({
+    this.gama,
+    this.maxLandedUnitCostNet,
+    this.minGrossMarginRatio,
+  });
+
+  final String? gama;
+  final double? maxLandedUnitCostNet;
+  final double? minGrossMarginRatio;
+
+  /// Un objetivo con las tres claves vacías **no es un objetivo**: la base lo
+  /// rechaza («Empty commercial target»), así que no se manda.
+  bool get isEmpty =>
+      gama == null &&
+      maxLandedUnitCostNet == null &&
+      minGrossMarginRatio == null;
+
+  Map<String, Object?> toCommandJson() => <String, Object?>{
+        if (gama != null) 'gama': gama,
+        if (maxLandedUnitCostNet != null)
+          'maxLandedUnitCostNet': maxLandedUnitCostNet,
+        if (minGrossMarginRatio != null)
+          'minGrossMarginRatio': minGrossMarginRatio,
+      };
+}
+
 @immutable
 class AIAssistantSupplyNeedDraftLine {
   const AIAssistantSupplyNeedDraftLine({
@@ -258,6 +296,7 @@ class AIAssistantSupplyNeedDraftLine {
     this.categoryId,
     this.categoryPath,
     this.technicalFamily,
+    this.commercialTarget,
     this.clarificationPrompts = const [],
   });
 
@@ -286,6 +325,12 @@ class AIAssistantSupplyNeedDraftLine {
   final String? preference;
   final String? clarification;
   final bool clarificationRequired;
+
+  /// Objetivo comercial tipado de **esta** línea, cuando el operador lo dijo.
+  ///
+  /// Viaja desde la tarjeta cerrada hasta el comando durable, igual que la
+  /// categoría resuelta: el cliente lo transporta y no lo inventa.
+  final AIAssistantSupplyNeedCommercialTarget? commercialTarget;
   final List<AIAssistantSupplyNeedClarificationPrompt> clarificationPrompts;
 
   bool get hasConfirmedProduct =>
@@ -318,6 +363,7 @@ class AIAssistantSupplyNeedDraftLine {
         preference: preference,
         clarification: clarification,
         clarificationRequired: clarificationRequired,
+        commercialTarget: commercialTarget,
         clarificationPrompts: clarificationPrompts,
       );
 
@@ -349,6 +395,10 @@ class AIAssistantSupplyNeedDraftLine {
         preference: null,
         clarification: clarification,
         clarificationRequired: true,
+        // El objetivo salió de interpretar la frase anterior, igual que el
+        // producto y la categoría. Si el operador la reescribe, arrastrarlo
+        // afirmaría un techo o una gama que nadie volvió a pedir.
+        commercialTarget: null,
       );
 
   Map<String, Object?> toCommandJson() => <String, Object?>{
@@ -364,6 +414,11 @@ class AIAssistantSupplyNeedDraftLine {
         'preference': preference,
         'clarification': clarification,
         'clarificationRequired': clarificationRequired,
+        // Ausente y vacío no son lo mismo: `create_supply_need_batch_v3`
+        // normaliza un objeto y descarta un objetivo vacío, pero una clave con
+        // un objeto sin claves útiles no aporta nada, así que no se envía.
+        if (commercialTarget != null && !commercialTarget!.isEmpty)
+          'commercialTarget': commercialTarget!.toCommandJson(),
       };
 }
 

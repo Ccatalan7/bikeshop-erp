@@ -138,7 +138,7 @@ const toolContracts = {
     maxItems: 3,
   },
   prepare_supply_request: {
-    rpc: "assistant_prepare_supply_request_v2",
+    rpc: "assistant_prepare_supply_request_v3",
     parameters: supplyRequestParameters,
     fields: [
       "entityId",
@@ -903,6 +903,7 @@ function supplyRequestParameters(args: JsonObject): JsonObject {
       "description",
       "productId",
       "categoryId",
+      "commercialTarget",
       "quantity",
       "unit",
       "technicalPredicates",
@@ -916,6 +917,7 @@ function supplyRequestParameters(args: JsonObject): JsonObject {
         !hasExactKeys(item, [...baseFields, "clarificationPrompts"])) ||
       !(item.productId === null || validUuidValue(item.productId)) ||
       !(item.categoryId === null || validUuidValue(item.categoryId)) ||
+      !validSupplyCommercialTarget(item.commercialTarget) ||
       typeof item.description !== "string" || !item.description.trim() ||
       utf8Bytes(item.description.trim()) > 2000 ||
       !finiteNumber(item.quantity) || (item.quantity as number) < 0.001 ||
@@ -938,11 +940,19 @@ function supplyRequestParameters(args: JsonObject): JsonObject {
         ))
     ) throw new InvalidToolArguments();
 
+    // Un objetivo con las tres claves en null NO es un objetivo: la RPC
+    // delega en `normalize_commercial_target_internal_v1`, que devolvería `{}`
+    // y hace fallar la llamada entera con «Empty commercial target». Ausente y
+    // vacío no son lo mismo, y sólo uno de los dos es válido.
+    const commercialTarget = normalizedSupplyCommercialTarget(
+      item.commercialTarget,
+    );
     return {
       lineRef: `line-${index + 1}`,
       description: item.description.trim(),
       productId: item.productId,
       categoryId: item.categoryId,
+      ...(commercialTarget === null ? {} : { commercialTarget }),
       quantity: item.quantity,
       unit: item.unit.trim(),
       technicalPredicates: normalizedInventoryTechnicalPredicates(
@@ -955,6 +965,56 @@ function supplyRequestParameters(args: JsonObject): JsonObject {
   });
 
   return { p_items: items, p_profile: args.profile };
+}
+
+/// Forma del objetivo comercial **sin marca**.
+///
+/// `preferredBrandId` queda fuera a propósito: ninguna herramienta acuña
+/// referencias de marca hoy, así que declararla haría que el modelo emitiera
+/// referencias que nunca resuelven. La base acepta la marca el día que exista
+/// una fuente; el esquema no la ofrece hasta entonces.
+const supplyCommercialTargetFields = [
+  "gama",
+  "maxLandedUnitCostNet",
+  "minGrossMarginRatio",
+] as const;
+
+function validSupplyCommercialTarget(value: JsonValue | undefined): boolean {
+  if (value === null) return true;
+  if (!isRecord(value) || !hasExactKeys(value, supplyCommercialTargetFields)) {
+    return false;
+  }
+  if (
+    !(value.gama === null ||
+      (typeof value.gama === "string" &&
+        ["economica", "media", "alta"].includes(value.gama)))
+  ) return false;
+  for (const key of ["maxLandedUnitCostNet", "minGrossMarginRatio"] as const) {
+    const candidate = value[key];
+    if (candidate === null) continue;
+    if (!finiteNumber(candidate)) return false;
+  }
+  const cost = value.maxLandedUnitCostNet;
+  if (cost !== null && ((cost as number) <= 0 || (cost as number) > 999999999)) {
+    return false;
+  }
+  const margin = value.minGrossMarginRatio;
+  if (margin !== null && ((margin as number) < 0 || (margin as number) > 1)) {
+    return false;
+  }
+  return true;
+}
+
+function normalizedSupplyCommercialTarget(
+  value: JsonValue | undefined,
+): JsonObject | null {
+  if (!isRecord(value)) return null;
+  const target: JsonObject = {};
+  for (const key of supplyCommercialTargetFields) {
+    const candidate = value[key];
+    if (candidate !== null && candidate !== undefined) target[key] = candidate;
+  }
+  return Object.keys(target).length === 0 ? null : target;
 }
 
 function validSupplyClarificationPrompts(

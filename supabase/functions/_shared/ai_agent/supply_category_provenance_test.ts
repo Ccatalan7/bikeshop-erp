@@ -71,6 +71,7 @@ function draftItem(overrides: JsonObject = {}): JsonObject {
   return {
     catalogItemRef: null,
     categoryRef: null,
+    commercialTarget: null,
     description: "Cadena de 10 velocidades",
     quantity: 1,
     unit: "unit",
@@ -193,6 +194,7 @@ Deno.test("una ficha exacta y una categoría del modelo no pueden convivir", () 
         items: [draftItem({
           catalogItemRef: "51515151-5151-4151-8151-515151515151",
           categoryRef: "61616161-6161-4161-8161-616161616161",
+          commercialTarget: null,
         })],
         profile: "balanced",
       },
@@ -216,6 +218,7 @@ Deno.test("una línea sin producto puede llevar categoría, y una sin nada tambi
     arguments: {
       items: [draftItem({
         categoryRef: "61616161-6161-4161-8161-616161616161",
+        commercialTarget: null,
       })],
       profile: "balanced",
     },
@@ -356,6 +359,7 @@ Deno.test("un producto exacto sí puede traer su categoría derivada", async () 
           description: "Cadena KMC X10",
           productId,
           categoryId: null,
+          commercialTarget: null,
           quantity: 1,
           unit: "unit",
           technicalPredicates: [],

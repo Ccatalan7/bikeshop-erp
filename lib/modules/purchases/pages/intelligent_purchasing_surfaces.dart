@@ -248,10 +248,8 @@ class _PurchaseProcessBandState extends State<PurchaseProcessBand> {
               if (!widget.compact) ...[
                 Text(
                   'Asistente de compras',
-                  style: PurchaseType.moduleTitle.copyWith(
-                    fontFamily: 'Poppins',
-                    color: roles.foreground,
-                  ),
+                  style: PurchaseType.moduleTitle
+                      .copyWith(color: roles.foreground),
                 ),
                 const SizedBox(width: 14),
               ],
@@ -508,10 +506,16 @@ class _StepBadge extends StatelessWidget {
       ),
       child: Text(
         '$position',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontFamily: 'IBM Plex Mono',
-              color: active ? roles.onAccent : roles.mutedForeground,
-            ),
+        // Pedir la familia por nombre la dejaba a merced de que otra pantalla
+        // ya hubiera cargado IBM Plex Mono en esa sesión. `PurchaseType.label`
+        // es el mismo rol mono que ya llevan la posición «n/4» y el subtítulo
+        // del paso, y resuelve la familia por `google_fonts`. El
+        // `letter-spacing` del rol separa letras de una etiqueta; en un dígito
+        // suelto sólo agrega aire a la derecha y descentra el glifo.
+        style: PurchaseType.label.copyWith(
+          letterSpacing: 0,
+          color: active ? roles.onAccent : roles.mutedForeground,
+        ),
       ),
     );
   }
@@ -565,8 +569,7 @@ class SupplyNeedBar extends StatelessWidget {
                 Text(title, style: PurchaseType.sectionTitle),
                 Text(
                   quantityLabel,
-                  style: PurchaseType.meta.copyWith(
-                    fontFamily: 'IBM Plex Mono',
+                  style: PurchaseType.metaNumeric.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
@@ -635,6 +638,21 @@ class InternalStockSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = PurchaseTokens.of(context);
+    // `frames[single-stock]`: el título de superficie y su lead van sobre el
+    // lienzo; la tarjeta empieza en la cabecera `sunken`. Estaban dentro del
+    // panel, y eso fundía dos bloques del diseño en uno solo.
+    final header = <Widget>[
+      Text(
+        'Stock interno primero',
+        style: PurchaseType.surfaceTitle.copyWith(color: tokens.ink),
+      ),
+      const SizedBox(height: 3),
+      Text(
+        'La bodega se consulta antes de cotizar. Existencias contadas del tenant, no historial de compras.',
+        style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+      ),
+      const SizedBox(height: 12),
+    ];
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(
@@ -644,62 +662,45 @@ class InternalStockSurface extends StatelessWidget {
           key: const ValueKey('internal-stock-surface'),
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           children: [
-            // Encabezado y existencias son **un** panel: el título suelto sobre
-            // el fondo y las filas debajo no se leían como una superficie.
-            PurchasePanel(
-              padded: false,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(13, 12, 13, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Stock interno primero',
-                          style: PurchaseType.surfaceTitle
-                              .copyWith(color: tokens.ink),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'La bodega se consulta antes de cotizar. Existencias contadas del tenant, no historial de compras.',
-                          style: PurchaseType.meta
-                              .copyWith(color: tokens.inkMuted),
-                        ),
-                      ],
+            ...header,
+            if (components.isEmpty)
+              // Sin coincidencias: texto inline, sin isla centrada.
+              Text(
+                'No hay existencias contadas para esta necesidad.',
+                style: PurchaseType.body.copyWith(color: tokens.inkMuted),
+              )
+            else if (compact)
+              // Teléfono: cards apiladas sobre el lienzo. Envolverlas en el
+              // panel dejaba una caja dentro de otra.
+              for (final component in components)
+                _StockCard(
+                  component: component,
+                  countedAtLabel: countedAtLabel,
+                  assignable: assignable,
+                  busy: busy,
+                  onAssign: onAssign,
+                )
+            else
+              PurchasePanel(
+                padded: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const StockPanelHeader(
+                      left: 'EXISTENCIA INTERNA',
+                      right: 'DISPONIBLE',
                     ),
-                  ),
-                  if (components.isEmpty)
-                    // Sin coincidencias: texto inline, sin isla centrada.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(13, 0, 13, 12),
-                      child: Text(
-                        'No hay existencias contadas para esta necesidad.',
-                        style:
-                            PurchaseType.body.copyWith(color: tokens.inkMuted),
-                      ),
-                    )
-                  else
                     for (final component in components)
-                      compact
-                          ? _StockCard(
-                              component: component,
-                              countedAtLabel: countedAtLabel,
-                              assignable: assignable,
-                              busy: busy,
-                              onAssign: onAssign,
-                            )
-                          : _StockRow(
-                              component: component,
-                              countedAtLabel: countedAtLabel,
-                              assignable: assignable,
-                              busy: busy,
-                              onAssign: onAssign,
-                            ),
-                ],
+                      _StockRow(
+                        component: component,
+                        countedAtLabel: countedAtLabel,
+                        assignable: assignable,
+                        busy: busy,
+                        onAssign: onAssign,
+                      ),
+                  ],
+                ),
               ),
-            ),
             if (rejectionReason != null) ...[
               const SizedBox(height: PurchaseMetrics.stageGap),
               Text(
@@ -712,7 +713,7 @@ class InternalStockSurface extends StatelessWidget {
               alignment: compact ? Alignment.center : Alignment.centerLeft,
               child: SizedBox(
                 width: compact ? double.infinity : null,
-                height: 36,
+                height: compact ? PurchaseMetrics.touchTarget : 36,
                 child: FilledButton(
                   key: const ValueKey('compare-providers-for-remaining'),
                   onPressed: busy ? null : onCompareProviders,
@@ -734,6 +735,44 @@ class InternalStockSurface extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Cabecera `sunken` de la tarjeta de existencias (`frames[single-stock]`).
+///
+/// Dos etiquetas mono 9 en versalitas, la de la derecha alineada al final. Es
+/// lo que hace que la lista se lea como una tabla; faltaba en las dos vías.
+class StockPanelHeader extends StatelessWidget {
+  const StockPanelHeader({
+    super.key,
+    required this.left,
+    required this.right,
+  });
+
+  final String left;
+  final String right;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+      color: tokens.sunken,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              left,
+              style: PurchaseType.label.copyWith(color: tokens.inkFaint),
+            ),
+          ),
+          Text(
+            right,
+            style: PurchaseType.label.copyWith(color: tokens.inkFaint),
+          ),
+        ],
       ),
     );
   }
@@ -830,7 +869,6 @@ class _StockRow extends StatelessWidget {
                       // grupo». `metric_md` es de las cards de teléfono, y
                       // esto es la fila de escritorio.
                       style: PurchaseType.metricSmall.copyWith(
-                        fontFamily: 'IBM Plex Mono',
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
@@ -846,7 +884,9 @@ class _StockRow extends StatelessWidget {
           ),
           if (assignable && onAssign != null) ...[
             const SizedBox(width: 8),
-            TextButton(
+            // `frames[single-stock]`: la acción trailing es un botón
+            // secundario **con borde**, no una CTA textual.
+            OutlinedButton(
               onPressed: busy ? null : onAssign,
               child: Text('Usar ${component.coverable} de bodega'),
             ),

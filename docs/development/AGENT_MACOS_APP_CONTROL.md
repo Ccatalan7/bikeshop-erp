@@ -595,6 +595,35 @@ can present its own `Test finished` surface even while the Flutter test is
 still reporting. Use the integration screenshot and the measured inset, not
 that external frame.
 
+## 4.b El escritorio dibuja a **0,8**: la captura no está en el espacio del spec
+
+**2026-08-18, costo real: casi «arreglo» una columna que ya era correcta.**
+
+`WindowZoomService._defaultScale` es **0,8** —el dueño lo pidió así, «equivalent
+to pressing Cmd- twice»— y `window_zoom_scope.dart` lo aplica con un
+`Transform.scale` sobre **todo** el contenido de escritorio. La consecuencia no
+es cosmética: la captura y el spec hablan **dos idiomas distintos**.
+
+- `shot` y `find` devuelven **píxeles pintados**: ya multiplicados por 0,8.
+- `read` (árbol de semántica) devuelve **tamaños lógicos**: sin multiplicar.
+- El contenido compone contra `ancho de ventana / 0,8`. Con la ventana en 1681
+  el módulo no ve 1681, ve ~2101, y por eso elige composición de escritorio
+  donde la captura «parece» de tablet.
+- Bajo 900 px de ancho de ventana el scope aplica escala **1,0**
+  (`appliedScale = constraints.maxWidth < desktopMin ? 1.0 : scale`), así que
+  las capturas de teléfono y tablet **sí** son 1:1.
+
+Síntoma exacto: el paso Necesidad medía **621 px** en la captura y el handoff
+declara `column_max: 780`. No había defecto — 780 × 0,8 = 624, que es lo que
+`find` devuelve para el `SingleChildScrollView` de la columna, y el árbol de
+semántica confirma 780 lógicos para la misma fila. Sin esta corrección, cada
+medida de escritorio parece un 20 % chica y se «corrige» geometría que ya
+cumplía el contrato.
+
+Regla: **para contrastar con un spec, divide la captura por 0,8, o mide con
+`read`, que ya viene en lógicos.** Y nunca elijas el breakpoint mirando el
+ancho de la captura.
+
 ## 5. Cost discipline
 
 The mechanism is cheap; **looking** is what costs. A screenshot is ~2 k

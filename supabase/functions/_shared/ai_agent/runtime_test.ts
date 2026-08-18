@@ -5532,6 +5532,7 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
                 items: [{
                   catalogItemRef,
                   categoryRef: null,
+                  commercialTarget: null,
                   description: "Neumático 27,5 ancho mayor a 2,0",
                   quantity: 2,
                   unit: "unit",
@@ -5543,6 +5544,7 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
                 }, {
                   catalogItemRef: null,
                   categoryRef: null,
+                  commercialTarget: null,
                   description: "Rayos 27,5",
                   quantity: 1,
                   unit: "set",
@@ -5711,6 +5713,7 @@ Deno.test("a validated supply draft may close the bounded sixth purchasing round
                 items: [{
                   catalogItemRef: null,
                   categoryRef: null,
+                  commercialTarget: null,
                   description: "Cámara 700x28 con válvula Presta de 60 mm",
                   quantity: 4,
                   unit: "unidad",
@@ -5856,6 +5859,7 @@ Deno.test("need capture rejects a known provider-ranking tool that was not adver
                 items: [{
                   catalogItemRef: null,
                   categoryRef: null,
+                  commercialTarget: null,
                   description: "Pastillas semimetálicas para freno hidráulico",
                   quantity: 2,
                   unit: "par",
@@ -6140,6 +6144,7 @@ Deno.test("purchasing preserves a zero-coverage request as an unresolved review 
                 items: [{
                   catalogItemRef: null,
                   categoryRef: null,
+                  commercialTarget: null,
                   description: "Neumáticos 27,5 de ancho mayor a 2,0",
                   quantity: 2,
                   unit: "unit",
@@ -6374,6 +6379,7 @@ Deno.test("repetir una pregunta ya respondida se rechaza y se pide avanzar", asy
                   description: "rayos para una rueda 29",
                   catalogItemRef: null,
                   categoryRef: null,
+                  commercialTarget: null,
                   quantity: 36,
                   unit: "unidad",
                   technicalPredicates: [],
@@ -6469,6 +6475,7 @@ function purchasingDraftTurns(
           items: [{
             kind: "category",
             categoryRef: publishedReference?.ref ?? null,
+            commercialTarget: null,
             category: "Cadenas",
             categoryPath: "Transmisión / Cadenas",
             technicalFamily: "chain",
@@ -6579,6 +6586,7 @@ function purchasingDraftTurns(
                 items: [{
                   catalogItemRef: null,
                   categoryRef,
+                  commercialTarget: null,
                   description: "Cadena de 10 velocidades",
                   quantity: 1,
                   unit: "unit",

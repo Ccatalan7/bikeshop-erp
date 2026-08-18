@@ -416,6 +416,39 @@ const prepareSupplyRequestSchema: StrictJsonSchema = {
             description:
               "Referencia opaca de la categoría devuelta por inspect_inventory_schema. Úsala cuando la línea no tenga producto exacto pero sí una categoría resuelta, para que la revisión conserve de qué familia se trata. Con catalogItemRef presente el servidor deriva la categoría de la ficha y esta debe ser null. Nunca inventes ni copies un UUID.",
           },
+          commercialTarget: {
+            // Obligatoria y anulable, como `categoryRef`. El validador del
+            // registro exige que toda propiedad declarada esté en `required`
+            // (`Every object property must be required`), así que «opcional»
+            // no existe acá: lo que se declara, se emite, aunque sea null.
+            type: ["object", "null"],
+            description:
+              "Objetivo comercial que el operador expresó para ESTA línea. Usa null cuando no fijó ninguno. Nunca inventes un techo de costo ni un piso de margen, no conviertas monedas y no repitas aquí el perfil general.",
+            properties: {
+              gama: {
+                type: ["string", "null"],
+                enum: ["economica", "media", "alta", null],
+                description:
+                  "Gama pedida explícitamente: economica, media o alta. null si el operador no la dijo.",
+              },
+              maxLandedUnitCostNet: {
+                type: ["number", "null"],
+                minimum: 0,
+                maximum: 999999999,
+                description:
+                  "Techo de costo aterrizado neto por unidad, en la moneda del taller. La moneda es del servidor: no la escribas ni la conviertas. null si no hay techo.",
+              },
+              minGrossMarginRatio: {
+                type: ["number", "null"],
+                minimum: 0,
+                maximum: 1,
+                description:
+                  "Piso de margen bruto como fracción entre 0 y 1: 0.35 es 35 por ciento. null si el operador no fijó un piso.",
+              },
+            },
+            required: ["gama", "maxLandedUnitCostNet", "minGrossMarginRatio"],
+            additionalProperties: false,
+          },
           description: {
             type: "string",
             minLength: 1,
@@ -568,6 +601,7 @@ const prepareSupplyRequestSchema: StrictJsonSchema = {
         required: [
           "catalogItemRef",
           "categoryRef",
+          "commercialTarget",
           "description",
           "quantity",
           "unit",

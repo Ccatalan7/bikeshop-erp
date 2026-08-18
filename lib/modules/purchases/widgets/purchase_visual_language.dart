@@ -243,6 +243,22 @@ abstract final class PurchaseType {
     height: 1.45,
   );
 
+  /// `meta` con la familia **numérica**: cantidades, edades de evidencia,
+  /// conteos de compra.
+  ///
+  /// No es un tamaño nuevo — son las métricas exactas de [meta] con
+  /// `typography.families.numeric`, que el spec reserva para «números
+  /// comparables, códigos, metadatos de conteo». Existe porque esos textos se
+  /// venían escribiendo como `meta.copyWith(fontFamily: 'IBM Plex Mono')`, y
+  /// pedir la familia por nombre es justo lo que este archivo prohíbe: el
+  /// proyecto sólo registra Oswald y Barlow, así que el nombre resuelve nada
+  /// más si otra pantalla ya cargó esa familia en la sesión.
+  static final TextStyle metaNumeric = GoogleFonts.ibmPlexMono(
+    fontWeight: FontWeight.w400,
+    fontSize: 10.5,
+    height: 1.45,
+  );
+
   /// Texto que se escribe: el campo del prototipo es 12,5, no el body de 11,5.
   static final TextStyle input = GoogleFonts.ibmPlexSans(
     fontWeight: FontWeight.w400,

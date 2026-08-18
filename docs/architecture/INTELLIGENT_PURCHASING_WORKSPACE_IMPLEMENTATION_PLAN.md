@@ -3636,3 +3636,81 @@ corrigieron dos roles), `01-single-need`, `03/04-single-providers`,
 Con `§33.15`–`§33.18` esa comparación es lo **único** que le queda a la
 condición (5): el `projectId`, la escala autoritativa, los cinco defectos
 cerrados y el método de auditoría por `surface` ya están.
+
+### 33.20 Objetivo comercial sin marca: cerrado de punta a punta (2026-08-18)
+
+**Los tres pasos que `§33.13` dejó medidos están ejecutados.** No hubo
+obstáculo nuevo: el camino era exactamente el que ese análisis describía.
+
+1. **Esquema** (`tool_registry.ts`). `commercialTarget` **obligatorio y
+   anulable** —`type: ["object","null"]` y dentro de `required`, igual que
+   `categoryRef`—, con tres propiedades y las tres también obligatorias y
+   anulables: `gama` (enum con `null` incluido en la lista, porque
+   `matchesSchema` comprueba el `enum` contra **todos** los valores, `null`
+   entre ellos), `maxLandedUnitCostNet` y `minGrossMarginRatio`.
+   `preferredBrandId` no se declara: §33.12 sigue vigente.
+2. **Ejecutor** (`tool_executor.ts`). La clave entra en `baseFields`, se valida
+   con su propia forma y **un objetivo con las tres claves en null se convierte
+   en ausencia**. Esto último no es cosmético: la RPC delega en
+   `normalize_commercial_target_internal_v1`, que con todo en null devuelve
+   `{}` y hace fallar la llamada entera con «Empty commercial target». El
+   modelo está *obligado* a emitir la clave, así que ese objeto todo-null es el
+   caso normal, no el raro.
+3. **RPC**. `assistant_prepare_supply_request_v2` → `_v3`, ya desplegada,
+   verificada y con los mismos `grant`.
+4. **Dart**. `AIAssistantSupplyNeedCommercialTarget` en
+   `ai_assistant_turn_contracts.dart`, parseado desde la tarjeta cerrada en
+   `ai_agent_gateway_contracts.dart` (rechaza claves fuera del contrato, y por
+   lo tanto rechaza `currencyCode`, que es del servidor), emitido por
+   `toCommandJson` sólo cuando aporta algo, conservado por `copyWith` y
+   **borrado** por `withRewrittenDescription`: el objetivo salió de interpretar
+   la frase anterior, igual que el producto y la categoría.
+
+**Gates, corridos y con su salida real:**
+
+- Deno `_shared/ai_agent/`: **229 passed / 2 failed**. Las dos fallas son
+  **preexistentes en HEAD** —`cards_test.ts:223` y el caso zero-coverage de
+  `runtime_test.ts`—, comprobado corriendo la misma suite en un `git worktree`
+  limpio en `HEAD`: mismo 229/2 antes y después. El arnés se actualizó en los
+  **catorce** constructores de línea que §33.13 anticipaba (3 en
+  `supply_category_provenance_test.ts`, 2 en `tool_executor_test.ts`, 8 en
+  `runtime_test.ts`, más la entrada del ejecutor y su payload esperado).
+- pgTAP: `supply_need_commercial_target` **111/111**,
+  `ai_supply_request_draft_batch` + `supply_request_category_provenance`
+  **68/68**.
+- Dart: `supply_draft_line_provenance` 14, `ai_agent_gateway_runtime` +
+  `intelligent_purchasing_ui_contract` 64, `intelligent_purchasing_workspace`
+  97, `candidate_inspector_panel` + modelos + journey 54. Analizador limpio.
+- Migraciones: `20260817210000`, `20260818200000` y `20260818210000`
+  **APPLIED** en producción (`scripts/db/migration_status.sh`).
+
+**Las dos mutaciones muerden.** Emitir siempre `commercialTarget` en
+`toCommandJson` pone rojas 3 pruebas Dart; devolver el objeto todo-null en vez
+de `null` en el ejecutor pone roja la de Deno. La segunda **no mordía** hasta
+que el caso de prueba se cambió de `commercialTarget: null` al objeto con las
+tres claves en null: una prueba que sólo cubre la ausencia literal no prueba
+nada sobre el caso que rompe producción.
+
+**El «tercer capability header» de §33.11 no aplica a este corte.** Ese punto
+nació con la variante *con marca*: leer identidad de marca era el dato nuevo.
+Sin `preferredBrandId`, `normalize_commercial_target_internal_v1` no toca
+marcas, y `_v3` tiene exactamente los mismos `grant` que `_v2`
+(`revoke ... from public, anon, authenticated, service_role` +
+`grant execute ... to authenticated`). `prepare_supply_request` sigue con
+`[ai.read.operational, ai.read.purchases]`, que es lo correcto: no hay dominio
+nuevo que autorizar. Cuando llegue la marca, ese header vuelve al alcance.
+
+**Lo que queda para que muerda en producción:** desplegar la función. El guard
+del repositorio deniega `supabase functions deploy` a Claude por diseño, así que
+la ejecución es de Codex o del dueño:
+
+```bash
+scripts/supabase_cli.sh functions deploy ai-agent-gateway \
+  --project-ref xzdvtzdqjeyqxnkqprtf
+```
+
+Después del despliegue, el smoke es una petición natural con objetivo explícito
+—«neumáticos 27,5 económicos con buen margen»— y comprobar que la necesidad
+creada trae su revisión de objetivo. Hasta que eso ocurra, la vía conversacional
+sigue corriendo contra el esquema anterior: **el código está entero y verde, y
+no está en vivo**.

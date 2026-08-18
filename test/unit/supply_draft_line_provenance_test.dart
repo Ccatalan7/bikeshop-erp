@@ -30,6 +30,10 @@ AIAssistantSupplyNeedDraftLine _line() => const AIAssistantSupplyNeedDraftLine(
       preference: 'gama económica',
       clarification: null,
       clarificationRequired: false,
+      commercialTarget: AIAssistantSupplyNeedCommercialTarget(
+        gama: 'economica',
+        minGrossMarginRatio: 0.35,
+      ),
     );
 
 void main() {
@@ -108,6 +112,67 @@ void main() {
       // que sigue cambiando.
       expect(command.containsKey('categoryPath'), isFalse);
       expect(command.containsKey('technicalFamily'), isFalse);
+    });
+
+    test('el objetivo comercial viaja con sus claves y sin la moneda', () {
+      final command = _line().toCommandJson();
+      final target = command['commercialTarget'] as Map<String, Object?>?;
+
+      expect(target, isNotNull);
+      expect(target!['gama'], 'economica');
+      expect(target['minGrossMarginRatio'], 0.35);
+      // El techo no se fijó: la clave no viaja en null. Y la moneda es del
+      // servidor —`normalize_commercial_target_internal_v1` rechaza
+      // `currencyCode`—, así que el cliente no la puede escribir.
+      expect(target.containsKey('maxLandedUnitCostNet'), isFalse);
+      expect(target.containsKey('currencyCode'), isFalse);
+    });
+
+    test('una línea sin objetivo no manda la clave', () {
+      const withoutTarget = AIAssistantSupplyNeedDraftLine(
+        lineRef: 'line-2',
+        description: 'Rayos 27,5',
+        productId: null,
+        productName: null,
+        productSku: null,
+        identityState: 'unresolved',
+        quantity: 1,
+        unit: 'juego',
+        technicalPredicates: [],
+        preference: null,
+        clarification: 'Falta el largo del rayo.',
+        clarificationRequired: true,
+      );
+
+      // Ausente y vacío no son lo mismo: la base rechaza un objetivo vacío con
+      // «Empty commercial target», así que un objetivo que no existe se omite.
+      expect(
+        withoutTarget.toCommandJson().containsKey('commercialTarget'),
+        isFalse,
+      );
+    });
+
+    test('un objetivo sin ninguna clave útil tampoco se manda', () {
+      final empty = _line().withRewrittenDescription(
+        description: 'Otra cosa',
+        quantity: 1,
+        unit: 'unit',
+        clarification: 'Confirma de qué pieza se trata.',
+      );
+
+      // Reescribir la frase borra el objetivo por la misma razón que borra el
+      // producto: salió de interpretar la frase anterior.
+      expect(empty.commercialTarget, isNull);
+      expect(empty.toCommandJson().containsKey('commercialTarget'), isFalse);
+    });
+
+    test('cambiar cantidad no pierde el objetivo', () {
+      final adjusted = _line().copyWith(quantity: 5);
+      final target =
+          adjusted.toCommandJson()['commercialTarget'] as Map<String, Object?>?;
+
+      expect(target, isNotNull);
+      expect(target!['gama'], 'economica');
     });
 
     test('una línea sin categoría manda null, no la omite', () {

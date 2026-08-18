@@ -1816,6 +1816,11 @@ class _IntelligentPurchasingWorkspacePageState
     final snapshot = _inventorySnapshot;
     final resolution = _stockResolution;
     final external = _externalCandidates;
+    // Las cards son de teléfono. En 834 el spec sigue pidiendo la fila con
+    // media 38 (`frames[single-stock].geometry."834"`), así que el corte es
+    // el de phone y no el de escritorio.
+    final compact = MediaQuery.sizeOf(context).width <
+        ResponsiveBreakpoints.phoneMaxExclusive;
     if (need == null) return const SizedBox.shrink();
     if (_loadingDecision) {
       return const Center(child: CircularProgressIndicator());
@@ -1895,6 +1900,7 @@ class _IntelligentPurchasingWorkspacePageState
             Expanded(
               child: FamilyStockOptions(
                 resolution: resolution,
+                compact: compact,
                 busy: _runningCommand || _refreshingResults,
                 onChooseProduct: (option) => unawaited(
                   _chooseFamilyProductId(option.productId),
@@ -1909,6 +1915,7 @@ class _IntelligentPurchasingWorkspacePageState
       }
       return FamilyStockOptions(
         resolution: resolution,
+        compact: compact,
         busy: _runningCommand || _refreshingResults,
         onChooseProduct: (option) => unawaited(
           _chooseFamilyProductId(option.productId),
@@ -1931,8 +1938,6 @@ class _IntelligentPurchasingWorkspacePageState
         ),
       );
     }
-    final compact = MediaQuery.sizeOf(context).width <
-        ResponsiveBreakpoints.phoneMaxExclusive;
     final stockSurface = InternalStockSurface(
       components: snapshot.components,
       requestedQuantity: need.quantity,
@@ -2504,7 +2509,7 @@ class _IntelligentPurchasingWorkspacePageState
                 Expanded(
                   child: Text(
                     'Análisis del asistente',
-                    style: Theme.of(context).textTheme.titleSmall,
+                    style: PurchaseType.panelTitle,
                   ),
                 ),
               ],
@@ -3697,8 +3702,7 @@ class _IntelligentPurchasingWorkspacePageState
               Text(
                 '${_formatSupplyQuantity(line.quantity)} '
                 '${purchaseUnitLabel(line.unit, line.quantity)}',
-                style: PurchaseType.meta.copyWith(
-                  fontFamily: 'IBM Plex Mono',
+                style: PurchaseType.metaNumeric.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -3921,14 +3925,14 @@ class _IntelligentPurchasingWorkspacePageState
                 children: [
                   Text(
                     'Comparación de la canasta',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: PurchaseType.surfaceTitle,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '${_basketNeedIds.length} necesidades · hasta $_maxSuppliers ${_maxSuppliers == 1 ? 'proveedor' : 'proveedores'}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                    style: PurchaseType.meta.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -4293,22 +4297,25 @@ class _IntelligentPurchasingWorkspacePageState
               spacing: 10,
               children: [
                 Text(
-                  _candidateCountLabel(ranking),
-                  style: Theme.of(context).textTheme.titleSmall,
+                  _candidateCountLabel(
+                    ranking,
+                    unverified: external?.unverifiedItems.length ?? 0,
+                  ),
+                  style: PurchaseType.sectionTitle,
                 ),
                 if (_allCandidatesHiddenByFilters)
                   Text(
                     '0 visibles con el filtro activo',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+                    style: PurchaseType.meta.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 if (ranking != null && ranking.items.isNotEmpty)
                   Text(
                     'Stock no verificado',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                    style: PurchaseType.meta.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
               ],
             ),
@@ -4327,9 +4334,9 @@ class _IntelligentPurchasingWorkspacePageState
         // La historia informa; la disponibilidad no se afirma desde ella.
         Text(
           'Precios históricos; disponibilidad por confirmar. El costo incluye el flete atribuible registrado y abrir el proveedor no genera una compra.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+          style: PurchaseType.meta.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         // Qué objetivo está reordenando la lista. Sin esto, un candidato que
         // sube por la marca preferida se ve como un ranking caprichoso.
@@ -4343,9 +4350,9 @@ class _IntelligentPurchasingWorkspacePageState
               Text(
                 _commercialTargetSentence ??
                     'Sin objetivo del taller: manda el ranking histórico.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                style: PurchaseType.meta.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               PurchaseInlineAction(
                 key: const ValueKey('edit-commercial-target'),
@@ -4462,14 +4469,14 @@ class _IntelligentPurchasingWorkspacePageState
               children: [
                 Text(
                   'No hay compras históricas comparables',
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: PurchaseType.sectionTitle,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Ninguna opción quedó descartada por incompatibilidad técnica: todavía no existe evidencia de compra para este producto.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                  style: PurchaseType.meta.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextButton(
@@ -4542,12 +4549,19 @@ class _IntelligentPurchasingWorkspacePageState
               ),
             ),
         ],
-        // La vía manual de identidad, cuando no hay candidato que elegir. Va
-        // en la columna angosta y centrada, igual que el resto del recorrido:
-        // una decisión de una sola cosa no ocupa 1.300 px.
+        // La vía manual de identidad, cuando no hay candidato que elegir.
+        //
+        // Conserva su ancho de lectura, pero **alineada a la izquierda**: los
+        // bloques que tiene encima —el recuento, el aviso de stock— ocupan la
+        // región entera de resultados, así que centrarla la dejaba como una
+        // isla flotando en medio de un lienzo vacío, con su borde izquierdo
+        // sin relación con nada. Es el mismo defecto que ya se corrigió en
+        // «Selecciona una necesidad», y el contrato lo prohíbe: la superficie
+        // de decisión del frame 10 va a la izquierda, sin isla.
         if (identityFallback != null) ...[
           const SizedBox(height: 14),
-          Center(
+          Align(
+            alignment: Alignment.centerLeft,
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                 maxWidth: PurchaseSurfaceGeometry.narrowColumnMax,
@@ -4747,8 +4761,15 @@ class _IntelligentPurchasingWorkspacePageState
   /// Encabezado de resultados del frame 03/04/16/26: «N candidatos ·
   /// M proveedores». El segundo recuento cuenta proveedores distintos, no
   /// filas: dos candidatos del mismo proveedor no son dos proveedores.
-  String _candidateCountLabel(PurchaseRanking? ranking) {
+  /// El recuento aparece **una vez**, en el encabezado de la comparación
+  /// (`frames[weak-evidence].count_rule`), y nunca dice «nada visible» con
+  /// filas a la vista: los candidatos por confirmar se muestran en su propio
+  /// grupo, así que «Sin opciones visibles» encima de ellos era falso.
+  String _candidateCountLabel(PurchaseRanking? ranking, {int unverified = 0}) {
     if (ranking == null || ranking.items.isEmpty) {
+      if (unverified > 0) {
+        return '0 verificados · $unverified por confirmar';
+      }
       return 'Sin opciones visibles';
     }
     final candidates = ranking.items.length;
@@ -4759,7 +4780,8 @@ class _IntelligentPurchasingWorkspacePageState
         .length;
     final candidateWord = candidates == 1 ? 'candidato' : 'candidatos';
     final supplierWord = suppliers == 1 ? 'proveedor' : 'proveedores';
-    return '$candidates $candidateWord · $suppliers $supplierWord';
+    final base = '$candidates $candidateWord · $suppliers $supplierWord';
+    return unverified > 0 ? '$base · $unverified por confirmar' : base;
   }
 
   /// Abre el portal del proveedor **dentro del ERP**.
@@ -5018,7 +5040,7 @@ class _PurchaseScenarioPanel extends StatelessWidget {
           Expanded(
             child: Text(
               scenario.label,
-              style: Theme.of(context).textTheme.titleMedium,
+              style: PurchaseType.rowTitle,
             ),
           ),
           if (scenario.historicalSubtotals.length == 1) ...[
@@ -5066,9 +5088,9 @@ class _PurchaseScenarioPanel extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'El total suma costos aterrizados históricos por línea; no supone ahorro adicional de flete por consolidar.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+          style: PurchaseType.meta.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -5132,10 +5154,19 @@ class _ScenarioSubtotalText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (subtotal.currency == 'CLP') return VbMoneyText(subtotal.amount);
+    // `VbMoneyText` fija su tamaño por dentro (14) y asume peso chileno, así
+    // que el subtotal de un escenario en USD se dibujaba con otra escala que
+    // el de al lado y la columna dejaba de alinear. La cifra llega ya
+    // formateada por `PurchaseMoney.format` —que reusa el mismo formato de
+    // pesos— y la escala la pone `metric_sm`, el rol que el spec asigna a los
+    // totales de grupo. Se pierde el cero apagado de `VbMoneyText`: un
+    // subtotal de escenario en cero es un total real, no un «no aplica».
     return Text(
-      '${subtotal.currency} ${subtotal.amount.toStringAsFixed(2)}',
-      style: Theme.of(context).textTheme.titleSmall,
+      PurchaseMoney.format(subtotal.amount, subtotal.currency),
+      style: PurchaseType.metricSmall.copyWith(
+        color: PurchaseTokens.of(context).ink,
+        fontFeatures: PurchaseType.tabular,
+      ),
     );
   }
 }

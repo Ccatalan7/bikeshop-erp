@@ -656,6 +656,7 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
     items: [{
       catalogItemRef,
       categoryRef: null,
+      commercialTarget: null,
       description: "Neumático 27,5 ancho mayor a 2,0",
       quantity: 2,
       unit: "unit",
@@ -667,6 +668,7 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
     }, {
       catalogItemRef: null,
       categoryRef: null,
+      commercialTarget: null,
       description: "Rayos 27,5",
       quantity: 1,
       unit: "set",
@@ -771,6 +773,13 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
           description: "Neumático 27,5 ancho mayor a 2,0",
           productId,
           categoryId: null,
+          // Un objetivo real: gama y piso de margen viajan; la marca no existe
+          // como referencia todavía y por eso no está en el esquema.
+          commercialTarget: {
+            gama: "economica",
+            maxLandedUnitCostNet: null,
+            minGrossMarginRatio: 0.35,
+          },
           quantity: 2,
           unit: "unit",
           technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
@@ -782,6 +791,16 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
           description: "Rayos 27,5",
           productId: null,
           categoryId: "62626262-6262-4262-8262-626262626262",
+          // El caso peligroso: el modelo emite el objeto porque el esquema lo
+          // exige, pero con las tres claves en null. La RPC delega en
+          // `normalize_commercial_target_internal_v1`, que devolvería `{}` y
+          // haría fallar la llamada entera con «Empty commercial target», así
+          // que acá se convierte en ausencia.
+          commercialTarget: {
+            gama: null,
+            maxLandedUnitCostNet: null,
+            minGrossMarginRatio: null,
+          },
           quantity: 1,
           unit: "set",
           technicalPredicates: [],
@@ -798,13 +817,14 @@ Deno.test("supply request preparation is typed, read-only and preserves ambiguit
   );
   assertEquals(execution.succeeded, true, "validated supply draft executes");
   assertEquals(calls, [{
-    name: "assistant_prepare_supply_request_v2",
+    name: "assistant_prepare_supply_request_v3",
     parameters: {
       p_items: [{
         lineRef: "line-1",
         description: "Neumático 27,5 ancho mayor a 2,0",
         productId,
         categoryId: null,
+        commercialTarget: { gama: "economica", minGrossMarginRatio: 0.35 },
         quantity: 2,
         unit: "unit",
         technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],

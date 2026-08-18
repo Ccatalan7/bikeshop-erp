@@ -815,6 +815,9 @@ AIAssistantSupplyNeedDraft _decodeSupplyNeedDraft(Object? value) {
         ),
         clarification: clarification,
         clarificationRequired: clarificationRequired,
+        commercialTarget: _decodeSupplyNeedCommercialTarget(
+          line['commercialTarget'],
+        ),
         clarificationPrompts: clarificationPrompts,
       ),
     );
@@ -824,6 +827,54 @@ AIAssistantSupplyNeedDraft _decodeSupplyNeedDraft(Object? value) {
     profile: profile,
     lines: List<AIAssistantSupplyNeedDraftLine>.unmodifiable(lines),
   );
+}
+
+/// Objetivo comercial de una línea, tal como lo devuelve la tarjeta cerrada.
+///
+/// Se valida acá y no se «arregla»: un valor fuera de rango o una clave que el
+/// contrato no publica es una tarjeta que no cuadra, y eso se rechaza entero.
+/// La moneda es del servidor: si aparece `currencyCode`, la tarjeta miente.
+AIAssistantSupplyNeedCommercialTarget? _decodeSupplyNeedCommercialTarget(
+  Object? value,
+) {
+  if (value == null) return null;
+  if (value is! Map) throw const AIAgentGatewayContractException();
+  const allowed = <String>{
+    'gama',
+    'maxLandedUnitCostNet',
+    'minGrossMarginRatio',
+  };
+  for (final key in value.keys) {
+    if (key is! String || !allowed.contains(key)) {
+      throw const AIAgentGatewayContractException();
+    }
+  }
+  final rawGama = value['gama'];
+  if (rawGama != null &&
+      (rawGama is! String ||
+          !const {'economica', 'media', 'alta'}.contains(rawGama))) {
+    throw const AIAgentGatewayContractException();
+  }
+  final rawCost = value['maxLandedUnitCostNet'];
+  if (rawCost != null &&
+      (rawCost is! num || !rawCost.isFinite || rawCost <= 0)) {
+    throw const AIAgentGatewayContractException();
+  }
+  final rawMargin = value['minGrossMarginRatio'];
+  if (rawMargin != null &&
+      (rawMargin is! num ||
+          !rawMargin.isFinite ||
+          rawMargin < 0 ||
+          rawMargin > 1)) {
+    throw const AIAgentGatewayContractException();
+  }
+  final target = AIAssistantSupplyNeedCommercialTarget(
+    gama: rawGama as String?,
+    maxLandedUnitCostNet: (rawCost as num?)?.toDouble(),
+    minGrossMarginRatio: (rawMargin as num?)?.toDouble(),
+  );
+  // Un objeto sin ninguna clave útil no es un objetivo: la base lo rechazaría.
+  return target.isEmpty ? null : target;
 }
 
 List<AIAssistantSupplyNeedClarificationPrompt>

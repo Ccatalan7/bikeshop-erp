@@ -54,6 +54,44 @@ DesignSync list_files   → what exists, and the highest handoff-t<N>/
 DesignSync get_file     → the authoritative source, with literal values
 ```
 
+### Cómo se abre el proyecto — el id va explícito (corrección 2026-08-18)
+
+**`projectId = a0fa3196-6315-4b96-bde7-7cc801e7a74e`**, proyecto
+`ERP Bikeshop UI Mockups`. Se pasa a `list_files` y `get_file` **siempre**.
+
+**`DesignSync list_projects` devuelve `[]` y eso es correcto.** Ese método lista
+únicamente proyectos de tipo **design-system**, filtrados a los escribibles. El
+proyecto de este ERP es `PROJECT_TYPE_PROJECT`, y ese tipo es **inmutable desde
+su creación**: no hay ajuste, permiso ni login que lo haga aparecer en esa
+lista. Nunca.
+
+**Un `[]` no es falta de autorización.** Comprobación de un segundo:
+
+```
+DesignSync get_project  projectId=a0fa3196-6315-4b96-bde7-7cc801e7a74e
+→ {"name":"ERP Bikeshop UI Mockups","type":"PROJECT_TYPE_PROJECT","canEdit":true}
+```
+
+**El costo real de no tener esto escrito.** El 2026-08-18 una sesión declaró
+«falta autorización de Design» como su único bloqueo, dejó una condición del
+corte sin verificar y se la devolvió al dueño como algo que sólo él podía
+resolver. Una segunda sesión repitió la conclusión sin probar la herramienta. No
+había nada que aprobar: el acceso estaba completo, con `canEdit: true`, y con
+los 600+ archivos del proyecto disponibles. Lo que faltaba era esta línea.
+
+**Regla operativa: antes de reportar un bloqueo de Design, corre `get_project`
+sobre el id.** Si devuelve `canEdit: true`, el bloqueo no existe.
+
+Rutas que se usan casi siempre —el listado completo sale de `list_files`—:
+
+| Ruta | Para qué |
+|---|---|
+| `GUÍA GENERAL Viñabike - Componentes.dc.html` | componentes compartidos, ids `S-05`/`O-02`/`I-01`, escala tipográfica |
+| `Arquitectura de Paletas - Viñabike.dc.html` | roles semánticos y modo oscuro |
+| `<módulo>.dc.html` | la **composición** del módulo, que el `spec.json` no trae |
+| `handoff-t<N>/spec.json` | tablas de medidas del turno |
+| `handoff-t<N>/frames/…` | los frames, con `-dark`, `-phone`, `-tablet` |
+
 ### Reading a large page without burning context
 
 A `get_file` result above roughly 50 KB is written to a file on disk and only a
@@ -308,3 +346,37 @@ deliberate deviation in the handoff.
 See [`CODEX_CLAUDE_COLLABORATION.md`](CODEX_CLAUDE_COLLABORATION.md) for the
 review gate and [`../architecture/appearance-palette-contract.md`](../architecture/appearance-palette-contract.md)
 for how palettes/brightness resolve.
+
+## `fontFamily: '<nombre>'` sobre un rol ya resuelto vuelve a colarse (2026-08-18)
+
+**Nueve sitios vivos en un módulo que ya documentaba la trampa como corregida.**
+
+El proyecto registra en `pubspec.yaml` **sólo Oswald y Barlow**. Los roles
+tipográficos del handoff resuelven su familia con las APIs específicas de
+`google_fonts` (`GoogleFonts.ibmPlexMono()`, `GoogleFonts.poppins()`), y eso es
+justamente lo que los hace independientes del recorrido previo del operador.
+
+Escribir después `.copyWith(fontFamily: 'IBM Plex Mono')` sobre uno de esos
+roles **deshace ese arreglo**: reemplaza la familia ya resuelta por un nombre
+que sólo existe si alguna otra pantalla cargó esa familia antes en la misma
+sesión. Se ve bien casi siempre —porque el propio módulo la carga— y por eso
+sobrevive a las revisiones.
+
+Dos formas y su corrección:
+
+- **El rol ya trae esa familia** (`metricSmall`, `metricMedium`, `panelTitle`,
+  `moduleTitle`): el `fontFamily` es redundante y dañino. Se borra.
+- **Se quiere otra familia a propósito** —un `meta` que debe ser mono porque
+  lleva una cantidad o una edad de evidencia—: no se pide por nombre, se
+  **agrega el rol**. Para eso existe `PurchaseType.metaNumeric`: las métricas
+  exactas de `meta` con `typography.families.numeric`, que el spec reserva para
+  «números comparables, códigos, metadatos de conteo». Agregar un rol con las
+  medidas de otro **no** es inventar un valor; pedir una familia por nombre sí
+  es romper el contrato.
+
+Cómo se detecta en un comando, y conviene correrlo al cerrar cualquier ronda
+tipográfica:
+
+```bash
+grep -rn "fontFamily: '" lib/modules/<módulo>/ | grep -v visual_language
+```
