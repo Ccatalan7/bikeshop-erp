@@ -3232,6 +3232,20 @@ motivo del `ToolRegistryError`; debe conservarlo por id y publicarlo en
 `failure_code` en vez del literal. Instrumentar `tool_executor.ts` no sirve: se
 midió y ese código no se alcanza en este camino.
 
+**Y `failure_code` es contrato, no bitácora.** Se implementó el cambio
+—`Map<id, motivo>` y un slug acotado al dominio del recibo,
+`^[a-z][a-z0-9_]{0,63}$`— y compiló limpio, pero puso rojas dos pruebas que
+fijan el literal `invalid_tool_arguments`, entre ellas la de la herramienta no
+anunciada. Se revirtió: extender ese dominio es una decisión deliberada que
+incluye actualizar esas expectativas, no un efecto colateral de instrumentar.
+El cambio son ~20 líneas y su ubicación está probada; lo que falta es decidir
+el dominio nuevo y migrar sus aserciones en la misma tarea.
+
+Es la tercera vez en el día que un código de error resulta ser contrato
+verificado: pasó también con `assistant_unavailable` en `runtimeErrorFrom`.
+**Antes de decorar un código de error en este repositorio, busca quién lo
+afirma.**
+
 **Lo que hay que hacer primero, y es la misma lección que ya costó dos rondas
 hoy: que el rechazo diga cuál comprobación falló.** Un validador que sólo
 responde «argumentos inválidos» obliga a reproducir con instrumentación cada
