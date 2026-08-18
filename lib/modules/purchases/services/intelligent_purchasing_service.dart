@@ -84,9 +84,20 @@ class IntelligentPurchasingService {
     String? assistantThreadId,
   }) async {
     final response = await _client.rpc(
-      // v2 persiste la categoría resuelta en la revisión de interpretación.
-      // La línea la trae desde la tarjeta cerrada; el cliente no la inventa.
-      'create_supply_need_batch_v2',
+      // v3 crea la necesidad y su primer objetivo comercial de forma atómica,
+      // delegando todas las reglas de la necesidad en v2, que queda intacta.
+      //
+      // Una línea sin objetivo accionable **no** escribe una revisión vacía, así
+      // que hasta que el borrador de la IA lo traiga esto se comporta igual que
+      // v2. El cambio va antes y no después: el recibo de v3 vive en el mismo
+      // espacio de nombres que el de v2 —una clave usada por cualquiera de los
+      // dos bloquea al otro—, de modo que migrar el llamador cuando ya hubiera
+      // objetivos en vuelo obligaría a razonar sobre dos escritores del mismo
+      // lote conviviendo.
+      //
+      // La categoría resuelta la sigue trayendo la línea desde la tarjeta
+      // cerrada; el cliente no la inventa.
+      'create_supply_need_batch_v3',
       params: {
         'p_original_request': originalRequest.trim(),
         'p_items': draft.lines
