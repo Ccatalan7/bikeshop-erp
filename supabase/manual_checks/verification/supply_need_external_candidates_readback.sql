@@ -159,7 +159,14 @@ select
         then 1 else 0 end) as a_real_need_has_historical_candidates,
   1 / (case when (payload ->> 'status') = 'success' then 1 else 0 end)
     as external_candidates_executes_and_ranks,
-  1 / (case when jsonb_array_length(payload -> 'items') > 0
+  -- **Los proveedores vuelven rankeados, con su razón.** En qué grupo caen lo
+  -- decide `matchState`, que depende de la ficha del producto: exigir el grupo
+  -- accionable ataba el read-back a los datos del día. El 2026-08-18 una
+  -- necesidad creada por la IA —con criterios técnicos que la ficha no puede
+  -- confirmar— dejó su único candidato en `unverified` y puso rojo este
+  -- archivo sin que nada estuviera roto.
+  1 / (case when jsonb_array_length(payload -> 'items')
+            + jsonb_array_length(payload -> 'unverifiedItems') > 0
         then 1 else 0 end) as suppliers_come_back_ranked,
   -- Envelope clave por clave: 33 claves, ni una más.
   1 / (case when payload ?& array[
@@ -222,12 +229,16 @@ with scoped as (
          is not null)
 ), target as (
   select id from open_lane order by candidate_products desc, id limit 1
+), answer as (
+  select public.get_supply_need_external_candidates_v1(target.id, 10, 0, 5, 0) as payload
+  from target
 ), items as (
+  -- Los dos grupos: un candidato no verificado también debe traer su razón
+  -- completa. «No saber» no exime de explicar por qué aparece.
   select entry.value as item
-  from target,
+  from answer,
     lateral jsonb_array_elements(
-      public.get_supply_need_external_candidates_v1(target.id, 10, 0, 5, 0)
-        -> 'items'
+      (answer.payload -> 'items') || (answer.payload -> 'unverifiedItems')
     ) entry(value)
 )
 select
