@@ -3558,8 +3558,14 @@ Resultado de auditar los tres archivos del módulo:
   `sectionTitle`. El spec nombra «criterios» dentro de `panel_title`: es un
   panel, no un encabezado de bloque. Corregido.
 
-Con los tres de §33.16 y éste, **cuatro asignaciones estaban mal** y las cuatro
-se veían razonables en pantalla. Ninguna se habría encontrado mirando la app.
+- **Cuarto error:** el ATP de la fila de stock de **escritorio** usaba
+  `metricMedium`. El spec asigna `metric_md` a «cards phone» y `metric_sm` a
+  «celdas de tabla, totales de grupo»; `_StockRow` es la fila de escritorio.
+  Corregido a `metricSmall`.
+
+Contando los dos roles ausentes de §33.16, **cinco asignaciones estaban mal** y
+las cinco se veían razonables en pantalla. Ninguna se habría encontrado mirando
+la app.
 
 **El método que sirve, para la próxima:** leer `typography.scale`, tomar su
 columna `surface`, y grepear cada rol en el módulo comprobando que sólo aparezca

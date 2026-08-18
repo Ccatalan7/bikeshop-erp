@@ -826,7 +826,10 @@ class _StockRow extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       '${component.availableToPromise}',
-                      style: PurchaseType.metricMedium.copyWith(
+                      // `metric_sm` en el spec: «celdas de tabla, totales de
+                      // grupo». `metric_md` es de las cards de teléfono, y
+                      // esto es la fila de escritorio.
+                      style: PurchaseType.metricSmall.copyWith(
                         fontFamily: 'IBM Plex Mono',
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
