@@ -3399,9 +3399,21 @@ y anulable**, que es justo lo que hace `categoryRef`.
 **Orden recomendado para retomar, ya medido:**
 
 1. `commercialTarget` **obligatorio y anulable** —`type: ["object","null"]` y
-   dentro de `required`, como `categoryRef`— más su forma en el ejecutor. Eso
-   pone rojas doce pruebas que construyen líneas sin la clave: actualizarlas es
-   el trabajo real de este corte, no un daño colateral.
+   dentro de `required`, como `categoryRef`— más su forma en el ejecutor.
+   **Ejecutado y medido hasta el final**: el corte deja 225/231 y las seis
+   restantes son dos preexistentes más cuatro de expectativa. El arnés se
+   actualiza en **dos** sitios distintos, y confundirlos cuesta una vuelta:
+   - **Once constructores de línea** (`tool_executor_test.ts` 2,
+     `supply_category_provenance_test.ts` 3, `runtime_test.ts` 6) llevan
+     `commercialTarget: null` junto a su `categoryRef`. Es mecánico.
+   - **Cuatro llamadas simuladas del modelo** en `runtime_test.ts` —las de
+     `categoryRef` y las de borrador terminal— también deben emitir la clave:
+     el esquema la exige en `validateProviderCall`, **antes** del ejecutor, así
+     que sin ella la llamada se rechaza y el turno nunca alcanza
+     `prepare_supply_request`. El síntoma no menciona el objetivo: dice que la
+     ronda no llegó al terminal.
+   Se revirtió por falta de margen para hacer bien esa segunda parte, no por
+   un obstáculo: el camino está entero y medido.
 2. El cambio de `_v2` a `_v3` **solo**, después. `_v3` ya está desplegada y
    verificada. No está medido cuánto arnés afirma el nombre `_v2`; el número 81
    que este documento le atribuyó era del esquema, no suyo.
