@@ -305,6 +305,19 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
   final PurchaseInvoiceDraftSeed? initialDraftSeed;
   final bool readOnly; // View-only mode (no editing, no status changes)
 
+  /// Opens an existing document ready to type into, instead of the view mode
+  /// that waits for «Editar». A host that opened the form *to edit* would
+  /// otherwise ask for the same intent twice.
+  final bool startInEditMode;
+
+  /// Set when the form is hosted inside another surface (a dialog) instead of
+  /// its own route.
+  ///
+  /// The host owns closing, so the form reports back — `true` when it saved —
+  /// rather than driving the router, and it drops the workflow actions that
+  /// belong to the document's own page.
+  final ValueChanged<bool>? onEmbeddedFinished;
+
   const PurchaseInvoiceFormPage({
     super.key,
     this.invoiceId,
@@ -314,6 +327,8 @@ class PurchaseInvoiceFormPage extends StatefulWidget {
     this.initialSourceDocumentKind,
     this.initialDraftSeed,
     this.readOnly = false,
+    this.startInEditMode = false,
+    this.onEmbeddedFinished,
     this.referrer,
     this.exitGuardScope,
   });
@@ -448,8 +463,9 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     // Set initial editing state:
     // - New invoice (invoiceId == null) → editing mode
     // - Existing draft → view mode (user clicks "Editar" to edit)
+    // - Existing draft opened *to edit* by its host → editing mode
     // - Other statuses → always view mode
-    _isEditing = widget.invoiceId == null;
+    _isEditing = widget.invoiceId == null || widget.startInEditMode;
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
 
@@ -548,6 +564,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     _hwScanTimer?.cancel();
     super.dispose();
   }
+
+  bool get _isEmbedded => widget.onEmbeddedFinished != null;
 
   // Can edit fields only when status is draft AND in editing mode
   bool get _canEditFields =>
@@ -2527,6 +2545,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
           content: Text('Documento de compra guardado correctamente'),
         ),
       );
+      final onEmbeddedFinished = widget.onEmbeddedFinished;
+      if (onEmbeddedFinished != null) {
+        onEmbeddedFinished(true);
+        return;
+      }
       // Navigate back - check if we can pop, otherwise go to list
       if (context.canPop()) {
         context.pop(true);
@@ -3178,31 +3201,40 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
         ],
       ),
     );
-    return MainLayout(
-      child: _showingReceiptWorkspace && _loadedInvoice != null
-          ? PurchaseReceivingWorkspace(
-              key: ValueKey('receipt-${_loadedInvoice!.id}'),
-              invoice: _loadedInvoice!,
-              onCancel: () => setState(
-                () => _showingReceiptWorkspace = false,
-              ),
-              onCompleted: _handleReceiptCompleted,
-            )
-          : Stack(
-              fit: StackFit.expand,
-              children: [
-                Offstage(
-                  offstage: _showingOcrWorkspace,
-                  child: TickerMode(
-                    enabled: !_showingOcrWorkspace,
-                    child: invoiceForm,
-                  ),
-                ),
-                if (_showingOcrWorkspace)
-                  Positioned.fill(child: _buildOcrWorkspace()),
-              ],
+    final body = _showingReceiptWorkspace && _loadedInvoice != null
+        ? PurchaseReceivingWorkspace(
+            key: ValueKey('receipt-${_loadedInvoice!.id}'),
+            invoice: _loadedInvoice!,
+            onCancel: () => setState(
+              () => _showingReceiptWorkspace = false,
             ),
-    );
+            onCompleted: _handleReceiptCompleted,
+          )
+        : Stack(
+            fit: StackFit.expand,
+            children: [
+              Offstage(
+                offstage: _showingOcrWorkspace,
+                child: TickerMode(
+                  enabled: !_showingOcrWorkspace,
+                  child: invoiceForm,
+                ),
+              ),
+              if (_showingOcrWorkspace)
+                Positioned.fill(child: _buildOcrWorkspace()),
+            ],
+          );
+
+    // Embedded: the app shell is already on screen, around the host. Wrapping
+    // in MainLayout would paint a second sidebar inside someone else's panel.
+    if (_isEmbedded) {
+      return Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        body: body,
+      );
+    }
+
+    return MainLayout(child: body);
   }
 
   /// Closes the form and returns to whatever opened it.
@@ -3211,6 +3243,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   /// scroll intact. The referrer hint only reconstructs a route, so it serves
   /// deep links that have no history to return to.
   void _returnToOrigin() {
+    final onEmbeddedFinished = widget.onEmbeddedFinished;
+    if (onEmbeddedFinished != null) {
+      // Same gate the routed form gets: a document mid-OCR cannot be walked
+      // away from, wherever the form is hosted.
+      unawaited(() async {
+        if (await _confirmCanLeave()) onEmbeddedFinished(false);
+      }());
+      return;
+    }
     if (ReturnNavigation.canReturn(context)) {
       ReturnNavigation.close(context, fallbackRoute: '/purchases');
       return;
@@ -3275,7 +3316,11 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     List<Widget> buildWorkflowActions() {
       final actionButtons = <Widget>[];
 
-      if (!widget.readOnly && widget.invoiceId != null) {
+      // Embedded: the host opened this to edit, not to walk the document's
+      // workflow. Sending, deleting or receiving from inside someone else's
+      // surface would leave that surface holding a document it no longer
+      // describes.
+      if (!widget.readOnly && widget.invoiceId != null && !_isEmbedded) {
         // Use form's payment model state
         final isPrepayment = _isPrepaymentModel;
         final physicalComplete = _receiptFulfillment.isClosed;

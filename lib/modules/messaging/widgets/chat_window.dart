@@ -12,7 +12,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
+import '../../purchases/models/purchase_invoice.dart';
+import '../../purchases/services/purchase_service.dart';
 import '../../sales/services/sales_service.dart';
+import '../../settings/services/appearance_service.dart';
 import '../../website/services/website_service.dart';
 import '../models/conversation.dart';
 import '../models/conversation_smart_action_capabilities.dart';
@@ -23,6 +26,7 @@ import '../models/message.dart';
 import '../models/message_delivery_state.dart';
 import '../models/autocomplete_suggestion.dart';
 import 'parsed_message_text.dart';
+import 'purchase_document_preview_dialog.dart';
 import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
 import '../utils/conversation_channel_presentation.dart';
@@ -33,7 +37,10 @@ import '../../storage/models/app_stored_file.dart';
 import '../../../shared/services/whatsapp_service.dart';
 import '../../../shared/services/route_share_service.dart';
 import '../../../shared/services/workspace_manager.dart';
+import '../../../shared/services/inventory_service.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/file_download.dart';
+import '../../../shared/utils/purchase_document_pdf_generator.dart';
 import '../models/conversation_context_hint.dart';
 
 class _EmojiGroup {
@@ -111,6 +118,12 @@ class _PendingChatAttachment {
   final bool canRetrySafely;
   final String? replayCaption;
 
+  /// Purchase document this attachment carries, when it was generated from a
+  /// draft. A confirmed send is what moves that draft to «Enviada», so the
+  /// identity has to survive every retry the composer allows.
+  final String? purchaseInvoiceId;
+  final String? purchaseInvoiceNumber;
+
   const _PendingChatAttachment({
     required this.id,
     required this.fileName,
@@ -122,6 +135,8 @@ class _PendingChatAttachment {
     this.retryUpload = false,
     this.canRetrySafely = false,
     this.replayCaption,
+    this.purchaseInvoiceId,
+    this.purchaseInvoiceNumber,
   });
 
   _PendingChatAttachment markOutcomeUnknown(
@@ -138,6 +153,26 @@ class _PendingChatAttachment {
         retryUpload: result.retryUpload,
         canRetrySafely: result.canRetrySafely,
         replayCaption: result.replayCaption,
+        purchaseInvoiceId: purchaseInvoiceId,
+        purchaseInvoiceNumber: purchaseInvoiceNumber,
+      );
+
+  /// Replace the file with the freshly saved document, keeping the row's place
+  /// in the composer. Only a row without a reservation can take a revision: a
+  /// reserved upload is bound to the exact bytes it announced.
+  _PendingChatAttachment withRevision({
+    required Uint8List bytes,
+    required String fileName,
+    required String invoiceNumber,
+  }) =>
+      _PendingChatAttachment(
+        id: id,
+        fileName: fileName,
+        bytes: bytes,
+        extension: extension,
+        isImage: isImage,
+        purchaseInvoiceId: purchaseInvoiceId,
+        purchaseInvoiceNumber: invoiceNumber,
       );
 
   _PendingChatAttachment resetForNewAttempt() => _PendingChatAttachment(
@@ -146,6 +181,8 @@ class _PendingChatAttachment {
         bytes: bytes,
         extension: extension,
         isImage: isImage,
+        purchaseInvoiceId: purchaseInvoiceId,
+        purchaseInvoiceNumber: purchaseInvoiceNumber,
       );
 }
 
@@ -224,6 +261,10 @@ class ChatWindow extends StatefulWidget {
 
 class _ChatWindowState extends State<ChatWindow> {
   static const Color _accentBlue = Color(0xFF093357);
+
+  /// Same sky the purchase list paints on «Enviada», so the composer entry
+  /// reads as the step that produces that state.
+  static const Color _purchaseDocumentAccent = Color(0xFF0EA5E9);
   static const String _pendingAttachmentMutationBlockedMessage =
       'WhatsApp aún no confirma este adjunto. Conservamos la misma reserva '
       'para evitar un envío duplicado; los controles se habilitarán cuando '
@@ -396,6 +437,7 @@ class _ChatWindowState extends State<ChatWindow> {
   bool _isExportingChatArchive = false;
   bool _isDraggingAttachment = false;
   bool _isSendingPendingAttachments = false;
+  bool _isPreparingPurchaseDocument = false;
   bool _pendingAttachmentReconciliationScheduled = false;
   bool _showJumpToLatest = false;
   bool _historyAutoLoadScheduled = false;
@@ -957,17 +999,23 @@ class _ChatWindowState extends State<ChatWindow> {
     final anchorRect = anchorOffset & anchorSize;
     final horizontalLimit =
         (overlaySize.width - effectiveWidth - 12).clamp(12.0, double.infinity);
-    final left = (anchorRect.center.dx - effectiveWidth / 2)
-        .clamp(12.0, horizontalLimit)
-        .toDouble();
-    final preferredTop = anchorRect.top - estimatedHeight - 8;
-    final fallbackTop = anchorRect.bottom + 8;
-    final verticalLimit = (overlaySize.height - estimatedHeight - 12)
-        .clamp(12.0, double.infinity);
-    final top = (preferredTop >= 12 ? preferredTop : fallbackTop)
-        .clamp(12.0, verticalLimit)
-        .toDouble();
-    final maxPanelHeight = (overlaySize.height - top - 12)
+    // Hug the button's own edge instead of centring on it: the panel is wider
+    // than the button, so centring pushes it past the pane and the clamp then
+    // parks it against the window border, far from what was pressed.
+    final left = anchorRect.left > horizontalLimit
+        ? (anchorRect.right - effectiveWidth)
+            .clamp(12.0, horizontalLimit)
+            .toDouble()
+        : anchorRect.left.clamp(12.0, horizontalLimit).toDouble();
+
+    // `estimatedHeight` only chooses the side. The panel is then pinned by the
+    // edge that touches the button, so a panel shorter than the estimate stays
+    // glued to it instead of floating that difference away.
+    final spaceAbove = anchorRect.top - 20;
+    final spaceBelow = overlaySize.height - anchorRect.bottom - 20;
+    final opensUpward = spaceAbove >= 140 &&
+        (spaceAbove >= estimatedHeight || spaceAbove >= spaceBelow);
+    final maxPanelHeight = (opensUpward ? spaceAbove : spaceBelow)
         .clamp(120.0, overlaySize.height - 24)
         .toDouble();
 
@@ -982,7 +1030,8 @@ class _ChatWindowState extends State<ChatWindow> {
         ),
         Positioned(
           left: left,
-          top: top,
+          top: opensUpward ? null : anchorRect.bottom + 8,
+          bottom: opensUpward ? overlaySize.height - anchorRect.top + 8 : null,
           width: effectiveWidth,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -2182,6 +2231,8 @@ class _ChatWindowState extends State<ChatWindow> {
   _PendingChatAttachment _buildPendingAttachment({
     required String fileName,
     required Uint8List bytes,
+    String? purchaseInvoiceId,
+    String? purchaseInvoiceNumber,
   }) {
     final validation = MessagingAttachmentService.validateBeforeRead(
       fileName: fileName,
@@ -2196,6 +2247,8 @@ class _ChatWindowState extends State<ChatWindow> {
       bytes: bytes,
       extension: ext,
       isImage: isImage,
+      purchaseInvoiceId: purchaseInvoiceId,
+      purchaseInvoiceNumber: purchaseInvoiceNumber,
     );
   }
 
@@ -2270,6 +2323,7 @@ class _ChatWindowState extends State<ChatWindow> {
     );
 
     final unresolved = <_PendingChatAttachment>[];
+    final confirmedPurchaseDocuments = <_PendingChatAttachment>[];
     var rejectedCount = 0;
     var unknownCount = 0;
     for (var i = 0; i < attachments.length; i += 1) {
@@ -2288,6 +2342,9 @@ class _ChatWindowState extends State<ChatWindow> {
       );
       switch (result.outcome) {
         case _AttachmentDispatchOutcome.confirmed:
+          if (attachment.purchaseInvoiceId != null) {
+            confirmedPurchaseDocuments.add(attachment);
+          }
           break;
         case _AttachmentDispatchOutcome.rejected:
           // A confirmed rejection can start over with a fresh reservation on
@@ -2340,6 +2397,8 @@ class _ChatWindowState extends State<ChatWindow> {
         ),
       );
     }
+
+    await _markPurchaseDocumentsAsSent(confirmedPurchaseDocuments);
   }
 
   String _droppedFileName(XFile file) {
@@ -7820,11 +7879,14 @@ class _ChatWindowState extends State<ChatWindow> {
     required bool showSmartActions,
   }) {
     final smartActions = _smartActionCapabilities;
+    final purchaseSupplierId =
+        _supportsOutgoingAttachments ? _supplierContextId : null;
     _toggleComposerMenu(
       name: 'composer_actions',
       anchorKey: _composerActionsButtonKey,
       width: 330,
-      estimatedHeight: _isWhatsAppConversation ? 330 : 275,
+      estimatedHeight: (_isWhatsAppConversation ? 330 : 275) +
+          (purchaseSupplierId == null ? 0 : 56),
       panelBuilder: (overlayContext) => _buildComposerPopoverPanel(
         context: overlayContext,
         icon: Icons.add_circle_outline_rounded,
@@ -7838,6 +7900,17 @@ class _ChatWindowState extends State<ChatWindow> {
               title: 'Foto o archivo',
               subtitle: 'Previsualiza antes de enviar',
               onTap: () => _showAttachmentOptions(
+                anchorKey: _composerActionsButtonKey,
+              ),
+            ),
+          if (purchaseSupplierId != null)
+            _buildComposerPopoverAction(
+              icon: Icons.receipt_long_outlined,
+              color: _purchaseDocumentAccent,
+              title: 'Documento de compra',
+              subtitle: 'Envía un borrador y queda como enviada',
+              onTap: () => _showPurchaseDraftPicker(
+                supplierId: purchaseSupplierId,
                 anchorKey: _composerActionsButtonKey,
               ),
             ),
@@ -7880,6 +7953,354 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  /// Supplier behind this thread, when there is one.
+  ///
+  /// The inbox binds a supplier by phone even when nothing was linked by hand,
+  /// so the hint is the reliable source and the explicit context is the
+  /// fallback.
+  String? get _supplierContextId {
+    if (!widget.conversation.isSupplierConversation) return null;
+    final hinted = widget.conversation.contextHint?.supplierId?.trim();
+    if (hinted != null && hinted.isNotEmpty) return hinted;
+    if (_effectiveContextType == 'supplier') {
+      final contextId = _effectiveContextId?.trim();
+      if (contextId != null && contextId.isNotEmpty) return contextId;
+    }
+    return null;
+  }
+
+  void _showPurchaseDraftPicker({
+    required String supplierId,
+    GlobalKey? anchorKey,
+  }) {
+    final draftsFuture = _loadSupplierDraftDocuments(supplierId);
+    _toggleComposerMenu(
+      name: 'purchase_drafts',
+      anchorKey: anchorKey ?? _composerActionsButtonKey,
+      width: 400,
+      estimatedHeight: 330,
+      panelBuilder: (overlayContext) => _buildPurchaseDraftPanel(
+        overlayContext,
+        draftsFuture: draftsFuture,
+      ),
+    );
+  }
+
+  Future<List<PurchaseInvoice>> _loadSupplierDraftDocuments(
+    String supplierId,
+  ) async {
+    final purchaseService = context.read<PurchaseService>();
+    final invoices = await purchaseService.getInvoicesBySupplier(supplierId);
+    return invoices
+        .where(
+          (invoice) =>
+              invoice.id != null &&
+              invoice.status == PurchaseInvoiceStatus.draft,
+        )
+        .toList();
+  }
+
+  Widget _buildPurchaseDraftPanel(
+    BuildContext overlayContext, {
+    required Future<List<PurchaseInvoice>> draftsFuture,
+  }) {
+    return _buildComposerPopoverPanel(
+      context: overlayContext,
+      icon: Icons.receipt_long_outlined,
+      iconColor: _purchaseDocumentAccent,
+      title: 'Documentos en borrador',
+      children: [
+        FutureBuilder<List<PurchaseInvoice>>(
+          future: draftsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.fromLTRB(16, 14, 16, 18),
+                child: LinearProgressIndicator(minHeight: 2),
+              );
+            }
+            if (snapshot.hasError) {
+              return _buildPurchaseDraftNotice(
+                context,
+                'No se pudieron cargar los documentos de este proveedor.',
+              );
+            }
+            final drafts = snapshot.data ?? const <PurchaseInvoice>[];
+            if (drafts.isEmpty) {
+              return _buildPurchaseDraftNotice(
+                context,
+                'Este proveedor no tiene documentos de compra en borrador.',
+              );
+            }
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 244),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: drafts.length,
+                itemBuilder: (context, index) => _buildPurchaseDraftOption(
+                  context,
+                  drafts[index],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPurchaseDraftNotice(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Text(
+        message,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPurchaseDraftOption(
+    BuildContext context,
+    PurchaseInvoice invoice,
+  ) {
+    final theme = Theme.of(context);
+    final lineCount = invoice.items.length;
+    return InkWell(
+      onTap: () => _queuePurchaseDocumentAttachment(invoice),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: _purchaseDocumentAccent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Icon(
+                Icons.description_outlined,
+                color: _purchaseDocumentAccent,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'N° ${invoice.invoiceNumber}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${ChileanUtils.formatDate(invoice.date)} · '
+                    '$lineCount ${lineCount == 1 ? 'línea' : 'líneas'} · '
+                    '${ChileanUtils.formatCurrency(invoice.total)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 13,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build the document the supplier receives and leave it in the composer.
+  ///
+  /// The draft only becomes «Enviada» once the transport confirms the send, so
+  /// nothing is written to the document here.
+  Future<void> _queuePurchaseDocumentAttachment(PurchaseInvoice invoice) async {
+    final invoiceId = invoice.id;
+    if (invoiceId == null || _isPreparingPurchaseDocument) return;
+    _removeComposerMenuOverlay(notify: true);
+    if (_guardPendingAttachmentMutation()) return;
+
+    final appearanceService = context.read<AppearanceService>();
+    final inventoryService = context.read<InventoryService>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _isPreparingPurchaseDocument = true);
+    try {
+      final bytes = await PurchaseDocumentPdfGenerator.generateBytes(
+        invoice,
+        appearanceService: appearanceService,
+        inventoryService: inventoryService,
+      );
+      if (!mounted) return;
+      _addPendingAttachments([
+        _buildPendingAttachment(
+          fileName: PurchaseDocumentPdfGenerator.fileNameFor(
+            invoice.invoiceNumber,
+          ),
+          bytes: bytes,
+          purchaseInvoiceId: invoiceId,
+          purchaseInvoiceNumber: invoice.invoiceNumber,
+        ),
+      ]);
+      if (_messageController.text.trim().isEmpty) {
+        _messageController.text =
+            'Te enviamos el documento de compra N° ${invoice.invoiceNumber}.';
+      }
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Documento N° ${invoice.invoiceNumber} listo. Al enviarlo queda '
+              'como enviada.',
+            ),
+          ),
+        );
+    } catch (error) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('No se pudo preparar el documento: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _isPreparingPurchaseDocument = false);
+    }
+  }
+
+  /// Open the queued purchase document, and take back whatever the operator
+  /// saved while it was open.
+  ///
+  /// Editing happens in the canonical document form, so the file that leaves
+  /// the chat is rebuilt from the stored document rather than from the copy
+  /// generated when it was queued.
+  Future<void> _openPurchaseDocumentPreview(
+    _PendingChatAttachment attachment,
+  ) async {
+    final invoiceId = attachment.purchaseInvoiceId;
+    if (invoiceId == null) return;
+
+    final isReserved = attachment.reservation != null;
+    final revision = await showPurchaseDocumentPreviewDialog(
+      context,
+      invoiceId: invoiceId,
+      invoiceNumber: attachment.purchaseInvoiceNumber ?? '',
+      bytes: attachment.bytes,
+      canEdit: !isReserved && !_isSendingPendingAttachments,
+      lockedReason: isReserved
+          ? 'Este adjunto ya está reservado para envío; no admite cambios.'
+          : null,
+    );
+    if (revision == null || !mounted) return;
+
+    final index = _pendingAttachments.indexWhere(
+      (item) => item.id == attachment.id,
+    );
+    if (index == -1) return;
+    setState(() {
+      _pendingAttachments[index] = _pendingAttachments[index].withRevision(
+        bytes: revision.bytes,
+        fileName: revision.fileName,
+        invoiceNumber: revision.invoiceNumber,
+      );
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Se enviará la versión guardada del documento '
+            'N° ${revision.invoiceNumber}.',
+          ),
+        ),
+      );
+  }
+
+  /// Move every confirmed purchase document from «Borrador» to «Enviada».
+  ///
+  /// A document someone else already advanced is left alone: the chat send is
+  /// not allowed to walk the purchase workflow backwards.
+  Future<void> _markPurchaseDocumentsAsSent(
+    List<_PendingChatAttachment> attachments,
+  ) async {
+    if (attachments.isEmpty || !mounted) return;
+
+    final purchaseService = context.read<PurchaseService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final marked = <String>[];
+    final failed = <String>[];
+
+    for (final attachment in attachments) {
+      final invoiceId = attachment.purchaseInvoiceId;
+      if (invoiceId == null) continue;
+      final label = attachment.purchaseInvoiceNumber ?? invoiceId;
+      try {
+        final outcome = await purchaseService.markDocumentSentAfterDispatch(
+          invoiceId,
+        );
+        switch (outcome) {
+          case PurchaseDocumentSendOutcome.marked:
+            marked.add(label);
+          case PurchaseDocumentSendOutcome.alreadyAdvanced:
+            break;
+          case PurchaseDocumentSendOutcome.missing:
+            failed.add(label);
+        }
+      } catch (error) {
+        debugPrint(
+            'No se pudo marcar el documento $label como enviada: $error');
+        failed.add(label);
+      }
+    }
+
+    if (!mounted) return;
+    if (failed.isNotEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            failed.length == 1
+                ? 'El documento N° ${failed.first} se envió, pero sigue en '
+                    'borrador. Cámbialo en Documentos de compra.'
+                : '${failed.length} documentos se enviaron, pero siguen en '
+                    'borrador. Cámbialos en Documentos de compra.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    if (marked.isNotEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            marked.length == 1
+                ? 'Documento N° ${marked.first} quedó como enviada.'
+                : '${marked.length} documentos quedaron como enviada.',
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildPendingAttachmentTray(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -7903,7 +8324,9 @@ class _ChatWindowState extends State<ChatWindow> {
     );
 
     return Container(
-      constraints: BoxConstraints(maxHeight: hasBlockingOutcome ? 166 : 142),
+      // No height cap: the tray's content is already bounded (header + one
+      // 82 px row), and a hardcoded ceiling only clips — or overflows — when
+      // the text renders taller than the number someone measured once.
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
@@ -8018,95 +8441,105 @@ class _ChatWindowState extends State<ChatWindow> {
         : attachment.extension.toUpperCase();
     final removalBlocked =
         attachment.outcomeUnknown && !attachment.canRetrySafely;
+    final isPurchaseDocument = attachment.purchaseInvoiceId != null;
 
     return SizedBox(
       width: 112,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Container(
-            width: 112,
-            height: 82,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
+          Tooltip(
+            message: isPurchaseDocument ? 'Ver o editar el documento' : '',
+            child: InkWell(
+              onTap: isPurchaseDocument
+                  ? () => _openPurchaseDocumentPreview(attachment)
+                  : null,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: colorScheme.outlineVariant),
+              child: Container(
+                width: 112,
+                height: 82,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colorScheme.outlineVariant),
+                ),
+                child: attachment.isImage
+                    ? Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.memory(
+                            attachment.bytes,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          ),
+                          Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.fromLTRB(7, 12, 7, 5),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.62),
+                                  ],
+                                ),
+                              ),
+                              child: Text(
+                                attachment.fileName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _getFileIcon(attachment.extension),
+                              size: 24,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              attachment.fileName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$extensionLabel · ${_formatAttachmentSize(attachment.bytes.length)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontSize: 9.5,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
             ),
-            child: attachment.isImage
-                ? Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.memory(
-                        attachment.bytes,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                      ),
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(7, 12, 7, 5),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.62),
-                              ],
-                            ),
-                          ),
-                          child: Text(
-                            attachment.fileName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _getFileIcon(attachment.extension),
-                          size: 24,
-                          color: colorScheme.primary,
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          attachment.fileName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$extensionLabel · ${_formatAttachmentSize(attachment.bytes.length)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontSize: 9.5,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
           ),
           Positioned(
             top: -7,

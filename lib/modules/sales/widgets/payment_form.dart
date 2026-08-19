@@ -39,7 +39,9 @@ class _PaymentFormState extends State<PaymentForm> {
   bool _isLoadingMethods = true;
   bool _includesIva = false;
 
-  bool get _taxChoiceIsLocked => widget.invoice.paidAmount > 0.01;
+  /// Amount typed right now, used to show what this payment separates.
+  double get _typedAmount =>
+      (_parseWholePesoAmount(_amountController.text) ?? 0).toDouble();
 
   int? _parseWholePesoAmount(String value) {
     final normalized = value.trim().replaceAll(RegExp(r'[\s$]'), '');
@@ -72,7 +74,12 @@ class _PaymentFormState extends State<PaymentForm> {
     _amountController = TextEditingController(
       text: _effectiveBalance.toStringAsFixed(0),
     );
+    _amountController.addListener(_onAmountChanged);
     _loadPaymentMethods();
+  }
+
+  void _onAmountChanged() {
+    if (mounted && _includesIva) setState(() {});
   }
 
   Future<void> _loadPaymentMethods() async {
@@ -85,6 +92,8 @@ class _PaymentFormState extends State<PaymentForm> {
         if (paymentMethodService.incomingPaymentMethods.isNotEmpty) {
           _selectedPaymentMethod =
               paymentMethodService.incomingPaymentMethods.first;
+          _includesIva = _selectedPaymentMethod!.defaultTaxTreatment ==
+              TaxTreatment.taxIncluded;
         }
       });
     }
@@ -315,6 +324,13 @@ class _PaymentFormState extends State<PaymentForm> {
                 if (value != null) {
                   setState(() {
                     _selectedPaymentMethod = value;
+                    // The tender decides the tax document: a card sale is
+                    // documented and carries 19%, cash is not. Since
+                    // 20260819180000 that classification belongs to this
+                    // payment, so deriving it here no longer reclassifies the
+                    // whole invoice. The operator can still override it.
+                    _includesIva = value.defaultTaxTreatment ==
+                        TaxTreatment.taxIncluded;
                   });
                 }
               },
@@ -327,46 +343,34 @@ class _PaymentFormState extends State<PaymentForm> {
             ),
           const SizedBox(height: 12),
 
-          // The terminal owns the tax choice for the whole invoice. Payments
-          // only settle accounts receivable; they never recognize IVA twice.
+          // Tax follows the tender, one payment at a time: a card payment is
+          // documented and carries 19%, cash is not. An invoice settled with
+          // both therefore carries both, and each payment posts its own IVA.
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Factura incluye IVA (19%)'),
+            title: const Text('Este pago lleva IVA (19%)'),
             subtitle: Text(
               _includesIva
-                  ? 'El total ya incluye IVA; se separará neto e impuesto.'
-                  : 'El total completo se registrará sin IVA.',
+                  ? 'Se documenta: del monto se separan neto e impuesto.'
+                  : 'Sin documento tributario: el monto entra completo.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             value: _includesIva,
-            onChanged: _taxChoiceIsLocked
-                ? null
-                : (value) => setState(() => _includesIva = value),
+            onChanged: (value) => setState(() => _includesIva = value),
             secondary: Icon(
               _includesIva ? Icons.receipt_long : Icons.receipt_outlined,
               color:
                   _includesIva ? Theme.of(context).colorScheme.primary : null,
             ),
           ),
-          if (_taxChoiceIsLocked)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'El documento tributario quedó fijado con el primer pago. '
-                'Para cambiarlo se requiere una corrección auditada.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ),
 
-          // Show the invoice classification using the full document total, not
-          // only the partial payment amount.
+          // The breakdown is of THIS payment, not of the document: on a mixed
+          // invoice the two no longer coincide.
           if (_includesIva) ...[
             Builder(builder: (context) {
-              final invoiceTotal = widget.invoice.total.roundToDouble();
-              final net = (invoiceTotal / 1.19).roundToDouble();
-              final iva = invoiceTotal - net;
+              final paymentAmount = _typedAmount;
+              final net = (paymentAmount / 1.19).roundToDouble();
+              final iva = paymentAmount - net;
               return Card(
                 color: Theme.of(context)
                     .colorScheme
@@ -382,8 +386,8 @@ class _PaymentFormState extends State<PaymentForm> {
                       _buildBreakdownRow('IVA (19%):',
                           ChileanUtils.formatCurrency(iva), context),
                       const Divider(height: 12),
-                      _buildBreakdownRow('Total factura:',
-                          ChileanUtils.formatCurrency(invoiceTotal), context,
+                      _buildBreakdownRow('Total de este pago:',
+                          ChileanUtils.formatCurrency(paymentAmount), context,
                           isBold: true),
                     ],
                   ),

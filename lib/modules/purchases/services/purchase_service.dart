@@ -38,6 +38,18 @@ class SupplierCommandRetryLedger {
   void clear() => _operationIds.clear();
 }
 
+/// What a «marcar como enviada» attempt did to a purchase document.
+enum PurchaseDocumentSendOutcome {
+  /// The draft moved to «Enviada».
+  marked,
+
+  /// Someone had already moved it past «Borrador»; it was left untouched.
+  alreadyAdvanced,
+
+  /// The document is no longer readable.
+  missing,
+}
+
 class PurchaseService extends ChangeNotifier {
   PurchaseService(
     this._db,
@@ -851,6 +863,24 @@ class PurchaseService extends ChangeNotifier {
       debugPrint('PurchaseService.updateInvoiceStatus error: $e');
       rethrow;
     }
+  }
+
+  /// Moves a document that was just dispatched to the supplier from
+  /// «Borrador» to «Enviada», and says what actually happened.
+  ///
+  /// The transition lives here, not in the surface that sent it: a chat window
+  /// should not know the purchase workflow, and a document someone else
+  /// already advanced must not be walked backwards by a late confirmation.
+  Future<PurchaseDocumentSendOutcome> markDocumentSentAfterDispatch(
+    String invoiceId,
+  ) async {
+    final current = await getPurchaseInvoice(invoiceId, refresh: true);
+    if (current == null) return PurchaseDocumentSendOutcome.missing;
+    if (current.status != PurchaseInvoiceStatus.draft) {
+      return PurchaseDocumentSendOutcome.alreadyAdvanced;
+    }
+    await updateInvoiceStatus(invoiceId, PurchaseInvoiceStatus.sent);
+    return PurchaseDocumentSendOutcome.marked;
   }
 
   /// Mark invoice as received (triggers inventory increase and accounting)

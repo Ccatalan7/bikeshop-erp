@@ -1167,6 +1167,72 @@ Cerré un turno diciendo «sigo ahora mismo, no me detengo» y terminé el turno
 > se escribe **al cerrar cada frame**, no al final: es lo único que sobrevive si
 > el chat se acaba.
 
+### Un control declarado y nunca pasado no aparece en ninguna captura
+
+**2026-08-19.** El módulo de compras declaraba `onOpenCriteria` en la barra de
+necesidad y **nadie se lo pasaba**: la CTA «Criterios» que el contrato nombra
+era código muerto, y la ranura del resumen recibía el origen de la necesidad en
+vez de sus criterios. Miradas al lado del frame, esas pantallas se veían
+completas: lo que faltaba no dejaba hueco.
+
+Lo mismo con el `»` de colapsar del inspector, y con el título del plan vacío.
+Los tres son ausencias, y una ausencia no se ve.
+
+> **La regla:** una superficie no se audita sólo comparando lo que hay. Se
+> recorren `blocks` y `acciones` del contrato **entrada por entrada**, y de cada
+> control declarado se comprueba que exista **y que alguien lo pase**. Un
+> parámetro opcional que nadie provee es exactamente igual a no tenerlo.
+>
+> **El corolario para las pruebas:** una prueba sobre el widget suelto no ve
+> nada de esto, porque el widget siempre estuvo bien. La que muerde es la que
+> monta la pantalla real y afirma que el control llegó.
+
+### El `spec.json` manda sobre los frames, y lo dice él mismo
+
+**2026-08-19.** `handoff-t23/spec.json` lleva escrito: «Ante discrepancia entre
+un frame y este spec, **manda el spec**». Leerlo entero cerró tres huecos que
+mirar los frames no resolvía —el stepper del pie del inspector, los asteriscos
+de obligatoriedad, la nota de la línea del plan— y **corrigió una decisión ya
+tomada**: yo había colapsado el inspector al mínimo del panel razonando que a
+cero sería indistinguible de cerrar, y el spec dice «riel de 28px», que es
+justo lo que distingue las dos cosas.
+
+> **La regla:** los frames son la evidencia de aspecto; el `spec.json` es el
+> contrato. Antes de decidir una geometría o un comportamiento por lo que se ve
+> en una imagen, se busca en `blocks`, `geometry` y `resize` del spec. Y cuesta
+> una sola llamada: entra completo, no está por sobre el cap.
+
+### Dos agentes no caben en una sesión de debug
+
+**2026-08-19.** Con otro agente trabajando en el mismo checkout, la app se fue
+sola a Correo, a Taller y a un borrador de factura en mitad de tres
+verificaciones. No es un fallo de la herramienta: es que la sesión nativa es
+**una** y el runbook prohíbe abrir una segunda.
+
+La vista web **no** es la salida: pide credenciales, y un agente no las teclea.
+
+> **La regla:** cuando la sesión está ocupada por otro agente, se le **pide**
+> —`list_sessions` da quién está activo— y mientras tanto se cierra todo lo que
+> no depende de la pantalla. Disputarle la ventana pierde el turno de los dos.
+
+### Un grep de una línea no verifica una migración tipográfica
+
+**2026-08-19.** El módulo se declaró con `textTheme.` en cero contándolo con
+`grep -c 'textTheme\.'`. Ese patrón **no** encuentra la forma partida:
+
+```dart
+style: Theme.of(context)
+    .textTheme
+    .labelSmall
+    ?.copyWith(color: tone.onContainer),
+```
+
+Quedaba una conversión viva en un módulo declarado al 100 %.
+
+> **La regla:** para contar usos de un miembro encadenado, el patrón cruza
+> saltos de línea — `textTheme\s*\.\s*\n?\s*[a-zA-Z]` — o se cuenta con el
+> analizador, no con `grep -c`.
+
 ---
 
 ## 5.d Lo que sólo se ve en el teléfono

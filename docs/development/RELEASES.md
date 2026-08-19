@@ -205,6 +205,34 @@ Antes de gastar una publicación, valida el candidato en seco con
 `acceptCodexReleaseEnvelope(envelope, {inventory})`: devuelve `source: "ai"`
 cuando pasa, y el motivo exacto cuando no.
 
+### La segunda causa de que no salgan novedades (2026-08-18)
+
+La cuota de Codex no es el único punto por el que se cae el recuadro. Antes de
+llamar al generador, `prepare_erp_update.sh` corre **gitleaks sobre el rango ya
+commiteado**, y si ese escaneo encuentra algo se salta las notas enteras:
+
+```text
+Local Codex notes skipped: the committed range did not pass the private secret scan.
+```
+
+En la publicación de `ee0692fe` lo que encontró fue un **falso positivo**: la
+regla `generic-api-key` muerde cualquier asignación de 16+ caracteres cuyo campo
+se llame algo con `key`, y un pgTAP lleno de `where event.operation_key = '…'`
+la dispara sin que haya credencial alguna. El costo se paga dos veces: la
+actualización sale con el texto determinista, y el workflow `Secret Scan` del
+push queda rojo en la rama. Ninguno de los dos publicadores depende de ese
+workflow, así que la publicación sigue — el rojo es ruido, no un bloqueo, y
+confundirlo con un bloqueo cuesta la ronda.
+
+Cómo se lee sin exponer nada: el reporte JSON de gitleaks trae `RuleID`, `File`
+y `StartLine`, que bastan para juzgar, mientras `--redact=100` mantiene el valor
+fuera de la salida. Un identificador de prueba se reconoce por su forma
+(`a9-aaaaaa-aaaaaa`), y esa forma se puede enseñar sin enseñar el valor.
+
+La reparación es una excepción en `.gitleaks.toml` acotada a `supabase/tests/`,
+no un `.gitleaksignore` por hallazgo: el hallazgo cambia de huella en cuanto se
+edita el test y vuelve a aparecer.
+
 Firebase rollback uses the previous Hosting release. Windows rollback uses the previous signed/checksummed artifact. macOS internal rollback restores the previous verified bundle retained under the per-user updater support directory. Database rollback follows the database backup/restore runbook and must not improvise destructive reverse SQL.
 
 For a Firebase rollback, select the last release whose retained evidence and

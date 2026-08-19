@@ -648,9 +648,9 @@ select throws_ok(
       'no_tax'
     )
   $$,
-  '55000',
-  'El tratamiento tributario quedó fijado con el primer pago. Use un flujo de corrección auditado para cambiarlo.',
-  'tax treatment cannot change after the first payment'
+  'P0001',
+  'El pago excede el saldo pendiente de la factura de venta.',
+  'a later payment is bounded by the balance, not by the document tax'
 );
 
 update public.mechanic_jobs
@@ -672,13 +672,27 @@ select
 
 -- Reproduce a legacy payment mirror without exercising the current integrity
 -- trigger. The metadata-only after-trigger guard must preserve its payment JE.
+-- Server-owned tax fields are immutable for an authenticated caller, so the
+-- legacy row is forged the only way the platform itself could have written it.
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select set_config('request.jwt.claim.sub', '', true);
 alter table public.sales_payments
   disable trigger trg_sales_payments_validate_integrity;
 update public.sales_payments
-   set tax_treatment = 'no_tax', net_amount = 119000, iva_amount = 0
+   set tax_treatment = 'no_tax', net_amount = 1, iva_amount = 999
  where idempotency_key = 'workshop-payment-command-1';
 alter table public.sales_payments
   enable trigger trg_sales_payments_validate_integrity;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"99942000-0000-4000-8000-000000000099","role":"authenticated"}',
+  true
+);
+select set_config(
+  'request.jwt.claim.sub',
+  '99942000-0000-4000-8000-000000000099',
+  true
+);
 
 delete from public.journal_entries
  where tenant_id = '99942000-0000-4000-8000-000000000001'
@@ -755,20 +769,20 @@ select is(
 select is(
   (select tax_treatment from public.sales_payments
     where idempotency_key = 'workshop-payment-command-1'),
-  'tax_included',
-  'financial backfill restores payment tax treatment'
+  'no_tax',
+  'financial backfill never reclassifies a payment it did not classify'
 );
 select is(
   (select net_amount from public.sales_payments
     where idempotency_key = 'workshop-payment-command-1'),
-  100000.00::numeric,
-  'financial backfill restores payment net metadata'
+  119000.00::numeric,
+  'financial backfill restores payment net metadata from its own treatment'
 );
 select is(
   (select iva_amount from public.sales_payments
     where idempotency_key = 'workshop-payment-command-1'),
-  19000.00::numeric,
-  'financial backfill restores payment IVA metadata'
+  0.00::numeric,
+  'financial backfill restores payment IVA metadata from its own treatment'
 );
 select is(
   (select id from public.journal_entries

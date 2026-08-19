@@ -334,6 +334,29 @@ zona y capturar `invalid_parameter_value`:
 llamada. Está APPLIED y su read-back de producción pasa completo. La lección de
 arriba sigue vigente; el defecto que la produjo, no.
 
+## Un read-back que no falla antes de aplicar no prueba nada (2026-08-19)
+
+`deploy_migration.sh` corre las verificaciones **después** de aplicar, así que
+un read-back mal escrito pasa igual y firma un despliegue que nadie comprobó.
+La forma barata de saber que muerde es correrlo **contra producción antes**: si
+no revienta ahí, no está mirando lo que cree.
+
+Al desplegar `20260819100000` esa comprobación encontró un read-back roto: la
+firma se comparaba con `pg_get_function_identity_arguments`, que devuelve
+`p_plan_id uuid, p_expected_plan_version bigint, …` —con los **nombres**— y no
+`uuid, bigint, …`. Pasaba en producción por la razón equivocada y habría pasado
+también sin la función. Se compara con `to_regprocedure('…(uuid,bigint,…)')`,
+que resuelve la firma real o devuelve `NULL`.
+
+> **La regla:** antes de `deploy_migration.sh`, correr cada `--verify` contra
+> producción con `query.sh` y **exigir que falle**. Después, que pase. Las dos
+> mitades, o el read-back es decorado.
+
+**Y una que no hay que hacer:** el cache de esquema de PostgREST no se refresca
+a mano. Producción tiene `pgrst_ddl_watch` y `pgrst_drop_watch` activos, así
+que una RPC nueva queda expuesta al terminar el DDL. Compruébalo con
+`pg_event_trigger` si dudas; no agregues un `NOTIFY pgrst` a la migración.
+
 ## Schema changes
 
 One required deployable artifact: a uniquely versioned, idempotent forward
@@ -397,3 +420,28 @@ commands. Sources and per-consumer scope are in `SUPABASE_WORKFLOW.md`
 ("Credentials and what each one does"). A publishable/anon key is public client
 identity and does not bypass RLS; a secret key is privileged and is never an
 ordinary test identity.
+
+## El archivo `--verify` no admite bloques ni constantes plegables (2026-08-19)
+
+Un read-back de `deploy_migration.sh` corre por la ruta de **lectura remota**, y
+ahí hay dos trampas que cuestan un intento de despliegue cada una:
+
+- **Nada de `do $$ begin ... end $$`.** El guard de transacciones busca `begin`
+  después de `;` y el bloque PL/pgSQL lo dispara: *«Remote read-only SQL files
+  cannot manage transactions»*. Se escribe con `select` planos.
+- **La rama que el `CASE` no toma igual se evalúa.** El planificador pliega
+  constantes: `else (1 / 0)::text` revienta aunque la condición sea verdadera, y
+  `'public.fn(args)'::regprocedure` revienta cuando la función no existe aunque
+  ese `when` nunca se alcance. El divisor va como agregado sobre un conjunto
+  vacío —`(select (1 / count(*))::text from pg_class where relname = '__x__')`—
+  y la existencia de una función se resuelve con `to_regprocedure(...)::oid`,
+  que devuelve NULL en vez de fallar.
+
+Ejemplo completo: `.tmp/db/payment-level-sales-tax-readback.sql`.
+
+**Y producción no tiene todas las migraciones del árbol.** `20260723023000`
+(correcciones auditadas de pago) nunca se desplegó, así que
+`sales_payment_edit_events` y `correct_sales_payment` no existen allá y una
+migración que las asuma falla a medio aplicar. Antes de reemplazar una función,
+compruébalo con `to_regclass`/`to_regprocedure` contra producción y haz esa
+sección condicional.

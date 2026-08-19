@@ -8,6 +8,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/document_accounting_preview.dart';
 import '../../../shared/services/document_accounting_context_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
+import '../../../shared/utils/purchase_document_pdf_generator.dart';
 import '../../../shared/models/payment_method.dart';
 import '../../../shared/services/payment_method_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -25,15 +26,11 @@ import '../widgets/purchase_receipt_resolution_register.dart';
 import 'purchase_credit_note_page.dart';
 import 'purchase_receiving_page.dart';
 import 'purchase_supplier_return_page.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import '../../../shared/models/tax_treatment.dart';
 import 'package:printing/printing.dart';
-import 'package:http/http.dart' as http;
 import '../../settings/services/appearance_service.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/widgets/branded_loading.dart';
-import 'dart:typed_data';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 
@@ -3684,9 +3681,6 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     );
   }
 
-  // Cached logo bytes for PDF generation
-  Uint8List? _cachedLogoBytes;
-  String? _cachedLogoUrl;
   bool _isGeneratingPdf = false;
 
   Future<void> _downloadInvoicePDF(PurchaseInvoice invoice) async {
@@ -3694,16 +3688,23 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
 
     setState(() => _isGeneratingPdf = true);
 
+    final appearanceService = context.read<AppearanceService>();
+    final inventoryService = context.read<InventoryService>();
+
     try {
-      final pdf = await _generatePurchaseInvoicePDF(invoice);
-      final bytes = await pdf.save();
+      final bytes = await PurchaseDocumentPdfGenerator.generateBytes(
+        invoice,
+        appearanceService: appearanceService,
+        inventoryService: inventoryService,
+      );
 
       // Platform-specific download
       if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
         // Desktop: Use Save As dialog
         final String? outputFile = await FilePicker.platform.saveFile(
           dialogTitle: 'Guardar documento de compra PDF',
-          fileName: 'documento_compra_${invoice.invoiceNumber}.pdf',
+          fileName:
+              PurchaseDocumentPdfGenerator.fileNameFor(invoice.invoiceNumber),
           allowedExtensions: ['pdf'],
           type: FileType.custom,
         );
@@ -3724,7 +3725,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
         // Use printing package for mobile/share
         await Printing.sharePdf(
           bytes: bytes,
-          filename: 'documento_compra_${invoice.invoiceNumber}.pdf',
+          filename:
+              PurchaseDocumentPdfGenerator.fileNameFor(invoice.invoiceNumber),
         );
       }
     } catch (e) {
@@ -3741,355 +3743,10 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     }
   }
 
-  Future<pw.Document> _generatePurchaseInvoicePDF(
-      PurchaseInvoice invoice) async {
-    final pdf = pw.Document();
-    final appearanceService = context.read<AppearanceService>();
-    final inventoryService = context.read<InventoryService>();
-
-    // Try to load company logo (use cache if available)
-    pw.ImageProvider? logoImage;
-    try {
-      final logoUrl = appearanceService.companyLogoUrl;
-      if (logoUrl != null && logoUrl.isNotEmpty) {
-        // Check if we already have cached bytes for this URL
-        if (_cachedLogoBytes != null && _cachedLogoUrl == logoUrl) {
-          logoImage = pw.MemoryImage(_cachedLogoBytes!);
-        } else {
-          // Fetch and cache
-          final response = await http.get(Uri.parse(logoUrl));
-          if (response.statusCode == 200) {
-            _cachedLogoBytes = response.bodyBytes;
-            _cachedLogoUrl = logoUrl;
-            logoImage = pw.MemoryImage(_cachedLogoBytes!);
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error loading logo for PDF: $e');
-    }
-
-    final products = await inventoryService.getProductsByIds(
-      invoice.items.map((item) => item.productId),
-    );
-    final productsById = {
-      for (final product in products) product.id: product,
-    };
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.letter,
-        margin: const pw.EdgeInsets.all(40),
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            // Header - much more compact
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                // Company logo or text fallback
-                if (logoImage != null)
-                  pw.Image(logoImage,
-                      width: 120, height: 40, fit: pw.BoxFit.contain)
-                else
-                  pw.Text(
-                    'VIÑABIKE',
-                    style: pw.TextStyle(
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.blue800,
-                    ),
-                  ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      '# ${invoice.invoiceNumber}',
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                    pw.SizedBox(height: 6),
-                    pw.Text(
-                      'Saldo adeudado',
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.SizedBox(height: 1),
-                    pw.Text(
-                      ChileanUtils.formatCurrency(
-                          invoice.total - invoice.paidAmount),
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            pw.SizedBox(height: 16),
-
-            // Company info - smaller
-            pw.Text('Viñabike',
-                style:
-                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-            pw.Text('Valparaíso',
-                style:
-                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-            pw.Text('Chile',
-                style:
-                    const pw.TextStyle(fontSize: 10, color: PdfColors.black)),
-
-            pw.SizedBox(height: 16),
-
-            // Supplier and date info - more compact
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      'Proveedor',
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      invoice.supplierName ?? 'Sin registro',
-                      style: pw.TextStyle(
-                        fontSize: 11,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.blue700,
-                      ),
-                    ),
-                    if (invoice.supplierRut != null)
-                      pw.Text(
-                        invoice.supplierRut!,
-                        style: const pw.TextStyle(
-                          fontSize: 10,
-                          color: PdfColors.grey700,
-                        ),
-                      ),
-                  ],
-                ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      'Fecha del documento:',
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      ChileanUtils.formatDate(invoice.date),
-                      style: const pw.TextStyle(
-                        fontSize: 10,
-                        color: PdfColors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            pw.SizedBox(height: 16),
-
-            // Items table - much tighter
-            pw.Table(
-              border: pw.TableBorder.all(
-                color: PdfColors.grey300,
-                width: 0.3, // Ultra thin borders
-              ),
-              columnWidths: {
-                0: const pw.FixedColumnWidth(35),
-                1: const pw.FlexColumnWidth(3),
-                2: const pw.FixedColumnWidth(60),
-                3: const pw.FixedColumnWidth(70),
-                4: const pw.FixedColumnWidth(70),
-              },
-              children: [
-                // Header row
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey800),
-                  children: [
-                    _buildPdfTableCell('#', isHeader: true),
-                    _buildPdfTableCell('Artículo & Descripción',
-                        isHeader: true),
-                    _buildPdfTableCell('Cant.', isHeader: true),
-                    _buildPdfTableCell('Tarifa', isHeader: true),
-                    _buildPdfTableCell('Importe', isHeader: true),
-                  ],
-                ),
-                // Data rows
-                ...invoice.items.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final item = entry.value;
-
-                  // Lookup clean product name from cache if available (mirrors form view logic)
-                  final product = productsById[item.productId];
-                  final displayName = _cleanPdfText(
-                      product?.name ?? item.productName ?? 'Sin nombre');
-                  final displaySku =
-                      _cleanPdfText(product?.sku ?? item.productSku ?? '');
-
-                  final hasDescription =
-                      item.description != null && item.description!.isNotEmpty;
-                  final hasSku = displaySku.isNotEmpty;
-
-                  return pw.TableRow(
-                    children: [
-                      _buildPdfTableCell('${index + 1}'),
-                      // Product name + description (Zoho style)
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 5),
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text(
-                              displayName,
-                              style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                            ),
-                            if (hasDescription) ...[
-                              pw.SizedBox(height: 3),
-                              pw.Text(
-                                _cleanPdfText(item.description!),
-                                style: const pw.TextStyle(
-                                  fontSize: 9,
-                                  color: PdfColors.grey700,
-                                ),
-                              ),
-                            ] else if (hasSku) ...[
-                              pw.SizedBox(height: 3),
-                              pw.Text(
-                                'SKU: $displaySku',
-                                style: const pw.TextStyle(
-                                  fontSize: 9,
-                                  color: PdfColors.grey700,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      _buildPdfTableCell(item.quantity.toStringAsFixed(2)),
-                      _buildPdfTableCell(
-                          ChileanUtils.formatCurrency(item.unitCost)),
-                      _buildPdfTableCell(
-                          ChileanUtils.formatCurrency(item.netAmountClamped)),
-                    ],
-                  );
-                }),
-              ],
-            ),
-
-            pw.SizedBox(height: 16),
-
-            // Totals - tighter
-            pw.Row(
-              children: [
-                pw.Spacer(),
-                pw.SizedBox(
-                  width: 250,
-                  child: pw.Column(
-                    children: [
-                      // Subtotal (the actual stored subtotal is always the net amount for purchases)
-                      _buildPdfTotalRow(
-                          invoice.taxTreatment == TaxTreatment.taxIncluded
-                              ? 'Subtotal (Neto)'
-                              : 'Subtotal',
-                          invoice.subtotal),
-                      if (invoice.discountAmount > 0)
-                        _buildPdfTotalRow('Descuento', -invoice.discountAmount),
-                      if (invoice.ivaAmount > 0)
-                        _buildPdfTotalRow('IVA (19%)', invoice.ivaAmount),
-                      pw.Divider(thickness: 0.3, color: PdfColors.grey400),
-                      _buildPdfTotalRow('Total', invoice.total, isTotal: true),
-                      if (invoice.paidAmount > 0) ...[
-                        pw.Divider(thickness: 0.3, color: PdfColors.grey400),
-                        _buildPdfTotalRow(
-                            'Pago realizado', -invoice.paidAmount),
-                      ],
-                      pw.Divider(thickness: 1, color: PdfColors.grey800),
-                      _buildPdfTotalRow(
-                          'Saldo adeudado', invoice.total - invoice.paidAmount,
-                          isTotal: true),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-
-    return pdf;
-  }
 
   String _cleanPdfText(String text) {
     if (text.isEmpty) return text;
     return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
   }
 
-  pw.Widget _buildPdfTableCell(String text, {bool isHeader = false}) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-      child: pw.Text(
-        text,
-        style: pw.TextStyle(
-          color: isHeader ? PdfColors.white : PdfColors.black,
-          fontWeight: isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
-          fontSize: isHeader ? 9 : 10,
-        ),
-      ),
-    );
-  }
-
-  pw.Widget _buildPdfTotalRow(String label, double amount,
-      {bool isTotal = false}) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 5),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(
-            label,
-            style: pw.TextStyle(
-              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
-              fontSize: isTotal ? 12 : 11,
-              color: PdfColors.black,
-            ),
-          ),
-          pw.Text(
-            ChileanUtils.formatCurrency(amount.abs()),
-            style: pw.TextStyle(
-              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
-              fontSize: isTotal ? 12 : 11,
-              color: PdfColors.black,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

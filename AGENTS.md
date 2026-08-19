@@ -55,6 +55,12 @@
   aesthetic snapshot tests do not override the two canonical GUI guides. Do
   not copy their literal colors, dimensions, containers, or modal/layout
   choices as visual precedent.
+- **DesignSync se abre con el id explícito.** `projectId =
+  a0fa3196-6315-4b96-bde7-7cc801e7a74e` (`ERP Bikeshop UI Mockups`), pasado a
+  `get_file`/`list_files`. **`list_projects` devuelve `[]` por diseño** —sólo
+  lista proyectos de tipo *design-system*, y éste no lo es—, así que un `[]`
+  **no** es falta de permiso y no hay nada que pedirle al dueño. Verifícalo con
+  `get_project` sobre ese id: `canEdit: true`.
 - **Every visual value is read from a Design file with the `DesignSync` tool** —
   colour, radius, shadow, border, spacing, font, height. Estimating a value, or
   reproducing it from a screenshot of the Design window, is prohibited for both

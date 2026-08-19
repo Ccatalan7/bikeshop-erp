@@ -39,6 +39,29 @@ Shared visual truth comes from `GUÍA GENERAL Viñabike - Componentes` in Design
 project `ERP Bikeshop UI Mockups` through `DesignSync`. Claude participates
 only when the owner explicitly requests an independent proposal or review.
 
+### Abrir DesignSync: el id va explícito, `list_projects` NO sirve
+
+**`projectId = a0fa3196-6315-4b96-bde7-7cc801e7a74e`** (`ERP Bikeshop UI
+Mockups`). Pásalo a `get_file` / `list_files` **siempre**.
+
+`DesignSync list_projects` devuelve `[]` **por diseño**: lista sólo proyectos de
+tipo *design-system*, y éste es `PROJECT_TYPE_PROJECT`. **Un `[]` no significa
+que falte autorización.** Ya costó dos sesiones bloqueadas concluyendo que el
+dueño tenía que aprobar algo; no hay nada que aprobar. Si dudas, compruébalo con
+`get_project` sobre ese id: devuelve `canEdit: true`.
+
+Las tres rutas que se usan casi siempre:
+
+- `GUÍA GENERAL Viñabike - Componentes.dc.html` — componentes compartidos.
+- `Arquitectura de Paletas - Viñabike.dc.html` — roles y modo oscuro.
+- `<módulo>.dc.html` (p. ej. `Compras · Asistente inteligente navegable.dc.html`)
+  — la composición, que el `spec.json` **no** trae.
+
+`get_file` sobre >50 KB guarda a disco y sólo te entra un preview: se greppea,
+no se carga. La guía **ya pasó el cap de 256 KiB** y se corta en 262 144 bytes
+**sin avisar** — si un rol no aparece, puede estar fuera del corte, no ausente.
+Procedimiento completo en `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`.
+
 - **Every visual value comes from a Design file, read with `DesignSync`.**
   Colour, radius, shadow, border, spacing, font, height. Reading them off a
   screenshot of the Design window, or estimating them, is prohibited. A value

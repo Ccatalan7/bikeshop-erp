@@ -415,6 +415,20 @@ Use both: **structure from `read`, appearance from `shot`.** When they
 disagree, the semantics tree is what a screen reader will announce — that
 disagreement is itself the bug.
 
+**Precisión 2026-08-19: un `shot` puede estar viejo, y entonces no desmiente
+nada.** Si la ventana de la app está detrás de otra —o su ciclo de vida quedó
+en `hidden`/`paused`—, macOS deja de pedirle frames y `_flutter.screenshot`
+devuelve el último raster que sí se dibujó: la captura muestra la pantalla
+*anterior* a la interacción. `read` no se conforma con eso, bombea frames antes
+de leer, así que sí ve el estado nuevo. Así que cuando `shot` y `read`
+discrepan y `read` describe algo que `shot` no muestra, lo primero que se
+descarta es que la app esté ociosa; el propio `read` lo avisa con «el engine no
+entregó frame en 3 s». El costo real: un diálogo recién abierto se dio por no
+abierto, y el paso siguiente habría sido «arreglar» código que ya funcionaba.
+`window` no rescata ese caso: fotografía el rectángulo de la pantalla, de modo
+que devuelve la ventana que esté delante —y de paso captura lo que el dueño
+tenga abierto—, no la app.
+
 ### Two input backends — the default does not touch the owner's cursor
 
 `click`, `scroll` and `drag` are delivered **inside the app** by default, through
