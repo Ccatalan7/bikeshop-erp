@@ -293,16 +293,23 @@ void main() {
     expect(workspace, contains('_selectedScenarioKey'));
   });
 
-  test('la nota de línea del plan no promete persistencia inexistente', () {
+  test('la nota de línea del plan sí persiste, por su propio comando', () {
     final decision = File(
       'lib/modules/purchases/pages/intelligent_purchasing_decision_surfaces.dart',
     ).readAsStringSync();
     final models = File(
       'lib/modules/purchases/models/intelligent_purchasing_models.dart',
     ).readAsStringSync();
-    // No existe campo de nota en la línea del plan…
-    expect(models, isNot(contains('final String? note;')));
-    // …así que tampoco existe el editor que fingía guardarla.
+    final service = File(
+      'lib/modules/purchases/services/intelligent_purchasing_service.dart',
+    ).readAsStringSync();
+    // Corrección 2026-08-19: la guarda anterior exigía que la nota NO existiera,
+    // porque la columna no estaba desplegada. Ya lo está (20260819100000), con
+    // su comando y su evento, así que ahora lo que hay que garantizar es que la
+    // nota que se escribe viaje por ese comando y no se quede en pantalla.
+    expect(models, contains('final String? note;'));
+    expect(service, contains("'set_purchase_plan_line_note_v1'"));
+    // El editor que fingía guardarla sigue sin existir.
     expect(decision, isNot(contains('PlanLineAlternativeNote')));
     expect(decision, contains('class PlanLineEvidenceNote'));
     expect(planSurface, contains('PlanLineEvidenceNote('));

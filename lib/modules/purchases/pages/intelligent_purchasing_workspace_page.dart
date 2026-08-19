@@ -19,7 +19,6 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/widgets/vb_money_text.dart';
 import '../../../shared/widgets/vb_notice.dart';
-import '../../../shared/widgets/vb_short_select.dart';
 import '../../ai_assistant/config/ai_assistant_runtime_config.dart';
 import '../../ai_assistant/models/ai_assistant_destination.dart';
 import '../../ai_assistant/models/ai_agent_gateway_contracts.dart';
@@ -83,6 +82,19 @@ class _IntelligentPurchasingWorkspacePageState
   bool _showExamples = false;
   String? _inspectedCandidateId;
   double _inspectorWidth = PurchaseSurfaceGeometry.inspectorDefaultWidth;
+
+  /// El `»` de los frames 04/05: el detalle cede ancho a la lista sin
+  /// cerrarse. Colapsado es el mínimo del clamp, no cero: a cero sería
+  /// indistinguible de cerrar, y para eso ya está el `×`.
+  bool _inspectorCollapsed = false;
+
+  /// Cantidad elegida en el pie del inspector. `null` mientras nadie la
+  /// toca: manda la de la necesidad, que es la respuesta correcta por
+  /// defecto y la que el operador ya declaró.
+  int? _inspectorQuantity;
+
+  /// La línea del plan cuya nota se está guardando.
+  String? _savingNoteLineId;
 
   List<PurchasePrioritySuggestion> _priority = const [];
   bool _priorityUnavailable = false;
@@ -152,6 +164,10 @@ class _IntelligentPurchasingWorkspacePageState
   bool get _showsLoadFailure => _decisionUnavailable && !_needsReload;
   PurchaseScenarioResult? _scenarioResult;
   PurchasePlanDraft? _plan;
+
+  /// Criterios de la necesidad abierta, y si su detalle está desplegado.
+  SupplyNeedCriteria _needCriteria = SupplyNeedCriteria.empty;
+  bool _showNeedCriteria = false;
   ProductSelection? _identitySelection;
   final Set<String> _basketNeedIds = <String>{};
   bool _loadingNeeds = true;
@@ -239,6 +255,31 @@ class _IntelligentPurchasingWorkspacePageState
         : PurchaseStep.providers;
     unawaited(_loadNeeds());
     unawaited(_loadPriority());
+    unawaited(_restoreOpenPlan());
+  }
+
+  /// Retoma el plan borrador que quedó abierto, en vez de empezar otro encima.
+  ///
+  /// **El bucle que corta.** `_plan` sólo se llenaba con lo agregado en la
+  /// sesión en curso, y `prepare_purchase_plan_line_v1` abre un plan nuevo
+  /// cada vez que recibe `p_plan_id` nulo. El operador armaba su plan, cerraba,
+  /// volvía, no lo veía —el paso Plan aparecía deshabilitado con las líneas
+  /// vivas en la base— y al agregar otra línea estrenaba un segundo borrador.
+  /// En producción quedaron dos planes del mismo 2026-08-18 por eso.
+  ///
+  /// Como la prioridad, un fallo acá no rompe el módulo: sin plan restaurado el
+  /// recorrido sigue igual que antes, sólo que sin retomar.
+  Future<void> _restoreOpenPlan() async {
+    try {
+      final plan = await _service.fetchOpenDraftPlan();
+      if (!mounted || plan == null) return;
+      // Si el operador ya empezó a armar algo mientras se leía, manda lo suyo:
+      // la restauración llega tarde y no puede pisarlo.
+      if (_plan != null) return;
+      setState(() => _plan = plan);
+    } catch (_) {
+      // Silencio deliberado: retomar es una comodidad, no un requisito.
+    }
   }
 
   /// Qué hay que comprar, levantado por el sistema. Se pide al abrir porque es
@@ -334,14 +375,30 @@ class _IntelligentPurchasingWorkspacePageState
           : PurchaseStep.providers;
       _selectedNeed = need;
       _inspectedCandidateId = null;
+      _inspectorQuantity = null;
       _editingNeed = false;
       _returnToScenarios = false;
       _identitySelection = null;
       _identityController.clear();
       _showStockRejection = false;
       _stockReasonController.clear();
+      // Los criterios son de la necesidad que se abandona: se limpian ahora,
+      // para que la barra no muestre los de la anterior mientras carga.
+      _needCriteria = SupplyNeedCriteria.empty;
+      _showNeedCriteria = false;
     });
     await _loadDecision(need);
+  }
+
+  /// Trae los criterios de la necesidad abierta, sin bloquear su decisión.
+  ///
+  /// Van por su propio camino porque son una glosa: el stock, los candidatos y
+  /// el plan no esperan por ellos, y si no llegan la barra se dibuja con el
+  /// origen como siempre.
+  Future<void> _loadNeedCriteria(SupplyNeed need) async {
+    final criteria = await _service.fetchNeedCriteria(need.id);
+    if (!mounted || _selectedNeed?.id != need.id) return;
+    setState(() => _needCriteria = criteria);
   }
 
   Future<void> _loadDecision(
@@ -359,6 +416,13 @@ class _IntelligentPurchasingWorkspacePageState
     bool incremental = false,
   }) async {
     if (!mounted || _selectedNeed?.id != need.id) return;
+    // **Acá y no en `_selectNeed`.** Hay dos caminos que abren una necesidad:
+    // el toque del operador y `_loadNeeds`, que selecciona sola al entrar con
+    // una necesidad ya pedida y llama directo a este método. Colgar la lectura
+    // del primero dejaba la barra sin criterios justo al abrir el módulo, que
+    // es la vez que más se mira. Una recarga incremental no la repite: el
+    // operador pidió más resultados, no otra necesidad.
+    if (!incremental) unawaited(_loadNeedCriteria(need));
     if (incremental) {
       setState(() {
         _refreshingResults = true;
@@ -1237,7 +1301,8 @@ class _IntelligentPurchasingWorkspacePageState
                         ),
                       ),
                       SizedBox(
-                        height: constraints.maxHeight * 0.88,
+                        height: constraints.maxHeight *
+                            PurchaseSurfaceGeometry.phoneSheetHeightFactor,
                         child: Material(elevation: 8, child: sheet),
                       ),
                     ],
@@ -1385,6 +1450,8 @@ class _IntelligentPurchasingWorkspacePageState
       _identityController.clear();
       _showStockRejection = false;
       _stockReasonController.clear();
+      _needCriteria = SupplyNeedCriteria.empty;
+      _showNeedCriteria = false;
     });
     await _loadDecision(need);
   }
@@ -1402,6 +1469,7 @@ class _IntelligentPurchasingWorkspacePageState
         candidate: candidate,
         profile: _rankingProfile,
         plan: _plan,
+        quantity: _inspectorQuantity?.toDouble(),
       );
       if (!mounted) return;
       setState(() {
@@ -1416,6 +1484,56 @@ class _IntelligentPurchasingWorkspacePageState
             'No se pudo guardar la alternativa en el plan. Recarga y vuelve a intentarlo.';
       });
     }
+  }
+
+  /// Guarda o borra la nota de una línea del plan.
+  ///
+  /// `frames[plan].with_lines.line_disclosure`: «Alternativa y **nota**». Un
+  /// fallo no se traga: la razón por la que se eligió un candidato es
+  /// justamente lo que se pierde si nadie avisa que no se guardó.
+  Future<void> _savePlanLineNote(PurchasePlanLine line, String? note) async {
+    final plan = _plan;
+    if (plan == null || _savingNoteLineId != null) return;
+    setState(() {
+      _savingNoteLineId = line.id;
+      _decisionError = null;
+    });
+    try {
+      final updated = await _service.setPlanLineNote(
+        plan: plan,
+        line: line,
+        note: note,
+      );
+      if (!mounted) return;
+      setState(() {
+        _plan = updated;
+        _savingNoteLineId = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _savingNoteLineId = null;
+        _decisionError = 'No se pudo guardar la nota de la línea.';
+      });
+    }
+  }
+
+  /// «Sustituir candidato»: vuelve a Proveedores **con la necesidad de esa
+  /// línea** abierta.
+  ///
+  /// No borra la línea antes de que haya reemplazo. Quitarla y luego mandar a
+  /// buscar dejaría el plan peor que antes si el operador se arrepiente o no
+  /// encuentra nada mejor: elegir otro candidato para la misma necesidad ya
+  /// reemplaza la línea del lado del servidor.
+  void _substitutePlanLine(PurchasePlanLine line) {
+    final need = _firstWhereOrNull(
+      _needs,
+      (item) => item.id == line.sourceNeedId,
+    );
+    if (need == null) return;
+    unawaited(_selectNeed(need));
+    if (!mounted) return;
+    setState(() => _step = PurchaseStep.providers);
   }
 
   Future<void> _removePlanLine(PurchasePlanLine line) async {
@@ -1612,6 +1730,10 @@ class _IntelligentPurchasingWorkspacePageState
                 _buildWorkspaceHeader(desktop: desktop),
                 if (_selectedNeed != null && _step != PurchaseStep.need)
                   _buildNeedBar(),
+                if (_selectedNeed != null &&
+                    _step != PurchaseStep.need &&
+                    _showNeedCriteria)
+                  _buildNeedCriteriaDisclosure(),
                 Expanded(
                   child: _wrapWithLocalPurchaseSheet(
                     Padding(
@@ -1693,6 +1815,26 @@ class _IntelligentPurchasingWorkspacePageState
     setState(() => _step = section);
   }
 
+  /// El estado que la cabecera anuncia, con su punto semántico.
+  ///
+  /// **El contrato nombra tres, la app decía dos.** «Listo» y «Resultados
+  /// parciales» (NOTES §36-37), y el frame 08 muestra el segundo justo cuando
+  /// hay una precisión pendiente. La cabecera decía «Listo» con una pregunta
+  /// abierta en pantalla: afirmaba que el análisis estaba completo mientras el
+  /// propio módulo pedía un dato para poder comparar.
+  ///
+  /// No se inventa la condición: es la misma que el borrador ya usa para
+  /// bloquearse (`clarificationRequired` en cualquiera de sus líneas).
+  /// «Analizando» gana sobre las dos, porque mientras se carga todavía no hay
+  /// resultado del que decir si es parcial.
+  String get _moduleStatusLabel {
+    if (_loadingDecision || _askingAssistant) return 'Analizando';
+    final draft = _supplyNeedDraft;
+    final pendingPrecision =
+        draft != null && draft.lines.any((line) => line.clarificationRequired);
+    return pendingPrecision ? 'Resultados parciales' : 'Listo';
+  }
+
   Widget _buildWorkspaceHeader({required bool desktop}) {
     return PurchaseProcessBand(
       key: const ValueKey('intelligent-purchasing-sections'),
@@ -1703,9 +1845,84 @@ class _IntelligentPurchasingWorkspacePageState
       // sólo el teléfono usa el stepper de tres piezas.
       compact: MediaQuery.sizeOf(context).width <
           ResponsiveBreakpoints.phoneMaxExclusive,
-      statusLabel:
-          _loadingDecision || _askingAssistant ? 'Analizando' : 'Listo',
+      statusLabel: _moduleStatusLabel,
+      statusPartial: _moduleStatusLabel == 'Resultados parciales',
       onGo: _openWorkspaceSection,
+    );
+  }
+
+  /// Lo que «Criterios» despliega: el resumen completo, sin el corte del «+N».
+  ///
+  /// Es una disclosure bajo la barra, no una superficie aparte, por la misma
+  /// razón que la del borrador: leer los criterios no puede sacar al operador
+  /// del paso en que está ni tapar la página. Copia la anatomía de
+  /// `_buildDraftLineCriteriaDisclosure` —panel `surfaceContainerLow` con
+  /// hairline izquierdo de 3 px— porque es el mismo objeto dicho dos veces en
+  /// el recorrido, y verlo distinto haría dudar de si es lo mismo.
+  Widget _buildNeedCriteriaDisclosure() {
+    final theme = Theme.of(context);
+    final tokens = PurchaseTokens.of(context);
+    final criteria = _needCriteria;
+    return Container(
+      key: const ValueKey('need-criteria-disclosure'),
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        border: Border(
+          left: BorderSide(color: theme.colorScheme.outlineVariant, width: 3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Criterios interpretados',
+                  style: PurchaseType.panelTitle.copyWith(color: tokens.ink),
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('need-criteria-close'),
+                onPressed: () => setState(() => _showNeedCriteria = false),
+                child: const Text('Ocultar'),
+              ),
+            ],
+          ),
+          if (criteria.categoryPath != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Categoría: ${criteria.categoryPath}',
+              style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+            ),
+          ],
+          for (final predicate in criteria.predicates) ...[
+            const SizedBox(height: 6),
+            Text(
+              _criterionLabel(predicate),
+              style: PurchaseType.body.copyWith(color: tokens.ink),
+            ),
+          ],
+          if (criteria.commercialPreference?.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 10),
+            Text(
+              criteria.commercialPreference!.trim(),
+              style: PurchaseType.body.copyWith(color: tokens.ink),
+            ),
+            const SizedBox(height: 2),
+            // Se dice, porque el operador lo escribió y merece verlo, pero
+            // sin dejar creer que ordena la lista: quedó demostrado que el
+            // texto libre no gobierna el ranking.
+            Text(
+              'Nota del operador. No ordena los proveedores.',
+              style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1722,7 +1939,23 @@ class _IntelligentPurchasingWorkspacePageState
           '${purchaseUnitLabel(need.unit, need.quantity)}',
       // La barra ya imprime la cantidad en su propia columna: repetirla en el
       // resumen dejaba «2 unidades · 2 unidades · Solicitud directa».
-      criteriaSummary: _needOrigin(need),
+      //
+      // **El origen es el respaldo, no el contenido.** El contrato pide acá el
+      // resumen de criterios («rodado 27,5 · ancho > 2,0 · gama económica ·
+      // buen margen · +1», NOTES §44-47). Esta ranura recibía siempre el
+      // origen, así que una necesidad interpretada se veía igual que una
+      // escrita a mano. Cuando hay criterios mandan ellos; cuando no —una
+      // solicitud directa sin predicados— sigue el origen, que es lo único
+      // cierto que queda por decir.
+      criteriaSummary: _needCriteria.isNotEmpty
+          ? _criteriaSummaryLine(_needCriteria)
+          : _needOrigin(need),
+      // La CTA que el contrato nombra existía en el widget y **nadie la
+      // pasaba**: era código muerto. Sólo se ofrece cuando hay algo que
+      // desplegar, porque un botón que abre una lista vacía miente.
+      onOpenCriteria: _needCriteria.isNotEmpty
+          ? () => setState(() => _showNeedCriteria = !_showNeedCriteria)
+          : null,
       editing: _editingNeed,
       onEdit: () {
         _needDescriptionController.text = need.description;
@@ -2246,6 +2479,19 @@ class _IntelligentPurchasingWorkspacePageState
     if (desktop) {
       // Split pane: ambos paneles conservan ancho útil y el detalle no tapa
       // la comparación.
+      // Colapsado el panel deja su riel de 28 px, no un panel estrecho: es lo
+      // que el spec pide y lo que distingue colapsar de cerrar.
+      if (_inspectorCollapsed) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: results),
+            CandidateInspectorRail(
+              onExpand: () => setState(() => _inspectorCollapsed = false),
+            ),
+          ],
+        );
+      }
       final paneWidth = _inspectorWidth.clamp(
         PurchaseSurfaceGeometry.inspectorMinWidth,
         PurchaseSurfaceGeometry.inspectorMaxWidth,
@@ -2256,35 +2502,66 @@ class _IntelligentPurchasingWorkspacePageState
           Expanded(child: results),
           _InspectorPaneHandle(
             width: paneWidth,
-            onDelta: (delta) => setState(
-              () => _inspectorWidth = (_inspectorWidth - delta).clamp(
+            onDelta: (delta) => setState(() {
+              // Arrastrar es pedir un ancho a mano: sale del colapso en vez de
+              // pelear contra él y no mover nada.
+              _inspectorCollapsed = false;
+              _inspectorWidth = (_inspectorWidth - delta).clamp(
                 PurchaseSurfaceGeometry.inspectorMinWidth,
                 PurchaseSurfaceGeometry.inspectorMaxWidth,
-              ),
-            ),
+              );
+            }),
           ),
-          SizedBox(width: paneWidth, child: _buildInspector(inspected)),
+          SizedBox(
+            width: paneWidth,
+            child: _buildInspector(inspected, collapsible: true),
+          ),
         ],
       );
     }
 
     if (phone) {
-      // Teléfono: el detalle ocupa el paso completo, anclado y sin velo. Es la
-      // recomposición compacta del panel, no una tabla ni un modal encogido:
-      // conserva estado y tiene una salida visible siempre alcanzable.
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      // **Frame 17: la hoja sube sobre el contenido, sin velo.** El encabezado
+      // de resultados y «Orden y filtros» siguen visibles y sin atenuar; la
+      // app **reemplazaba** la región entera por el detalle y ofrecía un
+      // «Volver a las opciones» que el contrato no pide. Perder de vista la
+      // lista es perder el contexto de contra qué se estaba comparando.
+      //
+      // Misma anatomía que la hoja de compra local y que el edge sheet de
+      // tablet, que ya viven en este archivo: la franja libre de arriba queda
+      // interactiva y sólo cierra el detalle —no es un scrim— y la altura sale
+      // del `LayoutBuilder` porque un `FractionallySizedBox` dentro de una
+      // `Column` recibe altura infinita y revienta el layout.
+      //
+      // El `×` no se repone acá: el panel ya trae el suyo
+      // (`close-candidate-inspector`), y dos cierres en la misma cabecera
+      // serían dos formas de decir lo mismo.
+      return Stack(
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const ValueKey('back-to-candidates'),
-              onPressed: () => setState(() => _inspectedCandidateId = null),
-              icon: const Icon(Icons.arrow_back, size: 18),
-              label: const Text('Volver a las opciones'),
+          Positioned.fill(child: results),
+          Positioned.fill(
+            child: LayoutBuilder(
+              builder: (context, constraints) => Column(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      key: const ValueKey('inspector-sheet-dismiss'),
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () => setState(() => _inspectedCandidateId = null),
+                    ),
+                  ),
+                  SizedBox(
+                    height: constraints.maxHeight *
+                        PurchaseSurfaceGeometry.phoneSheetHeightFactor,
+                    child: Material(
+                      elevation: 8,
+                      child: _buildInspector(inspected),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          Expanded(child: _buildInspector(inspected)),
         ],
       );
     }
@@ -2333,7 +2610,13 @@ class _IntelligentPurchasingWorkspacePageState
     );
   }
 
-  Widget _buildInspector(PurchaseCandidate candidate) {
+  Widget _buildInspector(
+    PurchaseCandidate candidate, {
+    /// Sólo el split pane de escritorio ofrece `»`: es el único sitio donde
+    /// colapsar devuelve ancho a algo. En el edge sheet de tablet y en la
+    /// hoja de teléfono el control no tendría a quién cederlo.
+    bool collapsible = false,
+  }) {
     final need = _selectedNeed;
     final plannedLine = need == null || _plan == null
         ? null
@@ -2341,13 +2624,23 @@ class _IntelligentPurchasingWorkspacePageState
             _plan!.lines,
             (line) => line.sourceNeedId == need.id,
           );
-    final quantity = need?.quantity ?? 1;
+    // La cantidad del pie: la elegida si el operador la tocó, y si no la de
+    // la necesidad, que es lo que ya declaró.
+    final quantity = (_inspectorQuantity ?? need?.quantity ?? 1).toDouble();
     return CandidateInspectorPanel(
       candidate: candidate,
       quantity: quantity,
       // El vocabulario de unidades tiene un dueño único en este módulo; el
       // inspector lo recibe concordado en vez de asumir «u.».
       unitLabel: purchaseUnitLabel(need?.unit ?? 'unit', quantity),
+      onQuantityChanged: (value) =>
+          setState(() => _inspectorQuantity = value),
+      onToggleCollapsed: collapsible
+          ? () => setState(
+                () => _inspectorCollapsed = !_inspectorCollapsed,
+              )
+          : null,
+      collapsed: _inspectorCollapsed,
       adding: _addingCandidateId == candidate.candidateId,
       alreadyInPlan: plannedLine?.candidateId == candidate.candidateId,
       onClose: () => setState(() => _inspectedCandidateId = null),
@@ -3931,6 +4224,10 @@ class _IntelligentPurchasingWorkspacePageState
   }
 
   Widget _buildScenarioSurface() {
+    // El mismo umbral que el resto del módulo: bajo `phoneMaxExclusive` la
+    // composición es la del teléfono.
+    final compact = MediaQuery.sizeOf(context).width <
+        ResponsiveBreakpoints.phoneMaxExclusive;
     final result = _scenarioResult;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3967,55 +4264,42 @@ class _IntelligentPurchasingWorkspacePageState
           ],
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            SizedBox(
-              width: 210,
-              child: VbShortSelect<String>(
-                value: _rankingProfile,
-                options: const [
-                  VbShortSelectOption(
-                    value: 'balanced',
-                    label: 'Equilibrio',
-                  ),
-                  VbShortSelectOption(
-                    value: 'profitability',
-                    label: 'Mayor rentabilidad',
-                  ),
-                  VbShortSelectOption(
-                    value: 'urgent_local',
-                    label: 'Urgencia local',
-                  ),
-                ],
-                onChanged: _loadingScenarios ? null : _changeRankingProfile,
-                sheetTitle: 'Prioridad de comparación',
-                label: 'Prioridad',
-              ),
-            ),
-            SizedBox(
-              width: 190,
-              child: VbShortSelect<int>(
-                value: _maxSuppliers,
-                options: const [
-                  VbShortSelectOption(value: 1, label: '1 proveedor'),
-                  VbShortSelectOption(value: 2, label: 'Hasta 2'),
-                  VbShortSelectOption(value: 3, label: 'Hasta 3'),
-                ],
-                onChanged: _loadingScenarios ? null : _changeMaxSuppliers,
-                sheetTitle: 'Máximo de proveedores',
-                label: 'Proveedores',
-              ),
-            ),
-          ],
+        // Frame 20: bajo el encabezado van las tabs. Acá se apilaban dos
+        // desplegables de formulario a ancho completo más una losa tonal, y
+        // eso empujaba la comparación **bajo el pliegue** en teléfono (y≈590
+        // de 788 medidos). En escritorio los dos controles se quedan, que es
+        // lo que el frame 11 pide en su encabezado; en teléfono se reúnen en
+        // un solo botón anclado, el mismo tratamiento que el paso de una sola
+        // necesidad ya usa a un paso de distancia.
+        BasketResultControls(
+          compact: compact,
+          profileValue: _rankingProfile,
+          profileOptions: const {
+            'balanced': 'Equilibrio',
+            'profitability': 'Mayor rentabilidad',
+            'urgent_local': 'Urgencia local',
+          },
+          onProfileChanged: _changeRankingProfile,
+          maxSuppliersValue: '$_maxSuppliers',
+          maxSuppliersOptions: const {
+            '1': '1 proveedor',
+            '2': 'Hasta 2',
+            '3': 'Hasta 3',
+          },
+          onMaxSuppliersChanged: (value) =>
+              _changeMaxSuppliers(int.parse(value)),
+          enabled: !_loadingScenarios,
         ),
-        const SizedBox(height: 12),
-        const VbNotice(
-          title: 'Stock interno primero; proveedores después',
-          body:
-              'Los costos y fletes son históricos. La disponibilidad externa se confirma con cada proveedor.',
-          tone: VbNoticeTone.info,
+        const SizedBox(height: 10),
+        // La misma salvedad, dicha como texto. El dueño ya rechazó una losa
+        // `VbNotice` en este módulo por repetir en un bloque tonal lo que la
+        // frase dice sola; en teléfono además costaba el pliegue.
+        Text(
+          'Stock interno primero; proveedores después. Los costos y fletes son '
+          'históricos y la disponibilidad externa se confirma con cada '
+          'proveedor.',
+          style: PurchaseType.meta
+              .copyWith(color: PurchaseTokens.of(context).inkMuted),
         ),
         if (_scenarioError != null) ...[
           const SizedBox(height: 12),
@@ -4915,6 +5199,9 @@ class _IntelligentPurchasingWorkspacePageState
                       onStepQuantity: (line, quantity) =>
                           unawaited(_setPlanQuantity(line, quantity)),
                       onRemove: _removePlanLine,
+                      onSaveNote: _savePlanLineNote,
+                      onSubstitute: _substitutePlanLine,
+                      savingNoteLineId: _savingNoteLineId,
                     );
                   },
                 ),
@@ -4953,6 +5240,41 @@ class _IntelligentPurchasingWorkspacePageState
   String _needOrigin(SupplyNeed need) => need.originKind == 'mechanic_job'
       ? 'Trabajo de taller'
       : 'Solicitud directa';
+
+  /// Cuántas piezas del resumen caben antes del «+N».
+  ///
+  /// El contrato muestra cuatro y luego «+1» (NOTES §46). No es un número
+  /// elegido a ojo: es el corte del frame.
+  static const int _criteriaSummaryVisible = 4;
+
+  /// El resumen de una línea que pide la barra de necesidad.
+  ///
+  /// Los predicados van primero porque son los que el servidor usa para
+  /// eliminar candidatos; la preferencia comercial va al final porque no
+  /// gobierna nada. Lo que no cabe se cuenta, no se corta a mitad de palabra.
+  String _criteriaSummaryLine(SupplyNeedCriteria criteria) {
+    final parts = <String>[
+      for (final predicate in criteria.predicates) _criterionLabel(predicate),
+      if (criteria.commercialPreference?.trim().isNotEmpty ?? false)
+        criteria.commercialPreference!.trim(),
+    ];
+    if (parts.length <= _criteriaSummaryVisible) return parts.join(' · ');
+    final shown = parts.take(_criteriaSummaryVisible).join(' · ');
+    return '$shown · +${parts.length - _criteriaSummaryVisible}';
+  }
+
+  /// Un predicado guardado, dicho con el mismo vocabulario que el borrador.
+  ///
+  /// Reusa la tabla de comparadores de `_predicateLabel` en vez de escribir una
+  /// segunda: dos formas de decir «mayor a» en el mismo módulo se separan al
+  /// primer cambio.
+  String _criterionLabel(SupplyNeedPredicate predicate) => _predicateLabel(
+        AIAssistantSupplyNeedTechnicalPredicate(
+          field: predicate.field,
+          operator: predicate.operator,
+          values: predicate.values,
+        ),
+      );
 
   /// Tomar una sugerencia: el mínimo input es **un toque**.
   ///

@@ -174,6 +174,51 @@ class IntelligentPurchasingService {
     return _enrichProducts(rows);
   }
 
+  /// Los criterios con que se interpretó una necesidad, de su última revisión.
+  ///
+  /// **Un viaje por necesidad seleccionada, no por lista.** La barra muestra
+  /// una necesidad a la vez, así que traer las revisiones de las diez abiertas
+  /// sería pagar nueve lecturas que nadie mira. Se lee al abrir la necesidad,
+  /// junto al resto de su decisión.
+  ///
+  /// La tabla ya es legible por el cliente con RLS por taller (`SELECT` a
+  /// `authenticated`), así que esto no necesita RPC ni migración.
+  ///
+  /// Un fallo devuelve criterios vacíos en vez de propagar: la barra se dibuja
+  /// igual sin resumen, y perder el recorrido por una glosa sería peor.
+  Future<SupplyNeedCriteria> fetchNeedCriteria(String needId) async {
+    try {
+      final revision = await _client
+          .from('supply_need_interpretation_revisions')
+          .select('constraints, category_id')
+          .eq('supply_need_id', needId)
+          .order('revision_no', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (revision == null) return SupplyNeedCriteria.empty;
+      final row = Map<String, dynamic>.from(revision as Map);
+      final categoryId = row['category_id']?.toString();
+      String? categoryPath;
+      if (categoryId != null && categoryId.isNotEmpty) {
+        final category = await _client
+            .from('product_categories')
+            .select('full_path, name')
+            .eq('id', categoryId)
+            .maybeSingle();
+        if (category != null) {
+          final map = Map<String, dynamic>.from(category as Map);
+          categoryPath = (map['full_path'] ?? map['name'])?.toString();
+        }
+      }
+      return SupplyNeedCriteria.fromConstraints(
+        row['constraints'],
+        categoryPath: categoryPath,
+      );
+    } catch (_) {
+      return SupplyNeedCriteria.empty;
+    }
+  }
+
   Future<SupplyNeed?> fetchNeed(String needId) async {
     final response = await _client
         .from('supply_needs')
@@ -470,6 +515,11 @@ class IntelligentPurchasingService {
     required PurchaseCandidate candidate,
     required String profile,
     PurchasePlanDraft? plan,
+
+    /// Cantidad elegida en el pie del inspector. La RPC ya la recibía; el
+    /// cliente mandaba siempre la de la necesidad, así que llevar tres de algo
+    /// obligaba a agregar y corregir después en la línea del plan.
+    double? quantity,
   }) async {
     final response = await _client.rpc(
       'prepare_purchase_plan_line_v1',
@@ -478,7 +528,7 @@ class IntelligentPurchasingService {
         'p_expected_plan_version': plan?.version,
         'p_source_need_id': need.id,
         'p_candidate_id': candidate.candidateId,
-        'p_quantity': need.quantity,
+        'p_quantity': quantity ?? need.quantity,
         'p_profile': profile,
         'p_operation_key': const Uuid().v4(),
       },
@@ -541,6 +591,40 @@ class IntelligentPurchasingService {
       throw const FormatException('No se pudo leer el plan recién guardado.');
     }
     return prepared;
+  }
+
+  /// El plan borrador que el taller dejó abierto, si lo hay.
+  ///
+  /// **El defecto que cierra.** `_plan` sólo se llenaba con lo que el operador
+  /// agregaba **en esa sesión**: nadie releía un plan guardado. Y
+  /// `prepare_purchase_plan_line_v1` crea uno nuevo cada vez que recibe
+  /// `p_plan_id` nulo. Las dos cosas juntas producen el bucle que se ve en
+  /// producción: el operador arma un plan, cierra, vuelve, no lo ve, agrega
+  /// otra línea y **abre un segundo borrador**. El 2026-08-18 quedaron dos
+  /// planes del mismo día por esa razón, con sus líneas activas invisibles.
+  ///
+  /// **Por qué el más reciente y no «el de hoy».** El título lo escribe el
+  /// servidor como `Plan de compra <tenant_business_date>`, y esa fecha de
+  /// negocio no viaja hasta el cliente: filtrar por ella acá exigiría
+  /// reconstruirla con el reloj local, que es la segunda definición que este
+  /// módulo ya decidió no tener. El borrador más reciente **es** el de hoy
+  /// cuando existe, y si no, es el trabajo sin terminar de ayer, que mostrarlo
+  /// es mejor que esconderlo.
+  ///
+  /// Queda una decisión de producto que no es de esta capa: qué hacer con los
+  /// borradores viejos que se acumularon —listarlos, archivarlos o fundirlos—.
+  /// Acá sólo se deja de crear uno nuevo encima.
+  Future<PurchasePlanDraft?> fetchOpenDraftPlan() async {
+    final rawPlan = await _client
+        .from('purchase_plans')
+        .select('id')
+        .eq('state', 'draft')
+        .order('updated_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    final planId = (rawPlan as Map?)?['id']?.toString();
+    if (planId == null || planId.isEmpty) return null;
+    return fetchPlan(planId);
   }
 
   Future<PurchasePlanDraft?> fetchPlan(String planId) async {
@@ -651,6 +735,38 @@ class IntelligentPurchasingService {
         'p_expected_plan_version': plan.version,
         'p_line_id': line.id,
         'p_quantity': quantity,
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+    final planId = _map(response)['plan_id']?.toString();
+    if (planId == null || planId.isEmpty) {
+      throw const FormatException('El servidor no devolvió el plan editado.');
+    }
+    final updated = await fetchPlan(planId);
+    if (updated == null) {
+      throw const FormatException('No se pudo releer el plan editado.');
+    }
+    return updated;
+  }
+
+  /// Deja o borra la nota de una línea del plan.
+  ///
+  /// `frames[plan].with_lines.line_disclosure`: «Alternativa y **nota**». Una
+  /// nota en blanco la borra —eso lo normaliza el comando, no el cliente— y el
+  /// mismo texto dos veces no mueve la versión del plan pero sí consume su
+  /// clave, igual que el resto de los comandos de este dominio.
+  Future<PurchasePlanDraft> setPlanLineNote({
+    required PurchasePlanDraft plan,
+    required PurchasePlanLine line,
+    required String? note,
+  }) async {
+    final response = await _client.rpc(
+      'set_purchase_plan_line_note_v1',
+      params: {
+        'p_plan_id': plan.id,
+        'p_expected_plan_version': plan.version,
+        'p_line_id': line.id,
+        'p_note': note,
         'p_operation_key': const Uuid().v4(),
       },
     );

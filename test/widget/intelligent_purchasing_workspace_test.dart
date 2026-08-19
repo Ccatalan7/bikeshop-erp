@@ -529,6 +529,13 @@ void main() {
     expect(find.byKey(const ValueKey('material-clarification')), findsNothing);
     expect(find.text('Antes de comparar hace falta una precisión'),
         findsOneWidget);
+    // **El estado del módulo no puede decir «Listo» con la pregunta abierta.**
+    // El contrato nombra «Resultados parciales» y el frame 08 lo muestra en
+    // exactamente esta pantalla (NOTES §36-37 y §132). La cabecera afirmaba
+    // que el análisis estaba completo mientras el módulo pedía un dato para
+    // poder comparar.
+    expect(find.text('Resultados parciales'), findsOneWidget);
+    expect(find.text('Listo'), findsNothing);
     expect(find.text('Corregir la petición'), findsOneWidget);
     expect(find.byKey(const ValueKey('clarification-continue')), findsNothing);
     expect(
@@ -1876,6 +1883,30 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('candidate-inspector')), findsOneWidget);
       expect(find.byType(Dialog), findsNothing);
+
+      // **Frame 17.** En teléfono la hoja sube **sobre** la lista: el contrato
+      // pide que el encabezado de resultados siga visible y sin atenuar
+      // (NOTES §238-241). Antes la app reemplazaba la región entera, así que
+      // el operador perdía de vista contra qué estaba comparando. Se afirma
+      // por lo que queda montado detrás, no por píxeles: si alguien vuelve a
+      // reemplazar, la lista desaparece del árbol y esto se pone rojo.
+      if (width < 600) {
+        expect(
+          find.byKey(const ValueKey('inspector-sheet-dismiss')),
+          findsOneWidget,
+          reason: 'la franja libre cierra el detalle y no es un scrim',
+        );
+        expect(
+          find.text('Kenda Kwick 27,5 × 2,10'),
+          findsWidgets,
+          reason: 'la lista sigue montada detrás de la hoja',
+        );
+        expect(
+          find.byKey(const ValueKey('back-to-candidates')),
+          findsNothing,
+          reason: 'el «Volver a las opciones» que el contrato no pide se fue',
+        );
+      }
       expect(find.byType(AlertDialog), findsNothing);
 
       // Ir y volver conserva la selección del candidato.
@@ -1884,9 +1915,14 @@ void main() {
       expect(find.byKey(const ValueKey('candidate-inspector')), findsOneWidget);
 
       // Toda talla ofrece una salida visible del detalle: nunca un callejón.
-      final closeInspector = width < 600
-          ? find.byKey(const ValueKey('back-to-candidates'))
-          : find.byKey(const ValueKey('close-candidate-inspector'));
+      //
+      // En teléfono la salida **es la misma** desde que el detalle dejó de
+      // reemplazar la región y pasó a ser la hoja anclada del frame 17: el
+      // panel ya traía su `×`, y el «Volver a las opciones» que había antes
+      // era un segundo cierre para decir lo mismo. La afirmación que importa
+      // —hay salida visible en toda talla— no cambia; el control sí.
+      final closeInspector =
+          find.byKey(const ValueKey('close-candidate-inspector'));
       await tester.ensureVisible(closeInspector);
       await tester.pumpAndSettle();
       await tester.tap(closeInspector);
@@ -3687,6 +3723,289 @@ void main() {
       },
     );
   });
+
+  group('el plan borrador que quedó abierto', () {
+    /// **El bucle que esto corta.** `_plan` sólo se llenaba con lo agregado en
+    /// la sesión en curso, y `prepare_purchase_plan_line_v1` abre un plan nuevo
+    /// cada vez que recibe `p_plan_id` nulo. El operador armaba su plan,
+    /// cerraba, volvía, veía el paso Plan **deshabilitado** con las líneas
+    /// vivas en la base, y al agregar otra línea estrenaba un segundo
+    /// borrador. En producción quedaron dos planes del mismo 2026-08-18 así.
+    ///
+    /// La prueba muerde en el sitio exacto: si alguien quita la restauración,
+    /// el paso vuelve a decir que no hay plan.
+    testWidgets('se retoma al abrir, en vez de empezar otro encima',
+        (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final navigation = NavigationService();
+      final workspaces = WorkspaceManager(
+        sessionIdentity: 'intelligent-purchasing-restore',
+      );
+      final appearance = AppearanceService();
+      final chat = ChatProvider();
+      final profile = CurrentUserProfileService();
+      final workspace = workspaces.activeWorkspace!;
+      addTearDown(navigation.dispose);
+      addTearDown(workspaces.dispose);
+      addTearDown(appearance.dispose);
+      addTearDown(chat.dispose);
+      addTearDown(profile.dispose);
+
+      final service = _RestoringPurchasingService();
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<NavigationService>.value(value: navigation),
+            ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+            ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+            ChangeNotifierProvider<ChatProvider>.value(value: chat),
+            ChangeNotifierProvider<CurrentUserProfileService>.value(
+              value: profile,
+            ),
+            Provider<Workspace>.value(value: workspace),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.resolve(
+              preset: AppearancePresets.all.first,
+              brightness: Brightness.light,
+            ),
+            home: IntelligentPurchasingWorkspacePage(
+              initialNeedId: _FakeIntelligentPurchasingService.need.id,
+              service: service,
+              gatewayClient: AIAgentGatewayClient(
+                transport: _NeverGatewayTransport(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Se preguntó por el borrador abierto: sin esta llamada el plan guardado
+      // no existe para la interfaz.
+      expect(service.askedForOpenPlan, isTrue);
+      // Y el paso lo declara con su recuento, no deshabilitado.
+      expect(find.textContaining('1 línea'), findsWidgets);
+    });
+
+    /// El pie del inspector elige la cantidad, y esa cantidad **llega**.
+    ///
+    /// `frames[single-inspector].blocks.pie` pide «cantidad con stepper +
+    /// total + …». El pie no tenía stepper y el cliente mandaba siempre la
+    /// cantidad de la necesidad, así que llevar tres de algo obligaba a
+    /// agregar y corregir después en la línea del plan. Se afirma sobre el
+    /// servicio real del espacio de trabajo: subir el stepper y agregar tiene
+    /// que viajar como 3, no como las 2 de la necesidad.
+    testWidgets('la cantidad elegida en el pie viaja al plan', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final navigation = NavigationService();
+      final workspaces = WorkspaceManager(
+        sessionIdentity: 'intelligent-purchasing-quantity',
+      );
+      final appearance = AppearanceService();
+      final chat = ChatProvider();
+      final profile = CurrentUserProfileService();
+      final workspace = workspaces.activeWorkspace!;
+      addTearDown(navigation.dispose);
+      addTearDown(workspaces.dispose);
+      addTearDown(appearance.dispose);
+      addTearDown(chat.dispose);
+      addTearDown(profile.dispose);
+
+      final service = _FakeIntelligentPurchasingService();
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<NavigationService>.value(value: navigation),
+            ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+            ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+            ChangeNotifierProvider<ChatProvider>.value(value: chat),
+            ChangeNotifierProvider<CurrentUserProfileService>.value(
+              value: profile,
+            ),
+            Provider<Workspace>.value(value: workspace),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.resolve(
+              preset: AppearancePresets.all.first,
+              brightness: Brightness.light,
+            ),
+            home: IntelligentPurchasingWorkspacePage(
+              initialNeedId: _FakeIntelligentPurchasingService.need.id,
+              service: service,
+              gatewayClient: AIAgentGatewayClient(
+                transport: _NeverGatewayTransport(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _goToStep(tester, 'Proveedores');
+      await tester.tap(find.text('Kenda Kwick 27,5 × 2,10').first);
+      await tester.pumpAndSettle();
+
+      final plus = find.byKey(const ValueKey('inspector-quantity-increase'));
+      expect(plus, findsOneWidget, reason: 'el pie ofrece el stepper');
+      await tester.ensureVisible(plus);
+      await tester.pumpAndSettle();
+      await tester.tap(plus);
+      await tester.pumpAndSettle();
+
+      final addToPlan = find.byKey(const ValueKey('add-candidate-to-plan'));
+      await tester.ensureVisible(addToPlan);
+      await tester.pumpAndSettle();
+      await tester.tap(addToPlan);
+      await tester.pumpAndSettle();
+
+      expect(
+        service.lastPreparedQuantity,
+        3,
+        reason: 'la necesidad pide 2; el operador subió a 3 y eso es lo que va',
+      );
+    });
+
+    /// **El cableado, no el widget.** `SupplyNeedBar` ya aceptaba
+    /// `onOpenCriteria` y nadie se lo pasaba: la CTA que el contrato nombra
+    /// era código muerto y la ranura del resumen recibía el **origen**. Una
+    /// prueba sobre el widget suelto no habría visto nada de eso, porque el
+    /// widget siempre estuvo bien. Ésta monta el espacio de trabajo real.
+    testWidgets('los criterios de la necesidad llegan a su barra',
+        (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final navigation = NavigationService();
+      final workspaces = WorkspaceManager(
+        sessionIdentity: 'intelligent-purchasing-criteria',
+      );
+      final appearance = AppearanceService();
+      final chat = ChatProvider();
+      final profile = CurrentUserProfileService();
+      final workspace = workspaces.activeWorkspace!;
+      addTearDown(navigation.dispose);
+      addTearDown(workspaces.dispose);
+      addTearDown(appearance.dispose);
+      addTearDown(chat.dispose);
+      addTearDown(profile.dispose);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<NavigationService>.value(value: navigation),
+            ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+            ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+            ChangeNotifierProvider<ChatProvider>.value(value: chat),
+            ChangeNotifierProvider<CurrentUserProfileService>.value(
+              value: profile,
+            ),
+            Provider<Workspace>.value(value: workspace),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.resolve(
+              preset: AppearancePresets.all.first,
+              brightness: Brightness.light,
+            ),
+            home: IntelligentPurchasingWorkspacePage(
+              initialNeedId: _FakeIntelligentPurchasingService.need.id,
+              service: _CriteriaPurchasingService(),
+              gatewayClient: AIAgentGatewayClient(
+                transport: _NeverGatewayTransport(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // El resumen manda sobre el origen: si la ranura volviera a recibir
+      // `_needOrigin`, acá aparecería «Solicitud directa».
+      expect(find.textContaining('mayor a 2,0'), findsWidgets);
+      expect(find.text('Solicitud directa'), findsNothing);
+
+      // Y la CTA que el contrato nombra existe y despliega.
+      final criterios = find.byKey(const ValueKey('open-need-criteria'));
+      expect(criterios, findsOneWidget);
+      await tester.tap(criterios);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('need-criteria-disclosure')),
+        findsOneWidget,
+      );
+      expect(find.text('Criterios interpretados'), findsOneWidget);
+      // La preferencia se muestra sin dejar creer que ordena la lista.
+      expect(
+        find.text('Nota del operador. No ordena los proveedores.'),
+        findsOneWidget,
+      );
+    });
+  });
+}
+
+/// El servicio del caso feliz, más una necesidad que sí trae criterios.
+class _CriteriaPurchasingService extends _FakeIntelligentPurchasingService {
+  @override
+  Future<SupplyNeedCriteria> fetchNeedCriteria(String needId) async {
+    return SupplyNeedCriteria.fromConstraints(
+      const <Object?>[
+        {'kind': 'ranking_profile', 'value': 'profitability'},
+        {'field': 'ancho', 'values': ['2,0'], 'operator': 'gt'},
+        {
+          'kind': 'commercial_preference',
+          'value': 'Económicos pero con buen margen',
+        },
+      ],
+      categoryPath: 'Componentes / Ruedas / Neumáticos',
+    );
+  }
+}
+
+/// El servicio del caso feliz, más un plan borrador ya guardado en el servidor.
+class _RestoringPurchasingService extends _FakeIntelligentPurchasingService {
+  bool askedForOpenPlan = false;
+
+  @override
+  Future<PurchasePlanDraft?> fetchOpenDraftPlan() async {
+    askedForOpenPlan = true;
+    return PurchasePlanDraft(
+      id: 'plan-guardado',
+      title: 'Plan de compra 2026-08-18',
+      state: 'draft',
+      objectiveProfile: 'balanced',
+      version: 1,
+      lines: [
+        PurchasePlanLine(
+          id: 'line-guardada',
+          sourceNeedId: _FakeIntelligentPurchasingService.need.id,
+          candidateId: 'cand-guardado',
+          productId: 'product-a',
+          productName: 'Neumático 27,5',
+          supplierName: 'Andes Industrial',
+          quantity: 2,
+          unit: 'unit',
+          currency: 'CLP',
+          landedUnitCostNet: 10100,
+          projectedGrossMarginRatio: 0.42,
+          supplierAvailability: 'unverified',
+          evidenceAgeDays: 18,
+        ),
+      ],
+      supplierGroups: const [],
+    );
+  }
 }
 
 class _NeverGatewayTransport implements AIAgentGatewayTransport {
@@ -4440,13 +4759,18 @@ class _FakeIntelligentPurchasingService extends IntelligentPurchasingService {
     );
   }
 
+  /// La última cantidad que el espacio de trabajo pidió llevar al plan.
+  double? lastPreparedQuantity;
+
   @override
   Future<PurchasePlanDraft> preparePlanLine({
     required SupplyNeed need,
     required PurchaseCandidate candidate,
     required String profile,
     PurchasePlanDraft? plan,
+    double? quantity,
   }) async {
+    lastPreparedQuantity = quantity;
     return PurchasePlanDraft(
       id: 'plan-a',
       title: 'Plan de compra 2026-08-16',
@@ -4614,6 +4938,7 @@ class _FamilyLaneService extends _FakeIntelligentPurchasingService {
     required PurchaseCandidate candidate,
     required String profile,
     PurchasePlanDraft? plan,
+    double? quantity,
   }) async {
     _FakeIntelligentPurchasingService.commands
         .add('plan:${need.id}:${candidate.candidateId}');

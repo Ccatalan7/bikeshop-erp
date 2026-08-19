@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Product photo of one catalog identity, resolved in the order the design
 /// handoff fixed: optimized, raw, then the first usable entry of the gallery.
 ///
@@ -680,6 +682,8 @@ class PurchasePlanLine {
     this.landedUnitCostNet,
     this.projectedGrossMarginRatio,
     this.media = ProductMedia.empty,
+    this.evidenceAgeDays,
+    this.note,
   });
 
   final String id;
@@ -706,6 +710,30 @@ class PurchasePlanLine {
   /// contrato no publica una para el plan.
   final ProductMedia media;
 
+  /// Días que tenía la evidencia de compra cuando esta línea entró al plan.
+  ///
+  /// **Por qué la edad al capturar y no la de hoy.** El servidor define la
+  /// edad como `tenant_business_date(tenant) - latest_purchase_at::date`
+  /// (`20260817180000`), y la fecha de negocio del taller no viaja hasta esta
+  /// pantalla: calcularla con el reloj local sería una segunda definición que
+  /// se separaría de la del ranking en cuanto cambiara el huso o la fecha de
+  /// negocio. La línea guarda un `evidence_snapshot` con `captured_at` y
+  /// `latest_purchase_at`, así que la resta entre esas dos fechas —las dos
+  /// escritas por el servidor— reproduce la fórmula sin inventar nada.
+  ///
+  /// El precio de esa decisión es que el número no envejece: dice qué tan
+  /// vieja era la evidencia **cuando se eligió**, que es el hecho auditable
+  /// del plan. `null` cuando el snapshot no trae alguna de las dos fechas.
+  final int? evidenceAgeDays;
+
+  /// Por qué este candidato y no otro, dicho por el operador.
+  ///
+  /// `frames[plan].with_lines.line_disclosure` del spec: «Alternativa y nota
+  /// (sustituir candidato, **nota libre**)». Es la razón que se pierde entre
+  /// el borrador y la compra si no queda escrita. `null` cuando no hay nota;
+  /// nunca una cadena en blanco —la columna lo rechaza—.
+  final String? note;
+
   PurchasePlanLine withProduct({String? name, ProductMedia? media}) =>
       PurchasePlanLine(
         id: id,
@@ -721,6 +749,8 @@ class PurchasePlanLine {
         projectedGrossMarginRatio: projectedGrossMarginRatio,
         supplierAvailability: supplierAvailability,
         media: media ?? this.media,
+        evidenceAgeDays: evidenceAgeDays,
+        note: note,
       );
 
   factory PurchasePlanLine.fromJson(Map<String, dynamic> json) {
@@ -740,7 +770,37 @@ class PurchasePlanLine {
       supplierAvailability:
           json['supplier_availability']?.toString() ?? 'unverified',
       media: ProductMedia.fromJson(json),
+      evidenceAgeDays: _snapshotEvidenceAgeDays(json['evidence_snapshot']),
+      note: json['note']?.toString(),
     );
+  }
+
+  /// Resta las dos fechas que el servidor ya escribió en el snapshot.
+  ///
+  /// Ambas llegan como texto ISO; se comparan por fecha civil UTC, igual que
+  /// el `::date` de la fórmula del servidor, y nunca baja de cero —una compra
+  /// posterior a la captura sería un dato roto, no una edad negativa—.
+  static int? _snapshotEvidenceAgeDays(Object? snapshot) {
+    if (snapshot is! Map) return null;
+    final capturedAt = DateTime.tryParse(
+      snapshot['captured_at']?.toString() ?? '',
+    );
+    final latestPurchaseAt = DateTime.tryParse(
+      snapshot['latest_purchase_at']?.toString() ?? '',
+    );
+    if (capturedAt == null || latestPurchaseAt == null) return null;
+    final captured = DateTime.utc(
+      capturedAt.toUtc().year,
+      capturedAt.toUtc().month,
+      capturedAt.toUtc().day,
+    );
+    final latest = DateTime.utc(
+      latestPurchaseAt.toUtc().year,
+      latestPurchaseAt.toUtc().month,
+      latestPurchaseAt.toUtc().day,
+    );
+    final days = captured.difference(latest).inDays;
+    return days < 0 ? 0 : days;
   }
 }
 
@@ -1899,5 +1959,121 @@ String supplySignalVerdict(SupplySignalEvaluation signal) {
       return 'En el puntaje';
     default:
       return 'No se pidió';
+  }
+}
+
+/// Los criterios con que el asistente interpretó una necesidad guardada.
+///
+/// **El hueco que llena.** `handoff-t23` pide en la barra de necesidad
+/// «nombre + cantidad | resumen de criterios en una línea» y, a la derecha,
+/// «Editar necesidad» + la CTA textual «Criterios» (NOTES §44-47 y §214-216).
+/// La barra existía, pero su parámetro `criteriaSummary` recibía el **origen**
+/// —«Solicitud directa»— y `onOpenCriteria` no se pasaba desde ningún sitio:
+/// el botón que el contrato nombra era código muerto. La necesidad guardada ni
+/// siquiera traía sus criterios hasta la pantalla.
+///
+/// **Qué es y qué no es un criterio acá.** `constraints` mezcla tres cosas en
+/// un mismo arreglo, y sólo dos se muestran:
+///
+///   · entradas **sin** `kind`, con `field`/`operator`/`values`: los predicados
+///     técnicos, que son los que el servidor usa para eliminar candidatos;
+///   · `commercial_preference`: texto libre del operador. Se muestra porque el
+///     frame lo muestra, pero **no rankea nada** —quedó demostrado en el corte
+///     del objetivo comercial— así que viaja aparte y nunca se confunde con un
+///     predicado;
+///   · `ranking_profile`: no se muestra. Ya tiene su propio control visible
+///     («Prioridad»), y repetirlo en el resumen sería decir dos veces lo mismo.
+@immutable
+class SupplyNeedCriteria {
+  const SupplyNeedCriteria({
+    required this.predicates,
+    this.commercialPreference,
+    this.categoryPath,
+  });
+
+  static const empty = SupplyNeedCriteria(predicates: <SupplyNeedPredicate>[]);
+
+  final List<SupplyNeedPredicate> predicates;
+
+  /// Texto libre del operador. No gobierna el ranking; se muestra como nota.
+  final String? commercialPreference;
+
+  /// Ruta legible de la categoría, cuando la interpretación fijó una.
+  final String? categoryPath;
+
+  bool get isEmpty =>
+      predicates.isEmpty &&
+      (commercialPreference == null || commercialPreference!.trim().isEmpty);
+
+  bool get isNotEmpty => !isEmpty;
+
+  /// Cuántas piezas tiene el resumen, contando la preferencia comercial.
+  int get length =>
+      predicates.length +
+      ((commercialPreference?.trim().isNotEmpty ?? false) ? 1 : 0);
+
+  factory SupplyNeedCriteria.fromConstraints(
+    Object? constraints, {
+    String? categoryPath,
+  }) {
+    if (constraints is! List) {
+      return SupplyNeedCriteria(
+        predicates: const <SupplyNeedPredicate>[],
+        categoryPath: categoryPath,
+      );
+    }
+    final predicates = <SupplyNeedPredicate>[];
+    String? preference;
+    for (final entry in constraints) {
+      if (entry is! Map) continue;
+      final kind = entry['kind']?.toString();
+      if (kind == null) {
+        final predicate = SupplyNeedPredicate.fromJson(entry);
+        if (predicate != null) predicates.add(predicate);
+        continue;
+      }
+      if (kind == 'commercial_preference') {
+        final value = entry['value']?.toString().trim();
+        if (value != null && value.isNotEmpty) preference = value;
+      }
+      // `ranking_profile` y cualquier `kind` futuro se ignoran a propósito:
+      // el resumen sólo habla de lo que describe al producto buscado.
+    }
+    return SupplyNeedCriteria(
+      predicates: List.unmodifiable(predicates),
+      commercialPreference: preference,
+      categoryPath: categoryPath,
+    );
+  }
+}
+
+/// Un predicado técnico de la interpretación: «ancho mayor a 2,0».
+@immutable
+class SupplyNeedPredicate {
+  const SupplyNeedPredicate({
+    required this.field,
+    required this.operator,
+    required this.values,
+  });
+
+  final String field;
+  final String operator;
+  final List<Object> values;
+
+  /// `null` cuando la entrada no describe un predicado utilizable: sin campo
+  /// no hay nada que decir, y escribir «: igual a 9» sería peor que callar.
+  static SupplyNeedPredicate? fromJson(Map<Object?, Object?> json) {
+    final field = json['field']?.toString().trim();
+    if (field == null || field.isEmpty) return null;
+    final rawValues = json['values'];
+    return SupplyNeedPredicate(
+      field: field,
+      operator: json['operator']?.toString() ?? 'eq',
+      values: rawValues is List
+          ? List<Object>.unmodifiable(
+              rawValues.whereType<Object>(),
+            )
+          : const <Object>[],
+    );
   }
 }

@@ -50,6 +50,24 @@ abstract final class PurchaseSurfaceGeometry {
   static const double inspectorHandleWidth = 13;
   static const double tabletEdgeSheetWidth = 410;
 
+  /// Lo que queda del inspector al colapsarlo.
+  ///
+  /// `frames[single-inspector].resize.collapse` del spec: «botón ›› / ‹‹ con
+  /// riel de 28px». No es un panel estrecho: es una franja con el control
+  /// para volver. Colapsar y cerrar se distinguen justo por esto —el riel
+  /// queda y conserva el candidato; el `×` lo suelta—.
+  static const double inspectorCollapsedRail = 28;
+
+  /// Cuánto del alto disponible ocupa una hoja anclada en teléfono.
+  ///
+  /// La franja que queda arriba es el punto del contrato: en el frame 17 el
+  /// encabezado de resultados sigue **visible y sin atenuar** detrás de la
+  /// hoja. Si la hoja llegara al borde superior no habría contexto que
+  /// conservar, y si fuera mucho más baja el detalle dejaría de caber. El
+  /// valor ya lo usaba la hoja de compra local; acá se le pone nombre para que
+  /// las dos hojas no se separen por descuido.
+  static const double phoneSheetHeightFactor = 0.88;
+
   /// Radio de tile del contrato de imagen.
   static const double mediaRadius = 8;
 }
@@ -187,6 +205,7 @@ class PurchaseProcessBand extends StatefulWidget {
     required this.onGo,
     required this.compact,
     this.statusLabel,
+    this.statusPartial = false,
   });
 
   final PurchaseStep active;
@@ -195,6 +214,10 @@ class PurchaseProcessBand extends StatefulWidget {
   final ValueChanged<PurchaseStep> onGo;
   final bool compact;
   final String? statusLabel;
+
+  /// El análisis dio resultado, pero falta una precisión para comparar.
+  /// Tiñe el punto de ámbar; el rótulo lo pone quien lo pasa.
+  final bool statusPartial;
 
   @override
   State<PurchaseProcessBand> createState() => _PurchaseProcessBandState();
@@ -265,11 +288,19 @@ class _PurchaseProcessBandState extends State<PurchaseProcessBand> {
               if (widget.statusLabel != null) ...[
                 const SizedBox(width: 12),
                 // Punto + texto, nunca cápsula.
+                //
+                // **El punto es semántico, no decorativo** (NOTES §36 y §132:
+                // «punto ámbar + texto» para «Resultados parciales»). Era
+                // siempre `accent`, así que decía lo mismo con una pregunta
+                // abierta que con el análisis cerrado: el color no aportaba
+                // nada y el operador tenía que leer para saberlo.
                 Container(
                   width: 7,
                   height: 7,
                   decoration: BoxDecoration(
-                    color: roles.accent,
+                    color: widget.statusPartial
+                        ? VinabikeThemeRoles.of(context).warning.accent
+                        : roles.accent,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -574,12 +605,32 @@ class SupplyNeedBar extends StatelessWidget {
                   ),
                 ),
                 if (criteriaSummary.isNotEmpty)
+                  // El contrato pide «cantidad + separador `|` + resumen»
+                  // (NOTES §44-45). El separador viaja **dentro** de esta
+                  // celda y no como hermano del `Wrap`: suelto podía quedar
+                  // como primer carácter de la línea siguiente, colgando de
+                  // nada.
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 460),
-                    child: Text(
-                      criteriaSummary,
-                      style: PurchaseType.meta
-                          .copyWith(color: PurchaseTokens.of(context).inkMuted),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '|',
+                          style: PurchaseType.meta.copyWith(
+                            color: PurchaseTokens.of(context).hair,
+                          ),
+                        ),
+                        const SizedBox(width: 11),
+                        Flexible(
+                          child: Text(
+                            criteriaSummary,
+                            style: PurchaseType.meta.copyWith(
+                              color: PurchaseTokens.of(context).inkMuted,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 OutlinedButton(

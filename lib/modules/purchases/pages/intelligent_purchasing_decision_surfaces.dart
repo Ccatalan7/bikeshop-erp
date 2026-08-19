@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/vb_money_text.dart';
+import '../../../shared/widgets/vb_short_select.dart';
 import '../models/intelligent_purchasing_models.dart';
 import '../widgets/purchase_visual_language.dart';
 import 'intelligent_purchasing_surfaces.dart';
@@ -143,10 +144,12 @@ class _ExceptionCapsule extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(color: tone.onContainer),
+        // `meta`, igual que `ComplianceLabel`: las dos cápsulas del módulo
+        // dicen lo mismo con la misma voz. Acá quedaba un `labelSmall` del
+        // tema partido en dos líneas, que es exactamente la forma que el
+        // conteo de conversiones no ve —se buscó `textTheme.` en una línea— y
+        // por eso sobrevivió a la migración.
+        style: PurchaseType.meta.copyWith(color: tone.onContainer),
       ),
     );
   }
@@ -500,6 +503,25 @@ class _LandedCostText extends StatelessWidget {
             style: PurchaseType.label
                 .copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
+        // Frames 04/05: bajo el costo va «incluye flete» en meta (NOTES §85-87).
+        // Faltaba, y sin eso el número se lee como precio de lista: el operador
+        // le suma el flete de cabeza y descarta al proveedor equivocado.
+        //
+        // **Sólo se afirma cuando es verdad.** La misma señal que el desglose
+        // ya usa —`freightEvidence == 'complete'`— decide entre afirmarlo y
+        // decir que el flete no está clasificado. Un «incluye flete» constante
+        // sería la clase de frase que hace desconfiar de todas las demás.
+        Text(
+          candidate.freightEvidence == 'complete'
+              ? 'incluye flete'
+              : 'flete sin clasificar',
+          style: PurchaseType.meta.copyWith(
+            fontSize: 10.5,
+            color: candidate.freightEvidence == 'complete'
+                ? PurchaseTokens.of(context).inkFaint
+                : VinabikeThemeRoles.of(context).warning.accent,
+          ),
+        ),
       ],
     );
   }
@@ -679,6 +701,9 @@ class CandidateInspectorPanel extends StatelessWidget {
     required this.adding,
     required this.alreadyInPlan,
     this.onChooseProduct,
+    this.onToggleCollapsed,
+    this.collapsed = false,
+    this.onQuantityChanged,
   });
 
   final PurchaseCandidate candidate;
@@ -697,6 +722,16 @@ class CandidateInspectorPanel extends StatelessWidget {
   /// que la primera acción es **elegir producto**, no agregar al plan. Son dos
   /// escrituras distintas y el pie las muestra en su orden real.
   final VoidCallback? onChooseProduct;
+
+  /// `»` de los frames 04/05: devuelve ancho a la lista **sin** perder el
+  /// candidato abierto, que es lo que distingue colapsar de cerrar. `null`
+  /// donde no hay ancho que devolver —la hoja de teléfono—.
+  final VoidCallback? onToggleCollapsed;
+  final bool collapsed;
+
+  /// Ver `_InspectorFooter.onQuantityChanged`.
+  final ValueChanged<int>? onQuantityChanged;
+
   final bool adding;
   final bool alreadyInPlan;
 
@@ -761,6 +796,26 @@ class CandidateInspectorPanel extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Frames 04/05 y 17: la cabecera lleva **dos** controles,
+                // `»` colapsar y `×` cerrar. Sólo estaba el segundo, así que
+                // la única forma de recuperar ancho para la lista era cerrar
+                // el detalle y perder el candidato abierto.
+                //
+                // Se ofrece nada más donde significa algo: en el split pane de
+                // escritorio. En la hoja de teléfono no hay ancho que devolver
+                // y un control que no hace nada es peor que no tenerlo.
+                if (onToggleCollapsed != null)
+                  IconButton(
+                    key: const ValueKey('collapse-candidate-inspector'),
+                    tooltip: collapsed ? 'Ampliar detalle' : 'Colapsar detalle',
+                    onPressed: onToggleCollapsed,
+                    icon: Icon(
+                      collapsed
+                          ? Icons.keyboard_double_arrow_left
+                          : Icons.keyboard_double_arrow_right,
+                      size: 18,
+                    ),
+                  ),
                 IconButton(
                   key: const ValueKey('close-candidate-inspector'),
                   tooltip: 'Cerrar detalle',
@@ -967,6 +1022,7 @@ class CandidateInspectorPanel extends StatelessWidget {
             adding: adding,
             alreadyInPlan: alreadyInPlan,
             onAddToPlan: onAddToPlan,
+            onQuantityChanged: onQuantityChanged,
             onChooseProduct: onChooseProduct,
             onOpenSupplier: onOpenSupplier,
           ),
@@ -999,6 +1055,7 @@ class _InspectorFooter extends StatelessWidget {
     required this.onAddToPlan,
     required this.onOpenSupplier,
     this.onChooseProduct,
+    this.onQuantityChanged,
   });
 
   final double quantity;
@@ -1010,6 +1067,13 @@ class _InspectorFooter extends StatelessWidget {
   final VoidCallback onAddToPlan;
   final VoidCallback? onOpenSupplier;
   final VoidCallback? onChooseProduct;
+
+  /// `frames[single-inspector].blocks.pie`: «cantidad **con stepper** + total
+  /// + Abrir proveedor + Agregar al plan». El pie mostraba el total de una
+  /// cantidad que sólo se podía cambiar después, en la línea del plan: para
+  /// llevar tres de algo había que agregar la cantidad de la necesidad y
+  /// corregirla en el paso siguiente. `null` deja el pie como estaba.
+  final ValueChanged<int>? onQuantityChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1025,6 +1089,22 @@ class _InspectorFooter extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (onQuantityChanged != null) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: PurchaseQuantityStepper(
+                keyPrefix: 'inspector-quantity',
+                value: quantity.round(),
+                unitLabel: unitLabel,
+                // El ayudante compone «<acción> de <sujeto>»: el sujeto va sin
+                // preposición o queda «de del candidato».
+                subject: 'este candidato',
+                enabled: !adding,
+                onChanged: onQuantityChanged,
+              ),
+            ),
+            const SizedBox(height: 9),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -1317,6 +1397,40 @@ class PlanEmptyInline extends StatelessWidget {
       key: const ValueKey('plan-empty-inline'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Frame 06: «Plan borrador» + cápsula pequeña «vacío» al lado. El
+        // estado vacío se quedaba sin título propio, así que el paso 4 no
+        // decía qué era hasta que tenía líneas. Los dos botones de la barra
+        // superior **no** van acá —el contrato los prohíbe en el vacío— y
+        // «Registrar compra local» aparece más abajo, en la fila de acciones.
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            children: [
+              Text(
+                'Plan borrador',
+                style: PurchaseType.surfaceTitle
+                    .copyWith(color: PurchaseTokens.of(context).ink),
+              ),
+              // Sin tono semántico: vacío no es una advertencia, es un estado.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: PurchaseTokens.of(context).actSoft,
+                  border:
+                      Border.all(color: PurchaseTokens.of(context).actBorder),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'vacío',
+                  style: PurchaseType.meta
+                      .copyWith(color: PurchaseTokens.of(context).inkMuted),
+                ),
+              ),
+            ],
+          ),
+        ),
         if (!compact) ...[
           // Cabeceras reales del plan: el vacío ocurre dentro de la tabla.
           Container(
@@ -1551,6 +1665,135 @@ class _StepperButton extends StatelessWidget {
         onPressed: onPressed,
         icon: Icon(icon, size: 16, semanticLabel: label),
       ),
+    );
+  }
+}
+
+/// El riel que queda cuando el inspector se colapsa.
+///
+/// `frames[single-inspector].resize.collapse`: «botón ›› / ‹‹ con riel de
+/// 28px». Colapsar **no** es cerrar: el riel conserva el candidato abierto y
+/// devuelve el ancho a la comparación; el `×` del panel lo suelta. Un panel
+/// estrecho en su lugar no distinguiría las dos cosas.
+class CandidateInspectorRail extends StatelessWidget {
+  const CandidateInspectorRail({super.key, required this.onExpand});
+
+  final VoidCallback onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      key: const ValueKey('candidate-inspector-rail'),
+      width: PurchaseSurfaceGeometry.inspectorCollapsedRail,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(left: BorderSide(color: tokens.hair)),
+      ),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: IconButton(
+          key: const ValueKey('expand-candidate-inspector'),
+          tooltip: 'Ampliar detalle',
+          onPressed: onExpand,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 28, height: 40),
+          icon: const Icon(Icons.keyboard_double_arrow_left, size: 16),
+        ),
+      ),
+    );
+  }
+}
+
+/// Controles del encabezado de la **canasta**.
+///
+/// Frame 20 (teléfono) pone las tabs `Líneas | Escenarios` **inmediatamente**
+/// bajo el encabezado. La canasta apilaba antes dos desplegables de formulario
+/// a ancho completo —«Prioridad» y «Proveedores»— más una losa tonal, y eso
+/// empujaba la comparación **bajo el pliegue**: y≈590 de 788 px medidos.
+///
+/// En escritorio los dos desplegables se quedan, que es lo que el frame 11
+/// pide en su encabezado. En teléfono se reúnen en un solo botón anclado, que
+/// es exactamente el tratamiento que `ProviderResultControls` ya documenta
+/// para los frames 16 y 20 a un paso de distancia. No se inventa un control:
+/// se deja de escribir una variante local del que el módulo ya tiene.
+class BasketResultControls extends StatelessWidget {
+  const BasketResultControls({
+    super.key,
+    required this.compact,
+    required this.profileValue,
+    required this.profileOptions,
+    required this.onProfileChanged,
+    required this.maxSuppliersValue,
+    required this.maxSuppliersOptions,
+    required this.onMaxSuppliersChanged,
+    this.enabled = true,
+  });
+
+  final bool compact;
+  final String profileValue;
+  final Map<String, String> profileOptions;
+  final ValueChanged<String> onProfileChanged;
+  final String maxSuppliersValue;
+  final Map<String, String> maxSuppliersOptions;
+  final ValueChanged<String> onMaxSuppliersChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return _AnchoredMenuButton(
+        menuId: 'basket-sort-and-suppliers',
+        label: 'Vista',
+        enabled: enabled,
+        sections: [
+          _MenuSection(
+            title: 'Prioridad de comparación',
+            value: profileValue,
+            options: profileOptions,
+            onSelected: onProfileChanged,
+          ),
+          _MenuSection(
+            title: 'Máximo de proveedores',
+            value: maxSuppliersValue,
+            options: maxSuppliersOptions,
+            onSelected: onMaxSuppliersChanged,
+          ),
+        ],
+      );
+    }
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      children: [
+        SizedBox(
+          width: 210,
+          child: VbShortSelect<String>(
+            value: profileValue,
+            options: [
+              for (final entry in profileOptions.entries)
+                VbShortSelectOption(value: entry.key, label: entry.value),
+            ],
+            onChanged: enabled ? onProfileChanged : null,
+            sheetTitle: 'Prioridad de comparación',
+            label: 'Prioridad',
+          ),
+        ),
+        SizedBox(
+          width: 190,
+          child: VbShortSelect<String>(
+            value: maxSuppliersValue,
+            options: [
+              for (final entry in maxSuppliersOptions.entries)
+                VbShortSelectOption(value: entry.key, label: entry.value),
+            ],
+            onChanged:
+                enabled ? onMaxSuppliersChanged : null,
+            sheetTitle: 'Máximo de proveedores',
+            label: 'Proveedores',
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2069,6 +2312,10 @@ class PlanLineEvidenceNote extends StatefulWidget {
     required this.currency,
     required this.landedUnitCostNet,
     required this.projectedGrossMarginRatio,
+    this.note,
+    this.onSaveNote,
+    this.onSubstitute,
+    this.savingNote = false,
   });
 
   final String lineId;
@@ -2082,12 +2329,42 @@ class PlanLineEvidenceNote extends StatefulWidget {
   final double? landedUnitCostNet;
   final double? projectedGrossMarginRatio;
 
+  /// `frames[plan].with_lines.line_disclosure`: «Alternativa y nota
+  /// (sustituir candidato, nota libre)». El desplegable existía pero sólo
+  /// **mostraba evidencia**: no dejaba decir por qué se eligió este candidato
+  /// ni cambiarlo sin salir a buscarlo a mano. La evidencia se queda —es lo
+  /// que sostiene la decisión— y encima se le agregan las dos acciones que el
+  /// contrato nombra. `null` en los callbacks deja el desplegable como estaba.
+  final String? note;
+  final ValueChanged<String?>? onSaveNote;
+  final VoidCallback? onSubstitute;
+  final bool savingNote;
+
   @override
   State<PlanLineEvidenceNote> createState() => _PlanLineEvidenceNoteState();
 }
 
 class _PlanLineEvidenceNoteState extends State<PlanLineEvidenceNote> {
   bool _open = false;
+  late final TextEditingController _note =
+      TextEditingController(text: widget.note ?? '');
+
+  @override
+  void didUpdateWidget(covariant PlanLineEvidenceNote oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // La nota vuelve del servidor normalizada —recortada, o nula si quedó en
+    // blanco—. Si el campo conservara lo tecleado, el operador vería una cosa
+    // y la fila guardaría otra.
+    if (oldWidget.note != widget.note && !_note.value.composing.isValid) {
+      _note.text = widget.note ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2102,7 +2379,9 @@ class _PlanLineEvidenceNoteState extends State<PlanLineEvidenceNote> {
         Semantics(
           button: true,
           expanded: _open,
-          label: 'Evidencia de ${widget.productName}',
+          label: widget.onSaveNote == null && widget.onSubstitute == null
+              ? 'Evidencia de ${widget.productName}'
+              : 'Alternativa y nota de ${widget.productName}',
           // El texto visible se repite en todas las líneas; el rótulo que se
           // busca es el que nombra el producto, así que el del `Text` se
           // excluye en vez de fundirse con él.
@@ -2111,7 +2390,13 @@ class _PlanLineEvidenceNoteState extends State<PlanLineEvidenceNote> {
             key: ValueKey('plan-line-evidence-${widget.lineId}'),
             onTap: () => setState(() => _open = !_open),
             child: Text(
-              _open ? 'Ocultar evidencia' : 'Evidencia de la línea',
+              _open
+                  ? 'Ocultar'
+                  // El contrato nombra el desplegable por lo que **hace**, no
+                  // por lo que muestra: adentro se decide, no sólo se lee.
+                  : widget.onSaveNote == null && widget.onSubstitute == null
+                      ? 'Evidencia de la línea'
+                      : 'Alternativa y nota',
               style: PurchaseType.inlineAction
                   .copyWith(fontSize: 10, color: tokens.act),
             ),
@@ -2137,6 +2422,53 @@ class _PlanLineEvidenceNoteState extends State<PlanLineEvidenceNote> {
                 ? 'sin base'
                 : '${(widget.projectedGrossMarginRatio! * 100).toStringAsFixed(1)}%',
           ),
+          if (widget.onSubstitute != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton(
+                key: ValueKey('plan-line-substitute-${widget.lineId}'),
+                onPressed: widget.savingNote ? null : widget.onSubstitute,
+                child: const Text('Sustituir candidato'),
+              ),
+            ),
+          ],
+          if (widget.onSaveNote != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Nota',
+              style: PurchaseType.label.copyWith(color: tokens.inkFaint),
+            ),
+            const SizedBox(height: 4),
+            TextField(
+              key: ValueKey('plan-line-note-field-${widget.lineId}'),
+              controller: _note,
+              enabled: !widget.savingNote,
+              maxLines: 2,
+              maxLength: 300,
+              style: PurchaseType.body.copyWith(color: tokens.ink),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: OutlineInputBorder(),
+                hintText: 'Por qué este y no otro',
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton(
+                key: ValueKey('plan-line-note-save-${widget.lineId}'),
+                onPressed: widget.savingNote
+                    ? null
+                    // Vacío **es** una orden: borra la nota. Se manda tal cual
+                    // y el comando la normaliza; decidirlo acá sería una
+                    // segunda definición de «en blanco».
+                    : () => widget.onSaveNote!(_note.text),
+                child: Text(widget.savingNote ? 'Guardando…' : 'Guardar nota'),
+              ),
+            ),
+          ],
           const SizedBox(height: 4),
         ],
       ],
@@ -2552,7 +2884,12 @@ class _LocalPurchaseSheetState extends State<LocalPurchaseSheet> {
                         .copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 16),
-                  Text('Tipo de documento', style: PurchaseType.label),
+                  // Frame 13: «cada uno con etiqueta con asterisco» y «sin
+                  // cápsulas naranjas de obligatoriedad: sólo el asterisco»
+                  // (NOTES §193 y §202). Los tres campos que esta hoja sí
+                  // captura son obligatorios —`_submit` no deja pasar sin
+                  // ellos— y ninguno lo decía.
+                  Text('Tipo de documento *', style: PurchaseType.label),
                   const SizedBox(height: 6),
                   for (final entry in _documentKinds.entries)
                     RadioListTile<String>(
@@ -2576,7 +2913,7 @@ class _LocalPurchaseSheetState extends State<LocalPurchaseSheet> {
                     enabled: !widget.busy,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: 'Cantidad (${widget.unitLabel})',
+                      labelText: 'Cantidad (${widget.unitLabel}) *',
                       border: const OutlineInputBorder(),
                       isDense: true,
                       errorText: _quantityError,
@@ -2584,7 +2921,7 @@ class _LocalPurchaseSheetState extends State<LocalPurchaseSheet> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Tratamiento tributario',
+                    'Tratamiento tributario *',
                     style: PurchaseType.label,
                   ),
                   const SizedBox(height: 6),
@@ -2684,6 +3021,9 @@ class PurchasePlanGroup extends StatelessWidget {
     required this.onCommitQuantity,
     required this.onStepQuantity,
     required this.onRemove,
+    this.onSaveNote,
+    this.onSubstitute,
+    this.savingNoteLineId,
   });
 
   final PurchasePlanSupplierGroup group;
@@ -2699,6 +3039,11 @@ class PurchasePlanGroup extends StatelessWidget {
   final ValueChanged<PurchasePlanLine> onCommitQuantity;
   final ValueChanged<PurchasePlanLine> onEditQuantity;
   final ValueChanged<PurchasePlanLine> onRemove;
+
+  /// Las dos acciones de `line_disclosure`, bajadas a cada fila.
+  final void Function(PurchasePlanLine line, String? note)? onSaveNote;
+  final ValueChanged<PurchasePlanLine>? onSubstitute;
+  final String? savingNoteLineId;
 
   /// El stepper `− n +` corrige la cantidad sin abrir el editor.
   final void Function(PurchasePlanLine line, int quantity) onStepQuantity;
@@ -2798,6 +3143,13 @@ class PurchasePlanGroup extends StatelessWidget {
                     onStepQuantity: (quantity) =>
                         onStepQuantity(line, quantity),
                     onRemove: () => onRemove(line),
+                    onSaveNote: onSaveNote == null
+                        ? null
+                        : (note) => onSaveNote!(line, note),
+                    onSubstitute: onSubstitute == null
+                        ? null
+                        : () => onSubstitute!(line),
+                    savingNote: savingNoteLineId == line.id,
                   ),
           // Pie hundido: el subtotal, rotulado con su moneda, y la nota de
           // flete que impide leerlo como precio final.
@@ -2865,6 +3217,9 @@ class PurchasePlanLineRow extends StatelessWidget {
     required this.onEditQuantity,
     required this.onStepQuantity,
     required this.onRemove,
+    this.onSaveNote,
+    this.onSubstitute,
+    this.savingNote = false,
   });
 
   final PurchasePlanLine line;
@@ -2874,6 +3229,12 @@ class PurchasePlanLineRow extends StatelessWidget {
   final VoidCallback onEditQuantity;
   final ValueChanged<int> onStepQuantity;
   final VoidCallback onRemove;
+
+  /// Ver `PlanLineEvidenceNote`: las dos acciones que el contrato nombra en
+  /// `line_disclosure`. `null` deja el desplegable como estaba.
+  final ValueChanged<String?>? onSaveNote;
+  final VoidCallback? onSubstitute;
+  final bool savingNote;
 
   /// El ancho mínimo de la fila en una sola línea, sumado de sus piezas leídas
   /// del prototipo. No es un número redondo elegido a ojo: si alguna pieza
@@ -2932,7 +3293,14 @@ class PurchasePlanLineRow extends StatelessWidget {
               // Sin costo aterrizado la línea no tiene evidencia comparable:
               // se dice, no se rellena con un número.
               ? 'evidencia incompleta · sin costo aterrizado'
-              : 'evidencia completa',
+              // `07 · Plan con líneas` pide «evidencia 18 días · completa»: la
+              // edad va **primero** porque es la que decide si el costo sirve;
+              // «completa» sólo dice que el cálculo no tuvo huecos. Cuando el
+              // snapshot no trae las dos fechas se omite el tramo en vez de
+              // escribir un cero que se leería como «de hoy».
+              : line.evidenceAgeDays == null
+                  ? 'evidencia completa'
+                  : 'evidencia ${line.evidenceAgeDays} días · completa',
           style: PurchaseType.body.copyWith(
             fontSize: 11,
             height: 1.2,
@@ -2941,6 +3309,10 @@ class PurchasePlanLineRow extends StatelessWidget {
         ),
         PlanLineEvidenceNote(
           lineId: line.id,
+          note: line.note,
+          onSaveNote: onSaveNote,
+          onSubstitute: onSubstitute,
+          savingNote: savingNote,
           productName: _productLabel,
           supplierAvailability: line.supplierAvailability,
           currency: line.currency,
