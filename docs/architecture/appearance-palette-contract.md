@@ -73,6 +73,23 @@ on-accent foreground, `surface*` the layer ladder, `onSurface(Variant)` ink.
    same `ThemeData`/roles — a component that needs a different look asks for
    a new ROLE in the resolver, never paints locally.
 
+7. **Un tema derivado tiene que reemplazar los temas de COMPONENTE, no sólo
+   el `colorScheme`.** `SegmentedButtonThemeData`, `MenuThemeData`,
+   `PopupMenuThemeData` y compañía resuelven sus colores contra el `scheme` y
+   los `roles` capturados **en un closure** cuando se construyó el tema de la
+   app. `baseTheme.copyWith(colorScheme: otro)` **no** los alcanza: siguen
+   pintando con los colores viejos.
+
+   Se vio el 2026-08-20 en `WorkspaceChromeTheme.sidebarTheme`: dentro de la
+   barra lateral y del riel, un `SegmentedButton` salía claro sobre el navy y
+   los desplegables salían con fondo blanco — y, una vez que el texto sí heredó
+   el chrome, con letra clara sobre blanco: ilegible. No era un caso nuevo, el
+   selector de tema ya venía así y nadie lo había mirado.
+
+   Un tema derivado reemplaza explícitamente cada tema de componente que
+   quiera respetar la paleta. La regla 6 dice de dónde hereda un componente;
+   ésta dice que heredar **no ocurre solo** cuando el tema se deriva.
+
 ## Verification gates (what "supports appearance" means)
 
 - Rendered matrix over **all presets × light/dark** for the surface family

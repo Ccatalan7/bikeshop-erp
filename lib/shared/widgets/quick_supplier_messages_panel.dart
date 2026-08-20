@@ -213,8 +213,11 @@ class _QuickSupplierMessagesPanelState
           height: 42,
           padding: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
-            color:
-                Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+            // Opaco y de un rol. Antes era `surface` al 72%: el contrato de
+            // paletas prohíbe el truco de opacidad, y acá además dejaba
+            // transparentar lo de atrás, que es por qué la flecha de volver no
+            // contrastaba ni en claro ni en oscuro.
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
             border: Border(
               bottom: BorderSide(color: Theme.of(context).dividerColor),
             ),
@@ -222,7 +225,11 @@ class _QuickSupplierMessagesPanelState
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back, size: 20),
+                icon: Icon(
+                  Icons.arrow_back,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
                 tooltip: 'Volver a proveedores',
                 onPressed: () => returnToInbox(conversation.id),
               ),
@@ -235,7 +242,11 @@ class _QuickSupplierMessagesPanelState
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.open_in_full, size: 18),
+                icon: Icon(
+                  Icons.open_in_full,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 tooltip: 'Abrir mensajería completa',
                 onPressed: () => _openFullChat(conversation),
               ),

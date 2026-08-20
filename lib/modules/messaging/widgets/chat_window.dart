@@ -4,6 +4,8 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -236,6 +238,7 @@ class _RouteSharePreview {
     required this.trailingText,
   });
 }
+
 
 class ChatWindow extends StatefulWidget {
   final Conversation conversation;
@@ -720,6 +723,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _debounce?.cancel();
     _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
+    _historyRequestDebounce?.cancel();
     _scrollController.removeListener(_handleTimelineScroll);
     _scrollController.dispose();
     _emojiScrollController.dispose();
@@ -831,8 +835,8 @@ class _ChatWindowState extends State<ChatWindow> {
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       border:
-                          Border(bottom: BorderSide(color: Colors.grey[200]!)),
-                      color: Colors.grey[50],
+                          Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
                     ),
                     child: const Row(
                       children: [
@@ -1368,9 +1372,28 @@ class _ChatWindowState extends State<ChatWindow> {
     return items;
   }
 
+  /// Espera a que el scroll SE DETENGA antes de pedir historial.
+  ///
+  /// Antes se pedía en cada evento de scroll. Cargar mensajes viejos mientras
+  /// el dedo está en movimiento inserta contenido en una lista invertida, la
+  /// extensión cambia y el viewport corrige la posición en medio del gesto: eso
+  /// es el «se queda pegado y vibra» al volver hacia abajo tras haber subido.
+  /// El indicador de «ir al último» sí sigue al dedo, porque no toca la
+  /// geometría.
+  Timer? _historyRequestDebounce;
+
   void _handleTimelineScroll() {
     if (!_scrollController.hasClients) return;
-    _requestOlderMessagesIfAtStart();
+
+    _historyRequestDebounce?.cancel();
+    _historyRequestDebounce = Timer(const Duration(milliseconds: 160), () {
+      if (!mounted || !_scrollController.hasClients) return;
+      // Una inercia larga sigue viva cuando expira el temporizador; pedir ahí
+      // reintroduce exactamente el defecto.
+      if (_scrollController.position.isScrollingNotifier.value) return;
+      _requestOlderMessagesIfAtStart();
+    });
+
     final shouldShow = _scrollController.offset > 180;
     if (shouldShow == _showJumpToLatest || !mounted) return;
     setState(() => _showJumpToLatest = shouldShow);
@@ -1993,16 +2016,16 @@ class _ChatWindowState extends State<ChatWindow> {
       await provider.acceptChatRequest(widget.conversation.id);
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Chat aceptado. Ahora puedes responder.'),
-            backgroundColor: Colors.green,
+            backgroundColor: VinabikeThemeRoles.of(context).success.accent,
           ),
         );
       }
     } catch (e) {
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
         );
       }
     }
@@ -2046,9 +2069,9 @@ class _ChatWindowState extends State<ChatWindow> {
                 );
                 if (ctx.mounted) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text('Solicitud rechazada'),
-                      backgroundColor: Colors.orange,
+                      backgroundColor: VinabikeThemeRoles.of(context).warning.accent,
                     ),
                   );
                 }
@@ -2057,12 +2080,12 @@ class _ChatWindowState extends State<ChatWindow> {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
                         content: Text('Error: $e'),
-                        backgroundColor: Colors.red),
+                        backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
                   );
                 }
               }
             },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
             child: const Text('Rechazar'),
           ),
         ],
@@ -2187,7 +2210,7 @@ class _ChatWindowState extends State<ChatWindow> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text('Error al preparar archivo: $e'),
-            backgroundColor: Colors.red),
+            backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
       );
     }
   }
@@ -2230,7 +2253,7 @@ class _ChatWindowState extends State<ChatWindow> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('No se pudo preparar ${_droppedFileName(file)}: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
           ),
         );
       }
@@ -2423,7 +2446,7 @@ class _ChatWindowState extends State<ChatWindow> {
               : rejectedCount == 1
                   ? 'No se pudo enviar 1 adjunto.'
                   : 'No se pudieron enviar $rejectedCount adjuntos.'),
-          backgroundColor: unknownCount > 0 ? null : Colors.red,
+          backgroundColor: unknownCount > 0 ? null : VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
     }
@@ -2858,7 +2881,14 @@ class _ChatWindowState extends State<ChatWindow> {
               widget.conversation.id,
             ) !=
             null;
-    if (!_showChatInfoPanel && messages.isNotEmpty) {
+    // Sólo para el primer llenado: si el timeline aún no alcanza a llenar el
+    // viewport no hay scroll que dispare la carga. Con contenido desplazable el
+    // dueño de la paginación es el scroll ya detenido, no cada build — dos
+    // disparadores compitiendo era la otra mitad del salto.
+    if (!_showChatInfoPanel &&
+        messages.isNotEmpty &&
+        (!_scrollController.hasClients ||
+            _scrollController.position.maxScrollExtent <= 0)) {
       _scheduleOlderMessagesIfAtStart(chatProvider);
     }
     final pendingDraft =
@@ -3128,7 +3158,7 @@ class _ChatWindowState extends State<ChatWindow> {
             'Solicitud de chat pendiente',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Colors.orange[900],
+              color: VinabikeThemeRoles.of(context).warning.onContainer,
             ),
           ),
           const SizedBox(height: 2),
@@ -3136,7 +3166,7 @@ class _ChatWindowState extends State<ChatWindow> {
             'El cliente espera respuesta. Acepta para comenzar a chatear.',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.orange[800],
+              color: VinabikeThemeRoles.of(context).warning.onContainer,
             ),
           ),
         ],
@@ -3147,7 +3177,7 @@ class _ChatWindowState extends State<ChatWindow> {
       OutlinedButton(
         onPressed: () => _showRejectDialog(context),
         style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.red[700],
+          foregroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
         child: const Text('Rechazar'),
       ),
@@ -3156,7 +3186,7 @@ class _ChatWindowState extends State<ChatWindow> {
         icon: const Icon(Icons.check, size: 18),
         label: const Text('Aceptar'),
         style: FilledButton.styleFrom(
-          backgroundColor: Colors.green[600],
+          backgroundColor: VinabikeThemeRoles.of(context).success.accent,
         ),
       ),
     ];
@@ -3167,9 +3197,9 @@ class _ChatWindowState extends State<ChatWindow> {
         vertical: 12,
       ),
       decoration: BoxDecoration(
-        color: Colors.orange[50],
+        color: VinabikeThemeRoles.of(context).warning.container,
         border: Border(
-          bottom: BorderSide(color: Colors.orange[200]!),
+          bottom: BorderSide(color: VinabikeThemeRoles.of(context).warning.border),
         ),
       ),
       child: widget.compact
@@ -3179,7 +3209,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.pending_actions, color: Colors.orange[700]),
+                    Icon(Icons.pending_actions, color: VinabikeThemeRoles.of(context).warning.accent),
                     const SizedBox(width: 10),
                     textBlock,
                   ],
@@ -3194,7 +3224,7 @@ class _ChatWindowState extends State<ChatWindow> {
             )
           : Row(
               children: [
-                Icon(Icons.pending_actions, color: Colors.orange[700]),
+                Icon(Icons.pending_actions, color: VinabikeThemeRoles.of(context).warning.accent),
                 const SizedBox(width: 12),
                 textBlock,
                 const SizedBox(width: 12),
@@ -5023,7 +5053,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 return Container(
                   width: 220,
                   height: 160,
-                  color: Colors.grey[300],
+                  color: Theme.of(context).colorScheme.outlineVariant,
                   child: const Center(
                     child: SizedBox(
                       width: 22,
@@ -5045,8 +5075,8 @@ class _ChatWindowState extends State<ChatWindow> {
             const SizedBox(height: 6),
             Text(
               caption,
-              style: const TextStyle(
-                color: Colors.black87,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 13,
                 height: 1.25,
               ),
@@ -5237,7 +5267,7 @@ class _ChatWindowState extends State<ChatWindow> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isMe ? Colors.white.withValues(alpha: 0.3) : Colors.grey[100],
+          color: isMe ? Colors.white.withValues(alpha: 0.3) : Theme.of(context).colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -5245,7 +5275,7 @@ class _ChatWindowState extends State<ChatWindow> {
           children: [
             Icon(
               _getFileIcon(extension),
-              color: isMe ? Colors.black87 : Colors.blue[600],
+              color: isMe ? Theme.of(context).colorScheme.onSurface : Colors.blue[600],
               size: 32,
             ),
             const SizedBox(width: 8),
@@ -5255,8 +5285,8 @@ class _ChatWindowState extends State<ChatWindow> {
                 children: [
                   Text(
                     fileName,
-                    style: const TextStyle(
-                      color: Colors.black87,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
@@ -5265,7 +5295,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: failed ? Colors.red[600] : Colors.grey[600],
+                      color: failed ? VinabikeThemeRoles.of(context).danger.accent : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 11,
                     ),
                     maxLines: 2,
@@ -5284,7 +5314,7 @@ class _ChatWindowState extends State<ChatWindow> {
             else
               Icon(
                 failed ? Icons.refresh : Icons.download,
-                color: failed ? Colors.red[500] : Colors.grey[500],
+                color: failed ? VinabikeThemeRoles.of(context).danger.accent : Theme.of(context).colorScheme.onSurfaceVariant,
                 size: 20,
               ),
           ],
@@ -5644,7 +5674,7 @@ class _ChatWindowState extends State<ChatWindow> {
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('Respaldo descargado: $fileName'),
-          backgroundColor: Colors.green,
+          backgroundColor: VinabikeThemeRoles.of(context).success.accent,
         ),
       );
     } catch (e) {
@@ -5653,7 +5683,7 @@ class _ChatWindowState extends State<ChatWindow> {
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('No se pudo descargar el respaldo: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
     } finally {
@@ -5669,9 +5699,9 @@ class _ChatWindowState extends State<ChatWindow> {
       await context.read<ChatProvider>().loadConversations();
       if (!mounted) return;
       scaffoldMessenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Conversación marcada como resuelta'),
-          backgroundColor: Colors.green,
+          backgroundColor: VinabikeThemeRoles.of(context).success.accent,
         ),
       );
     } catch (e) {
@@ -5679,7 +5709,7 @@ class _ChatWindowState extends State<ChatWindow> {
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('No se pudo actualizar la conversación: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
     }
@@ -5695,7 +5725,7 @@ class _ChatWindowState extends State<ChatWindow> {
         children: [
           Expanded(
             child: Divider(
-              color: Colors.grey.shade300,
+              color: Theme.of(context).colorScheme.outlineVariant,
               thickness: 1,
               endIndent: 10,
             ),
@@ -5724,7 +5754,7 @@ class _ChatWindowState extends State<ChatWindow> {
           ),
           Expanded(
             child: Divider(
-              color: Colors.grey.shade300,
+              color: Theme.of(context).colorScheme.outlineVariant,
               thickness: 1,
               indent: 10,
             ),
@@ -5925,7 +5955,7 @@ class _ChatWindowState extends State<ChatWindow> {
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         border: Border(
-          bottom: BorderSide(color: Colors.blueGrey[100]!),
+          bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         ),
       ),
       child: Row(
@@ -5947,7 +5977,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 const SizedBox(height: 3),
                 Text(
                   draft.subtitle,
-                  style: TextStyle(fontSize: 12, color: Colors.blueGrey[700]),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 8),
                 Container(
@@ -5956,7 +5986,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blueGrey[100]!),
+                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                   ),
                   child: Text(
                     draft.body,
@@ -6056,9 +6086,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Conversación de WhatsApp abierta aparte.'),
-          backgroundColor: Colors.green,
+          backgroundColor: VinabikeThemeRoles.of(context).success.accent,
         ),
       );
     } catch (e) {
@@ -6066,7 +6096,7 @@ class _ChatWindowState extends State<ChatWindow> {
       messenger.showSnackBar(
         SnackBar(
           content: Text('No se pudo abrir WhatsApp: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
     } finally {
@@ -6123,7 +6153,7 @@ class _ChatWindowState extends State<ChatWindow> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.18),
@@ -6168,7 +6198,7 @@ class _ChatWindowState extends State<ChatWindow> {
                         Text(
                           headerTitle,
                           style: theme.textTheme.titleSmall?.copyWith(
-                            color: Colors.white,
+                            color: theme.colorScheme.onSurface,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -6186,10 +6216,10 @@ class _ChatWindowState extends State<ChatWindow> {
                     IconButton(
                       tooltip: 'Volver',
                       visualDensity: VisualDensity.compact,
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.arrow_back,
                         size: 18,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                       onPressed: () {
                         setState(() => _showAutomaticMessagesPanel = false);
@@ -7059,7 +7089,7 @@ class _ChatWindowState extends State<ChatWindow> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $e'), backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
         );
       }
     }
@@ -7280,7 +7310,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   child: LinearProgressIndicator(
                     minHeight: 3,
                     value: isOpen ? progress : 1,
-                    backgroundColor: Colors.grey[200],
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     valueColor: AlwaysStoppedAnimation<Color>(color),
                   ),
                 ),
@@ -7291,7 +7321,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -7468,7 +7498,7 @@ class _ChatWindowState extends State<ChatWindow> {
                               : 'Elige la plantilla aprobada para esta ocasión.',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[600],
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -7591,7 +7621,7 @@ class _ChatWindowState extends State<ChatWindow> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -8209,7 +8239,7 @@ class _ChatWindowState extends State<ChatWindow> {
         ..showSnackBar(
           SnackBar(
             content: Text('No se pudo preparar el documento: $error'),
-            backgroundColor: Colors.red,
+            backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
           ),
         );
     } finally {
@@ -8313,7 +8343,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 : '${failed.length} documentos se enviaron, pero siguen en '
                     'borrador. Cámbialos en Documentos de compra.',
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
       return;
@@ -8724,7 +8754,7 @@ class _ChatWindowState extends State<ChatWindow> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.16),
@@ -8797,7 +8827,7 @@ class _ChatWindowState extends State<ChatWindow> {
           height: 26,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? Colors.grey.shade200 : Colors.transparent,
+            color: selected ? theme.colorScheme.surfaceContainerHighest : Colors.transparent,
             borderRadius: BorderRadius.circular(5),
           ),
           child: Text(
@@ -8805,7 +8835,7 @@ class _ChatWindowState extends State<ChatWindow> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: selected ? Colors.black87 : Colors.grey.shade500,
+              color: selected ? theme.colorScheme.onSurface : Colors.grey.shade500,
             ),
           ),
         ),
@@ -8816,9 +8846,9 @@ class _ChatWindowState extends State<ChatWindow> {
       height: 30,
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -8843,7 +8873,7 @@ class _ChatWindowState extends State<ChatWindow> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: Colors.grey.shade700,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -8888,7 +8918,7 @@ class _ChatWindowState extends State<ChatWindow> {
       height: 44,
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+        border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -8915,13 +8945,13 @@ class _ChatWindowState extends State<ChatWindow> {
                   height: 34,
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
-                    color: selected ? Colors.grey.shade200 : Colors.transparent,
+                    color: selected ? theme.colorScheme.surfaceContainerHighest : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     item.icon,
                     size: 19,
-                    color: selected ? _accentBlue : Colors.grey.shade600,
+                    color: selected ? _accentBlue : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -8995,14 +9025,14 @@ class _ChatWindowState extends State<ChatWindow> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(content),
-        backgroundColor: Colors.green,
+        backgroundColor: VinabikeThemeRoles.of(context).success.accent,
       ),
     );
   }
 
   void _showErrorSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(content: Text(message), backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
     );
   }
 
@@ -9010,7 +9040,7 @@ class _ChatWindowState extends State<ChatWindow> {
     if (name == 'Cliente') return Colors.blue[800]!;
 
     final colors = [
-      Colors.orange[800]!,
+      VinabikeThemeRoles.of(context).warning.onContainer!,
       Colors.purple[700]!,
       Colors.pink[700]!,
       Colors.teal[700]!,
@@ -9067,19 +9097,26 @@ class _ChatWindowState extends State<ChatWindow> {
     bool isMe,
   ) {
     final preview = _routeSharePreviewFor(message);
+    // La tinta va SOBRE la burbuja, y la burbuja sale de la paleta. Con
+    // `theme.colorScheme.onSurface` fijo el texto quedaba negro sobre una burbuja oscura.
+    final theme = Theme.of(context);
+    final roles = theme.extension<VinabikeThemeRoles>();
+    final onBubble = isMe
+        ? roles?.onSelectionContainer ?? theme.colorScheme.onPrimaryContainer
+        : theme.colorScheme.onSurface;
     if (preview == null) {
       return ParsedMessageText(
         text: message.content,
         isMe: isMe,
         onReferenceTap: widget.onReferenceTap,
-        style: const TextStyle(
-          color: Colors.black87,
+        style: TextStyle(
+          color: onBubble,
           fontSize: 14,
         ),
       );
     }
 
-    const textStyle = TextStyle(color: Colors.black87, fontSize: 14);
+    final textStyle = TextStyle(color: onBubble, fontSize: 14);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -9349,8 +9386,26 @@ class _ChatWindowState extends State<ChatWindow> {
             final timeStr = DateFormat('HH:mm').format(msg.createdAt);
 
             // Bubble Decoration
+            // Las burbujas salen de la PALETA elegida en Apariencia, no de un
+            // hex. Antes eran `0xFFD9FDD3` y blanco fijos, así que en modo
+            // oscuro se veían idénticas al claro —dos manchas claras sobre un
+            // fondo oscuro— y no seguían la paleta.
+            //
+            // `selectionContainer` es el rol correcto para la propia: su
+            // contrato dice que es para un bloque que se lee «como elegido o
+            // como propio del operador». La ajena usa una superficie neutra
+            // elevada, que es lo que es.
+            final theme = Theme.of(context);
+            final roles = theme.extension<VinabikeThemeRoles>();
+            final bubbleColor = isMe
+                ? roles?.selectionContainer ?? theme.colorScheme.primaryContainer
+                : theme.colorScheme.surfaceContainerHigh;
+            final onBubbleColor = isMe
+                ? roles?.onSelectionContainer ??
+                    theme.colorScheme.onPrimaryContainer
+                : theme.colorScheme.onSurface;
             final bubbleDecoration = BoxDecoration(
-              color: isMe ? const Color(0xFFD9FDD3) : Colors.white,
+              color: bubbleColor,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(grouping.withPrevious ? 5 : 12),
                 topRight: Radius.circular(grouping.withPrevious ? 5 : 12),
@@ -9371,7 +9426,10 @@ class _ChatWindowState extends State<ChatWindow> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
+                  // La sombra sale del rol, no de negro fijo: sobre un lienzo
+                  // oscuro un negro al 8% no separa nada.
+                  color: roles?.shadow ??
+                      theme.colorScheme.shadow.withValues(alpha: 0.08),
                   blurRadius: 1,
                   offset: const Offset(0, 1),
                 ),
@@ -9394,7 +9452,7 @@ class _ChatWindowState extends State<ChatWindow> {
                       else
                         CircleAvatar(
                           radius: 14,
-                          backgroundColor: Colors.grey[200],
+                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
                           backgroundImage: senderAvatar != null
                               ? NetworkImage(senderAvatar)
                               : null,
@@ -9402,7 +9460,7 @@ class _ChatWindowState extends State<ChatWindow> {
                               ? Icon(
                                   Icons.person,
                                   size: 16,
-                                  color: Colors.grey[500],
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 )
                               : null,
                         ),
@@ -9461,7 +9519,8 @@ class _ChatWindowState extends State<ChatWindow> {
                                   child: Text(
                                     timeStr,
                                     style: TextStyle(
-                                      color: Colors.grey[500],
+                                      color: onBubbleColor
+                                          .withValues(alpha: 0.65),
                                       fontSize: 10,
                                     ),
                                   ),
@@ -9838,7 +9897,7 @@ class _ChatWindowState extends State<ChatWindow> {
         Text(
           timeStr,
           style: TextStyle(
-            color: Colors.grey[500],
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 10,
           ),
         ),
@@ -9915,10 +9974,10 @@ class _ChatWindowState extends State<ChatWindow> {
     // High contrast colors for both sender (green bubble) and receiver (white bubble)
     // On green bubble (isMe), we use Dark Green/Black text.
     // On white bubble (!isMe), we use Green/Black text.
-    final headerIconColor = isMe ? Colors.green[900] : Colors.green;
-    final headerTextColor = isMe ? Colors.green[900] : Colors.green[800];
+    final headerIconColor = isMe ? VinabikeThemeRoles.of(context).success.onContainer : VinabikeThemeRoles.of(context).success.accent;
+    final headerTextColor = isMe ? VinabikeThemeRoles.of(context).success.onContainer : VinabikeThemeRoles.of(context).success.onContainer;
     final headerBgColor =
-        isMe ? Colors.black.withValues(alpha: 0.05) : Colors.green[50];
+        isMe ? Colors.black.withValues(alpha: 0.05) : VinabikeThemeRoles.of(context).success.container;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -9957,9 +10016,9 @@ class _ChatWindowState extends State<ChatWindow> {
             children: [
               Text(
                 msg.content.split('\n').first,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87, // Always dark for readability
+                  color: Theme.of(context).colorScheme.onSurface, // Always dark for readability
                 ),
               ),
               const SizedBox(height: 4),
@@ -9984,7 +10043,7 @@ class _ChatWindowState extends State<ChatWindow> {
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Row(
               children: [
-                Icon(Icons.history, size: 15, color: Colors.grey[600]),
+                Icon(Icons.history, size: 15, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
@@ -9992,7 +10051,7 @@ class _ChatWindowState extends State<ChatWindow> {
                     style: TextStyle(
                       fontSize: 11,
                       height: 1.3,
-                      color: Colors.grey[700],
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -10006,7 +10065,7 @@ class _ChatWindowState extends State<ChatWindow> {
             child: Center(
               child: Text('✅ Confirmado',
                   style: TextStyle(
-                      color: Colors.green[800], // Always visible
+                      color: VinabikeThemeRoles.of(context).success.onContainer, // Always visible
                       fontWeight: FontWeight.bold)),
             ),
           ),
@@ -10030,22 +10089,22 @@ class _ChatWindowState extends State<ChatWindow> {
     // Feature colors (icons/titles) should be dark versions of their accent.
 
     Color iconColor;
-    Color titleColor = Colors.black87;
+    Color titleColor = Theme.of(context).colorScheme.onSurface;
     Color headerBgColor =
-        isMe ? Colors.black.withValues(alpha: 0.05) : Colors.grey[50]!;
+        isMe ? Colors.black.withValues(alpha: 0.05) : Theme.of(context).colorScheme.surfaceContainerLow!;
 
     switch (actionType) {
       case 'approve_quote':
         icon = Icons.description;
         if (status == 'accepted') {
           title = 'Presupuesto Aprobado';
-          accentColor = Colors.green;
+          accentColor = VinabikeThemeRoles.of(context).success.accent;
         } else if (status == 'declined') {
           title = 'Presupuesto Rechazado';
-          accentColor = Colors.red;
+          accentColor = VinabikeThemeRoles.of(context).danger.accent;
         } else {
           title = 'Presupuesto Enviado';
-          accentColor = Colors.orange;
+          accentColor = VinabikeThemeRoles.of(context).warning.accent;
         }
         // Use darker shade for icon to ensure visibility on light green
         iconColor = isMe ? Colors.black54 : accentColor;
@@ -10053,9 +10112,9 @@ class _ChatWindowState extends State<ChatWindow> {
       case 'pay_now':
         icon = Icons.payment;
         title = 'Solicitud de Pago';
-        accentColor = Colors.green;
+        accentColor = VinabikeThemeRoles.of(context).success.accent;
         iconColor =
-            isMe ? Colors.green[900]! : accentColor; // Visible green on green
+            isMe ? VinabikeThemeRoles.of(context).success.onContainer! : accentColor; // Visible green on green
         break;
       case 'confirm_delivery':
         icon = Icons.local_shipping;
@@ -10068,7 +10127,7 @@ class _ChatWindowState extends State<ChatWindow> {
         icon = Icons.help_outline;
         title = 'Acción Requerida';
         accentColor = Colors.grey;
-        iconColor = Colors.grey[700]!;
+        iconColor = Theme.of(context).colorScheme.onSurfaceVariant!;
     }
 
     // Build status badge
@@ -10077,19 +10136,19 @@ class _ChatWindowState extends State<ChatWindow> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (isMe ? Colors.black : Colors.green).withValues(alpha: 0.05),
+          color: (isMe ? Colors.black : VinabikeThemeRoles.of(context).success.accent).withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+          border: Border.all(color: VinabikeThemeRoles.of(context).success.accent.withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, size: 14, color: Colors.green[800]),
+            Icon(Icons.check_circle, size: 14, color: VinabikeThemeRoles.of(context).success.onContainer),
             const SizedBox(width: 4),
             Text('Aceptado',
                 style: TextStyle(
                     fontSize: 12,
-                    color: Colors.green[900],
+                    color: VinabikeThemeRoles.of(context).success.onContainer,
                     fontWeight: FontWeight.bold)),
           ],
         ),
@@ -10098,9 +10157,9 @@ class _ChatWindowState extends State<ChatWindow> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (isMe ? Colors.black : Colors.red).withValues(alpha: 0.05),
+          color: (isMe ? Colors.black : VinabikeThemeRoles.of(context).danger.accent).withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
+          border: Border.all(color: VinabikeThemeRoles.of(context).danger.accent.withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -10150,8 +10209,8 @@ class _ChatWindowState extends State<ChatWindow> {
           padding: const EdgeInsets.all(12),
           child: Text(
             msg.content,
-            style: const TextStyle(
-                color: Colors.black87, fontSize: 13, height: 1.4),
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface, fontSize: 13, height: 1.4),
           ),
         ),
         if (responseNote != null && responseNote.isNotEmpty)
@@ -10165,8 +10224,8 @@ class _ChatWindowState extends State<ChatWindow> {
                 Expanded(
                   child: Text(
                     responseNote,
-                    style: const TextStyle(
-                      color: Colors.black87,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 12,
                       height: 1.35,
                     ),
