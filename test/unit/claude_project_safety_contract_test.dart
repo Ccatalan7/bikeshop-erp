@@ -175,10 +175,25 @@ void main() {
       isNull,
     );
 
-    // Lo que NO es el ciclo de release sigue siendo del dueño.
+    // 2026-08-19 · decisión del dueño: desplegar una Edge Function pasa al
+    // agente. La regla anterior era asimétrica sin querer — el hook sólo corre
+    // en Claude Code, así que Codex desplegaba el mismo comando sin fricción y
+    // a Claude se le denegaba: no era política, era dónde estaba enganchado el
+    // freno. La protección real la conserva `scripts/supabase_cli.sh`, que
+    // exige un `--project-ref` aprobado: importa el destino, no quién escribe.
+    expect(
+      await _runGuard(
+        'scripts/supabase_cli.sh functions deploy whatsapp-webhook '
+        '--project-ref xzdvtzdqjeyqxnkqprtf',
+      ),
+      isNull,
+    );
+
+    // Lo que NO es el ciclo de release sigue siendo del dueño. Publicar el
+    // sitio y correr la release son alcance distinto al de una función
+    // revisada, y siguen denegados.
     for (final command in const [
       'firebase deploy',
-      'supabase functions deploy mi-funcion',
       'bash scripts/deploy.sh',
       'sh ./scripts/deploy.sh --prod',
       './scripts/deploy.sh',
