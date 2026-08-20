@@ -186,6 +186,103 @@ abstract final class WorkspaceChromeTheme {
         thickness: 1,
         space: 1,
       ),
+      // Mismo defecto que el `segmentedButtonTheme` de abajo: `menuTheme` y
+      // `popupMenuTheme` capturan el esquema de la APP, así que un desplegable
+      // abierto desde la barra o el riel salía con fondo blanco y, una vez que
+      // el texto sí heredó el chrome, con letra clara sobre blanco: ilegible.
+      popupMenuTheme: baseTheme.popupMenuTheme.copyWith(
+        color: colorScheme.surfaceContainerLow,
+        surfaceTintColor: Colors.transparent,
+        textStyle: textTheme.bodyMedium?.copyWith(color: chrome.foreground),
+        labelTextStyle: WidgetStatePropertyAll(
+          textTheme.bodyMedium?.copyWith(color: chrome.foreground),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: chrome.edge),
+        ),
+      ),
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor:
+              WidgetStatePropertyAll(colorScheme.surfaceContainerLow),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          elevation: const WidgetStatePropertyAll(6),
+          side: WidgetStatePropertyAll(BorderSide(color: chrome.edge)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      ),
+      menuButtonTheme: MenuButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) return disabledForeground;
+            return chrome.foreground;
+          }),
+          iconColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) return disabledForeground;
+            return chrome.mutedForeground;
+          }),
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
+              return chrome.accent.withValues(alpha: 0.16);
+            }
+            if (states.contains(WidgetState.hovered)) {
+              return chrome.foreground.withValues(alpha: 0.08);
+            }
+            return null;
+          }),
+        ),
+      ),
+      // El `segmentedButtonTheme` de la app resuelve sus colores contra el
+      // esquema de la APP, capturado en un closure. Sustituir el `colorScheme`
+      // aquí no lo alcanza, así que un SegmentedButton dentro de la barra salía
+      // claro sobre el navy — se veía en «Menú lateral» y en el selector de
+      // tema. Se reemplaza entero contra el esquema del chrome.
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return disabledForeground;
+            }
+            return states.contains(WidgetState.selected)
+                ? colorScheme.onPrimaryContainer
+                : chrome.mutedForeground;
+          }),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return colorScheme.surfaceContainerLowest;
+            }
+            return states.contains(WidgetState.selected)
+                ? selectionContainer
+                : colorScheme.surfaceContainerLow;
+          }),
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
+              return chrome.accent.withValues(alpha: 0.16);
+            }
+            if (states.contains(WidgetState.hovered)) {
+              return chrome.foreground.withValues(alpha: 0.06);
+            }
+            return null;
+          }),
+          side: WidgetStateProperty.resolveWith((states) {
+            return BorderSide(
+              color: states.contains(WidgetState.selected)
+                  ? chrome.accent
+                  : chrome.edge,
+            );
+          }),
+          minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          ),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+      ),
       drawerTheme: DrawerThemeData(
         backgroundColor: chrome.canvas,
         surfaceTintColor: Colors.transparent,

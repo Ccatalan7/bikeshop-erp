@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -9,7 +10,9 @@ import '../services/current_user_profile_navigation.dart';
 import '../services/navigation_service.dart';
 import '../services/query_performance_service.dart';
 import '../services/right_toolbar_service.dart';
-import '../services/workspace_launch_options.dart';
+import 'notifications_panel.dart';
+import 'quick_messages_panel.dart';
+import 'quick_supplier_messages_panel.dart';
 import '../services/workspace_manager.dart';
 import '../services/window_zoom_service.dart';
 import '../services/notification_service.dart';
@@ -18,8 +21,9 @@ import '../utils/responsive_viewport.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/mail/providers/mail_account_manager.dart';
-import 'browser_workspace_favicon.dart';
 import 'expandable_menu_item.dart';
+import '../services/workspace_launch_options.dart';
+import 'browser_workspace_favicon.dart';
 import 'toolbar_tool_presentation.dart';
 import 'current_user_profile_tile.dart';
 import 'workspace_shell_scope.dart';
@@ -871,6 +875,18 @@ void _showSidebarOptionsMenu({
   required NavigationService navigationService,
 }) {
   final RenderBox button = anchorContext.findRenderObject() as RenderBox;
+  // El panel se dibujaba contra el tema RAÍZ de la app, así que salía blanco
+  // siempre — y es justamente el panel donde se elige la paleta: no se podía
+  // previsualizar lo que se estaba eligiendo. El botón vive dentro del subárbol
+  // con `WorkspaceChromeTheme.sidebarTheme`, así que su tema ES el de la barra;
+  // se captura aquí y se reinyecta en el overlay.
+  final chromeTheme = Theme.of(anchorContext);
+  // El panel se dibuja en el overlay RAÍZ, fuera del subárbol del espacio de
+  // trabajo, así que ahí `Provider.of<Workspace>` no encuentra nada. Dentro de
+  // un espacio manda su propio modo de chrome, no la preferencia global: sin
+  // capturarlo aquí, cambiar de Completo a Riel no hacía nada.
+  final scopedWorkspace = _maybeWorkspaceOf(anchorContext);
+  final workspaceManager = anchorContext.read<WorkspaceManager>();
   final navigator = Navigator.of(overlayContext, rootNavigator: true);
   final RenderBox overlay =
       navigator.overlay!.context.findRenderObject() as RenderBox;
@@ -894,9 +910,14 @@ void _showSidebarOptionsMenu({
           Positioned(
             left: buttonPosition.dx,
             bottom: overlay.size.height - buttonPosition.dy + 8,
-            child: _SidebarOptionsPanel(
-              navigationService: navigationService,
-              onClose: () => Navigator.of(dialogContext).pop(),
+            child: Theme(
+              data: chromeTheme,
+              child: _SidebarOptionsPanel(
+                navigationService: navigationService,
+                scopedWorkspace: scopedWorkspace,
+                workspaceManager: workspaceManager,
+                onClose: () => Navigator.of(dialogContext).pop(),
+              ),
             ),
           ),
         ],
@@ -910,8 +931,15 @@ class _SidebarOptionsPanel extends StatelessWidget {
   final NavigationService navigationService;
   final VoidCallback onClose;
 
+  /// Espacio de trabajo activo, capturado en el ancla: aquí dentro ya no está
+  /// en el árbol.
+  final Workspace? scopedWorkspace;
+  final WorkspaceManager workspaceManager;
+
   const _SidebarOptionsPanel({
     required this.navigationService,
+    required this.scopedWorkspace,
+    required this.workspaceManager,
     required this.onClose,
   });
 
@@ -929,7 +957,10 @@ class _SidebarOptionsPanel extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           color: theme.colorScheme.surface,
           child: Container(
-            width: 308,
+            // 344 y no 308: con tres rótulos —Completo/Riel/Oculto— el ancho
+            // anterior partía «Completo» en dos líneas. Un SegmentedButton
+            // reserva ~32px de padding por segmento y eso no se puede bajar.
+            width: 344,
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
@@ -940,6 +971,19 @@ class _SidebarOptionsPanel extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Los tres estados del menú, rotulados. Antes eran dos íconos
+                // de chevron en el pie que sólo se distinguían por la cantidad
+                // de flechas: « compactaba y ‹ ocultaba. Eso no se aprende.
+                _SidebarChromeModeSelector(
+                  navigationService: navigationService,
+                  scopedWorkspace: scopedWorkspace,
+                  workspaceManager: workspaceManager,
+                  onClose: onClose,
+                ),
+                Divider(
+                    height: 1,
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.3)),
                 _ThemeModeSelector(
                   mode: appearanceService.themeMode,
                   onChanged: appearanceService.setThemeMode,
@@ -1057,6 +1101,119 @@ class _SidebarOptionsPanel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Los tres estados de la barra lateral, con su nombre.
+///
+/// Reemplaza a los dos chevrons del pie. `expanded` y `rail` son el mismo
+/// ajuste del servicio; «oculto» es visibilidad, otra cosa distinta — por eso
+/// antes eran dos botones. Aquí se presentan como lo que son para el operador:
+/// tres tamaños del mismo menú.
+class _SidebarChromeModeSelector extends StatelessWidget {
+  const _SidebarChromeModeSelector({
+    required this.navigationService,
+    required this.scopedWorkspace,
+    required this.workspaceManager,
+    required this.onClose,
+  });
+
+  final NavigationService navigationService;
+  final Workspace? scopedWorkspace;
+  final WorkspaceManager workspaceManager;
+  final VoidCallback onClose;
+
+  /// Dentro de un espacio de trabajo manda su modo; fuera, la preferencia
+  /// global. Es la misma regla que usa el botón del pie.
+  void _applyMode(NavigationChromeMode mode) {
+    final workspace = scopedWorkspace;
+    if (workspace != null) {
+      workspaceManager.setWorkspaceChromeMode(workspace.id, mode);
+    } else {
+      navigationService.setPreferredChromeMode(mode);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hidden = !navigationService.isDrawerVisible;
+    // Misma resolución que usa el shell: dentro de un espacio manda su
+    // override, y sólo si no hay se cae a la preferencia global. Leer sólo la
+    // global marcaba «Completo» con el riel puesto.
+    final effectiveMode = scopedWorkspace?.chromeModeOverride ??
+        navigationService.preferredChromeMode;
+    final selected = hidden
+        ? 'hidden'
+        : effectiveMode == NavigationChromeMode.rail
+            ? 'rail'
+            : 'expanded';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 2, bottom: 6),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.view_sidebar_outlined,
+                  size: 17,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 8),
+                Text('Menú lateral', style: theme.textTheme.bodyMedium),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<String>(
+              key: const ValueKey('sidebar-chrome-mode-selector'),
+              // Sin iconos a propósito: con icono un SegmentedButton no se
+              // estrecha y tres rótulos no caben en el panel de 308px.
+              segments: const <ButtonSegment<String>>[
+                ButtonSegment<String>(
+                  value: 'expanded',
+                  label: Text('Completo'),
+                  tooltip: 'Menú con nombres',
+                ),
+                ButtonSegment<String>(
+                  value: 'rail',
+                  label: Text('Riel'),
+                  tooltip: 'Sólo iconos',
+                ),
+                ButtonSegment<String>(
+                  value: 'hidden',
+                  label: Text('Oculto'),
+                  tooltip: 'Sin menú lateral',
+                ),
+              ],
+              selected: <String>{selected},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) {
+                if (selection.isEmpty) return;
+                switch (selection.single) {
+                  case 'expanded':
+                    _applyMode(NavigationChromeMode.expanded);
+                    navigationService.showDrawer();
+                  case 'rail':
+                    _applyMode(NavigationChromeMode.rail);
+                    navigationService.showDrawer();
+                  case 'hidden':
+                    navigationService.hideDrawer();
+                    // Se cierra: el panel cuelga de un menú que acaba de
+                    // desaparecer, y dejarlo abierto lo deja huérfano.
+                    onClose();
+                }
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1567,8 +1724,19 @@ class _MainLayoutState extends State<MainLayout> {
                               palette: palette,
                               brightness: Theme.of(context).brightness,
                             );
+                        // El riel también va envuelto en el tema del chrome.
+                        // Sin esto sus desplegables salían blancos sobre la
+                        // paleta: `MenuAnchor` conserva la ascendencia del
+                        // árbol, así que hereda el tema del ancla — y el ancla
+                        // vivía fuera del tema de la barra.
                         final sidebar = isRailChrome
-                            ? const AppNavigationRail()
+                            ? Theme(
+                                data: WorkspaceChromeTheme.sidebarTheme(
+                                  Theme.of(context),
+                                  chrome,
+                                ),
+                                child: const AppNavigationRail(),
+                              )
                             : Theme(
                                 data: WorkspaceChromeTheme.sidebarTheme(
                                   Theme.of(context),
@@ -1772,14 +1940,12 @@ class _MainLayoutState extends State<MainLayout> {
             ...?widget.compactHeader?.actions,
             _CompactShellActions(
               chrome: compactChrome,
-              drawerToolsMode: _compactDrawerToolsMode,
             ),
           ],
         ),
         drawer: isPinnedWorkspace
             ? null
             : AppDrawer(
-                toolsModeController: _compactDrawerToolsMode,
               ),
         drawerScrimColor:
             Theme.of(context).colorScheme.scrim.withValues(alpha: 0.36),
@@ -1807,46 +1973,61 @@ class _ThemeModeSelector extends StatelessWidget {
       label: 'Tema de la aplicación',
       child: Padding(
         padding: padding,
-        child: SizedBox(
-          width: double.infinity,
-          child: SegmentedButton<ThemeMode>(
-            key: const ValueKey('theme-mode-selector'),
-            segments: const <ButtonSegment<ThemeMode>>[
-              ButtonSegment<ThemeMode>(
-                value: ThemeMode.system,
-                icon: Icon(Icons.brightness_auto_outlined, size: 17),
-                label: Text(
-                  'Sistema',
-                  key: ValueKey('theme-mode-system'),
-                ),
-                tooltip: 'Seguir apariencia del sistema',
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Con icono, un SegmentedButton NO se estrecha: ni la densidad
+            // compacta ni un padding menor le bajan el ancho, y lo único que
+            // funciona es quitar el icono. En el pie del drawer «Sistema» se
+            // partía en dos líneas por eso.
+            final showIcons = constraints.maxWidth >= 330;
+            return SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<ThemeMode>(
+                key: const ValueKey('theme-mode-selector'),
+                segments: <ButtonSegment<ThemeMode>>[
+                  ButtonSegment<ThemeMode>(
+                    value: ThemeMode.system,
+                    icon: showIcons
+                        ? const Icon(Icons.brightness_auto_outlined, size: 17)
+                        : null,
+                    label: const Text(
+                      'Sistema',
+                      key: ValueKey('theme-mode-system'),
+                    ),
+                    tooltip: 'Seguir apariencia del sistema',
+                  ),
+                  ButtonSegment<ThemeMode>(
+                    value: ThemeMode.light,
+                    icon: showIcons
+                        ? const Icon(Icons.light_mode_outlined, size: 17)
+                        : null,
+                    label: const Text(
+                      'Claro',
+                      key: ValueKey('theme-mode-light'),
+                    ),
+                    tooltip: 'Usar siempre modo claro',
+                  ),
+                  ButtonSegment<ThemeMode>(
+                    value: ThemeMode.dark,
+                    icon: showIcons
+                        ? const Icon(Icons.dark_mode_outlined, size: 17)
+                        : null,
+                    label: const Text(
+                      'Oscuro',
+                      key: ValueKey('theme-mode-dark'),
+                    ),
+                    tooltip: 'Usar siempre modo oscuro',
+                  ),
+                ],
+                selected: <ThemeMode>{mode},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) {
+                  if (selection.isEmpty) return;
+                  onChanged(selection.single);
+                },
               ),
-              ButtonSegment<ThemeMode>(
-                value: ThemeMode.light,
-                icon: Icon(Icons.light_mode_outlined, size: 17),
-                label: Text(
-                  'Claro',
-                  key: ValueKey('theme-mode-light'),
-                ),
-                tooltip: 'Usar siempre modo claro',
-              ),
-              ButtonSegment<ThemeMode>(
-                value: ThemeMode.dark,
-                icon: Icon(Icons.dark_mode_outlined, size: 17),
-                label: Text(
-                  'Oscuro',
-                  key: ValueKey('theme-mode-dark'),
-                ),
-                tooltip: 'Usar siempre modo oscuro',
-              ),
-            ],
-            selected: <ThemeMode>{mode},
-            showSelectedIcon: false,
-            onSelectionChanged: (selection) {
-              if (selection.isEmpty) return;
-              onChanged(selection.single);
-            },
-          ),
+            );
+          },
         ),
       ),
     );
@@ -1856,196 +2037,49 @@ class _ThemeModeSelector extends StatelessWidget {
 class _CompactShellActions extends StatelessWidget {
   const _CompactShellActions({
     required this.chrome,
-    required this.drawerToolsMode,
   });
 
   final WorkspaceChromeStyleData chrome;
-  final ValueNotifier<bool> drawerToolsMode;
 
-  Future<void> _showWorkspaceTasks(BuildContext context) async {
-    final manager = context.read<WorkspaceManager>();
+  Future<void> _showNotifications(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
-      isScrollControlled: true,
       showDragHandle: true,
-      builder: (sheetContext) {
-        return ListenableBuilder(
-          listenable: manager,
-          builder: (context, _) {
-            final workspaces = manager.workspaces;
-            final activeId = manager.activeWorkspace?.id;
-            return ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * 0.7,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
-                    child: Text(
-                      'Tareas abiertas',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                  ),
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.only(bottom: 16),
-                      itemCount: workspaces.length,
-                      itemBuilder: (context, index) {
-                        final workspace = workspaces[index];
-                        final selected = workspace.id == activeId;
-                        return ListTile(
-                          key: ValueKey('compact-workspace-${workspace.id}'),
-                          minTileHeight: 56,
-                          selected: selected,
-                          leading: Icon(
-                            selected
-                                ? Icons.check_circle_rounded
-                                : Icons.radio_button_unchecked_rounded,
-                          ),
-                          title: Text(
-                            workspace.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle:
-                              workspace.currentRoute == workspace.initialRoute
-                                  ? null
-                                  : Text(
-                                      getRouteTitle(workspace.currentRoute),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                          trailing: workspaces.length <= 1
-                              ? null
-                              : IconButton(
-                                  onPressed: () async {
-                                    final closed =
-                                        await manager.requestCloseWorkspaceById(
-                                            workspace.id);
-                                    if (closed &&
-                                        sheetContext.mounted &&
-                                        manager.workspaces.length <= 1) {
-                                      Navigator.pop(sheetContext);
-                                    }
-                                  },
-                                  icon:
-                                      const Icon(Icons.close_rounded, size: 20),
-                                  tooltip: 'Cerrar ${workspace.title}',
-                                ),
-                          onTap: () {
-                            manager.switchToWorkspaceById(workspace.id);
-                            Navigator.pop(sheetContext);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
+      builder: (sheetContext) => const _CompactSheetFrame(
+        title: 'Notificaciones',
+        child: NotificationsToolbarPanel(),
+      ),
     );
   }
 
-  Future<void> _showActivity(BuildContext context) async {
-    final toolbar = context.read<RightToolbarService>();
-    final notificationCount =
-        NotificationService().unreadNotificationsCount.value;
-    final messageCount = context.read<ChatProvider>().totalUnreadCount;
+  Future<void> _showMessages(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (sheetContext) {
-        Widget row({
-          required ToolbarTool tool,
-          required String title,
-          required String subtitle,
-          required IconData icon,
-          required int count,
-        }) {
-          return ListTile(
-            key: ValueKey('compact-activity-${tool.name}'),
-            minTileHeight: 58,
-            leading: Icon(icon),
-            title: Text(title),
-            subtitle: Text(subtitle),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (count > 0) _CompactCountBadge(count: count),
-                const SizedBox(width: 6),
-                const Icon(Icons.chevron_right_rounded),
-              ],
-            ),
-            onTap: () {
-              Navigator.pop(sheetContext);
-              toolbar.openTool(tool);
-            },
-          );
-        }
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
+      builder: (sheetContext) => const _CompactMessagesSheet(),
+    );
+  }
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
-              child: Text(
-                'Actividad',
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ),
-            row(
-              tool: ToolbarTool.notifications,
-              title: 'Notificaciones',
-              subtitle: notificationCount == 0
-                  ? 'No hay novedades pendientes'
-                  : '$notificationCount sin revisar',
-              icon: Icons.notifications_outlined,
-              count: notificationCount,
-            ),
-            row(
-              tool: ToolbarTool.messages,
-              title: 'Mensajería',
-              subtitle: messageCount == 0
-                  ? 'No hay conversaciones pendientes'
-                  : '$messageCount sin leer',
-              icon: Icons.chat_bubble_outline,
-              count: messageCount,
-            ),
-            ListTile(
-              key: const ValueKey('compact-activity-open-tools'),
-              minTileHeight: 58,
-              leading: const Icon(Icons.grid_view_rounded),
-              title: const Text('Todas las herramientas'),
-              subtitle: const Text('Archivos, gastos, tareas y utilidades'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                drawerToolsMode.value = true;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!context.mounted) return;
-                  Scaffold.maybeOf(context)?.openDrawer();
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        );
-      },
+  Future<void> _showWorkspacesAndTools(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
+      builder: (sheetContext) => const _CompactWorkspaceToolsSheet(),
     );
   }
 
@@ -2059,27 +2093,707 @@ class _CompactShellActions extends StatelessWidget {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (manager.workspaces.length >= 2)
-              _CompactHeaderAction(
-                key: const ValueKey('main-layout-mobile-workspaces'),
-                chrome: chrome,
-                icon: Icons.layers_outlined,
-                count: manager.workspaces.length,
-                tooltip: 'Tareas abiertas',
-                onPressed: () => _showWorkspaceTasks(context),
-              ),
+            // Tres entradas separadas y cada una dice lo que abre: la campana
+            // es sólo avisos, el globo es sólo mensajes, y la cuadrícula junta
+            // lo que no es bandeja —tareas abiertas y herramientas—.
             _CompactHeaderAction(
-              key: const ValueKey('main-layout-mobile-activity'),
+              key: const ValueKey('main-layout-mobile-notifications'),
               chrome: chrome,
               icon: Icons.notifications_none_rounded,
-              count: chatCount + notificationCount,
-              tooltip: 'Actividad',
-              onPressed: () => _showActivity(context),
+              count: notificationCount,
+              tooltip: 'Notificaciones',
+              onPressed: () => _showNotifications(context),
+            ),
+            _CompactHeaderAction(
+              key: const ValueKey('main-layout-mobile-messages'),
+              chrome: chrome,
+              icon: Icons.chat_bubble_outline_rounded,
+              count: chatCount,
+              tooltip: 'Mensajes',
+              onPressed: () => _showMessages(context),
+            ),
+            _CompactHeaderAction(
+              key: const ValueKey('main-layout-mobile-workspaces'),
+              chrome: chrome,
+              icon: Icons.grid_view_rounded,
+              count: manager.workspaces.length >= 2
+                  ? manager.workspaces.length
+                  : 0,
+              tooltip: 'Tareas y herramientas',
+              onPressed: () => _showWorkspacesAndTools(context),
             ),
             const SizedBox(width: 4),
           ],
         );
       },
+    );
+  }
+}
+
+/// Marco común de las hojas compactas: título arriba y contenido debajo.
+class _CompactSheetFrame extends StatelessWidget {
+  const _CompactSheetFrame({
+    required this.title,
+    required this.child,
+  });
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+}
+
+/// Las dos bandejas de conversación del taller.
+enum _MessagesTab { suppliers, customers }
+
+/// La hoja de Mensajes en compacto.
+///
+/// Proveedores y clientes son dos bandejas distintas con dueños distintos, y
+/// cada una lleva su propio contador de no leídos: mezclarlas en un solo número
+/// escondía cuál de las dos estaba esperando respuesta.
+class _CompactMessagesSheet extends StatefulWidget {
+  const _CompactMessagesSheet();
+
+  @override
+  State<_CompactMessagesSheet> createState() => _CompactMessagesSheetState();
+}
+
+class _CompactMessagesSheetState extends State<_CompactMessagesSheet> {
+  /// La pestaña sobrevive al cierre: quien sigue una conversación con un
+  /// proveedor vuelve a ella, no a la bandeja de clientes.
+  static _MessagesTab _lastTab = _MessagesTab.suppliers;
+
+  late _MessagesTab _tab;
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = _lastTab;
+  }
+
+  int _supplierCount(ChatProvider chat) => chat.conversations.fold(0, (sum, c) {
+        if (!c.isSupplierConversation) return sum;
+        if (c.type == 'support' && c.status == 'pending') {
+          return sum + (c.unreadCount > 0 ? c.unreadCount : 1);
+        }
+        return sum + c.unreadCount;
+      });
+
+  int _customerCount(ChatProvider chat) => chat.conversations.fold(0, (sum, c) {
+        if (c.isSupplierConversation) return sum;
+        if (c.type == 'support' && c.status == 'pending') {
+          return sum + (c.unreadCount > 0 ? c.unreadCount : 1);
+        }
+        return sum + c.unreadCount;
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final chat = context.watch<ChatProvider>();
+    final counts = <_MessagesTab, int>{
+      _MessagesTab.suppliers: _supplierCount(chat),
+      _MessagesTab.customers: _customerCount(chat),
+    };
+
+    return _CompactSheetFrame(
+      title: 'Mensajes',
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _CompactTabBar<_MessagesTab>(
+              selected: _tab,
+              values: _MessagesTab.values,
+              counts: counts,
+              keyPrefix: 'compact-messages-tab',
+              labelOf: (tab) => switch (tab) {
+                _MessagesTab.suppliers => 'Proveedores',
+                _MessagesTab.customers => 'Clientes',
+              },
+              iconOf: (tab) => switch (tab) {
+                _MessagesTab.suppliers => Icons.local_shipping_outlined,
+                _MessagesTab.customers => Icons.person_outline_rounded,
+              },
+              nameOf: (tab) => tab.name,
+              onChanged: (tab) => setState(() {
+                _tab = tab;
+                _lastTab = tab;
+              }),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: switch (_tab) {
+              _MessagesTab.suppliers =>
+                const QuickSupplierMessagesPanel(showTitle: false),
+              _MessagesTab.customers =>
+                const QuickMessagesPanel(showTitle: false),
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lo que no es bandeja: herramientas y tareas abiertas.
+enum _WorkspaceToolsTab { tools, workspaces }
+
+/// La hoja de Tareas y herramientas en compacto.
+///
+/// Abre en **Herramientas** y las muestra aquí mismo. La versión anterior sólo
+/// ofrecía una fila «Todas las herramientas» que mandaba al drawer, lo que era
+/// un salto de más para lo que se usa a diario —y encima estaba rota: cerraba
+/// la hoja y recién entonces buscaba el `Scaffold` con un contexto ya muerto,
+/// así que no abría nada.
+class _CompactWorkspaceToolsSheet extends StatefulWidget {
+  const _CompactWorkspaceToolsSheet();
+
+  @override
+  State<_CompactWorkspaceToolsSheet> createState() =>
+      _CompactWorkspaceToolsSheetState();
+}
+
+class _CompactWorkspaceToolsSheetState
+    extends State<_CompactWorkspaceToolsSheet> {
+  _WorkspaceToolsTab _tab = _WorkspaceToolsTab.tools;
+
+  int _badgeFor(
+    ToolbarTool tool,
+    ChatProvider chat,
+    int notificationCount,
+  ) {
+    switch (tool) {
+      case ToolbarTool.notifications:
+        return notificationCount;
+      case ToolbarTool.messages:
+        return chat.conversations.fold(0, (sum, c) {
+          if (c.isSupplierConversation) return sum;
+          if (c.type == 'support' && c.status == 'pending') {
+            return sum + (c.unreadCount > 0 ? c.unreadCount : 1);
+          }
+          return sum + c.unreadCount;
+        });
+      case ToolbarTool.supplierMessages:
+        return chat.conversations.fold(0, (sum, c) {
+          if (!c.isSupplierConversation) return sum;
+          if (c.type == 'support' && c.status == 'pending') {
+            return sum + (c.unreadCount > 0 ? c.unreadCount : 1);
+          }
+          return sum + c.unreadCount;
+        });
+      default:
+        return 0;
+    }
+  }
+
+  /// El router y el servicio se toman ANTES de cerrar: después del `pop` el
+  /// contexto de la hoja está muerto y cualquier lookup contra él falla en
+  /// silencio, que es exactamente por qué la fila anterior no abría nada.
+  void _openTool(ToolbarTool tool) {
+    final presentation = tool.toolbarPresentation;
+    final route = presentation.route;
+    final router = GoRouter.of(context);
+    final toolbarService = context.read<RightToolbarService>();
+
+    Navigator.pop(context);
+    if (route != null) {
+      router.push(route);
+      return;
+    }
+    toolbarService.openTool(tool);
+  }
+
+  Widget _buildTools(BuildContext context) {
+    final toolbarService = context.watch<RightToolbarService>();
+    final chat = context.watch<ChatProvider>();
+    final profileService = context.watch<CurrentUserProfileService?>();
+    final canManageHr = profileService != null &&
+        !profileService.isLoading &&
+        profileService.loadIssue == null &&
+        profileService.profile?.canManageUsers == true;
+    final visibleTools = resolveVisibleToolbarTools(
+      canManageHr: canManageHr,
+      performanceEnabled: QueryPerformanceService.isEnabled,
+      performancePinned: toolbarService.isGaugePinned,
+    );
+
+    return ValueListenableBuilder<int>(
+      valueListenable: NotificationService().unreadNotificationsCount,
+      builder: (context, notificationCount, _) {
+        final rows = <Widget>[];
+        for (final group in ToolbarToolGroup.values) {
+          final grouped = visibleTools
+              .where((tool) => tool.toolbarPresentation.group == group)
+              .toList(growable: false);
+          if (grouped.isEmpty) continue;
+          rows.add(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              child: Text(
+                group.label.toUpperCase(),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.55,
+                    ),
+              ),
+            ),
+          );
+          for (final tool in grouped) {
+            final presentation = tool.toolbarPresentation;
+            final badge = _badgeFor(tool, chat, notificationCount);
+            rows.add(
+              ListTile(
+                key: ValueKey('compact-tools-${tool.name}'),
+                minTileHeight: 52,
+                // La herramienta abierta se ve marcada: en el drawer anterior
+                // se veía, y sin eso no se sabe a cuál se está volviendo.
+                selected: toolbarService.activeTool == tool,
+                selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+                leading: Icon(presentation.icon),
+                title: Text(presentation.title),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (badge > 0) _CompactCountBadge(count: badge),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.chevron_right_rounded, size: 20),
+                  ],
+                ),
+                onTap: () => _openTool(tool),
+              ),
+            );
+          }
+        }
+        return ListView(
+          padding: const EdgeInsets.only(bottom: 16),
+          children: rows,
+        );
+      },
+    );
+  }
+
+  /// Las tareas abiertas, con todo lo que traían en el drawer: favicon del
+  /// navegador, fijar/desfijar, cerrar, y las pestañas web agrupadas cuando hay
+  /// más de una sin fijar. Al sacar los espacios del drawer esto se había
+  /// perdido; es una diferencia real, no adorno.
+  Widget _buildWorkspaces(BuildContext context) {
+    final manager = context.watch<WorkspaceManager>();
+    final workspaces = manager.workspaces;
+    final activeId = manager.activeWorkspace?.id;
+
+    if (workspaces.isEmpty) {
+      return const Center(child: Text('No hay tareas abiertas'));
+    }
+
+    final browserStack = manager.unpinnedBrowserWorkspaces;
+    final groupsBrowsers = browserStack.length > 1;
+    final browserStackIds = groupsBrowsers
+        ? browserStack.map((workspace) => workspace.id).toSet()
+        : const <String>{};
+
+    final children = <Widget>[];
+    var insertedBrowserStack = false;
+    for (final workspace in workspaces) {
+      if (browserStackIds.contains(workspace.id)) {
+        if (!insertedBrowserStack) {
+          children.add(
+            ExpansionTile(
+              key: const ValueKey('mobile-browser-workspace-group'),
+              minTileHeight: 48,
+              initiallyExpanded:
+                  browserStack.any((browser) => browser.id == activeId),
+              leading: const Icon(Icons.tab_rounded, size: 20),
+              title: Text(
+                'Pestañas web · ${browserStack.length}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              children: [
+                for (final browser in browserStack)
+                  _buildWorkspaceTile(context, manager, browser, activeId),
+              ],
+            ),
+          );
+          insertedBrowserStack = true;
+        }
+        continue;
+      }
+      children.add(
+        _buildWorkspaceTile(context, manager, workspace, activeId),
+      );
+    }
+
+    return ListView(
+      key: const ValueKey('mobile-workspace-selector'),
+      padding: const EdgeInsets.only(bottom: 16),
+      children: [
+        _buildNewWorkspaceAction(context, manager),
+        const Divider(height: 1),
+        ...children,
+      ],
+    );
+  }
+
+  /// Abrir un espacio nuevo. Existe desde el 2026-08-06 porque hasta entonces
+  /// el shell compacto sólo podía moverse entre los espacios ya abiertos y no
+  /// podía crear el segundo. Se movió aquí con el resto del manejo de tareas;
+  /// perderlo dejaría al teléfono otra vez sin poder abrir uno.
+  Widget _buildNewWorkspaceAction(
+    BuildContext context,
+    WorkspaceManager manager,
+  ) {
+    final atLimit =
+        manager.workspaces.length >= WorkspaceManager.maxWorkspaces;
+    return ListTile(
+      key: const ValueKey('mobile-workspace-new'),
+      minTileHeight: 48,
+      enabled: !atLimit,
+      leading: const Icon(Icons.add_rounded, size: 20),
+      // El tope se dice, no se descubre al fallar.
+      title: Text(
+        atLimit ? 'Máximo de espacios abiertos' : 'Nuevo espacio de trabajo',
+      ),
+      onTap: atLimit ? null : () => _openWorkspaceLauncher(context, manager),
+    );
+  }
+
+  /// Elige el destino del espacio nuevo en una hoja inferior.
+  ///
+  /// O-05 de la guía de componentes: en compacto el catálogo se ofrece en una
+  /// hoja, no en el popover anclado que usa el «+» de escritorio.
+  Future<void> _openWorkspaceLauncher(
+    BuildContext context,
+    WorkspaceManager manager,
+  ) async {
+    final navigator = Navigator.of(context);
+    final chosen = await showModalBottomSheet<WorkspaceLaunchOption>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Text(
+                'Abrir en un espacio nuevo',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final option in workspaceLaunchOptions)
+                    ListTile(
+                      key: ValueKey('mobile-workspace-launch-${option.route}'),
+                      minTileHeight: 48,
+                      leading: Icon(option.icon),
+                      title: Text(option.title),
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop<WorkspaceLaunchOption>(
+                        option,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null) return;
+    manager.addWorkspace(title: chosen.title, initialRoute: chosen.route);
+    // Cerrar la hoja deja a la vista el espacio recién abierto.
+    if (navigator.canPop()) navigator.pop();
+  }
+
+  Widget _buildWorkspaceTile(
+    BuildContext context,
+    WorkspaceManager manager,
+    Workspace workspace,
+    String? activeId,
+  ) {
+    final theme = Theme.of(context);
+    final selected = workspace.id == activeId;
+    return ListTile(
+      key: ValueKey('mobile-workspace-${workspace.id}'),
+      minTileHeight: 48,
+      selected: selected,
+      selectedColor: theme.colorScheme.onPrimaryContainer,
+      selectedTileColor: theme.colorScheme.primaryContainer,
+      leading: workspace.isBrowserWorkspace
+          ? BrowserWorkspaceFavicon(
+              key: ValueKey('mobile-workspace-favicon-${workspace.id}'),
+              faviconUrl: workspace.browserFaviconUrl,
+              size: 20,
+              fallbackColor: theme.colorScheme.onSurfaceVariant,
+            )
+          : Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+            ),
+      title: Text(
+        workspace.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: workspace.currentRoute == workspace.initialRoute
+          ? null
+          : Text(
+              getRouteTitle(workspace.currentRoute),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+      onTap: () {
+        manager.switchToWorkspaceById(workspace.id);
+        Navigator.pop(context);
+      },
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (workspace.isBrowserWorkspace)
+            IconButton(
+              key: ValueKey('mobile-workspace-pin-${workspace.id}'),
+              onPressed: () {
+                final index = manager.workspaces.indexWhere(
+                  (candidate) => candidate.id == workspace.id,
+                );
+                if (index >= 0) manager.toggleWorkspacePinned(index);
+              },
+              icon: Icon(
+                workspace.isPinned
+                    ? Icons.push_pin_rounded
+                    : Icons.push_pin_outlined,
+                size: 18,
+              ),
+              tooltip: workspace.isPinned
+                  ? 'Desfijar ${workspace.title}'
+                  : 'Fijar ${workspace.title}',
+            ),
+          // Con una sola tarea no se ofrece cerrarla: dejaría el espacio vacío.
+          if (manager.workspaces.length > 1)
+            IconButton(
+              key: ValueKey('mobile-workspace-close-${workspace.id}'),
+              onPressed: () async {
+                await manager.requestCloseWorkspaceById(workspace.id);
+              },
+              icon: const Icon(Icons.close_rounded, size: 18),
+              tooltip: 'Cerrar ${workspace.title}',
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final workspaceCount = context.watch<WorkspaceManager>().workspaces.length;
+
+    return _CompactSheetFrame(
+      title: 'Tareas y herramientas',
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _CompactTabBar<_WorkspaceToolsTab>(
+              selected: _tab,
+              values: _WorkspaceToolsTab.values,
+              counts: {
+                _WorkspaceToolsTab.tools: 0,
+                _WorkspaceToolsTab.workspaces: workspaceCount,
+              },
+              keyPrefix: 'compact-workspace-tools-tab',
+              labelOf: (tab) => switch (tab) {
+                _WorkspaceToolsTab.tools => 'Herramientas',
+                _WorkspaceToolsTab.workspaces => 'Tareas',
+              },
+              iconOf: (tab) => switch (tab) {
+                _WorkspaceToolsTab.tools => Icons.grid_view_rounded,
+                _WorkspaceToolsTab.workspaces => Icons.layers_outlined,
+              },
+              nameOf: (tab) => tab.name,
+              onChanged: (tab) => setState(() => _tab = tab),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: switch (_tab) {
+              _WorkspaceToolsTab.tools => _buildTools(context),
+              _WorkspaceToolsTab.workspaces => _buildWorkspaces(context),
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pestañas compactas con contador propio.
+///
+/// Se dibujan a mano y no con `SegmentedButton`: ése no se estrecha con icono
+/// —ni densidad compacta ni padding reducen su ancho— y desborda en un teléfono
+/// angosto.
+class _CompactTabBar<T> extends StatelessWidget {
+  const _CompactTabBar({
+    required this.selected,
+    required this.values,
+    required this.counts,
+    required this.labelOf,
+    required this.iconOf,
+    required this.nameOf,
+    required this.keyPrefix,
+    required this.onChanged,
+  });
+
+  final T selected;
+  final List<T> values;
+  final Map<T, int> counts;
+  final String Function(T) labelOf;
+  final IconData Function(T) iconOf;
+  final String Function(T) nameOf;
+  final String keyPrefix;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          for (final value in values)
+            Expanded(
+              child: _CompactTab(
+                tabKey: ValueKey('$keyPrefix-${nameOf(value)}'),
+                label: labelOf(value),
+                icon: iconOf(value),
+                count: counts[value] ?? 0,
+                isSelected: value == selected,
+                onTap: () => onChanged(value),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactTab extends StatelessWidget {
+  const _CompactTab({
+    required this.tabKey,
+    required this.label,
+    required this.icon,
+    required this.count,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final Key tabKey;
+  final String label;
+  final IconData icon;
+  final int count;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final foreground = isSelected
+        ? theme.colorScheme.onSurface
+        : theme.colorScheme.onSurfaceVariant;
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: count > 0 ? '$label, $count sin leer' : label,
+      excludeSemantics: true,
+      child: InkWell(
+        key: tabKey,
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Container(
+          // 48px reales: en compacto no hay escala 0.8 que los encoja.
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? theme.colorScheme.surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            // Explícito: sin esto el contador se estiraba a lo alto de la
+            // pestaña y se leía como una barra, no como un número.
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: foreground),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: foreground,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 5),
+                SizedBox(
+                  height: 16,
+                  child: _CompactCountBadge(count: count),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2109,11 +2823,20 @@ class _CompactHeaderAction extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: IconButton(
-              tooltip: tooltip,
-              onPressed: onPressed,
-              color: chrome.foreground,
-              icon: Icon(icon, size: 21),
+            // El tooltip sólo aparece al pasar el cursor o mantener pulsado, y
+            // en un teléfono eso no existe: sin rótulo semántico estos tres
+            // íconos eran mudos para un lector de pantalla. El contador entra
+            // en el mismo rótulo para que se oiga «Mensajes, 3 sin leer».
+            child: Semantics(
+              button: true,
+              label: count > 0 ? '$tooltip, $count sin leer' : tooltip,
+              excludeSemantics: true,
+              child: IconButton(
+                tooltip: tooltip,
+                onPressed: onPressed,
+                color: chrome.foreground,
+                icon: Icon(icon, size: 21),
+              ),
             ),
           ),
           if (count > 0)
@@ -2671,51 +3394,68 @@ class _AppSidebarState extends State<AppSidebar> {
                   ),
                 ),
 
-                // Hide navigation button (bottom-right, small like Zoho)
+                // El pie lleva dos cosas y las dos dicen su nombre: la
+                // apariencia, y el gesto diario de compactar. Antes eran tres
+                // íconos mudos —«...», « y ‹— donde el segundo y el tercero
+                // sólo se distinguían por la cantidad de flechas.
                 Consumer<NavigationService>(
                   builder: (context, navigationService, _) {
+                    final isRail = navigationService.preferredChromeMode ==
+                        NavigationChromeMode.rail;
                     return Container(
                       padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
                       child: Row(
                         children: [
-                          // 3-dot menu button
-                          IconButton(
-                            icon: Icon(
-                              Icons.more_horiz,
-                              size: 18,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6),
+                          Expanded(
+                            child: TextButton.icon(
+                              key: const ValueKey('sidebar-appearance-entry'),
+                              onPressed: () {
+                                _showSidebarOptionsMenu(
+                                  anchorContext: context,
+                                  overlayContext: widget.overlayContext,
+                                  navigationService: navigationService,
+                                );
+                              },
+                              icon: const Icon(Icons.palette_outlined,
+                                  size: 17),
+                              label: const Text(
+                                'Apariencia',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              style: TextButton.styleFrom(
+                                alignment: Alignment.centerLeft,
+                                foregroundColor: theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.75),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                minimumSize: const Size(0, 36),
+                              ),
                             ),
-                            iconSize: 18,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 32,
-                            ),
-                            tooltip: 'Opciones',
-                            onPressed: () {
-                              _showSidebarOptionsMenu(
-                                anchorContext: context,
-                                overlayContext: widget.overlayContext,
-                                navigationService: navigationService,
-                              );
-                            },
                           ),
-                          const Spacer(),
-                          // Compact-to-rail button (middle chrome state)
+                          // Un solo botón para el gesto de todos los días.
+                          // «Oculto» vive en Apariencia: es raro, y una vez
+                          // oculto este botón ya no existe, así que su vuelta
+                          // es por otro camino de todos modos.
                           IconButton(
-                            icon: const Icon(
-                              Icons.keyboard_double_arrow_left,
+                            key: const ValueKey('sidebar-compact-toggle'),
+                            icon: Icon(
+                              isRail
+                                  ? Icons.view_sidebar_rounded
+                                  : Icons.view_sidebar_outlined,
                               size: 18,
                             ),
                             iconSize: 18,
                             padding: const EdgeInsets.all(8),
                             constraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 32,
+                              minWidth: 36,
+                              minHeight: 36,
                             ),
-                            tooltip: 'Compactar menú',
+                            tooltip: isRail ? 'Expandir menú' : 'Compactar menú',
                             onPressed: () {
+                              final nextMode = isRail
+                                  ? NavigationChromeMode.expanded
+                                  : NavigationChromeMode.rail;
                               final scopedWorkspace =
                                   _maybeWorkspaceOf(context);
                               if (scopedWorkspace != null) {
@@ -2723,46 +3463,16 @@ class _AppSidebarState extends State<AppSidebar> {
                                     .read<WorkspaceManager>()
                                     .setWorkspaceChromeMode(
                                       scopedWorkspace.id,
-                                      NavigationChromeMode.rail,
+                                      nextMode,
                                     );
                               } else {
-                                navigationService.setPreferredChromeMode(
-                                  NavigationChromeMode.rail,
-                                );
+                                navigationService
+                                    .setPreferredChromeMode(nextMode);
                               }
                             },
                             style: IconButton.styleFrom(
-                              backgroundColor: theme.colorScheme.surface,
                               foregroundColor: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          // Hide navigation button
-                          IconButton(
-                            icon: const Icon(Icons.chevron_left, size: 18),
-                            iconSize: 18,
-                            padding: const EdgeInsets.all(8),
-                            constraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 32,
-                            ),
-                            tooltip: 'Ocultar menú',
-                            onPressed: () {
-                              final scopedWorkspace =
-                                  _maybeWorkspaceOf(context);
-                              if (scopedWorkspace != null) {
-                                context
-                                    .read<WorkspaceManager>()
-                                    .hideWorkspaceDrawer(scopedWorkspace.id);
-                              } else {
-                                navigationService.hideDrawer();
-                              }
-                            },
-                            style: IconButton.styleFrom(
-                              backgroundColor: theme.colorScheme.surface,
-                              foregroundColor: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6),
+                                  .withValues(alpha: 0.7),
                             ),
                           ),
                         ],
@@ -3079,19 +3789,29 @@ class AppNavigationRail extends StatelessWidget {
                 selected: false,
                 onTap: () => _handleLogout(context),
               ),
+              // Apariencia también desde el riel: si no, para llegar a los
+              // tres estados del menú había que expandir primero.
+              _RailDestination(
+                title: 'Apariencia',
+                icon: Icons.palette_outlined,
+                activeIcon: Icons.palette,
+                selected: false,
+                hasSubmenu: true,
+                onTap: () => _showSidebarOptionsMenu(
+                  anchorContext: context,
+                  overlayContext: context,
+                  navigationService: context.read<NavigationService>(),
+                ),
+              ),
+              // Un solo control, igual que en la barra expandida. «Ocultar»
+              // vive en Apariencia: es raro, y dos flechas que se distinguen
+              // por su cantidad no se aprenden.
               _RailDestination(
                 title: 'Expandir menú',
-                icon: Icons.keyboard_double_arrow_right,
-                activeIcon: Icons.keyboard_double_arrow_right,
+                icon: Icons.view_sidebar_rounded,
+                activeIcon: Icons.view_sidebar_rounded,
                 selected: false,
                 onTap: () => _expandChrome(context),
-              ),
-              _RailDestination(
-                title: 'Ocultar menú',
-                icon: Icons.chevron_left,
-                activeIcon: Icons.chevron_left,
-                selected: false,
-                onTap: () => _hideChrome(context),
               ),
               const SizedBox(height: 6),
               Tooltip(
@@ -3153,14 +3873,6 @@ class AppNavigationRail extends StatelessWidget {
     }
   }
 
-  void _hideChrome(BuildContext context) {
-    final scopedWorkspace = _maybeWorkspaceOf(context);
-    if (scopedWorkspace != null) {
-      context.read<WorkspaceManager>().hideWorkspaceDrawer(scopedWorkspace.id);
-    } else {
-      context.read<NavigationService>().hideDrawer();
-    }
-  }
 }
 
 /// One rail module trigger. Single-destination modules navigate directly;
@@ -3181,6 +3893,30 @@ class _RailModuleDestination extends StatefulWidget {
 
 class _RailModuleDestinationState extends State<_RailModuleDestination> {
   final MenuController _menuController = MenuController();
+
+  /// El desplegable se abre al posar el cursor, como el de Zoho. El cierre va
+  /// con un respiro: al pasar del icono al panel el puntero deja el disparador
+  /// por unos milisegundos, y sin esa gracia el menú se cerraría justo cuando
+  /// el usuario va a usarlo.
+  Timer? _closeTimer;
+
+  void _openOnHover() {
+    _closeTimer?.cancel();
+    if (!_menuController.isOpen) _menuController.open();
+  }
+
+  void _scheduleClose() {
+    _closeTimer?.cancel();
+    _closeTimer = Timer(const Duration(milliseconds: 450), () {
+      if (mounted && _menuController.isOpen) _menuController.close();
+    });
+  }
+
+  @override
+  void dispose() {
+    _closeTimer?.cancel();
+    super.dispose();
+  }
 
   void _navigate(String route) {
     final resolved = widget.module.resolveRoute?.call(route) ?? route;
@@ -3213,10 +3949,28 @@ class _RailModuleDestinationState extends State<_RailModuleDestination> {
     return MenuAnchor(
       controller: _menuController,
       consumeOutsideTap: true,
+      // Al COSTADO del icono, fuera del riel. Por defecto `MenuAnchor` abre
+      // hacia abajo, y ahí el panel se monta encima de los módulos siguientes:
+      // el riel queda inutilizable justo mientras se está mirando el submenú.
       style: const MenuStyle(
+        alignment: AlignmentDirectional.topEnd,
         minimumSize: WidgetStatePropertyAll(Size(230, 0)),
       ),
+      // Sin hueco: 6px entre el icono y el panel son zona muerta donde el
+      // cursor no está en ninguno de los dos, y ahí arranca el cierre.
+      alignmentOffset: Offset.zero,
       menuChildren: [
+        // Envuelve TODO el panel: entrar en él cancela el cierre programado.
+        // Antes esto envolvía un `SizedBox.shrink()` —tamaño cero—, así que no
+        // recibía el cursor nunca y el menú se cerraba igual estuvieras encima
+        // o no. Era imposible llegar a un submódulo.
+        MouseRegion(
+          onEnter: (_) => _closeTimer?.cancel(),
+          onExit: (_) => _scheduleClose(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
           child: Text(
@@ -3263,29 +4017,44 @@ class _RailModuleDestinationState extends State<_RailModuleDestination> {
               onPressed: () => _navigate(item.route),
               child: Text(item.title),
             ),
+            ],
+          ),
+        ),
       ],
       builder: (context, controller, _) {
-        return _RailDestination(
-          title: module.title,
-          icon: module.icon,
-          activeIcon: module.activeIcon,
-          selected: selected,
-          enabled: module.enabled,
-          badgeCount: module.badgeCount,
-          expanded: controller.isOpen,
-          onTap: () {
-            if (controller.isOpen) {
-              controller.close();
-            } else {
-              controller.open();
-            }
-          },
+        return MouseRegion(
+          onEnter: (_) => _openOnHover(),
+          onExit: (_) => _scheduleClose(),
+          child: _RailDestination(
+            title: module.title,
+            icon: module.icon,
+            activeIcon: module.activeIcon,
+            selected: selected,
+            enabled: module.enabled,
+            badgeCount: module.badgeCount,
+            expanded: controller.isOpen,
+            hasSubmenu: true,
+            onTap: () {
+              // El clic sigue sirviendo: en pantalla táctil no hay hover.
+              if (controller.isOpen) {
+                controller.close();
+              } else {
+                controller.open();
+              }
+            },
+          ),
         );
       },
     );
   }
 }
 
+/// Una entrada del riel, al estilo del de Zoho Books: icono con su rótulo
+/// debajo, y el seleccionado como un bloque relleno.
+///
+/// El riel anterior era de iconos mudos: para saber qué era cada uno había que
+/// posar el cursor y esperar el tooltip, uno por uno. Un rótulo de 10px cuesta
+/// 20px de ancho y elimina esa adivinanza.
 class _RailDestination extends StatelessWidget {
   const _RailDestination({
     required this.title,
@@ -3296,6 +4065,7 @@ class _RailDestination extends StatelessWidget {
     this.enabled = true,
     this.badgeCount = 0,
     this.expanded,
+    this.hasSubmenu = false,
   });
 
   final String title;
@@ -3309,24 +4079,30 @@ class _RailDestination extends StatelessWidget {
   /// Whether this trigger's flyout is open (null when it has none).
   final bool? expanded;
 
+  /// Marca la esquina cuando el módulo tiene submódulos, para que se sepa que
+  /// hay algo más antes de posar el cursor.
+  final bool hasSubmenu;
+
   @override
   Widget build(BuildContext context) {
     final chrome = WorkspaceChromeStyle.maybeOf(context) ??
         WorkspaceChromeStyleData.vinabike;
-    final iconColor = !enabled
+    final foreground = !enabled
         ? chrome.mutedForeground.withValues(alpha: 0.45)
         : selected
-            ? chrome.accent
+            ? chrome.onAccent
             : chrome.mutedForeground;
 
-    return Tooltip(
-      message: title,
-      waitDuration: const Duration(milliseconds: 350),
-      child: Semantics(
+    // El tooltip sólo tiene sentido donde NO hay desplegable: el rótulo se corta
+    // a dos líneas y ahí conserva el nombre entero. En un módulo con submenú el
+    // panel ya lo encabeza con su nombre, así que el tooltip repetía la palabra
+    // y encima flotaba por encima del propio panel.
+    final body = Semantics(
         button: true,
         selected: selected,
         expanded: expanded,
         label: title + (badgeCount > 0 ? ', $badgeCount pendientes' : ''),
+        excludeSemantics: true,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -3336,41 +4112,69 @@ class _RailDestination extends StatelessWidget {
                 enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
             hoverColor: chrome.foreground.withValues(alpha: 0.08),
             focusColor: chrome.foreground.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             child: SizedBox(
               width: AppNavigationRail.railWidth,
-              height: 40,
+              height: 58,
               child: Center(
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 32,
-                      height: 32,
+                      width: 64,
+                      height: 52,
                       decoration: BoxDecoration(
-                        color: selected ? chrome.raised : Colors.transparent,
-                        borderRadius: BorderRadius.circular(7),
-                        border: Border.all(
-                          color: selected ? chrome.accent : chrome.edge,
-                        ),
-                        boxShadow: selected
-                            ? <BoxShadow>[
-                                BoxShadow(
-                                  color: chrome.accent.withValues(alpha: 0.10),
-                                  spreadRadius: 3,
-                                  blurRadius: 0,
-                                ),
-                              ]
-                            : null,
+                        color:
+                            selected ? chrome.accent : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       alignment: Alignment.center,
-                      child: Icon(selected ? activeIcon : icon,
-                          size: 17, color: iconColor),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(selected ? activeIcon : icon,
+                              size: 19, color: foreground),
+                          const SizedBox(height: 3),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: Text(
+                              title,
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                height: 1.1,
+                                letterSpacing: 0,
+                                color: foreground,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                    if (hasSubmenu)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: CustomPaint(
+                          size: const Size(6, 6),
+                          painter: _RailSubmenuCorner(
+                            color: selected
+                                ? chrome.onAccent.withValues(alpha: 0.75)
+                                : chrome.mutedForeground
+                                    .withValues(alpha: 0.65),
+                          ),
+                        ),
+                      ),
                     if (badgeCount > 0)
                       Positioned(
-                        top: -3,
-                        right: -3,
+                        top: -1,
+                        right: 2,
                         child: Container(
                           width: 9,
                           height: 9,
@@ -3390,9 +4194,36 @@ class _RailDestination extends StatelessWidget {
             ),
           ),
         ),
-      ),
+    );
+
+    if (hasSubmenu) return body;
+    return Tooltip(
+      message: title,
+      waitDuration: const Duration(milliseconds: 500),
+      child: body,
     );
   }
+}
+
+/// El triangulito de la esquina que marca «esto tiene submódulos».
+class _RailSubmenuCorner extends CustomPainter {
+  const _RailSubmenuCorner({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RailSubmenuCorner oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _RailBadge extends StatelessWidget {
@@ -3451,64 +4282,25 @@ String _foldForNavigationSearch(String value) {
 class AppDrawer extends StatefulWidget {
   const AppDrawer({
     super.key,
-    this.toolsModeController,
   });
 
-  final ValueNotifier<bool>? toolsModeController;
 
   @override
   State<AppDrawer> createState() => _AppDrawerState();
 }
 
-enum _AppDrawerMode { navigation, tools }
-
+// 2026-08-20 · el drawer es sólo navegación. El enum de modos y el
+// controlador externo que lo ponía en «Herramientas» quedaron sin uso al mover
+// las herramientas a la hoja del encabezado.
 class _AppDrawerState extends State<AppDrawer> {
   String? _expandedSection;
-  _AppDrawerMode _mode = _AppDrawerMode.navigation;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
   @override
-  void initState() {
-    super.initState();
-    _mode = widget.toolsModeController?.value == true
-        ? _AppDrawerMode.tools
-        : _AppDrawerMode.navigation;
-    widget.toolsModeController?.addListener(_syncExternalMode);
-  }
-
-  @override
-  void didUpdateWidget(covariant AppDrawer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.toolsModeController == widget.toolsModeController) return;
-    oldWidget.toolsModeController?.removeListener(_syncExternalMode);
-    widget.toolsModeController?.addListener(_syncExternalMode);
-    _syncExternalMode();
-  }
-
-  @override
   void dispose() {
-    widget.toolsModeController?.removeListener(_syncExternalMode);
     _searchController.dispose();
     super.dispose();
-  }
-
-  void _syncExternalMode() {
-    final nextMode = widget.toolsModeController?.value == true
-        ? _AppDrawerMode.tools
-        : _AppDrawerMode.navigation;
-    if (!mounted || nextMode == _mode) return;
-    setState(() => _mode = nextMode);
-  }
-
-  void _selectMode(_AppDrawerMode mode) {
-    final controller = widget.toolsModeController;
-    final usesTools = mode == _AppDrawerMode.tools;
-    if (controller != null && controller.value != usesTools) {
-      controller.value = usesTools;
-      return;
-    }
-    if (_mode != mode) setState(() => _mode = mode);
   }
 
   void _handleExpansionChange(String sectionKey, bool isExpanded) {
@@ -3548,6 +4340,55 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   /// Shows a bottom sheet with reorderable module list
+  /// Tema y paleta en compacto.
+  ///
+  /// El teléfono sólo tenía claro/oscuro: la paleta no se podía elegir en
+  /// ningún lado. Los estados del menú lateral y el zoom NO están, y es
+  /// correcto — no hay barra que compactar, y la guía móvil fija la escala en
+  /// 1.0 bajo 900px, así que el zoom es preferencia de escritorio.
+  void _showCompactAppearanceSheet(BuildContext hostContext) {
+    Navigator.pop(hostContext);
+    showModalBottomSheet<void>(
+      context: hostContext,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => Consumer<AppearanceService>(
+        builder: (context, appearance, _) => SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 4, 18, 6),
+                child: Text(
+                  'Apariencia',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              _ThemeModeSelector(
+                mode: appearance.themeMode,
+                onChanged: appearance.setThemeMode,
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              ),
+              _SidebarPalettePicker(appearanceService: appearance),
+              _OptionSwitchTile(
+                icon: Icons.chat_bubble_outline,
+                label: 'Paleta en mensajería',
+                value: appearance.messagingUsesSidebarPalette,
+                onChanged: appearance.setMessagingUsesSidebarPalette,
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showReorderSheet(BuildContext overlayContext) {
     final navigationService = overlayContext.read<NavigationService>();
     final canSeeHr = _visibleHrMenuItems(
@@ -3754,78 +4595,7 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  Widget _buildDrawerModeSwitch(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      key: const ValueKey('mobile-drawer-mode-switch'),
-      height: 56,
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-      // The border also consumes layout space. Three vertical pixels keep the
-      // visual control at 56 while preserving a real 48px target per mode.
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildDrawerModeButton(
-              context,
-              mode: _AppDrawerMode.navigation,
-              label: 'Navegación',
-            ),
-          ),
-          Expanded(
-            child: _buildDrawerModeButton(
-              context,
-              mode: _AppDrawerMode.tools,
-              label: 'Herramientas',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildDrawerModeButton(
-    BuildContext context, {
-    required _AppDrawerMode mode,
-    required String label,
-  }) {
-    final theme = Theme.of(context);
-    final selected = _mode == mode;
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: 'Modo $label',
-      child: InkWell(
-        key: ValueKey('mobile-drawer-mode-${mode.name}'),
-        onTap: () => _selectMode(mode),
-        borderRadius: BorderRadius.circular(6),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected
-                ? theme.colorScheme.primaryContainer
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: selected
-                  ? theme.colorScheme.onPrimaryContainer
-                  : theme.colorScheme.onSurfaceVariant,
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildCompactNavigationSearch(BuildContext context) {
     final theme = Theme.of(context);
@@ -3949,470 +4719,12 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  Widget _buildCompactWorkspaceAccess(
-    BuildContext context, {
-    required WorkspaceChromeStyleData chrome,
-  }) {
-    return Consumer<WorkspaceManager>(
-      builder: (context, manager, _) {
-        final workspaces = manager.workspaces;
-        final activeId = manager.activeWorkspace?.id;
-        // Elegir entre espacios sólo tiene sentido cuando hay más de uno; la
-        // acción de abrir uno nuevo vive aparte, siempre visible.
-        if (workspaces.length <= 1) return const SizedBox.shrink();
 
-        final browserStack = manager.unpinnedBrowserWorkspaces;
-        final groupsBrowsers = browserStack.length > 1;
-        final browserStackIds = groupsBrowsers
-            ? browserStack.map((workspace) => workspace.id).toSet()
-            : const <String>{};
-        final workspaceChildren = <Widget>[];
-        var insertedBrowserStack = false;
-        for (final workspace in workspaces) {
-          if (browserStackIds.contains(workspace.id)) {
-            if (!insertedBrowserStack) {
-              workspaceChildren.add(
-                ExpansionTile(
-                  key: const ValueKey('mobile-browser-workspace-group'),
-                  minTileHeight: 48,
-                  initiallyExpanded: browserStack.any(
-                    (browser) => browser.id == activeId,
-                  ),
-                  leading: const Icon(Icons.tab_rounded, size: 20),
-                  title: Text(
-                    'Pestañas web · ${browserStack.length}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  children: [
-                    for (final browser in browserStack)
-                      _buildCompactWorkspaceTile(
-                        context,
-                        manager: manager,
-                        workspace: browser,
-                        activeId: activeId,
-                        chrome: chrome,
-                      ),
-                  ],
-                ),
-              );
-              insertedBrowserStack = true;
-            }
-            continue;
-          }
-          workspaceChildren.add(
-            _buildCompactWorkspaceTile(
-              context,
-              manager: manager,
-              workspace: workspace,
-              activeId: activeId,
-              chrome: chrome,
-            ),
-          );
-        }
 
-        return ExpansionTile(
-          key: const ValueKey('mobile-workspace-selector'),
-          minTileHeight: 48,
-          leading: const Icon(Icons.layers_outlined, size: 20),
-          title: Text(
-            'Espacios de trabajo · ${workspaces.length}',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          children: workspaceChildren,
-        );
-      },
-    );
-  }
 
-  Widget _buildCompactWorkspaceTile(
-    BuildContext context, {
-    required WorkspaceManager manager,
-    required Workspace workspace,
-    required String? activeId,
-    required WorkspaceChromeStyleData chrome,
-  }) {
-    final theme = Theme.of(context);
-    final selected = workspace.id == activeId;
-    return ListTile(
-      key: ValueKey('mobile-workspace-${workspace.id}'),
-      minTileHeight: 48,
-      selected: selected,
-      // Congelar también la selección contra el chrome: el ListTile heredaba
-      // el primaryContainer claro de la app.
-      selectedColor: theme.colorScheme.onPrimaryContainer,
-      selectedTileColor: theme.colorScheme.primaryContainer,
-      iconColor: chrome.mutedForeground,
-      textColor: chrome.foreground,
-      leading: workspace.isBrowserWorkspace
-          ? BrowserWorkspaceFavicon(
-              key: ValueKey('mobile-workspace-favicon-${workspace.id}'),
-              faviconUrl: workspace.browserFaviconUrl,
-              size: 20,
-              fallbackColor: chrome.mutedForeground,
-            )
-          : null,
-      title: Text(
-        workspace.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      onTap: () {
-        manager.switchToWorkspaceById(workspace.id);
-        Navigator.pop(context);
-      },
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (workspace.isBrowserWorkspace)
-            IconButton(
-              key: ValueKey('mobile-workspace-pin-${workspace.id}'),
-              onPressed: () {
-                final index = manager.workspaces.indexWhere(
-                  (candidate) => candidate.id == workspace.id,
-                );
-                if (index >= 0) manager.toggleWorkspacePinned(index);
-              },
-              icon: Icon(
-                workspace.isPinned
-                    ? Icons.push_pin_rounded
-                    : Icons.push_pin_outlined,
-                size: 18,
-              ),
-              tooltip: workspace.isPinned
-                  ? 'Desfijar ${workspace.title}'
-                  : 'Fijar ${workspace.title}',
-            ),
-          IconButton(
-            key: ValueKey('mobile-workspace-close-${workspace.id}'),
-            onPressed: () async {
-              await manager.requestCloseWorkspaceById(workspace.id);
-            },
-            icon: const Icon(Icons.close_rounded, size: 18),
-            tooltip: 'Cerrar ${workspace.title}',
-          ),
-        ],
-      ),
-    );
-  }
 
-  /// Abre un espacio de trabajo nuevo desde el shell compacto.
-  ///
-  /// Es el equivalente del «+» de la barra de pestañas de escritorio. Va
-  /// siempre visible y fuera del selector: crear no es elegir entre los ya
-  /// abiertos, y hasta el 2026-08-06 el compacto simplemente no tenía forma de
-  /// abrir un segundo espacio.
-  Widget _buildCompactNewWorkspaceAction(
-    BuildContext context, {
-    required WorkspaceChromeStyleData chrome,
-  }) {
-    return Consumer<WorkspaceManager>(
-      builder: (context, manager, _) {
-        final atLimit =
-            manager.workspaces.length >= WorkspaceManager.maxWorkspaces;
-        return ListTile(
-          key: const ValueKey('mobile-workspace-new'),
-          minTileHeight: 48,
-          enabled: !atLimit,
-          iconColor: chrome.mutedForeground,
-          textColor: chrome.foreground,
-          leading: const Icon(Icons.add_rounded, size: 20),
-          title: Text(
-            atLimit
-                ? 'Máximo de espacios abiertos'
-                : 'Nuevo espacio de trabajo',
-            style: TextStyle(
-              color: atLimit ? chrome.mutedForeground : chrome.foreground,
-            ),
-          ),
-          onTap: atLimit
-              ? null
-              : () => _openCompactWorkspaceLauncher(context, manager),
-        );
-      },
-    );
-  }
 
-  /// Elige el destino del espacio nuevo en una hoja inferior.
-  ///
-  /// O-05 de la guía de componentes: en compacto el catálogo se ofrece en una
-  /// hoja, no en el popover anclado que usa el «+» de escritorio. El catálogo
-  /// es el mismo (`workspaceLaunchOptions`), sólo cambia la presentación.
-  Future<void> _openCompactWorkspaceLauncher(
-    BuildContext context,
-    WorkspaceManager manager,
-  ) async {
-    final navigator = Navigator.of(context);
-    final chosen = await showModalBottomSheet<WorkspaceLaunchOption>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              child: Text(
-                'Abrir en un espacio nuevo',
-                style: Theme.of(sheetContext).textTheme.titleMedium,
-              ),
-            ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  for (final option in workspaceLaunchOptions)
-                    ListTile(
-                      key: ValueKey('mobile-workspace-launch-${option.route}'),
-                      minTileHeight: 48,
-                      leading: Icon(option.icon),
-                      title: Text(option.title),
-                      onTap: () =>
-                          Navigator.of(sheetContext).pop<WorkspaceLaunchOption>(
-                        option,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (chosen == null) return;
-    manager.addWorkspace(title: chosen.title, initialRoute: chosen.route);
-    // Cerrar el drawer deja a la vista el espacio recién abierto.
-    if (navigator.canPop()) navigator.pop();
-  }
 
-  Widget _buildCompactToolsMode(
-    BuildContext context, {
-    required BuildContext overlayContext,
-    required WorkspaceChromeStyleData chrome,
-  }) {
-    final toolbarService = context.watch<RightToolbarService>();
-    final chatProvider = context.watch<ChatProvider>();
-    final profileService = context.watch<CurrentUserProfileService?>();
-    final canManageHr = profileService != null &&
-        !profileService.isLoading &&
-        profileService.loadIssue == null &&
-        profileService.profile?.canManageUsers == true;
-    final visibleTools = resolveVisibleToolbarTools(
-      canManageHr: canManageHr,
-      performanceEnabled: QueryPerformanceService.isEnabled,
-      performancePinned: toolbarService.isGaugePinned,
-    );
-
-    return ValueListenableBuilder<int>(
-      valueListenable: NotificationService().unreadNotificationsCount,
-      builder: (context, notificationCount, _) {
-        final widgets = <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Text(
-              'Abre una herramienta en todo el espacio disponible. Al volver, '
-              'tu módulo queda exactamente donde estaba.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    height: 1.35,
-                  ),
-            ),
-          ),
-        ];
-        for (final group in ToolbarToolGroup.values) {
-          final groupedTools = visibleTools
-              .where((tool) => tool.toolbarPresentation.group == group)
-              .toList(growable: false);
-          if (groupedTools.isEmpty) continue;
-          widgets.add(
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 5),
-              child: Text(
-                group.label.toUpperCase(),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.55,
-                    ),
-              ),
-            ),
-          );
-          for (final tool in groupedTools) {
-            widgets.add(
-              _buildCompactToolRow(
-                context,
-                tool: tool,
-                toolbarService: toolbarService,
-                badgeCount: _compactToolBadgeCount(
-                  tool,
-                  chatProvider,
-                  notificationCount,
-                ),
-              ),
-            );
-          }
-        }
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 5),
-            child: Text(
-              'APARIENCIA',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.55,
-                  ),
-            ),
-          ),
-        );
-        widgets.add(
-          Consumer<AppearanceService>(
-            builder: (context, appearance, _) => _ThemeModeSelector(
-              mode: appearance.themeMode,
-              onChanged: appearance.setThemeMode,
-              padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-            ),
-          ),
-        );
-        widgets.add(
-          ListTile(
-            minTileHeight: 52,
-            // La fila va sobre el navy; la HOJA que abre, no (ver abajo).
-            iconColor: chrome.mutedForeground,
-            textColor: chrome.foreground,
-            leading: Icon(
-              Icons.swap_vert_rounded,
-              color: chrome.mutedForeground,
-            ),
-            title: Text(
-              'Reordenar módulos',
-              style: TextStyle(color: chrome.foreground),
-            ),
-            trailing: Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: chrome.mutedForeground,
-            ),
-            // Open from the app context above the drawer's chromatic Theme.
-            // Otherwise showModalBottomSheet captures the shell ColorScheme and
-            // paints a navy application overlay.
-            onTap: () => _showReorderSheet(overlayContext),
-          ),
-        );
-        widgets.add(const SizedBox(height: 16));
-        return Column(
-          key: const ValueKey('mobile-drawer-tools-mode'),
-          mainAxisSize: MainAxisSize.min,
-          children: widgets,
-        );
-      },
-    );
-  }
-
-  int _compactToolBadgeCount(
-    ToolbarTool tool,
-    ChatProvider chatProvider,
-    int notificationCount,
-  ) {
-    if (tool == ToolbarTool.notifications) return notificationCount;
-    if (tool != ToolbarTool.messages && tool != ToolbarTool.supplierMessages) {
-      return 0;
-    }
-    final supplier = tool == ToolbarTool.supplierMessages;
-    return chatProvider.conversations.fold<int>(0, (sum, conversation) {
-      if (conversation.isSupplierConversation != supplier) return sum;
-      if (conversation.type == 'support' && conversation.status == 'pending') {
-        return sum +
-            (conversation.unreadCount > 0 ? conversation.unreadCount : 1);
-      }
-      return sum + conversation.unreadCount;
-    });
-  }
-
-  Widget _buildCompactToolRow(
-    BuildContext context, {
-    required ToolbarTool tool,
-    required RightToolbarService toolbarService,
-    required int badgeCount,
-  }) {
-    final theme = Theme.of(context);
-    final presentation = tool.toolbarPresentation;
-    final selected = toolbarService.activeTool == tool;
-    final badgeLabel = badgeCount > 99 ? '99+' : '$badgeCount';
-
-    return Semantics(
-      button: true,
-      selected: selected,
-      label:
-          '${presentation.title}${badgeCount > 0 ? ', $badgeCount pendientes' : ''}',
-      child: ListTile(
-        key: ValueKey('mobile-toolbar-tool-${tool.name}'),
-        minLeadingWidth: 32,
-        minVerticalPadding: 4,
-        selected: selected,
-        selectedTileColor: theme.colorScheme.primaryContainer,
-        leading: Icon(
-          presentation.icon,
-          size: 21,
-          color: selected
-              ? theme.colorScheme.onPrimaryContainer
-              : theme.colorScheme.onSurfaceVariant,
-        ),
-        title: Text(
-          presentation.title,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: selected ? theme.colorScheme.onPrimaryContainer : null,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-          ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (badgeCount > 0)
-              Container(
-                constraints: const BoxConstraints(
-                  minWidth: 24,
-                  minHeight: 22,
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 7),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  badgeLabel,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onErrorContainer,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            const SizedBox(width: 6),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ],
-        ),
-        onTap: () {
-          final route = presentation.route;
-          if (route != null) {
-            Navigator.pop(context);
-            _handleMobileNavigation(context, route, presentation.title);
-            return;
-          }
-          toolbarService.openTool(tool);
-          Navigator.pop(context);
-        },
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -4503,8 +4815,6 @@ class _AppDrawerState extends State<AppDrawer> {
               key: const ValueKey('mobile-drawer-navigation-mode'),
               padding: const EdgeInsets.only(bottom: 12),
               children: [
-                _buildCompactWorkspaceAccess(drawerContext, chrome: chrome),
-                _buildCompactNewWorkspaceAction(drawerContext, chrome: chrome),
                 ExpandableMenuItem(
                   key: const ValueKey('drawer-dashboard'),
                   icon: Icons.dashboard_outlined,
@@ -4549,20 +4859,12 @@ class _AppDrawerState extends State<AppDrawer> {
               child: Column(
                 children: [
                   _buildCompactDrawerHeader(drawerContext),
-                  _buildDrawerModeSwitch(drawerContext),
-                  if (_mode == _AppDrawerMode.navigation)
-                    _buildCompactNavigationSearch(drawerContext),
-                  Expanded(
-                    child: _mode == _AppDrawerMode.navigation
-                        ? navigationList()
-                        : SingleChildScrollView(
-                            child: _buildCompactToolsMode(
-                              drawerContext,
-                              overlayContext: context,
-                              chrome: chrome,
-                            ),
-                          ),
-                  ),
+                  // 2026-08-20 · decisión del dueño: el drawer es sólo
+                  // navegación. Herramientas y tareas abiertas viven en la hoja
+                  // del encabezado, y tenerlas también aquí eran dos caminos al
+                  // mismo sitio.
+                  _buildCompactNavigationSearch(drawerContext),
+                  Expanded(child: navigationList()),
                   Container(
                     key: const ValueKey('mobile-drawer-footer'),
                     decoration: BoxDecoration(
@@ -4570,6 +4872,56 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                     child: Column(
                       children: [
+                        // El tema y el orden de los módulos venían del modo
+                        // Herramientas, que se retiró del drawer. Reordenar
+                        // módulos configura la propia navegación, así que su
+                        // sitio es aquí; el tema acompaña a Configuración, que
+                        // ya vivía en este pie. Ninguno de los dos se perdió.
+                        // Una entrada con nombre, igual que en escritorio, en
+                        // vez del selector suelto: el teléfono no tenía dónde
+                        // elegir la paleta, sólo el modo claro/oscuro.
+                        ListTile(
+                          key: const ValueKey('mobile-drawer-appearance'),
+                          minTileHeight: 52,
+                          iconColor: chrome.mutedForeground,
+                          textColor: chrome.foreground,
+                          leading: Icon(
+                            Icons.palette_outlined,
+                            color: chrome.mutedForeground,
+                          ),
+                          title: Text(
+                            'Apariencia',
+                            style: TextStyle(color: chrome.foreground),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: chrome.mutedForeground,
+                          ),
+                          onTap: () => _showCompactAppearanceSheet(context),
+                        ),
+                        ListTile(
+                          minTileHeight: 52,
+                          iconColor: chrome.mutedForeground,
+                          textColor: chrome.foreground,
+                          leading: Icon(
+                            Icons.swap_vert_rounded,
+                            color: chrome.mutedForeground,
+                          ),
+                          title: Text(
+                            'Reordenar módulos',
+                            style: TextStyle(color: chrome.foreground),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: chrome.mutedForeground,
+                          ),
+                          // Desde el contexto de la app, por encima del Theme
+                          // cromático del drawer: si no, la hoja captura el
+                          // ColorScheme del shell y sale pintada de navy.
+                          onTap: () => _showReorderSheet(context),
+                        ),
                         // Mismo defecto medido que en los resultados del
                         // buscador: sin color explícito salían a 1,03:1 sobre
                         // el navy.

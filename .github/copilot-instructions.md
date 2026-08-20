@@ -768,6 +768,14 @@ These are safe to remove when disk space is low because they are regenerated fro
 - Flutter ephemeral folders such as `macos/Flutter/ephemeral/`, `ios/Flutter/ephemeral/`, and their `mobile_scanner_app/` equivalents
 - local dependency installs such as root `node_modules/`, `cloudflare-worker/node_modules/`, `ios/Pods/`, `macos/Pods/`, and mobile scanner Pods when the relevant lockfiles are present
 
+Check for a live canonical Flutter session before removing root `build/` or
+`.dart_tool/`: `pgrep -fl "flutter run|vinabike_erp.app"`. The running app
+binary lives under `build/macos/Build/Products/Debug/`, and the incremental
+compiler holds `.dart_tool/package_config.json` and its dill cache, so deleting
+either kills a session another agent or the owner may be mid-round on. Report
+the live session and skip those two targets instead — they are only safe on an
+idle checkout.
+
 Do **not** use broad recursive cleanup such as deleting every folder named `build` anywhere under the repo. Some vendored or tracked dependency trees may legitimately contain a directory named `build`. Prefer explicit known generated paths, and check `git status --short` after cleanup. If tracked files were removed by mistake, restore only those files.
 
 ### Safe Machine-Level Cleanup Targets
@@ -781,6 +789,33 @@ On macOS, it is generally safe to clear these when space is tight, with the trad
 - editor workspace caches such as VS Code/Cursor/Antigravity `workspaceStorage`, `CachedData`, `Cache`, `Code Cache`, old logs, and crash reports
 - downloaded installers in `~/Downloads` such as old `.dmg`, `.pkg`, `.zip`, and app installer files
 - unused Docker images through normal prune commands
+- agent probe artifacts in `/private/tmp`, especially `vinabike-*` PDFs, build
+  folders and `*-readback.*` temp dirs left by print/PDF/release probes
+
+#### Probes write to `/private/tmp` and nobody deletes them (2026-08-20)
+
+A single print probe left `/private/tmp/vinabike-print-operation-probe.pdf` at
+**33 GB** and took the machine to 867 MB free — WhatsApp and the browser would
+not start. The file was not produced by any versioned script: it came from an
+ad-hoc probe command in an agent session on 2026-08-17.
+
+The cause is structural, not a one-off: PDF/print probes render into
+`/private/tmp` with no size cap, a bad layout loop can grow the output without
+bound, and macOS only prunes `/private/tmp` on reboot for files older than three
+days — on a machine that is rarely rebooted, nothing ever reclaims them.
+
+Therefore:
+
+- A probe that renders a document writes to the session scratchpad, not to a
+  bare `/private/tmp/<name>.pdf`, and the session deletes it in the same round.
+- Check the output size before opening or keeping it. A page-count probe that
+  produces gigabytes is a runaway render, not a result — the finding is the bug,
+  and the file is deleted rather than inspected.
+- When disk pressure is reported, measure `/private/tmp` before any cache:
+  `du -sh -- /private/tmp/* | sort -hr | head`. It is not covered by
+  `flutter clean`, by editor cache clearing, or by any repo-level target, so it
+  is invisible to every other cleanup path in this document.
+
 
 On Windows, the equivalent cleanup targets are usually:
 

@@ -195,27 +195,24 @@ void main() {
     expect(rightToolbarSource, contains("tooltip: 'Volver'"));
   });
 
-  test('drawer owns navigation and tools modes with complete command wiring',
-      () {
+  // 2026-08-20 · decisión del dueño: «saca del drawer tanto herramientas como
+  // el manejo de workspaces». El drawer queda sólo navegación y las
+  // herramientas viven en la hoja del tercer ícono del encabezado, que abre
+  // directamente en Herramientas y tiene una pestaña para las tareas. Lo que se
+  // exige no cambió —el catálogo completo, agrupado, con su tinta y su
+  // apertura—, cambió dónde vive.
+  test('the tools sheet owns every tool with complete command wiring', () {
     expect(
       mainLayoutSource,
-      contains('enum _AppDrawerMode { navigation, tools }'),
+      isNot(contains('enum _AppDrawerMode { navigation, tools }')),
     );
     expect(
       mainLayoutSource,
-      contains("ValueKey('mobile-drawer-mode-\${mode.name}')"),
+      isNot(contains("ValueKey('mobile-drawer-mode-\${mode.name}')")),
     );
     expect(
       mainLayoutSource,
-      contains('mode: _AppDrawerMode.navigation'),
-    );
-    expect(
-      mainLayoutSource,
-      contains('mode: _AppDrawerMode.tools'),
-    );
-    expect(
-      mainLayoutSource,
-      contains("ValueKey('mobile-drawer-tools-mode')"),
+      contains("ValueKey('compact-tools-\${tool.name}')"),
     );
     expect(
       mainLayoutSource,
@@ -227,11 +224,7 @@ void main() {
     );
     expect(
       mainLayoutSource,
-      contains('for (final tool in groupedTools)'),
-    );
-    expect(
-      mainLayoutSource,
-      contains("ValueKey('mobile-toolbar-tool-\${tool.name}')"),
+      contains('for (final tool in grouped)'),
     );
 
     expect(
@@ -254,33 +247,36 @@ void main() {
       expect(tool.toolbarPresentation.opensPanel, isTrue);
     }
 
-    final compactToolTap = _between(
+    // Abrir una herramienta sigue teniendo los dos caminos: ruta propia, o
+    // panel del toolbar. El router y el servicio se toman ANTES de cerrar la
+    // hoja: con el contexto ya muerto el lookup falla en silencio y no abría
+    // nada.
+    final toolTap = _between(
       mainLayoutSource,
-      'Widget _buildCompactToolRow(',
-      '@override\n  Widget build(BuildContext context)',
+      'void _openTool(ToolbarTool tool) {',
+      'Widget _buildTools(BuildContext context)',
     );
-    expect(compactToolTap, contains('if (route != null)'));
+    expect(toolTap, contains('final router = GoRouter.of(context);'));
     expect(
-      compactToolTap,
-      contains('_handleMobileNavigation(context, route, presentation.title)'),
+      toolTap,
+      contains('context.read<RightToolbarService>()'),
     );
-    expect(compactToolTap, contains('toolbarService.openTool(tool)'));
+    expect(toolTap, contains('if (route != null)'));
+    expect(toolTap, contains('router.push(route)'));
+    expect(toolTap, contains('toolbarService.openTool(tool)'));
   });
 
   test('workspace selector is on demand and compact targets stay at least 48',
       () {
+    // El selector se mudó del drawer a la pestaña «Tareas» de la hoja del
+    // encabezado. Ya no se esconde con una sola tarea —si no se ve, no se puede
+    // gestionar—, pero conserva favicon, fijar y la agrupación de pestañas web.
     final selector = _between(
       mainLayoutSource,
-      'Widget _buildCompactWorkspaceAccess(',
-      'Widget _buildCompactToolsMode(',
+      'Widget _buildWorkspaces(BuildContext context) {',
+      '@override\n  Widget build(BuildContext context) {\n    final workspaceCount',
     );
 
-    expect(
-      selector,
-      contains(
-        'if (workspaces.length <= 1) return const SizedBox.shrink();',
-      ),
-    );
     expect(selector, contains("ValueKey('mobile-workspace-selector')"));
     expect(selector, contains('minTileHeight: 48'));
     expect(selector, contains('manager.switchToWorkspaceById(workspace.id)'));
@@ -300,10 +296,13 @@ void main() {
     // Abrir un espacio nuevo es una acción propia y siempre visible: vive
     // fuera del selector, porque hasta el 2026-08-06 el shell compacto sólo
     // podía moverse entre los espacios ya abiertos y no crear el segundo.
+    // 2026-08-20 · esto se mudó del drawer a la pestaña «Tareas» de la hoja del
+    // encabezado, pero sigue existiendo: hasta el 2026-08-06 el shell compacto
+    // no podía crear el segundo espacio, y perderlo lo dejaría otra vez así.
     final newWorkspaceAction = _between(
       mainLayoutSource,
-      'Widget _buildCompactNewWorkspaceAction(',
-      'Future<void> _openCompactWorkspaceLauncher(',
+      'Widget _buildNewWorkspaceAction(',
+      'Future<void> _openWorkspaceLauncher(',
     );
     expect(newWorkspaceAction, contains("ValueKey('mobile-workspace-new')"));
     expect(newWorkspaceAction, contains('minTileHeight: 48'));
@@ -312,16 +311,11 @@ void main() {
       contains('WorkspaceManager.maxWorkspaces'),
       reason: 'el tope de espacios se dice, no se descubre al fallar',
     );
-    expect(
-      mainLayoutSource,
-      contains('_buildCompactNewWorkspaceAction(drawerContext'),
-      reason: 'la acción se monta en el drawer, no dentro del selector',
-    );
-    // El catálogo de destinos es el mismo que ofrece el «+» de escritorio.
+
     final launcher = _between(
       mainLayoutSource,
-      'Future<void> _openCompactWorkspaceLauncher(',
-      'Widget _buildCompactToolsMode(',
+      'Future<void> _openWorkspaceLauncher(',
+      '@override\n  Widget build(BuildContext context) {\n    final workspaceCount',
     );
     expect(launcher, contains('workspaceLaunchOptions'));
     expect(launcher, contains('showModalBottomSheet<WorkspaceLaunchOption>'));
@@ -329,33 +323,19 @@ void main() {
     final drawerHeader = _between(
       mainLayoutSource,
       'Widget _buildCompactDrawerHeader(',
-      'Widget _buildDrawerModeSwitch(',
+      'Widget _buildCompactNavigationSearch(',
     );
     expect(drawerHeader, contains('minimumSize: const Size(48, 48)'));
 
-    final modeSwitch = _between(
+    // Las pestañas de la hoja del encabezado toman el relevo del conmutador
+    // retirado, y su blanco táctil se declara entero, no calculado a mano.
+    final compactTab = _between(
       mainLayoutSource,
-      'Widget _buildDrawerModeSwitch(',
-      'Widget _buildDrawerModeButton(',
+      'class _CompactTab extends StatelessWidget {',
+      'class _CompactCountBadge extends StatelessWidget {',
     );
-    expect(modeSwitch, contains('height: 56'));
-    expect(
-      modeSwitch,
-      contains(
-        'padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3)',
-      ),
-    );
-
-    const modeSwitchHeight = 56.0;
-    const modeSwitchVerticalPadding = 3.0;
-    const modeSwitchBorder = 1.0;
-    expect(
-      modeSwitchHeight -
-          (modeSwitchVerticalPadding * 2) -
-          (modeSwitchBorder * 2),
-      48,
-      reason: 'The mode InkWell must receive a full 48px content target.',
-    );
+    expect(compactTab, contains('height: 48'));
+    expect(compactTab, contains('Semantics('));
 
     expect(
       rightToolbarSource,

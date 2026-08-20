@@ -11,8 +11,9 @@ import 'package:vinabike_erp/modules/purchases/services/purchase_service.dart';
 import 'package:vinabike_erp/shared/models/supplier.dart';
 import 'package:vinabike_erp/shared/services/authority_scoped_cache.dart';
 import 'package:vinabike_erp/shared/services/database_service.dart';
-import 'package:vinabike_erp/shared/services/right_toolbar_service.dart';
 import 'package:vinabike_erp/shared/services/tenant_service.dart';
+import 'package:vinabike_erp/shared/services/right_toolbar_service.dart';
+import 'package:vinabike_erp/shared/widgets/conversation_inbox_host.dart';
 import 'package:vinabike_erp/shared/widgets/quick_supplier_messages_panel.dart';
 
 /// Cerrar el toolbar desmonta el panel a propósito: su `dispose()` cancela la
@@ -180,44 +181,34 @@ void main() {
   );
 
   testWidgets(
-    'un cambio de tenant descarta el estado de vista retenido',
+    'una sesión de otro usuario o inquilino se descarta, no se restaura',
     (tester) async {
       final toolbarService = RightToolbarService();
       addTearDown(toolbarService.dispose);
-      final firstTenant = _WarmPurchaseService();
-      addTearDown(firstTenant.dispose);
+      final purchaseService = _WarmPurchaseService();
+      addTearDown(purchaseService.dispose);
 
-      await tester.pumpWidget(
-        host(
-          toolbarService: toolbarService,
-          purchaseService: firstTenant,
-          panelOpen: true,
+      // `RightToolbarService` vive en la raíz de la app y sobrevive al cierre
+      // de sesión, así que puede quedar guardada la sesión de quien usó la app
+      // antes. Se siembra una de otro alcance y se exige que el panel la tire:
+      // el buscador de otra persona no puede aparecer en esta bandeja.
+      toolbarService.savePanelSession(
+        ToolbarTool.supplierMessages,
+        const InboxPanelSession(
+          searchText: 'búsqueda de otro inquilino',
+          selectedConversationId: null,
+          showOnlyActiveChats: false,
+          scope: ErpAuthorityScopeKey(
+            userId: 'otro-usuario',
+            tenantId: 'otro-inquilino',
+          ),
         ),
       );
-      await tester.pump();
-      await tester.pump();
-
-      await tester.enterText(find.byType(TextField).first, 'Droppbike');
-      await tester.pump();
 
       await tester.pumpWidget(
         host(
           toolbarService: toolbarService,
-          purchaseService: firstTenant,
-          panelOpen: false,
-        ),
-      );
-      await tester.pump();
-
-      // Otro inquilino en el mismo proceso: RightToolbarService vive en la raíz
-      // de la app y sobrevive al cierre de sesión, así que la sesión retenida
-      // tiene que descartarse sola.
-      final secondTenant = _WarmPurchaseService(tenantId: 'tenant-b');
-      addTearDown(secondTenant.dispose);
-      await tester.pumpWidget(
-        host(
-          toolbarService: toolbarService,
-          purchaseService: secondTenant,
+          purchaseService: purchaseService,
           panelOpen: true,
         ),
       );
@@ -230,6 +221,13 @@ void main() {
         searchField.controller?.text,
         isEmpty,
         reason: 'El estado de vista no puede cruzar el límite de tenant.',
+      );
+      expect(
+        toolbarService.panelSession<InboxPanelSession>(
+          ToolbarTool.supplierMessages,
+        ),
+        isNull,
+        reason: 'La sesión ajena se descarta, no se deja para el próximo.',
       );
       expect(tester.takeException(), isNull);
     },
@@ -288,3 +286,5 @@ class _WarmPurchaseService extends PurchaseService {
     return const [];
   }
 }
+
+

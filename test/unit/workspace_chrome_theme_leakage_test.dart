@@ -52,23 +52,17 @@ void main() {
     }
 
     test(
-      'drawer mode switch and search consume the scoped semantic roles',
+      'the compact drawer search consumes the scoped semantic roles',
       () {
         final source =
             File('lib/shared/widgets/main_layout.dart').readAsStringSync();
         final themeSource = File(
           'lib/shared/themes/workspace_chrome_theme.dart',
         ).readAsStringSync();
-        final modeSwitch = _between(
-          source,
-          'Widget _buildDrawerModeSwitch(',
-          'Widget _buildDrawerModeButton(',
-        );
-        final modeButton = _between(
-          source,
-          'Widget _buildDrawerModeButton(',
-          'Widget _buildCompactNavigationSearch(',
-        );
+        // 2026-08-20 · el conmutador Navegación/Herramientas se retiró: el
+        // drawer es sólo navegación. Lo que sigue vivo —y lo que este contrato
+        // protege— es que su buscador consuma los roles del chrome y no la
+        // tinta clara de la app.
         final search = _between(
           source,
           'Widget _buildCompactNavigationSearch(',
@@ -76,12 +70,9 @@ void main() {
         );
 
         expect(
-            modeSwitch, contains('theme.colorScheme.surfaceContainerHighest'));
-        expect(modeSwitch, contains('theme.colorScheme.outlineVariant'));
-        expect(modeButton, contains('theme.colorScheme.primaryContainer'));
-        expect(modeButton, contains('theme.colorScheme.onPrimaryContainer'));
-        expect(modeButton, contains('theme.colorScheme.onSurfaceVariant'));
-        expect(modeButton, contains('InkWell('));
+          source,
+          isNot(contains('Widget _buildDrawerModeSwitch(')),
+        );
         expect(search, contains('decoration: InputDecoration('));
         expect(search, contains('prefixIcon: const Icon('));
         expect(search, isNot(contains('fillColor:')));
@@ -99,11 +90,7 @@ void main() {
             themeSource, contains('prefixIconColor: chrome.mutedForeground'));
         expect(themeSource, contains('focusedBorder: fieldBorder.copyWith('));
 
-        for (final implementation in <String>[
-          modeSwitch,
-          modeButton,
-          search,
-        ]) {
+        for (final implementation in <String>[search]) {
           expect(implementation, isNot(contains('Colors.white')));
           expect(implementation, isNot(contains('Colors.black')));
           expect(implementation, isNot(contains('ThemeData.light')));

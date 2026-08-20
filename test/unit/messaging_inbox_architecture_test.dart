@@ -6,6 +6,7 @@ void main() {
   late String provider;
   late String service;
   late String tile;
+  late String inboxHost;
   late String customerPanel;
   late String supplierPanel;
   late String customerChat;
@@ -22,12 +23,21 @@ void main() {
     tile = File(
       'lib/modules/messaging/widgets/conversation_tile.dart',
     ).readAsStringSync();
-    customerPanel = File(
-      'lib/shared/widgets/quick_messages_panel.dart',
+    // 2026-08-20 · Clientes y Proveedores comparten su ciclo de vida en
+    // `ConversationInboxHost`. Lo que antes estaba copiado en los dos paneles
+    // ahora vive ahí una sola vez, así que cada panel se lee JUNTO al común:
+    // el contrato es sobre el comportamiento, no sobre el archivo.
+    inboxHost = File(
+      'lib/shared/widgets/conversation_inbox_host.dart',
     ).readAsStringSync();
-    supplierPanel = File(
-      'lib/shared/widgets/quick_supplier_messages_panel.dart',
-    ).readAsStringSync();
+    customerPanel = inboxHost +
+        File(
+          'lib/shared/widgets/quick_messages_panel.dart',
+        ).readAsStringSync();
+    supplierPanel = inboxHost +
+        File(
+          'lib/shared/widgets/quick_supplier_messages_panel.dart',
+        ).readAsStringSync();
     customerChat = File(
       'lib/public_store/widgets/customer_chat_view.dart',
     ).readAsStringSync();

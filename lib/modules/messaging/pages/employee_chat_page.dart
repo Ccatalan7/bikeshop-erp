@@ -8,6 +8,7 @@ import '../../../shared/models/supplier.dart' as shared_supplier;
 import '../../messaging/models/conversation.dart';
 import '../../messaging/providers/chat_provider.dart';
 import '../../messaging/widgets/chat_window.dart';
+import '../../messaging/widgets/compact_chat_route.dart';
 import '../../messaging/widgets/new_chat_dialog.dart';
 import '../../messaging/widgets/context_side_panel.dart';
 import '../../messaging/widgets/chat_context_panel.dart';
@@ -134,7 +135,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ChatWindow(conversation: targetConv),
+                builder: (_) => CompactChatRoute(conversation: targetConv),
               ),
             );
           }
@@ -1278,7 +1279,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ChatWindow(conversation: conversation),
+            builder: (_) => CompactChatRoute(conversation: conversation),
           ),
         );
       }
@@ -1673,7 +1674,7 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ChatWindow(conversation: conv),
+                  builder: (_) => CompactChatRoute(conversation: conv),
                 ),
               );
             }

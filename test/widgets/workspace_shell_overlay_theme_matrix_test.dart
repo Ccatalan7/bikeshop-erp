@@ -177,7 +177,9 @@ void main() {
           services.rightToolbar.close();
           await tester.pump(const Duration(milliseconds: 250));
 
-          await tester.tap(find.byTooltip('Opciones'));
+          await tester.tap(
+            find.byKey(const ValueKey('sidebar-appearance-entry')),
+          );
           await tester.pump(const Duration(milliseconds: 250));
 
           final popup = find.byKey(const ValueKey('sidebar-options-overlay'));
@@ -188,26 +190,30 @@ void main() {
           );
           final popupTheme = Theme.of(tester.element(popup));
           final popupRoles = popupTheme.extension<VinabikeThemeRoles>();
+          // 2026-08-20 · decisión del dueño, invierte el contrato anterior.
+          // El panel se abría con el tema RAÍZ para no salir navy, y por eso
+          // salía blanco SIEMPRE. Pero es el panel donde se elige la paleta: no
+          // se podía previsualizar lo elegido. Ahora hereda el tema de la barra
+          // y su brillo lo decide la luminancia de la paleta, no el modo
+          // claro/oscuro de la app — que es justo lo pedido: «debería tomar la
+          // paleta independientemente si está dark mode o light mode».
           expect(
-            popupTheme.brightness,
-            brightness,
-            reason: '${preset.code}/${brightness.name} popup root brightness',
+            popupTheme.colorScheme.surface,
+            chrome.canvas,
+            reason: '${preset.code}/${brightness.name} popup takes the palette',
           );
           expect(
             popupRoles?.presetCode,
             preset.code,
             reason: '${preset.code}/${brightness.name} popup root preset',
           );
+          // El menú del riel y el del panel comparten esta regla: cualquier
+          // desplegable abierto desde la barra se pinta en su paleta.
           expect(
-            popupTheme.colorScheme.surface,
-            rootTheme.colorScheme.surface,
-            reason: '${preset.code}/${brightness.name} popup content surface',
-          );
-          expect(
-            popupTheme.colorScheme.surface,
-            isNot(chrome.canvas),
-            reason: '${preset.code}/${brightness.name} popup must not capture '
-                'the chromatic sidebar Theme',
+            popupTheme.colorScheme.onSurface,
+            chrome.foreground,
+            reason: '${preset.code}/${brightness.name} popup ink follows the '
+                'palette, so text stays legible on its own surface',
           );
 
           Navigator.of(

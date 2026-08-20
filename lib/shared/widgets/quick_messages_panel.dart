@@ -18,6 +18,7 @@ import '../../modules/messaging/widgets/conversation_tile.dart';
 import '../../modules/messaging/widgets/new_chat_dialog.dart';
 import '../services/image_service.dart';
 import '../services/right_toolbar_service.dart';
+import 'conversation_inbox_host.dart';
 
 enum _MessageFilter {
   all,
@@ -32,105 +33,71 @@ enum _MessageFilter {
 }
 
 class QuickMessagesPanel extends StatefulWidget {
-  const QuickMessagesPanel({super.key});
+  const QuickMessagesPanel({super.key, this.showTitle = true});
+
+  /// En la hoja de Actividad el segmento ya dice «Mensajes»; repetirlo aquí
+  /// gasta una fila de alto en un teléfono. Las acciones de la barra sí siguen.
+  final bool showTitle;
 
   @override
   State<QuickMessagesPanel> createState() => _QuickMessagesPanelState();
 }
 
-class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
-  final TextEditingController _searchController = TextEditingController();
+/// Lo único que Clientes necesita conservar además de lo común: su filtro.
+class _CustomerSessionExtra {
+  const _CustomerSessionExtra(this.filter);
+  final _MessageFilter filter;
+}
 
+class _QuickMessagesPanelState extends State<QuickMessagesPanel>
+    with ConversationInboxHost<QuickMessagesPanel> {
+  // El buscador, el alcance activo/historial, la conversación abierta, la
+  // recarga y la retención de sesión los aporta `ConversationInboxHost`. Aquí
+  // queda sólo lo que es de clientes.
   _MessageFilter _filter = _MessageFilter.all;
-  String _searchTerm = '';
-  String? _selectedConversationId;
-  String? _panelActiveConversationId;
   String? _openingCustomerId;
-  ChatProvider? _chatProvider;
   Set<String> _pinnedConversationIds = {};
   List<Customer> _whatsAppContacts = [];
-  bool _isRefreshing = false;
   bool _isLoadingWhatsAppContacts = false;
-  bool _showOnlyActiveChats = true;
+
+  @override
+  ToolbarTool get inboxTool => ToolbarTool.messages;
+
+  @override
+  Object? captureSessionExtra() => _CustomerSessionExtra(_filter);
+
+  @override
+  void restoreSessionExtra(Object? extra) {
+    if (extra is _CustomerSessionExtra) _filter = extra.filter;
+  }
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_handleSearchChanged);
-    ConversationActivity.showOnlyActiveChats.addListener(
-      _handleActiveModeChanged,
-    );
-    unawaited(_loadPreferences());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      unawaited(
-        context.read<ChatProvider>().refreshConversationContextHints(),
-      );
-    });
+    initInboxHost();
   }
+
+  /// Los contactos de WhatsApp sin conversación son datos propios de esta
+  /// bandeja: el común los recarga junto a las conversaciones, igual que
+  /// Proveedores recarga los suyos.
+  @override
+  Future<void> loadInboxData() => _loadWhatsAppContacts();
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _chatProvider = context.read<ChatProvider>();
+    didChangeInboxDependencies();
   }
 
   @override
   void dispose() {
-    final panelActiveConversationId = _panelActiveConversationId;
-    if (panelActiveConversationId != null) {
-      _chatProvider?.clearActiveConversation(
-        conversationId: panelActiveConversationId,
-        notify: false,
-      );
-    }
-    _searchController.removeListener(_handleSearchChanged);
-    ConversationActivity.showOnlyActiveChats.removeListener(
-      _handleActiveModeChanged,
-    );
-    _searchController.dispose();
+    disposeInboxHost();
     super.dispose();
   }
 
-  void _handleSearchChanged() {
-    final nextSearchTerm = ConversationSearch.normalize(_searchController.text);
-    setState(() => _searchTerm = nextSearchTerm);
-    if (nextSearchTerm.isNotEmpty && _whatsAppContacts.isEmpty) {
-      unawaited(_loadWhatsAppContacts());
-    }
-  }
 
-  Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    final pinned = prefs.getStringList('quick_messages_pinned_conversations');
-    final showOnlyActive =
-        prefs.getBool(ConversationActivity.activeOnlyPreferenceKey) ?? true;
-    if (!mounted) return;
-    if (ConversationActivity.showOnlyActiveChats.value != showOnlyActive) {
-      ConversationActivity.showOnlyActiveChats.value = showOnlyActive;
-    }
-    setState(() {
-      _pinnedConversationIds = pinned?.toSet() ?? {};
-      _showOnlyActiveChats = ConversationActivity.showOnlyActiveChats.value;
-    });
-  }
 
-  Future<void> _setShowOnlyActiveChats(bool value) async {
-    if (ConversationActivity.showOnlyActiveChats.value != value) {
-      ConversationActivity.showOnlyActiveChats.value = value;
-    } else if (mounted) {
-      setState(() => _showOnlyActiveChats = value);
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(ConversationActivity.activeOnlyPreferenceKey, value);
-  }
 
-  void _handleActiveModeChanged() {
-    if (!mounted) return;
-    final value = ConversationActivity.showOnlyActiveChats.value;
-    if (_showOnlyActiveChats == value) return;
-    setState(() => _showOnlyActiveChats = value);
-  }
 
   Future<void> _loadWhatsAppContacts() async {
     if (_isLoadingWhatsAppContacts) return;
@@ -181,18 +148,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     );
   }
 
-  Future<void> _refresh() async {
-    setState(() => _isRefreshing = true);
-    final provider = context.read<ChatProvider>();
-    await provider.loadConversations(refreshContextHints: false);
-    await provider.refreshConversationContextHints();
-    if (_searchTerm.isNotEmpty || _whatsAppContacts.isNotEmpty) {
-      await _loadWhatsAppContacts();
-    }
-    if (mounted) {
-      setState(() => _isRefreshing = false);
-    }
-  }
 
   void _showNewChatDialog() {
     showDialog(
@@ -229,11 +184,11 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       if (!mounted) return;
       final conversationId = provider.activeConversationId;
       setState(() {
-        _selectedConversationId = conversationId;
-        _panelActiveConversationId = conversationId;
+        selectedConversationId = conversationId;
+        panelActiveConversationId = conversationId;
         _openingCustomerId = null;
       });
-      _searchController.clear();
+      searchController.clear();
     } catch (error) {
       debugPrint('Error opening WhatsApp customer from quick search: $error');
       if (!mounted) return;
@@ -248,7 +203,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   }
 
   Conversation? _selectedConversation(List<Conversation> conversations) {
-    final selectedId = _selectedConversationId;
+    final selectedId = selectedConversationId;
     if (selectedId == null) return null;
 
     for (final conversation in conversations) {
@@ -261,10 +216,10 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   Widget build(BuildContext context) {
     final provider = context.watch<ChatProvider>();
     final selectedConversation = _selectedConversation(provider.conversations);
-    if (_selectedConversationId != null && selectedConversation == null) {
+    if (selectedConversationId != null && selectedConversation == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _selectedConversationId == null) return;
-        _returnToInbox(_selectedConversationId!);
+        if (!mounted || selectedConversationId == null) return;
+        returnToInbox(selectedConversationId!);
       });
     }
 
@@ -300,7 +255,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
               IconButton(
                 icon: const Icon(Icons.arrow_back, size: 20),
                 tooltip: 'Volver a bandeja de entrada',
-                onPressed: () => _returnToInbox(conversation.id),
+                onPressed: () => returnToInbox(conversation.id),
               ),
               const Expanded(
                 child: Text(
@@ -330,21 +285,28 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
   Widget _buildActionBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
+      // Sin título la barra es sólo acciones: se ciñe para no dejar un hueco
+      // entre el segmento y el buscador.
+      padding: widget.showTitle
+          ? const EdgeInsets.fromLTRB(12, 10, 8, 8)
+          : const EdgeInsets.fromLTRB(12, 0, 4, 0),
       child: LayoutBuilder(
         builder: (context, constraints) => Row(
           children: [
-            Expanded(
-              child: Text(
-                'Mensajería',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
-                    ),
-              ),
-            ),
+            if (widget.showTitle)
+              Expanded(
+                child: Text(
+                  'Mensajería',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                ),
+              )
+            else
+              const Spacer(),
             _buildActiveModeMenu(compact: constraints.maxWidth < 300),
             const SizedBox(width: 2),
             IconButton(
@@ -355,9 +317,9 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
             ),
             IconButton(
               tooltip: 'Recargar',
-              onPressed: _isRefreshing ? null : _refresh,
+              onPressed: isRefreshing ? null : refreshInbox,
               visualDensity: VisualDensity.compact,
-              icon: _isRefreshing
+              icon: isRefreshing
                   ? const SizedBox(
                       width: 18,
                       height: 18,
@@ -381,16 +343,16 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: TextField(
-        controller: _searchController,
+        controller: searchController,
         decoration: InputDecoration(
           isDense: true,
           prefixIcon: const Icon(Icons.search, size: 18),
-          suffixIcon: _searchTerm.isEmpty
+          suffixIcon: searchTerm.isEmpty
               ? null
               : IconButton(
                   icon: const Icon(Icons.close, size: 18),
                   tooltip: 'Limpiar búsqueda',
-                  onPressed: _searchController.clear,
+                  onPressed: searchController.clear,
                 ),
           hintText: 'Nombre, teléfono, trabajo, bici o factura',
           border: OutlineInputBorder(
@@ -404,10 +366,10 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   Widget _buildActiveModeMenu({bool compact = false}) {
     final colorScheme = Theme.of(context).colorScheme;
     return PopupMenuButton<bool>(
-      initialValue: _showOnlyActiveChats,
+      initialValue: showOnlyActiveChats,
       tooltip: 'Elegir alcance de la bandeja',
       padding: EdgeInsets.zero,
-      onSelected: (value) => unawaited(_setShowOnlyActiveChats(value)),
+      onSelected: (value) => unawaited(setShowOnlyActiveChats(value)),
       itemBuilder: (context) => [
         _buildActiveModeMenuItem(
           value: true,
@@ -434,7 +396,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              _showOnlyActiveChats ? Icons.bolt_outlined : Icons.history,
+              showOnlyActiveChats ? Icons.bolt_outlined : Icons.history,
               size: 15,
               color: colorScheme.primary,
             ),
@@ -443,8 +405,8 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 140),
                 child: Text(
-                  _showOnlyActiveChats ? 'Activos' : 'Historial',
-                  key: ValueKey(_showOnlyActiveChats),
+                  showOnlyActiveChats ? 'Activos' : 'Historial',
+                  key: ValueKey(showOnlyActiveChats),
                   style: TextStyle(
                     color: colorScheme.onSurface,
                     fontSize: 11,
@@ -473,7 +435,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final selected = value == _showOnlyActiveChats;
+    final selected = value == showOnlyActiveChats;
     return PopupMenuItem<bool>(
       value: value,
       height: 48,
@@ -536,7 +498,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
           visibleConversations.where((c) => c.isInternal).length,
     };
     final resultCount = _visibleConversationResults(provider).length +
-        (_searchTerm.isEmpty || !_filterAllowsWhatsAppContacts
+        (searchTerm.isEmpty || !_filterAllowsWhatsAppContacts
             ? 0
             : _matchingWhatsAppContacts(provider).take(10).length);
 
@@ -710,7 +672,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
                     duration: const Duration(milliseconds: 140),
                     child: Text(
                       '$resultCount ${resultCount == 1 ? 'resultado' : 'resultados'}',
-                      key: ValueKey('$resultCount-$_filter-$_searchTerm'),
+                      key: ValueKey('$resultCount-$_filter-$searchTerm'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -873,7 +835,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
   }
 
   Widget _buildConversationList(ChatProvider provider) {
-    final isSearching = _searchTerm.isNotEmpty;
+    final isSearching = searchTerm.isNotEmpty;
     final conversations = _visibleConversationResults(provider);
     final contactMatches = isSearching && _filterAllowsWhatsAppContacts
         ? _matchingWhatsAppContacts(provider).take(10).toList()
@@ -886,7 +848,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
         !(isSearching && _isLoadingWhatsAppContacts)) {
       return _buildEmptyState(
         !hasClientConversations,
-        activeModeEmpty: _showOnlyActiveChats &&
+        activeModeEmpty: showOnlyActiveChats &&
             hasClientConversations &&
             !_clientConversations(provider.conversations)
                 .any(_matchesActivityMode),
@@ -894,7 +856,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     }
 
     return RefreshIndicator(
-      onRefresh: _refresh,
+      onRefresh: refreshInbox,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
@@ -967,39 +929,18 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
     final isPinned = _pinnedConversationIds.contains(conversation.id);
     return ConversationTile(
       conversation: conversation,
-      isActive: _selectedConversationId != null &&
-          conversation.id == _selectedConversationId,
+      isActive: selectedConversationId != null &&
+          conversation.id == selectedConversationId,
       isPinned: isPinned,
       isMobile: false,
       subtitle: _subtitle(conversation),
-      onTap: () => _openConversationInPanel(conversation),
+      onTap: () => openConversationInPanel(conversation.id),
       onTogglePinned: () => _togglePinnedConversation(conversation.id),
       onArchive: () => _confirmArchive(provider, conversation),
     );
   }
 
-  void _openConversationInPanel(Conversation conversation) {
-    setState(() {
-      _selectedConversationId = conversation.id;
-      _panelActiveConversationId = conversation.id;
-    });
-  }
 
-  void _returnToInbox(String conversationId) {
-    final shouldClearActive = _panelActiveConversationId == conversationId;
-    setState(() {
-      _selectedConversationId = null;
-      if (shouldClearActive) {
-        _panelActiveConversationId = null;
-      }
-    });
-
-    if (shouldClearActive) {
-      context
-          .read<ChatProvider>()
-          .clearActiveConversation(conversationId: conversationId);
-    }
-  }
 
   Widget _buildSearchSectionHeader({
     required IconData icon,
@@ -1157,16 +1098,16 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
       _filter == _MessageFilter.clients;
 
   bool _matchesActivityMode(Conversation conversation) {
-    return !_showOnlyActiveChats ||
+    return !showOnlyActiveChats ||
         conversation.isInternal ||
         ConversationActivity.isActiveConversation(conversation);
   }
 
   bool _matchesSearch(ChatProvider provider, Conversation conversation) {
-    if (_searchTerm.isEmpty) return true;
+    if (searchTerm.isEmpty) return true;
 
     final hint = conversation.contextHint;
-    return ConversationSearch.matches(_searchTerm, [
+    return ConversationSearch.matches(searchTerm, [
       provider.getChatTitle(conversation),
       conversation.title ?? '',
       conversation.creatorName ?? '',
@@ -1221,7 +1162,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel> {
 
   bool _matchesCustomerSearch(Customer customer) {
     final phone = _normalizedPhone(customer.phone);
-    return ConversationSearch.matches(_searchTerm, [
+    return ConversationSearch.matches(searchTerm, [
       customer.name,
       customer.email ?? '',
       customer.rut,

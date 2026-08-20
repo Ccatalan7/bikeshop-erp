@@ -2014,6 +2014,7 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
         debugPrint(
             '🔔 [WorkspaceRouterView] Notification tap → navigating to: $route');
         try {
+          if (_openChatNotificationInToolbar(route)) return;
           _router.go(route);
         } catch (e) {
           debugPrint(
@@ -2021,6 +2022,44 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
         }
       }
     });
+  }
+
+  /// Una notificación de mensaje abre la bandeja del rail derecho, no el módulo
+  /// `/chat`.
+  ///
+  /// El módulo es la bandeja completa y sirve para trabajar; para «vengo de una
+  /// notificación y quiero contestar esto» es un rodeo, y en teléfono además
+  /// pelea con la barra de estado del sistema. El panel del rail se monta igual
+  /// en escritorio y en compacto —ahí a pantalla completa, con su flecha de
+  /// volver—, así que el mismo desvío sirve para los dos.
+  ///
+  /// Devuelve `true` cuando se hizo cargo; si no, el enrutado normal sigue.
+  bool _openChatNotificationInToolbar(String route) {
+    final uri = Uri.tryParse(route);
+    if (uri == null || uri.path != '/chat') return false;
+
+    final toolbar = Provider.of<RightToolbarService>(context, listen: false);
+    final conversationId = uri.queryParameters['conversation'];
+    if (conversationId == null || conversationId.isEmpty) {
+      // Sin hilo, la notificación sólo dice «tienes mensajes».
+      toolbar.openTool(ToolbarTool.messages);
+      return true;
+    }
+
+    // Proveedores y clientes son dos bandejas: se abre la que le corresponde.
+    // Si el hilo aún no está cargado se cae a Clientes, que es la general, y la
+    // bandeja lo resuelve cuando llegan las conversaciones.
+    final chat = Provider.of<ChatProvider>(context, listen: false);
+    final index =
+        chat.conversations.indexWhere((c) => c.id == conversationId);
+    final isSupplier =
+        index != -1 && chat.conversations[index].isSupplierConversation;
+
+    toolbar.openConversation(
+      tool: isSupplier ? ToolbarTool.supplierMessages : ToolbarTool.messages,
+      conversationId: conversationId,
+    );
+    return true;
   }
 
   @override

@@ -40,19 +40,20 @@ void main() {
     var drawerSource =
         source.substring(classStart, sheetStart) + source.substring(sheetEnd);
 
-    // Misma razón para la hoja que elige el destino de un espacio nuevo: se
-    // muestra como modal sobre el contexto de la app, no sobre el navy del
-    // drawer. Declararle la tinta del chrome la haría ilegible sobre la
-    // superficie clara de la hoja.
-    final launcherStart = drawerSource.indexOf(
-      'Future<void> _openCompactWorkspaceLauncher',
+    // 2026-08-20 · la hoja de espacios nuevos se retiró con el manejo de
+    // workspaces: el drawer es sólo navegación. Su exclusión se va con ella.
+    //
+    // Misma razón que `_showReorderSheet` para la hoja de Apariencia: se abre
+    // como modal sobre el contexto de la app, no sobre el navy del drawer.
+    final appearanceStart = drawerSource.indexOf(
+      'void _showCompactAppearanceSheet',
     );
-    expect(launcherStart, greaterThan(0),
-        reason: 'la hoja de espacios nuevos dejó de existir o cambió de nombre');
-    final launcherEnd = drawerSource.indexOf('\n  Widget ', launcherStart);
-    expect(launcherEnd, greaterThan(launcherStart));
-    drawerSource = drawerSource.substring(0, launcherStart) +
-        drawerSource.substring(launcherEnd);
+    expect(appearanceStart, greaterThan(0),
+        reason: 'la hoja de apariencia dejó de existir o cambió de nombre');
+    final appearanceEnd = drawerSource.indexOf('\n  Widget ', appearanceStart);
+    expect(appearanceEnd, greaterThan(appearanceStart));
+    drawerSource = drawerSource.substring(0, appearanceStart) +
+        drawerSource.substring(appearanceEnd);
 
     final offenders = <String>[];
     for (final match in RegExp(r'ListTile\(').allMatches(drawerSource)) {

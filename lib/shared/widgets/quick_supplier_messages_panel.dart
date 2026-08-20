@@ -16,37 +16,14 @@ import '../../modules/purchases/services/purchase_service.dart';
 import '../models/supplier.dart' as shared_supplier;
 import '../services/authority_scoped_cache.dart';
 import '../services/right_toolbar_service.dart';
+import 'conversation_inbox_host.dart';
 
 enum _SupplierMessageFilter { all, unread }
 
-/// Estado de vista que sobrevive al cierre del panel, guardado en
-/// `RightToolbarService`. Cerrar el toolbar desmonta el panel a propósito —el
-/// `dispose()` cancela la suscripción realtime y suelta el historial—, así que
-/// sin esto reabrir se sentía un arranque en frío: buscador vacío, filtro
-/// reiniciado, scroll arriba y el chat que estabas leyendo perdido.
-///
-/// Sólo vive aquí estado de vista. Los proveedores y las facturas se releen de
-/// la caché con alcance de tenant de `PurchaseService`, y la conversación
-/// seleccionada se valida contra las del tenant actual antes de restaurarse.
-class _SupplierPanelSession {
-  _SupplierPanelSession({
-    required this.searchText,
-    required this.filter,
-    required this.selectedConversationId,
-    required this.showOnlyActiveChats,
-    required this.scope,
-  });
-
-  final String searchText;
+/// Lo único que Proveedores necesita conservar además de lo común: su filtro.
+class _SupplierSessionExtra {
+  const _SupplierSessionExtra(this.filter);
   final _SupplierMessageFilter filter;
-  final String? selectedConversationId;
-  final bool showOnlyActiveChats;
-
-  /// Usuario y tenant a los que pertenece este estado. `RightToolbarService`
-  /// vive en la raíz de la app y sobrevive al cierre de sesión, así que la
-  /// sesión se descarta cuando el scope cambia en vez de confiar en que alguien
-  /// se acuerde de limpiarla.
-  final ErpAuthorityScopeKey? scope;
 }
 
 enum _SupplierToolbarAction {
@@ -57,7 +34,11 @@ enum _SupplierToolbarAction {
 }
 
 class QuickSupplierMessagesPanel extends StatefulWidget {
-  const QuickSupplierMessagesPanel({super.key});
+  const QuickSupplierMessagesPanel({super.key, this.showTitle = true});
+
+  /// En la hoja de Actividad el segmento ya dice «Proveedores»; repetirlo aquí
+  /// gasta una fila de alto en un teléfono. Las acciones de la barra sí siguen.
+  final bool showTitle;
 
   @override
   State<QuickSupplierMessagesPanel> createState() =>
@@ -65,77 +46,44 @@ class QuickSupplierMessagesPanel extends StatefulWidget {
 }
 
 class _QuickSupplierMessagesPanelState
-    extends State<QuickSupplierMessagesPanel> {
+    extends State<QuickSupplierMessagesPanel>
+    with ConversationInboxHost<QuickSupplierMessagesPanel> {
   static const double _compactToolbarBreakpoint = 360;
 
-  final TextEditingController _searchController = TextEditingController();
-
+  // El buscador, el alcance activo/historial, la conversación abierta, la
+  // recarga y la sesión los aporta `ConversationInboxHost`. Aquí queda sólo lo
+  // que es de proveedores.
   _SupplierMessageFilter _filter = _SupplierMessageFilter.all;
-  String _searchTerm = '';
-  String? _selectedConversationId;
-  String? _panelActiveConversationId;
   String? _openingSupplierId;
-  ChatProvider? _chatProvider;
-  RightToolbarService? _toolbarService;
-  ErpAuthorityScopeKey? _supplierAuthorityScope;
   List<shared_supplier.Supplier> _suppliers = [];
   Map<String, List<PurchaseInvoice>> _invoicesBySupplierId = const {};
-  bool _isRefreshing = false;
   bool _isLoadingSuppliers = false;
-  bool _showOnlyActiveChats = true;
+
+  @override
+  ToolbarTool get inboxTool => ToolbarTool.supplierMessages;
+
+  @override
+  Object? captureSessionExtra() => _SupplierSessionExtra(_filter);
+
+  @override
+  void restoreSessionExtra(Object? extra) {
+    if (extra is _SupplierSessionExtra) _filter = extra.filter;
+  }
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_handleSearchChanged);
-    ConversationActivity.showOnlyActiveChats.addListener(
-      _handleActiveModeChanged,
-    );
-    _restoreSession();
-    // Ambos son síncronos y corren antes del primer build a propósito: hacerlo
-    // en un postFrameCallback dejaba una trama en blanco, que es exactamente el
-    // parpadeo de «arranque en frío» que se está corrigiendo.
-    _seedFromWarmCache();
-    unawaited(_loadPreferences());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _resubscribeRestoredConversation();
-      unawaited(
-        context.read<ChatProvider>().refreshConversationContextHints(),
-      );
-      unawaited(_loadSupplierData());
-    });
+    initInboxHost();
   }
 
-  /// Devuelve el buscador, el filtro y el chat abierto al estado en que
-  /// quedaron. No toca datos: sólo lo que el usuario había elegido.
-  void _restoreSession() {
-    // `read` no registra dependencia, así que es seguro en initState; el
-    // campo cacheado se resuelve en didChangeDependencies para poder guardar
-    // desde dispose(), donde el context ya no sirve.
-    final session = context
-        .read<RightToolbarService>()
-        .panelSession<_SupplierPanelSession>(ToolbarTool.supplierMessages);
-    if (session == null) return;
-    if (session.scope != context.read<PurchaseService>().supplierAuthorityScope) {
-      context
-          .read<RightToolbarService>()
-          .clearPanelSession(ToolbarTool.supplierMessages);
-      return;
-    }
-    _filter = session.filter;
-    _showOnlyActiveChats = session.showOnlyActiveChats;
-    _selectedConversationId = session.selectedConversationId;
-    if (session.searchText.isNotEmpty) {
-      // Asignar el texto dispara el listener, que sincroniza `_searchTerm`.
-      _searchController.text = session.searchText;
-    }
-  }
+  @override
+  Future<void> loadInboxData() => _loadSupplierData();
 
   /// Pinta la primera trama con lo que `PurchaseService` ya tiene en memoria en
   /// vez de partir en blanco. La caché es del servicio y tiene alcance de
   /// tenant, así que esto no introduce una segunda copia ni cruza inquilinos.
-  void _seedFromWarmCache() {
+  @override
+  void seedFromWarmCache() {
     if (_suppliers.isNotEmpty) return;
     // `read` no registra dependencia, así que es seguro desde initState.
     final purchaseService = context.read<PurchaseService>();
@@ -147,25 +95,6 @@ class _QuickSupplierMessagesPanelState
     }
   }
 
-  /// El chat restaurado necesita volver a suscribirse: `dispose()` canceló la
-  /// suscripción realtime a propósito. Si la conversación ya no está en el
-  /// tenant actual, se vuelve a la bandeja en vez de mostrar un chat fantasma.
-  void _resubscribeRestoredConversation() {
-    final conversationId = _selectedConversationId;
-    if (conversationId == null || !mounted) return;
-    final provider = context.read<ChatProvider>();
-    final exists =
-        provider.conversations.any((c) => c.id == conversationId);
-    if (!exists) {
-      setState(() {
-        _selectedConversationId = null;
-        _panelActiveConversationId = null;
-      });
-      return;
-    }
-    provider.setActiveConversation(conversationId);
-    _panelActiveConversationId = conversationId;
-  }
 
   List<shared_supplier.Supplier> _visibleSuppliers(
     List<shared_supplier.Supplier> suppliers,
@@ -180,85 +109,19 @@ class _QuickSupplierMessagesPanelState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _chatProvider = context.read<ChatProvider>();
-    _toolbarService = context.read<RightToolbarService>();
-    // Se cachea porque dispose() guarda la sesión y ahí el context ya no sirve.
-    _supplierAuthorityScope =
-        context.read<PurchaseService>().supplierAuthorityScope;
+    didChangeInboxDependencies();
   }
 
   @override
   void dispose() {
-    _saveSession();
-    // Se conserva tal cual: soltar la conversación activa es lo que cancela la
-    // suscripción realtime y compacta el historial. Sin esto, un panel cerrado
-    // seguiría marcando como leídos mensajes que nadie vio y reteniendo
-    // historial sin techo.
-    final panelActiveConversationId = _panelActiveConversationId;
-    if (panelActiveConversationId != null) {
-      _chatProvider?.clearActiveConversation(
-        conversationId: panelActiveConversationId,
-        notify: false,
-      );
-    }
-    _searchController.removeListener(_handleSearchChanged);
-    ConversationActivity.showOnlyActiveChats.removeListener(
-      _handleActiveModeChanged,
-    );
-    _searchController.dispose();
+    disposeInboxHost();
     super.dispose();
   }
 
-  void _saveSession() {
-    final toolbarService = _toolbarService;
-    if (toolbarService == null) return;
-    toolbarService.savePanelSession(
-      ToolbarTool.supplierMessages,
-      _SupplierPanelSession(
-        searchText: _searchController.text,
-        filter: _filter,
-        selectedConversationId: _selectedConversationId,
-        showOnlyActiveChats: _showOnlyActiveChats,
-        scope: _supplierAuthorityScope,
-      ),
-    );
-  }
 
-  void _handleSearchChanged() {
-    setState(
-      () => _searchTerm = ConversationSearch.normalize(_searchController.text),
-    );
-  }
 
-  Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    final showOnlyActive =
-        prefs.getBool(ConversationActivity.activeOnlyPreferenceKey) ?? true;
-    if (!mounted) return;
-    if (ConversationActivity.showOnlyActiveChats.value != showOnlyActive) {
-      ConversationActivity.showOnlyActiveChats.value = showOnlyActive;
-    }
-    setState(() {
-      _showOnlyActiveChats = ConversationActivity.showOnlyActiveChats.value;
-    });
-  }
 
-  Future<void> _setShowOnlyActiveChats(bool value) async {
-    if (ConversationActivity.showOnlyActiveChats.value != value) {
-      ConversationActivity.showOnlyActiveChats.value = value;
-    } else if (mounted) {
-      setState(() => _showOnlyActiveChats = value);
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(ConversationActivity.activeOnlyPreferenceKey, value);
-  }
 
-  void _handleActiveModeChanged() {
-    if (!mounted) return;
-    final value = ConversationActivity.showOnlyActiveChats.value;
-    if (_showOnlyActiveChats == value) return;
-    setState(() => _showOnlyActiveChats = value);
-  }
 
   Future<void> _loadSupplierData() async {
     if (_isLoadingSuppliers) return;
@@ -296,16 +159,6 @@ class _QuickSupplierMessagesPanelState
     return phone?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
   }
 
-  Future<void> _refresh() async {
-    setState(() => _isRefreshing = true);
-    final provider = context.read<ChatProvider>();
-    await provider.loadConversations(refreshContextHints: false);
-    await provider.refreshConversationContextHints();
-    await _loadSupplierData();
-    if (mounted) {
-      setState(() => _isRefreshing = false);
-    }
-  }
 
   void _openFullChat([Conversation? conversation]) {
     final route = conversation == null
@@ -319,7 +172,7 @@ class _QuickSupplierMessagesPanelState
   }
 
   Conversation? _selectedConversation(List<Conversation> conversations) {
-    final selectedId = _selectedConversationId;
+    final selectedId = selectedConversationId;
     if (selectedId == null) return null;
 
     for (final conversation in conversations) {
@@ -332,10 +185,10 @@ class _QuickSupplierMessagesPanelState
   Widget build(BuildContext context) {
     final provider = context.watch<ChatProvider>();
     final selectedConversation = _selectedConversation(provider.conversations);
-    if (_selectedConversationId != null && selectedConversation == null) {
+    if (selectedConversationId != null && selectedConversation == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _selectedConversationId == null) return;
-        _returnToInbox(_selectedConversationId!);
+        if (!mounted || selectedConversationId == null) return;
+        returnToInbox(selectedConversationId!);
       });
     }
 
@@ -371,7 +224,7 @@ class _QuickSupplierMessagesPanelState
               IconButton(
                 icon: const Icon(Icons.arrow_back, size: 20),
                 tooltip: 'Volver a proveedores',
-                onPressed: () => _returnToInbox(conversation.id),
+                onPressed: () => returnToInbox(conversation.id),
               ),
               const Expanded(
                 child: Text(
@@ -401,25 +254,32 @@ class _QuickSupplierMessagesPanelState
 
   Widget _buildActionBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      // Sin título la barra es sólo acciones: se ciñe para no dejar un hueco
+      // entre el segmento y el buscador.
+      padding: widget.showTitle
+          ? const EdgeInsets.fromLTRB(12, 12, 12, 8)
+          : const EdgeInsets.fromLTRB(12, 0, 4, 0),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              'Proveedores',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-            ),
-          ),
+          if (widget.showTitle)
+            Expanded(
+              child: Text(
+                'Proveedores',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
+              ),
+            )
+          else
+            const Spacer(),
           const SizedBox(width: 8),
           IconButton(
             tooltip: 'Recargar',
-            onPressed: _isRefreshing ? null : _refresh,
-            icon: _isRefreshing
+            onPressed: isRefreshing ? null : refreshInbox,
+            icon: isRefreshing
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -441,16 +301,16 @@ class _QuickSupplierMessagesPanelState
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: TextField(
-        controller: _searchController,
+        controller: searchController,
         decoration: InputDecoration(
           isDense: true,
           prefixIcon: const Icon(Icons.search, size: 18),
-          suffixIcon: _searchTerm.isEmpty
+          suffixIcon: searchTerm.isEmpty
               ? null
               : IconButton(
                   icon: const Icon(Icons.close, size: 18),
                   tooltip: 'Limpiar búsqueda',
-                  onPressed: _searchController.clear,
+                  onPressed: searchController.clear,
                 ),
           hintText: 'Buscar proveedores, compras o WhatsApp...',
           border: OutlineInputBorder(
@@ -465,7 +325,7 @@ class _QuickSupplierMessagesPanelState
     final entries = _filteredSupplierEntries(provider);
     final allEntries = _supplierEntries(
       provider,
-      includeInactive: !_showOnlyActiveChats,
+      includeInactive: !showOnlyActiveChats,
     );
     final allCount = allEntries.length;
     final unreadCount = allEntries.where(_isUnreadSupplierEntry).length;
@@ -562,7 +422,7 @@ class _QuickSupplierMessagesPanelState
     required int historyCount,
   }) {
     final filterLabel = _filterLabel(_filter);
-    final scopeLabel = _showOnlyActiveChats ? 'Activos' : 'Historial';
+    final scopeLabel = showOnlyActiveChats ? 'Activos' : 'Historial';
 
     return PopupMenuButton<_SupplierToolbarAction>(
       key: const ValueKey('supplier_toolbar_compact_menu'),
@@ -575,9 +435,9 @@ class _QuickSupplierMessagesPanelState
           case _SupplierToolbarAction.filterUnread:
             setState(() => _filter = _SupplierMessageFilter.unread);
           case _SupplierToolbarAction.showActive:
-            unawaited(_setShowOnlyActiveChats(true));
+            unawaited(setShowOnlyActiveChats(true));
           case _SupplierToolbarAction.showHistory:
-            unawaited(_setShowOnlyActiveChats(false));
+            unawaited(setShowOnlyActiveChats(false));
         }
       },
       itemBuilder: (context) => [
@@ -601,14 +461,14 @@ class _QuickSupplierMessagesPanelState
           icon: Icons.bolt_outlined,
           label: 'Activos',
           count: activeCount,
-          selected: _showOnlyActiveChats,
+          selected: showOnlyActiveChats,
         ),
         _buildCompactToolbarItem(
           action: _SupplierToolbarAction.showHistory,
           icon: Icons.history,
           label: 'Historial',
           count: historyCount,
-          selected: !_showOnlyActiveChats,
+          selected: !showOnlyActiveChats,
         ),
       ],
       child: Semantics(
@@ -773,10 +633,10 @@ class _QuickSupplierMessagesPanelState
   }) {
     return PopupMenuButton<bool>(
       tooltip: 'Elegir actividad',
-      initialValue: _showOnlyActiveChats,
+      initialValue: showOnlyActiveChats,
       position: PopupMenuPosition.under,
       onSelected: (activeOnly) => unawaited(
-        _setShowOnlyActiveChats(activeOnly),
+        setShowOnlyActiveChats(activeOnly),
       ),
       itemBuilder: (context) => [
         _buildActivityScopeItem(
@@ -793,8 +653,8 @@ class _QuickSupplierMessagesPanelState
         ),
       ],
       child: _buildToolbarMenuLabel(
-        icon: _showOnlyActiveChats ? Icons.bolt_outlined : Icons.history,
-        label: _showOnlyActiveChats ? 'Activos' : 'Historial',
+        icon: showOnlyActiveChats ? Icons.bolt_outlined : Icons.history,
+        label: showOnlyActiveChats ? 'Activos' : 'Historial',
       ),
     );
   }
@@ -807,7 +667,7 @@ class _QuickSupplierMessagesPanelState
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final selected = activeOnly == _showOnlyActiveChats;
+    final selected = activeOnly == showOnlyActiveChats;
 
     return PopupMenuItem<bool>(
       value: activeOnly,
@@ -917,13 +777,13 @@ class _QuickSupplierMessagesPanelState
     if (entries.isEmpty && !_isLoadingSuppliers) {
       return _buildEmptyState(
         isTotallyEmpty: _supplierEntries(provider).isEmpty,
-        activeModeEmpty: _showOnlyActiveChats &&
+        activeModeEmpty: showOnlyActiveChats &&
             _supplierEntries(provider, includeInactive: true).isNotEmpty,
       );
     }
 
     return RefreshIndicator(
-      onRefresh: _refresh,
+      onRefresh: refreshInbox,
       child: ListView.builder(
         // Devuelve el scroll donde estaba al reabrir el panel: el bucket vive
         // en la ruta, que sobrevive al desmontaje del panel.
@@ -960,11 +820,11 @@ class _QuickSupplierMessagesPanelState
     final colorScheme = theme.colorScheme;
     final conversation = entry.conversation;
     final isSelected = conversation != null &&
-        _selectedConversationId != null &&
-        conversation.id == _selectedConversationId;
+        selectedConversationId != null &&
+        conversation.id == selectedConversationId;
     final isOpening = _openingSupplierId == entry.supplier.id;
     final preview = conversation?.lastMessageContent?.trim();
-    final invoice = entry.relevantInvoice(_showOnlyActiveChats);
+    final invoice = entry.relevantInvoice(showOnlyActiveChats);
 
     if (conversation != null) {
       return ConversationTile(
@@ -982,7 +842,7 @@ class _QuickSupplierMessagesPanelState
         secondaryContextLine: invoice == null
             ? entry.phone
             : _formatCLP(invoice.balance > 0 ? invoice.balance : invoice.total),
-        onTap: () => _openConversationInPanel(conversation),
+        onTap: () => openConversationInPanel(conversation.id),
         onArchive: () => _confirmArchive(conversation),
       );
     }
@@ -1185,7 +1045,7 @@ class _QuickSupplierMessagesPanelState
   Future<void> _openSupplierChat(_QuickSupplierChatEntry entry) async {
     final conversation = entry.conversation;
     if (conversation != null) {
-      _openConversationInPanel(conversation);
+      openConversationInPanel(conversation.id);
       return;
     }
 
@@ -1201,11 +1061,11 @@ class _QuickSupplierMessagesPanelState
       if (!mounted) return;
       final conversationId = provider.activeConversationId;
       setState(() {
-        _selectedConversationId = conversationId;
-        _panelActiveConversationId = conversationId;
+        selectedConversationId = conversationId;
+        panelActiveConversationId = conversationId;
         _openingSupplierId = null;
       });
-      _searchController.clear();
+      searchController.clear();
     } catch (error) {
       debugPrint('Error opening WhatsApp supplier from quick panel: $error');
       if (!mounted) return;
@@ -1219,35 +1079,14 @@ class _QuickSupplierMessagesPanelState
     }
   }
 
-  void _openConversationInPanel(Conversation conversation) {
-    setState(() {
-      _selectedConversationId = conversation.id;
-      _panelActiveConversationId = conversation.id;
-    });
-  }
 
-  void _returnToInbox(String conversationId) {
-    final shouldClearActive = _panelActiveConversationId == conversationId;
-    setState(() {
-      _selectedConversationId = null;
-      if (shouldClearActive) {
-        _panelActiveConversationId = null;
-      }
-    });
-
-    if (shouldClearActive) {
-      context
-          .read<ChatProvider>()
-          .clearActiveConversation(conversationId: conversationId);
-    }
-  }
 
   List<_QuickSupplierChatEntry> _filteredSupplierEntries(
     ChatProvider provider,
   ) {
     return _supplierEntries(
       provider,
-      includeInactive: !_showOnlyActiveChats,
+      includeInactive: !showOnlyActiveChats,
     ).where(_matchesFilter).where(_matchesSearch).toList()
       ..sort(_compareSupplierEntries);
   }
@@ -1261,7 +1100,7 @@ class _QuickSupplierMessagesPanelState
         .toList();
     return _quickSupplierEntries(
       supplierConversations,
-      includeInactive: includeInactive ?? !_showOnlyActiveChats,
+      includeInactive: includeInactive ?? !showOnlyActiveChats,
     );
   }
 
@@ -1393,8 +1232,8 @@ class _QuickSupplierMessagesPanelState
   }
 
   bool _matchesSearch(_QuickSupplierChatEntry entry) {
-    if (_searchTerm.isEmpty) return true;
-    return ConversationSearch.matches(_searchTerm, [
+    if (searchTerm.isEmpty) return true;
+    return ConversationSearch.matches(searchTerm, [
       entry.supplier.name,
       entry.supplier.legalName,
       entry.supplier.tradeName,
