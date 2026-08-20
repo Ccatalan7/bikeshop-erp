@@ -417,6 +417,10 @@ class _ChatWindowState extends State<ChatWindow> {
   bool _isSendingMessage = false;
   bool _isEmojiPickerOpen = false;
   OverlayEntry? _emojiOverlayEntry;
+  /// Cuando el panel de emojis se abre desde el «+» de una reacción, este es el
+  /// mensaje al que va dirigido. Nulo = el panel escribe en el compositor, que
+  /// es su uso original.
+  Message? _emojiPickerReactionTarget;
   int _selectedEmojiCategoryIndex = 0;
   int _openingUnreadCount = 0;
   String? _openingUnreadConversationId;
@@ -910,6 +914,22 @@ class _ChatWindowState extends State<ChatWindow> {
     setState(() {});
   }
 
+  /// Abre el panel de emojis del chat apuntando a un mensaje, para el «+» de
+  /// la barra de reacciones. Se ancla y se dibuja igual que el del compositor:
+  /// dentro del chat, no como un diálogo flotante al medio de la pantalla.
+  void _openEmojiPickerForReaction(Message msg) {
+    _removeEmojiOverlay();
+    _removeOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    _emojiPickerReactionTarget = msg;
+    _isEmojiPickerOpen = true;
+    _emojiOverlayEntry = OverlayEntry(
+      builder: (context) => _buildEmojiOverlay(context),
+    );
+    Overlay.of(context).insert(_emojiOverlayEntry!);
+    setState(() {});
+  }
+
   void _hideEmojiPicker({bool restoreComposerFocus = false}) {
     _removeEmojiOverlay();
     if (mounted) setState(() {});
@@ -920,6 +940,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _emojiOverlayEntry?.remove();
     _emojiOverlayEntry = null;
     _isEmojiPickerOpen = false;
+    _emojiPickerReactionTarget = null;
     _emojiSearchController.clear();
   }
 
@@ -1217,6 +1238,15 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _insertEmoji(String emoji) {
+    // Mismo panel, distinto destino. Un segundo selector para reaccionar se
+    // desincronizaría del del compositor y, peor, WhatsApp no lo tiene: es el
+    // mismo teclado de emojis abierto desde otro lado.
+    final reactionTarget = _emojiPickerReactionTarget;
+    if (reactionTarget != null) {
+      _hideEmojiPicker();
+      unawaited(_toggleReaction(reactionTarget, emoji));
+      return;
+    }
     final value = _messageController.value;
     final text = value.text;
     final selection = _focusNode.hasFocus
@@ -9380,7 +9410,24 @@ class _ChatWindowState extends State<ChatWindow> {
 
                       // Bubble
                       Flexible(
-                        child: Container(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                        Builder(
+                          builder: (bubbleContext) => GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onLongPress: () => _showReactionPicker(
+                            bubbleContext,
+                            msg,
+                            isMe: false,
+                          ),
+                          onSecondaryTap: () => _showReactionPicker(
+                            bubbleContext,
+                            msg,
+                            isMe: false,
+                          ),
+                          child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 6),
                           constraints: BoxConstraints(
@@ -9423,6 +9470,11 @@ class _ChatWindowState extends State<ChatWindow> {
                             ],
                           ),
                         ),
+                        ),
+                        ),
+                            _buildReactionStrip(context, msg, isMe: false),
+                          ],
+                        ),
                       ),
                       const SizedBox(width: 40),
                     ],
@@ -9443,7 +9495,24 @@ class _ChatWindowState extends State<ChatWindow> {
                   children: [
                     const SizedBox(width: 40),
                     Flexible(
-                      child: Container(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                      Builder(
+                        builder: (bubbleContext) => GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onLongPress: () => _showReactionPicker(
+                          bubbleContext,
+                          msg,
+                          isMe: true,
+                        ),
+                        onSecondaryTap: () => _showReactionPicker(
+                          bubbleContext,
+                          msg,
+                          isMe: true,
+                        ),
+                        child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 6),
                         constraints: BoxConstraints(
@@ -9478,6 +9547,11 @@ class _ChatWindowState extends State<ChatWindow> {
                           ],
                         ),
                       ),
+                      ),
+                      ),
+                      _buildReactionStrip(context, msg, isMe: true),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -9509,6 +9583,246 @@ class _ChatWindowState extends State<ChatWindow> {
         return Icons.image;
       default:
         return Icons.insert_drive_file;
+    }
+  }
+
+  /// Los chips de reacción, colgando del borde inferior de la burbuja como en
+  /// WhatsApp. El margen negativo es lo que produce el solape característico;
+  /// sin él quedan flotando y se leen como otro mensaje.
+  ///
+  /// Un chip propio se marca y volver a tocarlo la retira, que es la regla de
+  /// WhatsApp: una reacción por persona, no un contador acumulable.
+  Widget _buildReactionStrip(
+    BuildContext context,
+    Message msg, {
+    required bool isMe,
+  }) {
+    final provider = context.watch<ChatProvider>();
+    final groups = provider.reactionGroupsFor(msg.id);
+    if (groups.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    // El solape va por traslación y no por padding negativo: `RenderPadding`
+    // exige valores no negativos y un `top: -6` revienta apenas se pinta.
+    return Transform.translate(
+      offset: const Offset(0, -6),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: isMe ? 0 : 8,
+          right: isMe ? 8 : 0,
+          bottom: 2,
+        ),
+        child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        alignment: isMe ? WrapAlignment.end : WrapAlignment.start,
+        children: [
+          for (final group in groups)
+            Tooltip(
+              message: group.tooltip,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _toggleReaction(msg, group.emoji),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  // Los dos chips se ven igual, entrante o saliente. La única
+                  // diferencia es un tinte suave cuando la reacción es tuya:
+                  // el anillo de color fuerte los hacía parecer controles
+                  // distintos según de qué lado colgaran.
+                  decoration: BoxDecoration(
+                    color: group.includesCurrentUser
+                        ? theme.colorScheme.primaryContainer
+                            .withValues(alpha: 0.55)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 1,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(group.emoji, style: const TextStyle(fontSize: 13)),
+                      if (group.count > 1) ...[
+                        const SizedBox(width: 3),
+                        Text(
+                          '${group.count}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Los seis de WhatsApp, en su orden. No es un selector de emoji completo a
+  /// propósito: la reacción rápida vive de ser un gesto, no de un buscador.
+  /// Valor que devuelve el «+». No es un emoji, así que no puede chocar con
+  /// uno elegido de verdad.
+  static const String _moreReactionsSentinel = '__mas_emojis__';
+
+  static const List<String> _quickReactionEmojis = [
+    '👍',
+    '❤️',
+    '😂',
+    '😮',
+    '😢',
+    '🙏',
+  ];
+
+  /// Abre la barra rápida COLGADA DE LA BURBUJA, como en WhatsApp: justo
+  /// encima del mensaje y alineada a su lado, no donde cayó el dedo.
+  ///
+  /// [context] tiene que ser el de la burbuja —por eso cada una va envuelta en
+  /// un `Builder`—: anclarla al contexto del constructor la pegaba al borde de
+  /// la fila completa, que es ancho, y la barra quedaba flotando lejos del
+  /// mensaje al que pertenece.
+  ///
+  /// Se usa `useRootNavigator` porque el menú, en el navegador anidado, se
+  /// acomoda dentro del overlay del área de contenido —que no incluye el rail
+  /// derecho— y terminaba dibujado sobre el dashboard.
+  Future<void> _showReactionPicker(
+    BuildContext context,
+    Message msg, {
+    required bool isMe,
+  }) async {
+    final overlay = Overlay.of(context, rootOverlay: true)
+        .context
+        .findRenderObject() as RenderBox?;
+    final bubble = context.findRenderObject() as RenderBox?;
+    if (overlay == null || bubble == null || !bubble.hasSize) return;
+
+    const emojiSlot = 30.0;
+    const barHeight = 40.0;
+    const gap = 6.0;
+    // +1 por el botón «+», que abre el catálogo completo igual que WhatsApp:
+    // los seis rápidos son un atajo, no el límite de lo que se puede poner.
+    final barWidth = (_quickReactionEmojis.length + 1) * emojiSlot + 10.0;
+
+    final origin = bubble.localToGlobal(Offset.zero, ancestor: overlay);
+    final bubbleRect = origin & bubble.size;
+
+    // Alineada al lado del que sale la burbuja, igual que WhatsApp.
+    var left = isMe ? bubbleRect.right - barWidth : bubbleRect.left;
+    // Encima del mensaje; si no cabe arriba, se pasa abajo en vez de salirse.
+    var top = bubbleRect.top - barHeight - gap;
+    if (top < 0) top = bubbleRect.bottom + gap;
+
+    left = left.clamp(
+      0.0,
+      (overlay.size.width - barWidth).clamp(0.0, double.infinity),
+    );
+    top = top.clamp(
+      0.0,
+      (overlay.size.height - barHeight).clamp(0.0, double.infinity),
+    );
+
+    final mine = context.read<ChatProvider>().myReactionFor(msg.id);
+    final theme = Theme.of(context);
+
+    final selected = await showMenu<String>(
+      context: context,
+      useRootNavigator: true,
+      position: RelativeRect.fromLTRB(
+        left,
+        top,
+        overlay.size.width - left - barWidth,
+        overlay.size.height - top,
+      ),
+      constraints: BoxConstraints(minWidth: barWidth, maxWidth: barWidth),
+      items: [
+        PopupMenuItem<String>(
+          enabled: false,
+          height: barHeight,
+          padding: EdgeInsets.zero,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final emoji in _quickReactionEmojis)
+                InkWell(
+                  borderRadius: BorderRadius.circular(15),
+                  onTap: () => Navigator.of(context, rootNavigator: true)
+                      .pop(emoji),
+                  child: Container(
+                    width: emojiSlot,
+                    height: emojiSlot,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      // El que ya pusiste se ve elegido; tocarlo lo retira.
+                      color: emoji == mine
+                          ? theme.colorScheme.primaryContainer
+                          : Colors.transparent,
+                    ),
+                    child: Text(emoji, style: const TextStyle(fontSize: 17)),
+                  ),
+                ),
+              InkWell(
+                borderRadius: BorderRadius.circular(15),
+                onTap: () => Navigator.of(context, rootNavigator: true)
+                    .pop(_moreReactionsSentinel),
+                child: Container(
+                  width: emojiSlot,
+                  height: emojiSlot,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: theme.colorScheme.surfaceContainerHighest,
+                  ),
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 18,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (selected == null) return;
+    if (selected == _moreReactionsSentinel) {
+      if (!mounted) return;
+      _openEmojiPickerForReaction(msg);
+      return;
+    }
+    await _toggleReaction(msg, selected);
+  }
+
+  Future<void> _toggleReaction(Message msg, String emoji) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await context.read<ChatProvider>().toggleMyReaction(
+            message: msg,
+            emoji: emoji,
+          );
+    } catch (error) {
+      debugPrint('No se pudo cambiar la reacción: $error');
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('No se pudo cambiar la reacción')),
+      );
     }
   }
 

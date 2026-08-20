@@ -8,6 +8,7 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
 import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
+import '../models/message_reaction.dart';
 import '../services/conversation_context_hint_cache.dart';
 import '../services/meta_messaging_service.dart';
 import '../services/messaging_service.dart';
@@ -132,6 +133,18 @@ class ChatProvider extends ChangeNotifier {
 
   // Subscriptions
   StreamSubscription? _messagesSubscription;
+  StreamSubscription? _reactionsSubscription;
+  // Reacciones del chat abierto, por id de mensaje. Viven aparte del timeline
+  // porque son de otra tabla: `messages` se transmite por realtime y un stream
+  // de Supabase no trae relaciones embebidas.
+  Map<String, List<MessageReaction>> _reactionsByMessageId = const {};
+  /// Última foto conocida de reacciones por conversación. Sobrevive al cierre
+  /// del chat para que reabrirlo pinte los chips en la primera trama, en vez de
+  /// dejarlos aparecer cuando llega la consulta inicial del stream. Es el mismo
+  /// principio que el estado de vista del panel: el widget es desechable, lo
+  /// que se muestra no tiene por qué reconstruirse desde cero.
+  final Map<String, Map<String, List<MessageReaction>>>
+      _reactionsByConversation = {};
   RealtimeChannel? _conversationsSubscription;
   StreamSubscription? _notificationSubscription;
   StreamSubscription<AuthState>? _authStateSubscription;
@@ -472,12 +485,16 @@ class ChatProvider extends ChangeNotifier {
     _messagesRetryTimer?.cancel();
     _contextHintCachePersistTimer?.cancel();
     unawaited(_messagesSubscription?.cancel() ?? Future<void>.value());
+    unawaited(_reactionsSubscription?.cancel() ?? Future<void>.value());
     unawaited(_notificationSubscription?.cancel() ?? Future<void>.value());
     final conversationsSubscription = _conversationsSubscription;
     if (conversationsSubscription != null) {
       unawaited(conversationsSubscription.unsubscribe());
     }
     _messagesSubscription = null;
+    _reactionsSubscription = null;
+    _reactionsByMessageId = const {};
+    _reactionsByConversation.clear();
     _notificationSubscription = null;
     _conversationsSubscription = null;
 
@@ -1806,6 +1823,9 @@ class ChatProvider extends ChangeNotifier {
     _messagesRetryAttempt = 0;
     _messagesSubscription?.cancel();
     _messagesSubscription = null;
+    _reactionsSubscription?.cancel();
+    _reactionsSubscription = null;
+    _reactionsByMessageId = const {};
 
     _activeConversationId = null;
     _activeMessages = [];
@@ -1815,9 +1835,94 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  /// Reacciones del mensaje, ya agrupadas por emoji y sabiendo si el usuario
+  /// actual está dentro.
+  List<MessageReactionGroup> reactionGroupsFor(String messageId) {
+    final reactions = _reactionsByMessageId[messageId];
+    if (reactions == null || reactions.isEmpty) {
+      return const <MessageReactionGroup>[];
+    }
+    return MessageReactionGroup.group(
+      reactions,
+      currentUserId: _service.currentUserId,
+    );
+  }
+
+  /// El emoji con el que el usuario actual reaccionó a este mensaje, si hay.
+  String? myReactionFor(String messageId) {
+    final userId = _service.currentUserId;
+    if (userId == null) return null;
+    for (final reaction in _reactionsByMessageId[messageId] ?? const []) {
+      if (reaction.reactorUserId == userId) return reaction.emoji;
+    }
+    return null;
+  }
+
+  /// Pone, reemplaza o quita la reacción del usuario sobre un mensaje.
+  ///
+  /// Tocar el mismo emoji que ya pusiste la retira, como en WhatsApp. El
+  /// realtime trae el resultado; no se pinta optimista para no mostrar una
+  /// reacción que el servidor podría rechazar por permisos.
+  Future<void> toggleMyReaction({
+    required Message message,
+    required String emoji,
+  }) async {
+    // Tocar el emoji que ya pusiste lo retira, como en WhatsApp.
+    final isRemoval = myReactionFor(message.id) == emoji;
+
+    final index =
+        _conversations.indexWhere((c) => c.id == message.conversationId);
+    final conversation = index == -1 ? null : _conversations[index];
+
+    // En una conversación de WhatsApp la reacción tiene que llegarle al
+    // contacto. Escribirla sólo en nuestra base mostraría en el ERP algo que
+    // el proveedor nunca vio, que es peor que no tener la función.
+    if (conversation != null && conversation.isWhatsApp) {
+      await _service.sendWhatsAppReaction(
+        message: message,
+        emoji: isRemoval ? '' : emoji,
+      );
+      return;
+    }
+
+    if (isRemoval) {
+      await _service.removeMyReaction(messageId: message.id);
+      return;
+    }
+    await _service.setMyReaction(
+      messageId: message.id,
+      conversationId: message.conversationId,
+      emoji: emoji,
+    );
+  }
+
+  void _subscribeToActiveReactions(String conversationId, int operationEpoch) {
+    _reactionsSubscription?.cancel();
+    _reactionsByMessageId =
+        _reactionsByConversation[conversationId] ?? const {};
+    _reactionsSubscription =
+        _service.getReactionsStream(conversationId).listen(
+      (grouped) {
+        // Un evento tardío de una conversación que ya se cerró no debe pintar
+        // reacciones sobre la que está abierta.
+        if (!_isCurrentSession(operationEpoch) ||
+            _activeConversationId != conversationId) {
+          return;
+        }
+        _reactionsByConversation[conversationId] = grouped;
+        _reactionsByMessageId = grouped;
+        notifyListeners();
+      },
+      onError: (Object error) {
+        debugPrint('Error en el realtime de reacciones: $error');
+      },
+    );
+  }
+
   void _subscribeToActiveMessages(String conversationId) {
     if (_activeConversationId != conversationId) return;
     final operationEpoch = _sessionEpoch;
+    _subscribeToActiveReactions(conversationId, operationEpoch);
 
     _messagesRetryTimer?.cancel();
     _messagesSubscription?.cancel();
@@ -3017,6 +3122,7 @@ class ChatProvider extends ChangeNotifier {
     _contextHintCachePersistTimer?.cancel();
     _messageReceiptRefreshCoalescer.dispose();
     _messagesSubscription?.cancel();
+    _reactionsSubscription?.cancel();
     _conversationsSubscription?.unsubscribe();
     _notificationSubscription?.cancel();
     _authStateSubscription?.cancel();

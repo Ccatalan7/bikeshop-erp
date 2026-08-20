@@ -14,9 +14,40 @@ import '../../modules/messaging/widgets/conversation_tile.dart';
 import '../../modules/purchases/models/purchase_invoice.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../models/supplier.dart' as shared_supplier;
+import '../services/authority_scoped_cache.dart';
 import '../services/right_toolbar_service.dart';
 
 enum _SupplierMessageFilter { all, unread }
+
+/// Estado de vista que sobrevive al cierre del panel, guardado en
+/// `RightToolbarService`. Cerrar el toolbar desmonta el panel a propósito —el
+/// `dispose()` cancela la suscripción realtime y suelta el historial—, así que
+/// sin esto reabrir se sentía un arranque en frío: buscador vacío, filtro
+/// reiniciado, scroll arriba y el chat que estabas leyendo perdido.
+///
+/// Sólo vive aquí estado de vista. Los proveedores y las facturas se releen de
+/// la caché con alcance de tenant de `PurchaseService`, y la conversación
+/// seleccionada se valida contra las del tenant actual antes de restaurarse.
+class _SupplierPanelSession {
+  _SupplierPanelSession({
+    required this.searchText,
+    required this.filter,
+    required this.selectedConversationId,
+    required this.showOnlyActiveChats,
+    required this.scope,
+  });
+
+  final String searchText;
+  final _SupplierMessageFilter filter;
+  final String? selectedConversationId;
+  final bool showOnlyActiveChats;
+
+  /// Usuario y tenant a los que pertenece este estado. `RightToolbarService`
+  /// vive en la raíz de la app y sobrevive al cierre de sesión, así que la
+  /// sesión se descarta cuando el scope cambia en vez de confiar en que alguien
+  /// se acuerde de limpiarla.
+  final ErpAuthorityScopeKey? scope;
+}
 
 enum _SupplierToolbarAction {
   filterAll,
@@ -45,6 +76,8 @@ class _QuickSupplierMessagesPanelState
   String? _panelActiveConversationId;
   String? _openingSupplierId;
   ChatProvider? _chatProvider;
+  RightToolbarService? _toolbarService;
+  ErpAuthorityScopeKey? _supplierAuthorityScope;
   List<shared_supplier.Supplier> _suppliers = [];
   Map<String, List<PurchaseInvoice>> _invoicesBySupplierId = const {};
   bool _isRefreshing = false;
@@ -58,9 +91,15 @@ class _QuickSupplierMessagesPanelState
     ConversationActivity.showOnlyActiveChats.addListener(
       _handleActiveModeChanged,
     );
+    _restoreSession();
+    // Ambos son síncronos y corren antes del primer build a propósito: hacerlo
+    // en un postFrameCallback dejaba una trama en blanco, que es exactamente el
+    // parpadeo de «arranque en frío» que se está corrigiendo.
+    _seedFromWarmCache();
     unawaited(_loadPreferences());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _resubscribeRestoredConversation();
       unawaited(
         context.read<ChatProvider>().refreshConversationContextHints(),
       );
@@ -68,14 +107,93 @@ class _QuickSupplierMessagesPanelState
     });
   }
 
+  /// Devuelve el buscador, el filtro y el chat abierto al estado en que
+  /// quedaron. No toca datos: sólo lo que el usuario había elegido.
+  void _restoreSession() {
+    // `read` no registra dependencia, así que es seguro en initState; el
+    // campo cacheado se resuelve en didChangeDependencies para poder guardar
+    // desde dispose(), donde el context ya no sirve.
+    final session = context
+        .read<RightToolbarService>()
+        .panelSession<_SupplierPanelSession>(ToolbarTool.supplierMessages);
+    if (session == null) return;
+    if (session.scope != context.read<PurchaseService>().supplierAuthorityScope) {
+      context
+          .read<RightToolbarService>()
+          .clearPanelSession(ToolbarTool.supplierMessages);
+      return;
+    }
+    _filter = session.filter;
+    _showOnlyActiveChats = session.showOnlyActiveChats;
+    _selectedConversationId = session.selectedConversationId;
+    if (session.searchText.isNotEmpty) {
+      // Asignar el texto dispara el listener, que sincroniza `_searchTerm`.
+      _searchController.text = session.searchText;
+    }
+  }
+
+  /// Pinta la primera trama con lo que `PurchaseService` ya tiene en memoria en
+  /// vez de partir en blanco. La caché es del servicio y tiene alcance de
+  /// tenant, así que esto no introduce una segunda copia ni cruza inquilinos.
+  void _seedFromWarmCache() {
+    if (_suppliers.isNotEmpty) return;
+    // `read` no registra dependencia, así que es seguro desde initState.
+    final purchaseService = context.read<PurchaseService>();
+    if (!purchaseService.hasSuppliersCache) return;
+    _suppliers = _visibleSuppliers(purchaseService.cachedSuppliers);
+    if (purchaseService.hasListInvoicesCache) {
+      _invoicesBySupplierId =
+          _indexInvoicesBySupplier(purchaseService.cachedListInvoices);
+    }
+  }
+
+  /// El chat restaurado necesita volver a suscribirse: `dispose()` canceló la
+  /// suscripción realtime a propósito. Si la conversación ya no está en el
+  /// tenant actual, se vuelve a la bandeja en vez de mostrar un chat fantasma.
+  void _resubscribeRestoredConversation() {
+    final conversationId = _selectedConversationId;
+    if (conversationId == null || !mounted) return;
+    final provider = context.read<ChatProvider>();
+    final exists =
+        provider.conversations.any((c) => c.id == conversationId);
+    if (!exists) {
+      setState(() {
+        _selectedConversationId = null;
+        _panelActiveConversationId = null;
+      });
+      return;
+    }
+    provider.setActiveConversation(conversationId);
+    _panelActiveConversationId = conversationId;
+  }
+
+  List<shared_supplier.Supplier> _visibleSuppliers(
+    List<shared_supplier.Supplier> suppliers,
+  ) {
+    return suppliers
+        .where((supplier) => supplier.isActive)
+        .where((supplier) => _supplierChatPhone(supplier) != null)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _chatProvider = context.read<ChatProvider>();
+    _toolbarService = context.read<RightToolbarService>();
+    // Se cachea porque dispose() guarda la sesión y ahí el context ya no sirve.
+    _supplierAuthorityScope =
+        context.read<PurchaseService>().supplierAuthorityScope;
   }
 
   @override
   void dispose() {
+    _saveSession();
+    // Se conserva tal cual: soltar la conversación activa es lo que cancela la
+    // suscripción realtime y compacta el historial. Sin esto, un panel cerrado
+    // seguiría marcando como leídos mensajes que nadie vio y reteniendo
+    // historial sin techo.
     final panelActiveConversationId = _panelActiveConversationId;
     if (panelActiveConversationId != null) {
       _chatProvider?.clearActiveConversation(
@@ -89,6 +207,21 @@ class _QuickSupplierMessagesPanelState
     );
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _saveSession() {
+    final toolbarService = _toolbarService;
+    if (toolbarService == null) return;
+    toolbarService.savePanelSession(
+      ToolbarTool.supplierMessages,
+      _SupplierPanelSession(
+        searchText: _searchController.text,
+        filter: _filter,
+        selectedConversationId: _selectedConversationId,
+        showOnlyActiveChats: _showOnlyActiveChats,
+        scope: _supplierAuthorityScope,
+      ),
+    );
   }
 
   void _handleSearchChanged() {
@@ -129,7 +262,13 @@ class _QuickSupplierMessagesPanelState
 
   Future<void> _loadSupplierData() async {
     if (_isLoadingSuppliers) return;
-    setState(() => _isLoadingSuppliers = true);
+    // El indicador sólo aparece cuando no hay nada que mostrar. Con la lista ya
+    // en pantalla, la relectura ocurre en silencio y reemplaza el contenido al
+    // llegar: eso es lo que separa «se actualiza» de «se reinicia».
+    final showIndicator = _suppliers.isEmpty;
+    if (showIndicator) {
+      setState(() => _isLoadingSuppliers = true);
+    }
     try {
       final purchaseService = context.read<PurchaseService>();
       final suppliers = await purchaseService.getSuppliers(activeOnly: true);
@@ -137,12 +276,7 @@ class _QuickSupplierMessagesPanelState
 
       if (!mounted) return;
       setState(() {
-        _suppliers = suppliers
-            .where((supplier) => _supplierChatPhone(supplier) != null)
-            .toList()
-          ..sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-          );
+        _suppliers = _visibleSuppliers(suppliers);
         _invoicesBySupplierId = _indexInvoicesBySupplier(invoices);
         _isLoadingSuppliers = false;
       });
@@ -791,6 +925,9 @@ class _QuickSupplierMessagesPanelState
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView.builder(
+        // Devuelve el scroll donde estaba al reabrir el panel: el bucket vive
+        // en la ruta, que sobrevive al desmontaje del panel.
+        key: const PageStorageKey<String>('quick-supplier-messages-list'),
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 16),
         itemCount: entries.length + (_isLoadingSuppliers ? 1 : 0),

@@ -918,6 +918,10 @@ serve(async (req) => {
           const ingestResult = (data ?? null) as JsonRecord | null;
           processedMessages.push(ingestResult);
           if (ingestResult?.ignored) continue;
+          // Una reacción anota un mensaje que ya existe: no hay fila propia que
+          // resolver, ni medios que descargar, ni acción que interpretar. El
+          // ingreso ya la guardó contra su mensaje destino.
+          if (ingestResult?.reaction) continue;
 
           const persisted = await resolvePersistedInboundMessage({
             supabase,

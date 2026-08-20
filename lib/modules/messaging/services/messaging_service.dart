@@ -4,10 +4,12 @@ import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
 import '../models/conversation_context_hint.dart';
 import '../models/message.dart';
+import '../models/message_reaction.dart';
 import '../utils/conversation_activity.dart';
 import '../utils/whatsapp_message_filters.dart';
 import 'messaging_attachment_service.dart';
 import 'messaging_command_idempotency_store.dart';
+import 'whatsapp_cloud_service.dart';
 // For VoidCallback
 
 class MessageReceiptRealtimeUpdate {
@@ -1684,6 +1686,127 @@ class MessagingService {
             ..sort(compareMessageTimelineOrder);
           return messages;
         });
+  }
+
+  /// Reacciones de una conversación, agrupadas por mensaje.
+  ///
+  /// Van por separado del timeline porque viven en su propia tabla: `messages`
+  /// se transmite por realtime y un stream de Supabase no puede traer una
+  /// relación embebida. Mezclarlas en el mensaje obligaría a recargar el
+  /// timeline entero cada vez que alguien pone un emoji.
+  Future<Map<String, List<MessageReaction>>> getReactionsForConversation(
+    String conversationId,
+  ) async {
+    final response = await _client
+        .from('message_reactions')
+        .select(
+          'id, message_id, emoji, reactor_user_id, reactor_wa_id, '
+          'reactor_name, created_at',
+        )
+        .eq('conversation_id', conversationId);
+    return _groupReactionsByMessage(response as List<dynamic>);
+  }
+
+  /// Realtime de reacciones de una conversación.
+  Stream<Map<String, List<MessageReaction>>> getReactionsStream(
+    String conversationId,
+  ) {
+    return _client
+        .from('message_reactions')
+        .stream(primaryKey: ['id'])
+        .eq('conversation_id', conversationId)
+        .map((rows) => _groupReactionsByMessage(rows));
+  }
+
+  Map<String, List<MessageReaction>> _groupReactionsByMessage(
+    List<dynamic> rows,
+  ) {
+    final grouped = <String, List<MessageReaction>>{};
+    for (final row in rows) {
+      final reaction = MessageReaction.fromJson(
+        Map<String, dynamic>.from(row as Map),
+      );
+      grouped.putIfAbsent(reaction.messageId, () => []).add(reaction);
+    }
+    return grouped;
+  }
+
+  /// Pone o reemplaza la reacción del usuario actual sobre un mensaje.
+  ///
+  /// El índice único de (mensaje, reactor) hace que reemplazar sea un upsert y
+  /// no un segundo chip: es la regla de WhatsApp, y la impone el motor.
+  Future<void> setMyReaction({
+    required String messageId,
+    required String conversationId,
+    required String emoji,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) {
+      throw StateError('No hay sesión para reaccionar');
+    }
+    // El inquilino se resuelve aquí y no en la UI: `Conversation` no lo lleva y
+    // adivinarlo en la capa de arriba es cómo se filtran datos entre tenants.
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No hay inquilino resuelto para reaccionar');
+    }
+    await _client.from('message_reactions').upsert(
+      {
+        'tenant_id': tenantId,
+        'message_id': messageId,
+        'conversation_id': conversationId,
+        'reactor_user_id': userId,
+        'emoji': emoji,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      onConflict: 'message_id, reactor_key',
+    );
+  }
+
+  /// Reacciona a un mensaje de WhatsApp: lo manda al contacto y deja que la
+  /// función de envío escriba la fila sólo si Meta la aceptó.
+  ///
+  /// [emoji] vacío la retira.
+  Future<void> sendWhatsAppReaction({
+    required Message message,
+    required String emoji,
+  }) async {
+    final externalMessageId =
+        message.metadata['external_message_id']?.toString();
+    if (externalMessageId == null || externalMessageId.isEmpty) {
+      // Un mensaje que nunca salió por WhatsApp no tiene a qué apuntar allá.
+      throw StateError('Este mensaje no existe en WhatsApp');
+    }
+
+    final bindings = await _client
+        .from('whatsapp_conversation_bindings')
+        .select('external_phone_number')
+        .eq('conversation_id', message.conversationId)
+        .limit(1);
+    final phone = (bindings as List).isEmpty
+        ? null
+        : (bindings.first as Map)['external_phone_number']?.toString();
+    if (phone == null || phone.trim().isEmpty) {
+      throw StateError('La conversación no tiene teléfono de WhatsApp');
+    }
+
+    await WhatsAppCloudService().sendReaction(
+      phoneNumber: phone,
+      conversationId: message.conversationId,
+      messageId: message.id,
+      externalMessageId: externalMessageId,
+      emoji: emoji,
+    );
+  }
+
+  Future<void> removeMyReaction({required String messageId}) async {
+    final userId = currentUserId;
+    if (userId == null) return;
+    await _client
+        .from('message_reactions')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('reactor_user_id', userId);
   }
 
   /// Reads one immutable page immediately before [beforeSequence]. Realtime

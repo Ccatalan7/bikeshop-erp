@@ -69,7 +69,7 @@ interface SendRequest {
   contextType?: string;
   contextId?: string;
   jobId?: string;
-  type: "text" | "image" | "document" | "template" | "interactive";
+  type: "text" | "image" | "document" | "template" | "interactive" | "reaction";
   text?: string;
   caption?: string;
   attachmentId?: string;
@@ -83,6 +83,13 @@ interface SendRequest {
   templateComponents?: unknown[];
   interactive?: JsonRecord;
   replyToMessageId?: string;
+  // Reacción: el wamid del mensaje anotado y el emoji. Un emoji vacío la
+  // retira, que es como WhatsApp expresa «me arrepentí».
+  reactionToExternalMessageId?: string;
+  reactionEmoji?: string;
+  // Fila local del mensaje anotado, para colgar la reacción sin re-resolver.
+  reactionToMessageId?: string;
+  reactionConversationId?: string;
   metadata?: JsonRecord;
   actionType?: string;
   actionTargetId?: string;
@@ -504,6 +511,16 @@ function buildGraphPayload(
     type: request.type,
   };
 
+  // Una reacción no acepta `context`: apunta a su objetivo por message_id
+  // dentro del propio bloque `reaction`.
+  if (request.type === "reaction") {
+    payload.reaction = {
+      message_id: request.reactionToExternalMessageId,
+      emoji: request.reactionEmoji ?? "",
+    };
+    return payload;
+  }
+
   if (request.replyToMessageId) {
     payload.context = { message_id: request.replyToMessageId };
   }
@@ -663,6 +680,18 @@ serve(async (req) => {
 
   if (requestBody.type === "template" && !requestBody.templateName) {
     return jsonResponse({ error: "templateName is required for template messages" }, 400);
+  }
+
+  if (
+    requestBody.type === "reaction" &&
+    (!requestBody.reactionToExternalMessageId ||
+      !requestBody.reactionToMessageId ||
+      !requestBody.reactionConversationId)
+  ) {
+    return jsonResponse({
+      error:
+        "reactionToExternalMessageId, reactionToMessageId and reactionConversationId are required for reactions",
+    }, 400);
   }
 
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -1258,6 +1287,55 @@ serve(async (req) => {
     status: graphResponse.status,
     external_message_id: externalMessageId,
   });
+
+  // Una reacción anota un mensaje que ya existe: no persiste uno nuevo. Sale
+  // antes de `persistOutboundMessage` por la misma razón que el webhook la
+  // saca del camino de ingreso — tratarla como mensaje es lo que ensuciaba el
+  // chat y levantaba no-leídos falsos.
+  if (requestBody.type === "reaction") {
+    const emoji = (requestBody.reactionEmoji ?? "").trim();
+    if (emoji === "") {
+      await adminClient
+        .from("message_reactions")
+        .delete()
+        .eq("message_id", requestBody.reactionToMessageId)
+        .eq("reactor_user_id", userId);
+    } else {
+      const { error: reactionError } = await adminClient
+        .from("message_reactions")
+        .upsert({
+          tenant_id: tenantId,
+          message_id: requestBody.reactionToMessageId,
+          conversation_id: requestBody.reactionConversationId,
+          reactor_user_id: userId,
+          emoji,
+          external_provider: "whatsapp",
+          external_message_id: externalMessageId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "message_id, reactor_key" });
+      if (reactionError) {
+        console.error(
+          "❌ [WHATSAPP-SEND] Reaction accepted by provider but not stored",
+          reactionError,
+        );
+        return jsonResponse({
+          ok: false,
+          accepted: true,
+          error: "reaction_not_persisted",
+          details: reactionError.message,
+          external_message_id: externalMessageId,
+        }, 500);
+      }
+    }
+    logTiming("response_returning", { reaction: true });
+    return jsonResponse({
+      ok: true,
+      accepted: true,
+      reaction: true,
+      external_message_id: externalMessageId,
+      graph_result: graphResult,
+    });
+  }
 
   try {
     const persisted = await persistOutboundMessage({

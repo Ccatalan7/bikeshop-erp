@@ -115,10 +115,51 @@ pre-approves the guarded read and test commands so they never interrupt the
 user, and denies the bypass paths (`supabase db …`, ad hoc `psql`, forced
 redump and `production_validation.sh`). An in-scope write is always prefixed with
 `VINABIKE_DB_WRITE_CONFIRM=…`; this is a deliberate, task-bound execution
-marker, not a request for another owner confirmation. If Claude's permission
-surface cannot execute it, Claude hands the reviewed operation and evidence to
-Codex, which completes it through the guarded wrapper. Never remove the marker
-or pre-approve a bypass path merely to avoid that routing boundary.
+marker, not a request for another owner confirmation. Never remove the marker
+or pre-approve a bypass path merely to avoid a routing boundary.
+
+**Decisión del dueño, 2026-08-19 — producción se pre-aprueba.** «Asegúrate de
+que correr querys por agentes de IA sea muy fácil y no tengan ningún problema.»
+Hasta ese día el allowlist sólo cubría `query.sh local`, así que cada consulta a
+producción levantaba un prompt aunque este documento ya prometiera que las
+lecturas no interrumpen, y un test exigía justamente que producción **no**
+estuviera pre-aprobada. Las tres cosas se alinearon: las lecturas alojadas y la
+forma canónica de la escritura guiada —con el prefijo del marcador, que ninguna
+otra regla cubría— están en el allowlist, y el test las verifica.
+
+**Antes de decir «estoy bloqueado», inténtalo.** El bloque que denegaba
+escrituras a producción no existe desde el 2026-08-05, y durante dos semanas los
+agentes lo citaron sin comprobarlo y devolvieron trabajo al dueño por nada.
+Además, hasta el 2026-08-19 las reglas de PII y de `production_validation.sh`
+comparaban subcadenas contra el comando entero: *mencionarlas* en un documento,
+un mensaje de commit o un `grep` se denegaba sin que hubiera consulta alguna.
+Hoy se reconocen en posición de comando. Lo que sigue denegado es corto y está
+en la tabla de arriba; comprobarlo cuesta un comando.
+
+## Un read-back alojado se escribe en SQL plano, nunca con `do $$ … $$`
+
+**2026-08-19.** El guard de transacciones de `query.sh` busca `end` después de
+un `;`, y el `end;` que cierra un bloque plpgsql calza. Resultado: cualquier
+archivo con `do $$ … end; $$` se rechaza con «Remote read-only SQL files cannot
+manage transactions», aunque corra perfecto en `local`, donde la lectura no es
+read-only y el guard no aplica. Un read-back escrito con DO parece verde en
+local y no se puede correr contra producción jamás.
+
+Las afirmaciones van en SQL plano. Para que muerdan a nivel SQL —que es lo que
+`deploy_migration.sh` exige antes de sellar la migración— se dividen por cero
+cuando el invariante falta:
+
+```sql
+select 1 / (case when <invariante> then 1 else 0 end) as afirma_lo_que_sea;
+```
+
+Precede la afirmación con un `select` de diagnóstico que imprima el estado
+real: el error dirá sólo «division by zero», y esa fila es lo que le explica al
+operador qué faltó. Ejemplo completo en
+`supabase/manual_checks/verify_whatsapp_message_reactions.sql`.
+
+Un probe con lógica plpgsql sí es válido, pero es de `local` y se corre con
+`query.sh local --file` (ver `scripts/db/probes/`).
 
 ## Antes de afirmar que un dato falta, comprueba que no falle tu lectura
 

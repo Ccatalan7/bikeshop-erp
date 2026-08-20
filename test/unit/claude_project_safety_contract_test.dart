@@ -50,13 +50,28 @@ void main() {
     final allowed = List<String>.from(
       (settings['permissions'] as Map<String, dynamic>)['allow'] as List,
     );
+    // 2026-08-19 · decisión del dueño: «asegúrate de que correr querys por
+    // agentes de IA sea muy fácil y no tengan ningún problema». Esta aserción
+    // exigía lo contrario —que producción NO estuviera pre-aprobada—, y
+    // contradecía al propio AGENT_DATABASE_CONTRACT.md, que promete que las
+    // lecturas guiadas «never interrupt the user». El resultado real fue un
+    // prompt por consulta que los agentes reportaban como bloqueo. La
+    // deliberación de una escritura la conserva VINABIKE_DB_WRITE_CONFIRM y el
+    // journal de query.sh, no un segundo permiso interactivo.
     expect(
-      allowed.where(
-        (rule) =>
-            rule.contains('query.sh production') ||
-            rule.contains('db-query production'),
+      allowed,
+      contains('Bash(bash scripts/db/query.sh production *)'),
+      reason: 'Las lecturas alojadas son autónomas y no deben interrumpir.',
+    );
+    expect(
+      allowed,
+      contains(
+        'Bash(VINABIKE_DB_WRITE_CONFIRM=production '
+        'bash scripts/db/query.sh production *)',
       ),
-      isEmpty,
+      reason:
+          'La forma canónica de la escritura guiada lleva el marcador de '
+          'entorno como prefijo; sin esta regla ninguna otra la cubre.',
     );
     final denied = List<String>.from(
       (settings['permissions'] as Map<String, dynamic>)['deny'] as List,
@@ -237,11 +252,39 @@ void main() {
     // UPDATE de una fila, y el guard lo devolvía a un Codex sin cupo. Los
     // caminos NO guiados (psql directo, supabase db, --allow-pii) siguen
     // denegados arriba: la política abrió el camino auditado, no la puerta.
+    // 2026-08-19 · Regresión del defecto de posición de comando. Las reglas de
+    // PII y de refresh comparaban subcadenas contra el comando entero, así que
+    // *mencionar* la regla —documentarla, commitearla, greparla— se denegaba
+    // sin que hubiera consulta. Es el mismo defecto que el bloque de deploy ya
+    // había pagado; aquí era silencioso y el agente lo reportaba como bloqueo
+    // mecánico. El entorno se lee del primer argumento posicional, de modo que
+    // un `production` dentro del SQL tampoco dispara la regla.
     for (final command in const [
       'bash scripts/db/query.sh production --write --sql "select 1"',
       'just db-query production --write --sql "select 1"',
+      'bash scripts/db/query.sh production --sql "select id from customers"',
+      'grep -rn -- "--allow-pii" docs/',
+      'git commit -m "docs: --allow-pii en scripts/db/query.sh production"',
+      'bash scripts/db/query.sh local --allow-pii --sql "select * from users"',
+      'bash scripts/db/query.sh local --sql "select * from production_lines"',
+      'rg "scripts/db/production_validation.sh refresh" docs/',
     ]) {
       expect(await _runGuard(command), isNull, reason: command);
+    }
+
+    // El override sigue denegado en uso real, incluso con prefijo de entorno.
+    for (final command in const [
+      'VINABIKE_DB_WRITE_CONFIRM=production bash scripts/db/query.sh '
+          'production --allow-pii --sql "select 1"',
+      'bash scripts/db/query.sh staging --allow-pii --sql "select 1"',
+      'bash scripts/db/production_validation.sh refresh',
+    ]) {
+      final output = await _runGuard(command);
+      expect(
+        output?['hookSpecificOutput']?['permissionDecision'],
+        'deny',
+        reason: command,
+      );
     }
   });
 }
