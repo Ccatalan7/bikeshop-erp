@@ -68,6 +68,7 @@ const toolContracts = {
       "tracksInventory",
       "location",
       "technicalMatch",
+      "technicalSpecs",
       "matchedCount",
       "trackedCount",
       "totalStock",
@@ -295,7 +296,11 @@ const toolContracts = {
   },
   search_purchase_invoices: {
     rpc: "assistant_search_purchase_invoices_v1",
-    parameters: boundedSearchParameters,
+    parameters: (args: JsonObject) => ({
+      p_query: args.query,
+      p_limit: args.limit,
+      p_relative_period: args.relativePeriod,
+    }),
     fields: [
       "entityId",
       "invoiceNumber",
@@ -305,6 +310,11 @@ const toolContracts = {
       "dueDate",
       "total",
       "balance",
+      "matchedCount",
+      "matchedTotal",
+      "matchedBalance",
+      "periodStart",
+      "periodEnd",
     ],
   },
   list_recent_expenses: {
@@ -363,10 +373,34 @@ const toolContracts = {
       "highestInvoiceId",
       "highestInvoiceNumber",
       "highestInvoiceCustomerName",
+      "customerCount",
+      "topCustomerName",
+      "topCustomerAmount",
+      "topCustomerInvoiceCount",
+      "topCustomers",
       "highestInvoiceTotal",
       "highestPeriodAmount",
     ],
     maxItems: 1,
+  },
+  prepare_customer_contact: {
+    rpc: "assistant_prepare_customer_contact_v1",
+    parameters: (args: JsonObject) => ({
+      p_query: args.query,
+      p_limit: args.limit,
+    }),
+    fields: [
+      "entityId",
+      "customerName",
+      "conversationId",
+      "channel",
+      "lastInboundAt",
+      "windowOpen",
+      "hasContactPhone",
+      "contactMode",
+      "businessName",
+    ],
+    maxItems: 5,
   },
   search_conversations: {
     rpc: "assistant_search_conversations_v1",
@@ -554,7 +588,11 @@ export function createSupabaseAgentToolExecutor(
         );
       }
       if (call.name === "report_capability_gap") {
-        return capabilityGapExecution(call.arguments, authority.tenantId);
+        return capabilityGapExecution(
+          call.arguments,
+          authority.tenantId,
+          context?.runId,
+        );
       }
       const contract = toolContracts[call.name as keyof typeof toolContracts];
       if (!contract) return unavailable(authority.tenantId, "unknown_tool");
@@ -1961,9 +1999,16 @@ function validateInventorySearch(result: AgentToolResultEnvelope, args: JsonObje
       !["not_applicable", "product_spec", "identity_fallback"].includes(
         String(item.technicalMatch),
       ) ||
-      ((args.technicalPredicates as JsonValue[]).length === 0
-        ? item.technicalMatch !== "not_applicable"
-        : item.technicalMatch === "not_applicable") ||
+      // Sin predicados del modelo, `technicalMatch` ya NO tiene que ser
+      // `not_applicable`: desde el 2026-08-21 el buscador traduce la frase del
+      // operador contra el registro de vocabulario y aplica los filtros que
+      // deduce. Exigir lo contrario descartaba justamente los resultados
+      // correctos —la RPC devolvía los tres motores y el ejecutor los
+      // convertía en «fuente no disponible»—. La invariante que sí se conserva
+      // es la otra: si el modelo pidió una condición técnica, ninguna fila
+      // puede volver sin evaluarla.
+      ((args.technicalPredicates as JsonValue[]).length > 0 &&
+        item.technicalMatch === "not_applicable") ||
       !finiteNumber(item.price) || !Number.isSafeInteger(stock) ||
       !Number.isSafeInteger(minimumStock) || (minimumStock as number) < 0 ||
       typeof tracksInventory !== "boolean" ||
@@ -2649,6 +2694,7 @@ function unavailable(tenantId: string, failureCode: string): AgentToolExecution 
 function capabilityGapExecution(
   argumentsValue: JsonObject,
   tenantId: string,
+  runId?: string,
 ): AgentToolExecution {
   const exactKeys = ["domain", "operation", "reason", "alternative", "field"];
   const domains = [

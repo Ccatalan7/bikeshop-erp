@@ -2135,10 +2135,17 @@ class _CompactSheetFrame extends StatelessWidget {
   const _CompactSheetFrame({
     required this.title,
     required this.child,
+    this.showHeader = true,
   });
 
   final String title;
   final Widget child;
+
+  /// La cabecera se ESCONDE, no se desmonta el marco. Devolver un árbol de
+  /// otra forma cuando hay chat abierto hacía que Flutter recreara el panel, y
+  /// el `initState` nuevo corría antes de que el `dispose` viejo guardara la
+  /// sesión: el chat se abría y se cerraba solo en el mismo instante.
+  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
@@ -2146,7 +2153,13 @@ class _CompactSheetFrame extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
+        // `Visibility` y no `if`: quitar el hijo cambia el ÍNDICE de lo que
+        // viene después, y Flutter, sin llaves, recrea esos elementos. El
+        // panel de abajo se remontaba —y con él, el chat abierto se cerraba
+        // solo. `Visibility` conserva la posición en la lista.
+        Visibility(
+          visible: showHeader,
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
           child: Row(
             children: [
@@ -2161,6 +2174,7 @@ class _CompactSheetFrame extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
         Expanded(child: child),
       ],
@@ -2190,10 +2204,32 @@ class _CompactMessagesSheetState extends State<_CompactMessagesSheet> {
 
   late _MessagesTab _tab;
 
+  /// Con un chat abierto la hoja cede TODA su cabecera: el título y las
+  /// pestañas no aportan ahí y en un teléfono le quitaban al mensaje casi un
+  /// tercio de la pantalla.
+  ///
+  /// Es un `ValueNotifier` y NO un `setState` a propósito: reconstruir la hoja
+  /// entera reconstruye el subárbol del panel, y dos intentos de esta función
+  /// murieron por eso — el panel se remontaba y el chat recién abierto se
+  /// cerraba solo. Con el notifier sólo la cabecera escucha; el panel ni se
+  /// entera.
+  final ValueNotifier<bool> _conversationOpen = ValueNotifier(false);
+
   @override
   void initState() {
     super.initState();
     _tab = _lastTab;
+  }
+
+  @override
+  void dispose() {
+    _conversationOpen.dispose();
+    super.dispose();
+  }
+
+  void _handleConversationVisibility(bool visible) {
+    if (!mounted) return;
+    _conversationOpen.value = visible;
   }
 
   int _supplierCount(ChatProvider chat) => chat.conversations.fold(0, (sum, c) {
@@ -2220,11 +2256,13 @@ class _CompactMessagesSheetState extends State<_CompactMessagesSheet> {
       _MessagesTab.customers: _customerCount(chat),
     };
 
-    return _CompactSheetFrame(
-      title: 'Mensajes',
-      child: Column(
-        children: [
-          Padding(
+    final inbox = Column(
+      children: [
+        ValueListenableBuilder<bool>(
+          valueListenable: _conversationOpen,
+          builder: (context, open, child) =>
+              Visibility(visible: !open, child: child!),
+          child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: _CompactTabBar<_MessagesTab>(
               selected: _tab,
@@ -2246,17 +2284,32 @@ class _CompactMessagesSheetState extends State<_CompactMessagesSheet> {
               }),
             ),
           ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: switch (_tab) {
-              _MessagesTab.suppliers =>
-                const QuickSupplierMessagesPanel(showTitle: false),
-              _MessagesTab.customers =>
-                const QuickMessagesPanel(showTitle: false),
-            },
-          ),
-        ],
+        ),
+        Expanded(
+          child: switch (_tab) {
+            _MessagesTab.suppliers => QuickSupplierMessagesPanel(
+                showTitle: false,
+                onConversationVisibilityChanged: _handleConversationVisibility,
+              ),
+            _MessagesTab.customers => QuickMessagesPanel(
+                showTitle: false,
+                onConversationVisibilityChanged: _handleConversationVisibility,
+              ),
+          },
+        ),
+      ],
+    );
+
+    // Mismo árbol siempre; con chat abierto la cabecera sólo se esconde, y el
+    // título escucha el notifier sin reconstruir la hoja.
+    return ValueListenableBuilder<bool>(
+      valueListenable: _conversationOpen,
+      builder: (context, open, child) => _CompactSheetFrame(
+        title: 'Mensajes',
+        showHeader: !open,
+        child: child!,
       ),
+      child: inbox,
     );
   }
 }

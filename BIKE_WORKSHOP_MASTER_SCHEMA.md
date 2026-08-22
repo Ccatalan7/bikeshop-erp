@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-08-16
+Last updated: 2026-08-21
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, supply needs and commitments, bike memory kernel, sync pipeline, and visible bike history
 
@@ -3506,3 +3506,539 @@ This architecture will be considered coherent when:
 - visible bike history reads from the kernel clearly
 
 Until then, this document must continue to record both the intended direction and the real current state.
+
+## Ficha de pedalier: cascada guiada y registro unificado (2026-08-21)
+
+Esta sección reemplaza la idea de que la ficha técnica es una lista plana de
+campos independientes. Un pedalier no se describe con campos sueltos: la caja
+del cuadro decide qué preguntas existen, y algunas respuestas **agregan**
+campos en vez de sólo esconderlos.
+
+### Dos mecanismos distintos, no uno
+
+- `spec_template_fields.visibility_rules` decide **si el campo existe**.
+- `spec_template_fields.option_rules` decide **qué opciones quedan** dentro de
+  un campo que sí existe. Es columna nueva; antes esto no se podía expresar y
+  por eso se podía elegir «Rodamiento sellado» en una caja *a presión*, que es
+  imposible.
+
+El evaluador de Dart (`SpecEngineService.allowedOptionsFor`) intersecta las
+reglas que calzan y entiende `is_set` / `not_set`, para poder preguntar por el
+orden de la cascada y no sólo por valores.
+
+### La cascada empieza por la caja, no por el producto
+
+`bb_shell_standard` («Caja de motor») es la primera pregunta y gobierna a las
+demás. Elegir `BSA / Caja inglesa 34,8 mm (1.37") x 24` con construcción
+`Cubetas y canastillo` lleva la ficha de 3 a 8 campos: aparecen mano de la
+rosca, diámetro exterior de cubeta, tamaño y cantidad de bolitas. Elegir
+`A presión` elimina la rosca por completo.
+
+Las combinaciones están simuladas: 15 cajas × las construcciones que cada una
+admite, 70 combinaciones verificadas en `test/unit/spec_cascade_bottom_bracket_test.dart`.
+
+### Un campo se esconde sólo cuando se sabe que no aplica
+
+`spindle_length_mm` **no** se esconde mientras la interfaz del eje esté sin
+responder. La razón es concreta: `saveProductSpecValues` borra las
+definiciones de la plantilla que no vienen en el payload, así que esconder un
+campo por «todavía no sé» habría borrado 118 mm de 29 productos en el primer
+guardado. La regla usa una lista `not_in` de paso: se esconde ante una
+interfaz que lo hace inaplicable, nunca ante el desconocimiento.
+
+### El vocabulario es chileno y sale del catálogo real
+
+`Rodamiento sellado`, `Cubetas y canastillo`, `Integrado`, `A presión`,
+`Caja de motor`. Las medidas van en milímetros con la pulgada entre
+paréntesis y sólo en la caja: `BSA / Caja inglesa 34,8 mm (1.37") x 24`.
+
+Los valores acotados de las medidas se derivaron del catálogo, no de memoria:
+una lista escrita a mano rechazaba 12 de 34 pedaliers reales (110,5 · 113,5 ·
+118,5 · 124 · 124,5 · 125 · 125,5 · 127). Misma causa detrás del defecto ya
+corregido de `valve_length_mm`, que no admitía 40 ni 48 —las dos longitudes
+Presta más comunes del catálogo— y por eso el asistente no las podía buscar.
+
+### La migración terminada (2026-08-21)
+
+**Los seis lectores y la escritura leen y escriben el registro.**
+
+| capa | estado | cómo se comprobó |
+|---|---|---|
+| `get_public_product_technical_specs` (tienda) | movido | 5 filas correctas + la página real |
+| `assistant_inspect_inventory_schema_v3` | movido | cobertura y vocabulario del registro |
+| `assistant_inventory_technical_predicate_source_internal_v1` | movido | calza por construcción y largo, rechaza lo que no |
+| `SpecEngineService.getProductSpecValues` | movido | forma de la consulta contra producción |
+| `BikeProductCompatibilityService` | movido | 49/49 tests |
+| `BulkProductEditService` | movido | analizador limpio |
+| `service_profile_questions_resolved_v1` (wizard) | movido | opciones del registro, preguntas de visita intactas |
+| **escritura** | movida | `save_product_spec_facts_v1`, transacción única |
+
+**El espejo se dio vuelta.** La app escribe `spec_facts` y un trigger mantiene
+`product_spec_values` al día como copia. No hay trigger en las dos direcciones,
+así que no hay ciclo posible; el read-back lo afirma.
+
+**`display_value` desapareció del camino de escritura.** Era una copia
+congelada de la etiqueta y era justo lo que obligaba a reescribir productos al
+renombrar un valor.
+
+### La prueba, hecha en producción
+
+Un `UPDATE 1` sobre `spec_definition_values.label` cambió al instante lo que
+muestran **la tienda, la ficha del producto y el vocabulario que ve el
+asistente**, sin tocar un producto, una regla ni una migración. Esa misma
+operación esa mañana costó cuatro lugares y se escapó uno.
+
+Y escribir un hecho en el registro actualizó la copia sola, verificado con un
+antes y un después.
+
+### Lo que queda, y por qué no se hizo hoy
+
+- **Los siete canonizadores de Dart** siguen en pie porque el lado de la bici y
+  el wizard aún guardan su vocabulario en blobs y `options_json`. Borrarlos
+  exige migrar la escritura de esas dos capas, que es otra fase.
+- **`product_spec_values` y los blobs siguen existiendo** como copia. Retirarlos
+  es seguro sólo cuando nada los lea; hoy ya nada de la app lo hace, pero
+  conviene dejar la copia viva un tiempo antes de borrar la tabla.
+
+
+### El buscador traduce la frase del operador (2026-08-21)
+
+El operador no escribe predicados: escribe «motores de caja BSA con ancho de
+caja 68 y largo de eje 118». Esa frase entraba al buscador como texto libre, y
+el filtro de texto exige que **cada** palabra esté en el nombre del producto:
+ningún motor se llama «caja» ni «BSA», así que la respuesta era cero.
+
+Con el vocabulario convertido en filas, el servidor traduce la frase él mismo
+en `assistant_infer_technical_predicates_internal_v1`, en tres reglas de la más
+fuerte a la más débil:
+
+1. una palabra que aparece en un solo valor de todo el vocabulario nombra ese
+   valor;
+2. un número precedido —dentro de cuatro palabras— por una palabra que aparece
+   en un solo rótulo del alcance se amarra a ese campo;
+3. un número suelto se amarra si dentro del alcance hay un solo campo cuyos
+   hechos reales lo contengan.
+
+El alcance es el más angosto que la frase justifique: la plantilla que probó el
+vocabulario, o —si no hubo— las plantillas de la categoría nombrada. Unirlos
+ensancharía el alcance y volvería ambiguo un rótulo genérico como «Ancho», que
+existe en llantas, neumáticos y cajas por igual.
+
+Detalles que costaron una ronda cada uno:
+
+- **El normalizador de búsqueda borra el punto decimal**: «122.5» se vuelve
+  «122» y «5». Para leer una medida hay que tokenizar el texto crudo.
+- **Las palabras de función del idioma no son evidencia.** «Con uña / claw» es
+  un valor real de patilla trasera, así que «hola necesito ayuda con una
+  boleta» inferían un filtro de patilla. Hay una lista de palabras vacías de
+  español —no de bicicletas— y una palabra de tres letras sin dígitos nunca
+  sobrevive como texto libre: «con» exigía «con» en cada nombre y devolvía cero.
+- **Sobre un mismo campo manda el valor deducido, no el del modelo.** El
+  modelo abrevia («BSA»); el registro tiene la etiqueta completa. Su
+  abreviatura no resuelve y filtra a cero.
+- **El validador del ejecutor tenía la invariante contraria.**
+  `validateInventorySearch` exigía que sin `technicalPredicates` toda fila
+  volviera con `technicalMatch = not_applicable`. Con traducción del lado del
+  servidor esa invariante quedó falsa, y el ejecutor convertía los tres motores
+  correctos en «fuente no disponible». Es el defecto que más caro salió: el
+  síntoma lo redactaba el modelo en primera persona («no ejecuté la consulta»)
+  mientras `pg_stat_statements` mostraba la RPC corriendo.
+
+Verificado en la app contra la base, el 2026-08-21: «dame los motores de caja
+BSA con ancho de caja 68 y largo de eje 118» → 3 productos; «necesito un motor
+con largo de eje 122.5» → 7; «cuántos motores tengo de rodamiento sellado» →
+12 modelos y 27 unidades. Los tres números coinciden con la consulta directa.
+
+### Lo que la batería de preguntas obligó a corregir (2026-08-21)
+
+Las tres primeras preguntas de prueba estaban hechas a la medida de lo
+construido. Una batería más amplia encontró cuatro defectos reales:
+
+- **Un valor de lista puede ser un número.** `rotor_diameter_mm` es una lista
+  con valores `160`, `180`, `203`; el rodado es `29"`; los rayos son `36`. La
+  inferencia sólo miraba palabras para el vocabulario y campos numéricos para
+  las medidas, así que «discos de freno de 160» devolvía cero teniendo quince
+  en bodega. Se compara contra el rótulo despojado de puntuación —el
+  normalizador borra el punto decimal— y por igualdad, para que `160` no se
+  lleve `160/140`.
+- **La rama nombrada tiene que volver como filtro.** Las palabras que nombran
+  una categoría se consumen del texto libre —si no, matan el filtro: ningún
+  rotor se llama «discos»— pero antes no volvían como nada. «Discos de freno de
+  160» calzaba 23 productos, de los cuales ocho eran bielas y cadenas con 160
+  en el nombre. Ahora la inferencia devuelve las categorías y el buscador acota
+  por ellas: 15, todas dentro de frenos.
+- **La palabra de un rótulo no es evidencia de un valor.** «Caja» está en «Caja
+  de motor» y en «Ancho caja motor», y por aparecer además dentro de un único
+  valor hacía que «motor caja 73» amarrara BSA en silencio. Y cuando una
+  palabra sí es de un valor pero vive en varios campos —«bsa» está en cuatro—,
+  decide el catálogo: gana el campo que el taller realmente llena, y sólo si
+  gana solo.
+- **La negación es un filtro.** «Motores que no traen eje» devolvía cero
+  habiendo cinco. Entre los campos *booleanos* del alcance, «eje» sí es
+  distintivo, y eso alcanza sin inventarle sinónimos al idioma. Sólo se amarra
+  la negación: afirmar es ambiguo —«con largo de eje 118» habla de la medida—
+  y estrecharía de más.
+
+**Límite que queda, y es del catálogo, no del motor.** La palabra del operador
+tiene que ser una que el catálogo use. «Aros de 36 rayos» no resuelve porque
+aquí esa categoría se llama **Llantas**; con «llantas de 36 rayos» funciona.
+Poner una lista de sinónimos sería inventar vocabulario en vez de leerlo, que
+es justo lo que esta arquitectura evita. Si el taller quiere que «aros»
+funcione, el lugar de arreglarlo es el nombre o un alias de la categoría.
+
+### Soltar el filtro más débil antes de rendirse (2026-08-21)
+
+La frase del dueño —«Necesito un motor para una caja inglesa de 68 mm con eje
+cuadrado de 118 mm. ¿Qué tengo en bodega?»— deducía **los cuatro filtros
+correctos** y devolvía cero. El culpable era el cuarto:
+`spindle_interface_accepted` tiene ficha cargada en cinco productos y ninguno
+es un motor, así que exigirlo borraba el resultado entero.
+
+Los predicados deducidos salen ordenados por cuánta ficha respalda a cada
+campo, y el buscador suelta el último y reintenta —hasta tres veces— antes de
+contestar que no hay nada. Un campo casi vacío es el primero en sobrar.
+
+Con eso, esa frase devuelve un resultado y respeta el «¿qué tengo en bodega?»
+como filtro de stock: el único de los tres motores que calzan y además tiene
+existencias.
+
+### Segunda batería: dos defectos más de la misma raíz (2026-08-21)
+
+- **Nombrar una rama ya es haber dicho algo.** «Cuáles son los 5 motores más
+  caros» devolvía cero teniendo treinta y cuatro. La frase no trae ningún
+  filtro técnico, así que el texto libre se conservaba entero: el buscador
+  acotaba a la rama de motores **y además** exigía la palabra «motores» dentro
+  del nombre del producto. El texto se reemplaza por el residuo en cuanto la
+  frase aportó algo, sea un filtro o el nombre de una rama.
+- **Una marca no es ruido.** «Qué motores shimano tengo en stock» devolvía diez
+  o más teniendo uno. «Shimano» se consumía por aparecer dentro del valor
+  «Shimano HG» —de piñones— sin convertirse en ningún filtro, y la marca se
+  perdía en silencio. Ahora sólo se consumen las palabras que **nombran un
+  campo**; lo que no llegó a ser filtro vuelve al texto libre, donde todavía
+  tiene que existir en algún producto de la rama para sobrevivir.
+
+**Dos decisiones que NO son del taller, y por qué (corrección del dueño,
+2026-08-21):** ambas se habían dejado como «decisión suya». No lo eran: la
+lógica correcta la decide quien conoce el dominio y los datos.
+
+- **«Bajo stock mínimo» incluye lo agotado.** Respondía 102 —los que aún tienen
+  existencias por debajo del mínimo— y dejaba fuera los 114 que están en cero.
+  Un producto en cero está *más* bajo su mínimo que uno que todavía tiene dos, y
+  es el más urgente de reponer: esconderlo del conteo responde de menos. El
+  contrato de `find_inventory_risks` ahora define `any` como «por debajo del
+  mínimo, incluido lo agotado» y lo señala como la respuesta a «qué me falta» o
+  «qué hay que reponer»; `low_stock` queda sólo para cuando el operador excluye
+  lo agotado a propósito.
+- **El ranking por cliente se construyó.** `assistant_rank_sales_customers_v1`
+  ordena los clientes de un período por cuánto compraron, reusando el mismo
+  cálculo de período y la misma distinción `issued`/`collected` que
+  `assistant_analyze_sales_period_v1` —para que dos preguntas del mismo día no
+  puedan contradecirse— y contando el mostrador sin ficha como un cliente más.
+
+### El ranking por cliente vive dentro de la herramienta de ventas (2026-08-21)
+
+Se construyó primero como herramienta aparte, `rank_sales_customers`:
+desplegada, alcanzable, registrada en el allowlist de recibos y anunciada al
+modelo —que la nombraba sola al preguntarle qué herramientas de ventas tenía—.
+Ante «quién fue mi mejor cliente este mes» igual declaraba una carencia y
+**nunca la ejecutó**: cero llamadas en `pg_stat_statements` tras cuatro
+correcciones por descripción, instrucción del sistema y contrato.
+
+Los mismos datos, colgados de `analyze_sales_period` —la herramienta que el
+modelo ya usa para toda pregunta de ventas del período— funcionaron a la
+primera, y el modelo agregó por su cuenta la distinción que un operador quiere:
+separar la boleta genérica del mostrador del mejor cliente individualizado.
+
+El modelo no falla ejecutando, falla eligiendo. Cada herramienta nueva es una
+decisión más de ruteo. La RPC `assistant_rank_sales_customers_v1` se conserva
+para cablearla a una pantalla del ERP, donde no depende de ese criterio.
+
+**Registrar una herramienta del asistente son cuatro lugares**, no dos: la RPC,
+el contrato del ejecutor, el esquema del registry y
+`assistant_runtime.assistant_tool_receipt_contract_internal_v1`. Si falta en ese
+allowlist, la corrida muere con un 500 opaco sin llegar nunca a la base.
+
+### Barrido de la superficie del asistente (2026-08-21)
+
+Medido con `pg_stat_statements`: de las herramientas anunciadas, nueve no se
+habían ejecutado **nunca**. Se probó una pregunta natural por cada una y se
+corrigió lo que devolvía la respuesta automática de «no tengo una herramienta
+autorizada». Dos causas, ninguna del modelo:
+
+- **Un listado sin término de búsqueda era inexpresable.** `search_suppliers`,
+  `search_customers` y `search_purchase_invoices` exigían un `query` de entre 1
+  y 240 bytes, así que «qué proveedores tengo» no se podía formular y el modelo
+  concluía que la herramienta no servía. Un query vacío ahora significa
+  «lístamelos», acotado por `limit`.
+- **Compras no tenía análisis por período.** El equivalente de
+  `analyze_sales_period` no existía de ese lado: «qué le compré a mis
+  proveedores este mes» declaraba una carencia y después mostraba facturas de
+  julio. `search_purchase_invoices` recibió `relativePeriod` y devuelve
+  `matchedCount`, `matchedTotal` y `matchedBalance` del conjunto completo del
+  período —no de la página—, siguiendo el patrón de `search_inventory`.
+
+El principio que gobierna las dos correcciones: **la capacidad se cuelga de la
+herramienta que el modelo ya usa**, y el servidor entrega totales verificados
+para que el modelo narre en vez de calcular.
+
+### Dos huecos del lado de productos y fichas (2026-08-21)
+
+Auditado el buscador con el mismo criterio que el resto de la superficie:
+
+- **Podía filtrar por ficha pero no leerla.** Ante «qué mano de rosca tiene la
+  cubeta NAKASAWA» el asistente sacaba las medidas del **nombre** del producto
+  —funciona sólo porque el backfill llenó la ficha desde esos mismos nombres— y
+  cuando el nombre no traía el dato se iba a buscarlo **a internet**, a un
+  catálogo en Scribd, teniéndolo en su propia base. Ahora cada fila del
+  buscador viaja con `technicalSpecs`: la ficha resuelta, rótulo y valor,
+  leídos del registro.
+- **Una pista numérica amarraba cualquier número.** «Cubeta NAKASAWA 10561»
+  devolvía cero: «cubeta» es palabra del rótulo «Diámetro de rosca de cubeta»,
+  así que la inferencia amarró el **SKU** como un diámetro de 10.561 mm —los
+  reales rondan 34,8—. Un SKU, un año o un teléfono podían envenenar cualquier
+  búsqueda en silencio. Ahora la pista sólo amarra un número dentro del rango
+  que el catálogo tiene cargado para ese campo; lo que queda fuera vuelve al
+  texto libre, donde un SKU encuentra su producto.
+
+El segundo defecto lo introdujo la propia inferencia de esta jornada, y sólo
+apareció al probar una interacción distinta —preguntar por un producto concreto
+en vez de filtrar por medidas—. Vale como recordatorio: una capacidad nueva se
+prueba en los usos que no la motivaron.
+
+### Opciones clickeables en el chat: la mitad del servidor (2026-08-21)
+
+Contactar a un cliente por WhatsApp tiene una regla que el operador no debería
+tener que recordar: fuera de las 24 horas desde su último mensaje **entrante**,
+Meta sólo acepta plantillas aprobadas. Hoy eso se descubre al intentar escribir.
+
+Construido y desplegado:
+
+- **`AgentCardOption`**: el contrato de tarjeta ahora admite opciones
+  excluyentes y un `optionKind`. Elegir una NO ejecuta: abre la revisión de lo
+  que se hará. Es el primitivo que faltaba para todas las acciones —agregar
+  productos a una factura, actualizar un trabajo, contactar a un cliente—.
+- **`assistant_prepare_customer_contact_v1`**: resuelve el cliente, su
+  conversación y si la ventana está abierta. No envía nada. El teléfono no
+  viaja: sólo si existe.
+- **Las plantillas se movieron a `_shared/whatsapp_templates.ts`**, para que el
+  gestor que las despliega en Meta y el asistente que las previsualiza lean el
+  mismo texto. Duplicarlas era garantizar que un día dijeran cosas distintas.
+- **La tarjeta trae el texto exacto** que recibiría el cliente, con su nombre y
+  el del negocio ya sustituidos en el cuerpo aprobado.
+
+**Un esquema compartido no sirve para una herramienta que exige su parámetro.**
+La de contacto se registró con `boundedSearchSchema`, donde `query` admite
+`null` desde este mismo día. El modelo mandaba `null`, la función lo rechazaba
+y la corrida moría. Con un esquema propio y mínimo, la RPC se ejecutó a la
+primera.
+
+**Falta la mitad del cliente**: renderizar las opciones en el chat, abrir el
+previsualizado al elegir una y enviar recién al confirmar.
+
+### Cuánto cuesta el asistente, y con qué modelo (2026-08-21)
+
+Medido en `assistant_runs` y `assistant_provider_attempts`, no estimado.
+
+**El modelo quedó en `gemini-3.7-flash`**, el Flash estable más nuevo, que Google
+describe para «agentic workflows and reliable multi-step execution» —exactamente
+esta carga, donde el asistente encadena herramientas—. Antes era
+`gemini-3.1-pro-preview`.
+
+| | Pro preview | 3.7 Flash |
+|---|---|---|
+| nivel gratuito | **no tiene** | sí |
+| precio entrada / salida por millón | $2,00 / $12,00 | $0,75 / $3,75 |
+| costo por pregunta, medido | $0,067 | **$0,023** |
+| 50 preguntas diarias, al mes | ~$112 | **~$35** |
+| fallas en la misma ventana | 12 de 12 | 0 de 8 |
+
+**Que el Pro preview no tenga nivel gratuito es la causa de los 429**, no una
+caída de Google: se le estaba pidiendo a un modelo de sólo pago que respondiera
+sin facturación habilitada.
+
+**El catálogo de precios estaba mal.** `AI_AGENT_MODEL_PRICING_JSON` tarifaba a
+los Flash a $1,50/$7,50 —los precios que rigen desde enero de 2027— así que todo
+costo que el sistema informaba de un Flash venía al doble. Se corrigió con los
+vigentes. El catálogo es de exigencia estricta: un modelo sin entrada hace
+fallar la corrida entera con «AI routed model has no pricing entry» —correcto,
+nunca gastar sin saber cuánto— pero hay que recordarlo al cambiar de modelo.
+
+**Lo que sigue caro es el preámbulo.** Cada llamada manda **10.777 tokens antes
+del texto del operador**, y una pregunta usa ~2 llamadas. De eso, ~7.200 son
+descripciones de herramientas y ~1.700 el bloque de reglas: el 83% de la cuenta
+no es la pregunta ni la respuesta. Se infló al escribir descripciones largas
+para corregir el ruteo del modelo. Podarlo, y el caché de contexto —el preámbulo
+es idéntico en cada llamada—, son las dos palancas que quedan.
+
+### Qué se puede optimizar del preámbulo, medido (2026-08-21)
+
+El catálogo de herramientas se puede serializar exactamente como se le manda al
+modelo. Medido así, con el filtro real del runtime —`prepare_supply_request`
+no se anuncia fuera del asistente de compras—:
+
+| | caracteres | ≈ tokens |
+|---|---|---|
+| descripciones de herramientas | 8.307 → **6.768** | 2.077 → **1.692** |
+| esquemas | 22.603 → **22.190** | 5.651 → **5.548** |
+| **total por llamada** | 30.910 → **28.958** | 7.728 → **7.240** |
+
+**Los esquemas pesan tres veces más que las descripciones**, al revés de lo que
+parecía: el 77% del catálogo son las propiedades, sus tipos y sus enums, no la
+prosa. Por eso podar texto rinde poco —bajó el costo por pregunta un 4%— y
+conviene no seguir recortando reglas a cambio de tan poco.
+
+**Los tokens por pregunta se triplicaron en diez días**: 9.804 el 12 de agosto,
+26.470 hoy. Creció el catálogo, no la conversación.
+
+**La palanca grande es el caché de contexto, y ni siquiera sabemos si ya está
+actuando.** Unos 8.900 tokens por llamada —catálogo más reglas— son idénticos
+en cada petición, y una pregunta hace ~2,2 llamadas: el 70% de la entrada es
+prefijo repetido. Gemini informa `cachedContentTokenCount` en su metadata de
+uso y **nuestro parser lo ignora**, así que el ledger cobra como nuevo lo que
+Google quizá ya descuenta. El primer paso no es optimizar sino medir: registrar
+ese contador, igual que se hizo con el estado HTTP de los fallos.
+
+### El caché del proveedor no está actuando, y se midió (2026-08-21)
+
+`assistant_provider_attempts.cached_input_tokens` registra cuántos tokens de
+entrada sirvió Gemini desde su caché. Medido tras instrumentarlo: **0 en todos
+los intentos**, con 13.400–16.100 tokens de entrada por llamada.
+
+La razón es estructural, no un ajuste que falte: el bulto repetido —catálogo de
+herramientas y bloque de reglas— viaja en `systemInstruction` y `tools`, campos
+aparte de `contents`. El caché implícito de Gemini trabaja sobre el prefijo de
+`contents`, y ahí lo primero que va es el mensaje del operador, distinto en cada
+pregunta. Por eso nunca puede haber acierto: **hace falta caché explícito**
+(`CachedContent`), que sí admite herramientas e instrucción de sistema.
+
+Tamaño del premio: ~8.900 tokens por llamada × ~2,2 llamadas por pregunta = el
+**70% de la entrada**.
+
+**Cómo se instrumentó, que importa tanto como el dato:** el cuerpo del recibo se
+valida con claves exactas y ese ledger es obligatorio —si falla, muere la
+corrida—. Por eso la función de base acepta a propósito **las dos formas** del
+cuerpo, con y sin `p_cached_input_tokens`, y así el orden de despliegue entre la
+base y la función de borde deja de importar.
+
+### Opciones clickeables en el chat, funcionando (2026-08-21)
+
+«Contacta al cliente X» resuelve la ventana de servicio de 24 horas, ofrece las
+plantillas aprobadas como controles, y al elegir una muestra **el texto exacto**
+que recibirá el cliente con Cancelar y Enviar. Elegir no envía nunca.
+
+- **La revisión es inline y se ve como el mensaje real.** Vive dentro de la
+  misma tarjeta del chat —no en un diálogo del sistema— y usa la gramática de
+  la ventana de conversación: burbuja propia sobre el rol `selectionContainer`,
+  alineada a la derecha, cola abajo a la derecha y hora al pie. Lo único que el
+  operador necesita juzgar antes de confirmar es **cómo le llegará al cliente**,
+  y un texto plano dentro de un modal no permite juzgar eso.
+- **Cada lado sustituye lo que le pertenece, y por eso la revisión no puede
+  mentir.** El cuerpo va aprobado por Meta desde `_shared/whatsapp_templates.ts`
+  —el mismo módulo que las despliega— con el nombre del negocio ya puesto, y el
+  saludo lo resuelve en el cliente `resolveWhatsAppTemplateGreetingName`, la
+  misma función que arma los parámetros del envío real.
+
+  Esto surgió de una pregunta del dueño: «¿renderiza tal cual como se enviaría?
+  Yo pedí que fuera sólo el nombre, sin apellido». No lo hacía: la primera
+  versión rendía el nombre completo en el servidor y el mensaje salía con el
+  nombre solo. La regla además no es «la primera palabra» —conserva compuestos
+  como «José Luis»—, así que replicarla en TypeScript habría garantizado que
+  algún día divergieran. Verificado: «Marcelo Silva» → «Hola Marcelo»;
+  «Jose Luis Campodónico» → «Hola Jose Luis».
+- El teléfono no viaja al modelo. El servidor informa sólo si existe; el cliente
+  lo resuelve al confirmar.
+- Las plantillas viven en `_shared/whatsapp_templates.ts`, compartidas con el
+  gestor que las despliega en Meta.
+
+**Una tarjeta nueva del asistente se registra en SEIS lugares**, y ninguno avisa
+del otro. Encontrarlos costó una madrugada de despliegues a ciegas:
+
+1. la RPC de la herramienta;
+2. el contrato del ejecutor (`toolContracts`);
+3. el esquema y la herramienta en el registry;
+4. el allowlist de recibos, `assistant_tool_receipt_contract_internal_v1`;
+5. `public.assistant_cards_valid_v1` en la base —claves, destino por tipo y
+   pareja tipo/entidad—;
+6. el cliente Dart: `validateStoredCards`, el mapa destino→tipo y la pareja
+   `entityRef`/destino.
+
+**La lección de método, que vale más que la feature:** los seis validan con
+listas cerradas —correcto— pero **todos rechazaban en silencio**, con un código
+genérico. Se instrumentaron dos: `AgentRuntimeError` conserva ahora un
+discriminador seguro del error (`assistant_unavailable_complete_run_v2_...`,
+`..._invalid_stored_card`) y el parser Dart nombra qué comprobación rechazó la
+tarjeta. Con eso, los tres últimos obstáculos cayeron en una vuelta cada uno;
+los tres primeros habían costado seis.
+
+**Un discriminador tiene que caber donde se guarda.** `assistant_runs.error_code`
+exige `^[a-z][a-z0-9_]{0,63}$`: lo distintivo va primero, porque con el prefijo
+genérico por delante el corte se comía justo el nombre de la RPC.
+
+### La bandeja archivaba algo distinto de lo enviado (2026-08-21)
+
+Envío real al teléfono del dueño, con su autorización. Llegó
+*«Hola Test, tu bicicleta **esta** lista para retiro en Viñabike»* —el cuerpo
+aprobado por Meta, sin tildes— y la previsualización del asistente decía
+exactamente eso. Pero la copia que el ERP archiva en la conversación decía
+*«**está** lista»*: `WhatsAppService.renderPreview` tenía su propia redacción,
+con tildes, distinta de los cuerpos publicados.
+
+O sea que el historial del taller mostraba un texto que el cliente nunca
+recibió. Las tres plantillas de cliente se alinearon literalmente con
+`_shared/whatsapp_templates.ts`, que es el módulo que las despliega en Meta.
+
+**El guardia importa más que el arreglo.** `whatsapp_customer_template_contract_test`
+lee ese archivo TypeScript y compara cuerpo por cuerpo contra la copia de Dart;
+se verificó que falla reintroduciendo una tilde. Sin él, la próxima redacción
+«mejorada» vuelve a separarlos y nadie se entera hasta que un cliente pregunta
+por qué el mensaje dice otra cosa.
+
+### Corregir una plantilla aprobada tiene costo operativo (2026-08-21)
+
+`deploy_defaults` sólo crea lo que falta y **salta** lo existente, así que un
+cuerpo mal escrito se quedaba aprobado para siempre. Se agregó `sync_bodies` al
+gestor: compara cada cuerpo vivo en Meta contra
+`_shared/whatsapp_templates.ts` y edita las que difieren, con su botón en el
+panel de plantillas del chat.
+
+Se corrigieron las tildes de las tres de cliente y se agregó al módulo la de
+primer contacto, con la redacción del dueño: *«Hola {{1}}, hablas con {{2}} de
+Viñabike. Te escribo por el servicio de tu bicicleta.»* —dos parámetros,
+cliente y quien escribe, porque así la manda `contactAndAgent`—.
+
+**Editar manda la plantilla de vuelta a revisión, y mientras está PENDING el
+envío falla con el error 132001 de Meta.** Se comprobó enviando: el mensaje se
+registró en la conversación pero sin `external_message_id`. Es un corte real de
+la capacidad de escribirle a un cliente fuera de la ventana de 24 horas, que
+dura lo que Meta demore en aprobar.
+
+Por eso el estado de revisión dejó de ser exclusivo de las plantillas de
+proveedor: ahora **todas** exigen aprobación viva y el panel muestra «En
+revisión», «Aprobada» o «Rechazada». Sin eso el taller sólo veía «no se pudo
+enviar», sin saber por qué ni hasta cuándo.
+
+### La previsualización la arma el cliente, con los parámetros del envío (2026-08-21)
+
+El servidor rendía el texto y ponía el negocio en `{{2}}`. Sirve para tres de
+las cuatro plantillas, pero **no para la de primer contacto**, donde ese
+parámetro es quien escribe: la revisión decía «hablas con Viñabike de Viñabike».
+Es el mismo error de ORDEN que el guardia de Dart ya vigilaba, cometido del lado
+del servidor.
+
+Ahora la tarjeta pide el texto resuelto al cliente, que lo arma con
+`renderPreview` usando exactamente los valores del envío —cliente, negocio y
+**quien tiene la sesión abierta**—. El orden de parámetros vive en un solo lugar,
+`bodyParameters`, y el guardia lo pinea contra el cuerpo aprobado.
+
+De paso apareció un segundo defecto, invisible en la previsualización anterior:
+el envío del asistente **no pasaba `agentName`**, así que una plantilla que se
+presenta por persona habría salido firmada «parte del equipo». Ahora firma con
+el nombre del operador, igual que un envío hecho a mano desde el chat.
+
+**Y quien escribe se presenta por su nombre, no por su nombre completo.** Se
+aplica la misma `resolveWhatsAppTemplateGreetingName` que al cliente —conserva
+compuestos como «José Luis» y deja fuera el apellido—, en `renderPreview` y en
+`bodyParameters` a la vez, para que revisión y envío no puedan separarse. Queda
+«hablas con Claudio», no «hablas con Claudio Catalán». Cubierto por tres
+pruebas: apellido fuera, compuesto entero, y firma neutra cuando no hay nombre
+resuelto en vez de dejar el hueco en blanco.

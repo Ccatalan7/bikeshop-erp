@@ -31,7 +31,11 @@ export class ProviderError extends Error {
 /// rechazo no se puede diagnosticar sin volver a reproducirlo. El código del
 /// run **no** cambia: esto es evidencia, no control de flujo.
 export function providerAttemptErrorCode(error: ProviderError): string {
-  if (error.code !== "provider_rejected") return error.code;
+  // El estado HTTP se guarda SIEMPRE que exista, no sólo en los rechazos
+  // definitivos. Los reintentables —429 por cuota, 503 por saturación— son
+  // justo los que hay que poder distinguir después, y hasta el 2026-08-21 se
+  // registraban todos como `provider_unavailable` a secas: con eso no se puede
+  // saber si al taller le falta cuota o si el proveedor está caído.
   const status = Number.isInteger(error.status) &&
       error.status >= 400 && error.status < 600
     ? `_${error.status}`

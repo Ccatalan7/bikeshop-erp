@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import '../../modules/messaging/services/messaging_service.dart';
 import '../../modules/sales/models/sales_models.dart';
 import '../../modules/bikeshop/models/bikeshop_models.dart';
 import '../services/tenant_service.dart';
@@ -68,7 +69,13 @@ String _foldWhatsAppNameToken(String value) => value
     .replaceAll('ú', 'u')
     .replaceAll('ü', 'u');
 
-@visibleForTesting
+/// Cómo saludamos a alguien en una plantilla: por su nombre, no por su
+/// nombre completo. La regla no es «la primera palabra» —conserva compuestos
+/// como «José Luis»— y por eso vive en un solo lugar.
+///
+/// Dejó de ser sólo-para-pruebas el 2026-08-21: la previsualización del
+/// asistente tiene que usar exactamente esta función, porque si la revisión
+/// dice «Marcelo Silva» y el mensaje sale «Marcelo», la revisión no sirve.
 String resolveWhatsAppTemplateGreetingName(String fullName) {
   final parts = fullName
       .trim()
@@ -141,19 +148,29 @@ class WhatsAppTemplateOption {
 
   bool get isSupplier => audience == WhatsAppTemplateAudience.supplier;
 
+  /// El texto tiene que ser **literalmente** el cuerpo que Meta aprobó, en
+  /// `supabase/functions/_shared/whatsapp_templates.ts`. No es una redacción
+  /// nuestra: es la copia local de algo que ya está publicado.
+  ///
+  /// El 2026-08-21 estas tres llevaban tilde —«está lista», «actualización»,
+  /// «aprobación»— y los cuerpos aprobados no la llevan. El cliente recibía una
+  /// cosa y la bandeja del taller archivaba otra. Se comprobó con un envío real
+  /// al teléfono del dueño: llegó sin tildes.
   String renderPreview({
     required String contactName,
     required String businessName,
     String? agentName,
   }) {
     final greetingName = resolveWhatsAppTemplateGreetingName(contactName);
-    final sender = agentName?.trim().isNotEmpty == true
-        ? agentName!.trim()
-        : 'parte del equipo';
+    final normalizedSender = agentName == null
+        ? ''
+        : resolveWhatsAppTemplateGreetingName(agentName);
+    final sender =
+        normalizedSender.isNotEmpty ? normalizedSender : 'parte del equipo';
 
     return switch (purpose) {
       WhatsAppTemplatePurpose.firstContact =>
-        'Hola $greetingName, buen día. Soy $sender de $businessName y te escribo por el servicio de tu bicicleta.',
+        'Hola $greetingName, hablas con $sender de Viñabike. Te escribo por el servicio de tu bicicleta.',
       WhatsAppTemplatePurpose.jobUpdate =>
         'Hola $greetingName, tenemos una actualización sobre tu bicicleta en $businessName. Responde este mensaje para continuar la conversación.',
       WhatsAppTemplatePurpose.readyForPickup =>
@@ -187,7 +204,12 @@ class WhatsAppTemplateOption {
       );
     }
 
-    final normalizedAgent = agentName?.trim();
+    // Quien escribe se presenta como se presenta una persona: por su nombre.
+    // Se usa la MISMA regla que para el cliente, que conserva compuestos como
+    // «José Luis» y deja fuera el apellido.
+    final normalizedAgent = agentName == null
+        ? null
+        : resolveWhatsAppTemplateGreetingName(agentName);
     if (requiresAgentName &&
         (normalizedAgent == null || normalizedAgent.isEmpty)) {
       throw ArgumentError.value(
@@ -401,6 +423,33 @@ class WhatsAppService {
 
   final _dateFormat = DateFormat('dd/MM/yyyy', 'es_CL');
 
+  /// Corrige en Meta el texto de las plantillas cuyo cuerpo aprobado difiere
+  /// del que el ERP considera correcto.
+  ///
+  /// `deploy_defaults` sólo crea lo que falta, así que un cuerpo mal escrito se
+  /// queda para siempre: así llegó a producción un «tu bicicleta esta lista»
+  /// sin tilde. Editar manda la plantilla de vuelta a revisión de Meta, y
+  /// mientras esté pendiente el envío con ese nombre puede fallar.
+  Future<({List<String> editadas, List<String> sinCambios, List<String> faltan})>
+      syncApprovedTemplateBodies() async {
+    final response = await _client.functions.invoke(
+      'whatsapp-template-manager',
+      body: const {'action': 'sync_bodies'},
+    );
+    final data = response.data;
+    if (data is! Map) {
+      throw StateError('Meta no confirmó la sincronización de plantillas.');
+    }
+    List<String> names(String key) => (data[key] as List? ?? const [])
+        .map((item) => item is Map ? '${item['name']}' : '$item')
+        .toList(growable: false);
+    return (
+      editadas: names('edited'),
+      sinCambios: names('unchanged'),
+      faltan: names('missing'),
+    );
+  }
+
   Future<Map<String, WhatsAppTemplateReviewStatus>>
       getSupplierTemplateReviewStatuses() async {
     final response = await _client.functions.invoke(
@@ -420,9 +469,14 @@ class WhatsAppService {
       );
     }
 
-    final expectedNames = supplierTemplateOptions
-        .map((option) => option.defaultTemplateName)
-        .toSet();
+    // Se devuelven las de proveedor Y las de cliente. Corregir un texto manda
+    // la plantilla a revisión de Meta, y mientras esté pendiente el envío
+    // falla con 132001: sin ver ese estado, el taller sólo sabe que «no se
+    // pudo enviar» y no por qué ni hasta cuándo.
+    final expectedNames = <String>{
+      ...supplierTemplateOptions.map((option) => option.defaultTemplateName),
+      ...customerTemplateOptions.map((option) => option.defaultTemplateName),
+    };
     final statuses = <String, WhatsAppTemplateReviewStatus>{};
     for (final item in data['templates'] as List) {
       if (item is! Map) continue;
@@ -452,6 +506,63 @@ class WhatsAppService {
 
     return '56$cleaned';
   }
+
+  /// Nombre, teléfono y negocio de un cliente, para previsualizar y enviar una
+  /// plantilla desde el asistente. Vive acá y no en el asistente porque el
+  /// teléfono es dato de contacto: el servidor nunca se lo manda al modelo,
+  /// sólo le dice si existe.
+  /// Incluye el nombre de quien tiene la sesión abierta: las plantillas de
+  /// primer contacto se presentan por persona —«hablas con Claudio»— y ese
+  /// dato es el segundo parámetro que recibe Meta, no el del negocio.
+  Future<({
+    String name,
+    String phone,
+    String businessName,
+    String? agentName,
+  })?> customerContactForAssistant(String customerId) async {
+    try {
+      final row = await _client
+          .from('customers')
+          .select('name, phone')
+          .eq('id', customerId)
+          .maybeSingle();
+      if (row == null) return null;
+      final phone = (row['phone'] as String?)?.trim() ?? '';
+      final name = (row['name'] as String?)?.trim() ?? '';
+      if (phone.isEmpty || name.isEmpty) return null;
+      return (
+        name: name,
+        phone: phone,
+        businessName: await _resolveBusinessName(),
+        agentName: await _resolveSignedInAgentName(),
+      );
+    } catch (error) {
+      debugPrint('⚠️ No se pudo resolver el contacto del cliente: $error');
+      return null;
+    }
+  }
+
+  /// Nombre de quien tiene la sesión abierta, tal como lo muestra el ERP.
+  Future<String?> _resolveSignedInAgentName() async {
+    try {
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) return null;
+      // El nombre visible del operador lo resuelve el mismo servicio que usa
+      // la ventana de conversación, para que la plantilla del asistente firme
+      // igual que una enviada a mano.
+      final info = await MessagingService().getSenderInfo(userId);
+      final name = info?['name']?.toString().trim();
+      return name == null || name.isEmpty ? null : name;
+    } catch (error) {
+      debugPrint('⚠️ No se pudo resolver el nombre del usuario: $error');
+      return null;
+    }
+  }
+
+  /// El nombre del negocio tal como aparecerá en la plantilla. Público porque
+  /// la previsualización tiene que usar exactamente el mismo valor que el
+  /// envío, y ese valor lo resuelve este servicio.
+  Future<String> resolveBusinessNameForPreview() => _resolveBusinessName();
 
   Future<String> _resolveBusinessName() async {
     try {

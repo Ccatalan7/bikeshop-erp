@@ -1449,10 +1449,41 @@ class _ProductFormPageState extends State<ProductFormPage>
       return const DrivetrainProductSpecFieldBehavior();
     }
 
-    return resolveDrivetrainProductSpecFieldBehavior(
+    final behavior = resolveDrivetrainProductSpecFieldBehavior(
       technicalFamily: template.technicalFamily,
       fieldKey: def.key,
       currentValues: values,
+    );
+
+    // Narrowing declared on the template field (`option_rules`) intersects
+    // with whatever the code-side family rules already decided, so a fact
+    // moved into the database keeps every downstream behavior it had here:
+    // pruning of values that stopped being offerable, the single-option
+    // auto-lock, and dropdown rendering for numeric fields.
+    final narrowed = field.allowedOptionsFor(values);
+    if (narrowed == null) {
+      return behavior;
+    }
+
+    final existing = behavior.allowedOptions;
+    final merged = existing == null
+        ? narrowed.toList(growable: false)
+        : existing.where(narrowed.contains).toList(growable: false);
+
+    // An empty intersection means two rules on one field contradict each
+    // other, which is a defect in the rules and not a statement about this
+    // product. Narrowing to nothing would drop a numeric field back to free
+    // text, so leave the field as the code-side rules left it;
+    // `spec_option_rules_test.dart` is what fails on the contradiction.
+    if (merged.isEmpty) {
+      return behavior;
+    }
+
+    return DrivetrainProductSpecFieldBehavior(
+      hidden: behavior.hidden,
+      enabled: behavior.enabled,
+      allowedOptions: merged,
+      helperText: behavior.helperText,
     );
   }
 

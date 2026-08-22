@@ -185,7 +185,11 @@ Deno.test("OpenAI protocol-forces one named tool and omits the choice otherwise"
   assertEquals(payloads.length, 2, "invalid required tools fail before network egress");
 });
 
-Deno.test("Gemini defaults route fast and vision to stable Flash and deep to Pro preview", async () => {
+// El rol `deep` dejó de apuntar a un modelo *preview*: `gemini-3.1-pro-preview`
+// rechazaba por cuota 12 de cada 12 llamadas el 2026-08-21, y Google describe
+// `gemini-3.7-flash` para «agentic workflows and reliable multi-step
+// execution», que es exactamente esta carga.
+Deno.test("Gemini defaults route every role to a stable Flash model", async () => {
   const urls: string[] = [];
   const provider = createGeminiAgentProvider({
     apiKey: "gemini-test-key",
@@ -206,7 +210,7 @@ Deno.test("Gemini defaults route fast and vision to stable Flash and deep to Pro
   await provider.generate({ ...base, modelRole: "deep" }, new AbortController().signal);
   await provider.generate({ ...base, modelRole: "vision" }, new AbortController().signal);
   assert(urls[0].includes("models/gemini-3.6-flash:generateContent"), "fast stable model");
-  assert(urls[1].includes("models/gemini-3.1-pro-preview:generateContent"), "deep Pro model");
+  assert(urls[1].includes("models/gemini-3.7-flash:generateContent"), "deep stable model");
   assert(urls[2].includes("models/gemini-3.6-flash:generateContent"), "vision stable model");
 });
 
@@ -238,7 +242,7 @@ Deno.test("Gemini accounts tool prompts and thinking tokens in the billed usage 
 
   assertEquals(
     turn.usage,
-    { inputTokens: 150, outputTokens: 320, totalTokens: 470 },
+    { cachedInputTokens: 0, inputTokens: 150, outputTokens: 320, totalTokens: 470 },
     "tool prompts are input and hidden thinking is billed output",
   );
 });

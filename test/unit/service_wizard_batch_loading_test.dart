@@ -57,7 +57,11 @@ void main() {
                 'target_position_mode': 'front_rear',
               },
             ],
-          'service_profile_questions' => [
+          // Desde el 2026-08-21 el wizard lee la vista, no la tabla: resuelve
+          // las opciones contra el registro de vocabulario cuando la pregunta
+          // es un campo de ficha. Sigue siendo UNA lectura para todo el lote,
+          // que es lo que esta prueba cuida.
+          'service_profile_questions_resolved_v1' => [
               {
                 'id': 'question-2',
                 'service_profile_id': 'profile-1',
@@ -121,7 +125,9 @@ void main() {
       hasLength(1),
     );
     expect(
-      requestedTables.where((table) => table == 'service_profile_questions'),
+      requestedTables.where(
+        (table) => table == 'service_profile_questions_resolved_v1',
+      ),
       hasLength(1),
     );
   });

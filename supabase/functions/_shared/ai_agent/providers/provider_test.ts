@@ -28,16 +28,24 @@ Deno.test("a typed upstream reason travels with the status", () => {
 
 // El control de flujo mira `code`, no esto: los otros códigos no se decoran,
 // porque su status es sintético del cliente y no dice nada del upstream.
-Deno.test("only a rejection is decorated", () => {
+// El estado HTTP se registra siempre que exista, también en los fallos
+// reintentables. Antes sólo se decoraba el rechazo definitivo, y por eso un
+// 429 por cuota y un 503 por saturación quedaban indistinguibles en el
+// ledger: los dos aparecían como `provider_unavailable` a secas.
+Deno.test("every attempt keeps the status it failed with", () => {
+  assertEquals(
+    providerAttemptErrorCode(new ProviderError("provider_unavailable", 429, true)),
+    "provider_unavailable_429",
+  );
   assertEquals(
     providerAttemptErrorCode(new ProviderError("provider_unavailable", 503, true)),
-    "provider_unavailable",
+    "provider_unavailable_503",
   );
   assertEquals(
     providerAttemptErrorCode(
       new ProviderError("provider_invalid_response", 502, false),
     ),
-    "provider_invalid_response",
+    "provider_invalid_response_502",
   );
 });
 

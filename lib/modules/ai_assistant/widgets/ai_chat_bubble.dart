@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../../shared/services/whatsapp_service.dart';
+import '../../../shared/widgets/whatsapp_outgoing_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -98,6 +101,81 @@ class _AIChatPanelState extends State<AIChatPanel> {
   /// The card supplies an identifier from a closed set; the resolver owns the
   /// route table and the toolbar table. An unregistered identifier produces no
   /// effect at all rather than a guessed route.
+  /// El texto exacto que recibirá el cliente, armado con los MISMOS valores
+  /// que usará el envío: su nombre, el del negocio y el de quien tiene la
+  /// sesión abierta. Devuelve null si falta algo y la tarjeta cae a lo que
+  /// mandó el servidor.
+  Future<String?> _previewCardOption(
+    AIAssistantActionCard card,
+    AIAssistantCardOption option,
+  ) async {
+    if (card.optionKind != 'whatsapp_template') return null;
+    final customerId = card.entityRef?.id;
+    if (customerId == null) return null;
+    final template = WhatsAppService.customerTemplateOptions
+        .where((candidate) => candidate.defaultTemplateName == option.id)
+        .firstOrNull;
+    if (template == null) return null;
+    final service = WhatsAppService();
+    final contact = await service.customerContactForAssistant(customerId);
+    if (contact == null) return null;
+    return service.buildTemplatePreviewText(
+      option: template,
+      customerName: contact.name,
+      businessName: contact.businessName,
+      agentName: contact.agentName,
+    );
+  }
+
+  /// Se llama sólo cuando el operador ya revisó el texto en la tarjeta y
+  /// apretó Enviar. La revisión vive en el chat, no en un diálogo del sistema:
+  /// lo que hay que poder juzgar es cómo le llegará el mensaje al cliente.
+  Future<void> _handleCardOption(
+    AIAssistantActionCard card,
+    AIAssistantCardOption option,
+  ) async {
+    if (card.optionKind != 'whatsapp_template') return;
+    final customerId = card.entityRef?.id;
+    if (customerId == null) return;
+    final template = WhatsAppService.customerTemplateOptions
+        .where((candidate) => candidate.defaultTemplateName == option.id)
+        .firstOrNull;
+    if (template == null) return;
+
+    final service = WhatsAppService();
+    final contact = await service.customerContactForAssistant(customerId);
+    if (!mounted) return;
+    if (contact == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ese cliente no tiene teléfono registrado.'),
+        ),
+      );
+      return;
+    }
+
+    final receipt = await service.sendTemplateMessage(
+      option: template,
+      customerPhone: contact.phone,
+      customerName: contact.name,
+      // Sin esto, una plantilla que se presenta por persona sale firmada como
+      // «parte del equipo» en vez de con el nombre del operador.
+      agentName: contact.agentName,
+      contextType: 'customer',
+      contextId: customerId,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          receipt.isSuccess
+              ? 'Mensaje enviado a ${contact.name}.'
+              : 'No se pudo enviar. Revisa la conversación.',
+        ),
+      ),
+    );
+  }
+
   void _handleCard(AIAssistantActionCard card) {
     final inventoryList = card.inventoryListRef;
     if (inventoryList != null) {
@@ -525,6 +603,8 @@ class _AIChatPanelState extends State<AIChatPanel> {
                                 session.approvalDecisionInFlight,
                             approvalErrorFor: session.approvalErrorFor,
                             onApproval: session.resolveApproval,
+                            onOption: _handleCardOption,
+                            onOptionPreview: _previewCardOption,
                           ),
                   ),
                 );
@@ -665,6 +745,8 @@ class _AssistantMessageBody extends StatelessWidget {
     required this.approvalDecisionInFlight,
     required this.approvalErrorFor,
     required this.onApproval,
+    required this.onOption,
+    required this.onOptionPreview,
   });
 
   final AIAssistantTranscriptEntry message;
@@ -677,6 +759,14 @@ class _AssistantMessageBody extends StatelessWidget {
     AIAssistantActionCard card,
     AIAssistantApprovalDecision decision,
   ) onApproval;
+  final void Function(
+    AIAssistantActionCard card,
+    AIAssistantCardOption option,
+  ) onOption;
+  final Future<String?> Function(
+    AIAssistantActionCard card,
+    AIAssistantCardOption option,
+  ) onOptionPreview;
 
   void _openSourceInEmbeddedBrowser(BuildContext context, String? href) {
     final uri = Uri.tryParse(href?.trim() ?? '');
@@ -746,6 +836,9 @@ class _AssistantMessageBody extends StatelessWidget {
                               ? null
                               : approvalErrorFor(card.approvalRef!.id),
                           onApproval: (decision) => onApproval(card, decision),
+                          onOption: (option) => onOption(card, option),
+                          onOptionPreview: (option) =>
+                              onOptionPreview(card, option),
                         ),
                       ))
                   .toList(),
@@ -756,7 +849,7 @@ class _AssistantMessageBody extends StatelessWidget {
   }
 }
 
-class _AssistantActionCard extends StatelessWidget {
+class _AssistantActionCard extends StatefulWidget {
   const _AssistantActionCard({
     required this.card,
     required this.onTap,
@@ -765,10 +858,16 @@ class _AssistantActionCard extends StatelessWidget {
     required this.approvalDecisionInFlight,
     required this.approvalError,
     required this.onApproval,
+    required this.onOption,
+    required this.onOptionPreview,
   });
 
   final AIAssistantActionCard card;
   final VoidCallback onTap;
+  final void Function(AIAssistantCardOption option) onOption;
+  /// Devuelve el texto EXACTO que se enviará, resuelto con los mismos valores
+  /// que usa el envío: cliente, negocio y quien tiene la sesión abierta.
+  final Future<String?> Function(AIAssistantCardOption option) onOptionPreview;
   final bool approvalEnabled;
   final bool approvalBusy;
   final AIAssistantApprovalDecision? approvalDecisionInFlight;
@@ -776,7 +875,44 @@ class _AssistantActionCard extends StatelessWidget {
   final Future<void> Function(AIAssistantApprovalDecision decision) onApproval;
 
   @override
+  State<_AssistantActionCard> createState() => _AssistantActionCardState();
+}
+
+class _AssistantActionCardState extends State<_AssistantActionCard> {
+  /// La opción que el operador está revisando. Elegir no envía: abre esta
+  /// revisión, y sólo «Enviar» ejecuta.
+  AIAssistantCardOption? _reviewing;
+  String? _reviewText;
+
+  /// Elegir abre la revisión; nunca envía. El texto se pide resuelto para que
+  /// sea el mismo que recibirá el cliente, no una aproximación.
+  Future<void> _review(AIAssistantCardOption option) async {
+    if (_reviewing?.id == option.id) {
+      setState(() {
+        _reviewing = null;
+        _reviewText = null;
+      });
+      return;
+    }
+    setState(() {
+      _reviewing = option;
+      _reviewText = null;
+    });
+    final text = await widget.onOptionPreview(option);
+    if (!mounted || _reviewing?.id != option.id) return;
+    setState(() => _reviewText = text ?? option.description ?? option.label);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final card = widget.card;
+    final onTap = widget.onTap;
+    final onOption = widget.onOption;
+    final approvalEnabled = widget.approvalEnabled;
+    final approvalBusy = widget.approvalBusy;
+    final approvalDecisionInFlight = widget.approvalDecisionInFlight;
+    final approvalError = widget.approvalError;
+    final onApproval = widget.onApproval;
     if (card.inventoryListRef != null) {
       return AIAssistantCompactActionTile(card: card, onTap: onTap);
     }
@@ -913,6 +1049,99 @@ class _AssistantActionCard extends StatelessWidget {
                                   ))
                               .toList(),
                         ),
+                      ],
+                      if (card.options.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        // Elegir una opción no envía: abre la revisión aquí
+                        // mismo, con la pinta que tendrá el mensaje en el chat
+                        // del cliente. El diálogo del sistema que había antes
+                        // sacaba al operador de la conversación para mostrarle
+                        // un texto plano que no se parecía a nada.
+                        for (final option in card.options)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                // La clave incluye a quién pertenece la
+                                // tarjeta: dos contactos en el mismo hilo
+                                // ofrecen las mismas plantillas, y sin eso
+                                // comparten clave y se confunden.
+                                key: Key(
+                                  'ai-card-option-${card.kind}'
+                                  '-${card.entityRef?.id ?? card.title}'
+                                  '-${option.id}',
+                                ),
+                                onPressed: () => _review(option),
+                                style: OutlinedButton.styleFrom(
+                                  alignment: Alignment.centerLeft,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  backgroundColor: _reviewing?.id == option.id
+                                      ? accent.withValues(alpha: 0.10)
+                                      : null,
+                                  side: BorderSide(
+                                    color: accent.withValues(
+                                      alpha: _reviewing?.id == option.id
+                                          ? 0.55
+                                          : 0.35,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        option.label,
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                          color: scheme.onSurface,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Icon(
+                                      _reviewing?.id == option.id
+                                          ? Icons.expand_less
+                                          : Icons.expand_more,
+                                      size: 18,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (_reviewing != null && _reviewText == null)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 10),
+                            child: Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          ),
+                        if (_reviewing != null && _reviewText != null)
+                          WhatsAppOutgoingPreview(
+                            key: const Key('ai-card-option-preview'),
+                            text: _reviewText!,
+                            onCancel: () => setState(() {
+                              _reviewing = null;
+                              _reviewText = null;
+                            }),
+                            onSend: () {
+                              final chosen = _reviewing!;
+                              setState(() {
+                                _reviewing = null;
+                                _reviewText = null;
+                              });
+                              onOption(chosen);
+                            },
+                          ),
                       ],
                       const SizedBox(height: 10),
                       if (isApprovalPreview)

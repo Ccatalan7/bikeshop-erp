@@ -4610,9 +4610,11 @@ Deno.test("runtime fails closed before provider execution when exact model prici
     }, new AbortController().signal);
   } catch (error) {
     assert(error instanceof AgentRuntimeError, "missing price is contained");
+    // El código conserva un discriminador desde el 2026-08-21: antes cualquier
+    // excepción se veía igual y diagnosticar exigía bisectar en producción.
     assertEquals(
       error.code,
-      "assistant_unavailable",
+      "assistant_unavailable_ai_routed_model_has_no_pricing_entry",
       "unknown pricing is fail closed",
     );
   }

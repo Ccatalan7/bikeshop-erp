@@ -2277,9 +2277,24 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   String _valueForTechnicalSpec(_PublicProductTechnicalSpec spec) {
     final raw = spec.displayValue.trim();
     if (raw.isEmpty) return raw;
-    final values = raw
-        .split(',')
-        .map((value) => _spanishTechnicalValue(spec.specKey, value.trim()))
+
+    // La coma sólo separa elementos cuando el campo es multi-valor: el RPC une
+    // ahí un `value_json` con «, ». En cualquier otro tipo la coma es parte del
+    // valor — un decimal escrito a la chilena — y partirlo lo corrompe:
+    // «34,8 mm» salía como «34, 8 Mm». Rompía toda medida con decimal.
+    final esMultivalor = spec.dataType == 'multi_select';
+
+    // Un valor de lista controlada ya viene redactado desde el ERP, con sus
+    // mayúsculas puestas. Title-case sobre eso sólo lo estropea: «x 24» se
+    // volvía «X 24» y «caja inglesa» perdía su forma.
+    final vieneDeVocabulario =
+        spec.dataType == 'single_select' || spec.dataType == 'multi_select';
+
+    final partes = esMultivalor ? raw.split(',') : <String>[raw];
+    final values = partes
+        .map((value) => vieneDeVocabulario
+            ? value.trim()
+            : _spanishTechnicalValue(spec.specKey, value.trim()))
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
     var display = values.isEmpty ? raw : values.join(', ');

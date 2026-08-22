@@ -1,4 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import {
+  defaultWhatsAppTemplates as defaultTemplates,
+  type TemplateDefinition,
+} from "../_shared/whatsapp_templates.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -14,17 +18,9 @@ const WHATSAPP_API_VERSION = Deno.env.get("WHATSAPP_API_VERSION") ?? "v23.0";
 
 type JsonRecord = Record<string, unknown>;
 
-interface TemplateDefinition {
-  name: string;
-  language: string;
-  category: "UTILITY" | "MARKETING" | "AUTHENTICATION";
-  body: string;
-  examples: string[];
-  allowCategoryChange?: boolean;
-}
 
 interface TemplateRequest {
-  action?: "list" | "deploy_defaults" | "delete";
+  action?: "list" | "deploy_defaults" | "delete" | "sync_bodies";
   tenantId?: string;
   channelId?: string;
   businessAccountId?: string;
@@ -41,71 +37,6 @@ interface TenantAccess {
 
 type TenantAccessResult = TenantAccess | { error: Response };
 
-const defaultTemplates: TemplateDefinition[] = [
-  {
-    name: "actualizacion_servicio_bicicleta",
-    language: "es_CL",
-    category: "UTILITY",
-    body:
-      "Hola {{1}}, tenemos una actualizacion sobre tu bicicleta en {{2}}. Responde este mensaje para continuar la conversacion.",
-    examples: ["Claudio", "Vinabike"],
-  },
-  {
-    name: "bicicleta_lista_retiro",
-    language: "es_CL",
-    category: "UTILITY",
-    body:
-      "Hola {{1}}, tu bicicleta esta lista para retiro en {{2}}. Responde este mensaje si necesitas coordinar algo.",
-    examples: ["Claudio", "Vinabike"],
-  },
-  {
-    name: "seguimiento_presupuesto_bicicleta",
-    language: "es_CL",
-    category: "UTILITY",
-    body:
-      "Hola {{1}}, necesitamos tu respuesta sobre un presupuesto o aprobacion pendiente en {{2}}. Responde este mensaje para continuar.",
-    examples: ["Claudio", "Vinabike"],
-  },
-  {
-    name: "proveedor_presentacion_nuevo_numero_v1",
-    language: "es_CL",
-    category: "MARKETING",
-    body:
-      "Hola {{1}}, buen día. Soy {{2}}, del equipo de Viñabike en Viña del Mar, razón social NEWEN SpA. Con nuestro equipo estamos usando este nuevo número para comunicarnos con nuestros proveedores, así que quería presentarme y confirmar que podemos coordinarnos por aquí para compras, cotizaciones, documentos y despachos.\n\nQuedo atento. Saludos.",
-    examples: ["Felipe", "Claudio"],
-  },
-  {
-    name: "proveedor_saludo_v1",
-    language: "es_CL",
-    category: "MARKETING",
-    body: "Hola {{1}}, buen día.",
-    examples: ["Felipe"],
-  },
-  {
-    name: "proveedor_retomar_contacto_v1",
-    language: "es_CL",
-    category: "MARKETING",
-    body: "Hola {{1}}, buen día. Cuando puedas me hablas, porfa. Quedo atento. Saludos.",
-    examples: ["Felipe"],
-  },
-  {
-    name: "proveedor_consulta_novedades_v1",
-    language: "es_CL",
-    category: "MARKETING",
-    body:
-      "Hola {{1}}, buen día. Cuando puedas me cuentas si hay alguna novedad, porfa. Quedo atento. Saludos.",
-    examples: ["Felipe"],
-  },
-  {
-    name: "proveedor_pedido_pendiente_v3",
-    language: "es_CL",
-    category: "UTILITY",
-    body:
-      "Hola {{1}}, buen día. Te escribo para seguir con el pedido que tenemos pendiente. Cuando puedas me hablas, porfa. Quedo atento, saludos.",
-    examples: ["Felipe"],
-    allowCategoryChange: false,
-  },
-];
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -295,7 +226,7 @@ serve(async (req) => {
   }
 
   const action = body.action ?? "list";
-  if (!["list", "deploy_defaults", "delete"].includes(action)) {
+  if (!["list", "deploy_defaults", "delete", "sync_bodies"].includes(action)) {
     return jsonResponse({ error: "Unsupported action" }, 400);
   }
   if (
@@ -365,6 +296,64 @@ serve(async (req) => {
     const templates = Array.isArray(body.templates) && body.templates.every(isTemplateDefinition)
       ? body.templates
       : defaultTemplates;
+
+    // `deploy_defaults` sólo crea lo que falta: una plantilla ya aprobada se
+    // salta, así que un cuerpo mal escrito se queda para siempre. `sync_bodies`
+    // corrige eso, editando en Meta las que difieren del módulo compartido.
+    //
+    // Editar manda la plantilla de vuelta a revisión: mientras esté PENDING el
+    // envío con ese nombre puede fallar, y Meta limita cuántas ediciones se
+    // permiten al mes. Por eso sólo se tocan las que de verdad difieren.
+    if (action === "sync_bodies") {
+      const edited: JsonRecord[] = [];
+      const unchanged: JsonRecord[] = [];
+      const missing: JsonRecord[] = [];
+      const rejected: JsonRecord[] = [];
+
+      for (const template of templates) {
+        const existing = existingTemplates.find((item) =>
+          item.name === template.name && item.language === template.language
+        );
+        if (!existing) {
+          missing.push({ name: template.name, language: template.language });
+          continue;
+        }
+        const currentBody = Array.isArray(existing.components)
+          ? (existing.components as JsonRecord[])
+            .find((component) => component.type === "BODY")?.text
+          : undefined;
+        if (currentBody === template.body) {
+          unchanged.push({ name: template.name });
+          continue;
+        }
+        const result = await graphRequest(String(existing.id), {
+          method: "POST",
+          body: JSON.stringify({
+            category: template.category,
+            components: buildTemplatePayload(template).components,
+          }),
+        });
+        if (result.response.ok) {
+          edited.push({
+            name: template.name,
+            from: currentBody,
+            to: template.body,
+          });
+        } else {
+          rejected.push({ name: template.name, error: result.body });
+        }
+      }
+
+      return jsonResponse({
+        ok: rejected.length === 0,
+        business_account_id: businessAccountId,
+        channel,
+        edited,
+        unchanged,
+        missing,
+        rejected,
+      }, rejected.length === 0 ? 200 : 207);
+    }
 
     const created: JsonRecord[] = [];
     const skipped: JsonRecord[] = [];

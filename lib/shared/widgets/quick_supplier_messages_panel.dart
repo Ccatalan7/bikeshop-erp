@@ -34,7 +34,15 @@ enum _SupplierToolbarAction {
 }
 
 class QuickSupplierMessagesPanel extends StatefulWidget {
-  const QuickSupplierMessagesPanel({super.key, this.showTitle = true});
+  const QuickSupplierMessagesPanel({
+    super.key,
+    this.showTitle = true,
+    this.onConversationVisibilityChanged,
+  });
+
+  /// Avisa a quien la hospeda que se abrió o cerró una conversación, para que
+  /// pueda cederle la altura.
+  final ValueChanged<bool>? onConversationVisibilityChanged;
 
   /// En la hoja de Actividad el segmento ya dice «Proveedores»; repetirlo aquí
   /// gasta una fila de alto en un teléfono. Las acciones de la barra sí siguen.
@@ -58,6 +66,11 @@ class _QuickSupplierMessagesPanelState
   List<shared_supplier.Supplier> _suppliers = [];
   Map<String, List<PurchaseInvoice>> _invoicesBySupplierId = const {};
   bool _isLoadingSuppliers = false;
+
+  @override
+  void onConversationVisibilityChanged(bool visible) {
+    widget.onConversationVisibilityChanged?.call(visible);
+  }
 
   @override
   ToolbarTool get inboxTool => ToolbarTool.supplierMessages;
@@ -185,12 +198,20 @@ class _QuickSupplierMessagesPanelState
   Widget build(BuildContext context) {
     final provider = context.watch<ChatProvider>();
     final selectedConversation = _selectedConversation(provider.conversations);
-    if (selectedConversationId != null && selectedConversation == null) {
+    // Sólo con la lista YA cargada: en la primera trama tras restaurar la
+    // sesión las conversaciones aún no llegan, y devolver a la bandeja ahí
+    // descartaba el chat restaurado antes de poder mostrarlo.
+    if (selectedConversationId != null &&
+        selectedConversation == null &&
+        provider.conversations.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || selectedConversationId == null) return;
         returnToInbox(selectedConversationId!);
       });
     }
+
+    // Se anuncia lo que se DIBUJA, no lo que se pretendía abrir.
+    announceConversationVisibility(selectedConversation != null);
 
     if (selectedConversation != null) {
       return _buildConversationView(selectedConversation);
@@ -245,7 +266,7 @@ class _QuickSupplierMessagesPanelState
                 icon: Icon(
                   Icons.open_in_full,
                   size: 18,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
                 tooltip: 'Abrir mensajería completa',
                 onPressed: () => _openFullChat(conversation),
@@ -287,9 +308,17 @@ class _QuickSupplierMessagesPanelState
           else
             const Spacer(),
           const SizedBox(width: 8),
+          // Tinta PRIMARIA declarada. Dos lecciones en una: heredar dejaba al
+          // tema ambiente decidir, y `onSurfaceVariant` —que fue el primer
+          // intento— es tinta de texto secundario: en el esquema oscuro es un
+          // gris azulado que sobre esta superficie casi desaparece. Un icono
+          // que ES una acción lleva `onSurface`, como cualquier rótulo
+          // primario; la variante queda para lo que acompaña.
           IconButton(
             tooltip: 'Recargar',
             onPressed: isRefreshing ? null : refreshInbox,
+            color: Theme.of(context).colorScheme.onSurface,
+
             icon: isRefreshing
                 ? const SizedBox(
                     width: 18,
@@ -301,6 +330,7 @@ class _QuickSupplierMessagesPanelState
           IconButton(
             tooltip: 'Abrir mensajería completa',
             onPressed: () => _openFullChat(),
+            color: Theme.of(context).colorScheme.onSurface,
             icon: const Icon(Icons.open_in_full, size: 18),
           ),
         ],

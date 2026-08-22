@@ -78,6 +78,8 @@ class BikeProductCompatibilityService {
     'bearing_inner_diameter_mm',
     'bearing_outer_diameter_mm',
     'bearing_size_code',
+    'bb_construction',
+    'bb_shell_standard',
     'bottom_bracket_family',
     'cassette_cog_sequence',
     'chain_connector_type',
@@ -248,19 +250,25 @@ class BikeProductCompatibilityService {
     };
 
     final client = _client ?? Supabase.instance.client;
-    final rows = await client.from('product_spec_values').select('''
-          product_id,
+    // El scorer lee el registro unificado. Antes leía `product_spec_values`,
+    // donde el valor de una lista es la etiqueta congelada en la fila; ahora la
+    // resuelve desde el vocabulario, así que un renombre no rompe una
+    // compatibilidad que ya estaba puntuada.
+    final rows = await client.from('spec_facts').select('''
+          subject_id,
           value_text,
           value_number,
           value_boolean,
-          value_option,
-          value_json,
-          display_value,
-          spec_definitions!inner(key)
-        ''').eq('tenant_id', tenantId).inFilter('product_id', missingIds);
+          spec_definitions!inner(key),
+          spec_fact_values(position, spec_definition_values!inner(label))
+        ''')
+        .eq('tenant_id', tenantId)
+        .eq('subject_type', 'product')
+        .isFilter('subject_scope', null)
+        .inFilter('subject_id', missingIds);
 
     for (final row in rows) {
-      final productId = row['product_id']?.toString();
+      final productId = row['subject_id']?.toString();
       final definition = row['spec_definitions'];
       final specKey = definition is Map ? definition['key']?.toString() : null;
       if (productId == null || specKey == null) {
@@ -1351,8 +1359,9 @@ class BikeProductCompatibilityService {
   }) {
     final expectedFamily =
         _canonicalBottomBracketFamily(compatibilityContext.bottomBracketFamily);
-    final productFamily =
-        _canonicalBottomBracketFamily(specValues['bottom_bracket_family']);
+    final productFamily = _canonicalBottomBracketFamily(
+      specValues['bb_shell_standard'] ?? specValues['bottom_bracket_family'],
+    );
     final expectedShellWidth = compatibilityContext.bbShellWidthMm;
     final productShellWidth =
         _parseDoubleValue(specValues['bb_shell_width_mm']);
@@ -1477,8 +1486,9 @@ class BikeProductCompatibilityService {
   }) {
     final expectedFamily =
         _canonicalBottomBracketFamily(compatibilityContext.bottomBracketFamily);
-    final productFamily =
-        _canonicalBottomBracketFamily(specValues['bottom_bracket_family']);
+    final productFamily = _canonicalBottomBracketFamily(
+      specValues['bb_shell_standard'] ?? specValues['bottom_bracket_family'],
+    );
     final expectedShellWidth = compatibilityContext.bbShellWidthMm;
     final productShellWidth =
         _parseDoubleValue(specValues['bb_shell_width_mm']);
@@ -2710,33 +2720,28 @@ class BikeProductCompatibilityService {
   }
 
   dynamic _resolveSpecValue(Map<String, dynamic> row) {
-    final optionValue = row['value_option'];
-    if (optionValue != null && optionValue.toString().trim().isNotEmpty) {
-      return optionValue;
+    // Un hecho de lista trae sus etiquetas en `spec_fact_values`, en el orden
+    // en que se eligieron. Un escalar viene en su columna tipada.
+    final listaCruda = row['spec_fact_values'];
+    if (listaCruda is List && listaCruda.isNotEmpty) {
+      final entradas = listaCruda.whereType<Map>().toList()
+        ..sort((a, b) => ((a['position'] as num?)?.toInt() ?? 0)
+            .compareTo((b['position'] as num?)?.toInt() ?? 0));
+      final etiquetas = entradas
+          .map((entrada) =>
+              (entrada['spec_definition_values'] as Map?)?['label'] as String?)
+          .whereType<String>()
+          .toList(growable: false);
+      if (etiquetas.isEmpty) return null;
+      return etiquetas.length == 1 ? etiquetas.first : etiquetas;
     }
 
-    final textValue = row['value_text'];
-    if (textValue != null && textValue.toString().trim().isNotEmpty) {
-      return textValue;
-    }
-
-    if (row['value_number'] != null) {
-      return row['value_number'];
-    }
-
-    if (row['value_boolean'] != null) {
-      return row['value_boolean'];
-    }
-
-    if (row['value_json'] != null) {
-      return row['value_json'];
-    }
-
-    final displayValue = row['display_value'];
-    if (displayValue != null && displayValue.toString().trim().isNotEmpty) {
-      return displayValue;
-    }
-
+    final number = row['value_number'];
+    if (number != null) return number;
+    final boolean = row['value_boolean'];
+    if (boolean != null) return boolean;
+    final text = row['value_text'];
+    if (text != null && text.toString().trim().isNotEmpty) return text;
     return null;
   }
 
@@ -3593,7 +3598,40 @@ class BikeProductCompatibilityService {
         normalized.contains('1.37')) {
       return 'bsa_threaded';
     }
-    if (normalized.contains('pressfit') || normalized.contains('press fit')) {
+    // Las cajas roscadas que no son inglesas comparten familia con ella sólo en
+    // que se enroscan; su rosca es distinta y no intercambian motor, así que
+    // cada una es su propia familia.
+    if (normalized.contains('italiano') || normalized.contains('36x24')) {
+      return 'italian_threaded';
+    }
+    if (normalized.contains('t47')) {
+      return 't47_threaded';
+    }
+    if (normalized.contains('frances') || normalized.contains('french')) {
+      return 'french_threaded';
+    }
+    if (normalized.contains('suizo') || normalized.contains('swiss')) {
+      return 'swiss_threaded';
+    }
+    if (normalized.contains('euro bmx')) {
+      return 'euro_bmx_threaded';
+    }
+    if (normalized.contains('spanish')) {
+      return 'spanish_bmx';
+    }
+    // El vocabulario chileno nombra estas cajas por su código, no por la
+    // palabra «pressfit»: `BB86 / BB92 41 mm`, `BB386EVO 46 mm`, `BB90 / BB95`,
+    // `BBRight / OSBB`. Sin esto el scorer no reconoce ninguna caja a presión
+    // moderna y las deja como familia cruda.
+    if (normalized.contains('pressfit') ||
+        normalized.contains('press fit') ||
+        normalized.contains('bb86') ||
+        normalized.contains('bb92') ||
+        normalized.contains('bb386') ||
+        normalized.contains('bb90') ||
+        normalized.contains('bb95') ||
+        normalized.contains('bbright') ||
+        normalized.contains('osbb')) {
       return 'pressfit';
     }
     if (normalized.contains('bb30') || normalized.contains('pf30')) {

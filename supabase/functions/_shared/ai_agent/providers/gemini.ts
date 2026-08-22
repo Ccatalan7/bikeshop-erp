@@ -19,7 +19,12 @@ import {
 
 const defaultModels: Readonly<Record<LogicalModelRole, string>> = {
   fast: "gemini-3.6-flash",
-  deep: "gemini-3.1-pro-preview",
+  // `gemini-3.7-flash` es el Flash estable más nuevo y el que Google describe
+  // para «agentic workflows and reliable multi-step execution», que es
+  // exactamente esta carga: el asistente encadena herramientas en varios
+  // pasos. Reemplazó a `gemini-3.1-pro-preview` el 2026-08-21, cuando ese
+  // preview empezó a rechazar por cuota 12 de cada 12 llamadas.
+  deep: "gemini-3.7-flash",
   vision: "gemini-3.6-flash",
 };
 
@@ -52,7 +57,8 @@ export function createGeminiAgentProvider(config: GeminiAgentProviderConfig): Ag
   );
   const modelByRole = config.modelByRole ?? defaultModels;
   const allowedModels = new Set(
-    config.allowedModels ?? ["gemini-3.6-flash", "gemini-3.1-pro-preview"],
+    config.allowedModels ??
+      ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.1-pro-preview"],
   );
   assertServerModelConfiguration(modelByRole, allowedModels);
 
@@ -326,6 +332,11 @@ function parseGeminiUsage(value: unknown): AgentUsage {
     outputTokens = safeTokenSum(outputTokens, reportedTotal - componentTotal);
   }
   return {
+    // Cuántos de los tokens de entrada los sirvió el caché del proveedor. El
+    // 70% de cada petición es prefijo idéntico —catálogo de herramientas y
+    // reglas—, así que saber si Gemini lo está descontando decide si vale la
+    // pena implementar caché explícito o ya no hace falta.
+    cachedInputTokens: safeTokenCount(usage.cachedContentTokenCount),
     inputTokens,
     outputTokens,
     totalTokens: safeTokenSum(inputTokens, outputTokens),

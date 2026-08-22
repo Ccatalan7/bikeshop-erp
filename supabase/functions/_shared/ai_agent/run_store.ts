@@ -237,6 +237,7 @@ export function createSupabaseAgentRunStore(
           p_model_role: input.modelRole,
           p_status: input.status,
           p_finish_reason: input.finishReason ?? null,
+          p_cached_input_tokens: usage.cachedInputTokens ?? 0,
           p_input_tokens: usage.inputTokens,
           p_output_tokens: usage.outputTokens,
           p_estimated_cost_microusd: input.estimatedCostMicrousd,

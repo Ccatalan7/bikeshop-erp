@@ -1,4 +1,9 @@
 import {
+  defaultWhatsAppTemplates,
+  renderWhatsAppTemplateBody,
+} from "../whatsapp_templates.ts";
+import {
+  type AgentCardOption,
   type AgentActionCard,
   type AgentApprovalRef,
   agentApprovalStates,
@@ -22,7 +27,7 @@ const kindsByDestination: Readonly<Record<AgentActionCard["destination"], readon
   inventory_products: ["inventory"],
   tasks: ["task", "task_preview"],
   expenses: ["expense"],
-  conversations: ["conversation"],
+  conversations: ["conversation", "customer_contact"],
 };
 const entityKindByCardKind: Readonly<Record<string, AgentEntityKind | undefined>> = {
   customer: "customer",
@@ -38,6 +43,8 @@ const entityKindByCardKind: Readonly<Record<string, AgentEntityKind | undefined>
   task_preview: undefined,
   expense: "expense",
   conversation: "conversation",
+  // La tarjeta de contacto apunta al cliente: desde ahí se abre su ficha.
+  customer_contact: "customer",
 };
 
 export function cardsForToolResult(
@@ -55,6 +62,36 @@ export function cardsForToolResult(
     return receivableCards(result.items.filter((item) => item.kind === "receivable").slice(0, 3));
   }
   if (toolName === "analyze_sales_period") return salesPeriodCards(result.items);
+  if (toolName === "prepare_customer_contact") {
+    return result.items.slice(0, 3).map((item) => {
+      const open = item.windowOpen === true;
+      return card({
+        kind: "customer_contact",
+        eyebrow: "Contactar cliente",
+        title: text(item, "customerName", "Cliente"),
+        subtitle: open
+          ? "Ventana de 24 horas abierta"
+          : "Fuera de la ventana de 24 horas",
+        description: open
+          ? "Puedes escribirle directamente. Revisa el texto antes de enviar."
+          : "Meta sólo acepta una plantilla aprobada. Elige cuál, revisa el " +
+            "texto exacto que le llegará y confirma.",
+        destination: "conversations",
+        chips: [
+          ...(item.hasContactPhone === true ? [] : ["Sin teléfono"]),
+          ...(typeof item.channel === "string" ? [item.channel] : []),
+        ],
+        entityRef: entityRef(item, "customer"),
+        optionKind: open ? "whatsapp_freeform" : "whatsapp_template",
+        // Fuera de la ventana, la tarjeta ofrece las plantillas aprobadas con
+        // el texto EXACTO que recibirá el cliente. Elegir una no envía nada:
+        // abre esa revisión y el operador confirma.
+        options: open ? undefined : customerTemplateOptions(
+          typeof item.businessName === "string" ? item.businessName : "",
+        ),
+      });
+    });
+  }
   const items = result.items.slice(0, 3);
   switch (toolName) {
     case "search_workshop_jobs":
@@ -558,6 +595,8 @@ export function validateStoredCards(value: unknown): readonly AgentActionCard[] 
       "approvalRef",
       "listRef",
       "supplyNeedDraft",
+      "options",
+      "optionKind",
     ]);
     if (Object.keys(item).some((key) => !requiredKeys.has(key) && !optionalKeys.has(key))) {
       throw new Error("Invalid stored card");
@@ -600,6 +639,10 @@ export function validateStoredCards(value: unknown): readonly AgentActionCard[] 
       approvalRef: approvalRefValue,
       listRef: listRefValue,
       supplyNeedDraft: supplyNeedDraftValue,
+      // Las opciones sobreviven al viaje por el historial: sin esto la tarjeta
+      // se relee sin ellas y el operador pierde los controles al recargar.
+      options: validateStoredOptions(item.options),
+      optionKind: optionalBounded(item.optionKind, 40),
     });
   }));
 }
@@ -864,6 +907,22 @@ function card(value: AgentActionCard): AgentActionCard {
       }
       : {}),
     ...(supplyNeedDraft ? { supplyNeedDraft } : {}),
+    ...(value.optionKind
+      ? { optionKind: projectedText(value.optionKind, 40, true) }
+      : {}),
+    ...(value.options && value.options.length > 0
+      ? {
+        options: Object.freeze(value.options.slice(0, 6).map((option) =>
+          Object.freeze({
+            id: projectedText(option.id, 64, true),
+            label: projectedText(option.label, 80, true),
+            ...(option.description
+              ? { description: projectedText(option.description, 200, true) }
+              : {}),
+          })
+        )),
+      }
+      : {}),
   });
 }
 
@@ -1305,4 +1364,61 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
   return JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...expected].sort());
+}
+
+
+/// Las plantillas de cliente aprobadas, con su cuerpo ya resuelto. El orden es
+/// el del taller: primero avisar que está lista, después una actualización, y
+/// al final el seguimiento de presupuesto.
+function customerTemplateOptions(
+  businessName: string,
+): readonly { id: string; label: string; description: string }[] {
+  const labels: Record<string, string> = {
+    // Va primera porque es la que abre una conversación que no existe, que es
+    // el caso más común cuando la ventana está cerrada.
+    seguimiento_servicio_bicicleta: "Primer contacto",
+    bicicleta_lista_retiro: "Lista para retiro",
+    actualizacion_servicio_bicicleta: "Actualización de taller",
+    seguimiento_presupuesto_bicicleta: "Seguimiento de presupuesto",
+  };
+  return defaultWhatsAppTemplates
+    .filter((template) => template.name in labels)
+    .map((template) => ({
+      id: template.name,
+      label: labels[template.name],
+      // El cuerpo va APROBADO por Meta y con el negocio ya puesto, pero el
+      // nombre del contacto se deja como `{{1}}`: quién saluda a quién lo
+      // decide `resolveWhatsAppTemplateGreetingName` en el cliente, la misma
+      // función que usa el envío real. Esa regla no es «la primera palabra»
+      // —conserva nombres compuestos como «José Luis»— y duplicarla aquí sería
+      // garantizar que un día la revisión diga algo distinto de lo que se
+      // manda. Cada lado sustituye lo que le pertenece.
+      description: renderWhatsAppTemplateBody(template.body, [
+        "{{1}}",
+        businessName,
+      ]),
+    }));
+}
+
+
+/// Las opciones guardadas se releen con la misma forma cerrada con que se
+/// escribieron: id, rótulo y la revisión que se mostrará antes de confirmar.
+function validateStoredOptions(value: unknown): readonly AgentCardOption[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || value.length > 6) {
+    throw new Error("Invalid stored card options");
+  }
+  return Object.freeze(value.map((item) => {
+    if (
+      !isRecord(item) ||
+      Object.keys(item).some((key) => !["id", "label", "description"].includes(key))
+    ) throw new Error("Invalid stored card options");
+    return Object.freeze({
+      id: bounded(item.id, 64, true),
+      label: bounded(item.label, 80, true),
+      ...(item.description === undefined
+        ? {}
+        : { description: bounded(item.description, 600, true) }),
+    });
+  }));
 }

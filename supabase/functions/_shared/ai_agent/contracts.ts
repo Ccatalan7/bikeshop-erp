@@ -75,6 +75,8 @@ export interface AgentUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /// Parte de `inputTokens` que el proveedor sirvió desde su caché.
+  cachedInputTokens?: number;
 }
 
 export type AgentFinishReason = "stop" | "tool_calls" | "length" | "blocked" | "unknown";
@@ -216,6 +218,16 @@ export interface AgentSupplyNeedDraft {
   lines: readonly AgentSupplyNeedDraftLine[];
 }
 
+/// Una opción que el operador puede elegir en la tarjeta. Elegir NO ejecuta:
+/// abre la revisión de lo que se hará —el texto exacto de un mensaje, la línea
+/// que se agregará— y recién ahí se confirma. El servidor sólo describe las
+/// opciones; quién las ejecuta y cómo es del cliente autorizado.
+export interface AgentCardOption {
+  id: string;
+  label: string;
+  description?: string;
+}
+
 export interface AgentActionCard {
   kind: string;
   title: string;
@@ -228,6 +240,12 @@ export interface AgentActionCard {
   approvalRef?: AgentApprovalRef;
   listRef?: AgentListRef;
   supplyNeedDraft?: AgentSupplyNeedDraft;
+  /// Opciones excluyentes. El cliente las muestra como controles y, al elegir
+  /// una, abre la previsualización antes de cualquier efecto.
+  options?: readonly AgentCardOption[];
+  /// Qué família de acción representan las opciones, para que el cliente sepa
+  /// qué previsualización abrir (`whatsapp_template`, por ejemplo).
+  optionKind?: string;
 }
 
 export const agentApprovalStates = [

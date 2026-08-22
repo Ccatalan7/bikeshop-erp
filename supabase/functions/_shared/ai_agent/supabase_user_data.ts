@@ -20,8 +20,16 @@ export class SupabaseUserDataError extends Error {
       : code === "request_aborted"
       ? "request_aborted"
       : "invalid_response",
+    /// Qué RPC falló. Es un identificador interno con forma cerrada
+    /// (`^[a-z][a-z0-9_]{2,63}$`), nunca dato del operador, y sin él un fallo
+    /// de este tipo obliga a bisectar en producción para saber dónde ocurrió.
+    readonly rpcName?: string,
   ) {
-    super("Supabase caller-scoped RPC failed");
+    super(
+      rpcName
+        ? `Supabase caller-scoped RPC failed ${rpcName}`
+        : "Supabase caller-scoped RPC failed",
+    );
     this.name = "SupabaseUserDataError";
   }
 }
@@ -87,7 +95,7 @@ export function createSupabaseRuntimeStoreClient(
   return Object.freeze({
     async rpc(name: string, parameters: JsonObject, signal: AbortSignal) {
       if (!runtimeStoreRpcs.has(name)) {
-        throw new SupabaseUserDataError("rpc_invalid_response", false);
+        throw new SupabaseUserDataError("rpc_invalid_response", false, undefined, name);
       }
       const binding = runtimeAttestationBinding(parameters);
       const body = canonicalJson(parameters);
@@ -257,9 +265,9 @@ export function createSupabaseUserDataClient(config: SupabaseUserDataConfig): Ag
   return {
     async rpc(name, parameters, signal) {
       if (!/^[a-z][a-z0-9_]{2,63}$/.test(name)) {
-        throw new SupabaseUserDataError("rpc_invalid_response", false);
+        throw new SupabaseUserDataError("rpc_invalid_response", false, undefined, name);
       }
-      if (signal.aborted) throw new SupabaseUserDataError("request_aborted", false);
+      if (signal.aborted) throw new SupabaseUserDataError("request_aborted", false, undefined, name);
       let response: Response;
       try {
         const headers = new Headers({
@@ -279,11 +287,11 @@ export function createSupabaseUserDataClient(config: SupabaseUserDataConfig): Ag
           signal,
         });
       } catch (_) {
-        if (signal.aborted) throw new SupabaseUserDataError("request_aborted", false);
-        throw new SupabaseUserDataError("rpc_unavailable", true);
+        if (signal.aborted) throw new SupabaseUserDataError("request_aborted", false, undefined, name);
+        throw new SupabaseUserDataError("rpc_unavailable", true, undefined, name);
       }
       if (!response.ok) {
-        throw await sanitizedRpcFailure(response, signal);
+        throw await sanitizedRpcFailure(response, signal, name);
       }
       return await readBoundedJson(response, maxResponseBytes, signal);
     },
@@ -293,18 +301,19 @@ export function createSupabaseUserDataClient(config: SupabaseUserDataConfig): Ag
 async function sanitizedRpcFailure(
   response: Response,
   signal: AbortSignal,
+  name?: string,
 ): Promise<SupabaseUserDataError> {
   try {
     const value = await readBoundedJson(response, MAX_ERROR_RESPONSE_BYTES, signal);
     if (isRecord(value) && typeof value.code === "string") {
       if (value.code === "22023") {
-        return new SupabaseUserDataError("rpc_invalid_response", false, "idempotency_conflict");
+        return new SupabaseUserDataError("rpc_invalid_response", false, "idempotency_conflict", name);
       }
       if (value.code === "42501") {
-        return new SupabaseUserDataError("rpc_invalid_response", false, "forbidden");
+        return new SupabaseUserDataError("rpc_invalid_response", false, "forbidden", name);
       }
       if (value.code === "P0001") {
-        return new SupabaseUserDataError("rpc_unavailable", false, "quota_exceeded");
+        return new SupabaseUserDataError("rpc_unavailable", false, "quota_exceeded", name);
       }
     }
   } catch (error) {
@@ -326,27 +335,27 @@ async function readBoundedJson(
   const length = Number(response.headers.get("content-length"));
   if (Number.isFinite(length) && length > maxBytes) {
     await discardBody(response);
-    throw new SupabaseUserDataError("rpc_invalid_response", false);
+    throw new SupabaseUserDataError("rpc_invalid_response", false, undefined, name);
   }
   const reader = response.body?.getReader();
-  if (!reader) throw new SupabaseUserDataError("rpc_invalid_response", false);
+  if (!reader) throw new SupabaseUserDataError("rpc_invalid_response", false, undefined, name);
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
     while (true) {
-      if (signal.aborted) throw new SupabaseUserDataError("request_aborted", false);
+      if (signal.aborted) throw new SupabaseUserDataError("request_aborted", false, undefined, name);
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
       if (total > maxBytes) {
         await reader.cancel("response_too_large");
-        throw new SupabaseUserDataError("rpc_invalid_response", false);
+        throw new SupabaseUserDataError("rpc_invalid_response", false, undefined, name);
       }
       chunks.push(value);
     }
   } catch (error) {
     if (error instanceof SupabaseUserDataError) throw error;
-    throw new SupabaseUserDataError("rpc_invalid_response", false);
+    throw new SupabaseUserDataError("rpc_invalid_response", false, undefined, name);
   } finally {
     reader.releaseLock();
   }
@@ -359,7 +368,7 @@ async function readBoundedJson(
   try {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch (_) {
-    throw new SupabaseUserDataError("rpc_invalid_response", false);
+    throw new SupabaseUserDataError("rpc_invalid_response", false, undefined, name);
   }
 }
 

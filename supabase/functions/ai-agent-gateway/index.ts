@@ -248,8 +248,10 @@ export function createProductionOptions(
       modelByRole: {
         fast: getEnv("AI_AGENT_GEMINI_FAST_MODEL")?.trim() ||
           "gemini-3.6-flash",
+        // El rol profundo dejó de apuntar a un *preview*: el 2026-08-21
+        // `gemini-3.1-pro-preview` rechazaba por cuota 12 de cada 12 llamadas.
         deep: getEnv("AI_AGENT_GEMINI_DEEP_MODEL")?.trim() ||
-          "gemini-3.1-pro-preview",
+          "gemini-3.7-flash",
         vision: getEnv("AI_AGENT_GEMINI_VISION_MODEL")?.trim() ||
           "gemini-3.6-flash",
       },

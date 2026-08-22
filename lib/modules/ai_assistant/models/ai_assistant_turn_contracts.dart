@@ -447,6 +447,25 @@ class AIAssistantSupplyNeedDraft {
 /// server-owned [entityRef]. It never carries a model-authored route. The
 /// application remains the owner of every possible click.
 @immutable
+/// Una opción excluyente que el operador puede elegir en la tarjeta. Elegir
+/// NO ejecuta nada: abre la revisión de lo que se hará —el texto exacto de un
+/// mensaje, la línea que se agregará— y recién ahí se confirma.
+@immutable
+class AIAssistantCardOption {
+  const AIAssistantCardOption({
+    required this.id,
+    required this.label,
+    this.description,
+  });
+
+  final String id;
+  final String label;
+
+  /// Lo que el operador verá antes de confirmar. Para una plantilla de
+  /// WhatsApp es el texto exacto que recibirá el cliente.
+  final String? description;
+}
+
 class AIAssistantActionCard {
   const AIAssistantActionCard({
     required this.kind,
@@ -460,6 +479,8 @@ class AIAssistantActionCard {
     this.approvalRef,
     this.inventoryListRef,
     this.supplyNeedDraft,
+    this.options = const <AIAssistantCardOption>[],
+    this.optionKind,
   });
 
   final String kind;
@@ -473,6 +494,12 @@ class AIAssistantActionCard {
   final AIAssistantApprovalRef? approvalRef;
   final AIAssistantInventoryListRef? inventoryListRef;
   final AIAssistantSupplyNeedDraft? supplyNeedDraft;
+
+  /// Opciones excluyentes que el chat dibuja como controles.
+  final List<AIAssistantCardOption> options;
+
+  /// Qué família de acción representan, para saber qué revisión abrir.
+  final String? optionKind;
 
   String get ctaLabel => supplyNeedDraft != null
       ? 'Revisar petición'
@@ -497,6 +524,8 @@ class AIAssistantActionCard {
       approvalRef: approval.withState(state),
       inventoryListRef: inventoryListRef,
       supplyNeedDraft: supplyNeedDraft,
+      options: options,
+      optionKind: optionKind,
     );
   }
 }

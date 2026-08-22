@@ -501,6 +501,30 @@ A long-lived workspace may have different primary actions as its state changes.
 - Use one coherent icon family. Do not decorate headings and actions with
   assorted colored emoji or repeat the same icon in every row.
 
+### Lo que sale del taller se lee antes de salir (2026-08-21)
+
+Un control que manda algo **fuera** —un WhatsApp al cliente, un correo al
+proveedor— no se dispara con el toque que lo elige. Elegir y enviar son dos
+gestos: el primero muestra el texto exacto que va a recibir la otra persona, el
+segundo lo manda. Y «exacto» es literal: el mismo cuerpo, con los mismos
+parámetros ya sustituidos, en la misma gramática de burbuja del chat. Un
+previsualizado que dice «Hola Marcelo Silva» cuando al cliente le llega «Hola
+Marcelo» es peor que no tener previsualizado, porque el operador deja de
+revisar.
+
+De ahí salen dos reglas que se ven al revés de lo que uno haría:
+
+- **No se puede enviar ≠ no se puede leer.** Una plantilla en revisión de Meta
+  igual hay que poder abrirla y leerla; lo que se apaga es el botón de enviar,
+  con el motivo escrito al lado. Apagar la fila entera esconde justo el texto
+  que el operador necesita revisar mientras espera la aprobación.
+- **El previsualizado va en el mismo bloque**, no en un diálogo encima. El
+  operador está comparando el mensaje con la conversación que tiene delante;
+  un modal le tapa la conversación.
+
+El costo real: mensajería enviaba la plantilla en el mismo toque que la elegía,
+sin confirmación y sin mostrar el texto, hasta el 2026-08-21.
+
 ### Chips, badges, and metrics
 
 Chips and badges are compact semantic tools, not universal containers.

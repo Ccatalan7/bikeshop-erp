@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'dart:convert';
 
 import 'ai_assistant_destination.dart';
@@ -377,6 +379,17 @@ const Map<AIAssistantEntityKind, String> _cardKindForEntityKind =
   AIAssistantEntityKind.conversation: 'conversation',
 };
 
+/// Rechaza una tarjeta diciendo POR QUÉ. Sin esto, un cambio de contrato se
+/// ve igual que cualquier otro y hay que bisectar contra producción para
+/// encontrarlo: pasó el 2026-08-21 con la tarjeta de contacto.
+Never _rejectCard(String reason) {
+  assert(() {
+    debugPrint('[AIAgentGateway] Tarjeta rechazada: $reason');
+    return true;
+  }());
+  throw const AIAgentGatewayContractException();
+}
+
 AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
   const required = <String>{'kind', 'title', 'destination', 'chips'};
   const optional = <String>{
@@ -387,6 +400,8 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     'approvalRef',
     'listRef',
     'supplyNeedDraft',
+    'options',
+    'optionKind',
   };
   _requireExactKeys(json, <String>{...required, ...optional},
       required: required);
@@ -395,7 +410,7 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
   final destination =
       destinationWire is String ? _destinationFromWire[destinationWire] : null;
   if (destination == null || !destination.isRegistered) {
-    throw const AIAgentGatewayContractException();
+    _rejectCard('destino_desconocido_o_sin_ruta');
   }
   final kind = _requiredBoundedText(json['kind'], maxBytes: 32);
   final expectedKind = _kindForDestination[destination];
@@ -410,15 +425,24 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
   };
   final isSupplyNeedDraft = destination == AIAssistantDestination.purchases &&
       kind == 'supply_need_draft';
-  if (expectedKind != kind && previewAction == null && !isSupplyNeedDraft) {
-    throw const AIAgentGatewayContractException();
+  // Un destino puede recibir más de un tipo de tarjeta: la conversación
+  // recibe tanto el hilo como la tarjeta de contacto, que ofrece las
+  // plantillas antes de abrirlo.
+  final isCustomerContact =
+      destination == AIAssistantDestination.conversations &&
+          kind == 'customer_contact';
+  if (expectedKind != kind &&
+      previewAction == null &&
+      !isSupplyNeedDraft &&
+      !isCustomerContact) {
+    _rejectCard('tipo_no_permitido_en_ese_destino');
   }
 
   AIAssistantEntityRef? entityRef;
   if (json.containsKey('entityRef')) {
     final rawEntityRef = json['entityRef'];
     if (rawEntityRef is! Map) {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('referencia_de_entidad_malformada');
     }
     final entityJson = rawEntityRef.map(
       (key, value) => MapEntry(key.toString(), value),
@@ -427,8 +451,15 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     final entityKindWire = entityJson['kind'];
     final entityKind =
         entityKindWire is String ? _entityKindFromWire[entityKindWire] : null;
-    if (entityKind == null || _cardKindForEntityKind[entityKind] != kind) {
-      throw const AIAgentGatewayContractException();
+    // La tarjeta de contacto es la excepción deliberada a «una referencia de
+    // cliente implica tarjeta de cliente»: apunta al cliente —de ahí sale su
+    // teléfono al confirmar— pero abre la conversación, que es donde el
+    // operador termina el trabajo.
+    final contactCard =
+        kind == 'customer_contact' && entityKind == AIAssistantEntityKind.customer;
+    if (entityKind == null ||
+        (!contactCard && _cardKindForEntityKind[entityKind] != kind)) {
+      _rejectCard('entidad_no_corresponde_al_tipo');
     }
     try {
       entityRef = AIAssistantEntityRef.verified(
@@ -436,10 +467,13 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
         id: _requiredBoundedText(entityJson['id'], maxBytes: 36),
       );
     } on ArgumentError {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('id_de_entidad_invalido');
     }
-    if (entityRef.destination != destination) {
-      throw const AIAgentGatewayContractException();
+    if (!contactCard && entityRef.destination != destination) {
+      _rejectCard('id_de_entidad_invalido');
+    }
+    if (contactCard && destination != AIAssistantDestination.conversations) {
+      _rejectCard('destino_no_calza_con_la_entidad');
     }
   }
 
@@ -447,7 +481,7 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
   if (json.containsKey('approvalRef')) {
     final rawApprovalRef = json['approvalRef'];
     if (rawApprovalRef is! Map) {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('aprobacion_malformada');
     }
     final approvalJson = rawApprovalRef.map(
       (key, value) => MapEntry(key.toString(), value),
@@ -464,7 +498,7 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     };
     final state = _approvalStateFromWire(approvalJson['state']);
     if (action == null || state == null) {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('accion_o_estado_de_aprobacion_desconocido');
     }
     approvalRef = AIAssistantApprovalRef(
       id: _requiredOpaqueId(approvalJson['id']),
@@ -480,10 +514,10 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     if (entityRef != null ||
         approvalRef == null ||
         approvalRef.action != previewAction) {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('previsualizacion_sin_aprobacion_coherente');
     }
   } else if (approvalRef != null) {
-    throw const AIAgentGatewayContractException();
+    _rejectCard('previsualizacion_sin_aprobacion_coherente');
   }
 
   AIAssistantInventoryListRef? inventoryListRef;
@@ -494,7 +528,7 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
         destination != AIAssistantDestination.inventoryProducts ||
         entityRef != null ||
         approvalRef != null) {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('lista_solo_para_inventario');
     }
     final listJson = rawListRef.map(
       (key, value) => MapEntry(key.toString(), value),
@@ -517,7 +551,7 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
         (listJson['resultCount'] as int) > 10 ||
         listJson['hasMore'] is! bool ||
         listJson['autoOpen'] is! bool) {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('conteo_de_lista_fuera_de_rango');
     }
     final availability = switch (listJson['availability']) {
       'any' => AIAssistantInventoryAvailability.any,
@@ -527,13 +561,13 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
       _ => null,
     };
     if (availability == null) {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('disponibilidad_desconocida');
     }
     final hasMore = listJson['hasMore'] as bool;
     final rawEntityIds = listJson['entityIds'];
     if ((hasMore && rawEntityIds != null) ||
         (!hasMore && rawEntityIds is! List)) {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('lista_truncada_con_ids');
     }
     List<String>? entityIds;
     if (rawEntityIds is List) {
@@ -541,7 +575,7 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
       final seen = <String>{};
       for (final rawId in rawEntityIds) {
         if (rawId is! String) {
-          throw const AIAgentGatewayContractException();
+          _rejectCard('id_de_producto_no_es_texto');
         }
         try {
           final verified = AIAssistantEntityRef.verified(
@@ -549,15 +583,15 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
             id: rawId,
           );
           if (!seen.add(verified.id)) {
-            throw const AIAgentGatewayContractException();
+            _rejectCard('id_de_producto_repetido');
           }
           entityIds.add(verified.id);
         } on ArgumentError {
-          throw const AIAgentGatewayContractException();
+          _rejectCard('id_de_producto_invalido');
         }
       }
       if (entityIds.length != listJson['resultCount']) {
-        throw const AIAgentGatewayContractException();
+        _rejectCard('conteo_no_calza_con_los_ids');
       }
       entityIds = List<String>.unmodifiable(entityIds);
     }
@@ -574,20 +608,57 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
   AIAssistantSupplyNeedDraft? supplyNeedDraft;
   if (json.containsKey('supplyNeedDraft')) {
     if (!isSupplyNeedDraft || entityRef != null || approvalRef != null) {
-      throw const AIAgentGatewayContractException();
+      _rejectCard('borrador_de_compra_fuera_de_lugar');
     }
     supplyNeedDraft = _decodeSupplyNeedDraft(json['supplyNeedDraft']);
   } else if (isSupplyNeedDraft) {
-    throw const AIAgentGatewayContractException();
+    _rejectCard('borrador_de_compra_fuera_de_lugar');
   }
 
   final rawChips = json['chips'];
   if (rawChips is! List || rawChips.length > 4) {
-    throw const AIAgentGatewayContractException();
+    _rejectCard('chips_invalidos');
   }
   final chips = <String>[
     for (final rawChip in rawChips) _requiredBoundedText(rawChip, maxBytes: 64),
   ];
+
+  final rawOptions = json['options'];
+  if (rawOptions != null && (rawOptions is! List || rawOptions.length > 6)) {
+    _rejectCard('opciones_malformadas');
+  }
+  final options = <AIAssistantCardOption>[
+    for (final rawOption in (rawOptions as List? ?? const <Object?>[]))
+      if (rawOption is Map)
+        () {
+          final optionJson = rawOption.map(
+            (key, value) => MapEntry(key.toString(), value),
+          );
+          _requireExactKeys(
+            optionJson,
+            const <String>{'id', 'label', 'description'},
+            required: const <String>{'id', 'label'},
+          );
+          return AIAssistantCardOption(
+            id: _requiredBoundedText(optionJson['id'], maxBytes: 64),
+            label: _requiredBoundedText(optionJson['label'], maxBytes: 80),
+            description: _optionalBoundedText(
+              optionJson['description'],
+              maxBytes: 600,
+            ),
+          );
+        }()
+      else
+        throw const AIAgentGatewayContractException(),
+  ];
+  final optionKind = _optionalBoundedText(json['optionKind'], maxBytes: 40);
+  // Una opción sin familia no se puede revisar, y una familia sin opciones no
+  // ofrece nada: las dos cosas viajan juntas o no viajan.
+  if (options.isEmpty != (optionKind == null || optionKind.isEmpty)) {
+    if (options.isNotEmpty || optionKind == 'whatsapp_template') {
+      _rejectCard('familia_de_opciones_sin_opciones');
+    }
+  }
 
   return AIAssistantActionCard(
     kind: kind,
@@ -601,6 +672,8 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     approvalRef: approvalRef,
     inventoryListRef: inventoryListRef,
     supplyNeedDraft: supplyNeedDraft,
+    options: List<AIAssistantCardOption>.unmodifiable(options),
+    optionKind: optionKind,
   );
 }
 

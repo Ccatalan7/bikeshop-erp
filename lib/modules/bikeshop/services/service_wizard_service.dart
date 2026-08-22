@@ -187,7 +187,11 @@ class ServiceWizardService {
                 'tenant_id, service_profile_id, target_family, target_position_mode')
             .inFilter('service_profile_id', profileIds),
         _client
-            .from('service_profile_questions')
+            // La vista resuelve las opciones desde el registro cuando la
+            // pregunta corresponde a un campo de ficha, y conserva su
+            // `options_json` cuando es propia de la visita. Así un renombre
+            // llega también al wizard, con el mismo `update` de una fila.
+            .from('service_profile_questions_resolved_v1')
             .select()
             .inFilter('service_profile_id', profileIds)
             .order('sort_order'),

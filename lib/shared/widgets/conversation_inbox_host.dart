@@ -85,6 +85,33 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
   /// Datos propios que la bandeja recarga junto a las conversaciones.
   Future<void> loadInboxData() async {}
 
+  /// Avisa cuando se abre o se cierra una conversación.
+  ///
+  /// Quien hospeda la bandeja puede necesitarlo para cederle la altura: en la
+  /// hoja compacta, con un chat abierto las pestañas y el título ya no aportan
+  /// —el chat trae su propia vuelta— y sólo le quitan pantalla al mensaje.
+  void onConversationVisibilityChanged(bool visible) {}
+
+  void _setSelectedConversation(String? id) {
+    selectedConversationId = id;
+  }
+
+  /// Se llama desde `build` con lo que la bandeja REALMENTE está dibujando.
+  ///
+  /// Atarlo a la intención de abrir no alcanzaba: si el hilo elegido ya no está
+  /// en la lista, el panel vuelve solo a la bandeja y el aviso quedaba
+  /// desincronizado — la hoja escondía su cabecera con la lista a la vista. Lo
+  /// que se anuncia es lo que se ve.
+  void announceConversationVisibility(bool rendered) {
+    // Sin dedupe local: tras un remontaje la copia nueva parte de cero y un
+    // dedupe aquí se tragaba la corrección. El receptor deduplica (es un
+    // ValueNotifier); este lado sólo difiere el aviso fuera del build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      onConversationVisibilityChanged(rendered);
+    });
+  }
+
   // --- Ciclo de vida -------------------------------------------------------
 
   void initInboxHost() {
@@ -169,7 +196,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
     final requested = _maybeToolbar()?.takePendingConversation(inboxTool);
     if (requested == null) return;
     setState(() {
-      selectedConversationId = requested;
+      _setSelectedConversation(requested);
       panelActiveConversationId = requested;
     });
     context.read<ChatProvider>().setActiveConversation(requested);
@@ -192,7 +219,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
     }
 
     showOnlyActiveChats = session.showOnlyActiveChats;
-    selectedConversationId = session.selectedConversationId;
+    _setSelectedConversation(session.selectedConversationId);
     restoreSessionExtra(session.extra);
     if (session.searchText.isNotEmpty) {
       // Asignar el texto dispara el listener, que sincroniza `searchTerm`.
@@ -223,7 +250,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
     final exists = provider.conversations.any((c) => c.id == conversationId);
     if (!exists) {
       setState(() {
-        selectedConversationId = null;
+        _setSelectedConversation(null);
         panelActiveConversationId = null;
       });
       return;
@@ -285,7 +312,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
 
   void openConversationInPanel(String conversationId) {
     setState(() {
-      selectedConversationId = conversationId;
+      _setSelectedConversation(conversationId);
       panelActiveConversationId = conversationId;
     });
   }
@@ -293,7 +320,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
   void returnToInbox(String conversationId) {
     final shouldClearActive = panelActiveConversationId == conversationId;
     setState(() {
-      selectedConversationId = null;
+      _setSelectedConversation(null);
       if (shouldClearActive) {
         panelActiveConversationId = null;
       }

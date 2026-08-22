@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/widgets/whatsapp_outgoing_preview.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -438,6 +439,10 @@ class _ChatWindowState extends State<ChatWindow> {
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _composerMenuOverlayEntry;
+  /// Plantilla que el operador está revisando en el panel, con el texto exacto
+  /// que recibirá el contacto. Tocar una plantilla ya no envía: abre esto.
+  WhatsAppTemplateOption? _reviewingTemplate;
+  String? _reviewingTemplateText;
   String? _activeComposerMenuName;
   bool _showAutomaticMessagesPanel = false;
   bool _showChatInfoPanel = false;
@@ -2930,6 +2935,19 @@ class _ChatWindowState extends State<ChatWindow> {
                         ListView.builder(
                           controller: _scrollController,
                           reverse: true,
+                          // La extensión de un ListView.builder se ESTIMA con
+                          // los hijos ya medidos. Con alturas dispares —un
+                          // comprobante de pantalla completa entre mensajes de
+                          // una línea— esa estimación oscila cientos de píxeles
+                          // mientras el dedo se mueve, y cada oscilación
+                          // corrige la posición: eso es el «se pega y vibra».
+                          // Medido: saltos de -710 y +1634 px sin que cambiara
+                          // la cantidad de mensajes.
+                          //
+                          // Con más caché quedan más hijos medidos, así que la
+                          // estimación se apoya en una muestra mayor y deja de
+                          // bailar.
+                          cacheExtent: 2400,
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
                           itemCount: timelineItems.length +
                               (showHistoryBoundary ? 1 : 0),
@@ -5042,17 +5060,27 @@ class _ChatWindowState extends State<ChatWindow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Alto FIJO, no libre. Una foto vertical —un comprobante— se
+          // renderizaba a su proporción natural y ocupaba 900px entre mensajes
+          // de una línea. Esa disparidad es lo que hace oscilar la estimación
+          // de largo del ListView y produce el «se pega y vibra»; además el
+          // placeholder medía 160 y la real 900, así que al cargar pegaba otro
+          // salto. Con una miniatura de tamaño conocido el item deja de ser un
+          // problema de estimación, y tocarla sigue abriendo el visor completo.
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Image.network(
               url,
               width: 220,
+              height: 220,
               fit: BoxFit.cover,
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;
                 return Container(
+                  // Mismo tamaño que la miniatura final: si difieren, la
+                  // extensión salta cuando la imagen termina de cargar.
                   width: 220,
-                  height: 160,
+                  height: 220,
                   color: Theme.of(context).colorScheme.outlineVariant,
                   child: const Center(
                     child: SizedBox(
@@ -7429,9 +7457,12 @@ class _ChatWindowState extends State<ChatWindow> {
     String? pendingText,
     GlobalKey? anchorKey,
   }) {
-    final supplierStatusFuture = widget.conversation.isSupplierConversation
-        ? WhatsAppService().getSupplierTemplateReviewStatuses()
-        : null;
+    // El estado de revisión se pide también para las conversaciones de
+    // cliente: una plantilla recién corregida queda PENDING en Meta y el envío
+    // falla con 132001 hasta que la aprueban. Verlo aquí evita que el taller
+    // interprete un rechazo temporal como una falla del sistema.
+    final supplierStatusFuture =
+        WhatsAppService().getSupplierTemplateReviewStatuses();
     _toggleComposerMenu(
       name: 'whatsapp_templates',
       anchorKey: anchorKey ?? _composerActionsButtonKey,
@@ -7443,6 +7474,97 @@ class _ChatWindowState extends State<ChatWindow> {
         supplierStatusFuture: supplierStatusFuture,
       ),
     );
+  }
+
+  /// Manda a Meta el texto que el ERP considera correcto para las plantillas
+  /// cuyo cuerpo aprobado difiere. Editar las devuelve a revisión: mientras
+  /// estén pendientes, un envío con ese nombre puede fallar, y por eso se
+  /// avisa con el detalle de cuáles se tocaron.
+  Future<void> _syncWhatsAppTemplateBodies() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Corrigiendo textos en Meta…')),
+    );
+    try {
+      final resultado = await WhatsAppService().syncApprovedTemplateBodies();
+      // El aviso en pantalla es efímero y esta operación toca la cuenta de
+      // Meta: queda también en el log, que es donde se puede auditar después.
+      debugPrint(
+        '[WhatsAppTemplates] editadas=${resultado.editadas} '
+        'sinCambios=${resultado.sinCambios} faltan=${resultado.faltan}',
+      );
+      if (!mounted) return;
+      final editadas = resultado.editadas;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            editadas.isEmpty
+                ? 'Los textos aprobados ya estaban correctos.'
+                : 'Enviadas a revisión de Meta: ${editadas.join(', ')}. '
+                    'Mientras revisan, esos envíos pueden fallar.',
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } catch (error) {
+      debugPrint('[WhatsAppTemplates] falló la corrección: $error');
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('No se pudo corregir en Meta: $error')),
+      );
+    }
+  }
+
+  /// Abre —o cierra— la revisión de una plantilla dentro del panel. Enviar sin
+  /// ver el texto era lo que permitía que un mensaje saliera diciendo algo
+  /// distinto de lo que el operador creía.
+  Future<void> _reviewWhatsAppTemplate(WhatsAppTemplateOption option) async {
+    final yaAbierta = _reviewingTemplate?.key == option.key;
+    setState(() {
+      _reviewingTemplate = yaAbierta ? null : option;
+      _reviewingTemplateText = null;
+    });
+    _composerMenuOverlayEntry?.markNeedsBuild();
+    if (yaAbierta) return;
+    final text = await _resolveWhatsAppTemplatePreview(option);
+    if (!mounted || _reviewingTemplate?.key != option.key) return;
+    setState(() => _reviewingTemplateText = text);
+    _composerMenuOverlayEntry?.markNeedsBuild();
+  }
+
+  /// El texto exacto que recibirá el contacto con esta plantilla, resuelto con
+  /// los mismos valores que usará el envío. Devuelve null si falta un dato:
+  /// preferimos no mostrar nada antes que mostrar algo que no es.
+  Future<String?> _resolveWhatsAppTemplatePreview(
+    WhatsAppTemplateOption option,
+  ) async {
+    try {
+      final contact = await _getWhatsAppContactFuture();
+      // La clave se elige antes de indexar: `cond ? mapa?[a] : mapa?[b]`
+      // confunde al parser de Dart, que lee el `?[` como otro condicional.
+      final contactKey = widget.conversation.isSupplierConversation
+          ? 'template_contact_name'
+          : 'name';
+      final recipientName = contact?[contactKey]?.toString().trim();
+      if (recipientName == null || recipientName.isEmpty) return null;
+      String? agentName;
+      if (option.parameterLayout ==
+          WhatsAppTemplateParameterLayout.contactAndAgent) {
+        final currentUserId = _messagingService.currentUserId;
+        final senderInfo =
+            currentUserId == null ? null : await _getSenderInfo(currentUserId);
+        agentName = senderInfo?['name']?.toString().trim();
+      }
+      return WhatsAppService().buildTemplatePreviewText(
+        option: option,
+        customerName: recipientName,
+        businessName: await WhatsAppService().resolveBusinessNameForPreview(),
+        agentName: agentName,
+      );
+    } catch (error) {
+      debugPrint('⚠️ No se pudo previsualizar la plantilla: $error');
+      return null;
+    }
   }
 
   Widget _buildWhatsAppTemplatePanel(
@@ -7504,6 +7626,17 @@ class _ChatWindowState extends State<ChatWindow> {
                       ],
                     ),
                   ),
+                  // Corregir el texto de una plantilla aprobada no tenía
+                  // camino: `deploy_defaults` sólo crea lo que falta, así que
+                  // un cuerpo mal escrito se quedaba para siempre. Vive acá
+                  // porque es el lugar donde ya se ven las plantillas y su
+                  // estado de revisión.
+                  IconButton(
+                    key: const Key('whatsapp-template-sync'),
+                    tooltip: 'Corregir textos en Meta',
+                    onPressed: _syncWhatsAppTemplateBodies,
+                    icon: const Icon(Icons.cloud_sync_outlined, size: 18),
+                  ),
                   IconButton(
                     tooltip: 'Cerrar',
                     onPressed: () => _removeComposerMenuOverlay(
@@ -7564,8 +7697,12 @@ class _ChatWindowState extends State<ChatWindow> {
     bool isCheckingReview = false,
     bool reviewCheckFailed = false,
   }) {
-    final requiresLiveApproval = option.isSupplier;
-    final isEnabled = !requiresLiveApproval || reviewStatus?.isApproved == true;
+    // Toda plantilla depende de la aprobación viva de Meta, no sólo las de
+    // proveedor: corregir un texto la manda de vuelta a revisión y el envío
+    // falla con 132001 hasta que la aprueban. Mostrarlo evita que el taller
+    // lea un rechazo temporal como una falla del sistema.
+    const requiresLiveApproval = true;
+    final isEnabled = reviewStatus?.isApproved == true;
     final availabilityLabel = !requiresLiveApproval
         ? null
         : isCheckingReview
@@ -7585,13 +7722,12 @@ class _ChatWindowState extends State<ChatWindow> {
 
     return Opacity(
       opacity: isEnabled ? 1 : 0.62,
-      child: InkWell(
-        onTap: isEnabled
-            ? () => _sendSelectedWhatsAppTemplate(
-                  option,
-                  pendingText: pendingText,
-                )
-            : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+        // Revisar el texto se puede siempre; enviar, sólo si Meta la aprobó.
+        onTap: () => _reviewWhatsAppTemplate(option),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Row(
@@ -7640,6 +7776,47 @@ class _ChatWindowState extends State<ChatWindow> {
             ],
           ),
         ),
+          ),
+          if (_reviewingTemplate?.key == option.key)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: _reviewingTemplateText == null
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  : WhatsAppOutgoingPreview(
+                      key: const Key('whatsapp-template-preview'),
+                      text: _reviewingTemplateText!,
+                      disabledReason: isEnabled
+                          ? null
+                          : 'No se puede enviar: ${availabilityLabel ?? 'sin aprobación de Meta'}.',
+                      onCancel: () {
+                        setState(() {
+                          _reviewingTemplate = null;
+                          _reviewingTemplateText = null;
+                        });
+                        _composerMenuOverlayEntry?.markNeedsBuild();
+                      },
+                      onSend: () {
+                        setState(() {
+                          _reviewingTemplate = null;
+                          _reviewingTemplateText = null;
+                        });
+                        _sendSelectedWhatsAppTemplate(
+                          option,
+                          pendingText: pendingText,
+                        );
+                      },
+                    ),
+            ),
+        ],
       ),
     );
   }
@@ -7819,9 +7996,7 @@ class _ChatWindowState extends State<ChatWindow> {
           children: [
             KeyedSubtree(
               key: _composerActionsButtonKey,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 1),
-                child: IconButton(
+              child: IconButton(
                   tooltip: hasBlockingOutcomeUnknownAttachment
                       ? 'Esperando confirmación del adjunto'
                       : !composerEnabled
@@ -7837,7 +8012,9 @@ class _ChatWindowState extends State<ChatWindow> {
                   style: IconButton.styleFrom(
                     foregroundColor: colorScheme.onSurfaceVariant,
                     backgroundColor: colorScheme.surfaceContainerHighest,
-                    minimumSize: const Size.square(42),
+                    // 44 = alto natural del campo con una línea, para que la
+                    // fila quede a ras.
+                    minimumSize: const Size.square(44),
                   ),
                   icon: AnimatedRotation(
                     turns: _activeComposerMenuName == 'composer_actions' ||
@@ -7848,7 +8025,6 @@ class _ChatWindowState extends State<ChatWindow> {
                     child: const Icon(Icons.add_rounded),
                   ),
                 ),
-              ),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -7880,6 +8056,12 @@ class _ChatWindowState extends State<ChatWindow> {
                           : 'Escribe un mensaje... (# para ref)',
                       filled: true,
                       fillColor: colorScheme.surfaceContainerLowest,
+                      // El texto de ayuda NO envuelve. En un teléfono angosto
+                      // «Escribe un mensaje... (# para ref)» se partía en dos
+                      // líneas y el campo vacío medía 66 px contra 44 de los
+                      // botones: por eso se veía descuadrado. El campo sigue
+                      // creciendo con texto real, hasta cinco líneas.
+                      hintMaxLines: 1,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 11,
@@ -7909,8 +8091,8 @@ class _ChatWindowState extends State<ChatWindow> {
             const SizedBox(width: 8),
             FilledButton(
               style: FilledButton.styleFrom(
-                minimumSize: const Size.square(42),
-                maximumSize: const Size.square(42),
+                minimumSize: const Size.square(44),
+                maximumSize: const Size.square(44),
                 padding: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(11),

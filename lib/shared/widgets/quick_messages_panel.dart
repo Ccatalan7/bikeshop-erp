@@ -33,7 +33,15 @@ enum _MessageFilter {
 }
 
 class QuickMessagesPanel extends StatefulWidget {
-  const QuickMessagesPanel({super.key, this.showTitle = true});
+  const QuickMessagesPanel({
+    super.key,
+    this.showTitle = true,
+    this.onConversationVisibilityChanged,
+  });
+
+  /// Avisa a quien la hospeda que se abrió o cerró una conversación, para que
+  /// pueda cederle la altura.
+  final ValueChanged<bool>? onConversationVisibilityChanged;
 
   /// En la hoja de Actividad el segmento ya dice «Mensajes»; repetirlo aquí
   /// gasta una fila de alto en un teléfono. Las acciones de la barra sí siguen.
@@ -59,6 +67,11 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
   Set<String> _pinnedConversationIds = {};
   List<Customer> _whatsAppContacts = [];
   bool _isLoadingWhatsAppContacts = false;
+
+  @override
+  void onConversationVisibilityChanged(bool visible) {
+    widget.onConversationVisibilityChanged?.call(visible);
+  }
 
   @override
   ToolbarTool get inboxTool => ToolbarTool.messages;
@@ -216,12 +229,20 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
   Widget build(BuildContext context) {
     final provider = context.watch<ChatProvider>();
     final selectedConversation = _selectedConversation(provider.conversations);
-    if (selectedConversationId != null && selectedConversation == null) {
+    // Sólo con la lista YA cargada: en la primera trama tras restaurar la
+    // sesión las conversaciones aún no llegan, y devolver a la bandeja ahí
+    // descartaba el chat restaurado antes de poder mostrarlo.
+    if (selectedConversationId != null &&
+        selectedConversation == null &&
+        provider.conversations.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || selectedConversationId == null) return;
         returnToInbox(selectedConversationId!);
       });
     }
+
+    // Se anuncia lo que se DIBUJA, no lo que se pretendía abrir.
+    announceConversationVisibility(selectedConversation != null);
 
     if (selectedConversation != null) {
       return _buildConversationView(selectedConversation);
@@ -276,7 +297,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
                 icon: Icon(
                   Icons.open_in_full,
                   size: 18,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
                 tooltip: 'Abrir mensajería completa',
                 onPressed: () => _openFullChat(conversation),
@@ -322,12 +343,14 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
             const SizedBox(width: 2),
             IconButton(
               tooltip: 'Nuevo chat interno',
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               onPressed: _showNewChatDialog,
               visualDensity: VisualDensity.compact,
               icon: const Icon(Icons.add_comment_outlined, size: 18),
             ),
             IconButton(
               tooltip: 'Recargar',
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               onPressed: isRefreshing ? null : refreshInbox,
               visualDensity: VisualDensity.compact,
               icon: isRefreshing
@@ -340,6 +363,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
             ),
             IconButton(
               tooltip: 'Abrir mensajería completa',
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               onPressed: () => _openFullChat(),
               visualDensity: VisualDensity.compact,
               icon: const Icon(Icons.open_in_full, size: 18),

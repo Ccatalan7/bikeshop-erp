@@ -317,6 +317,7 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
         tracksInventory: true,
         location: "A1",
         technicalMatch: "not_applicable",
+        technicalSpecs: null,
         matchedCount: 1,
         trackedCount: 1,
         totalStock: 3,
@@ -899,6 +900,7 @@ Deno.test("inventory availability is mapped before limit and revalidated after t
     tracksInventory: true,
     location: null,
     technicalMatch: "identity_fallback",
+    technicalSpecs: null,
     matchedCount: 1,
     trackedCount: 1,
     totalStock: 0,
@@ -999,6 +1001,7 @@ Deno.test("inventory operational thresholds are typed, mapped and revalidated", 
         tracksInventory: true,
         location: null,
         technicalMatch: "not_applicable",
+        technicalSpecs: null,
         matchedCount: 1,
         trackedCount: 1,
         totalStock: returnedStock,
@@ -1080,6 +1083,7 @@ Deno.test("inventory top-N order and full-set metrics are server-validated", asy
     tracksInventory: true,
     location: null,
     technicalMatch: "not_applicable",
+    technicalSpecs: null,
     matchedCount: 3,
     trackedCount: 3,
     totalStock: 15,
@@ -2431,6 +2435,14 @@ Deno.test("workshop reads and preparations are typed, run-bound and never free-f
           highestInvoiceCustomerName: "María Soto",
           highestInvoiceTotal: 120000,
           highestPeriodAmount: 100000,
+          // El desglose por cliente viaja en la misma herramienta desde el
+          // 2026-08-21: una capacidad que el modelo tenga que descubrir en una
+          // herramienta aparte no se ejecuta.
+          customerCount: 2,
+          topCustomerName: "María Soto",
+          topCustomerAmount: 100000,
+          topCustomerInvoiceCount: 2,
+          topCustomers: "María Soto 100.000 (2) · Juan Pérez 75.000 (1)",
         }]));
       }
       if (name === "assistant_prepare_diagnosis_update_v1") {

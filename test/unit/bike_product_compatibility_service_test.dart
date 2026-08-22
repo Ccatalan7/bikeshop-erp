@@ -256,6 +256,70 @@ void main() {
     });
 
     test(
+        'scores a motor against the deployed shell vocabulary, not the retired key',
+        () async {
+      // La ficha del motor dejó de tener `bottom_bracket_family` el 2026-08-20
+      // y pasó a `bb_shell_standard` con el vocabulario chileno. Mientras el
+      // scorer siguió leyendo la clave vieja no puntuó ni uno de los 34 motores
+      // del catálogo: veía null y caía a «sin datos».
+      final assessment = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: const <String, dynamic>{
+          'bottomBracketFamily': 'BSA roscado',
+          'bbShellWidthMm': 68,
+        },
+        productSpecs: const <String, dynamic>{
+          'bb_shell_standard': 'BSA / Caja inglesa 34,8 mm (1.37") x 24',
+          'bb_construction': 'Rodamiento sellado',
+          'bb_shell_width_mm': 68,
+          'spindle_length_mm': 118,
+        },
+      );
+
+      expect(assessment.level, ProductCompatibilityLevel.caution,
+          reason: 'el motor tiene que puntuar con la clave nueva, no quedar mudo');
+      expect(assessment.detail, contains('68 mm'),
+          reason: 'y el detalle tiene que nombrar el ancho que si calzo');
+    });
+
+    test('blocks a motor whose shell cannot go in that frame', () async {
+      final assessment = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: const <String, dynamic>{
+          'bottomBracketFamily': 'BSA roscado',
+          'bbShellWidthMm': 68,
+        },
+        productSpecs: const <String, dynamic>{
+          'bb_shell_standard': 'Mid BMX 41,2 mm',
+          'bb_shell_width_mm': 68,
+        },
+      );
+
+      expect(assessment.level, ProductCompatibilityLevel.incompatible,
+          reason: 'un Mid BMX no entra en una caja inglesa');
+    });
+
+    test('reads a modern press-fit shell named by its code', () async {
+      // El vocabulario chileno nombra estas cajas por su codigo — `BB86 / BB92
+      // 41 mm`, `BB386EVO 46 mm` — y nunca con la palabra «pressfit», que era
+      // lo unico que el canonicalizador sabia buscar.
+      final assessment = await _assessProduct(
+        technicalFamily: 'bottom_bracket',
+        bikeTechnicalValues: const <String, dynamic>{
+          'bottomBracketFamily': 'Pressfit',
+          'bbShellWidthMm': 92,
+        },
+        productSpecs: const <String, dynamic>{
+          'bb_shell_standard': 'BB86 / BB92 41 mm',
+          'bb_shell_width_mm': 92,
+        },
+      );
+
+      expect(assessment.level, isNot(ProductCompatibilityLevel.incompatible),
+          reason: 'BB92 es una caja a presión y la bici tambien');
+    });
+
+    test(
         'keeps crankset matches in caution while chainline and mounting seams stay unresolved',
         () async {
       final assessment = await _assessProduct(

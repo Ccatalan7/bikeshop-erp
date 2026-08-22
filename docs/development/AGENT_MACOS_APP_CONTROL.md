@@ -267,6 +267,35 @@ scripts/dev/app_control.sh key 36            # 36 return · 53 esc · 48 tab
 scripts/dev/app_control.sh choose-file /ruta/absoluta/cartola.png
 ```
 
+### `type` y `key` se caen solos; `enter-text` no (2026-08-21)
+
+`type` y `key` son los **únicos** subcomandos que salen por AppleScript
+(`System Events`). Esa autorización es del proceso que corre el shell, así que
+puede estar concedida a una sesión y **denegada a la siguiente sin que cambie
+nada en el repo**: `osascript` devuelve `-1743 Not authorized to send Apple
+events`, `app_control.sh type` lo traga con `>/dev/null 2>&1` y sale 1 **en
+silencio**. El campo se ve enfocado, con cursor y borde activo, y el texto
+simplemente no llega — se parece exactísimo a un `TextField` deshabilitado.
+
+`click`, `tap`, `scroll`, `drag`, `find`, `read` y `enter-text` van por el
+canal de depuración de Flutter y siguen funcionando con la autorización
+denegada. Por eso el síntoma es «los clics andan pero no puedo escribir», que
+manda a buscar el defecto en la app.
+
+Escribe siempre con `enter-text --key`, no con `type`:
+
+```bash
+scripts/dev/app_control.sh enter-text --key ai-assistant-message-input \
+  --text "contacta al cliente Test"
+scripts/dev/app_control.sh tap --label "Enviar mensaje al asistente"
+```
+
+Confirma con el eco que imprime (`texto ingresado (N caracteres) en <key>`).
+`type` queda para el caso en que **no haya** `ValueKey` y haga falta el camino
+real del sistema operativo; comprueba entonces su salida en vez de descartarla.
+
+Costó cinco rondas el 2026-08-21 dando por rota la app.
+
 ### El selector de archivos es una ventana del sistema (2026-08-01)
 
 `Elegir archivo` abre un panel de macOS que no pertenece al árbol semántico de

@@ -215,7 +215,7 @@ const inventorySearchSchema: StrictJsonSchema = {
       minItems: 0,
       maxItems: 8,
       description:
-        "Predicados técnicos explícitos obtenidos de inspect_inventory_schema. No inventes claves, operadores ni valores. Usa [] cuando no exista una restricción técnica.",
+        "Predicados sobre claves y operadores que anunció inspect_inventory_schema. No inventes claves ni operadores; los valores sí van como los dijo el operador. Usa [] cuando no haya restricción técnica.",
       items: {
         type: "object",
         properties: {
@@ -228,7 +228,7 @@ const inventorySearchSchema: StrictJsonSchema = {
           operator: {
             type: "string",
             enum: ["eq", "neq", "lt", "lte", "gt", "gte", "between", "in", "contains"],
-            description: "Operador anunciado por inspect_inventory_schema para el campo exacto.",
+            description: "Operador anunciado para ese campo. En listas, eq/in comparan el vocabulario ya traducido; contains busca por fragmento.",
           },
           values: {
             type: "array",
@@ -236,7 +236,7 @@ const inventorySearchSchema: StrictJsonSchema = {
             maxItems: 10,
             items: { type: ["string", "number", "boolean"] },
             description:
-              "Uno o más valores tipados. between usa exactamente dos; los operadores escalares usan uno.",
+              "Uno o más valores; between usa dos y los escalares uno. En campos de lista manda las palabras del operador —«caja inglesa», «sellado»— y el servidor las resuelve; un valor que no resuelve descarta sólo ese predicado, así que intentar siempre supera a no filtrar.",
           },
         },
         required: ["field", "operator", "values"],
@@ -695,14 +695,41 @@ const capabilityGapSchema: StrictJsonSchema = {
   additionalProperties: false,
 };
 
-const boundedSearchSchema: StrictJsonSchema = {
+const customerContactSchema: StrictJsonSchema = {
   type: "object",
   properties: {
     query: {
       type: "string",
       minLength: 1,
       maxLength: 240,
-      description: "Texto breve y específico para filtrar datos autorizados.",
+      description: "Nombre del cliente a contactar.",
+    },
+    limit: {
+      type: "integer",
+      minimum: 1,
+      maximum: 5,
+      description: "Máximo de clientes candidatos.",
+    },
+  },
+  required: ["query", "limit"],
+  additionalProperties: false,
+};
+
+const boundedSearchSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    query: {
+      // Nullable a propósito: sin esto, «qué proveedores tengo» era
+      // inexpresable —el listado completo no tiene término de búsqueda— y el
+      // modelo respondía que no tenía herramienta, teniéndola.
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 240,
+      description:
+        "Texto breve y específico para filtrar. Usa null para pedir el listado " +
+        "sin filtrar, ordenado por lo más reciente: «qué proveedores tengo», " +
+        "«muéstrame mis clientes». Nunca declares que falta una herramienta " +
+        "por no tener un término de búsqueda.",
     },
     limit: {
       type: "integer",
@@ -714,6 +741,47 @@ const boundedSearchSchema: StrictJsonSchema = {
   required: ["query", "limit"],
   additionalProperties: false,
 };
+const purchaseInvoiceSearchSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    query: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 240,
+      description:
+        "Texto para filtrar por folio, proveedor o estado. null para no filtrar por texto.",
+    },
+    relativePeriod: enumProperty(
+      [
+        "any",
+        "today",
+        "yesterday",
+        "this_week",
+        "last_week",
+        "last_7_days",
+        "this_month",
+        "last_month",
+        "this_year",
+        "last_year",
+      ],
+      "Período del negocio resuelto por el servidor. Úsalo para «qué compré " +
+        "este mes», «cuánto le compré a mis proveedores la semana pasada» o " +
+        "cualquier pregunta de compras acotada en el tiempo: cada fila trae " +
+        "matchedCount, matchedTotal y matchedBalance del conjunto COMPLETO del " +
+        "período, no de la página. Con eso respondes totales sin sumar a mano " +
+        "y sin declarar que falta una herramienta. any no acota el tiempo.",
+    ),
+    limit: {
+      type: "integer",
+      minimum: 1,
+      maximum: 10,
+      description: "Máximo seguro de resultados.",
+    },
+  },
+  required: ["query", "relativePeriod", "limit"],
+  additionalProperties: false,
+};
+
 
 const attentionItemsSchema: StrictJsonSchema = {
   type: "object",
@@ -741,9 +809,25 @@ const businessSnapshotSchema: StrictJsonSchema = {
   additionalProperties: false,
 };
 
-const inventoryRisksSchema: StrictJsonSchema = closedSearchSchema({
-  risk: ["any", "low_stock", "out_of_stock"],
-});
+const inventoryRisksSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    query: optionalQueryProperty(),
+    risk: enumProperty(
+      ["any", "low_stock", "out_of_stock"],
+      "Qué se considera en riesgo. `any` = todo lo que está POR DEBAJO de su " +
+        "mínimo, incluido lo que está en cero: ésta es la respuesta a «qué me " +
+        "falta», «bajo stock mínimo» o «qué tengo que reponer», porque un " +
+        "producto en cero está más bajo su mínimo que uno que aún tiene " +
+        "unidades. `low_stock` = todavía queda stock pero está en o bajo el " +
+        "mínimo; sirve sólo cuando el operador excluye explícitamente lo " +
+        "agotado. `out_of_stock` = exactamente cero.",
+    ),
+    limit: integerProperty(1, 10, "Máximo seguro de resultados."),
+  },
+  required: ["query", "risk", "limit"],
+  additionalProperties: false,
+};
 
 const recentExpensesSchema: StrictJsonSchema = {
   type: "object",
@@ -841,6 +925,7 @@ const salesPeriodSchema: StrictJsonSchema = {
   ],
   additionalProperties: false,
 };
+
 
 const workshopJobContextSchema: StrictJsonSchema = {
   type: "object",
@@ -1115,7 +1200,7 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     readTool(
       "search_inventory",
-      "Consulta productos, precio y stock en el inventario autorizado. Separa categoría, identidad, especificaciones y magnitudes operativas: category se valida contra el árbol real y sus descendientes; query queda sólo para identidad/contexto; restricciones de ficha van en technicalPredicates y comparaciones de stock, stock mínimo o precio van en operationalPredicates. availability expresa estados, nunca reemplaza un umbral numérico. La base aplica todos los predicados antes de ordenar y limitar; cada fila incluye métricas verificadas del conjunto completo filtrado para responder conteos, stock total, valor de inventario y mínimos/máximos/promedio de precio sin sumar una página truncada. Usa sort y selectionMode para top-N. Separa una respuesta informativa de una petición explícita de abrir el listado y nunca enumeres un conjunto distinto del devuelto por la herramienta.",
+      "Consulta productos, precio, stock y ficha técnica del inventario autorizado. Hay dos caminos y NO se mezclan. (1) Sin predicados, el que debes preferir: manda en query la frase del operador tal como la dijo y technicalPredicates en []; el servidor la traduce contra el vocabulario real de fichas y las medidas del catálogo, y basta una llamada sin inspección previa. (2) Con predicados: inspecciona antes el esquema en una ronda aparte y usa su categoría y campos exactos; mandarlos sin esa inspección hace que el servidor rechace la llamada. Cada fila trae technicalSpecs con la ficha resuelta del producto: úsala para responder qué medidas o qué características tiene, y nunca deduzcas una especificación del nombre ni la busques en la web. Trae además métricas verificadas del conjunto completo filtrado —conteo, stock total, valor, mínimo, máximo y promedio de precio— para responder totales sin sumar una página truncada. availability expresa estados, no reemplaza un umbral. Usa sort y selectionMode para top-N, y nunca enumeres un conjunto distinto del que devolvió la herramienta.",
       inventorySearchSchema,
       operationalRead,
     ),
@@ -1141,7 +1226,7 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     },
     readTool(
       "find_inventory_risks",
-      "Detecta productos con stock bajo o agotado usando filtros autorizados de inventario.",
+      "Detecta productos en riesgo de quiebre. Para «qué me falta», «bajo stock mínimo» o «qué hay que reponer» usa risk=any: lo agotado también está bajo el mínimo y es lo más urgente, así que dejarlo fuera responde de menos. Al contar «bajo su mínimo» considera sólo los items cuyo minimumStock sea mayor que cero —un producto en cero SIN mínimo configurado está agotado, pero no está bajo un mínimo que nadie definió— y dilo por separado si el operador pregunta por agotados. Reserva low_stock para cuando pide explícitamente lo que todavía tiene unidades, y out_of_stock para lo que está en cero.",
       inventoryRisksSchema,
       operationalRead,
     ),
@@ -1201,8 +1286,8 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     readTool(
       "search_purchase_invoices",
-      "Busca facturas de compra autorizadas por folio, proveedor o estado.",
-      boundedSearchSchema,
+      "Busca facturas de compra autorizadas por folio, proveedor o estado, y responde totales por período. Con relativePeriod cada fila trae matchedCount, matchedTotal y matchedBalance del conjunto completo del período —no de la página—, así que «qué le compré a mis proveedores este mes» o «cuánto gasté en compras la semana pasada» se contestan con esta misma herramienta, sin sumar a mano y sin declarar que falta una capacidad.",
+      purchaseInvoiceSearchSchema,
       purchasesRead,
     ),
     readTool(
@@ -1219,9 +1304,15 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     readTool(
       "analyze_sales_period",
-      "Calcula sobre un intervalo inclusivo de fechas del negocio cuántas facturas se emitieron o recibieron cobros, el monto total y la factura de mayor monto. collected usa eventos reales de sales_payments y cuenta facturas distintas; no infiere cobro desde el estado de la factura.",
+      "Calcula sobre un intervalo inclusivo de fechas del negocio cuántas facturas se emitieron o recibieron cobros, el monto total, la factura de mayor monto Y el desglose por cliente del período: cuántos clientes distintos, quién encabeza con su monto y número de facturas, y el top 5 en topCustomers. Con eso responde también «quién me compró más», «mi mejor cliente del mes» o cualquier ranking por cliente: no hace falta ninguna otra herramienta ni declarar que falta una. collected usa eventos reales de sales_payments y cuenta facturas distintas; no infiere cobro desde el estado de la factura.",
       salesPeriodSchema,
       salesRead,
+    ),
+    readTool(
+      "prepare_customer_contact",
+      "Prepara el contacto por WhatsApp con un cliente. Resuelve si la ventana de 24 horas está abierta y ofrece las plantillas aprobadas con su texto exacto. No envía nada: el operador confirma en la tarjeta.",
+      customerContactSchema,
+      operationalRead,
     ),
     readTool(
       "search_conversations",
@@ -1249,7 +1340,7 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     localTool(
       capabilityGapToolName,
-      "Termina de forma honesta una petición que ninguna herramienta o dato autorizado puede resolver con precisión. Úsala sólo después de comparar la intención con las herramientas anunciadas o después de que una lectura demuestre la carencia; la respuesta final la redacta el servidor y nunca debe inventar ejecución ni disponibilidad.",
+      "Termina de forma honesta una petición que ninguna herramienta autorizada puede resolver. Sólo después de que una EJECUCIÓN real lo demuestre: inspeccionar un esquema no demuestra nada, y sin ejecutar no sabes si hay datos. Nunca la uses sobre un campo que la inspección devolvió y no intentaste buscar, ni para un ranking por cliente (lo trae analyze_sales_period), ni para contactar a un cliente (prepare_customer_contact). source_unavailable es sólo para una herramienta que falló al ejecutarse. La respuesta final la redacta el servidor.",
       capabilityGapSchema,
     ),
     readTool(
