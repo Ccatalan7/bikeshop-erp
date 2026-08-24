@@ -169,18 +169,15 @@ void main() {
     expect(
       prepareHelper,
       contains(
-        'select(\n'
-        '        .schema_version == 1\n'
-        '        and .from_commit == \$from',
+        'Gemini Flash will generate the shared release notes inside protected CI.',
       ),
     );
-    expect(prepareHelper, contains('local -a release_notes_args=('));
+    expect(prepareHelper, contains("release_notes_candidate_b64=''"));
+    expect(prepareHelper, contains("release_notes_candidate_sha256=''"));
+    expect(prepareHelper, isNot(contains('--notes-candidate')));
+    expect(prepareHelper, isNot(contains('generate_codex_release_notes.mjs')));
     expect(
-      prepareHelper,
-      contains('release_notes_args+=(--candidate-file "\$NOTES_CANDIDATE")'),
-    );
-    expect(prepareHelper, contains('"\${release_notes_args[@]}"'));
-    expect(prepareHelper, isNot(contains('"\${candidate_flags[@]}"')));
+        prepareHelper.toLowerCase(), isNot(contains('require_command codex')));
     expect(prepareHelper, isNot(contains('SIGNING_PASSWORD')));
     expect(prepareHelper, isNot(contains('SUPABASE_RELEASE_SECRET')));
   });

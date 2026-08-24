@@ -2367,6 +2367,11 @@ class AppRouter {
             () => erp.IntelligentPurchasingWorkspacePage(
               initialNeedId: state.uri.queryParameters['need'],
               mechanicJobId: state.uri.queryParameters['job'],
+              // Llegar desde «Pedidos» abre la ficha del proveedor con ese
+              // pedido ya cargado: un folio que no se puede reabrir donde se
+              // armó obliga a rearmarlo.
+              initialSupplierId: state.uri.queryParameters['supplier'],
+              initialOrderId: state.uri.queryParameters['order'],
             ),
           ),
         ),

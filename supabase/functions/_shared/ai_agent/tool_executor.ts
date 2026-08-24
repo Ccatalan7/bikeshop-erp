@@ -62,6 +62,13 @@ const toolContracts = {
       "brand",
       "category",
       "price",
+      // Costo y margen: sin ellos «¿cuál me deja más margen?» era una carencia
+      // declarada teniendo el dato en la misma fila.
+      "cost",
+      "marginPercent",
+      // Cuánto se movió en 90 días: lo que separa el stock que rota del que
+      // lleva meses parado.
+      "soldRecently",
       "stock",
       "minimumStock",
       "availability",
@@ -73,9 +80,99 @@ const toolContracts = {
       "trackedCount",
       "totalStock",
       "inventoryRetailValue",
+      // A precio de venta y a costo son dos preguntas distintas: lo que vale
+      // si se vende todo, y la plata que está inmovilizada.
+      "inventoryCostValue",
+      "costedCount",
       "averagePrice",
       "minimumPrice",
       "maximumPrice",
+    ],
+  },
+  rank_basket_suppliers: {
+    rpc: "assistant_rank_basket_suppliers_v1",
+    parameters: basketSupplierParameters,
+    fields: [
+      "entityId",
+      "rank",
+      "supplierName",
+      // Cuántas líneas de la lista cubre: es la respuesta a «¿a uno solo o lo
+      // reparto?», y no se deduce de los porcentajes por línea.
+      "coveredNeeds",
+      "totalNeeds",
+      "coveredList",
+      // La decisión de repartir, ya calculada en la base. Sólo la fila de
+      // rango 1 la trae poblada.
+      "missingList",
+      "complementSupplierName",
+      "complementCoversList",
+      "averageSharePercent",
+      "landedSpendNet",
+      "lastPurchaseAt",
+      "daysSinceLastPurchase",
+      "brands",
+      "supplierWebsite",
+      "hasPortalAccount",
+      "supplierCity",
+      "salesRepPhone",
+      "salesRepEmail",
+      "supplierAvailability",
+    ],
+  },
+  rank_purchase_suppliers: {
+    rpc: "assistant_rank_purchase_suppliers_v1",
+    parameters: supplierRankingParameters,
+    fields: [
+      "entityId",
+      "rank",
+      "supplierName",
+      // La respuesta a «a quién le compramos esto»: la concentración del
+      // gasto, no la cobertura del catálogo.
+      "spendSharePercent",
+      "landedSpendNet",
+      "purchaseLines",
+      "purchaseInvoices",
+      "distinctProducts",
+      "purchasedUnits",
+      // **Las dos, y la base primero.** Desde que el eje por defecto es «sin
+      // flete», el costo comparable entre proveedores es el base; el aterrizado
+      // queda para explicar la diferencia. La RPC ya publicaba `base` y esta
+      // lista no lo declaraba, y como `validateEnvelope` exige claves EXACTAS,
+      // una clave de más no se ignora: bota cada fila y descarta el sobre
+      // entero. Resultado medido el 2026-08-24: `rank_purchase_suppliers`
+      // —la herramienta de «a quién le compramos X»— fallaba SIEMPRE con
+      // `tool_source_unavailable` con la base respondiendo `status: success`,
+      // y el asistente sólo contestaba porque el modelo se replegaba a
+      // `rank_basket_suppliers`. Al agregar un campo a una RPC del asistente,
+      // se agrega aquí en la misma tarea.
+      "averageBaseUnitCostNet",
+      "averageLandedUnitCostNet",
+      "lastPurchaseAt",
+      "daysSinceLastPurchase",
+      "brands",
+      "gamaMix",
+      "requestedGamaLines",
+      "supplierWebsite",
+      "hasPortalAccount",
+      "supplierCity",
+      "salesRepName",
+      "salesRepPhone",
+      "salesRepEmail",
+      // Qué se soltó para poder contestar. El servidor baja escalones cuando
+      // la frase no calza literalmente —suelta el texto que no reconoce, la
+      // medida sin cobertura, o la exigencia de que estén TODAS las palabras—.
+      // Sin estos campos el modelo presentaría como literal una respuesta que
+      // se ensanchó, que es la forma más silenciosa de mentir.
+      "scopeRelaxed",
+      "droppedWords",
+      "droppedFilters",
+      // Cuánta historia sostiene el porcentaje. Sin esto el modelo presenta
+      // un 100% de tres líneas con la misma seguridad que uno de trescientas.
+      "evidencePurchaseLines",
+      "evidenceSuppliers",
+      "evidenceProductsMatched",
+      "concentrationScore",
+      "supplierAvailability",
     ],
   },
   rank_purchase_candidates: {
@@ -176,6 +273,12 @@ const toolContracts = {
       "risk",
       "isSet",
       "updatedAt",
+      // Lo que decide si reponer: cuánto se movió de verdad, cuánto pedir y a
+      // quién. Sin demanda, la lista la encabezaban productos de catálogo que
+      // nunca se vendieron y el dueño no podía actuar sobre ninguno.
+      "soldRecently",
+      "suggestedOrder",
+      "supplierName",
     ],
   },
   list_attention_items: {
@@ -599,6 +702,9 @@ export function createSupabaseAgentToolExecutor(
       try {
         throwIfAborted(signal);
         const toolSignal = AbortSignal.any([signal, AbortSignal.timeout(5_000)]);
+        // Los argumentos llegan YA reparados desde el registro, que es el único
+        // punto donde se completan. Repararlos otra vez aquí metía claves que
+        // este lado —que traduce nombres y valida claves exactas— rechaza.
         const parameters = contract.parameters(call.arguments, context) as JsonObject;
         validateRpcParameters(call.name, parameters);
         const value = await client.rpc(
@@ -629,15 +735,18 @@ export function createSupabaseAgentToolExecutor(
             call.name === "inspect_inventory_schema",
           );
         if (call.name === "get_business_snapshot") validateBusinessSnapshot(result, call.arguments);
-        validateSpecializedResult(call.name, result, call.arguments);
-        const projection = modelVisibleResult(call.name, result);
+        const normalized = call.name === "search_inventory"
+          ? inventorySearchWithoutDroppedFilter(result, call.arguments)
+          : result;
+        validateSpecializedResult(call.name, normalized, call.arguments);
+        const projection = modelVisibleResult(call.name, normalized);
         const outputText = JSON.stringify(projection.value);
         const outputBytes = new TextEncoder().encode(outputText).byteLength;
         if (outputBytes > MAX_TOOL_OUTPUT_BYTES) {
           return unavailable(authority.tenantId, "tool_output_too_large");
         }
         return {
-          result,
+          result: normalized,
           outputText,
           outputBytes,
           succeeded: true,
@@ -645,6 +754,35 @@ export function createSupabaseAgentToolExecutor(
         };
       } catch (error) {
         throwIfAborted(signal);
+        // Una regla del negocio que dice «no» NO es una fuente caída. Al
+        // aplanar las dos cosas en `tool_source_unavailable`, el operador que
+        // pedía agregar una línea a un trabajo ya facturado leía «intenta de
+        // nuevo en unos segundos» —y reintentar no iba a funcionar nunca—, en
+        // vez de «esa bicicleta ya tiene factura confirmada». La base sí lo
+        // distingue; lo perdíamos acá.
+        const refusal = businessRefusalCode(error);
+        if (refusal) return unavailable(authority.tenantId, refusal);
+        // Cuando la base explica el rechazo con una frase fija, esa frase llega
+        // al modelo para que se la diga al operador. «No tengo una herramienta
+        // autorizada» ante «los filtros técnicos necesitan una categoría» es
+        // una respuesta que no ayuda a nadie y esconde el defecto.
+        // Dos fuentes de motivo, y las dos son frases fijas nuestras: la que
+        // manda la base y la que lanza esta misma capa al revisar el resultado
+        // («invalid supply request draft»). Sin ninguna de las dos, un rechazo
+        // de forma se ve igual que una caída, y depurarlo es adivinar.
+        const detail = (error as { detail?: unknown }).detail ??
+          (error instanceof Error && /^[a-z][a-z ]{4,60}$/.test(error.message)
+            ? error.message
+            : undefined);
+        if (typeof detail === "string" && detail) {
+          return unavailableBecause(authority.tenantId, detail);
+        }
+        // OJO con el nombre: el outcome `idempotency_conflict` NO es un choque
+        // de idempotencia — es el SQLSTATE 22023, o sea la RPC rechazando sus
+        // argumentos. Por eso mapea a `tool_arguments_invalid` y es correcto.
+        // Perseguir el nombre en vez del código costó una ronda entera el
+        // 2026-08-23; el defecto real vivía en el guard de la RPC, más estricto
+        // que el del ejecutor.
         return unavailable(
           authority.tenantId,
           error instanceof InvalidToolArguments ||
@@ -709,6 +847,7 @@ async function executePublicResearch(
       items: publicSources,
       resultCount: publicSources.length,
       hasMore: research.hasMore,
+      totalMatches: publicSources.length,
     });
     const visibleResult = modelVisibleResult("research_public_web", result);
     const outputText = JSON.stringify({
@@ -811,7 +950,26 @@ function inventorySchemaInspectionParameters(args: JsonObject): JsonObject {
   };
 }
 
-function inventorySearchParameters(args: JsonObject): JsonObject {
+/// Lo que el modelo NO tiene que decidir para buscar un producto.
+///
+/// Pedirle nueve campos obligatorios —incluidos dos arreglos casi siempre
+/// vacíos y un objeto `sort` con dos subcampos— hacía que una de cada dos
+/// búsquedas se rechazara por argumentos inválidos. Cada rechazo gasta una de
+/// las cinco rondas del turno, así que el asistente moría en
+/// `agent_budget_exhausted` sin haber hecho nada malo salvo omitir
+/// `operationalPredicates: []`. Estos valores no aflojan ninguna garantía: son
+/// exactamente los que el propio esquema ya declaraba como neutros, y todo lo
+/// demás se sigue validando igual.
+const inventorySearchDefaults: Readonly<JsonObject> = {
+  sort: { field: "relevance", direction: "desc" },
+  limit: 10,
+  selectionMode: "all_matches",
+  technicalPredicates: [],
+  operationalPredicates: [],
+};
+
+function inventorySearchParameters(rawArgs: JsonObject): JsonObject {
+  const args: JsonObject = { ...inventorySearchDefaults, ...rawArgs };
   if (
     !hasExactKeys(args, [
       "query",
@@ -838,14 +996,21 @@ function inventorySearchParameters(args: JsonObject): JsonObject {
     ) ||
     !isRecord(args.sort) ||
     !hasExactKeys(args.sort, ["field", "direction"]) ||
-    !["relevance", "name", "stock", "minimum_stock", "price"].includes(
+    !["relevance", "name", "stock", "minimum_stock", "price", "margin", "sold_recently"].includes(
       String(args.sort.field),
     ) ||
     !["asc", "desc"].includes(String(args.sort.direction)) ||
-    (args.sort.field === "relevance" && args.sort.direction !== "desc") ||
     !boundedInteger(args.limit, 1, 10) ||
     !["all_matches", "top_n"].includes(String(args.selectionMode))
   ) throw new InvalidToolArguments();
+  // Ordenar por relevancia no tiene dirección: el ranking de identidad ya viene
+  // de mayor a menor. El esquema permitía `relevance` + `asc` y el ejecutor lo
+  // rechazaba, así que el modelo perdía una ronda del turno por una
+  // combinación que el propio esquema le ofrecía y que además no significa
+  // nada. Se normaliza en vez de rechazarse.
+  const sortDirection = args.sort.field === "relevance"
+    ? "desc"
+    : args.sort.direction;
   const technicalPredicates = normalizedInventoryTechnicalPredicates(
     args.technicalPredicates,
   );
@@ -859,10 +1024,51 @@ function inventorySearchParameters(args: JsonObject): JsonObject {
     p_technical_predicates: technicalPredicates,
     p_operational_predicates: operationalPredicates,
     p_sort_field: args.sort.field,
-    p_sort_direction: args.sort.direction,
+    p_sort_direction: sortDirection,
     p_limit: args.limit,
     p_selection_mode: args.selectionMode,
   };
+}
+
+function basketSupplierParameters(args: JsonObject): JsonObject {
+  if (
+    !hasExactKeys(args, ["queries", "limit"]) ||
+    !Array.isArray(args.queries) ||
+    args.queries.length < 2 || args.queries.length > 6 ||
+    args.queries.some((line) =>
+      typeof line !== "string" || !line.trim() || utf8Bytes(line.trim()) > 240
+    ) ||
+    !boundedInteger(args.limit, 1, 5)
+  ) throw new InvalidToolArguments();
+  return {
+    p_queries: args.queries.map((line) => (line as string).trim()),
+    p_limit: args.limit,
+  };
+}
+
+function supplierRankingParameters(args: JsonObject): JsonObject {
+  if (
+    !hasExactKeys(args, ["query", "category", "brand", "limit"]) ||
+    !optionalBoundedText(args.query, 240) ||
+    !optionalBoundedText(args.category, 160) ||
+    !optionalBoundedText(args.brand, 80) ||
+    // Sin nada que acotar la pregunta sería «a quién le compramos todo», que
+    // devuelve el ranking completo de proveedores disfrazado de análisis.
+    (args.query === null && args.category === null && args.brand === null) ||
+    !boundedInteger(args.limit, 1, 5)
+  ) throw new InvalidToolArguments();
+  return {
+    p_query: typeof args.query === "string" ? args.query.trim() : null,
+    p_category: typeof args.category === "string" ? args.category.trim() : null,
+    p_brand: typeof args.brand === "string" ? args.brand.trim() : null,
+    p_limit: args.limit,
+  };
+}
+
+function optionalBoundedText(value: unknown, maxBytes: number): boolean {
+  return value === null ||
+    (typeof value === "string" && value.trim().length > 0 &&
+      utf8Bytes(value.trim()) <= maxBytes);
 }
 
 function purchaseRankingParameters(args: JsonObject): JsonObject {
@@ -993,9 +1199,20 @@ function supplyRequestParameters(args: JsonObject): JsonObject {
       ...(commercialTarget === null ? {} : { commercialTarget }),
       quantity: item.quantity,
       unit: item.unit.trim(),
-      technicalPredicates: normalizedInventoryTechnicalPredicates(
-        item.technicalPredicates,
-      ),
+      // Un filtro técnico sin categoría resuelta NO tumba la línea.
+      //
+      // La base exige «Technical predicates require a resolved category»: si el
+      // modelo no logró arrastrar la referencia opaca de categoría, la petición
+      // COMPLETA moría. Y esa es la petición típica del taller —«neumáticos 29
+      // de gama media»—, donde el 29 ya viaja en la descripción. Se descarta el
+      // filtro, no la necesidad: perder un filtro deja una búsqueda más amplia;
+      // perder la línea deja al operador sin nada.
+      // Con producto exacto resuelto los filtros SÍ valen: la base los acepta
+      // contra su ficha. Se descartan sólo cuando la línea no tiene ni producto
+      // ni categoría, que es justo cuando la base los rechaza.
+      technicalPredicates: item.productId === null && item.categoryId === null
+        ? []
+        : normalizedInventoryTechnicalPredicates(item.technicalPredicates),
       preference: typeof item.preference === "string" ? item.preference.trim() : null,
       clarification: typeof item.clarification === "string" ? item.clarification.trim() : null,
       clarificationRequired: item.clarificationRequired,
@@ -1043,6 +1260,41 @@ function validSupplyCommercialTarget(value: JsonValue | undefined): boolean {
   return true;
 }
 
+/// La gama como la dice el taller, no como la escribe la base.
+///
+/// El vocabulario aceptado es exactamente `alta`, `media` y `economica`.
+/// «gama media» —con la palabra delante, que es como se habla— muere, y con
+/// ella la petición COMPLETA. Peor: «gama media y alta» es una frase normal del
+/// taller y no hay forma de expresarla, porque una línea tiene una sola gama.
+///
+/// Aquí se traduce lo que tiene una sola lectura posible. Lo que no se entiende
+/// NO mata la petición: se descarta el objetivo y la línea sigue viva. El dueño
+/// fue explícito (2026-08-23): la gama y el margen se CONSIDERAN, no se exigen;
+/// tratarlos como requisito fue lo que llenó de trabas el asistente.
+function normalizedSupplyGama(value: JsonValue): JsonValue | undefined {
+  if (typeof value !== "string") return undefined;
+  const plano = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\bgamas?\b/g, "")
+    .replace(/[^a-z]+/g, " ")
+    .trim();
+  // Con dos gamas en la misma frase no se elige una a dedo: se descarta el
+  // objetivo y la línea sigue. Partirla en dos es decisión del modelo, no una
+  // que este código pueda tomar sin inventar cantidades.
+  const nombradas = ["alta", "media", "economica", "baja", "premium", "barata"]
+    .filter((nombre) => new RegExp(`\\b${nombre}\\b`).test(plano));
+  if (new Set(nombradas.map(canonicalGama)).size !== 1) return undefined;
+  return canonicalGama(nombradas[0]);
+}
+
+function canonicalGama(nombre: string): string {
+  if (nombre === "premium") return "alta";
+  if (nombre === "baja" || nombre === "barata") return "economica";
+  return nombre;
+}
+
 function normalizedSupplyCommercialTarget(
   value: JsonValue | undefined,
 ): JsonObject | null {
@@ -1050,7 +1302,31 @@ function normalizedSupplyCommercialTarget(
   const target: JsonObject = {};
   for (const key of supplyCommercialTargetFields) {
     const candidate = value[key];
-    if (candidate !== null && candidate !== undefined) target[key] = candidate;
+    if (candidate === null || candidate === undefined) continue;
+    if (key === "gama") {
+      const gama = normalizedSupplyGama(candidate);
+      if (gama !== undefined) target[key] = gama;
+      continue;
+    }
+    // Los topes fuera de rango se DESCARTAN, no matan la petición. La base
+    // exige costo en (0, 999999999] y margen en [0, 1]; un modelo que escribe
+    // `maxLandedUnitCostNet: 0` queriendo decir «sin tope» tumbaba la línea
+    // entera. Un tope que no se entiende es un tope que no hay.
+    if (key === "maxLandedUnitCostNet") {
+      if (
+        typeof candidate === "number" && Number.isFinite(candidate) &&
+        candidate > 0 && candidate <= 999999999
+      ) target[key] = candidate;
+      continue;
+    }
+    if (key === "minGrossMarginRatio") {
+      if (
+        typeof candidate === "number" && Number.isFinite(candidate) &&
+        candidate >= 0 && candidate <= 1
+      ) target[key] = candidate;
+      continue;
+    }
+    target[key] = candidate;
   }
   return Object.keys(target).length === 0 ? null : target;
 }
@@ -1172,7 +1448,7 @@ function normalizedInventoryOperationalPredicates(value: JsonValue): JsonValue[]
       !isRecord(predicate) ||
       !hasExactKeys(predicate, ["field", "operator", "values"]) ||
       typeof predicate.field !== "string" ||
-      !["stock", "minimum_stock", "price"].includes(predicate.field) ||
+      !["stock", "minimum_stock", "price", "sold_recently"].includes(predicate.field) ||
       fields.has(predicate.field) ||
       typeof predicate.operator !== "string" ||
       !["eq", "neq", "lt", "lte", "gt", "gte", "between", "in"]
@@ -1214,7 +1490,51 @@ function taskQueryParameters(args: JsonObject): JsonObject {
   };
 }
 
-class InvalidToolArguments extends Error {}
+/// Qué argumento estaba mal, no sólo que alguno lo estaba.
+///
+/// El recibo guardaba `invalid_tool_arguments` a secas, así que un modelo que
+/// repite la misma llamada malformada quemaba la mitad de su presupuesto sin
+/// dejar rastro de la causa. Medido el 2026-08-22: de cuatro búsquedas de
+/// inventario en un turno, dos rechazadas y el turno muerto por
+/// `agent_budget_exhausted`.
+/// Rechazos del dominio que la base nombra explícitamente. Cada uno tiene una
+/// causa que el operador puede entender y, casi siempre, algo que puede hacer;
+/// ninguno se arregla reintentando.
+const businessRefusals: readonly (readonly [string, string])[] = [
+  ["Workshop invoice has financial history", "tool_refused_invoice_already_confirmed"],
+  ["Workshop target is unavailable", "tool_refused_job_not_available"],
+  ["Workshop bike is unavailable", "tool_refused_bike_not_available"],
+  ["Catalog item is unavailable", "tool_refused_catalog_item_not_available"],
+];
+
+const businessRefusalMessages: Readonly<Record<string, string>> = {
+  tool_refused_invoice_already_confirmed:
+    "Ese trabajo ya tiene una factura confirmada, así que no se le pueden " +
+    "agregar líneas. Dilo así y ofrece abrir el trabajo o la factura.",
+  tool_refused_job_not_available:
+    "Ese trabajo no está disponible para modificarse. Dilo así y no reintentes.",
+  tool_refused_bike_not_available:
+    "Esa bicicleta no está disponible en el trabajo indicado. Dilo así y no " +
+    "reintentes.",
+  tool_refused_catalog_item_not_available:
+    "Ese producto o servicio no está disponible en el catálogo. Dilo así y " +
+    "ofrece los nombres parecidos que ya viste.",
+};
+
+function businessRefusalCode(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : "";
+  if (!message) return null;
+  for (const [needle, code] of businessRefusals) {
+    if (message.includes(needle)) return code;
+  }
+  return null;
+}
+
+class InvalidToolArguments extends Error {
+  constructor(readonly detail: string = "") {
+    super(detail ? `invalid tool arguments: ${detail}` : "invalid tool arguments");
+  }
+}
 
 function validateRpcParameters(toolName: string, parameters: JsonObject): void {
   if (toolName === "prepare_task") {
@@ -1333,6 +1653,28 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
     if (!validUuidValue(parameters.p_job_id)) throw new InvalidToolArguments();
     return;
   }
+  if (toolName === "rank_basket_suppliers") {
+    if (
+      !Array.isArray(parameters.p_queries) ||
+      parameters.p_queries.length < 2 || parameters.p_queries.length > 6 ||
+      parameters.p_queries.some((line) =>
+        typeof line !== "string" || !line.trim() || utf8Bytes(line) > 240
+      ) ||
+      !boundedInteger(parameters.p_limit, 1, 5)
+    ) throw new InvalidToolArguments();
+    return;
+  }
+  if (toolName === "rank_purchase_suppliers") {
+    if (
+      !optionalBoundedText(parameters.p_query, 240) ||
+      !optionalBoundedText(parameters.p_category, 160) ||
+      !optionalBoundedText(parameters.p_brand, 80) ||
+      (parameters.p_query === null && parameters.p_category === null &&
+        parameters.p_brand === null) ||
+      !boundedInteger(parameters.p_limit, 1, 5)
+    ) throw new InvalidToolArguments();
+    return;
+  }
   if (toolName === "rank_purchase_candidates") {
     if (
       !(parameters.p_query === null ||
@@ -1414,22 +1756,22 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
     !["any", "in_stock", "low_stock", "out_of_stock"].includes(
       String(parameters.p_availability),
     )
-  ) throw new InvalidToolArguments();
+  ) throw new InvalidToolArguments("p_availability");
   if (
     toolName === "search_inventory" &&
     !Array.isArray(parameters.p_technical_predicates)
   ) {
-    throw new InvalidToolArguments();
+    throw new InvalidToolArguments("p_technical_predicates");
   }
   if (
     toolName === "search_inventory" &&
     !Array.isArray(parameters.p_operational_predicates)
   ) {
-    throw new InvalidToolArguments();
+    throw new InvalidToolArguments("p_operational_predicates");
   }
   if (
     toolName === "search_inventory" &&
-    (!["relevance", "name", "stock", "minimum_stock", "price"].includes(
+    (!["relevance", "name", "stock", "minimum_stock", "price", "margin", "sold_recently"].includes(
       String(parameters.p_sort_field),
     ) ||
       !["asc", "desc"].includes(String(parameters.p_sort_direction)) ||
@@ -1437,7 +1779,7 @@ function validateRpcParameters(toolName: string, parameters: JsonObject): void {
         parameters.p_sort_direction !== "desc") ||
       !boundedInteger(parameters.p_limit, 1, 10) ||
       !["all_matches", "top_n"].includes(String(parameters.p_selection_mode)))
-  ) throw new InvalidToolArguments();
+  ) throw new InvalidToolArguments("p_sort/p_limit/p_selection_mode");
   if (
     toolName === "find_inventory_risks" &&
     !["any", "low_stock", "out_of_stock"].includes(String(parameters.p_risk))
@@ -1537,16 +1879,25 @@ function validateEnvelope(
   // hace cumplir el validador del propio resultado, no éste.
   optionalEntityId = false,
 ): AgentToolResultEnvelope {
+  // `totalMatches` es opcional a propósito: la base y la función se despliegan
+  // por separado, así que el sobre tiene que ser válido con y sin la clave. Sin
+  // esa tolerancia, el primer despliegue de los dos deja al asistente
+  // rechazando TODAS las herramientas hasta que llegue el segundo.
   if (
-    !isRecord(value) || !hasExactKeys(value, [
-      "authorityTenantId",
-      "asOf",
-      "status",
-      "items",
-      "resultCount",
-      "hasMore",
-    ])
+    !isRecord(value) || !(
+      hasExactKeys(value, envelopeBaseKeys) ||
+      hasExactKeys(value, [...envelopeBaseKeys, "totalMatches"])
+    )
   ) throw new Error("invalid tool envelope");
+  // Cuántas hay en total, no cuántas caben en el tope. «Te muestro 10» sin
+  // decir «de 1016» es exacto por fila y engañoso como respuesta.
+  const totalMatches = value.totalMatches === undefined
+    ? (value.resultCount as number)
+    : value.totalMatches;
+  if (
+    !Number.isSafeInteger(totalMatches) ||
+    (totalMatches as number) < (value.resultCount as number)
+  ) throw new Error("invalid tool total");
   if (value.authorityTenantId !== authority.tenantId) throw new Error("tool tenant mismatch");
   if (typeof value.asOf !== "string" || !Date.parse(value.asOf)) {
     throw new Error("invalid tool timestamp");
@@ -1599,6 +1950,7 @@ function validateEnvelope(
     items,
     resultCount: value.resultCount as number,
     hasMore: value.hasMore,
+    totalMatches: totalMatches as number,
   });
 }
 
@@ -1802,6 +2154,11 @@ function validateSupplyRequestEnvelope(
     "clarificationRequired",
     "profile",
   ] as const;
+  // La línea puede traer objetivo comercial o no traerlo: la base lo separa y
+  // sólo lo devuelve cuando existe. Exigir una sola forma rechazaba el borrador
+  // ENTERO —con la petición ya interpretada y consultada— justo cuando el
+  // operador había expresado una gama, que es el caso corriente del taller.
+  const fieldsWithTarget = [...fields, "commercialTarget"] as const;
   if (
     envelope.status !== "success" || envelope.hasMore ||
     envelope.items.length !== requestedItems.length
@@ -1812,7 +2169,7 @@ function validateSupplyRequestEnvelope(
     const source = sourceItems[index];
     if (
       !isRecord(requested) || !isRecord(source) || !isRecord(item) ||
-      !hasExactKeys(item, fields) ||
+      !(hasExactKeys(item, fields) || hasExactKeys(item, fieldsWithTarget)) ||
       !(item.entityId === null ||
         (typeof item.entityId === "string" && validUuid(item.entityId))) ||
       item.entityId !== requested.productId ||
@@ -1959,6 +2316,49 @@ function validateBusinessSnapshot(result: AgentToolResultEnvelope, args: JsonObj
   }
 }
 
+/// **Un filtro que la fuente dejó caer significa cero, no una caída.**
+///
+/// `assistant_search_inventory_v7` tiene una escalera de degradación: cuando el
+/// predicado técnico no calza con NINGÚN producto, no devuelve vacío — devuelve
+/// la categoría entera con todas las filas marcadas `not_applicable`. Medido el
+/// 2026-08-24 con `spoke_length_mm eq 264`: `matchedCount` saltó de 2 (con 265,
+/// que sí existe) a 48, o sea los rayos completos.
+///
+/// El validador de abajo exige, con razón, que si el modelo pidió una condición
+/// técnica ninguna fila vuelva sin evaluarla, así que lanzaba — y el ejecutor
+/// convertía eso en `tool_source_unavailable`. El operador que preguntó «tengo
+/// rayos de 264» leía **«No pude procesar esa solicitud ahora. Intenta de nuevo
+/// en unos segundos»**, y reintentar no iba a funcionar nunca: no hay rayos de
+/// 264. Un «no tengo» del negocio no es una fuente caída.
+///
+/// La verdad de lo que se preguntó es **cero**. Devolverla como vacío
+/// verificado deja al modelo decir «no tengo de 264» y ofrecer el más cercano,
+/// que es lo que el mecánico necesita, en vez de matar el turno.
+///
+/// La condición es estrecha a propósito: predicados pedidos, **todas** las
+/// filas sin evaluar, y un conjunto más ancho que la página. Si sólo algunas
+/// filas vienen sin evaluar, eso sí es una inconsistencia real y el validador
+/// debe seguir rechazándola.
+function inventorySearchWithoutDroppedFilter(
+  result: AgentToolResultEnvelope,
+  args: JsonObject,
+): AgentToolResultEnvelope {
+  const predicates = args.technicalPredicates;
+  if (!Array.isArray(predicates) || predicates.length === 0) return result;
+  if (result.items.length === 0) return result;
+  if (!result.items.every((item) => item.technicalMatch === "not_applicable")) {
+    return result;
+  }
+  return {
+    ...result,
+    status: "verifiedEmpty",
+    items: Object.freeze([]),
+    resultCount: 0,
+    hasMore: false,
+    totalMatches: 0,
+  };
+}
+
 function validateSpecializedResult(
   toolName: string,
   result: AgentToolResultEnvelope,
@@ -2066,8 +2466,12 @@ function validateInventorySearch(result: AgentToolResultEnvelope, args: JsonObje
 
 function validateInventoryOrder(items: readonly JsonObject[], sort: JsonObject): void {
   const field = sort.field;
-  if (!["stock", "minimum_stock", "price"].includes(String(field))) return;
-  const key = field === "minimum_stock" ? "minimumStock" : field;
+  if (!["stock", "minimum_stock", "price", "sold_recently"].includes(String(field))) return;
+  const key = field === "minimum_stock"
+    ? "minimumStock"
+    : field === "sold_recently"
+    ? "soldRecently"
+    : field;
   for (let index = 1; index < items.length; index += 1) {
     const previous = items[index - 1][key as string];
     const current = items[index][key as string];
@@ -2081,12 +2485,19 @@ function validateInventoryOrder(items: readonly JsonObject[], sort: JsonObject):
 
 function inventoryOperationalPredicateMatches(item: JsonObject, value: JsonValue): boolean {
   if (!isRecord(value) || !Array.isArray(value.values)) return false;
+  // La revalidación tiene que conocer TODOS los campos que el esquema ofrece:
+  // si el modelo filtra por uno que aquí falta, `actual` queda indefinido y el
+  // resultado entero se descarta con `tool_source_unavailable` — aunque la base
+  // haya respondido bien. Es la misma inconsistencia entre compuertas de
+  // siempre, ahora en la revisión posterior.
   const actual = value.field === "stock"
     ? item.stock
     : value.field === "minimum_stock"
     ? item.minimumStock
     : value.field === "price"
     ? item.price
+    : value.field === "sold_recently"
+    ? item.soldRecently
     : undefined;
   if (typeof actual !== "number" || !Number.isFinite(actual)) return false;
   if (
@@ -2155,7 +2566,7 @@ function validateInventorySchemaInspection(result: AgentToolResultEnvelope): voi
           typeof item.operators !== "string" || !item.operators.trim())) ||
       (item.kind === "operational_field" &&
         (item.technicalFamily !== null ||
-          !["stock", "minimum_stock", "price"].includes(String(item.field)) ||
+          !["stock", "minimum_stock", "price", "sold_recently"].includes(String(item.field)) ||
           item.dataType !== "number" || item.allowedValues !== null ||
           item.operators !== "eq,neq,lt,lte,gt,gte,between,in"))
     ) throw new Error("invalid inventory schema inspection");
@@ -2517,20 +2928,31 @@ function validateConversations(result: AgentToolResultEnvelope, args: JsonObject
   }
 }
 
+const envelopeBaseKeys = [
+  "authorityTenantId",
+  "asOf",
+  "status",
+  "items",
+  "resultCount",
+  "hasMore",
+];
+
 function validateEnvelopeBase(
   value: unknown,
   authority: AgentAuthority,
   maxItems: number,
 ): AgentToolResultEnvelope {
+  // Segundo validador de sobre. `totalMatches` es opcional acá por la MISMA
+  // razón que en el primero, y olvidarlo costó una tarde: con la clave nueva
+  // llegando desde la base, este camino rechazaba el sobre entero y las
+  // herramientas que pasan por aquí —flujo de caja y cuentas por cobrar entre
+  // ellas— respondían «la fuente autorizada no está disponible». Una lista
+  // cerrada duplicada se actualiza en los dos lados o no se actualiza.
   if (
-    !isRecord(value) || !hasExactKeys(value, [
-      "authorityTenantId",
-      "asOf",
-      "status",
-      "items",
-      "resultCount",
-      "hasMore",
-    ]) || value.authorityTenantId !== authority.tenantId ||
+    !isRecord(value) || !(
+      hasExactKeys(value, envelopeBaseKeys) ||
+      hasExactKeys(value, [...envelopeBaseKeys, "totalMatches"])
+    ) || value.authorityTenantId !== authority.tenantId ||
     typeof value.asOf !== "string" || !Date.parse(value.asOf) ||
     !["success", "verifiedEmpty"].includes(String(value.status)) ||
     !Array.isArray(value.items) || value.items.length > maxItems ||
@@ -2547,6 +2969,7 @@ function validateEnvelopeBase(
     items: value.items as JsonObject[],
     resultCount: value.resultCount as number,
     hasMore: value.hasMore,
+    totalMatches: value.resultCount as number,
   }) as AgentToolResultEnvelope;
 }
 
@@ -2660,6 +3083,10 @@ function modelVisibleResult(
     }),
     resultCount: result.resultCount,
     hasMore: result.hasMore,
+    // El modelo no puede decir «de 1016» si sólo recibe las 10 que caben.
+    // `hasMore` avisa que faltan; no dice cuántas, y sin el número la
+    // respuesta suena completa cuando no lo es.
+    totalMatches: result.totalMatches,
   };
   return { value, entityReferences: Object.freeze(entityReferences) };
 }
@@ -2667,6 +3094,25 @@ function modelVisibleResult(
 function isoInstant(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
     Number.isFinite(Date.parse(value));
+}
+
+function unavailableBecause(
+  tenantId: string,
+  detail: string,
+): AgentToolExecution {
+  const execution = unavailable(tenantId, "tool_source_unavailable");
+  const outputText = JSON.stringify({
+    status: "refused",
+    retryable: false,
+    message:
+      `La fuente rechazó la solicitud: ${detail}. Dilo con palabras del taller ` +
+      `y ofrece seguir sin esa parte, en vez de declarar que falta una herramienta.`,
+  });
+  return {
+    ...execution,
+    outputText,
+    outputBytes: new TextEncoder().encode(outputText).byteLength,
+  };
 }
 
 function unavailable(tenantId: string, failureCode: string): AgentToolExecution {
@@ -2677,11 +3123,24 @@ function unavailable(tenantId: string, failureCode: string): AgentToolExecution 
     items: [],
     resultCount: 0,
     hasMore: false,
+    totalMatches: 0,
   };
-  const outputText = JSON.stringify({
-    status: "unavailable",
-    message: "La fuente autorizada no estuvo disponible.",
-  });
+  // El modelo redacta la respuesta final, así que necesita la causa, no un
+  // código. «No estuvo disponible» ante una regla del negocio invita a
+  // reintentar algo que nunca va a funcionar.
+  const refusalMessage = businessRefusalMessages[failureCode];
+  const outputText = JSON.stringify(
+    refusalMessage
+      ? {
+        status: "refused",
+        retryable: false,
+        message: refusalMessage,
+      }
+      : {
+        status: "unavailable",
+        message: "La fuente autorizada no estuvo disponible.",
+      },
+  );
   return {
     result,
     outputText,
@@ -2758,6 +3217,7 @@ function capabilityGapExecution(
     items: Object.freeze([item]),
     resultCount: 1,
     hasMore: false,
+    totalMatches: 1,
   });
   const outputText = JSON.stringify({
     status: "accepted",

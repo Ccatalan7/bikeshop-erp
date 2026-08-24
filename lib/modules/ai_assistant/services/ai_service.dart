@@ -10,6 +10,8 @@ import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import '../../bikeshop/models/bikeshop_models.dart';
+import '../../inventory/services/product_identity/product_identity_extractor.dart'
+    show nonManufacturerBrandWords;
 import '../../bikeshop/services/bikeshop_service.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
@@ -104,6 +106,41 @@ String _compositionRoleWireValue(AIProductCompositionRole role) =>
       AIProductCompositionRole.component => 'component',
       AIProductCompositionRole.includedAccessory => 'included_accessory',
     };
+
+/// La marca que se le muestra al modelo, o nada.
+///
+/// **Un marketplace en la columna de marca no es un fabricante: es la ausencia
+/// de uno.** El lector determinista ya lo sabe —su compuerta de marca resolvió
+/// `notApplicable` para el disco `AE0007`, cuya marca es «Aliexpress»— pero la
+/// ficha que viaja al modelo llevaba el valor crudo, y el modelo lo leyó como
+/// fabricante: rechazó el candidato con «Marca diferente (Aliexpress vs Avid)»
+/// aunque en la misma frase reconocía que el modelo G3 y los 160 mm calzaban.
+///
+/// Costo real medido el 2026-08-24: con ese rechazo la fila del rotor se quedó
+/// sin ningún candidato y terminó ofreciendo crear un duplicado de un producto
+/// que ya estaba en bodega.
+///
+/// Reusa el mismo conjunto que el extractor, para que las dos capas no se
+/// contradigan.
+String? manufacturerBrandForModel(String? rawBrand) {
+  final trimmed = rawBrand?.trim() ?? '';
+  if (trimmed.isEmpty) return null;
+  final normalized = trimmed
+      .toLowerCase()
+      .replaceAll(RegExp(r'[áàä]'), 'a')
+      .replaceAll(RegExp(r'[éèë]'), 'e')
+      .replaceAll(RegExp(r'[íìï]'), 'i')
+      .replaceAll(RegExp(r'[óòö]'), 'o')
+      .replaceAll(RegExp(r'[úùü]'), 'u')
+      .replaceAll('ñ', 'n')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (nonManufacturerBrandWords.contains(normalized)) return null;
+  if (nonManufacturerBrandWords.contains(normalized.replaceAll(' ', ''))) {
+    return null;
+  }
+  return trimmed;
+}
 
 class AIProductObjectIdentity {
   const AIProductObjectIdentity(
@@ -815,7 +852,7 @@ class AIAssistantService extends ChangeNotifier
       ProductIdentityAIContract.schemaVersion;
   static const String productIdentityVisionModel = 'gemini-3.6-flash';
   static const String productMatchPromptKey =
-      'ai-product-grounded-adjudication-v6';
+      'ai-product-grounded-adjudication-v9';
   static const String productCatalogScreenPromptKey =
       'ai-product-catalog-screen-v1';
 
@@ -1011,7 +1048,9 @@ class AIAssistantService extends ChangeNotifier
           'ref': referenceById[card.id.trim()],
           if (compact(card.sku, max: 60) case final value?) 'sku': value,
           'name': compact(card.name, max: 160),
-          if (compact(card.brand, max: 60) case final value?) 'brand': value,
+          if (compact(manufacturerBrandForModel(card.brand), max: 60)
+              case final value?)
+            'brand': value,
           if (compact(card.category, max: 120) case final value?)
             'category': value,
           if (compact(card.model, max: 80) case final value?) 'model': value,
@@ -1456,6 +1495,21 @@ END_UNTRUSTED_CATALOG_CARDS_JSON
         'unit_class': supplierUnitClass,
         'conflict': supplierPackEvidenceConflict,
       },
+      // **El costo de UNA pieza cuando la compra trae varias.**
+      //
+      // `invoice_unit_cost` es lo que costó la unidad COMPRADA, y cuando esa
+      // unidad es un par el número no se puede comparar contra la ficha de una
+      // pieza. El modelo lo notó y lo usó para rechazar: «el costo unitario no
+      // coincide con el componente del par comprado». Tenía razón sobre el
+      // número y sacaba la conclusión equivocada, porque nadie le había dado
+      // el costo por pieza. Se calcula sólo cuando la composición demuestra el
+      // pack, y se nombra distinto para que no se confunda con el de arriba.
+      if (investigation != null &&
+          investigation.packaging.count != null &&
+          investigation.packaging.count! > 1 &&
+          invoiceCost != null)
+        'invoice_unit_cost_per_package_piece':
+            invoiceCost / investigation.packaging.count!,
       'line_context': lineContext?.trim(),
       'source_image_available': imageBytes?.isNotEmpty == true,
       'specifications': invoiceSpecifications,
@@ -1514,7 +1568,7 @@ END_UNTRUSTED_CATALOG_CARDS_JSON
           'name': option.name,
           'catalog_unit_cost': option.cost,
           'catalog_supplier': option.supplierName,
-          'brand': option.brand,
+          'brand': manufacturerBrandForModel(option.brand),
           'category': option.category,
           'family': option.family,
           'model': option.model,
@@ -1578,6 +1632,28 @@ Reglas duras:
   pieza, no respondas `same`: devuelve `composite` con esa cantidad. Si la
   unidad es `pair` o `set`, no inventes cuántas piezas contiene; usa la
   composición visible/nombrada o `insufficient`.
+- «Genérico», «compatible», «alternativo», «sin marca» o el nombre de un
+  marketplace (AliExpress, Temu, eBay…) NO son fabricantes: son la AUSENCIA de
+  uno. Un candidato así no contradice a una fuente que sí declara fabricante, y
+  rechazarlo por «marca diferente» esconde el producto que el taller ya tiene en
+  bodega. La contradicción de fabricante exige que AMBOS lados nombren un
+  fabricante REAL y que sean distintos.
+- SOURCE.invoice_unit_cost_per_package_piece, cuando viene, es el costo de UNA
+  pieza del pack: úsalo para comparar contra el costo de un candidato que
+  controla la pieza suelta. No rechaces por costo comparando el precio del par
+  contra la ficha de una unidad.
+- SOURCE.structured_identity.composition y .packaging son la lectura
+  estructurada de ESA MISMA compra y valen como evidencia de pack aunque
+  `supplier_package.count` venga vacío: la variante puede nombrar el pack sin
+  escribir una cantidad (`G3-160-160MM` son DOS discos de 160 mm). Si
+  `composition.kind=composite` con UN solo componente repetido, `packaging.count`
+  coincide con el `qty` de ese componente, y algún candidato ofrecido es ESE
+  componente —la pieza suelta, no el pack—, responde `composite` con ese id,
+  qty=packaging.count y role=`homogeneous`.
+  NO respondas `different` sólo porque el catálogo controle la pieza suelta y el
+  proveedor venda el par: ése es exactamente el caso que `composite` existe para
+  resolver, y contestar `different` obliga a crear un duplicado del producto que
+  ya está en bodega.
 - Un candidato con `is_set=true` es un producto-set canónico cuyo stock se
   controla mediante `set_components`. Puedes responder `same` para ese padre
   sólo si su composición completa coincide con lo comprado; no elijas además
@@ -4538,8 +4614,11 @@ END_CANONICAL_RESPONSE_SCHEMA_JSON
     } on GeminiProxyException catch (e) {
       _debugAi('⚠️ [AI] The configured model provider is unavailable.');
       return _textResponse(_friendlyGeminiErrorMessage(e));
-    } catch (_) {
-      _debugAi('⚠️ [AI] The assistant turn failed.');
+    } catch (error) {
+      // El motivo se DICE, aunque sea sólo al log de depuración: sin él, un
+      // turno que muere por llamadas rechazadas se ve idéntico a uno que murió
+      // por la red, y desde afuera los dos son «el asistente no respondió».
+      _debugAi('⚠️ [AI] The assistant turn failed: $error');
       return _textResponse(
         'No pude procesar esa solicitud ahora. Intenta de nuevo en unos segundos.',
       );

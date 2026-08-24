@@ -64,6 +64,10 @@ export interface AgentRunStore {
     modelRole: LogicalModelRole;
     threadId: string | null;
     maxOutputTokens: number;
+    /// El Asistente de compras recibe varias necesidades en una sola frase, y
+    /// cada línea cuesta sus propias lecturas. Medido: tres líneas gastaron las
+    /// ocho llamadas del tope sin llegar a armar el borrador.
+    multiLinePurchasing?: boolean;
   }, signal: AbortSignal): Promise<AgentRunLease>;
   heartbeat(lease: AgentRunLease, signal: AbortSignal): Promise<{ cancelRequested: boolean }>;
   recordProviderAttempt(input: {
@@ -131,7 +135,7 @@ export function createSupabaseAgentRunStore(
           p_model_role: input.modelRole,
           p_thread_id: input.threadId,
           p_turn_budget: 5,
-          p_tool_call_budget: 8,
+          p_tool_call_budget: input.multiLinePurchasing ? 18 : 8,
           p_max_output_tokens: input.maxOutputTokens,
           p_lease_owner: "ai-agent-gateway-v1",
           p_lease_ttl_seconds: LEASE_TTL_SECONDS,

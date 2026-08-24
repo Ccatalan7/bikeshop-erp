@@ -301,7 +301,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Más parecido'), findsOneWidget);
+      expect(find.text('Podría ser'), findsOneWidget);
       expect(find.textContaining('Tee Aluminio Wake'), findsOneWidget);
       expect(find.byKey(const Key('ocr-review-new-l1')), findsOneWidget);
       expect(

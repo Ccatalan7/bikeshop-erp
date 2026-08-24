@@ -3898,6 +3898,39 @@ class RequestMatchEvidence extends StatelessWidget {
 /// dependía del snapshot exacto y, sin él, decía «no fue posible verificar el
 /// stock interno» aunque el servidor sí hubiera respondido: se afirmaba una
 /// falla que no existía y se escondía la bodega que sí había.
+
+/// **Lo comprobado y lo que no, separados.**
+///
+/// De 128 cámaras del taller sólo 4 tienen ficha técnica, así que una lista
+/// ordenada por evidencia sigue leyéndose como un solo lote: la cámara que
+/// dice 29 en su nombre queda pegada a una de 26 y el operador tiene que leer
+/// el rótulo de cada fila para separarlas.
+///
+/// La banda no es un encabezado ni una sección nueva: es la misma superficie
+/// hundida que ya usa la cabecera del panel, con una sola frase que dice qué
+/// viene abajo. Dos grupos, un panel.
+class _StockGroupBand extends StatelessWidget {
+  const _StockGroupBand({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+      decoration: BoxDecoration(
+        color: tokens.sunken,
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: Text(
+        label,
+        style: PurchaseType.label.copyWith(color: tokens.inkFaint),
+      ),
+    );
+  }
+}
+
 class FamilyStockOptions extends StatelessWidget {
   const FamilyStockOptions({
     super.key,
@@ -3939,6 +3972,19 @@ class FamilyStockOptions extends StatelessWidget {
     }
   }
 
+  /// Una alternativa quedó comprobada cuando algún criterio se estableció
+  /// —por ficha o por el nombre curado— y ninguno se contradijo. `no_criteria`
+  /// también entra: sin criterios no hay nada que comprobar y esconderla sería
+  /// castigarla por una pregunta que nadie hizo.
+  static bool _isChecked(SupplyStockOption option) =>
+      option.matchState != 'unverified';
+
+  /// «Sin verificar contra los criterios · 121». El número va porque el
+  /// tamaño del grupo es la información: dice cuánto del catálogo está sin
+  /// fichar, que es la razón real de que estén ahí abajo.
+  static String _uncheckedBandLabel(List<SupplyStockOption> unchecked) =>
+      'SIN VERIFICAR CONTRA LOS CRITERIOS · ${unchecked.length}';
+
   static String _matchLabel(String matchState) {
     switch (matchState) {
       case 'strong':
@@ -3957,6 +4003,13 @@ class FamilyStockOptions extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = PurchaseTokens.of(context);
     final rejection = resolution.internalStockRejectionReason;
+    // El servidor ya las devuelve ordenadas por evidencia; acá sólo se parten
+    // en dos para que el corte se vea, sin reordenar nada dentro de cada grupo.
+    final checked = resolution.items.where(_isChecked).toList(growable: false);
+    final unchecked =
+        resolution.items.where((option) => !_isChecked(option)).toList(
+              growable: false,
+            );
     final header = <Widget>[
       Text(
         // La identidad de la superficie, no un encabezado de bloque: es el
@@ -4000,7 +4053,22 @@ class FamilyStockOptions extends StatelessWidget {
             ...header,
             const SizedBox(height: 12),
             if (compact)
-              for (final option in resolution.items) ...[
+              for (final option in <SupplyStockOption>[
+                ...checked,
+                ...unchecked,
+              ]) ...[
+                // En teléfono las cards ya tienen borde, así que el corte es
+                // el rótulo y no una banda más: dos bordes seguidos con una
+                // franja entremedio son tres líneas para una sola idea.
+                if (option == unchecked.firstOrNull && checked.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8, left: 2),
+                    child: Text(
+                      _uncheckedBandLabel(unchecked),
+                      style: PurchaseType.label.copyWith(color: tokens.inkFaint),
+                    ),
+                  ),
+                ],
                 PurchasePanel(
                   child: _FamilyStockCard(
                     option: option,
@@ -4021,7 +4089,18 @@ class FamilyStockOptions extends StatelessWidget {
                       left: 'ALTERNATIVA INTERNA',
                       right: 'DISPONIBLE',
                     ),
-                    for (final option in resolution.items)
+                    for (final option in checked)
+                      _FamilyStockRow(
+                        option: option,
+                        requested: resolution.quantity,
+                        busy: busy,
+                        onChoose: () => onChooseProduct(option),
+                      ),
+                    // La banda sólo existe cuando hay dos grupos que separar.
+                    // Con uno solo sería un rótulo sobre nada.
+                    if (checked.isNotEmpty && unchecked.isNotEmpty)
+                      _StockGroupBand(label: _uncheckedBandLabel(unchecked)),
+                    for (final option in unchecked)
                       _FamilyStockRow(
                         option: option,
                         requested: resolution.quantity,

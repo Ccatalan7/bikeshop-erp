@@ -3,7 +3,7 @@ name: Publish Android ERP Release
 run-name: >-
   Android ${{ inputs.publish_release == true && 'publish' || 'validation' }}
   · ${{ github.sha }}
-  · notes ${{ inputs.release_notes_candidate_sha256 || 'fallback' }}
+  · notes ${{ inputs.release_notes_candidate_sha256 || 'gemini' }}
   · from ${{ inputs.release_notes_from_commit || 'auto' }}
   · integrity ${{ inputs.integrity_run_id || 'self' }}
 
@@ -53,12 +53,12 @@ on:
         type: string
         default: ""
       release_notes_candidate_b64:
-        description: Optional bounded local Codex release-note candidate
+        description: Legacy compatibility field; standard releases leave it empty
         required: false
         type: string
         default: ""
       release_notes_candidate_sha256:
-        description: SHA-256 of the decoded Codex candidate envelope
+        description: Legacy compatibility field; standard releases leave it empty
         required: false
         type: string
         default: ""
@@ -268,58 +268,16 @@ jobs:
 
       - name: Validate and generate exact-range release notes
         env:
-          CODEX_CANDIDATE_B64: ${{ inputs.release_notes_candidate_b64 }}
-          CODEX_CANDIDATE_SHA256: ${{ inputs.release_notes_candidate_sha256 }}
           NOTES_BASE: ${{ steps.notes-base.outputs.commit }}
           GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}
           GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_RELEASE_NOTES_MODEL: ${{ vars.OPENAI_RELEASE_NOTES_MODEL }}
         run: |
           set -euo pipefail
 
-          candidate_transport_valid=true
-          if (( ${#CODEX_CANDIDATE_B64} > 16384 )); then
-            candidate_transport_valid=false
-          fi
-
-          if [[ -n "$CODEX_CANDIDATE_B64" && "$candidate_transport_valid" == true ]]; then
-            if [[ ! "$CODEX_CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-              candidate_transport_valid=false
-            fi
-          fi
-          if [[ -n "$CODEX_CANDIDATE_B64" && "$candidate_transport_valid" == true ]]; then
-            candidate_file="$RUNNER_TEMP/android-codex-release-candidate.json"
-            if ! printf '%s' "$CODEX_CANDIDATE_B64" |
-              base64 --decode > "$candidate_file"; then
-              candidate_transport_valid=false
-            fi
-            if [[ "$candidate_transport_valid" == true ]]; then
-              candidate_bytes="$(stat -c '%s' "$candidate_file")"
-              if (( candidate_bytes < 2 || candidate_bytes > 12288 )); then
-                candidate_transport_valid=false
-              fi
-            fi
-            if [[ "$candidate_transport_valid" == true ]]; then
-              candidate_sha="$(sha256sum "$candidate_file" | awk '{print $1}')"
-              if [[ "$candidate_sha" != "$CODEX_CANDIDATE_SHA256" ]]; then
-                candidate_transport_valid=false
-              fi
-            fi
-          elif [[ -n "$CODEX_CANDIDATE_SHA256" ]]; then
-            candidate_transport_valid=false
-          fi
-          if [[ "$candidate_transport_valid" != true ]]; then
-            CODEX_CANDIDATE_B64=''
-            rm -f "$RUNNER_TEMP/android-codex-release-candidate.json"
-            echo 'Local release-note candidate discarded: transport_validation.'
-          fi
-
-          CODEX_RELEASE_NOTES_CANDIDATE_B64="$CODEX_CANDIDATE_B64" \
-            node scripts/releases/generate_release_notes.mjs \
-              --from-commit "$NOTES_BASE" \
-              --to-commit "$GITHUB_SHA" \
-              --output "$RUNNER_TEMP/android-release-notes.json"
+          node scripts/releases/generate_release_notes.mjs \
+            --from-commit "$NOTES_BASE" \
+            --to-commit "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/android-release-notes.json"
 
           jq -e \
             --arg base "$NOTES_BASE" \
@@ -388,5 +346,4 @@ jobs:
         run: |
           rm -f \
             "$RUNNER_TEMP/android-release.jks" \
-            "$RUNNER_TEMP/android-codex-release-candidate.json" \
             "$RUNNER_TEMP/android-release-notes.json"

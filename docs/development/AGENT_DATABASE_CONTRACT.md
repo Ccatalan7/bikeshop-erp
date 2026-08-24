@@ -256,6 +256,47 @@ scripts/db/query.sh production --sql "
   where conrelid = 'public.employees'::regclass"
 ```
 
+## Un campo nuevo en una RPC del asistente rompe su herramienta
+
+**2026-08-24 — costo real: la herramienta de «a quién le compramos X» murió el
+día entero, y el operador leía un error transitorio que era permanente.**
+
+El Edge Function valida cada sobre con `hasExactKeys`: la fila que devuelve la
+RPC tiene que traer **exactamente** los campos declarados en la lista `fields`
+de `supabase/functions/_shared/ai_agent/tool_executor.ts`. Una clave de más **no
+se ignora** — bota cada fila, descarta el sobre completo y sale como
+`tool_source_unavailable`.
+
+`20260824530000_cost_with_or_without_freight.sql` agregó
+`averageBaseUnitCostNet` a `purchase_supplier_concentration_internal_v1`, el
+motor detrás de `assistant_rank_purchase_suppliers_v1`, y la lista del ejecutor
+no se tocó. Read-back: **7 de 7 llamadas correctas el 23-08, 6 de 6 caídas el
+24-08**, con la base respondiendo `status: success`. El modelo reintentaba hasta
+cuatro veces, quemaba medio presupuesto de herramientas y el turno moría en
+`agent_budget_exhausted`; en pantalla eso es «No pude procesar esa solicitud
+ahora. Intenta de nuevo en unos segundos», y reintentar no iba a funcionar
+nunca.
+
+La regla, porque es un despliegue en dos piezas y la base va primero:
+
+- Una migración que **agrega, renombra o quita** un campo de una RPC
+  `assistant_*` actualiza `fields` en la **misma tarea**. No es opcional ni
+  aditivo: el validador es exacto en los dos sentidos.
+- El read-back es diferencial, y se lee de la fuente, no del código:
+
+  ```sql
+  select jsonb_object_keys(
+    (public.assistant_rank_purchase_suppliers_v1('camaras 29', null, null, 5))
+      ->'items'->0);
+  ```
+
+  Comparado contra la lista `fields`, sobra o falta exactamente la clave
+  culpable.
+- Diagnóstico previo obligatorio: **llama la RPC directamente** fijando el JWT
+  en sólo lectura (ver `scripts/db/query.sh production --file` con
+  `set_config('request.jwt.claims', …)`). Si devuelve `status: success`, el
+  defecto vive **después** de la base y perseguir al modelo es tiempo perdido.
+
 ## `core_schema.sql` es una guía histórica incompleta, no una autoridad
 
 2026-08-05. Al planear un aviso en `Usuarios y roles` había que saber si el
@@ -375,6 +416,106 @@ zona y capturar `invalid_parameter_value`:
 llamada. Está APPLIED y su read-back de producción pasa completo. La lección de
 arriba sigue vigente; el defecto que la produjo, no.
 
+## Pendiente: `complete_run_v2` rechaza a veces la respuesta final (2026-08-23)
+
+4 corridas en toda la historia mueren con
+`assistant_unavailable_complete_run_v2_rpc_invalid_response`: el turno hizo todo
+—buscó, armó tarjetas, redactó— y el RPC de cierre lo rechaza. El operador lee
+«no pude procesar esa solicitud», después de pagarse el turno completo.
+
+Descartado con evidencia, para que la próxima vuelta no lo repita:
+
+- **No son las tarjetas.** `assistant_cards_valid_v1` acepta el conjunto exacto
+  que produce esa respuesta (probado con 1 a 5 tarjetas, con y sin opciones).
+- **No es el largo del texto.** El runtime corta en 16 KB y el RPC admite 64 KB.
+- **No es el tope de tarjetas.** Ambos lados cortan en 6.
+- **No es un `$` ni un símbolo raro** en el contenido.
+
+Queda por descartar: el cuerpo de atestación de `assistant_complete_run_v2`
+—valida claves exactas— y la verificación HMAC/replay cuando dos respuestas
+idénticas se cierran seguidas. Es intermitente (2 de 3 con la MISMA pregunta
+repetida), lo que apunta justo ahí.
+
+Para diagnosticarlo hace falta el mensaje real del RPC, que hoy se aplana a
+`rpc_invalid_response`: ver «Una función agrupada se prueba EJECUTÁNDOLA» para
+llamar el RPC con identidad en sólo lectura.
+
+**Mientras tanto, ya no cuesta la respuesta.** `completeWithoutLosingTheAnswer`
+reintenta el cierre una vez sin tarjetas: el texto ES la respuesta y las
+tarjetas son atajos para abrir pantallas. Un segundo rechazo sí es terminal,
+porque entonces el problema está en el contenido. Si al revisar los recibos
+aparece una corrida cerrada con cero tarjetas y texto largo, ahí está la prueba
+de que el conjunto de tarjetas era la causa — y con eso se cierra el
+diagnóstico.
+
+## Una función agrupada se prueba EJECUTÁNDOLA, no leyéndola (2026-08-23)
+
+`assistant_inspect_inventory_schema_v3` quedó con una subconsulta que
+referenciaba `definition.id` mientras el `GROUP BY` sólo agrupaba por
+`definition.key`. Postgres **acepta el `CREATE FUNCTION`** —el cuerpo de una
+`plpgsql` no se planifica hasta ejecutarse— y falla recién con el primer dato
+que llega a esa rama:
+
+```text
+ERROR:  subquery uses ungrouped column "definition.id" from outer query
+```
+
+Resultado: 28 llamadas fallidas contra 5 exitosas en un día, reportadas como
+`tool_source_unavailable`, en la herramienta que resuelve la categoría antes de
+buscar. Nadie lo vio porque la migración se aplicó verde.
+
+**Un read-back que sólo comprueba que la función existe no prueba nada.** Para
+cualquier función con `GROUP BY`, ventanas o subconsultas correlacionadas, el
+`--verify` tiene que ejecutar esa misma forma contra datos reales del tenant.
+
+Cómo llamar a una RPC del asistente para diagnosticar, en sólo lectura:
+
+```sql
+select set_config('request.jwt.claims',
+  json_build_object('sub','<uuid del usuario>','role','authenticated')::text, true);
+select set_config('role','authenticated', true);
+select public.assistant_<lo_que_sea>_v1('...', null);
+```
+
+Eso devuelve el error real en un segundo, en vez de tres rondas de hipótesis.
+
+### El tope del ejecutor y el de la consulta son el mismo tope
+
+La misma función limitaba el catálogo a 40 filas y **después** agregaba tres
+campos operativos fijos: 43 ítems contra un `maxItems` de 40, así que el sobre
+se rechazaba entero. Fallaba justo en las consultas amplias —«freno», «rueda»,
+«piñón»—, que son las comunes. Si una función agrega filas fuera de su `limit`,
+el reparto se calcula completo: 37 + 3, no 40 + 3.
+
+## Agregar un parámetro con default NO reemplaza la función: la duplica (2026-08-22)
+
+`create or replace function f(a, b, c, d default null)` sobre una `f(a, b, c)`
+existente **no reemplaza nada**. Postgres identifica una función por su lista de
+argumentos, así que quedan las dos, y desde ese instante toda llamada de tres
+argumentos falla con:
+
+```text
+ERROR:  function public.f(uuid, jsonb, boolean) is not unique
+HINT:  Could not choose a best candidate function.
+```
+
+No es un error de sintaxis ni aparece al aplicar la migración: aparece cuando
+alguien llama. El día que pasó, la migración se aplicó y se verificó verde —el
+read-back llamaba con cuatro argumentos—, y las 38 herramientas del asistente
+que llamaban con tres murieron calladas. En la app se leía «La fuente autorizada
+respondió como no disponible», que es honesto sobre el síntoma y no dice nada de
+la causa; el diagnóstico salió de `assistant_tool_receipts`, no del mensaje.
+
+Al cambiar la firma de una función existente, en la MISMA migración:
+
+- `drop function if exists` la firma anterior, con sus tipos explícitos; o
+- mantén el mismo número de argumentos.
+
+Y el read-back tiene que ejercitar la firma **vieja**, no sólo la nueva: si el
+llamador real pasa tres argumentos, el `--verify` que sólo prueba cuatro no
+cubre nada. Ver también «Un read-back que no falla antes de aplicar no prueba
+nada».
+
 ## Un read-back que no falla antes de aplicar no prueba nada (2026-08-19)
 
 `deploy_migration.sh` corre las verificaciones **después** de aplicar, así que
@@ -486,3 +627,21 @@ Ejemplo completo: `.tmp/db/payment-level-sales-tax-readback.sql`.
 migración que las asuma falla a medio aplicar. Antes de reemplazar una función,
 compruébalo con `to_regclass`/`to_regprocedure` contra producción y haz esa
 sección condicional.
+
+## Una vista `_metrics_` puede tener una fila por producto, no por par (2026-08-23)
+
+`purchase_candidate_metrics_v1` parece el sustrato natural para «a quién le
+compramos esto»: trae `supplier_id`, `supplier_name`, `purchase_count`,
+`purchased_units` y costo aterrizado. **Tiene una fila por producto**, no una
+por producto×proveedor —medido: 267 filas, 267 productos distintos, 12
+proveedores—, así que agregar por proveedor ahí le atribuye TODA la historia de
+un producto a su último proveedor.
+
+El hecho es la línea: `purchase_line_landed_cost_observations_v1`, que además
+prorratea el flete (`landed_unit_cost_net`). Comparar por precio unitario base
+premia al importador barato contra el distribuidor local por una diferencia que
+el flete se come.
+
+Antes de agregar por una dimensión, comprueba la granularidad real con
+`count(*)` contra `count(distinct <dimensión>)`. El nombre de la vista no la
+declara.

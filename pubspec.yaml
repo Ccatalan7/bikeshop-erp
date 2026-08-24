@@ -148,6 +148,7 @@ flutter:
     # de Chrome sigue siendo dueña de los originales en tools/. El test
     # aliexpress_asset_mirror_test.dart exige que las copias no deriven.
     - assets/browser/aliexpress_invoice_content.js
+    - assets/browser/supplier_portal_probe.js
     - assets/browser/aliexpress_invoice.css
     - assets/browser/aliexpress_invoice.js
 

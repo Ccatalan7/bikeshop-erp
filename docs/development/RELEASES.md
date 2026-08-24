@@ -152,7 +152,7 @@ cualquier estimación anterior.
 Cómo se corre el camino rápido:
 
 ```bash
-bash scripts/releases/prepare_erp_update.sh --notes-candidate <notas.json>
+bash scripts/releases/prepare_erp_update.sh
 node scripts/releases/qualify_erp_update.mjs --prepared-state auto --dispatch-only
 # y enseguida, sin esperar:
 bash scripts/publish_macos_update.sh --prepared-state auto &
@@ -165,19 +165,18 @@ roto. Ya era frágil; correr cuatro procesos a la vez sólo lo hizo visible. Se
 le dio holgura sin cambiar lo que afirma. Un test que mide tiempo real necesita
 márgenes que aguanten un corredor ocupado.
 
-## El recuadro de novedades (2026-08-06)
+## El recuadro de novedades (corregido el 2026-08-24)
 
-`prepare_erp_update.sh` genera la nota de usuario con el **Codex local**. Esa
-cuenta lleva tiempo sin cuota: el generador responde «the Codex account hit its
-usage limit», el pipeline sigue adelante y la actualización sale con el texto
-determinista («Esta actualización incluye ajustes en …»). Ése es el motivo real
-—no un bug del recuadro— de que las publicaciones nunca hayan llevado una
-descripción escrita.
+La preparación sólo fija el rango exacto de commits. La nota de usuario se
+genera dentro del job protegido con **Gemini Flash** y se valida contra ese
+rango antes de firmar o publicar el manifiesto. El camino estándar no llama a
+Codex local, no acepta `--notes-candidate` y no entrega una clave de OpenAI al
+CI. `GEMINI_RELEASE_NOTES_MODEL` queda fijado en el environment `Production` a
+`gemini-3.1-flash-lite`; si Google retira ese modelo, el generador sólo puede
+elegir otro Flash/Flash-Lite de su allowlist después de consultar los modelos
+disponibles.
 
-La salida está en el propio pipeline: **`--notes-candidate <archivo.json>`**.
-Quien conduce la publicación escribe la nota y el gate la valida; el productor
-del texto es intercambiable, lo que garantiza que sea cierta es la validación.
-Cuatro reglas que cuestan un intento fallido cada una si se ignoran:
+La validación sigue siendo la autoridad sobre el texto generado:
 
 1. Forma exacta: `{title ≤80, summary ≤280, modules[1..5]}`, y cada módulo
    `{id, label, items[1..3] ≤160, evidence_ids[1..12]}`. `id` y `label` salen
@@ -189,7 +188,6 @@ Cuatro reglas que cuestan un intento fallido cada una si se ignoran:
    generados ni sensibles); por ejemplo un `supabase/tests/*.sql` queda fuera.
 4. Los `change_NNN` se leen del inventario del rango, no se inventan:
    `collectReleaseInventory(...)` + `createCodexReleaseContext(inv).changes`.
-
 5. **El gate mide qué tan concreta es la nota, no sólo su forma.** Rechaza con
    «AI release notes are too generic» si los ítems no nombran algo observable.
    Cada ítem se valida contra dos vocabularios de `generate_release_notes.mjs`:
@@ -201,37 +199,12 @@ Cuatro reglas que cuestan un intento fallido cada una si se ignoran:
    «se mejoró el flujo» nunca pasa; «Ahora el menú del móvil incorpora un botón
    para abrir otro espacio de trabajo» sí, y además se entiende.
 
-Antes de gastar una publicación, valida el candidato en seco con
-`acceptCodexReleaseEnvelope(envelope, {inventory})`: devuelve `source: "ai"`
-cuando pasa, y el motivo exacto cuando no.
-
-### La segunda causa de que no salgan novedades (2026-08-18)
-
-La cuota de Codex no es el único punto por el que se cae el recuadro. Antes de
-llamar al generador, `prepare_erp_update.sh` corre **gitleaks sobre el rango ya
-commiteado**, y si ese escaneo encuentra algo se salta las notas enteras:
-
-```text
-Local Codex notes skipped: the committed range did not pass the private secret scan.
-```
-
-En la publicación de `ee0692fe` lo que encontró fue un **falso positivo**: la
-regla `generic-api-key` muerde cualquier asignación de 16+ caracteres cuyo campo
-se llame algo con `key`, y un pgTAP lleno de `where event.operation_key = '…'`
-la dispara sin que haya credencial alguna. El costo se paga dos veces: la
-actualización sale con el texto determinista, y el workflow `Secret Scan` del
-push queda rojo en la rama. Ninguno de los dos publicadores depende de ese
-workflow, así que la publicación sigue — el rojo es ruido, no un bloqueo, y
-confundirlo con un bloqueo cuesta la ronda.
-
-Cómo se lee sin exponer nada: el reporte JSON de gitleaks trae `RuleID`, `File`
-y `StartLine`, que bastan para juzgar, mientras `--redact=100` mantiene el valor
-fuera de la salida. Un identificador de prueba se reconoce por su forma
-(`a9-aaaaaa-aaaaaa`), y esa forma se puede enseñar sin enseñar el valor.
-
-La reparación es una excepción en `.gitleaks.toml` acotada a `supabase/tests/`,
-no un `.gitleaksignore` por hallazgo: el hallazgo cambia de huella en cuanto se
-edita el test y vuelve a aparecer.
+El generador siempre materializa primero una nota determinista válida, por lo
+que una caída de Google no corrompe el artefacto. Pero cuando la publicación
+requiere texto escrito por IA no basta con que el workflow quede verde: en los
+dos logs se debe leer `Release notes source: ai; Gemini model: ...`. Un log con
+`source: fallback` obliga a diagnosticar y repetir sólo el publicador afectado
+sobre el mismo SHA calificado; no se declara cerrada esa publicación.
 
 Firebase rollback uses the previous Hosting release. Windows rollback uses the previous signed/checksummed artifact. macOS internal rollback restores the previous verified bundle retained under the per-user updater support directory. Database rollback follows the database backup/restore runbook and must not improvise destructive reverse SQL.
 

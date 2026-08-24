@@ -146,6 +146,13 @@ const _briefing = AIAssistantResponse(
 );
 
 const _approvalId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+/// **Una expiración absoluta se pudre sola.** Esta fixture vencía el
+/// 2026-08-12: el día que el calendario lo pasó, la tarjeta empezó a decir
+/// «Propuesta vencida» y la prueba falló sin que nadie tocara el código.
+/// Lo que se afirma es la cuenta regresiva, así que la fecha es relativa.
+final DateTime _approvalExpiry =
+    DateTime.now().toUtc().add(const Duration(hours: 2, minutes: 1));
 const _actionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 final _taskPreviewResponse = AIAssistantResponse(
@@ -162,7 +169,7 @@ final _taskPreviewResponse = AIAssistantResponse(
       approvalRef: AIAssistantApprovalRef(
         id: _approvalId,
         action: AIAssistantApprovalAction.createTask,
-        expiresAt: DateTime.utc(2026, 8, 12, 3, 45),
+        expiresAt: _approvalExpiry,
         state: AIAssistantApprovalState.pending,
       ),
     ),
@@ -207,7 +214,7 @@ final _diagnosisPreviewResponse = AIAssistantResponse(
       approvalRef: AIAssistantApprovalRef(
         id: _approvalId,
         action: AIAssistantApprovalAction.updateDiagnosis,
-        expiresAt: DateTime.utc(2026, 8, 12, 3, 45),
+        expiresAt: _approvalExpiry,
         state: AIAssistantApprovalState.pending,
       ),
     ),
@@ -804,7 +811,9 @@ void main() {
     expect(find.textContaining('PG-00484'), findsOneWidget);
     expect(find.text('Mañana'), findsOneWidget);
     expect(find.text('Alta'), findsOneWidget);
-    expect(find.text('Vence 2026-08-12 · 03:45 UTC'), findsOneWidget);
+    // La cuenta regresiva reemplazó al sello UTC: «03:45 UTC» obligaba al
+    // operador a convertir la hora para saber si alcanzaba a confirmar.
+    expect(find.text('Confirma en 2 horas'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('ai-approval-$_approvalId-approve')),
       findsOneWidget,

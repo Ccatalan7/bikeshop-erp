@@ -12,6 +12,8 @@
 /// un texto de la interfaz.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -432,6 +434,160 @@ class PurchasePrimaryButton extends StatelessWidget {
 /// En el prototipo «Ejemplos» es `font:600 11px` del color de acción y nada
 /// más. Envolverlo en un `TextButton` con su relleno y su altura de 40 lo
 /// convierte en otro objeto y desequilibra la fila.
+/// **Con flete o sin flete.**
+///
+/// Lo que se negocia con el proveedor es la mercadería: el flete es un costo
+/// nuestro y meterlo en el precio que se le compara —y en el que se le propone
+/// en un pedido— infla la cifra con algo que él no cobra. Por eso el estado
+/// normal es `sinFlete`.
+///
+/// El aterrizado sigue a un toque, porque para decidir a quién comprarle el
+/// costo real puesto en bodega sí es el que manda.
+enum PurchaseCostBasis {
+  sinFlete,
+  conFlete;
+
+  bool get includesFreight => this == PurchaseCostBasis.conFlete;
+
+  /// Lo que va bajo el número, en la fila.
+  String get rowCaption => includesFreight ? 'c/u con flete' : 'c/u neto';
+
+  String get label => includesFreight ? 'Con flete' : 'Sin flete';
+
+  /// La salvedad al pie del bloque. Cambia con el eje: publicar «costos con
+  /// flete prorrateado» mientras se muestra el neto sería describir otra tabla.
+  String get footnote => includesFreight
+      ? 'Costos con flete prorrateado.'
+      : 'Costos de mercadería, sin el flete que pagamos aparte.';
+}
+
+/// El interruptor del eje de costo.
+///
+/// Dos palabras y sin icono: con icono, `SegmentedButton` no se estrecha —ni
+/// con densidad compacta ni reduciendo el padding— y se come el ancho que la
+/// cabecera necesita para su recuento.
+class PurchaseCostBasisToggle extends StatelessWidget {
+  const PurchaseCostBasisToggle({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final PurchaseCostBasis value;
+  final ValueChanged<PurchaseCostBasis> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'COSTO',
+          style: PurchaseType.label.copyWith(color: tokens.inkFaint),
+        ),
+        const SizedBox(width: 7),
+        Container(
+          decoration: BoxDecoration(
+            color: tokens.sunken,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: tokens.hair),
+          ),
+          padding: const EdgeInsets.all(2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final option in PurchaseCostBasis.values)
+                _Option(
+                  key: ValueKey('cost-basis-${option.name}'),
+                  label: option.label,
+                  selected: option == value,
+                  onTap: () => onChanged(option),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Option extends StatelessWidget {
+  const _Option({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Mostrar el costo unitario ${label.toLowerCase()}',
+      excludeSemantics: true,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: selected ? null : onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: selected ? tokens.surface : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: selected ? tokens.borderStrong : Colors.transparent,
+              ),
+            ),
+            child: Text(
+              label,
+              style: PurchaseType.meta.copyWith(
+                color: selected ? tokens.ink : tokens.inkMuted,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// **Cuánto ocupa una orden rotulada se mide; no se declara.**
+///
+/// Depende de la familia tipográfica y de la escala de texto del sistema: un
+/// ancho «medido a ojo» en un Mac desborda en otro, y en la fuente de las
+/// pruebas de widget desbordaba siempre. Se pasan **todos** los rótulos que el
+/// control puede llegar a mostrar —«Confirmando…», «Ocultar»— para que la
+/// columna no se corra cuando una fila cambia de estado.
+double purchaseInlineActionWidth(BuildContext context, List<String> labels) {
+  // El control hereda del `DefaultTextStyle` del host: medir el estilo suelto
+  // usa otra familia que la que se dibuja y se queda corto por unos píxeles,
+  // que es exactamente un desborde.
+  final style = DefaultTextStyle.of(context).style.merge(
+        PurchaseType.inlineAction,
+      );
+  final scaler = MediaQuery.textScalerOf(context);
+  var widest = 0.0;
+  for (final label in labels) {
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    )..layout();
+    widest = math.max(widest, painter.width.ceilToDouble());
+  }
+  // Los 4 px son el padding horizontal del propio control.
+  return widest + 4;
+}
+
 class PurchaseInlineAction extends StatelessWidget {
   const PurchaseInlineAction({
     super.key,

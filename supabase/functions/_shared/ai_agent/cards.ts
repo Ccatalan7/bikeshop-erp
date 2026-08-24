@@ -57,11 +57,13 @@ export function cardsForToolResult(
   }
   if (result.status !== "success" && result.status !== "partial") return [];
   if (toolName === "list_attention_items") return attentionCards(result.items);
-  if (toolName === "find_inventory_risks") return inventoryRiskCards(result.items);
+  if (toolName === "find_inventory_risks") return inventoryRiskCards(result);
   if (toolName === "analyze_cash_and_receivables") {
     return receivableCards(result.items.filter((item) => item.kind === "receivable").slice(0, 3));
   }
   if (toolName === "analyze_sales_period") return salesPeriodCards(result.items);
+  if (toolName === "rank_purchase_suppliers") return supplierHistoryCards(result.items);
+  if (toolName === "rank_basket_suppliers") return basketSupplierCards(result.items);
   if (toolName === "prepare_customer_contact") {
     return result.items.slice(0, 3).map((item) => {
       const open = item.windowOpen === true;
@@ -95,7 +97,7 @@ export function cardsForToolResult(
   const items = result.items.slice(0, 3);
   switch (toolName) {
     case "search_workshop_jobs":
-      return items.map((item) =>
+      return items.map((item, index) =>
         card({
           kind: "job",
           eyebrow: "Trabajo",
@@ -106,19 +108,60 @@ export function cardsForToolResult(
           ]),
           description: optionalText(item, "clientRequest"),
           destination: "workshop_jobs",
-          chips: compact([optionalText(item, "status"), optionalText(item, "priority")]),
+          chips: compact([
+            workshopStatusLabel(optionalText(item, "status")),
+            workshopPriorityLabel(optionalText(item, "priority")),
+          ]),
           entityRef: entityRef(item, "workshopJob"),
+          // Sobre el primer trabajo cuelgan los dos pasos que el taller da de
+          // verdad después de mirar la lista: avisarle al cliente y saber qué
+          // falta para cerrar. En cada fila serían un muro de botones.
+          ...(index === 0
+            ? {
+              optionKind: "follow_up",
+              options: [
+                {
+                  id: "workshop_blockers",
+                  label: "¿Qué falta para cerrarlos?",
+                  description: "Repuestos, aprobaciones y trabajos en pausa.",
+                },
+                {
+                  id: "workshop_notify_ready",
+                  label: "Avisar al cliente del primero",
+                  description: "Prepara el mensaje, sin enviarlo.",
+                },
+              ] as readonly AgentCardOption[],
+            }
+            : {}),
         })
       );
     case "search_tasks":
-      return items.map((item) =>
+      return items.map((item, index) =>
         card({
           kind: "task",
           eyebrow: "Tarea",
           title: text(item, "title", "Tarea"),
-          subtitle: join([optionalText(item, "assigneeName"), optionalText(item, "linkedContext")]),
+          subtitle: join([
+            optionalText(item, "assigneeName"),
+            optionalText(item, "linkedContext"),
+          ]),
           destination: "tasks",
-          chips: compact([optionalText(item, "status"), optionalText(item, "priority")]),
+          chips: compact([
+            taskStatusLabel(optionalText(item, "status")),
+            taskPriorityChip(optionalText(item, "priority")),
+          ]),
+          ...(index === 0
+            ? {
+              optionKind: "follow_up",
+              options: [
+                {
+                  id: "tasks_overdue_first",
+                  label: "¿Cuáles están atrasadas?",
+                  description: "Ordena por fecha de vencimiento.",
+                },
+              ] as readonly AgentCardOption[],
+            }
+            : {}),
         })
       );
     case "prepare_task":
@@ -195,20 +238,60 @@ function inventorySearchCards(
   }
   const availability = argumentsValue.availability as AgentInventoryAvailabilityFilter;
   const resultCount = result.resultCount;
+  // «10+ resultados» es un número sin referente: no dice de cuántos son diez.
+  // Y la lista que se abre son exactamente éstos, así que se nombran como lo
+  // que son.
+  //
+  // **El total va en el título, no en `listRef`** (2026-08-24). El decodificador
+  // del cliente exige claves EXACTAS en `listRef`, así que una clave nueva ahí
+  // haría que las apps ya publicadas rechacen toda tarjeta de inventario. El
+  // título es texto libre acotado a 160 bytes y llega igual a la pantalla.
+  //
+  // Sin el total, «Los primeros 10» de una consulta que calza con 24 esconde
+  // 14 productos sin decirlo: medido con «26x2.1», donde dos de los ocultos
+  // tenían stock.
+  // El total sale de `matchedCount`, que viaja en cada fila y cuenta el conjunto
+  // filtrado completo. **No de `totalMatches` del sobre**, que hoy devuelve el
+  // tamaño de la página: medido el 2026-08-24 sobre «26x2.1», el sobre decía
+  // `hasMore: true` y `totalMatches: 10` —contradictorio consigo mismo— mientras
+  // `matchedCount` decía 24, que es la verdad.
+  const firstMatchedCount = result.items[0]?.matchedCount;
+  const totalMatches = typeof firstMatchedCount === "number" &&
+      Number.isSafeInteger(firstMatchedCount) && firstMatchedCount > resultCount
+    ? firstMatchedCount
+    : null;
   const title = resultCount === 0
     ? "Sin resultados"
-    : `${resultCount}${result.hasMore ? "+" : ""} ${
-      resultCount === 1 ? "resultado" : "resultados"
-    }`;
+    : result.hasMore
+    ? (totalMatches === null
+      ? `Los primeros ${resultCount}`
+      : `Los primeros ${resultCount} de ${totalMatches}`)
+    : `${resultCount} ${resultCount === 1 ? "resultado" : "resultados"}`;
   const identityQuery = typeof argumentsValue.query === "string"
     ? argumentsValue.query.trim()
     : null;
-  const filterLabel = [category, identityQuery]
-    .filter((value): value is string => Boolean(value))
-    .join(" · ") || "Inventario";
-  // For a truncated result the client still needs one useful local search
-  // string. Prefer the explicit identity query; complete structured results
-  // navigate by exact IDs and therefore never place this text in the field.
+  const spokenSubject = spokenListSubject(identityQuery, category);
+  // El subtítulo puede mostrar las dos —«Piñones · Shimano» dice más que
+  // cualquiera sola—, pero no repite la que no agrega: con «camara 29» dentro
+  // de «Cámaras» la segunda sobra. La frase final, en cambio, nombra UNA cosa;
+  // por eso usa `spokenSubject` y no esto.
+  const identityAddsMeaning = Boolean(identityQuery) &&
+    spokenSubject === identityQuery;
+  const filterLabel = [
+    category,
+    identityAddsMeaning ? identityQuery : undefined,
+  ].filter((value): value is string => Boolean(value)).join(" · ") ||
+    "Inventario";
+  // Dos textos porque son dos cosas. `query` es el respaldo para el buscador
+  // local y `spokenSubject` es cómo se le nombra al operador lo que está
+  // viendo; ahí manda la categoría resuelta cuando la hay, porque rotular la
+  // lista con lo que él tipeó esconde un malentendido.
+  //
+  // **`query` ya no es el camino cuando el resultado se truncó.** Se creía que
+  // «con el resultado truncado la frase es lo único que reencuentra esas
+  // filas», y era falso: la frase sólo funciona a través de la traducción de
+  // ficha que hace el servidor, y el buscador local compara texto literal.
+  // Queda como respaldo para un cliente viejo que no lea `entityIds`.
   const navigationQuery = identityQuery ?? category ?? "Inventario";
   return [card({
     kind: "inventory",
@@ -227,10 +310,18 @@ function inventorySearchCards(
     listRef: Object.freeze({
       kind: "inventory",
       query: navigationQuery,
+      spokenSubject,
       availability,
       resultCount,
       hasMore: result.hasMore,
-      entityIds: result.hasMore ? null : Object.freeze(entityIds),
+      // **Las ids viajan siempre, truncado o no.** Mandarlas en null cuando
+      // había más resultados dejaba al cliente buscando la frase como texto, y
+      // eso no encuentra nada: mientras más acertaba la búsqueda, más vacía
+      // salía la lista. «cámaras 26 con válvula VA de 48mm» calzaba con 15
+      // productos de la ficha y abría cero. Son las que se pudieron mostrar,
+      // no la selección completa: `hasMore` lo dice y el título las nombra
+      // «los primeros N».
+      entityIds: Object.freeze(entityIds),
       autoOpen: argumentsValue.presentation === "open_list" ||
         argumentsValue.presentation === "open_list_with_analysis",
     }),
@@ -392,7 +483,7 @@ export function autoOpenListAnswer(
   const listRef = cards[0].listRef;
   if (!listRef?.autoOpen || listRef.kind !== "inventory") return undefined;
   const filter = cards[0].chips.join(" · ") || inventoryAvailabilityLabel(listRef.availability);
-  const subject = listRef.query;
+  const subject = listRef.spokenSubject;
   if (listRef.resultCount === 0) {
     return supportsResultLists
       ? `No encontré resultados para “${subject}” con el filtro “${filter}”. Abrí Inventario para que puedas revisarlo o ajustarlo.`
@@ -408,11 +499,32 @@ export function autoOpenListAnswer(
 }
 
 /** Keeps rolling client updates compatible with the strict v1 card decoder. */
-export function cardsForClient(
+/// `spokenSubject` es del servidor y no viaja.
+///
+/// Sirve para redactar la frase final, que el servidor arma antes de proyectar.
+/// El cliente no lo usa para nada, y su decodificador exige claves EXACTAS en
+/// `listRef`: mandarlo haría que las apps ya instaladas —macOS 1.0.3 y Android
+/// 1.0.3+45, publicadas el 2026-08-22— rechazaran toda tarjeta de lista de
+/// inventario. Un campo interno se queda adentro.
+function withoutServerOnlyListFields(
   cards: readonly AgentActionCard[],
+): readonly AgentActionCard[] {
+  if (!cards.some((item) => item.listRef)) return cards;
+  return Object.freeze(cards.map((item) => {
+    if (!item.listRef) return item;
+    const { spokenSubject: _serverOnly, ...wire } = item.listRef;
+    return Object.freeze({ ...item, listRef: Object.freeze(wire) }) as AgentActionCard;
+  }));
+}
+
+export function cardsForClient(
+  rawCards: readonly AgentActionCard[],
   supportsResultLists: boolean,
   supportsStructuredClarifications = false,
 ): readonly AgentActionCard[] {
+  // El embudo único hacia el cliente: aplicarlo acá cubre los diez lugares que
+  // proyectan tarjetas, en vez de diez parches que se desincronizan.
+  const cards = withoutServerOnlyListFields(dropSearchScaffolding(rawCards));
   if (
     (supportsResultLists || !cards.some((item) => item.listRef)) &&
     (supportsStructuredClarifications ||
@@ -442,6 +554,36 @@ export function cardsForClient(
   }));
 }
 
+/// Cómo se le nombra al operador la lista que está viendo.
+///
+/// Manda su propia frase, porque ahí vive la identidad: «Shimano» no es ruido
+/// y la categoría «Piñones» no lo dice. La excepción es cuando la frase no
+/// agrega nada sobre la categoría resuelta —«camara 29» dentro de «Cámaras»—:
+/// repetirla rotula la lista con lo que él tipeó en vez de con lo que el
+/// asistente entendió, y un malentendido se esconde justo ahí.
+function spokenListSubject(
+  identityQuery: string | null,
+  category: string | null | undefined,
+): string {
+  if (!identityQuery) return category ?? "Inventario";
+  if (!category) return identityQuery;
+  const normalizada = plainWords(category);
+  const cubierta = plainWords(identityQuery)
+    .split(" ")
+    .filter((token) => /[a-z]/.test(token))
+    .every((token) => normalizada.includes(token) || token.length < 3);
+  return cubierta ? category : identityQuery;
+}
+
+function plainWords(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function inventoryAvailabilityLabel(value: AgentInventoryAvailabilityFilter): string {
   switch (value) {
     case "any":
@@ -455,23 +597,71 @@ function inventoryAvailabilityLabel(value: AgentInventoryAvailabilityFilter): st
   }
 }
 
-function inventoryRiskCards(items: readonly JsonObject[]): readonly AgentActionCard[] {
+function inventoryRiskCards(
+  result: AgentToolResultEnvelope,
+): readonly AgentActionCard[] {
+  const items = result.items;
   if (items.length === 0) return [];
   const outOfStock = items.filter((item) => item.risk === "out_of_stock").length;
   const lowStock = items.filter((item) => item.risk === "low_stock").length;
+  // El total, no la página. La tarjeta decía «10 productos detectados» cuando
+  // el conjunto real eran 1.016: exacto sobre lo mostrado y falso como
+  // resumen, que es justo para lo que sirve un subtítulo.
+  const total = Math.max(result.totalMatches, items.length);
+  const subtitle = total > items.length
+    ? `${items.length} de ${total.toLocaleString("es-CL")} productos en riesgo`
+    : `${total} ${total === 1 ? "producto en riesgo" : "productos en riesgo"}`;
+  // La demanda es lo que convierte la lista en una decisión: sin ella el
+  // operador no sabe cuáles de los 1.016 le duelen.
+  const withDemand = items.filter((item) =>
+    typeof item.soldRecently === "number" && item.soldRecently > 0
+  ).length;
+  const supplierNames = [
+    ...new Set(
+      items
+        .map((item) => typeof item.supplierName === "string" ? item.supplierName : "")
+        .filter((name) => name.length > 0),
+    ),
+  ];
   return [card({
     kind: "inventory",
     eyebrow: "Inventario",
-    title: "Revisar riesgos de inventario",
-    subtitle: `${items.length} ${
-      items.length === 1 ? "producto detectado" : "productos detectados"
-    }`,
-    description: "Abre el inventario para revisar existencias y mínimos configurados.",
+    title: "Reponer lo que se está acabando",
+    subtitle,
+    description: total > items.length
+      ? "Se muestran primero los que más se movieron en los últimos 90 días."
+      : "Abre el inventario para revisar existencias y mínimos configurados.",
     destination: "inventory_products",
     chips: compact([
       outOfStock ? `${outOfStock} agotado${outOfStock === 1 ? "" : "s"}` : undefined,
       lowStock ? `${lowStock} con stock bajo` : undefined,
+      withDemand ? `${withDemand} con venta reciente` : undefined,
     ]),
+    // El paso siguiente vive donde termina la respuesta. El `id` viene de un
+    // catálogo cerrado que el cliente conoce: el servidor elige CUÁL
+    // continuación ofrecer, nunca redacta el texto que se enviará como
+    // mensaje del operador.
+    optionKind: "follow_up",
+    options: ([
+      supplierNames.length > 0
+        ? {
+          id: "restock_by_supplier",
+          label: "Agrupar el pedido por proveedor",
+          description: supplierNames.length === 1
+            ? `Ordena qué pedirle a ${supplierNames[0]}.`
+            : `Ordena qué pedirle a ${supplierNames.length} proveedores.`,
+        }
+        : undefined,
+      withDemand > 0
+        ? {
+          id: "restock_only_moving",
+          label: "Sólo lo que se vendió",
+          description: "Deja fuera el catálogo que no rotó en 90 días.",
+        }
+        : undefined,
+    ] as readonly (AgentCardOption | undefined)[]).filter(
+      (option): option is AgentCardOption => option !== undefined,
+    ),
   })];
 }
 
@@ -488,9 +678,9 @@ function expenseCards(items: readonly JsonObject[]): readonly AgentActionCard[] 
       ]),
       destination: "expenses",
       chips: compact([
-        optionalText(item, "postingStatus"),
-        optionalText(item, "paymentStatus"),
-        optionalText(item, "approvalStatus"),
+        expenseStatusLabel(optionalText(item, "postingStatus")),
+        expenseStatusLabel(optionalText(item, "paymentStatus")),
+        approvalStatusLabel(optionalText(item, "approvalStatus")),
       ]),
       entityRef: entityRef(item, "expense"),
     })
@@ -498,7 +688,7 @@ function expenseCards(items: readonly JsonObject[]): readonly AgentActionCard[] 
 }
 
 function receivableCards(items: readonly JsonObject[]): readonly AgentActionCard[] {
-  return items.map((item) =>
+  return items.map((item, index) =>
     card({
       kind: "sales_invoice",
       eyebrow: "Cuenta por cobrar",
@@ -506,8 +696,27 @@ function receivableCards(items: readonly JsonObject[]): readonly AgentActionCard
       subtitle: optionalText(item, "dueDate"),
       description: money(item.balance, "Saldo"),
       destination: "sales_invoices",
-      chips: compact([optionalText(item, "timing")]),
+      chips: compact([receivableTimingLabel(optionalText(item, "timing"))]),
       entityRef: entityRef(item, "salesInvoice"),
+      // El paso siguiente sólo cuelga de la primera: repetir las mismas dos
+      // opciones en cada factura convierte la respuesta en un muro de botones.
+      ...(index === 0
+        ? {
+          optionKind: "follow_up",
+          options: [
+            {
+              id: "collections_priority",
+              label: "¿A quién le cobro primero?",
+              description: "Ordena lo vencido por monto y antigüedad.",
+            },
+            {
+              id: "collections_contact",
+              label: "Contactar al que más debe",
+              description: "Prepara el mensaje, sin enviarlo.",
+            },
+          ] as readonly AgentCardOption[],
+        }
+        : {}),
     })
   );
 }
@@ -520,13 +729,17 @@ function conversationCards(items: readonly JsonObject[]): readonly AgentActionCa
       title: channelTitle(item.channel),
       subtitle: join([
         optionalText(item, "contextLabel"),
-        optionalText(item, "contextType"),
-        optionalText(item, "lastMessageAt"),
+        counterpartyLabel(optionalText(item, "contextType")),
+        // Una marca ISO completa no es una fecha para leer.
+        dueDateLabel(optionalText(item, "lastMessageAt"))?.replace(
+          "Vence ",
+          "Último mensaje ",
+        ),
       ]),
       description: item.needsReply === true ? "Requiere respuesta" : undefined,
       destination: "conversations",
       chips: compact([
-        optionalText(item, "status"),
+        conversationStatusLabel(optionalText(item, "status")),
         typeof item.unreadCount === "number" && item.unreadCount > 0
           ? `${item.unreadCount} sin leer`
           : undefined,
@@ -551,6 +764,24 @@ function channelTitle(value: unknown): string {
     default:
       return "Conversación";
   }
+}
+
+/// Cuando el turno terminó proponiendo una acción, las listas de búsqueda que
+/// hicieron falta para llegar ahí son andamiaje, no respuesta.
+///
+/// Al pedir «agrega una revisión de frenos al trabajo PG-00521» el asistente
+/// buscó tres veces en el catálogo hasta dar con «Regulación de frenos», y esas
+/// tres búsquedas aparecían como tarjetas —«Sin resultados», «10+ resultados»,
+/// «10+ resultados»— empujando la propuesta real fuera de la vista. El operador
+/// no pidió buscar: pidió agregar.
+function dropSearchScaffolding(
+  cards: readonly AgentActionCard[],
+): readonly AgentActionCard[] {
+  if (!cards.some((item) => item.approvalRef)) return cards;
+  const limpio = cards.filter((item) => !item.listRef || item.approvalRef);
+  // Si al sacar el andamiaje no queda nada más que la propuesta, igual está
+  // bien: la propuesta ES la respuesta.
+  return limpio.length > 0 ? Object.freeze(limpio) : cards;
 }
 
 export function mergeCards(
@@ -671,6 +902,137 @@ function attentionCards(items: readonly JsonObject[]): readonly AgentActionCard[
   ];
 }
 
+/// «A quién le compramos esto». La tarjeta responde con la participación del
+/// gasto y la evidencia que la sostiene, y abre la ficha del proveedor —desde
+/// ahí el operador entra a su sitio con la sesión que el ERP ya guarda—.
+///
+/// El porcentaje nunca viaja solo: un 100% sobre tres líneas y un 57% sobre
+/// diecisiete son conclusiones distintas, y quien lee la tarjeta tiene que
+/// poder distinguirlas sin abrir nada.
+function supplierHistoryCards(items: readonly JsonObject[]): readonly AgentActionCard[] {
+  return items.slice(0, 3).map((item) => {
+    const share = typeof item.spendSharePercent === "number" ? item.spendSharePercent : null;
+    const lines = typeof item.purchaseLines === "number" ? item.purchaseLines : null;
+    const evidence = typeof item.evidencePurchaseLines === "number"
+      ? item.evidencePurchaseLines
+      : null;
+    const days = typeof item.daysSinceLastPurchase === "number"
+      ? item.daysSinceLastPurchase
+      : null;
+    const cost = typeof item.averageLandedUnitCostNet === "number"
+      ? item.averageLandedUnitCostNet
+      : null;
+    return card({
+      kind: "supplier",
+      eyebrow: item.scopeRelaxed === true
+        ? "Le compramos algo así"
+        : "Le compramos esto",
+      title: text(item, "supplierName", "Proveedor"),
+      subtitle: share !== null && lines !== null && evidence !== null
+        ? `${formatShare(share)} de lo comprado · ${lines} de ${evidence} líneas`
+        : undefined,
+      // Cuando el servidor tuvo que ensanchar la pregunta, la tarjeta lo dice.
+      // Presentar como literal un resultado que se ensanchó es la forma más
+      // silenciosa de mentir.
+      description: join([
+        cost !== null ? money(cost, "Costo unitario promedio") : undefined,
+        daysSinceLabel(days),
+        optionalText(item, "brands"),
+        optionalText(item, "gamaMix"),
+        widenedLabel(item),
+      ]),
+      destination: "suppliers",
+      chips: compact([
+        item.hasPortalAccount === true ? "Con cuenta en su portal" : undefined,
+        optionalText(item, "supplierCity"),
+      ]),
+      entityRef: entityRef(item, "supplier"),
+    });
+  });
+}
+
+/// **La lista entera, y con quién se cierra.**
+///
+/// La pregunta del taller ante una lista no es «quién tiene rayos»: es «¿le
+/// pido todo a uno, o lo reparto?». La tarjeta de rango 1 lleva esa decisión ya
+/// tomada —qué cubre, qué le falta y quién completa lo que falta—, porque
+/// dejársela al lector significa que la tome mal.
+function basketSupplierCards(items: readonly JsonObject[]): readonly AgentActionCard[] {
+  return items.slice(0, 3).map((item) => {
+    const covered = typeof item.coveredNeeds === "number" ? item.coveredNeeds : null;
+    const total = typeof item.totalNeeds === "number" ? item.totalNeeds : null;
+    const days = typeof item.daysSinceLastPurchase === "number"
+      ? item.daysSinceLastPurchase
+      : null;
+    const missing = optionalText(item, "missingList");
+    const complement = optionalText(item, "complementSupplierName");
+    return card({
+      kind: "supplier",
+      eyebrow: covered !== null && total !== null && covered === total
+        ? "Cubre toda la lista"
+        : "Cubre parte de la lista",
+      title: text(item, "supplierName", "Proveedor"),
+      subtitle: covered !== null && total !== null
+        ? `${covered} de ${total} ${total === 1 ? "línea" : "líneas"}: ${
+          text(item, "coveredList", "—")
+        }`
+        : undefined,
+      description: join([
+        // El reparto se dice completo o no se dice: «le falta X» sin decir a
+        // quién pedírselo deja al operador con el problema, no con la salida.
+        missing && complement
+          ? `Le falta ${missing} — eso se lo compramos a ${complement}`
+          : missing
+          ? `Le falta ${missing}, y no hay historial de eso con nadie más`
+          : undefined,
+        daysSinceLabel(days),
+        optionalText(item, "brands"),
+      ]),
+      destination: "suppliers",
+      chips: compact([
+        item.hasPortalAccount === true ? "Con cuenta en su portal" : undefined,
+        optionalText(item, "supplierCity"),
+      ]),
+      entityRef: entityRef(item, "supplier"),
+    });
+  });
+}
+
+/// Qué se soltó para poder contestar, dicho en la tarjeta.
+///
+/// El servidor baja escalones cuando la frase no calza literalmente: suelta las
+/// palabras que no aparecen en ningún producto, la medida que esa rama no tiene
+/// poblada, o la exigencia de que estén todas las palabras. Un resultado
+/// ensanchado que se presenta como literal es exacto por dentro y engañoso como
+/// respuesta.
+function widenedLabel(item: JsonObject): string | undefined {
+  if (item.scopeRelaxed !== true) return undefined;
+  const words = optionalText(item, "droppedWords");
+  if (words) return `Sin «${words}»: no aparece en ningún producto`;
+  const filters = optionalText(item, "droppedFilters");
+  if (filters) return `Búsqueda ampliada: se soltó ${filters}`;
+  return "Búsqueda ampliada";
+}
+
+/// «hace 4 meses», no «138». El operador decide con la distancia, no con el
+/// entero.
+function daysSinceLabel(days: number | null): string | undefined {
+  if (days === null || days < 0) return undefined;
+  if (days === 0) return "Última compra hoy";
+  if (days === 1) return "Última compra ayer";
+  if (days < 30) return `Última compra hace ${days} días`;
+  const months = Math.round(days / 30);
+  if (months < 12) {
+    return `Última compra hace ${months} ${months === 1 ? "mes" : "meses"}`;
+  }
+  const years = Math.round(days / 365);
+  return `Última compra hace ${years} ${years === 1 ? "año" : "años"}`;
+}
+
+function formatShare(share: number): string {
+  return `${share.toFixed(share >= 10 ? 0 : 1).replace(".", ",")}%`;
+}
+
 function entityCards(
   items: readonly JsonObject[],
   kind: string,
@@ -698,10 +1060,43 @@ function invoiceCards(items: readonly JsonObject[], purchase: boolean): readonly
       subtitle: optionalText(item, purchase ? "supplierName" : "customerName"),
       description: join([money(item.total, "Total"), money(item.balance, "Saldo")]),
       destination: purchase ? "purchases" : "sales_invoices",
-      chips: compact([optionalText(item, "status")]),
+      chips: compact([invoiceStatusLabel(optionalText(item, "status"))]),
       entityRef: entityRef(item, purchase ? "purchaseInvoice" : "salesInvoice"),
     })
   );
+}
+
+/// «Vence mañana a las 18:00» en vez de una marca de tiempo ISO. La fecha se
+/// interpreta en la zona que trae la propia marca —la del taller—, nunca en
+/// UTC: un desfase de cuatro horas cambia el día que lee el operador.
+function dueDateLabel(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/u,
+  );
+  if (!match) return undefined;
+  const [, year, month, day, hour, minute] = match;
+  const fecha = `${Number(day)}-${Number(month)}-${year}`;
+  return `Vence ${fecha} a las ${hour}:${minute}`;
+}
+
+function taskPriorityLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "low":
+    case "baja":
+      return "Prioridad baja";
+    case "normal":
+    case "media":
+      return "Prioridad normal";
+    case "high":
+    case "alta":
+      return "Prioridad alta";
+    case "urgent":
+    case "urgente":
+      return "Urgente";
+    default:
+      return undefined;
+  }
 }
 
 function preparedTaskCard(item: JsonObject): AgentActionCard {
@@ -709,10 +1104,17 @@ function preparedTaskCard(item: JsonObject): AgentActionCard {
     kind: "task_preview",
     eyebrow: "Tarea por confirmar",
     title: text(item, "title", "Tarea"),
-    subtitle: join([optionalText(item, "assigneeName"), optionalText(item, "dueAt")]),
+    subtitle: join([
+      optionalText(item, "assigneeName"),
+      // `2026-08-23T18:00:00-04:00` es una clave, no una fecha para leer.
+      dueDateLabel(optionalText(item, "dueAt")),
+    ]),
     description: optionalText(item, "description"),
     destination: "tasks",
-    chips: compact([optionalText(item, "priority"), "Requiere confirmación"]),
+    chips: compact([
+      taskPriorityLabel(optionalText(item, "priority")),
+      "Requiere confirmación",
+    ]),
     approvalRef: approvalRef(item),
   });
 }
@@ -734,6 +1136,186 @@ function preparedDiagnosisCard(item: JsonObject): AgentActionCard {
   });
 }
 
+/// Los estados y prioridades del taller viajan en MAYÚSCULA con guiones bajos
+/// porque son claves: `ESPERANDO_REPUESTOS`, `EN_CURSO`, `NORMAL`. En un chip
+/// se leen como si el sistema estuviera gritando una constante interna. La
+/// clave sigue siendo la clave; lo que cambia es lo que se muestra.
+function workshopStatusLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "PENDIENTE":
+      return "Pendiente";
+    case "DIAGNOSTICO":
+      return "Diagnóstico";
+    case "EN_CURSO":
+      return "En curso";
+    case "EN_PAUSA":
+      return "En pausa";
+    case "ESPERANDO_REPUESTOS":
+      return "Esperando repuestos";
+    case "FINALIZADO":
+      return "Finalizado";
+    case "ENTREGADO":
+      return "Entregado";
+    case "RETIRO_SIN_SERVICIO":
+      return "Retiro sin servicio";
+    case "CANCELADO":
+      return "Cancelado";
+    case "REPUESTOS":
+      return "Esperando repuestos";
+    default:
+      // Un estado que este código no conoce igual deja de gritar. Enumerar
+      // sirve para decirlo bien —«Esperando repuestos», no «Esperando
+      // repuestos» literal de la clave—, pero el respaldo evita que una
+      // constante nueva aparezca mañana como `RETIRO_SIN_SERVICIO` en un chip.
+      return sentenceCaseConstant(value);
+  }
+}
+
+/// `ESPERANDO_REPUESTOS` → `Esperando repuestos`. Sólo actúa sobre lo que
+/// evidentemente es una clave: mayúsculas, dígitos y guiones bajos.
+function sentenceCaseConstant(value: string | undefined): string | undefined {
+  if (!value || !/^[A-Z][A-Z0-9_]*$/.test(value)) return value;
+  const palabras = value.toLowerCase().replace(/_/g, " ");
+  return palabras.charAt(0).toUpperCase() + palabras.slice(1);
+}
+
+function workshopPriorityLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "NORMAL":
+      // La prioridad corriente no merece un chip: ocupa lugar y no distingue
+      // nada. Sólo se muestra lo que se sale de lo normal.
+      return undefined;
+    case "ALTA":
+      return "Prioridad alta";
+    case "URGENTE":
+      return "Urgente";
+    default:
+      return sentenceCaseConstant(value);
+  }
+}
+
+/// Estados de gasto y de conversación. Mismo criterio que el resto: la clave
+/// se queda en la base, el chip habla castellano, y lo que este código no
+/// conoce deja de gritar en vez de mostrarse crudo.
+function expenseStatusLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "draft":
+      return "Borrador";
+    case "posted":
+      return "Contabilizado";
+    case "void":
+      return "Anulado";
+    case "scheduled":
+      return "Pago programado";
+    case "partial":
+      return "Pago parcial";
+    case "paid":
+      return "Pagado";
+    case "approved":
+      return "Aprobado";
+    case "rejected":
+      return "Rechazado";
+    default:
+      return sentenceCaseConstant(value);
+  }
+}
+
+/// La aprobación tiene su propio «pending», y no es el del pago. Mezclarlos
+/// ponía «Pagado» y «Pendiente de pago» en el mismo gasto: dos chips que se
+/// contradicen y hacen dudar del dato correcto.
+function approvalStatusLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "pending":
+      return "Pendiente de aprobación";
+    case "approved":
+      // Un gasto aprobado es lo corriente: el chip no distingue nada.
+      return undefined;
+    case "rejected":
+      return "Aprobación rechazada";
+    default:
+      return sentenceCaseConstant(value);
+  }
+}
+
+function counterpartyLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "customer":
+      return "Cliente";
+    case "supplier":
+      return "Proveedor";
+    case "internal":
+      return "Interna";
+    default:
+      return sentenceCaseConstant(value);
+  }
+}
+
+function conversationStatusLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "active":
+      // Una conversación activa es lo corriente: el chip no distingue nada.
+      return undefined;
+    case "archived":
+      return "Archivada";
+    case "rejected":
+      return "Rechazada";
+    case "blocked":
+      return "Bloqueada";
+    default:
+      return sentenceCaseConstant(value);
+  }
+}
+
+/// Las tareas tienen su propio vocabulario, en minúscula y en inglés
+/// (`pending`, `completed`, `normal`), distinto del taller
+/// (`EN_CURSO`, `NORMAL`). Reusar el del taller dejaba `pending` y `normal`
+/// crudos en la tarjeta.
+function taskStatusLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "pending":
+      return "Pendiente";
+    case "in_progress":
+      return "En curso";
+    case "completed":
+      // Una tarea completada rara vez necesita el chip: si aparece en una
+      // lista de pendientes, el estado ya lo dice el encabezado.
+      return "Completada";
+    case "cancelled":
+      return "Cancelada";
+    default:
+      return sentenceCaseConstant(value);
+  }
+}
+
+function taskPriorityChip(value: string | undefined): string | undefined {
+  switch (value) {
+    case "normal":
+      // Lo corriente no distingue nada y ocupa lugar.
+      return undefined;
+    case "low":
+      return "Prioridad baja";
+    case "high":
+      return "Prioridad alta";
+    case "urgent":
+      return "Urgente";
+    default:
+      return sentenceCaseConstant(value);
+  }
+}
+
+function workshopItemTypeLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "service":
+    case "servicio":
+      return "Servicio";
+    case "product":
+    case "producto":
+      return "Producto";
+    default:
+      return undefined;
+  }
+}
+
 function preparedWorkshopItemCard(item: JsonObject): AgentActionCard {
   return card({
     kind: "workshop_item_preview",
@@ -749,7 +1331,10 @@ function preparedWorkshopItemCard(item: JsonObject): AgentActionCard {
       money(item.lineTotal, "Total línea"),
     ]),
     destination: "workshop_jobs",
-    chips: compact([optionalText(item, "itemType"), "Requiere confirmación"]),
+    chips: compact([
+      workshopItemTypeLabel(optionalText(item, "itemType")),
+      "Requiere confirmación",
+    ]),
     approvalRef: approvalRef(item, "workshop_item_preview"),
   });
 }
@@ -827,10 +1412,19 @@ export function committedTaskCard(item: JsonObject): AgentActionCard {
     kind: "task",
     eyebrow: "Tarea creada",
     title: text(item, "title", "Tarea"),
-    subtitle: join([optionalText(item, "assigneeName"), optionalText(item, "dueAt")]),
+    subtitle: join([
+      optionalText(item, "assigneeName"),
+      // La tarjeta de «tarea creada» mostraba la marca ISO cruda mientras la
+      // propuesta —la de al lado, un segundo antes— ya decía «Vence 24-8-2026
+      // a las 10:00». La misma tarea, dos formatos.
+      dueDateLabel(optionalText(item, "dueAt")),
+    ]),
     description: optionalText(item, "description"),
     destination: "tasks",
-    chips: compact([optionalText(item, "status"), optionalText(item, "priority")]),
+    chips: compact([
+      taskStatusLabel(optionalText(item, "status")),
+      taskPriorityChip(optionalText(item, "priority")),
+    ]),
   });
 }
 
@@ -852,6 +1446,71 @@ export function committedWorkshopActionCard(
   });
 }
 
+/// El estado de una factura no está normalizado en los datos: conviven `sent`
+/// y `enviado` en la misma columna. Traducir en la tarjeta además de castellanizar
+/// **unifica**, y así dos facturas en el mismo estado dejan de verse distintas.
+/// Un valor que no está en esta lista se omite en vez de mostrarse crudo.
+function invoiceStatusLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "draft":
+    case "borrador":
+      return "Borrador";
+    case "sent":
+    case "enviado":
+      return "Enviada";
+    case "confirmed":
+      return "Confirmada";
+    case "issued":
+      return "Emitida";
+    case "paid":
+    case "pagada":
+      return "Pagada";
+    case "partial":
+      return "Pago parcial";
+    case "overdue":
+      return "Vencida";
+    case "cancelled":
+    case "canceled":
+    case "anulada":
+      return "Anulada";
+    default:
+      return undefined;
+  }
+}
+
+/// Los estados de la base viajan en inglés porque son claves, no texto. Un
+/// chip que dice «overdue» dentro de una respuesta en español se lee como una
+/// falla del sistema; el taller necesita «Vencida».
+function receivableTimingLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "overdue":
+      return "Vencida";
+    case "due_today":
+      return "Vence hoy";
+    case "due_in_horizon":
+      return "Por vencer";
+    case "later":
+      return "Más adelante";
+    case "undated":
+      return "Sin fecha de vencimiento";
+    default:
+      return undefined;
+  }
+}
+
+function salesBasisLabel(value: string | undefined): string | undefined {
+  switch (value) {
+    case "issued":
+      return "Por lo emitido";
+    case "collected":
+      return "Por lo cobrado";
+    default:
+      // Un criterio que este código no conoce no se traduce a la fuerza ni se
+      // muestra crudo: se omite, y el resto de la tarjeta sigue siendo cierto.
+      return undefined;
+  }
+}
+
 function salesPeriodCards(items: readonly JsonObject[]): readonly AgentActionCard[] {
   const summary = items[0];
   if (!summary || typeof summary.highestInvoiceId !== "string") return [];
@@ -865,11 +1524,28 @@ function salesPeriodCards(items: readonly JsonObject[]): readonly AgentActionCar
       money(summary.highestPeriodAmount, "Monto del período"),
     ]),
     destination: "sales_invoices",
-    chips: compact([optionalText(summary, "basis")]),
+    // `basis` es el criterio del período —«issued» o «collected»— y viajaba
+    // crudo hasta el chip. El taller lee en castellano; una etiqueta en inglés
+    // dentro de una respuesta en español se lee como un error del sistema, no
+    // como información.
+    chips: compact([salesBasisLabel(optionalText(summary, "basis"))]),
     entityRef: {
       kind: "salesInvoice",
       id: summary.highestInvoiceId.toLowerCase(),
     },
+    optionKind: "follow_up",
+    options: [
+      {
+        id: "sales_top_customers",
+        label: "¿Quién me compró más?",
+        description: "Ordena el período por cliente.",
+      },
+      {
+        id: "sales_compare_previous",
+        label: "Comparar con el período anterior",
+        description: "Mismo cálculo sobre el tramo previo.",
+      },
+    ] as readonly AgentCardOption[],
   })];
 }
 
@@ -1220,6 +1896,16 @@ function validateSupplyNeedClarificationPrompts(
   return Object.freeze(prompts);
 }
 
+const storedListRefKeys = [
+  "kind",
+  "query",
+  "availability",
+  "resultCount",
+  "hasMore",
+  "entityIds",
+  "autoOpen",
+];
+
 function validateListRef(
   value: unknown,
   cardKind: unknown,
@@ -1232,18 +1918,17 @@ function validateListRef(
     cardKind !== "inventory" || destination !== "inventory_products" ||
     entityRefValue !== undefined || approvalRefValue !== undefined ||
     !isRecord(value) ||
-    !hasExactKeys(value, [
-      "kind",
-      "query",
-      "availability",
-      "resultCount",
-      "hasMore",
-      "entityIds",
-      "autoOpen",
-    ]) ||
+    // `spokenSubject` es opcional en la validación: una tarjeta guardada por
+    // una versión anterior no lo trae, y rechazarla borraría el historial del
+    // hilo. Al proyectar, cae de vuelta a `query`.
+    !(hasExactKeys(value, storedListRefKeys) ||
+      hasExactKeys(value, [...storedListRefKeys, "spokenSubject"])) ||
     value.kind !== "inventory" ||
     typeof value.query !== "string" || !value.query.trim() ||
     new TextEncoder().encode(value.query.trim()).byteLength > 240 ||
+    !(value.spokenSubject === undefined ||
+      (typeof value.spokenSubject === "string" && value.spokenSubject.trim() &&
+        new TextEncoder().encode(value.spokenSubject.trim()).byteLength <= 240)) ||
     typeof value.availability !== "string" ||
     !(agentInventoryAvailabilityFilters as readonly string[]).includes(value.availability) ||
     !Number.isSafeInteger(value.resultCount) ||
@@ -1258,13 +1943,22 @@ function validateListRef(
     return id.toLowerCase();
   });
   if (
-    (value.hasMore ? entityIds !== null : entityIds === null) ||
+    // **Las ids son obligatorias, truncado o no.** Antes se exigía lo
+    // contrario —`hasMore` implicaba `entityIds === null`— y eso dejaba al
+    // cliente buscando la frase como texto, que no encuentra nada: mientras
+    // más acertaba la búsqueda, más vacía salía la lista. Se sigue aceptando
+    // `null` al LEER, porque hay tarjetas guardadas por la versión anterior y
+    // rechazarlas borraría el historial del hilo.
+    entityIds === null && !value.hasMore ||
     (entityIds !== null && entityIds.length !== value.resultCount) ||
     (entityIds !== null && new Set(entityIds).size !== entityIds.length)
   ) throw new Error("Invalid list reference");
   return Object.freeze({
     kind: "inventory",
     query: value.query.trim(),
+    spokenSubject: typeof value.spokenSubject === "string" && value.spokenSubject.trim()
+      ? value.spokenSubject.trim()
+      : value.query.trim(),
     availability: value.availability as AgentInventoryAvailabilityFilter,
     resultCount: value.resultCount as number,
     hasMore: value.hasMore,

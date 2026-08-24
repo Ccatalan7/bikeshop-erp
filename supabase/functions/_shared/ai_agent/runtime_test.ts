@@ -11,7 +11,11 @@ import { createDefaultAgentToolRegistry } from "./tool_registry.ts";
 import { AgentProviderRouter } from "./providers/provider.ts";
 import { ProviderError } from "./providers/provider.ts";
 import { type AgentRunLease, type AgentRunStore, RunBeginError } from "./run_store.ts";
-import { AgentRuntimeError, executeAgentRun } from "./runtime.ts";
+import {
+  AgentRuntimeError,
+  coalescedSupplierBasket,
+  executeAgentRun,
+} from "./runtime.ts";
 import type {
   AgentToolExecution,
   AgentToolExecutionContext,
@@ -99,6 +103,7 @@ class TestRunStore implements AgentRunStore {
   toolReceiptInputs: Array<Parameters<AgentRunStore["recordToolReceipt"]>[0]> = [];
   completions: string[] = [];
   completionInputs: Array<Parameters<AgentRunStore["complete"]>[0]> = [];
+  rejectCardsOnce = false;
   failProviderReceipt = false;
   failCompletion = false;
   completionStatus: "succeeded" | "failed" | "cancelled" | "timed_out" | null = null;
@@ -143,6 +148,17 @@ class TestRunStore implements AgentRunStore {
     this.completionInputs.push(input);
     if (this.failCompletion) {
       return Promise.reject(new Error("completion unavailable"));
+    }
+    // La base rechaza la respuesta terminal completa cuando las tarjetas no le
+    // gustan. El runtime debe reintentar sin ellas antes de tirar el turno.
+    if (this.rejectCardsOnce && (input.cards ?? []).length > 0) {
+      this.rejectCardsOnce = false;
+      return Promise.reject(
+        Object.assign(new Error("terminal response rejected"), {
+          code: "rpc_invalid_response",
+          outcome: "idempotency_conflict",
+        }),
+      );
     }
     const status = this.completionStatus ?? input.status;
     return Promise.resolve({
@@ -216,6 +232,7 @@ function incompleteTechnicalResearchExecution(
     }],
     resultCount: 1,
     hasMore: true,
+    totalMatches: 1,
   };
   const publicResearchCompleteness = {
     targets: [
@@ -312,6 +329,7 @@ function structuredTechnicalResearchExecutionFromItems(
     items,
     resultCount: items.length,
     hasMore: status === "partial",
+    totalMatches: items.length,
   };
   const requestedFacts = [...new Set(targets.map((target) => target.fact))];
   const unresolvedFacts = [
@@ -365,6 +383,7 @@ Deno.test("runtime executes tool rounds sequentially and persists receipts befor
         items: [{ entityId: contextJobId, name: "Cadena 10v", sku: "CAD-10", stock: 2 }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -442,6 +461,88 @@ Deno.test("runtime executes tool rounds sequentially and persists receipts befor
   );
 });
 
+Deno.test("una respuesta rechazada por sus tarjetas no se pierde", async () => {
+  const store = new TestRunStore();
+  // La base valida la respuesta terminal COMPLETA y la rechaza entera. Sin
+  // reintento, el operador leía «no pude procesar esa solicitud» después de
+  // que el turno ya había buscado, razonado y redactado: se botaba una
+  // respuesta correcta por un problema de presentación.
+  store.rejectCardsOnce = true;
+  const executor: AgentToolExecutor = {
+    execute() {
+      // Con al menos un resultado el turno arma tarjetas, que es la condición
+      // que dispara el rechazo que esta prueba simula.
+      const result = {
+        authorityTenantId: tenantId,
+        asOf: "2026-08-23T12:00:00Z",
+        status: "success" as const,
+        items: [{
+          entityId: contextJobId,
+          title: "Llamar a Droppbike",
+          status: "pending",
+          priority: "normal",
+          assigneeName: null,
+          linkedContext: null,
+          dueAt: null,
+        }],
+        resultCount: 1,
+        hasMore: false,
+        totalMatches: 1,
+      };
+      const outputText = JSON.stringify(result);
+      return Promise.resolve({
+        result,
+        outputText,
+        outputBytes: new TextEncoder().encode(outputText).byteLength,
+        succeeded: true,
+      });
+    },
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  let turnos = 0;
+  const response = await executeAgentRun(request(), authority, {
+    providerRouter: providerRouter(() => {
+      turnos += 1;
+      if (turnos === 1) {
+        return Promise.resolve({
+          text: "Reviso las tareas",
+          toolCalls: [{
+            id: "call-1",
+            name: "search_tasks",
+            arguments: { query: null },
+          }],
+          usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+          finishReason: "tool_calls" as const,
+          continuationToken: "opaque",
+        });
+      }
+      return Promise.resolve(finalTurn("No tienes tareas pendientes."));
+    }),
+    toolRegistry: createDefaultAgentToolRegistry(),
+    toolExecutor: executor,
+    runStore: store,
+    auditHmacKey: hmacKey,
+    pricingCatalog,
+  }, new AbortController().signal);
+
+  assertEquals(response.status, "completed", "la respuesta llega igual");
+  assertEquals(
+    response.text,
+    "No tienes tareas pendientes.",
+    "el texto es la respuesta y sobrevive",
+  );
+  assertEquals(
+    store.completionInputs.length,
+    2,
+    "se reintenta el cierre una vez",
+  );
+  assertEquals(
+    (store.completionInputs[1].cards ?? []).length,
+    0,
+    "el reintento va sin tarjetas, que son el atajo y no la respuesta",
+  );
+});
+
 Deno.test("explicit inventory listing has one server-owned answer, result set and navigation intent", async () => {
   const store = new TestRunStore();
   const providerRequests: AgentProviderRequest[] = [];
@@ -469,6 +570,7 @@ Deno.test("explicit inventory listing has one server-owned answer, result set an
           }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         };
         const outputText = JSON.stringify(result);
         return Promise.resolve({
@@ -498,6 +600,7 @@ Deno.test("explicit inventory listing has one server-owned answer, result set an
         ],
         resultCount: 2,
         hasMore: false,
+        totalMatches: 2,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -621,6 +724,7 @@ Deno.test("inventory follow-up restores the interactive list, uses exact sparse 
     }],
     resultCount: 1,
     hasMore: true,
+    totalMatches: 1,
   }, {
     query: "Shimano",
     category: null,
@@ -685,6 +789,7 @@ Deno.test("inventory follow-up restores the interactive list, uses exact sparse 
           }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         };
         const outputText = JSON.stringify(result);
         return Promise.resolve({
@@ -717,6 +822,9 @@ Deno.test("inventory follow-up restores the interactive list, uses exact sparse 
           brand: "Shimano",
           category: "Piñones",
           price: 19_990,
+          cost: 9995,
+          marginPercent: 50,
+          soldRecently: 0,
           stock: 0,
           minimumStock: 3,
           availability: "out_of_stock",
@@ -727,12 +835,15 @@ Deno.test("inventory follow-up restores the interactive list, uses exact sparse 
           trackedCount: 1,
           totalStock: 0,
           inventoryRetailValue: 0,
+          inventoryCostValue: 0,
+          costedCount: 0,
           averagePrice: 19_990,
           minimumPrice: 19_990,
           maximumPrice: 19_990,
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -943,6 +1054,7 @@ Deno.test("technical inventory plan stays bound to the inspected category and fi
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -1056,6 +1168,7 @@ Deno.test("zero structured coverage yields a server-owned honest capability gap"
         items: [item],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -1152,6 +1265,7 @@ Deno.test("zero structured coverage terminates even when the model insists on se
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -1252,6 +1366,7 @@ Deno.test("an unrelated unavailable operation uses the same capability terminal"
         items: [call.arguments],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -1316,6 +1431,7 @@ Deno.test("model repairs invalid known-tool arguments without executing the reje
         items: [],
         resultCount: 0,
         hasMore: false,
+        totalMatches: 0,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -1337,7 +1453,13 @@ Deno.test("model repairs invalid known-tool arguments without executing the reje
           toolCalls: [{
             id: "bad-args",
             name: "search_tasks",
-            arguments: { query: null },
+            // Desde el 2026-08-23 omitir campos MECÁNICOS ya no es un error:
+            // el servidor les pone su valor neutro deducido del esquema, así
+            // que `{query: null}` es una llamada válida. Lo que esta prueba
+            // cuida —que el modelo repare en vez de ejecutarse una llamada
+            // mala— se expresa con un error que sigue siéndolo: un horizonte
+            // que no existe en el vocabulario cerrado.
+            arguments: { query: null, horizon: "cuando_sea" },
           }],
           usage: { inputTokens: 2, outputTokens: 1, totalTokens: 3 },
           finishReason: "tool_calls",
@@ -1425,6 +1547,7 @@ Deno.test("tool prompt injection stays inside the exact receipted untrusted enve
         items: [{ entityId: contextJobId, name: injection, sku: "ADV-1", stock: 1 }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -1541,6 +1664,7 @@ Deno.test("model-first runtime can plan ERP and public-web tools in one turn", a
           }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         };
         const outputText = JSON.stringify(result);
         return Promise.resolve({
@@ -1561,6 +1685,7 @@ Deno.test("model-first runtime can plan ERP and public-web tools in one turn", a
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -1689,6 +1814,7 @@ Deno.test("explicit web request forces Specialized research before synthesis", a
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -2634,6 +2760,7 @@ Deno.test("ERP reads remain available before an incomplete-research terminal ans
         items: [],
         resultCount: 0,
         hasMore: false,
+        totalMatches: 0,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -3007,6 +3134,7 @@ Deno.test("named-forum question is model-first public research with an exact cit
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -3122,6 +3250,7 @@ Deno.test("failed research never satisfies the server-owned public evidence gate
         items: [],
         resultCount: 0,
         hasMore: false,
+        totalMatches: 0,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -3320,6 +3449,7 @@ Deno.test("identical public research calls reuse one external result within the 
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -3447,6 +3577,7 @@ Deno.test("model-first runtime chains risk, accounting and conversation reads wi
         items: [],
         resultCount: 0,
         hasMore: false,
+        totalMatches: 0,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -3542,6 +3673,7 @@ Deno.test("tool wrapper stays within the exact 48 KiB receipt boundary", async (
           items: [],
           resultCount: 0,
           hasMore: false,
+          totalMatches: 0,
         },
         outputText,
         outputBytes: new TextEncoder().encode(outputText).byteLength,
@@ -3900,6 +4032,7 @@ Deno.test("cancellation after tool execution records its receipt before stopping
         items: [],
         resultCount: 0,
         hasMore: false,
+        totalMatches: 0,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -4000,6 +4133,7 @@ Deno.test("aggregate tool output exhaustion never leaves an executed tool withou
           items: [],
           resultCount: 0,
           hasMore: false,
+          totalMatches: 0,
         },
         outputText,
         outputBytes: 40_000,
@@ -4287,6 +4421,7 @@ Deno.test("duplicate provider call ids across rounds are rejected before executi
         items: [],
         resultCount: 0,
         hasMore: false,
+        totalMatches: 0,
       };
       const outputText = JSON.stringify(result);
       return Promise.resolve({
@@ -4370,6 +4505,7 @@ Deno.test("workshop context and summaries stay untrusted data, never system inst
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       });
     },
   };
@@ -4549,6 +4685,7 @@ Deno.test("truncated workshop selection is explicitly partial with omitted IDs",
         items: [{ jobNumber: "PG-00991" }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       }),
   };
   await executeAgentRun(
@@ -4649,6 +4786,7 @@ Deno.test("task preparation is run-bound, receipted as approval-required draft, 
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       return Promise.resolve({
         result,
@@ -4657,6 +4795,7 @@ Deno.test("task preparation is run-bound, receipted as approval-required draft, 
           items: [{ title: "Llamar al cliente", state: "pending" }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         }),
         outputBytes: 100,
         succeeded: true,
@@ -4845,12 +4984,14 @@ Deno.test("workshop preparations remain previews under the same generic approval
             }],
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           };
           const outputText = JSON.stringify({
             status: "success",
             items: [{ jobRef, jobNumber: "PG-00420", bikeCount: 1 }],
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           });
           return Promise.resolve({
             result,
@@ -4876,6 +5017,9 @@ Deno.test("workshop preparations remain previews under the same generic approval
               brand: null,
               category: "Servicios",
               price: 15000,
+              cost: 7500,
+              marginPercent: 50,
+              soldRecently: 0,
               stock: 0,
               minimumStock: 0,
               availability: "not_tracked",
@@ -4886,18 +5030,22 @@ Deno.test("workshop preparations remain previews under the same generic approval
               trackedCount: 0,
               totalStock: 0,
               inventoryRetailValue: 0,
+              inventoryCostValue: 0,
+              costedCount: 0,
               averagePrice: 15000,
               minimumPrice: 15000,
               maximumPrice: 15000,
             }],
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           };
           const outputText = JSON.stringify({
             status: "success",
             items: [{ catalogItemRef, name: "Cambio de cadena", price: 15000 }],
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           });
           return Promise.resolve({
             result,
@@ -4939,6 +5087,7 @@ Deno.test("workshop preparations remain previews under the same generic approval
             }],
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           };
           const outputText = JSON.stringify({
             status: "success",
@@ -4952,6 +5101,7 @@ Deno.test("workshop preparations remain previews under the same generic approval
             }],
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           });
           return Promise.resolve({
             result,
@@ -4983,12 +5133,14 @@ Deno.test("workshop preparations remain previews under the same generic approval
             }],
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           };
           const outputText = JSON.stringify({
             status: "success",
             items: result.items,
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           });
           return Promise.resolve({
             result,
@@ -5012,6 +5164,7 @@ Deno.test("workshop preparations remain previews under the same generic approval
           items: [scenario.item],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         };
         return Promise.resolve({
           result,
@@ -5020,6 +5173,7 @@ Deno.test("workshop preparations remain previews under the same generic approval
             items: [{ state: "pending" }],
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           }),
           outputBytes: 80,
           succeeded: true,
@@ -5156,12 +5310,14 @@ Deno.test("purchase baskets resolve every opaque catalog reference before the ER
           items: [{ entityId, name, sku: null, stock: 0 }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         };
         const outputText = JSON.stringify({
           status: "success",
           items: [{ catalogItemRef, name, stock: 0 }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         });
         return Promise.resolve({
           result,
@@ -5214,12 +5370,14 @@ Deno.test("purchase baskets resolve every opaque catalog reference before the ER
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify({
         status: "success",
         items: result.items,
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       });
       return Promise.resolve({
         result,
@@ -5355,12 +5513,14 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
           items: [{ entityId: productId, name: "Kenda Kwick 27,5 × 2,10", stock: 0 }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         };
         const outputText = JSON.stringify({
           status: "success",
           items: [{ catalogItemRef, name: "Kenda Kwick 27,5 × 2,10", stock: 0 }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         });
         return Promise.resolve({
           result,
@@ -5376,6 +5536,7 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
           description: "Neumático 27,5 ancho mayor a 2,0",
           productId,
           categoryId: null,
+          commercialTarget: null,
           quantity: 2,
           unit: "unit",
           technicalPredicates: [{ field: "tire_width", operator: "gt", values: [2] }],
@@ -5387,6 +5548,7 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
           description: "Rayos 27,5",
           productId: null,
           categoryId: null,
+          commercialTarget: null,
           quantity: 1,
           unit: "set",
           technicalPredicates: [],
@@ -5460,12 +5622,14 @@ Deno.test("supply draft preparation is purchasing-scoped and resolves opaque pro
         }],
         resultCount: 2,
         hasMore: false,
+        totalMatches: 2,
       };
       const outputText = JSON.stringify({
         status: "success",
         items: result.items.map(({ entityId: _privateEntityId, ...item }) => item),
         resultCount: 2,
         hasMore: false,
+        totalMatches: 2,
       });
       return Promise.resolve({
         result,
@@ -5661,12 +5825,14 @@ Deno.test("a validated supply draft may close the bounded sixth purchasing round
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify({
         status: "success",
         items: result.items.map(({ entityId: _privateEntityId, ...item }) => item),
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       });
       return Promise.resolve({
         result,
@@ -5794,12 +5960,14 @@ Deno.test("need capture rejects a known provider-ranking tool that was not adver
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify({
         status: "success",
         items: result.items.map(({ entityId: _privateEntityId, ...item }) => item),
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       });
       return Promise.resolve({
         result,
@@ -5917,6 +6085,7 @@ Deno.test("a nonterminal sixth tool round still fails before execution", async (
         items: [],
         resultCount: 0,
         hasMore: false,
+        totalMatches: 0,
       });
       return Promise.resolve({
         result: {
@@ -5926,6 +6095,7 @@ Deno.test("a nonterminal sixth tool round still fails before execution", async (
           items: [],
           resultCount: 0,
           hasMore: false,
+          totalMatches: 0,
         },
         outputText,
         outputBytes: new TextEncoder().encode(outputText).byteLength,
@@ -6014,6 +6184,7 @@ Deno.test("purchasing preserves a zero-coverage request as an unresolved review 
           }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         };
         const outputText = JSON.stringify(result);
         return Promise.resolve({
@@ -6029,6 +6200,7 @@ Deno.test("purchasing preserves a zero-coverage request as an unresolved review 
           description: "Neumáticos 27,5 de ancho mayor a 2,0",
           productId: null,
           categoryId: null,
+          commercialTarget: null,
           quantity: 2,
           unit: "unit",
           technicalPredicates: [{ field: "tire_width_in", operator: "gt", values: [2] }],
@@ -6064,12 +6236,14 @@ Deno.test("purchasing preserves a zero-coverage request as an unresolved review 
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify({
         status: "success",
         items: result.items.map(({ entityId: _privateEntityId, ...item }) => item),
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       });
       return Promise.resolve({
         result,
@@ -6091,8 +6265,11 @@ Deno.test("purchasing preserves a zero-coverage request as an unresolved review 
       providerRouter: providerRouter((providerRequest) => {
         turns++;
         assert(
+          // La regla se reescribió; el invariante es el mismo: una carencia de
+          // ficha deja la línea sin resolver en vez de inventar el producto
+          // desde el nombre. Se afirma la regla vigente, no la frase histórica.
           providerRequest.systemInstruction.includes(
-            "no enumeres productos desde nombres ambiguos ni termines la solicitud",
+            "no uses nombres: conserva el criterio en prepare_supply_request como línea unresolved",
           ),
           "the purchasing context explains the non-terminal data gap",
         );
@@ -6484,6 +6661,7 @@ function purchasingDraftTurns(
           }],
           resultCount: 1,
           hasMore: false,
+          totalMatches: 1,
         });
         return Promise.resolve({
           result: {
@@ -6499,6 +6677,7 @@ function purchasingDraftTurns(
             }],
             resultCount: 1,
             hasMore: false,
+            totalMatches: 1,
           },
           outputText,
           outputBytes: new TextEncoder().encode(outputText).byteLength,
@@ -6535,6 +6714,7 @@ function purchasingDraftTurns(
         }],
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       };
       const outputText = JSON.stringify({
         status: "success",
@@ -6543,6 +6723,7 @@ function purchasingDraftTurns(
         ) => item),
         resultCount: 1,
         hasMore: false,
+        totalMatches: 1,
       });
       return Promise.resolve({
         result,
@@ -6697,5 +6878,422 @@ Deno.test("una referencia de otra especie no sirve como categoría", async () =>
     ),
     true,
     "una referencia de producto no se canjea como categoría",
+  );
+});
+
+Deno.test("el andamiaje del servidor nunca llega a la burbuja del operador", async () => {
+  // Visto en la app real: el modelo copió el bloque de estado que ve en el
+  // historial y quedó impreso dentro de la respuesta, con su JSON crudo.
+  const store = new TestRunStore();
+  const executor: AgentToolExecutor = {
+    execute: () => Promise.reject(new Error("no tools in this turn")),
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  const response = await executeAgentRun(
+    { ...request(), message: "faltan neumáticos 29" },
+    authority,
+    {
+      providerRouter: providerRouter(() =>
+        Promise.resolve({
+          text:
+            'Comercial Ciclo concentra el 56% de lo comprado.\n\nESTADO_INTERACTIVO_SERVER_OWNED:{"inventoryLists":[{"kind":"inventory_result_list"}]}',
+          toolCalls: [],
+          usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+          finishReason: "stop",
+        })
+      ),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+      toolRegistry: createDefaultAgentToolRegistry(),
+    },
+    new AbortController().signal,
+  );
+  assertEquals(
+    response.text.includes("ESTADO_INTERACTIVO_SERVER_OWNED"),
+    false,
+    "the operator never reads the server marker",
+  );
+  assertEquals(
+    response.text,
+    "Comercial Ciclo concentra el 56% de lo comprado.",
+    "the answer itself survives the trim",
+  );
+});
+
+Deno.test("tres preguntas por línea son una sola pregunta por la lista", () => {
+  // Medido dos veces en producción: ante una lista de tres cosas el modelo
+  // llama la herramienta de una frase tres veces, aun teniendo la de canasta
+  // anunciada. Una vez agotó el presupuesto; la otra concluyó «no hay un único
+  // proveedor» cuando sí lo había, porque tres respuestas por separado no
+  // contienen esa decisión.
+  const merged = coalescedSupplierBasket([
+    {
+      id: "a",
+      name: "rank_purchase_suppliers",
+      arguments: { query: "rayos 27.5", category: null, brand: null, limit: 5 },
+    },
+    {
+      id: "b",
+      name: "rank_purchase_suppliers",
+      arguments: { query: "camaras 29", category: null, brand: null, limit: 5 },
+    },
+    {
+      id: "c",
+      name: "rank_purchase_suppliers",
+      arguments: {
+        query: "cadenas de 11 velocidades",
+        category: null,
+        brand: null,
+        limit: 5,
+      },
+    },
+  ]);
+  assertEquals(merged.length, 1, "the three become one");
+  assertEquals(merged[0].name, "rank_basket_suppliers", "the basket tool runs");
+  assertEquals(
+    merged[0].arguments.queries,
+    ["rayos 27.5", "camaras 29", "cadenas de 11 velocidades"],
+    "every line survives, in the order the operator said them",
+  );
+
+  // Una sola línea se deja como está: la herramienta de una frase es más
+  // barata y la canasta la rechazaría.
+  const single = coalescedSupplierBasket([
+    {
+      id: "a",
+      name: "rank_purchase_suppliers",
+      arguments: { query: "rayos 27.5", category: null, brand: null, limit: 5 },
+    },
+  ]);
+  assertEquals(single.length, 1, "one line stays one line");
+  assertEquals(single[0].name, "rank_purchase_suppliers", "and keeps its tool");
+
+  // Con filtros distintos cada llamada quería algo distinto: no se fusionan.
+  const distintas = coalescedSupplierBasket([
+    {
+      id: "a",
+      name: "rank_purchase_suppliers",
+      arguments: { query: "cadenas", category: null, brand: "KMC", limit: 5 },
+    },
+    {
+      id: "b",
+      name: "rank_purchase_suppliers",
+      arguments: { query: "cadenas", category: null, brand: "Shimano", limit: 5 },
+    },
+  ]);
+  assertEquals(distintas.length, 2, "different filters are different questions");
+});
+
+Deno.test("un JSON mal escrito no vale una corrida entera", async () => {
+  // Medido en producción con «tenemos motores de eje menor a 130mm?»: Gemini
+  // cerró con MALFORMED_FUNCTION_CALL después de dos herramientas que corrieron
+  // bien, y el operador leyó «no pude procesar esa solicitud».
+  const store = new TestRunStore();
+  const executor: AgentToolExecutor = {
+    execute: () => Promise.reject(new Error("no tools in this turn")),
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  let turnos = 0;
+  const response = await executeAgentRun(
+    { ...request(), message: "tenemos motores de eje menor a 130mm?" },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        turnos += 1;
+        // Primer intento: el modelo escribe JSON inválido al llamar una
+        // herramienta. Segundo: contesta bien.
+        return Promise.resolve({
+          text: turnos === 1 ? "" : "No hay motores con eje menor a 130 mm.",
+          toolCalls: [],
+          usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+          finishReason: turnos === 1 ? "malformed_tool_call" : "stop",
+        });
+      }),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+      toolRegistry: createDefaultAgentToolRegistry(),
+    },
+    new AbortController().signal,
+  );
+  assertEquals(turnos, 2, "the malformed turn is asked again, exactly once");
+  assertEquals(
+    response.text,
+    "No hay motores con eje menor a 130 mm.",
+    "the operator gets the answer instead of a failure",
+  );
+});
+
+Deno.test("un JSON mal escrito dos veces entrega el texto que sí hay", async () => {
+  const store = new TestRunStore();
+  const executor: AgentToolExecutor = {
+    execute: () => Promise.reject(new Error("no tools in this turn")),
+    workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+  };
+  let turnos = 0;
+  const response = await executeAgentRun(
+    { ...request(), message: "tenemos motores de eje menor a 130mm?" },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        turnos += 1;
+        return Promise.resolve({
+          // A la segunda ya no es mala suerte, pero el modelo alcanzó a
+          // escribir algo utilizable: tirarlo sería perder la respuesta.
+          text: "Revisé el inventario y no encontré motores bajo 130 mm.",
+          toolCalls: [],
+          usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+          finishReason: "malformed_tool_call",
+        });
+      }),
+      toolExecutor: executor,
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+      toolRegistry: createDefaultAgentToolRegistry(),
+    },
+    new AbortController().signal,
+  );
+  assertEquals(turnos, 2, "asked again once, and no more");
+  assertEquals(
+    response.text,
+    "Revisé el inventario y no encontré motores bajo 130 mm.",
+    "the usable answer survives",
+  );
+});
+
+/// Un calce pegado es una medida, aunque la respuesta salga en prosa.
+///
+/// Medido en la app real el 2026-08-24 con «camara para 700x28»: el modelo
+/// mandó `presentation: "answer"` y ningún predicado, la compuerta lo dejó
+/// pasar por partida doble —el patrón no veía `700x28`, y «answer» estaba
+/// exento— y la respuesta enumeró cinco cámaras con SKU y stock **saltándose
+/// una sexta con 2 unidades disponibles**, más 7 del catálogo. Por ficha son
+/// 12 las que cubren 28 mm y 3 las que tienen stock.
+function inventorySearchTurn(query: string, presentation: string) {
+  return {
+    text: "",
+    toolCalls: [{
+      id: `search-${presentation}`,
+      name: "search_inventory",
+      arguments: {
+        query,
+        category: null,
+        availability: "any",
+        presentation,
+        sort: { field: "relevance", direction: "desc" },
+        limit: 10,
+        selectionMode: "all_matches",
+        operationalPredicates: [],
+        technicalPredicates: [],
+      },
+    }],
+    usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+    finishReason: "tool_calls" as const,
+    continuationToken: `search-${presentation}-1`,
+  };
+}
+
+async function gatedInventorySearch(
+  query: string,
+  presentation: string,
+  viewContext?: AgentGatewayRequest["viewContext"],
+) {
+  const store = new TestRunStore();
+  let providerCalls = 0;
+  let executorCalls = 0;
+  await executeAgentRun(
+    { ...(viewContext ? request(viewContext) : request()), message: query },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        providerCalls++;
+        if (providerCalls === 1) {
+          return Promise.resolve<AgentProviderTurn>(
+            inventorySearchTurn(query, presentation),
+          );
+        }
+        return Promise.resolve(finalTurn("Listo"));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: {
+        execute: () => {
+          executorCalls++;
+          const result = {
+            authorityTenantId: tenantId,
+            asOf: "2026-08-24T12:00:00Z",
+            status: "verifiedEmpty" as const,
+            items: [],
+            resultCount: 0,
+            hasMore: false,
+            totalMatches: 0,
+          };
+          const outputText = JSON.stringify(result);
+          return Promise.resolve({
+            result,
+            outputText,
+            outputBytes: new TextEncoder().encode(outputText).byteLength,
+            succeeded: true,
+          });
+        },
+        workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+      },
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+  return {
+    executorCalls,
+    failureCode: store.toolReceiptInputs[0]?.failureCode,
+  };
+}
+
+/// El abanico del turno es lo que distingue una pregunta de una canasta.
+async function fannedOutInventorySearches(queries: readonly string[]) {
+  const store = new TestRunStore();
+  let providerCalls = 0;
+  let executorCalls = 0;
+  await executeAgentRun(
+    { ...request(), message: queries.join(" y ") },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        providerCalls++;
+        if (providerCalls === 1) {
+          return Promise.resolve<AgentProviderTurn>({
+            text: "",
+            toolCalls: queries.map((query, index) => ({
+              id: `fan-${index}`,
+              name: "search_inventory",
+              arguments: {
+                query,
+                category: null,
+                availability: "any",
+                presentation: "answer",
+                sort: { field: "relevance", direction: "desc" },
+                limit: 10,
+                selectionMode: "all_matches",
+                operationalPredicates: [],
+                technicalPredicates: [],
+              },
+            })),
+            usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+            finishReason: "tool_calls",
+            continuationToken: "fan-1",
+          });
+        }
+        return Promise.resolve(finalTurn("Listo"));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: {
+        execute: () => {
+          executorCalls++;
+          const result = {
+            authorityTenantId: tenantId,
+            asOf: "2026-08-24T12:00:00Z",
+            status: "verifiedEmpty" as const,
+            items: [],
+            resultCount: 0,
+            hasMore: false,
+            totalMatches: 0,
+          };
+          const outputText = JSON.stringify(result);
+          return Promise.resolve({
+            result,
+            outputText,
+            outputBytes: new TextEncoder().encode(outputText).byteLength,
+            succeeded: true,
+          });
+        },
+        workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+      },
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+  return { executorCalls, receipts: store.toolReceiptInputs };
+}
+
+Deno.test("a basket that fans out in one turn resolves every line", async () => {
+  // Las dos nombran una medida; ninguna es la respuesta del operador, que es
+  // la comparación de proveedores que viene después.
+  const { executorCalls, receipts } = await fannedOutInventorySearches([
+    "piñón 9 velocidades",
+    "neumático 27,5 x 2,10",
+  ]);
+  assertEquals(executorCalls, 2, "cada línea de la canasta llega a su RPC");
+  assertEquals(
+    receipts.filter((receipt) => receipt.failureCode === "schema_discovery_required").length,
+    0,
+    "el abanico no gatilla la compuerta de ficha",
+  );
+});
+
+Deno.test("a glued tyre size names a measurement even when the answer is prose", async () => {
+  for (const query of [
+    "camara para 700x28",
+    "que camara me sirve para un neumatico 26x2.1",
+    "camara 26×1.95",
+    "eje 12x142",
+  ]) {
+    for (const presentation of ["answer", "open_list", "open_list_with_analysis"]) {
+      const { executorCalls, failureCode } = await gatedInventorySearch(
+        query,
+        presentation,
+      );
+      assertEquals(
+        executorCalls,
+        0,
+        `«${query}» con presentation=${presentation} no llega a la RPC sin ficha`,
+      );
+      assertEquals(
+        failureCode,
+        "schema_discovery_required",
+        `«${query}» con presentation=${presentation} exige inspeccionar el esquema`,
+      );
+    }
+  }
+});
+
+Deno.test("a code or a SKU is not a measurement and still searches by name", async () => {
+  // Cada uno de éstos trae dígitos y ninguno es una medida. Exigirles ficha
+  // convertiría la búsqueda correcta —por nombre— en dos rondas perdidas.
+  for (
+    const query of [
+      "RD-M6100",
+      "6927116100261",
+      "SM-RT56",
+      "cassette CS-M5100-11",
+      "camara ornate",
+    ]
+  ) {
+    const { failureCode } = await gatedInventorySearch(query, "open_list");
+    assertEquals(
+      failureCode,
+      undefined,
+      `«${query}» busca por nombre sin pasar por la compuerta`,
+    );
+  }
+});
+
+Deno.test("the purchasing lane keeps resolving each line without inspection", async () => {
+  // El carril de compras resuelve la frase por diseño y tiene su propio
+  // presupuesto: la compuerta nunca lo alcanza, cualquiera sea la medida.
+  const { failureCode } = await gatedInventorySearch(
+    "camara para 700x28",
+    "answer",
+    { kind: "intelligent_purchasing", jobIds: [], truncated: false },
+  );
+  assertEquals(
+    failureCode,
+    undefined,
+    "el borrador de compras no queda sin resolver ni una línea",
   );
 });

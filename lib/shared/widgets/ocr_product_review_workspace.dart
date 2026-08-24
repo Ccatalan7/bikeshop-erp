@@ -5,6 +5,7 @@ import '../../modules/inventory/models/brand_models.dart';
 import '../../modules/inventory/models/category_models.dart';
 import '../../modules/inventory/models/inventory_models.dart';
 import '../../modules/inventory/models/product_duplicate_candidate.dart';
+import '../../modules/inventory/services/product_identity/product_identity_matcher.dart';
 import '../themes/vinabike_theme_roles.dart';
 import 'vb_notice.dart';
 import 'vb_searchable_select.dart';
@@ -261,6 +262,7 @@ class OcrProductReviewCallbacks {
   final ValueChanged<String>? onRemoveImage;
   final ValueChanged<String>? onChangeDecision;
   final ValueChanged<bool>? onCostIncludesVatChanged;
+
   final VoidCallback? onBack;
   final VoidCallback? onPrimary;
 }
@@ -294,6 +296,7 @@ class OcrProductReviewProgress {
   final int resolved;
   final int pending;
   final int failed;
+
 
   bool get isComplete => total > 0 && pending == 0 && failed == 0;
 
@@ -1568,9 +1571,13 @@ class _DecisionCell extends StatelessWidget {
           return _candidateDecision(
             context,
             candidate: best,
+            // «Revisión manual» se conserva porque nombra un estado distinto:
+            // una compuerta lo descartó y sólo se ofrece para que el operador
+            // pueda desautorizarla. «Podría ser» es la palabra del contrato
+            // para el nivel más débil de evidencia.
             label: best.isRuledOut || best.isReviewOnlyFamilyScope
                 ? 'Revisión manual'
-                : 'Más parecido',
+                : 'Podría ser',
             tone: roles.warning,
             canInspect: canInspect,
           );
@@ -1638,9 +1645,13 @@ class _DecisionCell extends StatelessWidget {
           return _candidateDecision(
             context,
             candidate: best,
+            // «Revisión manual» se conserva porque nombra un estado distinto:
+            // una compuerta lo descartó y sólo se ofrece para que el operador
+            // pueda desautorizarla. «Podría ser» es la palabra del contrato
+            // para el nivel más débil de evidencia.
             label: best.isRuledOut || best.isReviewOnlyFamilyScope
                 ? 'Revisión manual'
-                : 'Más parecido',
+                : 'Podría ser',
             tone: roles.warning,
             canInspect: canInspect,
           );
@@ -1695,6 +1706,29 @@ class _DecisionCell extends StatelessWidget {
     }
   }
 
+  /// El bloque de decisión de una línea, según el contrato de la superficie
+  /// (`handoff-t22/snippets/contrato-linea.txt` §3 y §4).
+  ///
+  /// **Dos acciones pares, no tres controles en fila.** Antes `Vincular`,
+  /// `Ver alternativas` y `Crear nuevo` salían con el mismo peso tipográfico en
+  /// un `Wrap`, así que la celda no decía cuál era la decisión y cuál el
+  /// desvío. El contrato lo fija: `Vincular existente` **secondary**,
+  /// `Crear nuevo` **primary**, y las alternativas como desplegable
+  /// subordinado.
+  ///
+  /// **Por qué el primario es «Crear nuevo» y no «Vincular».** Parece al revés
+  /// hasta que se mira qué cuesta cada error. Un duplicado se arregla después
+  /// fusionando. Vincular al producto equivocado corrompe el stock **y enseña
+  /// la regla equivocada**: el vínculo persiste el alias del proveedor, así que
+  /// la próxima factura repite el error sola. La acción destructiva no lleva el
+  /// peso visual.
+  ///
+  /// **Las razones que se muestran discriminan; las de ambiente no se
+  /// muestran.** El contrato es explícito: familia, marca, mismo proveedor a
+  /// secas y stock NO son evidencia de identidad. Se derivan de campos
+  /// tipados —códigos de modelo calzados, compuertas `spec:` aprobadas y
+  /// acuerdo de variante—, nunca filtrando el texto de `reasons`, que sería la
+  /// lista escrita a mano que este repositorio ya pagó dos veces.
   Widget _candidateDecision(
     BuildContext context, {
     required ProductDuplicateCandidate candidate,
@@ -1703,17 +1737,43 @@ class _DecisionCell extends StatelessWidget {
     required bool canInspect,
   }) {
     final theme = Theme.of(context);
+    final reasons = _discriminatingReasons(candidate);
+    final identity = <String>[
+      if (candidate.product.sku.trim().isNotEmpty) candidate.product.sku.trim(),
+      ...reasons,
+    ].join(' · ');
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // El objeto propuesto manda: es lo que el operador tiene que leer para
+        // decidir, así que va primero y con el peso más alto de la celda.
+        Text(
+          candidate.product.name,
+          key: Key(
+            'ocr-review-candidate-${line.id}-${candidate.product.id ?? candidate.product.sku}',
+          ),
+          // Una línea, como antes. Con dos, la celda de decisión pasaba a ser
+          // lo más alto de la fila y subía el piso de TODAS: entonces una fila
+          // con un motivo de bloqueo ya no podía crecer más que el resto y el
+          // motivo se recortaba para dejar la tabla pareja, que es justo lo
+          // que el guard de validación prohíbe.
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        // E-01 y su evidencia comparten renglón: el badge dice el NIVEL y el
+        // texto de al lado dice POR QUÉ. Separarlos en dos líneas hacía de la
+        // celda de decisión lo más alto de la fila, y entonces una fila con un
+        // motivo de bloqueo ya no podía crecer por encima del resto.
         Row(
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 6,
-                vertical: 1,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
                 color: tone.container,
                 borderRadius: BorderRadius.circular(999),
@@ -1728,24 +1788,34 @@ class _DecisionCell extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: _OcrProductReviewWorkspaceState.space1),
-            Expanded(
-              child: Text(
-                candidate.product.name,
-                key: Key(
-                  'ocr-review-candidate-${line.id}-${candidate.product.id ?? candidate.product.sku}',
+            if (identity.isNotEmpty) ...[
+              const SizedBox(width: _OcrProductReviewWorkspaceState.space1),
+              Expanded(
+                child: Text(
+                  identity,
+                  key: Key('ocr-review-evidence-${line.id}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 10,
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall,
               ),
-            ),
+            ],
           ],
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: _OcrProductReviewWorkspaceState.space1),
+        // El par de decisión y, al final de la MISMA fila, el desvío.
+        //
+        // Comparte línea con los botones a propósito: darle su propio renglón
+        // subía el piso de altura de TODAS las filas y anulaba el guard que
+        // exige que una fila con un motivo de bloqueo pueda crecer más que las
+        // demás. La jerarquía acá no la da la posición sino el peso: dos
+        // controles con chrome —contorno y relleno— contra un enlace de 10 px.
         _ActionRow(
           children: [
-            FilledButton(
+            OutlinedButton(
               key: Key('ocr-review-link-${line.id}'),
               onPressed: enabled && callbacks.onLinkCandidate != null
                   ? () => callbacks.onLinkCandidate!(
@@ -1753,29 +1823,59 @@ class _DecisionCell extends StatelessWidget {
                         candidate.product,
                       )
                   : null,
+              style: _tinyOutlinedStyle,
+              child: const Text('Vincular existente'),
+            ),
+            FilledButton(
+              key: Key('ocr-review-new-${line.id}'),
+              onPressed: enabled && callbacks.onConfirmNewProduct != null
+                  ? () => callbacks.onConfirmNewProduct!(line.id)
+                  : null,
               style: _tinyFilledStyle,
-              child: const Text('Vincular'),
+              child: const Text('Crear nuevo'),
             ),
             TextButton(
               key: Key('ocr-review-alternatives-${line.id}'),
               onPressed: canInspect && callbacks.onOpenCandidates != null
                   ? () => callbacks.onOpenCandidates!(line.id)
                   : null,
-              style: _tinyButtonStyle,
+              style: _linkButtonStyle,
               child: const Text('Ver alternativas'),
-            ),
-            TextButton(
-              key: Key('ocr-review-new-${line.id}'),
-              onPressed: enabled && callbacks.onConfirmNewProduct != null
-                  ? () => callbacks.onConfirmNewProduct!(line.id)
-                  : null,
-              style: _tinyButtonStyle,
-              child: const Text('Crear nuevo'),
             ),
           ],
         ),
       ],
     );
+  }
+
+  /// Sólo las señales que distinguen ESTE producto de otro de la misma familia.
+  ///
+  /// Salen de campos tipados, no del texto de `reasons`: ahí conviven «Modelo
+  /// G3» y «Diámetro del rotor 160mm», que discriminan, con «Es rotor» y
+  /// «Misma categoría del catálogo», que las trae cualquier candidato de la
+  /// misma estantería y que el contrato prohíbe mostrar como razón.
+  List<String> _discriminatingReasons(ProductDuplicateCandidate candidate) {
+    final out = <String>[];
+    if (candidate.matchedModelCodes.isNotEmpty) {
+      // El código de modelo se compara normalizado en minúscula, pero se
+      // MUESTRA como lo imprime el fabricante: «RT56», no «rt56». Es un
+      // identificador que el mecánico busca en la caja.
+      final codes = candidate.matchedModelCodes.map((c) => c.toUpperCase()).toList()
+        ..sort();
+      out.add('mismo modelo ${codes.join('/')}');
+    }
+    for (final gate in candidate.gates) {
+      if (out.length >= 3) break;
+      if (!gate.id.startsWith('spec:')) continue;
+      if (gate.outcome != IdentityGateOutcome.passed) continue;
+      final detail = gate.detail.trim();
+      if (detail.isEmpty) continue;
+      out.add('${gate.label.toLowerCase()} $detail');
+    }
+    if (candidate.variantAgreement && out.length < 3) {
+      out.add('misma variante');
+    }
+    return out;
   }
 }
 
@@ -1875,6 +1975,28 @@ final ButtonStyle _tinyButtonStyle = TextButton.styleFrom(
   padding: const EdgeInsets.symmetric(horizontal: 8),
   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+);
+
+/// Secundario del par de decisión: mismo alto y misma tipografía que el
+/// primario, distinto peso. Un `TextButton` no servía — leído junto al
+/// primario parecía un enlace y no una de las dos opciones.
+final ButtonStyle _tinyOutlinedStyle = OutlinedButton.styleFrom(
+  minimumSize: const Size(0, 26),
+  padding: const EdgeInsets.symmetric(horizontal: 10),
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+);
+
+/// El desvío. Va bajo el par de decisión, sin peso de botón.
+final ButtonStyle _linkButtonStyle = TextButton.styleFrom(
+  minimumSize: const Size(0, 22),
+  padding: EdgeInsets.zero,
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  textStyle: const TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w600,
+    decoration: TextDecoration.underline,
+  ),
 );
 
 final ButtonStyle _tinyFilledStyle = FilledButton.styleFrom(
@@ -2599,12 +2721,17 @@ class _EvidencePresentation {
 
   factory _EvidencePresentation.forTier(ProductDuplicateMatchTier tier) {
     return switch (tier) {
+      // Las tres palabras las fija el contrato de la superficie
+      // (`handoff-t21/snippets/contrato-revision.txt` §4, heredado por t22 §3):
+      // el badge E-01 dice el nivel de evidencia y NUNCA un porcentaje.
+      // «Casi seguro» sonaba a medición sin serlo; «Muy parecido» describe lo
+      // que el matcher realmente sabe.
       ProductDuplicateMatchTier.exact =>
-        const _EvidencePresentation('Es el mismo', VbStatusTone.success),
+        const _EvidencePresentation('La misma publicación', VbStatusTone.success),
       ProductDuplicateMatchTier.strong =>
-        const _EvidencePresentation('Casi seguro', VbStatusTone.info),
+        const _EvidencePresentation('Muy parecido', VbStatusTone.warning),
       ProductDuplicateMatchTier.possible =>
-        const _EvidencePresentation('Parecido', VbStatusTone.neutral),
+        const _EvidencePresentation('Podría ser', VbStatusTone.neutral),
       // A row never recommends a ruled-out product. It only reaches this
       // surface if one is passed in by mistake, and it must still read
       // honestly rather than borrow another tier's word.

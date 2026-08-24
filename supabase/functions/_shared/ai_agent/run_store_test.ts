@@ -391,3 +391,49 @@ Deno.test("run store preserves a DB-coerced cancelled completion snapshot", asyn
   assertEquals(completion.terminalErrorCode, "run_cancelled", "durable code is retained");
   assertEquals(completion.response, null, "cancelled run has no assistant response");
 });
+
+Deno.test("el Asistente de compras pide más lecturas que una línea suelta", async () => {
+  // Medido en el módulo real: «necesito pastillas de freno shimano, líquido
+  // sellante tubeless y cámaras 29» gastó las ocho llamadas del tope —tres
+  // búsquedas, tres inspecciones y dos reintentos— sin llegar a armar el
+  // borrador, y la lista del operador se perdió entera.
+  const seen: JsonObject[] = [];
+  const client: AgentRpcClient = {
+    rpc(name, parameters) {
+      seen.push({ name, ...parameters });
+      return Promise.resolve(beginEnvelope());
+    },
+  };
+  const store = createSupabaseAgentRunStore(client, client);
+  await store.begin({
+    authority,
+    clientRequestId: "11111111-1111-4111-8111-111111111111",
+    requestHash: "a".repeat(64),
+    userContent: "necesito rayos 27.5, camaras 29 y cadenas de 11v",
+    modelRole: "fast",
+    threadId: null,
+    maxOutputTokens: 1024,
+    multiLinePurchasing: true,
+  }, new AbortController().signal);
+  assertEquals(
+    seen[0].p_tool_call_budget,
+    18,
+    "the purchasing workspace gets room for every line",
+  );
+
+  seen.length = 0;
+  await store.begin({
+    authority,
+    clientRequestId: "22222222-2222-4222-8222-222222222222",
+    requestHash: "b".repeat(64),
+    userContent: "cuanto vendi hoy",
+    modelRole: "fast",
+    threadId: null,
+    maxOutputTokens: 1024,
+  }, new AbortController().signal);
+  assertEquals(
+    seen[0].p_tool_call_budget,
+    8,
+    "every other surface keeps the tighter budget",
+  );
+});

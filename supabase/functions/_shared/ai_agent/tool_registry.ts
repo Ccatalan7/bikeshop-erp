@@ -2,6 +2,7 @@ import type {
   AgentAuthority,
   AgentToolCall,
   AgentToolDefinition,
+  JsonObject,
   JsonValue,
   StrictJsonSchema,
 } from "./contracts.ts";
@@ -18,6 +19,8 @@ const prepareDiagnosisUpdateToolName = "prepare_diagnosis_update";
 const prepareWorkshopItemToolName = "prepare_workshop_item";
 const inventorySchemaToolName = "inspect_inventory_schema";
 const purchaseRankingToolName = "rank_purchase_candidates";
+const supplierRankingToolName = "rank_purchase_suppliers";
+const basketSupplierToolName = "rank_basket_suppliers";
 const purchaseScenarioToolName = "build_purchase_scenarios";
 const prepareSupplyRequestToolName = "prepare_supply_request";
 const capabilityGapToolName = "report_capability_gap";
@@ -40,6 +43,9 @@ export class ToolRegistryError extends Error {
 
 export class AgentToolRegistry {
   readonly #tools: ReadonlyMap<string, AgentToolDefinition>;
+  /// Neutros deducidos de los propios esquemas al construir el registro: una
+  /// tabla escrita a mano se desincroniza en cuanto alguien agrega un campo.
+  readonly #defaults: Readonly<Record<string, MechanicalDefaults>>;
 
   constructor(
     definitions: readonly AgentToolDefinition[],
@@ -59,6 +65,22 @@ export class AgentToolRegistry {
       tools.set(definition.name, freezeDefinition(definition));
     }
     this.#tools = tools;
+    this.#defaults = derivedMechanicalDefaults([...tools.values()]);
+  }
+
+  /// La llamada con sus campos mecánicos completados, tal como el registro la
+  /// validó. Se repara UNA sola vez y esa copia es la que se ejecuta: repararla
+  /// otra vez río abajo mete claves que el ejecutor —que traduce nombres y
+  /// valida claves exactas— rechaza.
+  repairedCall(call: AgentToolCall): AgentToolCall {
+    const repaired = withMechanicalDefaults(
+      call.name,
+      call.arguments,
+      this.#defaults,
+    );
+    return repaired === call.arguments
+      ? call
+      : { ...call, arguments: repaired as Readonly<Record<string, JsonValue>> };
   }
 
   advertisedFor(authority: AgentAuthority): readonly AgentToolDefinition[] {
@@ -94,39 +116,56 @@ export class AgentToolRegistry {
 
   #validateCall(call: AgentToolCall, authority: AgentAuthority, status: 400 | 502): void {
     const definition = this.#requireAllowed(call.name, authority, status);
-    if (!matchesSchema(call.arguments, definition.parameters)) {
+    // El esquema se queda estricto —el repo exige que toda propiedad sea
+    // obligatoria— y lo que se ablanda es la ENTRADA: un campo mecánico que el
+    // modelo omitió se completa con su valor neutro antes de validar, en vez
+    // de costarle una ronda del turno. Sólo se rellena lo ausente; un valor
+    // presente se valida como siempre, y una clave desconocida sigue siendo un
+    // rechazo.
+    const argumentsValue = withMechanicalDefaults(
+      call.name,
+      call.arguments,
+      this.#defaults,
+    );
+    const mismatch = schemaMismatch(argumentsValue, definition.parameters);
+    if (mismatch !== null) {
       throw new ToolRegistryError(
         status,
         "invalid_tool_arguments",
-        "AI tool arguments are invalid",
+        `AI tool arguments are invalid — ${call.name} ${mismatch}`,
       );
     }
+    // Los validadores por herramienta reciben lo REPARADO. Recibiendo lo crudo,
+    // un campo que el relleno acababa de completar volvía a faltar aquí y la
+    // llamada moría igual — con el esquema ya satisfecho, que es la forma más
+    // confusa de fallar.
+    const repaired = argumentsValue as Readonly<Record<string, JsonValue>>;
     if (call.name === publicResearchToolName) {
-      validatePublicResearchProjection(call.arguments, status);
+      validatePublicResearchProjection(repaired, status);
     }
     if (call.name === prepareTaskToolName) {
-      validatePrepareTaskProjection(call.arguments, status);
+      validatePrepareTaskProjection(repaired, status);
     }
     if (call.name === prepareDiagnosisUpdateToolName) {
-      validatePrepareDiagnosisUpdateProjection(call.arguments, status);
+      validatePrepareDiagnosisUpdateProjection(repaired, status);
     }
     if (call.name === prepareWorkshopItemToolName) {
-      validatePrepareWorkshopItemProjection(call.arguments, status);
+      validatePrepareWorkshopItemProjection(repaired, status);
     }
     if (call.name === "get_workshop_job_context") {
-      validateWorkshopJobContextProjection(call.arguments, status);
+      validateWorkshopJobContextProjection(repaired, status);
     }
     if (call.name === "analyze_sales_period") {
-      validateSalesPeriodProjection(call.arguments, status);
+      validateSalesPeriodProjection(repaired, status);
     }
     if (call.name === purchaseRankingToolName) {
-      validatePurchaseRankingProjection(call.arguments, status);
+      validatePurchaseRankingProjection(repaired, status);
     }
     if (call.name === purchaseScenarioToolName) {
-      validatePurchaseScenarioProjection(call.arguments, status);
+      validatePurchaseScenarioProjection(repaired, status);
     }
     if (call.name === prepareSupplyRequestToolName) {
-      validatePrepareSupplyRequestProjection(call.arguments, status);
+      validatePrepareSupplyRequestProjection(repaired, status);
     }
   }
 
@@ -186,7 +225,7 @@ const inventorySearchSchema: StrictJsonSchema = {
       properties: {
         field: {
           type: "string",
-          enum: ["relevance", "name", "stock", "minimum_stock", "price"],
+          enum: ["relevance", "name", "stock", "minimum_stock", "price", "margin", "sold_recently"],
           description: "Campo cerrado por el cual ordenar los productos filtrados.",
         },
         direction: {
@@ -215,7 +254,7 @@ const inventorySearchSchema: StrictJsonSchema = {
       minItems: 0,
       maxItems: 8,
       description:
-        "Predicados sobre claves y operadores que anunció inspect_inventory_schema. No inventes claves ni operadores; los valores sí van como los dijo el operador. Usa [] cuando no haya restricción técnica.",
+        "Predicados sobre claves y operadores que anunció inspect_inventory_schema. No inventes claves ni operadores. **Los valores SÍ se traducen**: pasa el vocabulario que anunció el esquema, no las palabras del operador — «VA», «válvula de auto» y «americana» son el valor Schrader, «VF» y «francesa» son Presta, «aro 26» es la medida 26\". Antes decía lo contrario y el resultado era una búsqueda de texto contra el nombre del producto, que ignora la ficha. Usa [] sólo cuando la petición no nombre ninguna medida ni atributo técnico: si nombra una y llegas sin predicados, el servidor te va a pedir inspeccionar primero. **Una cobertura baja NO significa un dato faltante.** El ancho vive en dos campos según la unidad con que el catálogo escribe esa medida —pulgadas en montaña (`*_width*_in`), milímetros en ruta (`*_width*_mm`)—, así que cada campo cubre sólo su mitad del catálogo y su populatedCount se ve bajo aunque para la medida que te pidieron la cobertura sea total. Elige el campo por la UNIDAD de lo que dijo el operador, nunca por su populatedCount: «700x28», «700x25c» y «28C» son milímetros; «26x2.1», «29x2.4» y «27.5x2.25» son pulgadas. **Una fracción de taller es un número:** «1 3/8», «1-3/8» y «1.3/8» son 1.375, y «1 5/8» es 1.625. **Un neumático tiene un ancho y una cámara cubre una banda:** para «qué neumático 2.25» el predicado es una igualdad sobre el ancho del neumático; para «qué cámara le sirve a un neumático 2.25» son dos, ancho mínimo ≤ 2.25 y ancho máximo ≥ 2.25.",
       items: {
         type: "object",
         properties: {
@@ -254,7 +293,7 @@ const inventorySearchSchema: StrictJsonSchema = {
         properties: {
           field: {
             type: "string",
-            enum: ["stock", "minimum_stock", "price"],
+            enum: ["stock", "minimum_stock", "price", "sold_recently"],
             description: "Campo operativo exacto anunciado por inspect_inventory_schema.",
           },
           operator: {
@@ -337,6 +376,59 @@ const purchaseRankingSchema: StrictJsonSchema = {
     limit: integerProperty(1, 10, "Máximo seguro de alternativas históricas."),
   },
   required: ["catalogItemRef", "query", "profile", "limit"],
+  additionalProperties: false,
+};
+
+const supplierRankingSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    query: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 240,
+      description:
+        "La frase del operador tal como la dijo: «rayos 27.5», «neumáticos 29 de gama media y alta». El servidor la traduce contra el catálogo real —la rama, la medida de ficha y la banda de gama—, así que NO la descompongas ni le quites las palabras de gama. Deja fuera sólo la intención: necesito, faltan, comprar.",
+    },
+    category: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 160,
+      description:
+        "Categoría exacta del catálogo cuando ya se conoce. Casi siempre null: la frase basta.",
+    },
+    brand: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 80,
+      description:
+        "Marca cuando el operador la nombra y quieres saber a quién se le compra ESA marca. Casi siempre null.",
+    },
+    limit: integerProperty(1, 5, "Máximo de proveedores a comparar."),
+  },
+  required: ["query", "category", "brand", "limit"],
+  additionalProperties: false,
+};
+
+const basketSupplierSchema: StrictJsonSchema = {
+  type: "object",
+  properties: {
+    queries: {
+      type: "array",
+      minItems: 2,
+      maxItems: 6,
+      items: {
+        type: "string",
+        minLength: 1,
+        maxLength: 240,
+        description:
+          "Una línea de la lista, en las palabras del operador: «rayos 27.5», «neumáticos 29 de gama media». No la descompongas ni le quites la gama.",
+      },
+      description:
+        "Las líneas de la lista, una por producto o tipo de producto. Dos como mínimo: para una sola frase usa rank_purchase_suppliers, que es más barata.",
+    },
+    limit: integerProperty(1, 5, "Máximo de proveedores a comparar."),
+  },
+  required: ["queries", "limit"],
   additionalProperties: false,
 };
 
@@ -1200,9 +1292,21 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     readTool(
       "search_inventory",
-      "Consulta productos, precio, stock y ficha técnica del inventario autorizado. Hay dos caminos y NO se mezclan. (1) Sin predicados, el que debes preferir: manda en query la frase del operador tal como la dijo y technicalPredicates en []; el servidor la traduce contra el vocabulario real de fichas y las medidas del catálogo, y basta una llamada sin inspección previa. (2) Con predicados: inspecciona antes el esquema en una ronda aparte y usa su categoría y campos exactos; mandarlos sin esa inspección hace que el servidor rechace la llamada. Cada fila trae technicalSpecs con la ficha resuelta del producto: úsala para responder qué medidas o qué características tiene, y nunca deduzcas una especificación del nombre ni la busques en la web. Trae además métricas verificadas del conjunto completo filtrado —conteo, stock total, valor, mínimo, máximo y promedio de precio— para responder totales sin sumar una página truncada. availability expresa estados, no reemplaza un umbral. Usa sort y selectionMode para top-N, y nunca enumeres un conjunto distinto del que devolvió la herramienta.",
+      "Consulta productos, precio, costo, margen, stock y ficha técnica del inventario autorizado. Cada fila trae `soldRecently` (unidades vendidas o usadas en taller en 90 días, así que «nunca se vende» es el predicado operacional sold_recently=0 y «lo que más rota» es sort.field=sold_recently), `cost` y `marginPercent` (margen sobre el precio de venta, nulo si falta costo), y el conjunto trae `inventoryRetailValue` (lo que vale si se vende todo) e `inventoryCostValue` con `costedCount` (la plata inmovilizada y sobre cuántos productos se calculó), así que preguntas como «cuál me deja más margen» se contestan con sort.field=margin y selectionMode=top_n, sin declarar una carencia. Hay dos caminos y NO se mezclan. (1) Sin predicados, el que debes preferir: manda en query la frase del operador tal como la dijo y technicalPredicates en []; el servidor la traduce contra el vocabulario real de fichas y las medidas del catálogo, y basta una llamada sin inspección previa. (2) Con predicados: inspecciona antes el esquema en una ronda aparte y usa su categoría y campos exactos; mandarlos sin esa inspección hace que el servidor rechace la llamada. Cada fila trae technicalSpecs con la ficha resuelta del producto: úsala para responder qué medidas o qué características tiene, y nunca deduzcas una especificación del nombre ni la busques en la web. Trae además métricas verificadas del conjunto completo filtrado —conteo, stock total, valor, mínimo, máximo y promedio de precio— para responder totales sin sumar una página truncada. availability expresa estados, no reemplaza un umbral. Usa sort y selectionMode para top-N, y nunca enumeres un conjunto distinto del que devolvió la herramienta.",
       inventorySearchSchema,
       operationalRead,
+    ),
+    readTool(
+      basketSupplierToolName,
+      "Resuelve una LISTA completa en una sola llamada y decide si conviene un proveedor o repartir en dos. Úsala en cuanto el operador nombre dos o más cosas —«necesito rayos 27.5, cámaras 29 y cadenas de 11v»—, NUNCA llames rank_purchase_suppliers una vez por línea: eso agota el presupuesto del turno y la respuesta se pierde (medido). Devuelve los proveedores ordenados por cuántas líneas de la lista cubre cada uno según el historial real de compras, con `coveredNeeds` de `totalNeeds` y `coveredList`. La fila de rango 1 trae además `missingList` —lo que ese proveedor NO cubre— y `complementSupplierName`, que es el segundo proveedor que completa la lista: ésa es la decisión de repartir, ya calculada; dila tal cual y no la recalcules. Si `missingList` viene nulo, un solo proveedor cubre todo y se dice así. Cubrir significa que se lo hemos comprado, nunca que tenga stock hoy.",
+      basketSupplierSchema,
+      purchasesRead,
+    ),
+    readTool(
+      supplierRankingToolName,
+      "Responde A QUIÉN LE COMPRAMOS UN tipo de producto —una sola frase—, analizando el historial real de facturas de compra. Para una lista de dos o más cosas usa rank_basket_suppliers en su lugar, que las resuelve todas de una vez. Es la herramienta del Asistente de compras cuando el operador pide algo por categoría y características —«necesito rayos 27.5», «faltan neumáticos 29 de gama media y alta»— y no por un producto exacto del catálogo. Devuelve los proveedores ordenados por CONCENTRACIÓN del gasto aterrizado (con flete prorrateado), con su participación, cuántas líneas y facturas la respaldan, hace cuántos días fue la última compra, el costo unitario promedio, las marcas que les compramos, la mezcla de gama y el sitio del proveedor. Cada fila trae `evidencePurchaseLines` y `evidenceSuppliers`: dilo siempre, porque un 57% sobre 17 líneas y un 100% sobre 3 no son la misma respuesta. Si `scopeRelaxed` es true, el servidor tuvo que ensanchar la pregunta para poder contestarla: di qué soltó —`droppedWords` son palabras suyas que no calzaron con ningún producto, `droppedFilters` nombra el filtro que se dejó ir— y presenta el resultado como lo que es, la rama y no la frase literal. Un resultado vacío es un resultado: significa que eso no aparece en el historial de compras, y se dice así, nunca como una herramienta que falló. La disponibilidad del proveedor NUNCA se verifica aquí: esto es historia de compras, no stock del proveedor.",
+      supplierRankingSchema,
+      purchasesRead,
     ),
     readTool(
       purchaseRankingToolName,
@@ -1280,7 +1384,7 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     readTool(
       "search_sales_invoices",
-      "Busca facturas de venta autorizadas por folio, cliente o estado.",
+      "Busca facturas de venta autorizadas por folio, cliente o estado. Sin término devuelve las MÁS RECIENTES, cobradas o no, así que no sirve para cobranza: para «cuánto me deben», «a quién le cobro primero» o cualquier pregunta sobre saldos pendientes usa analyze_cash_and_receivables, que ya trae lo vencido, lo por vencer y el saldo. Mezclar las dos mete facturas con saldo cero en una respuesta de cobranza.",
       boundedSearchSchema,
       salesRead,
     ),
@@ -1298,7 +1402,7 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     readTool(
       "analyze_cash_and_receivables",
-      "Analiza el saldo contable de cuentas configuradas y facturas por cobrar en un horizonte cerrado; no representa saldo bancario, conciliado ni disponible.",
+      "Cobranza: responde «cuánto me deben», «a quién le cobro primero», «qué está vencido» y cualquier pregunta sobre saldos pendientes. Devuelve cada factura por cobrar con su saldo y si está vencida, por vencer o sin fecha, así que NO hace falta combinarla con search_sales_invoices —esa trae las más recientes aunque estén pagadas y ensucia la respuesta con saldos cero—. Analiza además el saldo contable de cuentas configuradas en un horizonte cerrado; no representa saldo bancario, conciliado ni disponible.",
       cashAndReceivablesSchema,
       accountingRead,
     ),
@@ -1334,7 +1438,7 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     readTool(
       prepareWorkshopItemToolName,
-      "Prepara agregar un producto o servicio de catálogo a un trabajo exacto y, cuando corresponde, a su factura vinculada. El servidor toma nombre, tipo y precio del catálogo, revalida bloqueos financieros y sólo escribe tras confirmación explícita.",
+      "Prepara agregar un producto o servicio de catálogo a un trabajo exacto y, cuando corresponde, a su factura vinculada. El servidor toma nombre, tipo y precio del catálogo, revalida bloqueos financieros y sólo escribe tras confirmación explícita. El taller nombra los servicios a su manera: «revisión de frenos» existe en el catálogo como «Regulación de frenos» o «Mantención de Freno». Busca UNA vez el servicio y quédate con lo que esa búsqueda devolvió; si hay un candidato claramente equivalente, propónlo con esta herramienta nombrando el término exacto del catálogo, y si hay varios plausibles pregúntale al operador cuál. Repetir la búsqueda con sinónimos agota el presupuesto del turno y termina sin respuesta, que es peor que proponer el candidato más cercano.",
       prepareWorkshopItemSchema,
       workshopWrite,
     ),
@@ -1745,39 +1849,432 @@ export function validateStrictSchema(schema: StrictJsonSchema): void {
   }
 }
 
-export function matchesSchema(value: JsonValue, schema: StrictJsonSchema): boolean {
+/// Valores neutros para los campos que no son una decisión del modelo.
+///
+/// Medido el 2026-08-22: una de cada dos llamadas a `search_inventory` se
+/// rechazaba por argumentos inválidos —el esquema pide nueve campos, entre
+/// ellos dos arreglos casi siempre vacíos y un objeto `sort`—, y como cada
+/// rechazo gasta una de las cinco rondas del turno, el asistente terminaba en
+/// `agent_budget_exhausted` sin responder nada.
+/// `query: ""` significa «sin filtro» y se escribe `null`. La excepción es la
+/// inspección de ficha, donde la consulta es obligatoria: ahí una cadena vacía
+/// es un error de verdad y tiene que rechazarse.
+const toolsWhereQueryIsRequired = new Set(["inspect_inventory_schema"]);
+
+/// Búsquedas simples: sólo hace falta decir QUÉ se busca. `null` es «sin
+/// filtro» y el tope tiene un valor seguro; omitir cualquiera de los dos no es
+/// una decisión del modelo, y le costaba una de las cinco rondas del turno.
+/// Medido: `search_sales_invoices` rechazada por «falta limit» en una batería
+/// donde todo lo demás pasó.
+const boundedSearchDefaults: Readonly<JsonObject> = { query: null, limit: 10 };
+
+/// Valor neutro de un campo, deducido de su PROPIO esquema.
+///
+/// Escribir la tabla a mano se desincroniza: se agrega un campo obligatorio y
+/// nadie se acuerda de darle su neutro, así que el modelo vuelve a perder
+/// rondas por omitirlo. Aquí el esquema es la fuente: si el enum ofrece «any»,
+/// ése es el neutro; si el tipo admite `null`, es `null`; si es booleano, es
+/// `false`. Un campo que no tiene neutro evidente —`presentation`, `risk` sin
+/// «any», una fecha obligatoria— sigue siendo una decisión del modelo y se
+/// queda sin default.
+function neutralValueFor(schema: StrictJsonSchema | undefined): JsonValue | undefined {
+  if (!schema) return undefined;
   const types = Array.isArray(schema.type) ? schema.type : [schema.type];
-  if (!types.some((type) => matchesType(value, type))) return false;
-  if (schema.enum && !schema.enum.some((candidate) => candidate === value)) return false;
+  if (schema.enum?.some((value) => value === "any")) return "any";
+  if (types.includes("null")) return null;
+  if (types.includes("boolean")) return false;
+  // Un arreglo que admite estar vacío tiene neutro evidente: vacío. Es el caso
+  // de `technicalPredicates` y `clarificationPrompts`, dos de los once campos
+  // obligatorios por línea que el modelo tenía que emitir para decir dos.
+  if (types.includes("array") && !schema.minItems) return [];
+  return undefined;
+}
+
+/// Los topes no son una decisión del operador: si el modelo no dice cuántos
+/// quiere, el máximo seguro que el propio esquema declara.
+function boundedDefaultFor(
+  key: string,
+  schema: StrictJsonSchema | undefined,
+): JsonValue | undefined {
+  if (!schema || (key !== "limit" && key !== "days")) return undefined;
+  return typeof schema.maximum === "number" ? schema.maximum : undefined;
+}
+
+/// Las que escriben tras aprobación no reciben defaults: ahí un campo omitido
+/// es una decisión que falta, no una formalidad. `prepare_supply_request` NO
+/// está en la lista: su contrato es `read`/`allowed` —arma un borrador que el
+/// operador revisa— y exigirle once campos por línea para expresar dos era la
+/// causa principal de que el Asistente de compras fallara.
+const toolsThatWriteOnApproval = new Set([
+  "prepare_task",
+  "prepare_diagnosis_update",
+  "prepare_workshop_item",
+]);
+
+/// Sólo lecturas y borradores. Una herramienta que escribe tras aprobación no
+/// recibe defaults:
+/// ahí un campo omitido es una decisión que falta, no una formalidad.
+///
+/// Y hay campos de lectura que TAMPOCO deben tener default aunque se pudiera:
+/// `analyze_sales_period.basis` elige entre lo emitido y lo cobrado, que en
+/// este negocio son cifras distintas y el dueño lo corrigió explícitamente. Un
+/// default ahí contestaría con confianza la pregunta equivocada. Como su enum
+/// no ofrece «any» ni admite nulo, esta derivación lo deja fuera sola: si algún
+/// día alguien le agrega un «any», estará rompiendo esa distinción.
+export interface MechanicalDefaults {
+  /// Neutros de los campos obligatorios del nivel superior.
+  readonly fields: Readonly<JsonObject>;
+  /// Neutros de los campos obligatorios DENTRO de cada línea de un arreglo.
+  ///
+  /// Aquí vivía el peor caso: `prepare_supply_request` exige once campos por
+  /// línea y sólo dos —qué y cuántos— son decisiones. Los otros nueve son
+  /// formalidades con neutro obvio, y el modelo moría intentando emitirlas. Un
+  /// relleno que sólo mira el nivel superior no toca ese problema.
+  readonly lineFields: Readonly<Record<string, Readonly<JsonObject>>>;
+}
+
+function neutralDefaultsFor(
+  schema: StrictJsonSchema | undefined,
+): JsonObject {
+  const properties = (schema?.properties ?? {}) as Record<string, StrictJsonSchema>;
+  const defaults: JsonObject = {};
+  for (const key of schema?.required ?? []) {
+    const property = properties[key];
+    const neutral = neutralValueFor(property);
+    const value = neutral === undefined ? boundedDefaultFor(key, property) : neutral;
+    if (value !== undefined) defaults[key] = value;
+  }
+  return defaults;
+}
+
+export function derivedMechanicalDefaults(
+  definitions: readonly AgentToolDefinition[],
+): Readonly<Record<string, MechanicalDefaults>> {
+  const table: Record<string, MechanicalDefaults> = {};
+  for (const definition of definitions) {
+    if (toolsThatWriteOnApproval.has(definition.name)) continue;
+    const properties = (definition.parameters.properties ?? {}) as Record<
+      string,
+      StrictJsonSchema
+    >;
+    const fields = neutralDefaultsFor(definition.parameters);
+    const lineFields: Record<string, JsonObject> = {};
+    for (const key of definition.parameters.required ?? []) {
+      const property = properties[key];
+      const types = Array.isArray(property?.type) ? property.type : [property?.type];
+      if (!types.includes("array") || !property?.items) continue;
+      const perLine = neutralDefaultsFor(property.items);
+      if (Object.keys(perLine).length > 0) lineFields[key] = perLine;
+    }
+    if (Object.keys(fields).length > 0 || Object.keys(lineFields).length > 0) {
+      table[definition.name] = Object.freeze({
+        fields: Object.freeze(fields),
+        lineFields: Object.freeze(lineFields),
+      });
+    }
+  }
+  return Object.freeze(table);
+}
+
+/// Neutros que el esquema no puede expresar solo.
+///
+/// `profile` es el objetivo comercial de la petición. El dueño fue explícito
+/// (2026-08-23): mencionó «con buen margen» como un ejemplo al pasar y quedó
+/// convertido en requisito. Debe CONSIDERARSE, no exigirse — así que sin él la
+/// petición vale y el objetivo es equilibrado.
+const handWrittenLineDefaults: Readonly<Record<string, Readonly<JsonObject>>> = {
+  prepare_supply_request: { unit: "unit" },
+};
+
+const mechanicalDefaults: Readonly<Record<string, Readonly<JsonObject>>> = {
+  prepare_supply_request: { profile: "balanced" },
+  // «¿Quién me escribió y no le he respondido?» no tiene término de búsqueda ni
+  // canal ni ventana: son ocho campos obligatorios para una pregunta que sólo
+  // dice «sin responder». Medido: tres llamadas en un turno, una rechazada.
+  search_conversations: {
+    query: null,
+    channel: "any",
+    status: "any",
+    contextType: "any",
+    unreadOnly: false,
+    needsReplyOnly: false,
+    days: 30,
+    limit: 10,
+  },
+  search_customers: boundedSearchDefaults,
+  search_suppliers: boundedSearchDefaults,
+  search_sales_invoices: boundedSearchDefaults,
+  search_inventory: {
+    sort: { field: "relevance", direction: "desc" },
+    limit: 10,
+    selectionMode: "all_matches",
+    technicalPredicates: [],
+    operationalPredicates: [],
+  },
+};
+
+export function withMechanicalDefaults(
+  toolName: string,
+  args: JsonValue,
+  derived?: Readonly<Record<string, MechanicalDefaults>>,
+): JsonValue {
+  // Lo deducido del esquema primero, y encima lo escrito a mano, que sólo
+  // existe para los pocos campos sin neutro evidente en el propio esquema.
+  const derivado = derived?.[toolName];
+  const defaults = derivado || mechanicalDefaults[toolName]
+    ? { ...(derivado?.fields ?? {}), ...(mechanicalDefaults[toolName] ?? {}) }
+    : undefined;
+  const lineFields: Record<string, Readonly<JsonObject>> = {
+    ...(derivado?.lineFields ?? {}),
+  };
+  const aMano = handWrittenLineDefaults[toolName];
+  if (aMano) {
+    for (const key of Object.keys(lineFields)) {
+      lineFields[key] = { ...lineFields[key], ...aMano };
+    }
+  }
+  // La cadena vacía se normaliza en TODA búsqueda, tenga o no valores por
+  // defecto: el mismo rechazo apareció en inventario y en facturas de venta.
+  const normalizaConsultaVacia = !toolsWhereQueryIsRequired.has(toolName);
+  if (
+    (!defaults && !normalizaConsultaVacia) || !args ||
+    typeof args !== "object" || Array.isArray(args)
+  ) {
+    return args;
+  }
+  const completado: JsonObject = { ...args };
+  let cambio = false;
+  // Las líneas de un arreglo se completan una por una. Sin esto,
+  // `prepare_supply_request` —el corazón del Asistente de compras— exigía once
+  // campos por línea para expresar dos, y se rechazaba la llamada entera.
+  for (const [key, perLine] of Object.entries(lineFields)) {
+    const lista = completado[key];
+    if (!Array.isArray(lista) || lista.length === 0) continue;
+    let listaCambio = false;
+    const completada = lista.map((linea) => {
+      if (!linea || typeof linea !== "object" || Array.isArray(linea)) return linea;
+      const item: JsonObject = { ...linea };
+      for (const [campo, valor] of Object.entries(perLine)) {
+        if (!(campo in item)) {
+          item[campo] = valor as JsonValue;
+          listaCambio = true;
+        }
+      }
+      return item;
+    });
+    if (listaCambio) {
+      completado[key] = completada as JsonValue;
+      cambio = true;
+    }
+  }
+  // «sin filtro» se escribe `null`, pero un modelo manda `""` con la misma
+  // intención y el esquema lo rechazaba por «muy corto». La cadena vacía no
+  // tiene otro significado posible acá, así que traducirla no puede esconder
+  // un error: lo único que evita es perder una ronda del turno por una coma.
+  for (const key of normalizaConsultaVacia ? ["query", "category"] : []) {
+    if (completado[key] === "" ) {
+      completado[key] = null;
+      cambio = true;
+    }
+  }
+  // Una pregunta que no se puede mostrar no vale una necesidad.
+  //
+  // Con `clarificationRequired: true` el contrato exige además un texto y al
+  // menos una pregunta tipada de seis campos. Un modelo que expresa la duda sin
+  // construir ese objeto perdía la petición COMPLETA. Se degrada a advertencia:
+  // la línea sobrevive con la duda escrita, que es exactamente lo que el propio
+  // plan pide para una carencia — «clarificationRequired=false y sólo una
+  // advertencia».
+  if (Array.isArray(completado.items)) {
+    let itemsCambio = false;
+    const items = completado.items.map((linea) => {
+      if (!linea || typeof linea !== "object" || Array.isArray(linea)) return linea;
+      const item = linea as JsonObject;
+      if (item.clarificationRequired !== true) {
+        // **Una línea que NO bloquea no puede traer preguntas.** El contrato
+        // exige `clarificationPrompts: []` cuando `clarificationRequired` es
+        // false, y el modelo deja las preguntas puestas de todas formas.
+        //
+        // Medido en el módulo real con «pastillas de freno shimano, sellante
+        // tubeless y cámaras 29»: el borrador se rechazó TRES veces seguidas
+        // con `invalid_tool_arguments` y la lista del operador se perdió
+        // entera. Ninguna de las tres necesidades tenía nada malo: sobraba un
+        // arreglo que el propio modelo había marcado como no necesario.
+        //
+        // Sobra: se vacía. Perder la petición por un campo que el contrato ya
+        // declaró irrelevante es el mismo defecto de siempre.
+        const prompts = item.clarificationPrompts;
+        if (Array.isArray(prompts) && prompts.length > 0) {
+          itemsCambio = true;
+          return { ...item, clarificationPrompts: [] };
+        }
+        return item;
+      }
+      // Con producto exacto ya elegido, una duda bloqueante es una
+      // CONTRADICCIÓN, no una formalidad: degradarla dejaría pasar en silencio
+      // un producto que el propio modelo dijo no poder confirmar. Ahí el
+      // rechazo es correcto y se mantiene.
+      const refExacta = item.catalogItemRef;
+      if (typeof refExacta === "string" && refExacta.trim()) return item;
+      const prompts = item.clarificationPrompts;
+      const usable = Array.isArray(prompts) && prompts.length > 0 &&
+        typeof item.clarification === "string" && item.clarification.trim();
+      if (usable) {
+        // El contrato admite hasta tres preguntas por línea. Una cuarta no
+        // invalida las tres primeras: se recorta, no se pierde la necesidad.
+        if (prompts.length > 3) {
+          itemsCambio = true;
+          return { ...item, clarificationPrompts: prompts.slice(0, 3) };
+        }
+        return item;
+      }
+      itemsCambio = true;
+      return {
+        ...item,
+        clarificationRequired: false,
+        clarificationPrompts: [],
+        clarification: typeof item.clarification === "string" &&
+            item.clarification.trim()
+          ? item.clarification
+          : "Queda una duda por precisar en esta línea.",
+      };
+    });
+    if (itemsCambio) {
+      completado.items = items as JsonValue;
+      cambio = true;
+    }
+  }
+  // Errores de FORMA con intención inequívoca. Se reparan porque no hay otra
+  // lectura posible y porque cada uno cuesta una de las cinco rondas del turno.
+  // Los errores de VOCABULARIO —`availability: "stock"`, `operator: "like"`—
+  // NO se reparan: ahí adivinar sería inventar una intención que el operador
+  // no expresó, y el esquema ya le dice al modelo cuáles son los valores.
+  if (typeof completado.sort === "string") {
+    completado.sort = { field: completado.sort, direction: "desc" };
+    cambio = true;
+  }
+  if (typeof completado.limit === "string" && /^\d+$/.test(completado.limit)) {
+    completado.limit = Number(completado.limit);
+    cambio = true;
+  }
+  for (const key of ["technicalPredicates", "operationalPredicates"]) {
+    const lista = completado[key];
+    if (!Array.isArray(lista)) continue;
+    const reparada: JsonValue[] = [];
+    let listaCambio = false;
+    for (const item of lista) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        reparada.push(item);
+        continue;
+      }
+      const predicado: JsonObject = { ...item };
+      if (!("values" in predicado) && "value" in predicado) {
+        predicado.values = [predicado.value as JsonValue];
+        delete predicado.value;
+        listaCambio = true;
+      }
+      if ("values" in predicado && !Array.isArray(predicado.values)) {
+        predicado.values = [predicado.values as JsonValue];
+        listaCambio = true;
+      }
+      // Un predicado sin valores no restringe nada: sobra, no invalida.
+      if (Array.isArray(predicado.values) && predicado.values.length === 0) {
+        listaCambio = true;
+        continue;
+      }
+      reparada.push(predicado);
+    }
+    if (listaCambio) {
+      completado[key] = reparada;
+      cambio = true;
+    }
+  }
+  for (const [key, value] of Object.entries(defaults ?? {})) {
+    if (!(key in completado)) {
+      completado[key] = value as JsonValue;
+      cambio = true;
+    }
+  }
+  return cambio ? completado : args;
+}
+
+export function matchesSchema(value: JsonValue, schema: StrictJsonSchema): boolean {
+  return schemaMismatch(value, schema) === null;
+}
+
+/// Dónde falla, no sólo que falla.
+///
+/// El rechazo se guardaba como `invalid_tool_arguments` a secas, y un modelo
+/// que insiste con la misma llamada malformada quemaba su presupuesto de
+/// herramientas sin dejar rastro de la causa: medido el 2026-08-22, dos de
+/// cuatro búsquedas rechazadas y el turno muerto por `agent_budget_exhausted`.
+/// La regla vive UNA vez: `matchesSchema` es esta misma función mirando si el
+/// camino salió vacío.
+export function schemaMismatch(
+  value: JsonValue,
+  schema: StrictJsonSchema,
+  path = "",
+): string | null {
+  const where = path || "(raíz)";
+  const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+  if (!types.some((type) => matchesType(value, type))) return `${where}: tipo`;
+  if (schema.enum && !schema.enum.some((candidate) => candidate === value)) {
+    return `${where}: valor no permitido`;
+  }
 
   if (typeof value === "string") {
     const byteLength = new TextEncoder().encode(value).byteLength;
-    if (schema.minLength !== undefined && byteLength < schema.minLength) return false;
-    if (schema.maxLength !== undefined && byteLength > schema.maxLength) return false;
+    if (schema.minLength !== undefined && byteLength < schema.minLength) {
+      return `${where}: muy corto`;
+    }
+    if (schema.maxLength !== undefined && byteLength > schema.maxLength) {
+      return `${where}: muy largo`;
+    }
   }
   if (typeof value === "number") {
-    if (schema.minimum !== undefined && value < schema.minimum) return false;
-    if (schema.maximum !== undefined && value > schema.maximum) return false;
+    if (schema.minimum !== undefined && value < schema.minimum) {
+      return `${where}: bajo el mínimo`;
+    }
+    if (schema.maximum !== undefined && value > schema.maximum) {
+      return `${where}: sobre el máximo`;
+    }
   }
   if (Array.isArray(value)) {
-    if (schema.minItems !== undefined && value.length < schema.minItems) return false;
-    if (schema.maxItems !== undefined && value.length > schema.maxItems) return false;
-    if (schema.items && !value.every((item) => matchesSchema(item, schema.items!))) return false;
+    if (schema.minItems !== undefined && value.length < schema.minItems) {
+      return `${where}: faltan elementos`;
+    }
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) {
+      return `${where}: demasiados elementos`;
+    }
+    if (schema.items) {
+      for (let index = 0; index < value.length; index += 1) {
+        const inner = schemaMismatch(value[index], schema.items, `${where}[${index}]`);
+        if (inner) return inner;
+      }
+    }
   }
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const properties = schema.properties;
-    if (!properties) return false;
+    if (!properties) return `${where}: objeto no esperado`;
     const keys = Object.keys(value);
-    if ((schema.required ?? []).some((key) => !keys.includes(key))) return false;
-    if (schema.additionalProperties === false && keys.some((key) => !(key in properties))) {
-      return false;
+    const missing = (schema.required ?? []).find((key) => !keys.includes(key));
+    if (missing !== undefined) return `${where}: falta ${missing}`;
+    if (schema.additionalProperties === false) {
+      const extra = keys.find((key) => !(key in properties));
+      if (extra !== undefined) return `${where}: sobra ${extra}`;
     }
     for (const [key, propertyValue] of Object.entries(value)) {
       const propertySchema = properties[key];
-      if (propertySchema && !matchesSchema(propertyValue, propertySchema)) return false;
+      if (!propertySchema) continue;
+      const inner = schemaMismatch(
+        propertyValue,
+        propertySchema,
+        path ? `${path}.${key}` : key,
+      );
+      if (inner) return inner;
     }
   }
-  return true;
+  return null;
 }
 
 const validSchemaTypes = new Set([

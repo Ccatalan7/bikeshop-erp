@@ -41,6 +41,18 @@ import {
 
 const MAX_TOOL_ROUNDS = 5;
 const MAX_TOOL_CALLS = 8;
+/// **Una lista cuesta lecturas por línea.** Medido en el módulo real: tres
+/// necesidades en una frase gastaron ocho llamadas —una búsqueda y una
+/// inspección por línea, más un reintento— y la corrida murió antes de armar
+/// el borrador. El operador vio «no pude cerrar el análisis» y perdió la lista
+/// entera, sin que fallara una sola herramienta.
+///
+/// El Asistente de compras es la superficie donde el taller escribe varias
+/// necesidades de una vez, así que ahí el tope es dos lecturas por cada una de
+/// las ocho líneas que el borrador admite, más el borrador. El mismo número
+/// vive en el guard de `assistant_begin_run_v1`: si los dos dejan de decir lo
+/// mismo, uno de ellos mata corridas que el otro autorizó.
+const MAX_PURCHASING_TOOL_CALLS = 18;
 const MAX_TOOL_OUTPUT_BYTES_PER_RUN = 96 * 1024;
 const MAX_TOOL_RECEIPT_OUTPUT_BYTES = 48 * 1024;
 const MAX_VISIBLE_HISTORY_BYTES = 64 * 1024;
@@ -55,6 +67,14 @@ const INVENTORY_SCHEMA_TOOL_NAME = "inspect_inventory_schema";
 const INVENTORY_SEARCH_TOOL_NAME = "search_inventory";
 const CAPABILITY_GAP_TOOL_NAME = "report_capability_gap";
 const PREPARE_SUPPLY_REQUEST_TOOL_NAME = "prepare_supply_request";
+// PENDIENTE (2026-08-23): en la etapa de capturar necesidades, `report_capability_gap`
+// no debería ser un final disponible —el propio preámbulo le pide al modelo
+// conservar la carencia como línea sin resolver—, y hoy una llamada suya mata
+// la corrida con `provider_invalid_response` en vez de corregirse. Sacarla de
+// este conjunto NO alcanza: la prueba «purchasing preserves a zero-coverage
+// request» verifica el contrato completo de esa etapa y falla de otra forma.
+// El arreglo vive en cómo el runtime redirige esa llamada al borrador, no en
+// dejar de anunciarla; no se deja a medias.
 const PURCHASING_DRAFT_TOOL_NAMES = Object.freeze(
   new Set([
     INVENTORY_SCHEMA_TOOL_NAME,
@@ -130,6 +150,11 @@ export async function executeAgentRun(
       modelRole: request.modelRole,
       threadId: request.threadId,
       maxOutputTokens,
+      // El presupuesto se decide antes de conocer el borrador, así que se ata
+      // a la superficie: el Asistente de compras es donde el taller escribe
+      // varias necesidades de una vez.
+      multiLinePurchasing:
+          request.viewContext.kind === "intelligent_purchasing",
     }, signal);
 
     if (lease.runDisposition === "terminal") {
@@ -190,7 +215,13 @@ export async function executeAgentRun(
     let continuationToken: string | undefined;
     let cards: readonly AgentActionCard[] = [];
     let toolRounds = 0;
+    // El JSON inválido de una llamada a herramienta no es determinista: se
+    // vuelve a preguntar UNA vez. La segunda ya no es mala suerte.
+    let malformedToolCallRetried = false;
     let toolCalls = 0;
+    /// Último motivo por el que se rechazó una llamada del modelo en este
+    /// turno. Es la pista que explica un presupuesto agotado.
+    let lastRejectionDetail: string | null = null;
     let toolOutputBytes = 0;
     let nextProviderAttemptNo = lease.nextProviderAttemptNo;
     let nextToolOrdinal = lease.nextToolOrdinal;
@@ -343,7 +374,7 @@ export async function executeAgentRun(
             "AI provider response is invalid",
           );
         }
-        const completion = await options.runStore.complete({
+        const completion = await completeWithoutLosingTheAnswer(options.runStore, {
           lease,
           status: "succeeded",
           content: text,
@@ -413,7 +444,30 @@ export async function executeAgentRun(
           groundedTerminalRecoveryRequired = true;
           continue;
         }
-        if (turn.finishReason !== "stop") {
+        // **Un JSON mal escrito no vale una corrida entera.**
+        //
+        // Medido en producción con «tenemos motores de eje menor a 130mm?»:
+        // Gemini cerró con `MALFORMED_FUNCTION_CALL` —intentó llamar una
+        // herramienta y escribió JSON inválido— después de dos herramientas
+        // que corrieron bien. El operador leyó «no pude procesar esa solicitud»
+        // y perdió el turno completo.
+        //
+        // Es un fallo de formato del modelo y no es determinista: se vuelve a
+        // preguntar una vez. Si a la segunda ya escribió una respuesta
+        // utilizable, se entrega esa en vez de tirarla.
+        if (turn.finishReason === "malformed_tool_call") {
+          if (!malformedToolCallRetried) {
+            malformedToolCallRetried = true;
+            continue;
+          }
+          if (!turn.text.trim()) {
+            throw new AgentRuntimeError(
+              502,
+              "provider_invalid_response",
+              "AI provider response is invalid",
+            );
+          }
+        } else if (turn.finishReason !== "stop") {
           throw new AgentRuntimeError(
             502,
             "provider_invalid_response",
@@ -430,14 +484,18 @@ export async function executeAgentRun(
             ? `${autoOpenAnswer}\n\n${turn.text.trim()}`.trim()
             : autoOpenAnswer ?? turn.text.trim()
           : withPublicSourceCitations(turn.text.trim(), publicSourceUrls);
-        if (!text || utf8Bytes(text) > MAX_FINAL_TEXT_BYTES || turn.finishReason !== "stop") {
+        if (
+          !text || utf8Bytes(text) > MAX_FINAL_TEXT_BYTES ||
+          (turn.finishReason !== "stop" &&
+            turn.finishReason !== "malformed_tool_call")
+        ) {
           throw new AgentRuntimeError(
             502,
             "provider_invalid_response",
             "AI provider response is invalid",
           );
         }
-        const completion = await options.runStore.complete({
+        const completion = await completeWithoutLosingTheAnswer(options.runStore, {
           lease,
           status: "succeeded",
           content: text,
@@ -482,6 +540,9 @@ export async function executeAgentRun(
         options.toolRegistry,
         advertisedToolNames,
       );
+      for (const detail of rejectedToolCallIds.values()) {
+        lastRejectionDetail = detail;
+      }
 
       toolRounds += 1;
       toolCalls += turn.toolCalls.length;
@@ -495,26 +556,53 @@ export async function executeAgentRun(
         !rejectedToolCallIds.has(turn.toolCalls[0].id);
       if (
         (toolRounds > MAX_TOOL_ROUNDS && !terminalSupplyDraftOverflow) ||
-        toolCalls > MAX_TOOL_CALLS ||
+        toolCalls >
+          (purchasingDraftMode ? MAX_PURCHASING_TOOL_CALLS : MAX_TOOL_CALLS) ||
         !turn.continuationToken ||
         new TextEncoder().encode(turn.continuationToken).byteLength >
           MAX_CONTINUATION_BYTES
       ) {
+        // Por qué se acabó, no sólo que se acabó. Cuando lo que consumió el
+        // turno fueron llamadas rechazadas, decir «intenta de nuevo» manda al
+        // operador a repetir algo que va a fallar igual, y a quien mantiene
+        // esto le esconde la única pista que había.
+        if (lastRejectionDetail) {
+          throw new AgentRuntimeError(
+            409,
+            "agent_budget_exhausted",
+            `Assistant request reached its safe limit — ${lastRejectionDetail}`,
+          );
+        }
         throw new AgentRuntimeError(
           409,
           "agent_budget_exhausted",
           "Assistant request reached its safe limit",
         );
       }
+      const turnCalls = coalescedSupplierBasket(turn.toolCalls);
       messages.push({
         role: "assistant",
         text: turn.text,
-        toolCalls: turn.toolCalls,
+        toolCalls: turnCalls,
       });
       continuationToken = turn.continuationToken;
       const inventorySchemaBeforeTurn = inventorySchemaSnapshot;
+      // **Una pregunta se contesta; una lista se resuelve línea por línea.**
+      // Es la diferencia que la compuerta necesita y la única observable en el
+      // momento de decidir: cuando el turno abre VARIAS búsquedas de inventario
+      // a la vez, cada una está resolviendo una línea que después alimenta
+      // `build_purchase_scenarios` — ahí exigir ficha dejaba la canasta sin
+      // resolver ni una línea. Cuando abre UNA, esa búsqueda es la respuesta
+      // que va a leer el operador.
+      //
+      // Medido el 2026-08-24 en producción: las dos búsquedas de «camara para
+      // 700x28» llegaron en `provider_attempt_id` distintos —una por turno—,
+      // mientras que las de una canasta comparten turno.
+      const inventorySearchesThisTurn = turnCalls.filter(
+        (candidate) => candidate.name === INVENTORY_SEARCH_TOOL_NAME,
+      ).length;
 
-      for (const call of turn.toolCalls) {
+      for (const call of turnCalls) {
         throwIfAborted(signal);
         const startedAt = new Date().toISOString();
         const providerCallHash = await hasher.hashText(call.id);
@@ -545,6 +633,10 @@ export async function executeAgentRun(
             outputHash: await hasher.hashText(modelOutput.text),
             resultCount: 0,
             outputBytes: modelOutput.bytes,
+            // El código se mantiene ESTABLE a propósito: es lo que permite
+            // agrupar rechazos. El detalle de qué argumento falló viaja en el
+            // mensaje que recibe el modelo —que es quien tiene que
+            // corregirlo—, no en esta etiqueta.
             failureCode: "invalid_tool_arguments",
             startedAt,
             completedAt: new Date().toISOString(),
@@ -565,7 +657,14 @@ export async function executeAgentRun(
           continue;
         }
         let execution: AgentToolExecution | undefined;
-        let executableCall: AgentToolCall = call;
+        // La llamada se repara UNA vez, aquí, antes de resolver referencias y
+        // de ejecutar: es la misma copia que el registro validó. Sin esto, una
+        // llamada que el esquema aceptó moría después por un campo mecánico
+        // que el relleno ya había completado — el modelo hacía todo bien y la
+        // herramienta fallaba igual.
+        let executableCall: AgentToolCall = options.toolRegistry.repairedCall(
+          call,
+        );
         let forcedCapabilityGapArguments: JsonObject | undefined;
         if (
           clarificationRound && call.name === PREPARE_SUPPLY_REQUEST_TOOL_NAME
@@ -594,7 +693,10 @@ export async function executeAgentRun(
           );
         }
         try {
-          executableCall = resolveToolEntityReferences(call, entityReferences);
+          executableCall = resolveToolEntityReferences(
+            executableCall,
+            entityReferences,
+          );
         } catch (_) {
           execution = syntheticToolFailure(
             authority.tenantId,
@@ -626,6 +728,48 @@ export async function executeAgentRun(
               authority.tenantId,
               "schema_discovery_required",
               "Primero llama inspect_inventory_schema y usa exactamente una categoría, campos y operadores devueltos en esa ronda.",
+            );
+          } else if (
+            execution === undefined &&
+            call.name === INVENTORY_SEARCH_TOOL_NAME &&
+            !hasTechnicalInventoryPredicates(executableCall.arguments) &&
+            inventoryQueryNamesAMeasurement(executableCall.arguments) &&
+            inventorySchemaBeforeTurn === undefined &&
+            // **Corrección 2026-08-24: la exención estaba trazada en el eje
+            // equivocado.** Decía que la compuerta protege «lo que el operador
+            // va a MIRAR», y por eso dejaba pasar `presentation: "answer"` como
+            // si toda respuesta en prosa fuera un paso interno. No lo es: a
+            // «camara para 700x28» el asistente contestó en prosa, nombrando
+            // producto, SKU y stock de cinco cámaras —y se saltó una sexta con
+            // 2 unidades disponibles, además de 7 del catálogo—, porque el
+            // conjunto salió de comparar la frase contra el nombre. Una prosa
+            // que enumera SKUs engaña MÁS que una lista equivocada, porque el
+            // operador no tiene cómo ver qué quedó fuera.
+            //
+            // Lo que sí es un paso interno es el carril de compras, y ese ya
+            // tiene su propia guarda abajo. Además la compuerta se evalúa
+            // contra `inventorySchemaBeforeTurn`, que es de la CORRIDA: dispara
+            // una vez y no una por línea, así que el costo que justificó la
+            // exención —«dejaba la canasta sin resolver ni una línea»— es una
+            // llamada, no N.
+            //
+            // Lo que reemplaza la exención es el abanico del turno: una sola
+            // búsqueda es la respuesta del operador, varias son las líneas de
+            // una canasta. Ver `inventorySearchesThisTurn`.
+            inventorySearchesThisTurn === 1 &&
+            !purchasingDraftMode
+          ) {
+            execution = syntheticToolFailure(
+              authority.tenantId,
+              "schema_discovery_required",
+              "La petición nombra una medida y vino sin predicados técnicos: " +
+                "buscar por texto compara la frase contra el nombre del " +
+                "producto y no usa la ficha. Llama inspect_inventory_schema, " +
+                "que anuncia los campos con su vocabulario permitido, y " +
+                "TRADUCE lo que dijo el operador a ese vocabulario — «VA», " +
+                "«válvula de auto» y «americana» son el valor Schrader; «VF» y " +
+                "«francesa» son Presta. Si ningún campo cubre lo que pidió, " +
+                "repite la búsqueda sin predicados y dilo.",
             );
           } else if (
             execution === undefined &&
@@ -869,7 +1013,7 @@ export async function executeAgentRun(
           turn.toolCalls.length === 1
         ) {
           const text = renderPreparedSupplyDraftAnswer(cards);
-          const completion = await options.runStore.complete({
+          const completion = await completeWithoutLosingTheAnswer(options.runStore, {
             lease,
             status: "succeeded",
             content: text,
@@ -911,7 +1055,7 @@ export async function executeAgentRun(
             inventorySchemaSnapshot,
             execution.failureCode,
           );
-          const completion = await options.runStore.complete({
+          const completion = await completeWithoutLosingTheAnswer(options.runStore, {
             lease,
             status: "succeeded",
             content: text,
@@ -947,7 +1091,7 @@ export async function executeAgentRun(
             inventorySchemaSnapshot,
             lastCapabilityFailureCode,
           );
-          const completion = await options.runStore.complete({
+          const completion = await completeWithoutLosingTheAnswer(options.runStore, {
             lease,
             status: "succeeded",
             content: text,
@@ -996,7 +1140,7 @@ export async function executeAgentRun(
         const finalizationSignal = signal.aborted
           ? freshAdminSignal()
           : AbortSignal.any([signal, freshAdminSignal()]);
-        const completion = await options.runStore.complete({
+        const completion = await completeWithoutLosingTheAnswer(options.runStore, {
           lease,
           status: runtimeError.terminalStatus,
           errorCode: runtimeError.code,
@@ -1904,6 +2048,115 @@ function visibleCanonicalMessageText(
   }`;
 }
 
+
+/// **Tres preguntas iguales son una sola pregunta.**
+///
+/// Ante «necesito rayos 27.5, cámaras 29 y cadenas de 11v, ¿a quién le pido
+/// todo eso?» el modelo llama `rank_purchase_suppliers` una vez por línea, aun
+/// teniendo `rank_basket_suppliers` anunciada y descrita para ese caso. Medido
+/// dos veces en producción: la primera agotó el presupuesto del turno a los
+/// 38,7 s y la respuesta se perdió entera; la segunda alcanzó a contestar y
+/// concluyó «no hay un único proveedor que concentre los tres» cuando SÍ lo
+/// había —RBX cubre las tres—, porque tres respuestas por separado no
+/// contienen esa decisión: nadie las cruza.
+///
+/// No se le vuelve a pedir al modelo que elija bien. Se repara la forma: N
+/// preguntas por línea son UNA pregunta por la lista, y la cobertura y el
+/// reparto se calculan donde están los datos.
+///
+/// Sólo se fusiona lo idéntico en intención —la misma herramienta, en el mismo
+/// turno, con una frase cada una—. Si el modelo mezcló filtros de categoría o
+/// marca, cada llamada quería algo distinto y se dejan como están.
+export function coalescedSupplierBasket(
+  calls: readonly AgentToolCall[],
+): readonly AgentToolCall[] {
+  const byLine = calls.filter((call) =>
+    call.name === "rank_purchase_suppliers" &&
+    typeof call.arguments?.query === "string" &&
+    (call.arguments.query as string).trim().length > 0 &&
+    call.arguments.category === null && call.arguments.brand === null
+  );
+  if (byLine.length < 2 || byLine.length > 6) return calls;
+  const queries: string[] = [];
+  for (const call of byLine) {
+    const line = (call.arguments.query as string).trim();
+    if (!queries.includes(line)) queries.push(line);
+  }
+  if (queries.length < 2) return calls;
+  const first = byLine[0];
+  const basket: AgentToolCall = {
+    // El id del primero: el proveedor espera una respuesta por cada llamada que
+    // emitió, y las demás se retiran del turno junto con su pregunta.
+    id: first.id,
+    name: "rank_basket_suppliers",
+    arguments: { queries, limit: Math.min(queries.length + 1, 5) },
+  };
+  const merged = new Set(byLine.map((call) => call.id));
+  return [
+    basket,
+    ...calls.filter((call) => !merged.has(call.id)),
+  ];
+}
+
+/// Cierra la corrida sin perder la respuesta si las tarjetas la hacen inválida.
+///
+/// `assistant_complete_run_v2` valida la respuesta terminal completa —contenido
+/// y tarjetas— y la rechaza entera con SQLSTATE 22023. Cuando eso pasa, el
+/// operador lee «no pude procesar esa solicitud» después de que el turno ya
+/// buscó, razonó y redactó: se tira a la basura una respuesta correcta por un
+/// problema de presentación. Medido: 5 corridas así hasta el 2026-08-23.
+///
+/// El texto es la respuesta; las tarjetas son atajos para abrir pantallas. Si
+/// el cierre rechaza el conjunto, se reintenta una vez sin tarjetas. Un
+/// segundo rechazo sí es terminal, porque entonces el problema está en el
+/// contenido y no hay nada que salvar.
+/// El estado interactivo es andamiaje del servidor, y el modelo lo copia.
+///
+/// Visto en la app real: la respuesta a «faltan neumáticos 29 de gama media y
+/// alta» terminaba con `ESTADO_INTERACTIVO_SERVER_OWNED:{"inventoryLists":…}`
+/// impreso dentro de la burbuja. El bloque se le muestra al modelo en el
+/// historial para que conserve los filtros de la lista que el operador todavía
+/// ve; nada le impedía repetirlo como texto.
+///
+/// La instrucción se lo prohíbe, pero una prohibición no es una garantía: aquí
+/// se recorta. El marcador sólo puede aparecer donde el servidor lo escribe.
+function withoutServerScaffolding(content: string): string {
+  const marker = content.indexOf("ESTADO_INTERACTIVO_SERVER_OWNED");
+  if (marker < 0) return content;
+  return content.slice(0, marker).trimEnd();
+}
+
+async function completeWithoutLosingTheAnswer(
+  runStore: AgentRunStore,
+  input: Parameters<AgentRunStore["complete"]>[0],
+  signal: AbortSignal,
+): Promise<Awaited<ReturnType<AgentRunStore["complete"]>>> {
+  if (typeof input.content === "string") {
+    const cleaned = withoutServerScaffolding(input.content);
+    // Un recorte no puede dejar al operador con una burbuja vacía: si el
+    // modelo respondió SÓLO con el andamiaje, se conserva lo que escribió y
+    // el defecto queda visible en vez de convertirse en silencio.
+    if (cleaned) input = { ...input, content: cleaned };
+  }
+  try {
+    return await runStore.complete(input, signal);
+  } catch (error) {
+    // La base rechaza la respuesta terminal con SQLSTATE 22023, que el
+    // transporte traduce a este par (code/outcome). El nombre del outcome
+    // engaña: no es un choque de idempotencia, es «argumentos inválidos».
+    const rejected = error as { code?: unknown; outcome?: unknown };
+    const rejectedTerminalResponse = rejected?.code === "rpc_invalid_response" &&
+      rejected?.outcome === "idempotency_conflict";
+    if (
+      !rejectedTerminalResponse || signal.aborted ||
+      !input.cards || input.cards.length === 0
+    ) {
+      throw error;
+    }
+    return await runStore.complete({ ...input, cards: [] }, signal);
+  }
+}
+
 function buildSystemInstruction(
   configured: string | undefined,
   purchasingDraftMode = false,
@@ -1916,9 +2169,18 @@ function buildSystemInstruction(
     : "Si la inspección muestra populatedCount=0, una igualdad o membresía exacta (eq/in) todavía puede consultar search_inventory: PostgreSQL la comprueba sólo contra identidad curada de nombre/modelo y rotula cada fila identity_fallback. Explica esa procedencia y no la presentes como ficha técnica poblada. Para rangos, desigualdades, contains u otra comparación sin cobertura, no uses nombres: ejecuta igualmente search_inventory con la frase del operador y, sólo si esa búsqueda ya corrió y el campo sigue sin cobertura, llama report_capability_gap con missing_structured_data y field igual a la clave exacta inspeccionada.";
   const supplyWorkflowRule = purchasingDraftMode
     ? "Este workspace está en la etapa de capturar y revisar necesidades, no en la etapa de elegir proveedor. Después de inspeccionar la ficha y consultar inventario, termina siempre con una única llamada prepare_supply_request: enlaza catalogItemRef sólo si search_inventory demostró una identidad exacta y deja unresolved cualquier alternativa o carencia. Conserva margen, gama, marca, urgencia y demás objetivos comerciales en preference/profile para que los pasos posteriores calculen el ranking. No compares proveedores ni construyas escenarios de canasta durante esta etapa, aunque el operador mencione rentabilidad o varios productos; prepara una línea por producto y deja que el flujo guiado revise primero el stock."
-    : "Si existe stock interno suficiente, preséntalo antes de proveedores. Sólo compara compra externa cuando el stock sea insuficiente, esté agotado o el operador descarte explícitamente una alternativa interna. rank_purchase_candidates acepta una catalogItemRef exacta o una identidad breve, nunca ambas; sus proveedores son alternativas históricas con disponibilidad no verificada. Para una canasta, resuelve primero cada producto exacto y luego usa build_purchase_scenarios con sus referencias, cantidades y un máximo de proveedores; externalOnly sólo puede ser true por descarte explícito del operador. Explica costo aterrizado, margen, historial, recencia, cobertura y calidad de evidencia sin presentar el score como certeza, esconder líneas faltantes ni crear una compra.";
+    : "Si existe stock interno suficiente, preséntalo antes de proveedores. Sólo compara compra externa cuando el stock sea insuficiente, esté agotado o el operador descarte explícitamente una alternativa interna. Cuando la pregunta es por TIPO de producto y características —«necesito rayos 27.5», «faltan neumáticos 29 de gama media y alta», «a quién le compramos cámaras»— la herramienta es rank_purchase_suppliers, y se le manda la frase del operador COMPLETA, sin descomponerla y sin quitarle las palabras de gama: el servidor la traduce. Si el operador nombra DOS O MÁS cosas, usa rank_basket_suppliers UNA vez con todas las líneas: llamar la herramienta de una frase varias veces agota el presupuesto del turno y la respuesta se pierde entera. Esa herramienta ya trae decidido si conviene un proveedor o repartir en dos —`missingList` y `complementSupplierName` en la fila de rango 1—: dilo tal cual y no lo recalcules. Contesta con el proveedor concentrado y la evidencia que lo sostiene —«de 17 líneas de rayos, 7 son de Derman: el 57% del gasto»—, di hace cuánto fue la última compra, y no la presentes como disponibilidad actual. rank_purchase_candidates acepta una catalogItemRef exacta o una identidad breve, nunca ambas; sus proveedores son alternativas históricas con disponibilidad no verificada. Para una canasta, resuelve primero cada producto exacto y luego usa build_purchase_scenarios con sus referencias, cantidades y un máximo de proveedores; externalOnly sólo puede ser true por descarte explícito del operador. Explica costo aterrizado, margen, historial, recencia, cobertura y calidad de evidencia sin presentar el score como certeza, esconder líneas faltantes ni crear una compra.";
   let base = configured?.trim() ||
     "Eres el agente operativo general de Viñabike. Interpreta el objetivo del operador desde lenguaje libre y el contexto visible, planifica los pasos necesarios y usa cualquier combinación de herramientas anunciadas que aporte evidencia útil. Puedes encadenar múltiples lecturas ERP e investigación pública en un mismo turno para comparar, priorizar, diagnosticar y conectar ideas; no exijas frases exactas ni supongas una sola intención. Si el operador pide explícitamente consultar la web, información actual, opiniones públicas o una fuente o sitio nombrado, y research_public_web está anunciada, debes usarla: no digas que careces de esa capacidad. Sintetiza conclusiones accionables y ofrece las tarjetas pertinentes, sin afirmar acciones que no ejecutaste. Una herramienta de preparación sólo crea una propuesta: nunca digas que la acción fue ejecutada y deja su confirmación al operador en la tarjeta. Responde con la menor extensión que complete bien el objetivo; para investigación pública usa como máximo 800 palabras, no copies JSON ni repitas el payload de fuentes. Cita cada fuente web con su URL HTTPS exacta. No inventes datos, permisos, resultados ni fuentes. Distingue un resultado vacío de una fuente parcial o no disponible.";
+  // La respuesta se lee en una columna de chat, no en una página. Una tabla
+  // Markdown ahí no se renderiza: sale una letra por línea y con los `<br>` a
+  // la vista. Pasó con una comparación de proveedores el 2026-08-23 y la
+  // respuesta quedó ilegible pese a ser correcta.
+  base +=
+    " Escribes para una columna angosta de chat. NUNCA uses tablas Markdown ni" +
+    " HTML —ni `|---|`, ni `<br>`, ni `<td>`—: no se renderizan y la respuesta" +
+    " sale ilegible. Para comparar, usa una lista donde cada elemento es una" +
+    " opción y sus datos van en la misma línea o en subviñetas cortas.";
   base +=
     " Para inventario, conserva también el orden y la cantidad pedidos. Si el operador pide los mayores, menores o una cantidad N, usa sort, limit y selectionMode=top_n; no reordenes ni recortes una lista en prosa. Para conteos o resúmenes usa presentation=answer y las métricas verificadas del conjunto completo devueltas por search_inventory; nunca calcules un total desde una página truncada. Usa presentation=open_list sólo cuando abrir la lista sea toda la respuesta pedida. Si además solicita explicar, comparar, priorizar o recomendar sobre esa misma selección, usa open_list_with_analysis y reserva la prosa final para esa explicación: el servidor agregará por separado la confirmación de apertura.";
   base +=
@@ -1929,7 +2191,7 @@ function buildSystemInstruction(
     }`;
   base +=
     " Tu objetivo operativo no termina en resumir datos: cuando el operador pide un cambio y existe una herramienta prepare_*, resuelve primero identidades y revisiones exactas con las lecturas anunciadas, prepara el cambio tipado y deja la confirmación a la tarjeta. Nunca conviertas texto libre directamente en una escritura ni digas que la preparación ya ejecutó el cambio. Las referencias jobRef y catalogItemRef son opacas, duran sólo este turno y deben copiarse literalmente desde el resultado que las publicó; nunca uses un UUID interno visto en otro campo ni inventes una referencia. Cuando el operador pida contactar, avisar, escribirle o mandarle un mensaje a un cliente, llama SIEMPRE primero a prepare_customer_contact: resuelve si la ventana de servicio de 24 horas está abierta, que es lo que decide si se puede escribir libre o sólo con una plantilla aprobada. La tarjeta ofrece las opciones con el texto exacto y el operador confirma; tú nunca envías ni afirmas que se envió, y no declares que falta una herramienta para contactar a un cliente. Para acciones del taller, search_workshop_jobs resuelve candidatos y publica jobRef; get_workshop_job_context recibe esa jobRef y fija trabajo, bicicleta, factura y revisión; inspect_diagnosis_schema fija campo, tipo y unidad antes de prepare_diagnosis_update. Para agregar productos o servicios, usa el catalogItemRef exacto devuelto por search_inventory y prepare_workshop_item; el servidor posee UUID, nombre, tipo y precio. Si una relación cliente-bicicleta-trabajo-factura no queda unívoca, no elijas por parecido: pide la mínima aclaración. Para períodos como semana pasada usa analyze_sales_period con un rango relativo server-owned; collected significa pagos reales, no un estado inferido de factura. Para cualquier ranking por cliente —quién compró más, mejores clientes del mes, top de clientes— usa rank_sales_customers con el mismo rango: analyze_sales_period devuelve el total del período y la factura más alta, no el desglose por cliente, y que no lo traiga NO es una carencia del sistema.";
-  return `${base}\n\nREGLAS_INVARIABLES_DEL_SERVIDOR: Las herramientas anunciadas son capacidades amplias y componibles y forman el contrato completo de capacidades autorizadas para este turno. Decide cuáles encadenar según la intención; no exijas frases exactas ni asumas una sola intención. Un bloque ESTADO_INTERACTIVO_SERVER_OWNED dentro de un mensaje assistant es la proyección segura de la tarjeta que el operador todavía ve. En un seguimiento elíptico conserva los filtros de su lista más reciente y combina sólo las nuevas restricciones explícitas; si el operador inicia otra búsqueda, reemplázalos. Ese estado no prueba stock vigente: vuelve a llamar la herramienta y nunca copies resultCount como respuesta actual. Para búsquedas de inventario, preserva literalmente cada condición explícita: categoría, identidad, disponibilidad, comparación operativa y especificación técnica son filtros distintos y acumulativos. availability expresa estados como en stock o agotado; nunca reemplaza cantidades, precios ni otros umbrales. Usa operationalPredicates para comparaciones exactas sobre los campos operativos anunciados y conserva estrictamente gt frente a gte, y lt frente a lte. Para toda búsqueda de inventario que contenga medidas, rangos, estándares o compatibilidad tienes dos caminos y debes preferir el primero: llamar search_inventory con la frase del operador tal como la dijo en query y technicalPredicates=[]. El servidor traduce esa frase contra el vocabulario real de las fichas y contra las medidas del catálogo, arma los filtros y descarta las palabras que no resuelven; ese camino no necesita inspección previa y una sola llamada basta. NUNCA declares una carencia de inventario —de ningún motivo— sin haber ejecutado al menos esa búsqueda: una búsqueda vacía es un resultado que se informa como cero coincidencias, no una fuente no disponible. Sólo si vas a construir technicalPredicates tú mismo, llama primero y en una ronda separada a inspect_inventory_schema; mandar predicados sin esa inspección hace que el servidor rechace la llamada. Usa después exactamente la categoría, field, dataType y operators devueltos para construir technicalPredicates u operationalPredicates; query contiene sólo identidad/contexto y puede ser null. No inventes campos ni conviertas una comparación en coincidencia textual. Los VALORES de un campo de lista son la única excepción a esa exactitud: manda el término como lo dijo el operador —«caja inglesa», «sellado», «hollowtech», «mid bmx»— y el servidor lo resuelve contra allowedValues antes de filtrar. No necesitas reproducir la entrada literal ni abstenerte por no tenerla. Un valor que no resuelve descarta sólo ese predicado y la búsqueda continúa con los demás, así que intentar siempre da más información que no filtrar. Por eso inspeccionar el esquema NUNCA prueba que un filtro sea imposible: si el campo existe en la inspección, ejecuta search_inventory y deja que el resultado lo demuestre. No uses report_capability_gap con unsupported_filter sobre un campo que la inspección devolvió y que no intentaste buscar. El servidor vincula el plan técnico a la última inspección y valida category contra product_categories y sus descendientes; product_spec_values es la autoridad técnica. La identidad curada sólo puede suplir una igualdad exacta cuando la ficha está vacía; nunca satisface rangos, desigualdades ni comparaciones. ${missingStructuredDataRule} En cualquier otra limitación, field debe ser null. Si ninguna herramienta anunciada puede ejecutar la operación pedida, llama report_capability_gap con missing_tool; si falta permiso, usa permission_required; si la petición necesita aclaración material, ambiguous_request${
+  return `${base}\n\nREGLAS_INVARIABLES_DEL_SERVIDOR: Las herramientas anunciadas son capacidades amplias y componibles y forman el contrato completo de capacidades autorizadas para este turno. Decide cuáles encadenar según la intención; no exijas frases exactas ni asumas una sola intención. Un bloque ESTADO_INTERACTIVO_SERVER_OWNED dentro de un mensaje assistant es la proyección segura de la tarjeta que el operador todavía ve; es andamiaje interno y NUNCA se escribe en tu respuesta: el operador no debe leer ese marcador ni su JSON. En un seguimiento elíptico conserva los filtros de su lista más reciente y combina sólo las nuevas restricciones explícitas; si el operador inicia otra búsqueda, reemplázalos. Ese estado no prueba stock vigente: vuelve a llamar la herramienta y nunca copies resultCount como respuesta actual. Para búsquedas de inventario, preserva literalmente cada condición explícita: categoría, identidad, disponibilidad, comparación operativa y especificación técnica son filtros distintos y acumulativos. availability expresa estados como en stock o agotado; nunca reemplaza cantidades, precios ni otros umbrales. Usa operationalPredicates para comparaciones exactas sobre los campos operativos anunciados y conserva estrictamente gt frente a gte, y lt frente a lte. Para toda búsqueda de inventario que contenga medidas, rangos, estándares o compatibilidad tienes dos caminos y debes preferir el primero: llamar search_inventory con la frase del operador tal como la dijo en query y technicalPredicates=[]. El servidor traduce esa frase contra el vocabulario real de las fichas y contra las medidas del catálogo, arma los filtros y descarta las palabras que no resuelven; ese camino no necesita inspección previa y una sola llamada basta. NUNCA declares una carencia de inventario —de ningún motivo— sin haber ejecutado al menos esa búsqueda: una búsqueda vacía es un resultado que se informa como cero coincidencias, no una fuente no disponible. Sólo si vas a construir technicalPredicates tú mismo, llama primero y en una ronda separada a inspect_inventory_schema; mandar predicados sin esa inspección hace que el servidor rechace la llamada. Usa después exactamente la categoría, field, dataType y operators devueltos para construir technicalPredicates u operationalPredicates; query contiene sólo identidad/contexto y puede ser null. No inventes campos ni conviertas una comparación en coincidencia textual. Los VALORES de un campo de lista son la única excepción a esa exactitud: manda el término como lo dijo el operador —«caja inglesa», «sellado», «hollowtech», «mid bmx»— y el servidor lo resuelve contra allowedValues antes de filtrar. No necesitas reproducir la entrada literal ni abstenerte por no tenerla. Un valor que no resuelve descarta sólo ese predicado y la búsqueda continúa con los demás, así que intentar siempre da más información que no filtrar. Por eso inspeccionar el esquema NUNCA prueba que un filtro sea imposible: si el campo existe en la inspección, ejecuta search_inventory y deja que el resultado lo demuestre. No uses report_capability_gap con unsupported_filter sobre un campo que la inspección devolvió y que no intentaste buscar. El servidor vincula el plan técnico a la última inspección y valida category contra product_categories y sus descendientes; product_spec_values es la autoridad técnica. La identidad curada sólo puede suplir una igualdad exacta cuando la ficha está vacía; nunca satisface rangos, desigualdades ni comparaciones. ${missingStructuredDataRule} En cualquier otra limitación, field debe ser null. Si ninguna herramienta anunciada puede ejecutar la operación pedida, llama report_capability_gap con missing_tool; si falta permiso, usa permission_required; si la petición necesita aclaración material, ambiguous_request${
     purchasingDraftMode
       ? ", salvo en este workspace: aquí conserva la ambigüedad como una línea unresolved con clarificationRequired=true, clarification no nula y al menos una clarificationPrompt válida en prepare_supply_request; si sólo falta evidencia del sistema usa clarificationRequired=false y prompts vacíos"
       : ""
@@ -2109,6 +2371,52 @@ function hasTechnicalInventoryPredicates(argumentsValue: JsonObject): boolean {
     argumentsValue.technicalPredicates.length > 0;
 }
 
+/// **La compuerta del esquema era de un solo lado.**
+///
+/// Castigaba estructurar sin inspeccionar y dejaba pasar libre el NO estructurar
+/// nada: con `technicalPredicates: []` la búsqueda caía a comparar la frase
+/// contra los nombres. «cámaras 26 con válvula VA de 48mm» pasaba sin filtro de
+/// ficha y devolvía Presta mezcladas con Schrader, teniendo los 126 productos
+/// con ficha cargada al lado.
+///
+/// El modelo obedecía: se le decía «no inventes claves» y nunca se le mostró
+/// ninguna. Así que la falta de predicados, cuando el operador nombró una
+/// medida, es señal de que falta la inspección — no de que no haya restricción.
+///
+/// El disparador es **un número que es token propio**, con su unidad opcional:
+/// «26», «48mm», «27.5», «700c». No basta «trae dígitos»: `RD-M6100` y el SKU
+/// `6927116100261` también los traen y no son medidas —son códigos, y para
+/// ésos buscar por nombre es exactamente lo correcto—. El largo se acota a
+/// cuatro dígitos por lo mismo: ninguna medida de bicicleta pasa de 700 y todo
+/// lo más largo es un código.
+///
+/// No es una lista de palabras del dominio escrita a mano: eso ya salió mal con
+/// «con uña / claw», que convertía cualquier frase con «con una» en un filtro.
+const standaloneMeasurement =
+  /(?:^|[\s(])\d{1,4}(?:[.,]\d{1,3})?\s*(?:mm|cm|c|"|''|pulgadas?|t|v)?(?=$|[\s,)./-])/i;
+
+/// **Un calce se escribe pegado, y así es como el mecánico lo escribe.**
+/// `700x28`, `26x1.95`, `27.5×2.25`, `12x142`: ninguno de sus dos números es
+/// token propio, de modo que `standaloneMeasurement` no ve **ninguna** medida
+/// compuesta. La compuerta quedaba ciega justo donde la frase es más
+/// inequívocamente técnica. Medido el 2026-08-24 con «camara para 700x28»: sin
+/// inspección, la respuesta se armó por nombre y perdió una cámara con stock y
+/// 7 del catálogo (12 cubren 28 mm por ficha, 3 con stock; entregó 2).
+///
+/// Esto NO contradice que el tokenizador del servidor se niegue a partir
+/// `26x1.95`: son dos preguntas distintas. Partirlo inventaría un valor que
+/// nadie pidió; reconocerlo como medida sólo obliga a mirar la ficha, y quien
+/// decide a qué campo pertenece cada número es el modelo, que tiene el anuncio.
+const compoundMeasurement =
+  /(?:^|[\s(])\d{1,4}(?:[.,]\d{1,3})?\s*[x×]\s*\d{1,4}(?:[.,]\d{1,3})?/i;
+
+function inventoryQueryNamesAMeasurement(argumentsValue: JsonObject): boolean {
+  const query = typeof argumentsValue.query === "string"
+    ? argumentsValue.query
+    : "";
+  return standaloneMeasurement.test(query) || compoundMeasurement.test(query);
+}
+
 function inventorySchemaSnapshotFromResult(
   result: AgentToolResultEnvelope,
 ): InventorySchemaSnapshot {
@@ -2277,6 +2585,12 @@ function resolveToolEntityReferences(
             item.categoryRef,
             "product_category",
           ),
+        // `commercialTarget` viaja tal cual. La traducción lo descartaba y el
+        // ejecutor lo exige entre sus claves exactas, así que TODA llamada a
+        // `prepare_supply_request` moría con `tool_arguments_invalid` — la
+        // herramienta con la que termina el Asistente de compras. El objetivo
+        // comercial no se resuelve contra referencias: es un dato del modelo.
+        commercialTarget: item.commercialTarget ?? null,
         quantity: item.quantity,
         unit: item.unit,
         technicalPredicates: item.technicalPredicates,
@@ -2358,6 +2672,7 @@ function syntheticToolFailure(
     items: [],
     resultCount: 0,
     hasMore: false,
+    totalMatches: 0,
   };
   const outputText = JSON.stringify({
     status: "rejected",

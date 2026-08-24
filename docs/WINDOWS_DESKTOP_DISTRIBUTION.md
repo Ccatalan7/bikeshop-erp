@@ -77,14 +77,12 @@ independent publishers:
    Windows release. The older ancestor, or their one unique safe merge base,
    becomes the common `Novedades` baseline. Missing, expired, non-ancestral, or
    ambiguous evidence stops safely.
-5. It asks the locally authenticated Codex CLI once for a bounded,
-   user-friendly Spanish release-note candidate. Missing login, timeout,
-   malformed output, or quota exhaustion leaves the candidate empty and does
-   not block the release.
+5. It resolves the exact common release-note range. Gemini Flash generates the
+   bounded, user-friendly Spanish copy later inside each protected publish job.
 6. It writes a short-lived, current-user-only Windows+Android handoff inside
    `.git`, separate from the macOS paired-release state, binding the branch,
-   exact local and remote SHA, release-note base, candidate bytes, and
-   candidate SHA256.
+   exact local and remote SHA, and release-note base. Legacy candidate fields
+   remain empty for state-schema compatibility.
 7. VS Code waits a bounded time for the push-triggered exact-SHA
    `ERP Integrity Gate`. If path filters created no run, it rechecks for a
    queued/in-progress run and dispatches the gate once with the exact expected
@@ -100,11 +98,9 @@ Android remain separate GitHub Actions workflows, protected publication jobs,
 artifacts, manifests, signing keys, logs, and final results. If one platform
 succeeds and the other fails, the successful release remains valid; rerunning
 the paired task treats an already-published exact commit as success and retries
-only what is missing. The preparation state keeps and reuses the exact
-SHA-bound Codex candidate for that same commit, so an ordinary partial-success
-retry does not silently rewrite the user-facing summary. Candidate reuse accepts
-both the pre-qualification schema-v2 state and the same handoff after its
-schema-v3 qualification upgrade.
+only what is missing. The preparation state keeps the exact notes baseline for
+that same commit. Both the pre-qualification schema-v2 state and the same
+handoff after its schema-v3 qualification upgrade preserve that binding.
 
 A retry after an application-test failure diagnoses the completed same-SHA run
 immediately instead of running the full gate again in both platform workflows.
@@ -112,12 +108,11 @@ Only cancelled, timed-out, stale, or startup-failed qualification may rerun the
 same GitHub run once. `Publish Windows Update (all changes)` carries no shared
 proof and therefore retains its own complete integrity fallback.
 
-The same validated Codex candidate is offered to both protected jobs, so their
-`Novedades` describe the same committed ERP update. Each workflow independently
-reconstructs and validates the committed evidence before accepting it. If
-Codex is unavailable or the candidate is rejected, the protected release-note
-generator continues through the established sanitized Gemini path and then the
-deterministic fallback.
+Both protected jobs run the same Gemini Flash generator over the same exact
+range, so their `Novedades` describe the same committed ERP update. Each
+workflow independently reconstructs and validates the committed evidence before
+accepting it. If Gemini is unavailable or its output is rejected, the validated
+deterministic fallback remains intact and publication can be retried safely.
 
 The workstation never receives the private Supabase credential. It derives the
 Android side of the common baseline from the bounded successful Actions evidence
@@ -143,10 +138,10 @@ in the protected `Production` environment. The default model is
 `gemini-3.1-flash-lite`, with `GEMINI_RELEASE_NOTES_MODEL` available as an
 optional override. If Google reports that model unavailable or rejects its
 output-format contract, the generator performs one metadata-free model-list
-request and retries only with an available model from its fixed free Gemini
+request and retries only with an available model from its fixed Gemini
 Flash/Flash-Lite allowlist. When the Gemini key is absent, the existing
-`OPENAI_API_KEY` and `OPENAI_RELEASE_NOTES_MODEL` integration remains available
-as a compatibility path.
+deterministic fallback remains in place. The standard workflows do not call
+Codex and do not receive an OpenAI credential.
 
 Errors, exhausted quota, timeouts, or invalid output leave the validated
 deterministic fallback in place and must not block publication. The generator
@@ -154,7 +149,7 @@ prints the selected provider, active Gemini model, and only a sanitized failure
 category so an AI downgrade is visible without exposing Google error text or
 release metadata.
 
-Only sanitized, bounded release metadata is eligible for either provider:
+Only sanitized, bounded release metadata is eligible for the provider:
 fixed canonical ERP module/topic labels, status and change counts, and opaque
 evidence IDs. Commit subjects, commit SHAs, raw/current/previous paths, source,
 diffs, credentials, generated bundles, binary contents, customer data, and

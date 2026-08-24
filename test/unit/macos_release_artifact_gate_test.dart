@@ -8,7 +8,6 @@ void main() {
   late String installer;
   late String updaterService;
   late String publishHelper;
-  late String codexReleaseNotesHelper;
   late String releaseNotesGenerator;
   late String flutterTestGate;
   late String releaseBaseResolver;
@@ -26,9 +25,6 @@ void main() {
       'lib/shared/services/desktop_update_service_io.dart',
     ).readAsStringSync();
     publishHelper = File('scripts/publish_macos_update.sh').readAsStringSync();
-    codexReleaseNotesHelper = File(
-      'scripts/releases/generate_codex_release_notes.mjs',
-    ).readAsStringSync();
     releaseNotesGenerator = File(
       'scripts/releases/generate_release_notes.mjs',
     ).readAsStringSync();
@@ -152,17 +148,10 @@ void main() {
     final geminiReleaseNotesSecret = workflow.indexOf(
       r'GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}',
     );
-    final openAiReleaseNotesSecret = workflow.indexOf(
-      r'OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}',
-    );
     final sourceGuardJob = workflow.indexOf('\n  source-guard:');
     final expectedCommitInput = workflow.indexOf(
       r'${{ inputs.expected_commit }}',
       sourceGuardJob,
-    );
-    final codexCandidateInput = workflow.indexOf(
-      r'${{ inputs.release_notes_candidate_b64 }}',
-      publishJob,
     );
     final baseResolution = workflow.indexOf(
       'resolve_previous_release_commit.sh',
@@ -182,7 +171,6 @@ void main() {
     expect(sourceGuardJob, greaterThanOrEqualTo(0));
     expect(expectedCommitInput, greaterThan(sourceGuardJob));
     expect(expectedCommitInput, lessThan(publishJob));
-    expect(codexCandidateInput, greaterThan(publishJob));
     expect(
       workflow.substring(sourceGuardJob, publishJob),
       allOf(
@@ -192,20 +180,13 @@ void main() {
       reason:
           'The workflow must bind an explicit publish request to its exact source SHA.',
     );
+    final androidRoute = workflow.indexOf('\n  android:', publishJob);
     expect(
-      workflow.substring(publishJob, baseResolution),
-      contains('CODEX_RELEASE_NOTES_CANDIDATE_B64'),
-      reason:
-          'Only protected publication may receive the optional local notes.',
-    );
-    expect(
-      workflow.substring(0, publishJob),
+      workflow.substring(publishJob, androidRoute),
       isNot(contains('CODEX_RELEASE_NOTES_CANDIDATE_B64')),
-      reason:
-          'The local Codex payload must only enter the protected publish job.',
+      reason: 'Standard macOS publication must not consume local model output.',
     );
     expect(geminiReleaseNotesSecret, greaterThan(publishJob));
-    expect(openAiReleaseNotesSecret, greaterThan(geminiReleaseNotesSecret));
     expect(
       workflow,
       contains(
@@ -218,38 +199,16 @@ void main() {
       reason:
           'The Gemini key must only be exposed inside protected publication.',
     );
-    expect(
-      RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow).length,
-      1,
-      reason:
-          'The compatibility OpenAI key must stay inside protected publication.',
-    );
+    expect(RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow), isEmpty);
     expect(baseResolution, greaterThan(publishJob));
     expect(generation, greaterThan(baseResolution));
-    expect(
-      releaseNotesGenerator,
-      contains('CODEX_RELEASE_NOTES_CANDIDATE_B64'),
-      reason:
-          'The generator must consume and revalidate the transported candidate.',
+    final cliMain = releaseNotesGenerator.substring(
+      releaseNotesGenerator.indexOf('async function main()'),
     );
-    final codexCandidateDecode = releaseNotesGenerator.indexOf(
-      'decodeCodexReleaseEnvelopeBase64(',
-    );
-    final generationFunction = releaseNotesGenerator.indexOf(
-      'export async function generateReleaseNotes',
-    );
-    final codexCandidateValidation = releaseNotesGenerator.indexOf(
-      'acceptCodexReleaseEnvelope(',
-      generationFunction,
-    );
-    final remoteProviderSelection = releaseNotesGenerator.indexOf(
-      'const provider =',
-      generationFunction,
-    );
-    expect(codexCandidateDecode, greaterThanOrEqualTo(0));
-    expect(generationFunction, greaterThanOrEqualTo(0));
-    expect(codexCandidateValidation, greaterThan(generationFunction));
-    expect(remoteProviderSelection, greaterThan(codexCandidateValidation));
+    expect(cliMain, contains('process.env.GEMINI_RELEASE_API_KEY'));
+    expect(cliMain, contains('process.env.GEMINI_RELEASE_NOTES_MODEL'));
+    expect(cliMain, isNot(contains('process.env.OPENAI_API_KEY')));
+    expect(cliMain, isNot(contains('CODEX_RELEASE_NOTES_CANDIDATE_B64')));
     expect(
       workflow.substring(generation, merge),
       allOf(
@@ -276,31 +235,22 @@ void main() {
     );
     expect(runbook, contains('GEMINI_RELEASE_API_KEY'));
     expect(runbook, contains('gemini-3.1-flash-lite'));
-    expect(runbook, contains('OPENAI_API_KEY'));
     expect(runbook, contains('deterministic fallback'));
     expect(runbook, contains('human reviewers'));
     final normalizedRunbook = runbook.replaceAll(RegExp(r'\s+'), ' ');
     expect(
       normalizedRunbook,
-      matches(
-        RegExp(
-          r'Codex.*Gemini.*deterministic fallback',
-          caseSensitive: false,
-        ),
-      ),
-      reason:
-          'The documented provider order must remain Codex, Gemini, then fallback.',
+      contains('Gemini Flash/Flash-Lite allowlist'),
+      reason: 'The documented automatic provider must remain Gemini Flash.',
     );
     expect(
       normalizedRunbook,
       allOf(
-        contains('source-inspection boundary'),
-        contains('source and diffs'),
-        contains('OpenAI'),
+        contains('source, diffs'),
         contains('sanitized'),
       ),
       reason:
-          'The runbook must explain the distinct local-Codex and sanitized-CI privacy boundaries.',
+          'The runbook must retain the protected-CI metadata privacy boundary.',
     );
   });
 
@@ -588,8 +538,8 @@ void main() {
   test('developer helper follows the Windows-like CI publication sequence', () {
     final stage = publishHelper.indexOf('git add -A');
     final commit = publishHelper.indexOf('git commit -m', stage);
-    final codexCandidate = publishHelper.indexOf(
-      'prepare_local_codex_release_notes "\$head_sha"',
+    final geminiNotes = publishHelper.indexOf(
+      'prepare_gemini_release_notes "\$head_sha"',
       commit,
     );
     final push = publishHelper.indexOf('git push origin', commit);
@@ -607,18 +557,15 @@ void main() {
 
     expect(stage, greaterThanOrEqualTo(0));
     expect(commit, greaterThan(stage));
-    expect(codexCandidate, greaterThan(commit));
-    expect(codexCandidate, lessThan(push));
+    expect(geminiNotes, greaterThan(commit));
+    expect(geminiNotes, lessThan(push));
     expect(push, greaterThan(commit));
     expect(activeRunLookup, greaterThan(push));
     expect(dispatch, greaterThan(activeRunLookup));
     expect(wait, greaterThan(dispatch));
     expect(diagnostics, greaterThan(wait));
     expect(releaseVerification, greaterThan(diagnostics));
-    expect(
-      publishHelper,
-      contains('scripts/releases/generate_codex_release_notes.mjs'),
-    );
+    expect(publishHelper, isNot(contains('generate_codex_release_notes.mjs')));
     expect(
       publishHelper.substring(activeRunLookup, dispatch),
       allOf(
@@ -626,7 +573,7 @@ void main() {
         contains('release_notes_candidate_b64'),
       ),
       reason:
-          'The dispatch payload must carry both exact-head and optional-note bindings.',
+          'The dispatch payload keeps its legacy-empty note field and exact-head binding.',
     );
     expect(
       publishHelper.substring(dispatch),
@@ -651,29 +598,15 @@ void main() {
     expect(publishHelper, isNot(contains('--preflight-only')));
   });
 
-  test('local Codex release-note attempt is read-only and optional', () {
-    expect(codexReleaseNotesHelper, contains('--ephemeral'));
-    expect(codexReleaseNotesHelper, contains('read-only'));
-    expect(codexReleaseNotesHelper, contains('--output-schema'));
-    expect(
-      codexReleaseNotesHelper,
-      anyOf(contains('--output-last-message'), contains('"-o"')),
-    );
-    expect(
-      codexReleaseNotesHelper,
-      isNot(contains('--dangerously-bypass-approvals-and-sandbox')),
-    );
+  test('standard helper delegates release-note generation only to Gemini CI',
+      () {
+    expect(publishHelper, contains('prepare_gemini_release_notes'));
     expect(
       publishHelper,
-      anyOf(
-        contains('Codex release notes unavailable'),
-        contains('Local Codex notes unavailable'),
-        contains('Continuing without local Codex release notes'),
-        contains('continuing without local Codex release notes'),
-      ),
-      reason:
-          'Codex authentication, quota, or output failure must not block publication.',
+      contains('Gemini Flash will generate release notes inside protected CI.'),
     );
+    expect(publishHelper.toLowerCase(), isNot(contains('codex')));
+    expect(publishHelper, isNot(contains('OPENAI_API_KEY')));
   });
 
   test('developer helper verifies exact run and release evidence', () {

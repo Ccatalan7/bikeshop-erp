@@ -447,3 +447,103 @@ and masked. It records candidate recall@K separately from top-1, product-set
 accuracy, exact category ID, false-new, false-link, abstention, AI calls/cost and
 stage latency. Known-existing rows require 100% gold retrieval and zero wrong
 automatic links; an honest abstention is valid, an invented duplicate is not.
+
+## Cómo escribe el catálogo una medida (2026-08-23)
+
+Salió de llenar la ficha de las 134 cámaras leyendo sus nombres. **Ninguna de
+estas convenciones es un nombre pobre: son formas distintas de escribir lo
+mismo**, y cada una que falta se traduce en productos sin ficha.
+
+| Convención | Ejemplo | Significa |
+|---|---|---|
+| Rango con barra | `29 X 1.75/2.35` | 1,75″ a 2,35″ |
+| Rango con «a» | `26 X 1.95 a 2.125` | igual |
+| Rango con guion | `26X1.95-2.125` | igual |
+| **Fracción** | `24 X 1.3/8` | 1‑3/8″ = **1,375″**, no «1,3 a 8» |
+| **Ancho único** | `700X28C`, `ARO 29 X 1.95C` | un solo ancho: mínimo = máximo |
+| Ruta en mm | `700 X 18/25C` | 18 mm a 25 mm, **no pulgadas** |
+| Signo `×` | `20×1.5/2.5` | U+00D7, no la letra X |
+
+La fracción se resuelve **antes** del rango, y sólo si es una fracción de verdad
+—numerador menor que denominador, denominador potencia de dos—. Sin ese guarda,
+`1.5/2.5` se lee como 1 + 5/2 = 3,5.
+
+El rango se busca **después de la X**: en `12 1/2 X 2.1/4` ese `1/2` es la
+medida de aro, no el ancho, y así se esquivan también los códigos ETRTO entre
+paréntesis (`(40/63-559)`).
+
+### El neumático se escribe casi igual, con cuatro trampas propias (2026-08-24)
+
+Salió de llenar la ficha de los 113 neumáticos, que tenían **cero**. Las
+convenciones de medida son las mismas de la cámara, pero un neumático tiene
+**un** ancho y no una banda: `26X2.20` es 2,20″ y punto.
+
+Las cuatro trampas se encontraron en un ensayo en seco **antes** de escribir
+nada, y cada una devolvía un valor plausible y equivocado — la peor clase,
+porque nadie la vuelve a revisar:
+
+| Trampa | Ejemplo | Qué devolvía | Regla |
+|---|---|---|---|
+| La X dentro de una palabra | `BMX 20x2.25`, `HARTEX 26 X 2.10` | ancho 20 y 26 —el aro— | el par aro×ancho se lee en **una** coincidencia, nunca la X suelta |
+| Dos notaciones en un nombre | `700x32 = 28x1 5/8 x 1 1/4` | 1,625″ en vez de 32 mm | la fracción sólo vale si es del **mismo aro** que el par |
+| La comilla como separador | `24x1"3/8` | ancho 1 | la fracción admite `-`, espacio, `.` y `"` |
+| El decimal sin punto | `24 X 2 125` | ancho 2 | **no se adivina**: queda sin ancho |
+
+Un ancho escrito en fracción está en **pulgadas aunque el aro sea de ruta**:
+`28 X 1.5/8` dice pulgadas, y pasarlo a milímetros sería escribir un valor que
+el nombre no da.
+
+### Cuándo el silencio NO alcanza: el caso del talón
+
+En las cámaras el silencio autorizó deducir sellante y material porque dos
+señales independientes coincidían **sin un solo desacuerdo**. Para el talón del
+neumático se evaluó lo mismo y **se rechazó**:
+
+| | neumáticos | precio promedio | mínimo | máximo |
+|---|---|---|---|---|
+| plegable (kevlar) | 9 | $33.327 | $19.990 | $54.990 |
+| alambre declarado | 20 | $23.973 | $14.000 | $35.000 |
+| no lo dice | 84 | $15.660 | $8.490 | **$39.990** |
+
+El promedio separa clarísimo, pero **los techos se solapan**: hay silenciosos
+por encima del plegable más barato. Ese solape es exactamente el desacuerdo que
+en las cámaras no existía. La regla del silencio necesita las dos señales de
+acuerdo, no una señal fuerte: con solape se escribe sólo lo que el nombre dice.
+
+### La válvula se escribe de once formas
+
+`V/AMERICANA`, `V/AUTO`, `V/A`, `VA`, `AV`, `A/V`, `Válvula de auto`, `V.Auto`,
+`VAL AUTO`, `SV`, `LSV` — todas **Schrader**. Y `V/FRANCESA`, `V/F`, `VF`, `FV`,
+`F/V`, `V.Francesa`, `VAL/FRANCESA`, `FV48`, `LFV` — todas **Presta**. `SV`/`FV`
+son la nomenclatura Maxxis (Schrader Valve / French Valve, con `L` de Long).
+
+Dos trampas que costaron una ronda cada una:
+
+- **`AUTO` matchea «AUTOsellante»**, que no dice nada de la válvula. Va
+  `AUTO(?!SELLANTE)`.
+- **Sin borde de palabra antes de la `V`**, el patrón `V\s*[/.]?\s*A` matchea
+  cualquier palabra terminada en «VA»: «cámara nue**VA**» quedaba Schrader, y un
+  servicio terminaba con ficha de producto.
+
+### Un ancho es una medida, no una lista
+
+45 pares distintos de ancho en 120 cámaras, y crecen con cada compra. Pero la
+razón para que sea numérico no es la cantidad: con números, «¿esta cámara sirve
+para un neumático 2.1?» se contesta con aritmética. Con una lista de texto,
+`1.95/2.125` nunca calzaría con `1.95 a 2.125`.
+
+### Cuándo el silencio del nombre es evidencia
+
+La regla que decide si un default es legítimo:
+
+- **Lo es** cuando el dato, si existiera, se diría. Una cámara con sellante
+  siempre se vende diciéndolo —es lo que justifica el precio—, así que no
+  mencionarlo es evidencia de que no lo trae. Corroborado con dos señales
+  independientes: 8 lo declaran en el nombre, la categoría «Cámaras
+  Anti-Pinchazo» tiene 4, y esas 4 están entre las 8.
+- **No lo es** cuando el dato existe igual. Una cámara tiene un largo de válvula
+  aunque el nombre lo omita: ahí vacío es la verdad y rellenar sería inventar.
+
+Y un producto que no entrega **ninguna** medida no recibe ficha: «Cámara nueva +
+servicio de cambio» es un servicio, y «Camara Para Carretilla 3.50 X 8» no es de
+bicicleta.

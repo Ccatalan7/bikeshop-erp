@@ -18,6 +18,7 @@ function result(item: JsonObject): AgentToolResultEnvelope {
     items: [item],
     resultCount: 1,
     hasMore: false,
+    totalMatches: 1,
   };
 }
 
@@ -164,6 +165,7 @@ Deno.test("structured supply requests project one strict review card", () => {
     }],
     resultCount: 2,
     hasMore: false,
+    totalMatches: 2,
   };
   const cards = cardsForToolResult("prepare_supply_request", draftResult);
   assertEquals(cards.length, 1, "one request becomes one review surface");
@@ -241,6 +243,7 @@ Deno.test("inventory search projects one exact compact result set instead of arb
     ],
     resultCount: 2,
     hasMore: false,
+    totalMatches: 2,
   };
   const cards = cardsForToolResult(
     "search_inventory",
@@ -266,7 +269,10 @@ Deno.test("inventory search projects one exact compact result set instead of arb
   );
   assertEquals(cards[0].listRef, {
     kind: "inventory",
-    query: "Cámaras",
+    // La frase del operador va al buscador local; la categoría resuelta es
+    // cómo se le nombra la lista. Son dos textos porque son dos cosas.
+    query: "camara 29",
+    spokenSubject: "Cámaras",
     availability: "in_stock",
     resultCount: 2,
     hasMore: false,
@@ -281,14 +287,18 @@ Deno.test("inventory search projects one exact compact result set instead of arb
     "Cámaras · 1 ficha técnica · 1 por identidad",
     "the card distinguishes canonical specs from the explicit sparse-catalog fallback",
   );
+  // La frase y la tarjeta dicen lo MISMO, que es la invariante que este bloque
+  // declara. «camara 29» no agrega nada sobre «Cámaras»: repetirlo rotularía la
+  // lista con lo que el operador tipeó en vez de con lo que se entendió. Una
+  // marca sí agrega —«Shimano» sobrevive, y eso lo cuida runtime_test.
   assertEquals(
     autoOpenListAnswer(cards, true),
-    'Abrí 2 resultados coincidentes para “camara 29” en Inventario con el filtro “En stock · 29"”.',
+    'Abrí 2 resultados coincidentes para “Cámaras” en Inventario con el filtro “En stock · 29"”.',
     "model prose cannot diverge from an explicit list action",
   );
   assertEquals(
     autoOpenListAnswer(cards, false),
-    'Encontré 2 resultados coincidentes para “camara 29” en Inventario con el filtro “En stock · 29"”. Usa la tarjeta para abrirlos.',
+    'Encontré 2 resultados coincidentes para “Cámaras” en Inventario con el filtro “En stock · 29"”. Usa la tarjeta para abrirlos.',
     "an older client gets truthful server-owned click guidance",
   );
   validateStoredCards(cards);
@@ -299,10 +309,53 @@ Deno.test("inventory search projects one exact compact result set instead of arb
   );
   assertEquals(
     cardsForClient(cards, true)[0].listRef,
-    cards[0].listRef,
+    // Lo mismo que guarda el servidor MENOS `spokenSubject`, que es interno:
+    // el decodificador del cliente exige claves exactas, así que una clave de
+    // más rompería las apps ya instaladas.
+    (() => {
+      const stored = { ...cards[0].listRef } as Record<string, unknown>;
+      delete stored.spokenSubject;
+      return stored;
+    })(),
     "capable clients receive the typed result set",
   );
   validateStoredCards(cardsForClient(cards, false));
+});
+
+Deno.test("el campo interno de la lista no viaja al cliente", () => {
+  const inventoryResult: AgentToolResultEnvelope = {
+    authorityTenantId: tenantId,
+    asOf: "2026-08-23T12:00:00Z",
+    status: "success",
+    items: [{ entityId, name: "Camara 29 A", stock: 7, technicalMatch: "product_spec" }],
+    resultCount: 1,
+    hasMore: false,
+    totalMatches: 1,
+  };
+  const cards = cardsForToolResult("search_inventory", inventoryResult, {
+    query: "camara 29",
+    category: "Cámaras",
+    availability: "in_stock",
+    presentation: "open_list",
+    sort: { field: "relevance", direction: "desc" },
+    limit: 10,
+    selectionMode: "all_matches",
+    operationalPredicates: [],
+    technicalPredicates: [],
+  });
+
+  // Adentro sirve para redactar la frase.
+  assertEquals(cards[0].listRef?.spokenSubject, "Cámaras", "el servidor lo usa");
+
+  // Afuera no existe: el decodificador de las apps ya instaladas exige claves
+  // exactas en `listRef`, así que una clave nueva las rompería enteras.
+  const wire = cardsForClient(cards, true)[0].listRef as unknown as Record<string, unknown>;
+  assertEquals(
+    Object.hasOwn(wire, "spokenSubject"),
+    false,
+    "un campo interno del servidor no viaja al cliente",
+  );
+  assertEquals(wire.query, "camara 29", "lo que sí viaja es el texto de búsqueda");
 });
 
 Deno.test("inventory cards preserve operational thresholds in the visible filter", () => {
@@ -318,6 +371,7 @@ Deno.test("inventory cards preserve operational thresholds in the visible filter
     }],
     resultCount: 1,
     hasMore: false,
+    totalMatches: 1,
   }, {
     query: null,
     category: "Cámaras",
@@ -347,6 +401,7 @@ Deno.test("inventory cards preserve operational thresholds in the visible filter
     items: [{ entityId, name: "Camara 29 A", stock: 7, technicalMatch: "product_spec" }],
     resultCount: 1,
     hasMore: false,
+    totalMatches: 1,
   }, {
     query: null,
     category: "Cámaras",
@@ -371,6 +426,7 @@ Deno.test("inventory cards preserve operational thresholds in the visible filter
     items: [{ entityId, name: "Producto", stock: 1, technicalMatch: "not_applicable" }],
     resultCount: 1,
     hasMore: false,
+    totalMatches: 1,
   }, {
     query: null,
     category: null,
@@ -397,6 +453,7 @@ Deno.test("inventory empty and truncated result sets remain truthful", () => {
     items: [],
     resultCount: 0,
     hasMore: false,
+    totalMatches: 0,
   };
   const emptyCard = cardsForToolResult("search_inventory", empty, {
     query: "camara 31",
@@ -430,8 +487,55 @@ Deno.test("inventory empty and truncated result sets remain truthful", () => {
     operationalPredicates: [],
     technicalPredicates: [],
   })[0];
-  assertEquals(truncated.listRef?.entityIds, null, "a truncated page never claims exact IDs");
+  // Antes esto exigía `null` «para que una página truncada no afirme ids
+  // exactas». La intención era buena y el efecto era una lista vacía: sin ids,
+  // el cliente buscaba la frase como texto y no encontraba nada. Las ids que se
+  // pudieron mostrar SÍ viajan; `hasMore` es lo que dice que no son todas.
+  assertEquals(
+    truncated.listRef?.entityIds?.length,
+    1,
+    "a truncated page still hands over the rows it could show",
+  );
   assertEquals(truncated.listRef?.hasMore, true, "truncation survives persistence");
+  assertEquals(
+    truncated.title,
+    "Los primeros 1",
+    "the count says what it is instead of «1+»",
+  );
+
+  // Y cuando la fuente dice cuántas hay en total, el título lo dice también:
+  // «Los primeros 10» de una consulta que calza con 24 esconde 14 productos
+  // sin avisar. El total viaja en el TÍTULO y nunca en `listRef`, cuyo
+  // decodificador exige claves exactas en las apps ya publicadas.
+  const conTotal = cardsForToolResult("search_inventory", {
+    ...result({ entityId, name: "Camara" }),
+    hasMore: true,
+    // El total verificado del conjunto filtrado viaja en la FILA. El
+    // `totalMatches` del sobre devuelve hoy el tamaño de la página, así que
+    // leerlo daría «10 de 10» justo cuando hay más.
+    items: [{ ...result({ entityId, name: "Camara" }).items[0], matchedCount: 24 }],
+    totalMatches: 1,
+  }, {
+    query: "camara",
+    category: null,
+    availability: "any",
+    presentation: "answer",
+    sort: { field: "relevance", direction: "desc" },
+    limit: 10,
+    selectionMode: "all_matches",
+    operationalPredicates: [],
+    technicalPredicates: [],
+  })[0];
+  assertEquals(
+    conTotal.title,
+    "Los primeros 1 de 24",
+    "a truncated list says how many it is truncating from",
+  );
+  assertEquals(
+    Object.keys(conTotal.listRef ?? {}).includes("totalMatches"),
+    false,
+    "the total never reaches listRef, whose client decoder demands exact keys",
+  );
   assertEquals(
     autoOpenListAnswer([truncated], true) ?? null,
     null,
@@ -455,6 +559,7 @@ Deno.test("inventory risks use one aggregate card and cash summary creates no ro
     ],
     resultCount: 2,
     hasMore: false,
+    totalMatches: 2,
   };
   const cards = cardsForToolResult("find_inventory_risks", riskResult);
   assertEquals(cards.length, 1, "risk rows collapse into one quiet card");
@@ -477,6 +582,7 @@ Deno.test("server cards omit absent optional fields before runtime attestation",
     items: [{ source: "workshop" }, { source: "task" }],
     resultCount: 2,
     hasMore: false,
+    totalMatches: 2,
   });
 
   assertEquals(cards.length, 2, "attention sources create two aggregate cards");

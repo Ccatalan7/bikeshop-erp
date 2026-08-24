@@ -17,6 +17,10 @@ import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../shared/services/supplier_availability_service.dart';
+import '../../../shared/services/supplier_portal_headless_runner.dart';
 import '../../../shared/widgets/vb_money_text.dart';
 import '../../../shared/widgets/vb_notice.dart';
 import '../../ai_assistant/config/ai_assistant_runtime_config.dart';
@@ -34,6 +38,24 @@ import '../widgets/purchase_composer.dart';
 import '../widgets/purchase_plan_close.dart';
 import '../widgets/purchase_priority_panel.dart';
 import '../widgets/purchase_visual_language.dart';
+import '../widgets/stock_candidates_table.dart';
+import '../widgets/supplier_concentration_table.dart';
+import 'package:printing/printing.dart';
+import '../../settings/services/appearance_service.dart';
+import '../../../shared/services/whatsapp_service.dart';
+import '../../../shared/utils/purchase_order_pdf_generator.dart';
+import '../../../shared/models/tax_treatment.dart';
+import '../../../shared/services/tenant_service.dart';
+import '../models/purchase_invoice.dart';
+import '../services/purchase_service.dart';
+import '../models/purchase_order_document.dart';
+import '../models/purchase_order_draft.dart';
+import '../models/purchase_order_message.dart';
+import '../models/purchase_order_summary.dart';
+import '../models/supplier_catalog.dart';
+import '../widgets/supplier_evidence_panel.dart';
+import '../widgets/purchase_order_message_preview.dart';
+import '../widgets/supplier_order_composer.dart';
 import 'intelligent_purchasing_decision_surfaces.dart';
 import 'intelligent_purchasing_surfaces.dart';
 
@@ -42,12 +64,19 @@ class IntelligentPurchasingWorkspacePage extends StatefulWidget {
     super.key,
     this.initialNeedId,
     this.mechanicJobId,
+    this.initialSupplierId,
+    this.initialOrderId,
     this.service,
     this.gatewayClient,
   });
 
   final String? initialNeedId;
   final String? mechanicJobId;
+
+  /// Abrir la ficha de un proveedor —y opcionalmente uno de sus documentos de
+  /// compra en borrador— sin pasar por la selección de necesidad.
+  final String? initialSupplierId;
+  final String? initialOrderId;
   final IntelligentPurchasingService? service;
   final AIAgentGatewayClient? gatewayClient;
 
@@ -103,6 +132,11 @@ class _IntelligentPurchasingWorkspacePageState
   SupplyNeed? _selectedNeed;
   SupplyInventorySnapshot? _inventorySnapshot;
   PurchaseRanking? _ranking;
+
+  /// A quién le compramos esto, según las facturas. Se carga aparte y NUNCA
+  /// bloquea: es una ayuda para decidir, no un requisito del paso.
+  SupplierConcentrationReport? _supplierHistory;
+  String? _supplierHistoryNeedId;
 
   /// Lectura stock-first de la fase B1. Es la autoridad de `needVersion` y
   /// `revisionNo`: `supply_needs` no guarda la revisión que gobierna, así que
@@ -205,6 +239,76 @@ class _IntelligentPurchasingWorkspacePageState
   String? _loadError;
   String? _decisionError;
   String? _scenarioError;
+
+  /// A quién le pedimos la lista entera. Se lee SIEMPRE que hay canasta, tenga
+  /// o no productos confirmados: es la única respuesta disponible cuando el
+  /// trabajador llega con descripciones y no con SKUs.
+  BasketCoverageReport? _basketCoverage;
+
+  /// **Por qué ese proveedor.** El ranking afirma un porcentaje; esto lo
+  /// demuestra con sus compras, factura y fecha. Se abre inline y no en un
+  /// panel lateral: una comparación deja de serlo si para leer a uno hay que
+  /// tapar a los otros.
+  String? _evidenceSupplierId;
+  SupplierEvidence? _evidence;
+
+  /// Lo que hay en bodega que se parece, cuando la necesidad todavía no tiene
+  /// producto exacto. Es la promesa del módulo —«revisa primero la bodega»—
+  /// para el caso en que el operador describe en vez de nombrar un SKU.
+  /// El chequeo de disponibilidad corre en un navegador sin ventana: el
+  /// operador aprieta una vez y sigue trabajando.
+  String? _checkingSupplierId;
+  String? _checkProgress;
+
+  // ── La ficha del proveedor, dentro del bloque ──────────────────────────────
+  /// Qué proveedor está abierto. Nulo = se ve la tabla. Es lo único que decide
+  /// cuál de las dos superficies vive en el panel.
+  String? _openSupplierId;
+  SupplierCatalogPage? _supplierCatalog;
+  bool _loadingSupplierCatalog = false;
+  bool _loadingMoreCatalog = false;
+  String? _supplierCatalogError;
+  final TextEditingController _supplierCatalogSearch = TextEditingController();
+  Timer? _supplierCatalogDebounce;
+
+  /// El pedido que se está armando, por producto. Vive en la página y no en la
+  /// ficha: cambiar de proveedor no puede borrar lo que ya se juntó sin que el
+  /// operador lo decida.
+  final Map<String, PurchaseOrderDraftLine> _orderLines =
+      <String, PurchaseOrderDraftLine>{};
+
+  /// La hoja está abierta. **No se cierra sola al sacar la última línea**:
+  /// cerrarse de golpe mientras el operador trabaja esconde el resultado de lo
+  /// que acaba de hacer.
+  bool _orderPreviewOpen = false;
+  bool _orderBusy = false;
+  String? _savedOrderId;
+  String? _savedOrderNumber;
+  String? _highlightedOrderLine;
+  PurchaseOrderMessage? _orderMessage;
+  final TextEditingController _orderMessageBody = TextEditingController();
+  bool _sendingOrder = false;
+
+  /// Lo que ya existe guardado con el proveedor abierto. Se lee al abrir la
+  /// ficha y se refresca al guardar: un pedido que se guardó y no aparece en la
+  /// lista de al lado hace dudar de si se guardó.
+  List<PurchaseOrderSummary> _openOrders = const <PurchaseOrderSummary>[];
+
+  /// Con flete o sin flete. **Sin flete es el estado normal**: es lo que el
+  /// proveedor cobra, y lo que tiene sentido comparar y proponerle. El eje es
+  /// uno solo para todo el bloque — la tabla, la ficha y lo que se propone al
+  /// agregar una línea—, porque dos ejes distintos en la misma pantalla harían
+  /// que un precio parezca mejor que otro por estar medido distinto.
+  PurchaseCostBasis _costBasis = PurchaseCostBasis.sinFlete;
+
+  /// Lo último que contestó el portal de cada proveedor. Convive con el
+  /// historial de compras; no lo reemplaza.
+  final Map<String, SupplierConfirmedAvailability> _confirmed = {};
+
+  StockCandidateReport? _stockCandidates;
+  String? _stockCandidatesNeedId;
+  bool _loadingEvidence = false;
+  String? _evidenceError;
   String? _assistantText;
   String? _assistantError;
   List<AIAssistantActionCard> _assistantCards = const [];
@@ -256,6 +360,27 @@ class _IntelligentPurchasingWorkspacePageState
     unawaited(_loadNeeds());
     unawaited(_loadPriority());
     unawaited(_restoreOpenPlan());
+    unawaited(_openIncomingOrder());
+  }
+
+  /// Abre la ficha con la que se llegó por enlace.
+  ///
+  /// El paso 3 necesita una necesidad seleccionada para dibujar su tabla, pero
+  /// la ficha del proveedor **no**: es del proveedor, no de la línea. Por eso se
+  /// abre directamente, sin pedir que antes se elija una necesidad que en este
+  /// camino nadie eligió.
+  Future<void> _openIncomingOrder() async {
+    final supplierId = widget.initialSupplierId;
+    if (supplierId == null || supplierId.isEmpty) return;
+    setState(() => _step = PurchaseStep.providers);
+    await _openSupplierWorkspace(supplierId);
+    final orderId = widget.initialOrderId;
+    if (orderId == null || orderId.isEmpty || !mounted) return;
+    final match = _openOrders
+        .where((order) => order.orderId == orderId)
+        .toList(growable: false);
+    if (match.isEmpty) return;
+    await _resumeOrder(match.first);
   }
 
   /// Retoma el plan borrador que quedó abierto, en vez de empezar otro encima.
@@ -300,6 +425,9 @@ class _IntelligentPurchasingWorkspacePageState
 
   @override
   void dispose() {
+    _supplierCatalogDebounce?.cancel();
+    _supplierCatalogSearch.dispose();
+    _orderMessageBody.dispose();
     final abort = _agentAbort;
     if (abort != null && !abort.isCompleted) abort.complete();
     _composerController.dispose();
@@ -436,6 +564,10 @@ class _IntelligentPurchasingWorkspacePageState
         _retryIncremental = null;
         _inventorySnapshot = null;
         _ranking = null;
+        _stockCandidates = null;
+        _stockCandidatesNeedId = null;
+        _supplierHistory = null;
+        _supplierHistoryNeedId = null;
         _stockResolution = null;
         _externalCandidates = null;
         _commercialTarget = null;
@@ -527,6 +659,10 @@ class _IntelligentPurchasingWorkspacePageState
         // El candidato abierto puede haber desaparecido del corte nuevo.
         if (_inspectedCandidate == null) _inspectedCandidateId = null;
       });
+      // Aparte y sin await: el paso ya está montado y utilizable. Si el
+      // historial tarda o falla, el operador no se entera.
+      unawaited(_loadSupplierHistory(need));
+      unawaited(_loadStockCandidates(need));
     } on SupplyConcurrencyConflict {
       if (!mounted || _selectedNeed?.id != need.id) return;
       setState(() {
@@ -818,14 +954,37 @@ class _IntelligentPurchasingWorkspacePageState
         operationKey: operationKey,
       );
       if (!mounted) return;
+      // **Una lista se contesta como lista.** El lote guardaba tres
+      // necesidades y dejaba al operador dentro de la primera, así que
+      // «necesito rayos 27.5, cámaras 29 y cadenas de 11v» —una sola pregunta
+      // suya— se convertía en tres pantallas y en un trabajo de recomposición
+      // que le tocaba a él: volver, entrar al modo canasta y marcar tres
+      // casillas para recuperar lo que ya había dicho de una vez.
+      //
+      // Con dos o más líneas el paso de proveedores abre directamente la
+      // cobertura de la canasta: quién cubre más de la lista y con quién se
+      // completa. Con una sola línea nada cambia.
+      final esLista = needs.length >= 2;
       setState(() {
         _runningCommand = false;
         _supplyNeedDraft = null;
         _supplyNeedBatchOperationKey = null;
         _supplyNeedSaveError = null;
         _step = PurchaseStep.providers;
+        if (esLista) {
+          _selectingBasket = true;
+          _basketNeedIds
+            ..clear()
+            ..addAll(needs.take(8).map((need) => need.id));
+          _showScenarios = true;
+          _scenarioResult = null;
+          _scenarioError = null;
+          _basketCoverage = null;
+        }
       });
       await _loadNeeds(selectId: needs.first.id);
+      if (!mounted) return;
+      if (esLista) await _loadScenarios();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -1349,8 +1508,18 @@ class _IntelligentPurchasingWorkspacePageState
     });
   }
 
-  bool _isBasketEligible(SupplyNeed need) =>
-      need.hasConfirmedProduct && need.supplyState == 'open';
+  /// **Una necesidad sin producto confirmado también entra a la canasta.**
+  ///
+  /// Exigir identidad exacta para siquiera SELECCIONARLA dejaba fuera el caso
+  /// típico del taller —«rayos 27.5», «neumáticos 27,5 económicos»—, que es
+  /// justo cuando el operador más necesita saber a quién pedirle todo. El
+  /// costo por escenario sí necesita el producto exacto y se calcula sólo
+  /// cuando lo hay; la cobertura por proveedor no lo necesita y responde igual.
+  bool _isBasketEligible(SupplyNeed need) => need.supplyState == 'open';
+
+  /// El costo por escenario necesita identidad exacta en TODAS las líneas.
+  bool get _basketCanPriceScenarios =>
+      _selectedBasketNeeds.every((need) => need.hasConfirmedProduct);
 
   List<SupplyNeed> get _selectedBasketNeeds => _needs
       .where((need) => _basketNeedIds.contains(need.id))
@@ -1375,7 +1544,26 @@ class _IntelligentPurchasingWorkspacePageState
     setState(() {
       _loadingScenarios = true;
       _scenarioError = null;
+      _basketCoverage = null;
     });
+    // **La cobertura por proveedor se lee siempre, y primero.** Los escenarios
+    // exigen un producto confirmado en CADA línea, que es justo lo que no tiene
+    // quien llega con «rayos 27.5, cámaras 29 y cadenas de 11v». Sin esto la
+    // pantalla decía «no se pudo comparar la canasta» y ahí terminaba el
+    // trabajo del operador.
+    unawaited(_loadBasketCoverage(needs));
+    if (!_basketCanPriceScenarios) {
+      // No es un fallo: falta una decisión que el operador todavía no tomó, y
+      // decirlo como error mandaría a buscar una causa que no existe.
+      if (!mounted) return;
+      setState(() {
+        _loadingScenarios = false;
+        _scenarioError =
+            'El costo por escenario necesita el producto exacto de cada línea. '
+            'Abajo está a quién le compramos cada cosa.';
+      });
+      return;
+    }
     try {
       final result = await _service.buildScenarios(
         needs: needs,
@@ -1391,9 +1579,31 @@ class _IntelligentPurchasingWorkspacePageState
       if (!mounted) return;
       setState(() {
         _loadingScenarios = false;
-        _scenarioError =
-            'No se pudo comparar la canasta. La selección sigue guardada para reintentar.';
+        // Con líneas sin producto confirmado el costo no se puede calcular, y
+        // decirlo como un fallo sería mentir sobre la causa: no falló nada,
+        // falta una decisión que el operador todavía no tomó.
+        _scenarioError = needs.any((need) => !need.hasConfirmedProduct)
+            ? 'El costo por escenario necesita el producto exacto de cada línea. '
+                'Mientras tanto, abajo está a quién le compramos cada cosa.'
+            : 'No se pudo comparar la canasta. La selección sigue guardada para reintentar.';
       });
+    }
+  }
+
+  Future<void> _loadBasketCoverage(List<SupplyNeed> needs) async {
+    final queries = needs
+        .map((need) => need.description.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (queries.length < 2) return;
+    try {
+      final report = await _service.rankBasketSuppliers(queries: queries);
+      if (!mounted) return;
+      setState(() => _basketCoverage = report);
+    } catch (_) {
+      // Una ayuda que puede tumbar la pantalla deja de ser una ayuda.
+      if (!mounted) return;
+      setState(() => _basketCoverage = null);
     }
   }
 
@@ -2085,11 +2295,20 @@ class _IntelligentPurchasingWorkspacePageState
     // acción los publica la lectura externa, que es su dueña; repetirlos acá
     // con otras palabras sería una segunda verdad.
     if (resolution != null && !resolution.isOk) {
+      // **La bodega va PRIMERO, aunque falte la identidad exacta.**
+      //
+      // Antes este paso terminaba acá con «la necesidad todavía no define un
+      // conjunto que revisar» y el operador se iba a comprar. Medido:
+      // «Cámaras 29 Schrader» dejaba la pantalla vacía teniendo siete unidades
+      // en bodega. Lo que falta es el SKU, no el stock.
+      final stockBlock = _buildStockCandidatesBlock();
       if (external != null) {
         return ListView(
           key: const ValueKey('stock-step-state'),
+          padding: const EdgeInsets.only(top: 14),
           children: [
             ...?notice,
+            ...stockBlock,
             ExternalCandidatesStateSurface(
               result: external,
               onEditNeed: () => setState(() => _step = PurchaseStep.need),
@@ -2098,16 +2317,21 @@ class _IntelligentPurchasingWorkspacePageState
           ],
         );
       }
-      return SingleChildScrollView(
-        child: VbNotice(
-          title: 'La necesidad todavía no define un conjunto que revisar',
-          body: 'Edita la necesidad para dejarla dentro de una categoría.',
-          tone: VbNoticeTone.neutral,
-          action: TextButton(
-            onPressed: () => setState(() => _step = PurchaseStep.need),
-            child: const Text('Editar la necesidad'),
+      return ListView(
+        key: const ValueKey('stock-step-unresolved'),
+        padding: const EdgeInsets.only(top: 14),
+        children: [
+          ...stockBlock,
+          VbNotice(
+            title: 'La necesidad todavía no define un conjunto que revisar',
+            body: 'Edita la necesidad para dejarla dentro de una categoría.',
+            tone: VbNoticeTone.neutral,
+            action: TextButton(
+              onPressed: () => setState(() => _step = PurchaseStep.need),
+              child: const Text('Editar la necesidad'),
+            ),
           ),
-        ),
+        ],
       );
     }
     // **Carril familia: la bodega del conjunto elegible.** Depender del
@@ -2448,6 +2672,17 @@ class _IntelligentPurchasingWorkspacePageState
             child: const Text('Reintentar'),
           ),
         ),
+      );
+    }
+    // Con la ficha de un proveedor abierta, mandan el proveedor y su pedido: no
+    // se le pide al operador que elija una necesidad que en este camino nadie
+    // eligió, ni se le muestra «no hay necesidades» sobre un pedido que sí
+    // existe.
+    if (_openSupplierId != null) {
+      return ListView(
+        key: const ValueKey('supplier-workspace-only'),
+        padding: const EdgeInsets.only(top: 14),
+        children: _buildSupplierHistoryBlock(),
       );
     }
     if (_needs.isEmpty) {
@@ -4312,6 +4547,7 @@ class _IntelligentPurchasingWorkspacePageState
             ),
           ),
         ],
+        ..._buildBasketCoverageBlock(),
         const SizedBox(height: 12),
         // Frame 20 — dos subestados del mismo borrador.
         BasketSectionTabs(
@@ -4562,6 +4798,1080 @@ class _IntelligentPurchasingWorkspacePageState
       'La necesidad cambió mientras la revisabas. Recárgala para trabajar '
       'sobre la versión vigente.';
 
+  /// La bodega que se parece, leída sin bloquear.
+  ///
+  /// Sólo cuando la necesidad NO tiene producto confirmado: con producto exacto
+  /// la bodega la publica su lectura dueña, y dos verdades sobre el mismo stock
+  /// son peor que una.
+  Future<void> _loadStockCandidates(SupplyNeed need) async {
+    if (need.hasConfirmedProduct) return;
+    if (_stockCandidatesNeedId == need.id) return;
+    _stockCandidatesNeedId = need.id;
+    try {
+      final report = await _service.stockCandidates(need.id);
+      if (!mounted || _selectedNeed?.id != need.id) return;
+      setState(() => _stockCandidates = report);
+      // El alcance de la fila recién existe ahora: los candidatos de bodega
+      // son los productos por los que se está preguntando. Sin esta segunda
+      // pasada, la celda se quedaría con el resultado de cuando no se sabía
+      // de qué productos hablábamos.
+      final history = _supplierHistory;
+      if (history != null && !history.isEmpty) {
+        unawaited(_loadConfirmedAvailability(history));
+      }
+    } catch (_) {
+      if (!mounted || _selectedNeed?.id != need.id) return;
+      setState(() => _stockCandidates = null);
+    }
+  }
+
+  /// **Lo que hay en bodega que se parece.**
+  ///
+  /// Medido en la app real: «Cámaras 29 Schrader» dejaba el paso «Stock
+  /// interno» completamente vacío, teniendo SIETE unidades de «CAMARA 29 X
+  /// 1.75/2.35 V/AMERICANA 48mm» —americana es Schrader—. La lectura exacta
+  /// exige producto confirmado y sin él responde `identity_unresolved`; el
+  /// operador habría comprado lo que ya tenía.
+  List<Widget> _buildStockCandidatesBlock() {
+    final report = _stockCandidates;
+    if (report == null || report.isEmpty) return const <Widget>[];
+    return <Widget>[
+      StockCandidatesTable(
+        report: report,
+        busy: _runningCommand,
+        onChoose: (item) => unawaited(_chooseFamilyProductId(item.productId)),
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  /// es lo que rompía el módulo.
+  Future<void> _loadSupplierHistory(SupplyNeed need, {bool force = false}) async {
+    if (!force && _supplierHistoryNeedId == need.id) return;
+    _supplierHistoryNeedId = need.id;
+    try {
+      final report = await _service.rankSuppliers(
+        query: need.description.trim().isEmpty ? null : need.description.trim(),
+      );
+      if (!mounted || _selectedNeed?.id != need.id) return;
+      setState(() => _supplierHistory = report);
+      // Lo confirmado se trae después y aparte: si el portal nunca se consultó,
+      // la fila igual muestra su historial.
+      unawaited(_loadConfirmedAvailability(report));
+    } catch (_) {
+      if (!mounted || _selectedNeed?.id != need.id) return;
+      setState(() => _supplierHistory = null);
+    }
+  }
+
+  /// **Los productos de los que habla esta fila.**
+  ///
+  /// La columna «Confirmado» compara proveedores *para esta necesidad*, así que
+  /// tiene que contar lo confirmado de estos productos y de ningún otro. Sin
+  /// esto salía el barrido de reposición del proveedor entero: en RBX decía
+  /// «12 de 12» —cámaras de 16", 20", 24", 26" y hasta una biela— sobre una
+  /// necesidad de cámaras 29, y ese 12 no se podía relacionar con nada de la
+  /// pantalla.
+  List<String> _needProductScope() {
+    final scope = <String>{};
+    final confirmado = _selectedNeed?.productId;
+    if (confirmado != null && confirmado.isNotEmpty) scope.add(confirmado);
+    // Sin producto confirmado, lo que la fila compara son los candidatos: son
+    // exactamente los productos por los que se está preguntando.
+    for (final candidate in _ranking?.items ?? const []) {
+      if (candidate.productId.isNotEmpty) scope.add(candidate.productId);
+    }
+    for (final candidate in _stockCandidates?.items ?? const []) {
+      if (candidate.productId.isNotEmpty) scope.add(candidate.productId);
+    }
+    return scope.toList(growable: false);
+  }
+
+  /// Trae lo último que contestó cada portal. Sin bloquear: si falla, la fila
+  /// muestra su historial igual y no se pierde nada de lo que ya servía.
+  Future<void> _loadConfirmedAvailability(
+    SupplierConcentrationReport report,
+  ) async {
+    if (report.isEmpty) return;
+    final service = SupplierAvailabilityService(Supabase.instance.client);
+    final scope = _needProductScope();
+    for (final supplier in report.items) {
+      try {
+        final raw = await service.lastAvailability(
+          supplier.supplierId,
+          productIds: scope,
+        );
+        final confirmed = SupplierConfirmedAvailability.fromJson(raw);
+        if (!mounted) return;
+        // Se guarda aunque venga en cero: «se le consultó, pero de otra cosa»
+        // es distinto de «nunca se le consultó», y el detalle lo dice.
+        if (confirmed.isEmpty && confirmed.sweptProducts == 0) continue;
+        setState(() => _confirmed[supplier.supplierId] = confirmed);
+      } catch (_) {
+        // Un proveedor sin confirmación no rompe la fila de los demás.
+        continue;
+      }
+    }
+  }
+
+  /// «12 confirmados hace 3 min · Cámara 29 +18,5% vs tu costo».
+  ///
+  /// Lo confirmado va con su ANTIGÜEDAD siempre: un dato de disponibilidad sin
+  /// hora es historia disfrazada de confirmación. Y lo que no concluyó se dice
+  /// aparte, porque una corrida con la sesión caída no es una corrida con
+  /// resultados.
+  String? _confirmedLabel(String supplierId) {
+    final confirmed = _confirmed[supplierId];
+    if (confirmed == null) return null;
+    // Se le consultó al portal, pero de otra cosa. Decir «sin consultar» acá
+    // empujaría a repetir un chequeo que no contesta esta pregunta.
+    if (confirmed.sweptButNotThis) {
+      return 'De esta línea no se le ha consultado nada. Aparte, '
+          '${confirmed.sweptProducts} productos suyos revisados para '
+          'reposición.';
+    }
+    if (confirmed.isEmpty) return null;
+    final partes = <String>[];
+    final edad = confirmed.ageLabel;
+    // **El número dice de qué es.** Antes decía «12 de 12» sobre una necesidad
+    // de cámaras 29, contando el barrido de reposición entero del proveedor.
+    partes.add(
+      '${confirmed.available} de ${confirmed.checked} '
+      '${confirmed.checked == 1 ? 'producto' : 'productos'} de esta línea, '
+      'disponibles${edad == null ? '' : ' $edad'}',
+    );
+    if (confirmed.outOfStock > 0) {
+      partes.add('${confirmed.outOfStock} sin stock');
+    }
+    if (confirmed.notFound > 0) {
+      // «No apareció» y no «no lo vende»: son cosas distintas.
+      partes.add('${confirmed.notFound} no apareció');
+    }
+    if (confirmed.inconclusive > 0) {
+      partes.add('${confirmed.inconclusive} sin concluir');
+    }
+    if (confirmed.sweptProducts > confirmed.checked) {
+      // El barrido sigue siendo útil, pero con su nombre puesto: es otra
+      // pregunta, no un recuento mayor de ésta.
+      partes.add(
+        '${confirmed.sweptProducts} productos suyos revisados para reposición',
+      );
+    }
+    final drift = confirmed.sharpestDriftPercent;
+    if (drift != null && drift.abs() >= 5) {
+      final signo = drift > 0 ? '+' : '';
+      partes.add(
+        '${confirmed.sharpestDriftName ?? 'un producto'} '
+        '$signo${drift.toStringAsFixed(1).replaceAll('.', ',')}% vs tu costo',
+      );
+    }
+    return partes.join(' · ');
+  }
+
+  /// **Confirmar con el proveedor, sin abrir su portal.**
+  ///
+  /// Antes esto exigía abrir el sitio, entrar y navegar. Ahora corre en un
+  /// navegador sin ventana con la sesión que la app ya tiene: el operador
+  /// aprieta una vez y sigue en lo suyo.
+  ///
+  /// No inicia sesión por su cuenta —ese camino tiene sus propias
+  /// comprobaciones y no se duplica—, así que si no hay sesión lo dice y se
+  /// detiene en vez de anotar una fila falsa por cada producto.
+  Future<void> _confirmAvailabilityWithSupplier(
+    String supplierId,
+    String supplierName,
+  ) async {
+    if (_checkingSupplierId != null) return;
+    final service = SupplierAvailabilityService(Supabase.instance.client);
+    setState(() {
+      _checkingSupplierId = supplierId;
+      _checkProgress = 'Preparando la consulta…';
+    });
+    try {
+      final probe = await service.enabledProbe(supplierId);
+      if (probe == null) {
+        _showCheckMessage(
+          '$supplierName todavía no tiene una consulta habilitada.',
+        );
+        return;
+      }
+      final targets = await service.targets(supplierId);
+      if (targets.isEmpty) {
+        _showCheckMessage(
+          'No hay productos de $supplierName bajo su mínimo para confirmar.',
+        );
+        return;
+      }
+      final summary = await SupplierPortalHeadlessRunner(service).run(
+        supplierId: supplierId,
+        probe: probe,
+        targets: targets,
+        onProgress: (done, total, name) {
+          if (!mounted) return;
+          setState(() => _checkProgress =
+              'Confirmando \${done + 1} de \$total: \$name');
+        },
+      );
+      if (!mounted) return;
+      if (summary.needsLogin) {
+        // Decirlo así y no «sin stock» es la diferencia entre reintentar y
+        // salir a comprar de más.
+        _showCheckMessage(
+          'No hay sesión abierta con $supplierName. Entra a su portal una vez '
+          'desde «Entrar al portal» y vuelve a intentarlo.',
+        );
+      } else {
+        _showCheckMessage(
+          'Confirmados \${summary.checked} productos con $supplierName.',
+        );
+      }
+      await _loadSupplierHistory(_selectedNeed!, force: true);
+    } catch (error) {
+      if (!mounted) return;
+      _showCheckMessage('No se pudo confirmar con $supplierName.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingSupplierId = null;
+          _checkProgress = null;
+        });
+      }
+    }
+  }
+
+  void _showCheckMessage(String message) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  /// Abre o cierra la evidencia de un proveedor. Sólo una a la vez: dos
+  /// explicaciones abiertas compiten por la misma pregunta.
+  Future<void> _toggleSupplierEvidence(
+    String supplierId,
+    List<String> queries,
+  ) async {
+    if (_evidenceSupplierId == supplierId) {
+      setState(() {
+        _evidenceSupplierId = null;
+        _evidence = null;
+        _evidenceError = null;
+      });
+      return;
+    }
+    setState(() {
+      _evidenceSupplierId = supplierId;
+      _evidence = null;
+      _evidenceError = null;
+      _loadingEvidence = true;
+    });
+    try {
+      final evidence = await _service.supplierEvidence(
+        supplierId: supplierId,
+        queries: queries,
+      );
+      if (!mounted || _evidenceSupplierId != supplierId) return;
+      setState(() {
+        _evidence = evidence;
+        _loadingEvidence = false;
+      });
+    } catch (_) {
+      if (!mounted || _evidenceSupplierId != supplierId) return;
+      setState(() {
+        _loadingEvidence = false;
+        _evidenceError =
+            'No se pudo abrir el detalle de este proveedor. El ranking de arriba no cambia.';
+      });
+    }
+  }
+
+  /// El detalle inline: primero por qué quedó ahí, después qué lo respalda.
+  // ── La ficha del proveedor ────────────────────────────────────────────────
+
+  Future<void> _openSupplierWorkspace(String supplierId) async {
+    // El estado de búsqueda es por proveedor: entrar a otro con el filtro del
+    // anterior mostraría un catálogo recortado sin decir por qué.
+    _supplierCatalogSearch.clear();
+    setState(() {
+      _openSupplierId = supplierId;
+      _supplierCatalog = null;
+      _supplierCatalogError = null;
+      _loadingSupplierCatalog = true;
+      // El pedido pertenece a un proveedor: arrastrar líneas de otro sería
+      // pedirle a RBX lo que se eligió en el catálogo de Vittal.
+      _orderLines.clear();
+      _orderPreviewOpen = false;
+      _savedOrderId = null;
+      _savedOrderNumber = null;
+      _orderMessage = null;
+      _openOrders = const <PurchaseOrderSummary>[];
+    });
+    await _loadSupplierCatalog(supplierId);
+    await _loadOpenOrders(supplierId);
+  }
+
+  Future<void> _loadSupplierCatalog(String supplierId,
+      {String? search}) async {
+    try {
+      final page = await _service.supplierCatalogPage(
+        supplierId: supplierId,
+        search: search,
+        needPhrase: _selectedNeed?.description,
+      );
+      if (!mounted || _openSupplierId != supplierId) return;
+      setState(() {
+        _supplierCatalog = page;
+        _loadingSupplierCatalog = false;
+        _supplierCatalogError = null;
+      });
+    } catch (error) {
+      if (!mounted || _openSupplierId != supplierId) return;
+      setState(() {
+        _loadingSupplierCatalog = false;
+        _supplierCatalogError = 'No se pudo leer el catálogo del proveedor.';
+      });
+    }
+  }
+
+  /// Los pedidos abiertos con este proveedor, leídos del **servicio real de
+  /// compras**. Son documentos de compra en borrador o enviados: la misma
+  /// lista que muestra «Documentos de compra», filtrada por proveedor.
+  Future<void> _loadOpenOrders(String supplierId) async {
+    try {
+      final purchases = context.read<PurchaseService>();
+      final documentos = await purchases.getPurchaseInvoices(forceRefresh: true);
+      if (!mounted || _openSupplierId != supplierId) return;
+      final abiertos = documentos
+          .where((invoice) =>
+              invoice.supplierId == supplierId &&
+              (invoice.status == PurchaseInvoiceStatus.draft ||
+                  invoice.status == PurchaseInvoiceStatus.sent))
+          .map(PurchaseOrderSummary.fromInvoice)
+          .toList()
+        // El borrador primero: es el que espera una decisión.
+        ..sort((a, b) {
+          if (a.isDraft != b.isDraft) return a.isDraft ? -1 : 1;
+          return (b.orderDate ?? DateTime(0))
+              .compareTo(a.orderDate ?? DateTime(0));
+        });
+      setState(() => _openOrders = abiertos);
+    } catch (error) {
+      // Que no se puedan leer los documentos anteriores no impide armar uno
+      // nuevo: la ficha sigue sirviendo.
+      if (!mounted) return;
+      setState(() => _openOrders = const <PurchaseOrderSummary>[]);
+    }
+  }
+
+  /// Retomar un pedido guardado **sin rearmarlo**: sus líneas vuelven a la hoja
+  /// tal como se guardaron, con el costo que el operador ya decidió.
+  ///
+  /// Las líneas vienen dentro del documento —`purchase_invoices.items` es
+  /// jsonb—, así que no hace falta una segunda consulta.
+  Future<void> _resumeOrder(PurchaseOrderSummary order) async {
+    if (_orderBusy) return;
+    setState(() => _orderBusy = true);
+    try {
+      final purchases = context.read<PurchaseService>();
+      final invoice = await purchases.getPurchaseInvoice(order.orderId);
+      if (!mounted) return;
+      if (invoice == null) {
+        setState(() => _orderBusy = false);
+        _showCheckMessage('Ese documento ya no está disponible.');
+        return;
+      }
+      final base = DateTime.now();
+      setState(() {
+        _orderLines
+          ..clear()
+          ..addEntries(invoice.items.asMap().entries.map((entry) {
+            final item = entry.value;
+            final line = PurchaseOrderDraftLine(
+              productId: item.productId,
+              name: item.productName ?? item.description ?? 'Producto',
+              sku: item.productSku,
+              brand: null,
+              quantity: item.quantity,
+              unitCostNet: item.unitCost,
+              // El costo guardado es el que el operador ya decidió, no una
+              // sugerencia que el catálogo haría de nuevo hoy.
+              costIsFromCatalog: false,
+              addedAt: base.add(Duration(milliseconds: entry.key)),
+            );
+            return MapEntry(line.productId, line);
+          }));
+        _savedOrderId = invoice.id;
+        _savedOrderNumber = invoice.invoiceNumber;
+        _orderPreviewOpen = true;
+        _orderMessage = null;
+        _orderBusy = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _orderBusy = false);
+      _showCheckMessage('No se pudo retomar el pedido: ${_reason(error)}');
+    }
+  }
+
+  void _closeSupplierWorkspace() {
+    _supplierCatalogDebounce?.cancel();
+    setState(() {
+      _openSupplierId = null;
+      _supplierCatalog = null;
+      _supplierCatalogError = null;
+      _loadingSupplierCatalog = false;
+      _loadingMoreCatalog = false;
+    });
+  }
+
+  /// La búsqueda espera a que deje de escribir. Sin esto, cada tecla es una
+  /// consulta al servidor y la lista salta mientras el operador todavía teclea.
+  void _onSupplierCatalogSearch(String value) {
+    _supplierCatalogDebounce?.cancel();
+    _supplierCatalogDebounce = Timer(const Duration(milliseconds: 320), () {
+      final supplierId = _openSupplierId;
+      if (supplierId == null) return;
+      unawaited(_loadSupplierCatalog(supplierId, search: value));
+    });
+    setState(() {});
+  }
+
+  Future<void> _loadMoreSupplierCatalog() async {
+    final supplierId = _openSupplierId;
+    final current = _supplierCatalog;
+    if (supplierId == null || current == null || _loadingMoreCatalog) return;
+    setState(() => _loadingMoreCatalog = true);
+    try {
+      final next = await _service.supplierCatalogPage(
+        supplierId: supplierId,
+        search: _supplierCatalogSearch.text,
+        offset: current.items.length,
+        needPhrase: _selectedNeed?.description,
+      );
+      if (!mounted || _openSupplierId != supplierId) return;
+      setState(() {
+        _supplierCatalog = current.merge(next);
+        _loadingMoreCatalog = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _loadingMoreCatalog = false);
+      _showCheckMessage('No se pudieron traer más productos.');
+    }
+  }
+
+  /// Sumar o sacar una línea del pedido. **La misma orden hace las dos cosas**:
+  /// obligar a buscar el borrador para quitar algo es exactamente «navegar a
+  /// otra parte para arreglarlo».
+  void _toggleOrderLine(SupplierCatalogItem item) {
+    setState(() {
+      if (_orderLines.containsKey(item.productId)) {
+        _orderLines.remove(item.productId);
+        if (_highlightedOrderLine == item.productId) {
+          _highlightedOrderLine = null;
+        }
+      } else {
+        _orderLines[item.productId] = PurchaseOrderDraftLine.fromCatalog(
+          item,
+          withFreight: _costBasis.includesFreight,
+        );
+        // La primera línea es la que abre la hoja: antes de eso, un documento
+        // vacío al lado no le sirve a nadie.
+        _orderPreviewOpen = true;
+        _highlightedOrderLine = item.productId;
+      }
+    });
+    // El realce dura lo justo para que el ojo encuentre la línea en la hoja.
+    if (_highlightedOrderLine == item.productId) {
+      Future<void>.delayed(const Duration(milliseconds: 1400), () {
+        if (!mounted || _highlightedOrderLine != item.productId) return;
+        setState(() => _highlightedOrderLine = null);
+      });
+    }
+  }
+
+  // ── Guardar, ver y enviar el pedido ───────────────────────────────────────
+
+  /// Guarda el pedido **en el servicio real de compras**.
+  ///
+  /// No hay un almacén paralelo. El pedido nace como el mismo documento de
+  /// compra que después va a llevar la factura del proveedor: se crea en
+  /// `purchase_invoices` con estado `draft`, aparece en «Documentos de compra»
+  /// junto a todo lo demás, y cuando llega la factura se le pone el folio real
+  /// y se marca recibida. Sin conversión, sin retipear las líneas y sin una
+  /// segunda lista que mantener.
+  ///
+  /// Un borrador no toca la contabilidad: los asientos los crean los
+  /// disparadores al pasar a `received`. Verificado contra producción — el
+  /// borrador que ya existía tiene cero asientos.
+  Future<void> _savePurchaseOrder(PurchaseOrderDraft draft) async {
+    if (draft.isEmpty || _orderBusy) return;
+    setState(() => _orderBusy = true);
+    try {
+      final purchases = context.read<PurchaseService>();
+      final tenantId = await TenantService().getTenantId();
+      if (tenantId == null || tenantId.isEmpty) {
+        throw StateError('No se pudo resolver el tenant.');
+      }
+      final ahora = DateTime.now();
+      // El número provisorio dice lo que es. Cuando llegue la factura, ese
+      // campo pasa a llevar el folio del proveedor: es el mismo documento.
+      final numero = _savedOrderNumber ??
+          'PED-${ahora.year}${ahora.month.toString().padLeft(2, '0')}'
+              '-${ahora.millisecondsSinceEpoch.remainder(100000)}';
+      final lineas = draft.orderedLines;
+      final neto = draft.netTotal;
+      final iva = draft.ivaAmount;
+      final saved = await purchases.savePurchaseInvoice(
+        PurchaseInvoice(
+          id: _savedOrderId,
+          tenantId: tenantId,
+          invoiceNumber: numero,
+          // El tipo que va a tener cuando exista de verdad. Estrenarlo con un
+          // tipo propio obligaría a convertirlo después, que es exactamente el
+          // retipeo que esto viene a evitar.
+          sourceDocumentKind: 'tax_invoice',
+          supplierId: draft.supplier.id,
+          supplierName: draft.supplier.name,
+          supplierRut: draft.supplier.rut,
+          date: ahora,
+          status: PurchaseInvoiceStatus.draft,
+          subtotal: neto,
+          ivaAmount: iva,
+          total: neto + iva,
+          netAmount: neto,
+          taxTreatment: TaxTreatment.taxIncluded,
+          notes: draft.note,
+          items: [
+            for (final line in lineas)
+              PurchaseInvoiceItem(
+                productId: line.productId,
+                productName: line.name,
+                productSku: line.sku,
+                quantity: line.quantity,
+                unitCost: line.unitCostNet,
+                ivaRate: PurchaseOrderDraft.ivaRate,
+              ),
+          ],
+          createdAt: ahora,
+          updatedAt: ahora,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _savedOrderId = saved.id;
+        _savedOrderNumber = saved.invoiceNumber;
+        _orderBusy = false;
+      });
+      _showCheckMessage(
+        'Pedido ${saved.invoiceNumber} guardado con '
+        '${lineas.length} ${lineas.length == 1 ? 'línea' : 'líneas'}. '
+        'Está arriba y en Compras › Documentos de compra, como borrador.',
+      );
+      await _loadOpenOrders(draft.supplier.id);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _orderBusy = false);
+      // **El motivo se publica.** Un «no se pudo guardar» pelado escondió una
+      // clave foránea rota durante toda una ronda: el operador no puede hacer
+      // nada con un mensaje que no dice qué pasó, y quien lo arregla tampoco.
+      _showCheckMessage('No se pudo guardar el pedido: ${_reason(error)}');
+    }
+  }
+
+  /// El PDF de verdad, el mismo que se le adjunta al proveedor. La vista previa
+  /// de la pantalla y este archivo salen del mismo `PurchaseOrderDocument`, así
+  /// que lo que se aprobó es lo que sale.
+  Future<void> _openOrderPdf(PurchaseOrderDocument document) async {
+    try {
+      final bytes = await PurchaseOrderPdfGenerator.generateBytes(
+        document,
+        appearanceService: context.read<AppearanceService>(),
+      );
+      if (!mounted) return;
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: PurchaseOrderPdfGenerator.fileNameFor(document),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showCheckMessage('No se pudo generar el PDF del pedido.');
+    }
+  }
+
+  /// Prepara el mensaje y lo muestra **antes** de mandarlo.
+  ///
+  /// Sin teléfono no hay envío posible, y decirlo acá —no después de apretar
+  /// «enviar»— es la diferencia entre agregar el número y perder el pedido.
+  Future<void> _prepareOrderMessage(PurchaseOrderDocument document) async {
+    final page = _supplierCatalog;
+    if (page == null) return;
+    final profile = page.supplier;
+    if (!profile.canReceiveMessage) {
+      _showCheckMessage(
+        'No hay teléfono registrado para ${profile.name}. Agrégalo en su ficha '
+        'de Proveedores y el pedido queda listo para enviarse.',
+      );
+      return;
+    }
+    final message = PurchaseOrderMessage.forDocument(
+      document,
+      recipientName: profile.salesRepName ?? profile.name,
+      recipientPhone: profile.salesRepPhone!,
+      attachmentName: PurchaseOrderPdfGenerator.fileNameFor(document),
+      // La ventana de 24 h la resuelve el transporte. Acá se asume cerrada
+      // mientras no haya evidencia de lo contrario: prometer un envío directo
+      // que después sale como plantilla es la mentira cara.
+      windowIsOpen: false,
+    );
+    _orderMessageBody.text = message.body;
+    setState(() => _orderMessage = message);
+  }
+
+  Future<void> _sendOrderToSupplier(PurchaseOrderDocument document) async {
+    final message = _orderMessage;
+    final orderId = _savedOrderId;
+    if (message == null || orderId == null || _sendingOrder) return;
+    setState(() => _sendingOrder = true);
+    try {
+      final receipt = await WhatsAppService().sendMessage(
+        context: context,
+        customerPhone: message.recipientPhone,
+        message: _orderMessageBody.text.trim(),
+        contactName: message.recipientName,
+        templateContactName: message.recipientName,
+        isSupplierConversation: true,
+        contextType: 'purchase_order',
+        contextId: orderId,
+      );
+      if (!mounted) return;
+      if (!receipt.isSuccess) {
+        setState(() => _sendingOrder = false);
+        _showCheckMessage(
+          'WhatsApp no aceptó el mensaje. El pedido sigue guardado como '
+          'borrador: se puede reintentar sin rearmarlo.',
+        );
+        return;
+      }
+      // El pedido sólo pasa a «enviado» cuando el mensaje salió de verdad. Al
+      // revés, un envío fallido dejaría un pedido marcado como salido que el
+      // proveedor nunca vio.
+      //
+      // Y lo marca el **servicio real de compras**, con su propio estado
+      // `sent`: es el mismo documento que después recibe la factura, no una
+      // copia en otra tabla.
+      final purchases = context.read<PurchaseService>();
+      final sent = await purchases.updateInvoiceStatus(
+        orderId,
+        PurchaseInvoiceStatus.sent,
+      );
+      if (!mounted) return;
+      setState(() {
+        _sendingOrder = false;
+        _orderMessage = null;
+        _savedOrderNumber = sent?.invoiceNumber ?? _savedOrderNumber;
+      });
+      await _loadOpenOrders(_openSupplierId!);
+      _showCheckMessage(
+        receipt.usedFirstContactTemplate
+            ? 'Pedido ${_savedOrderNumber ?? ''} enviado. Como estaba fuera de '
+                'las 24 horas, salió la plantilla de contacto y el detalle '
+                'quedó en la conversación.'
+            : 'Pedido ${_savedOrderNumber ?? ''} enviado a '
+                '${message.recipientName}.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _sendingOrder = false);
+      _showCheckMessage('No se pudo enviar el pedido: ${_reason(error)}');
+    }
+  }
+
+  /// El motivo, en una línea. Postgres manda el suyo en `message`; lo demás
+  /// —traza, contexto— no le sirve a quien está mirando la pantalla.
+  static String _reason(Object error) {
+    final texto = error is PostgrestException
+        ? error.message
+        : error.toString();
+    final limpio = texto.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return limpio.length > 160 ? '${limpio.substring(0, 157)}…' : limpio;
+  }
+
+  Future<void> _editSupplierPhoto(SupplierProfile profile) async {
+    // Ninguno de los 91 proveedores tiene imagen: esto no es un caso raro, es
+    // el estado de todos. Se resuelve donde se nota que falta.
+    _showCheckMessage(
+      'La foto de ${profile.name} se agrega desde su ficha en Proveedores.',
+    );
+  }
+
+  Widget _buildSupplierEvidencePanel(PurchaseTokens tokens) {
+    if (_loadingEvidence) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 2),
+        child: Text(
+          'Buscando sus compras…',
+          style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+        ),
+      );
+    }
+    if (_evidenceError != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 2),
+        child: Text(
+          _evidenceError!,
+          style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+        ),
+      );
+    }
+    final evidence = _evidence;
+    if (evidence == null) return const SizedBox.shrink();
+    return SupplierEvidencePanel(evidence: evidence);
+  }
+
+  /// **A quién le pedimos la lista entera, y si conviene repartirla.**
+  ///
+  /// La pregunta del taller ante una lista no es «quién tiene rayos»: es «¿le
+  /// pido todo a uno, o lo reparto?». Esa decisión no está en ninguna consulta
+  /// por línea —hay que cruzarlas—, así que se calcula sobre la lista completa
+  /// y llega aquí ya tomada.
+  List<Widget> _buildBasketCoverageBlock() {
+    final report = _basketCoverage;
+    if (report == null || report.isEmpty) return const <Widget>[];
+    final tokens = PurchaseTokens.of(context);
+    final leader = report.leader!;
+    return <Widget>[
+      const SizedBox(height: 12),
+      PurchasePanel(
+        key: const ValueKey('basket-coverage-block'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              leader.coversEverything
+                  ? 'Se lo puedes pedir todo a ${leader.supplierName}'
+                  : 'A quién le pedimos esta lista',
+              style: PurchaseType.panelTitle.copyWith(color: tokens.ink),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              _basketCoverageSummary(leader),
+              style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+            ),
+            const SizedBox(height: 11),
+            for (final supplier in report.items) ...[
+              _buildBasketCoverageRow(supplier, tokens),
+              if (_evidenceSupplierId == supplier.supplierId)
+                _buildSupplierEvidencePanel(tokens),
+              if (supplier != report.items.last) const SizedBox(height: 9),
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
+
+  /// El reparto se dice completo o no se dice: «le falta X» sin decir a quién
+  /// pedírselo deja al operador con el problema, no con la salida.
+  String _basketCoverageSummary(BasketSupplierCoverage leader) {
+    if (leader.coversEverything) {
+      return 'Cubre las ${leader.totalNeeds} líneas según el historial de compras. '
+          'Eso es a quién se lo hemos comprado, no lo que tenga hoy en bodega.';
+    }
+    final missing = leader.missingList;
+    final complement = leader.complementSupplierName;
+    if (missing != null && complement != null) {
+      return 'Ninguno cubre la lista completa. ${leader.supplierName} cubre '
+          '${leader.coveredNeeds} de ${leader.totalNeeds}; para $missing '
+          'conviene $complement.';
+    }
+    if (missing != null) {
+      return 'Ninguno cubre la lista completa. ${leader.supplierName} cubre '
+          '${leader.coveredNeeds} de ${leader.totalNeeds}, y de $missing no hay '
+          'historial de compra con nadie.';
+    }
+    return 'Cobertura según el historial de compras; no valida stock de hoy.';
+  }
+
+  Widget _buildBasketCoverageRow(
+    BasketSupplierCoverage supplier,
+    PurchaseTokens tokens,
+  ) {
+    final detail = <String>[
+      if (supplier.coveredList != null) supplier.coveredList!,
+      if (supplier.brands != null) supplier.brands!,
+    ];
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      supplier.supplierName,
+                      style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${supplier.coveredNeeds} de ${supplier.totalNeeds}',
+                    style: PurchaseType.rowTitle.copyWith(color: tokens.act),
+                  ),
+                ],
+              ),
+              if (detail.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  detail.join(' · '),
+                  style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        // «Por qué» antes que «abrir»: el operador decide con la evidencia, y
+        // recién después va al proveedor.
+        PurchaseInlineAction(
+          key: ValueKey('explain-basket-supplier-${supplier.supplierId}'),
+          label: _evidenceSupplierId == supplier.supplierId
+              ? 'Ocultar detalle'
+              : 'Por qué',
+          onPressed: () => unawaited(_toggleSupplierEvidence(
+            supplier.supplierId,
+            _selectedBasketNeeds
+                .map((need) => need.description.trim())
+                .where((line) => line.isNotEmpty)
+                .toList(growable: false),
+          )),
+        ),
+        if (supplier.supplierWebsite != null) ...[
+          const SizedBox(width: 10),
+          PurchaseInlineAction(
+            key: ValueKey('open-basket-supplier-${supplier.supplierId}'),
+            label:
+                supplier.hasPortalAccount ? 'Entrar al portal' : 'Abrir sitio',
+            onPressed: () => _openSupplier(
+              supplier.supplierWebsite!,
+              supplierName: supplier.supplierName,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// **A quién le compramos esto**, antes que qué producto comprar.
+  ///
+  /// El paso de proveedores respondía por PRODUCTO: para «neumáticos 27.5
+  /// económicos» listaba un 26x1.75, un 29x2.25 y un 700x28C —medidas que no
+  /// son la pedida— cada uno con «Sin verificar · flete sin clasificar · Sin
+  /// banda aún». Un trabajador sin experiencia no puede decidir con eso.
+  ///
+  /// Un vendedor con años en el local contesta otra cosa, de memoria: «eso se
+  /// lo compramos a Derman». Este bloque es esa respuesta, sacada de las
+  /// facturas: concentración del gasto ya aterrizado, con la evidencia que la
+  /// sostiene y el camino directo al proveedor.
+  ///
+  /// El porcentaje NUNCA viaja solo. Un 100% sobre tres líneas y un 57% sobre
+  /// diecisiete son conclusiones distintas, y quien mira la pantalla tiene que
+  /// poder separarlas sin abrir nada.
+  /// **La tabla y la ficha se turnan en el mismo panel.**
+  ///
+  /// Tocar un proveedor no es irse a otra ruta: el análisis, la necesidad
+  /// seleccionada y la evidencia abierta siguen ahí cuando se vuelve. Salir del
+  /// bloque para mirar a un proveedor —y tener que rehacer el camino— es lo que
+  /// hace que nadie lo mire.
+  List<Widget> _buildSupplierHistoryBlock() {
+    final report = _supplierHistory;
+    // La ficha del proveedor es del proveedor, no de la línea: llegando desde
+    // «Pedidos» no hay necesidad elegida y la ficha igual tiene que abrirse.
+    if (_openSupplierId != null) {
+      return <Widget>[_buildSupplierWorkspace(), const SizedBox(height: 12)];
+    }
+    if (report == null || report.isEmpty) return const <Widget>[];
+    return <Widget>[
+      AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          // Entra desde la derecha al abrir y vuelve por donde vino: el
+          // movimiento es lo que dice que se entró y se salió de algo, no que
+          // el panel se reemplazó.
+          transitionBuilder: (child, animation) {
+            final entrando = child.key == ValueKey(_openSupplierId ?? 'tabla');
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset(entrando && _openSupplierId != null
+                      ? 0.04
+                      : (_openSupplierId == null ? -0.04 : 0.04), 0),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            );
+          },
+          child: _openSupplierId == null
+              ? _buildSupplierTable(report)
+              : _buildSupplierWorkspace(),
+        ),
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  Widget _buildSupplierTable(SupplierConcentrationReport report) {
+    return SupplierConcentrationTable(
+      key: const ValueKey('tabla'),
+      report: report,
+      // Un recuento y su antigüedad: «12 de 12» y «hace 7 min». Separados
+      // porque uno compara y el otro fecha.
+      confirmedDetailFor: _confirmedLabel,
+      checkProgress: _checkProgress,
+      confirmedLabelFor: (supplierId) => _confirmed[supplierId]?.rowLabel,
+      confirmedAgeFor: (supplierId) {
+        final confirmed = _confirmed[supplierId];
+        if (confirmed == null) return null;
+        // «Sin consultar» acá empujaría a repetir un chequeo que ya corrió y
+        // que no contesta esta pregunta: apuntó a otros productos.
+        if (confirmed.sweptButNotThis) return 'nada de esta línea';
+        return confirmed.ageLabel;
+      },
+      busySupplierId: _checkingSupplierId,
+      expandedSupplierId: _evidenceSupplierId,
+      onConfirm: (supplier) => unawaited(_confirmAvailabilityWithSupplier(
+        supplier.supplierId,
+        supplier.supplierName,
+      )),
+      onExplain: (supplier) {
+        final need = _selectedNeed;
+        if (need == null) return;
+        unawaited(_toggleSupplierEvidence(
+          supplier.supplierId,
+          <String>[need.description.trim()],
+        ));
+      },
+      onOpenPortal: (supplier) => _openSupplier(
+        supplier.supplierWebsite!,
+        supplierName: supplier.supplierName,
+      ),
+      onOpenSupplier: (supplier) =>
+          unawaited(_openSupplierWorkspace(supplier.supplierId)),
+      basis: _costBasis,
+      onBasisChanged: (basis) => setState(() => _costBasis = basis),
+      evidencePanelBuilder: (context) =>
+          _buildSupplierEvidencePanel(PurchaseTokens.of(context)),
+    );
+  }
+
+  Widget _buildSupplierWorkspace() {
+    final page = _supplierCatalog;
+    if (page == null) {
+      return Padding(
+        key: ValueKey(_openSupplierId),
+        padding: const EdgeInsets.symmetric(vertical: 26),
+        child: Center(
+          child: _loadingSupplierCatalog
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _supplierCatalogError ?? 'No se pudo abrir el proveedor.',
+                      style: PurchaseType.meta.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    PurchaseInlineAction(
+                      key: const ValueKey('supplier-workspace-back-error'),
+                      label: 'Volver a los proveedores',
+                      onPressed: _closeSupplierWorkspace,
+                    ),
+                  ],
+                ),
+        ),
+      );
+    }
+    final draft = PurchaseOrderDraft(
+      supplier: page.supplier,
+      lines: _orderLines,
+    );
+    final document = PurchaseOrderDocument.fromDraft(
+      draft,
+      orderNumber: _savedOrderNumber,
+    );
+    final message = _orderMessage;
+    return SupplierOrderComposer(
+      key: ValueKey(_openSupplierId),
+      page: page,
+      document: document,
+      open: _orderPreviewOpen,
+      busy: _orderBusy,
+      savedOrderNumber: _savedOrderNumber,
+      highlightedProductId: _highlightedOrderLine,
+      loadingMore: _loadingMoreCatalog,
+      searchController: _supplierCatalogSearch,
+      addedProductIds: _orderLines.keys.toSet(),
+      openOrders: _openOrders,
+      activeOrderId: _savedOrderId,
+      onResumeOrder: (order) => unawaited(_resumeOrder(order)),
+      messagePreview: message == null
+          ? null
+          : PurchaseOrderMessagePreview(
+              message: message,
+              bodyController: _orderMessageBody,
+              sending: _sendingOrder,
+              onBack: () => setState(() => _orderMessage = null),
+              onSend: () => unawaited(_sendOrderToSupplier(document)),
+            ),
+      onBack: _closeSupplierWorkspace,
+      onSearch: _onSupplierCatalogSearch,
+      onLoadMore: () => unawaited(_loadMoreSupplierCatalog()),
+      onToggleLine: _toggleOrderLine,
+      onOpenPortal: () {
+        final sitio = page.supplier.website;
+        if (sitio == null) return;
+        _openSupplier(sitio, supplierName: page.supplier.name);
+      },
+      onAddPhoto: () => unawaited(_editSupplierPhoto(page.supplier)),
+      basis: _costBasis,
+      onBasisChanged: (basis) => setState(() => _costBasis = basis),
+      onRemoveLine: (productId) => setState(() {
+        _orderLines.remove(productId);
+        _highlightedOrderLine = null;
+      }),
+      onClearOrder: () => setState(() {
+        _orderLines.clear();
+        _highlightedOrderLine = null;
+      }),
+      onSaveDraft: () => unawaited(_savePurchaseOrder(draft)),
+      onOpenPdf: () => unawaited(_openOrderPdf(document)),
+      onSendToSupplier: () => unawaited(_prepareOrderMessage(document)),
+      onClosePreview: () => setState(() {
+        _orderPreviewOpen = false;
+        _orderMessage = null;
+      }),
+    );
+  }
+
+  /// «17 líneas de compra entre 4 proveedores» — la base, dicha antes que
+  /// cualquier porcentaje.
   Widget _buildCandidateSection({
     required bool phone,
     Widget? identityFallback,
@@ -4589,69 +5899,89 @@ class _IntelligentPurchasingWorkspacePageState
     // Umbral del spec: por debajo, la tabla dejaría de ser legible y la
     // composición correcta son las cards, no una tabla comprimida.
     final useCards = phone || usableWidth < 470;
+    final hasCandidatesHeader = (ranking != null && ranking.items.isNotEmpty) ||
+        (external?.unverifiedItems.isNotEmpty ?? false) ||
+        _allCandidatesHiddenByFilters;
 
     return ListView(
       key: const ValueKey('provider-results'),
       padding: const EdgeInsets.only(top: 14),
       children: [
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 16,
-          runSpacing: 8,
-          children: [
-            // Frame 03/04/16/26: recuento de candidatos y de proveedores en una
-            // sola línea, con la salvedad de disponibilidad como texto
-            // secundario contiguo. Nunca una cápsula: no es una excepción.
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 10,
-              children: [
-                Text(
-                  _candidateCountLabel(
-                    ranking,
-                    unverified: external?.unverifiedItems.length ?? 0,
-                  ),
-                  style: PurchaseType.sectionTitle,
-                ),
-                if (_allCandidatesHiddenByFilters)
+        // Antes que la tabla de productos: a quién le compramos esto.
+        ..._buildSupplierHistoryBlock(),
+        // **Un encabezado sin su tabla no encabeza nada.** «Sin opciones
+        // visibles» con un selector de vista al lado, sobre una compuerta que
+        // ya dice qué decidir primero, es un rótulo de una cosa que no está.
+        // Se conserva sólo cuando hay algo que encabezar, o cuando el filtro es
+        // lo que esconde las filas: ahí el control es la salida.
+        if (hasCandidatesHeader)
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 8,
+            children: [
+              // Frame 03/04/16/26: recuento de candidatos y de proveedores en una
+              // sola línea, con la salvedad de disponibilidad como texto
+              // secundario contiguo. Nunca una cápsula: no es una excepción.
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 10,
+                children: [
                   Text(
-                    '0 visibles con el filtro activo',
-                    style: PurchaseType.meta.copyWith(
-                      color: Theme.of(context).colorScheme.error,
+                    _candidateCountLabel(
+                      ranking,
+                      unverified: external?.unverifiedItems.length ?? 0,
                     ),
+                    style: PurchaseType.sectionTitle,
                   ),
-                if (ranking != null && ranking.items.isNotEmpty)
-                  Text(
-                    'Stock no verificado',
-                    style: PurchaseType.meta.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  if (_allCandidatesHiddenByFilters)
+                    Text(
+                      '0 visibles con el filtro activo',
+                      style: PurchaseType.meta.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
-                  ),
-              ],
-            ),
-            // Frames 03/26 en ancho, 16/20 en teléfono.
-            ProviderResultControls(
-              compact: phone,
-              enabled: !_loadingDecision && !_refreshingResults,
-              profileLabel: _serverProfileLabel,
-              viewValue: _tableView,
-              viewOptions: _tableViewOptions,
-              onViewChanged: (view) => setState(() => _tableView = view),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        // La historia informa; la disponibilidad no se afirma desde ella.
-        Text(
-          'Precios históricos; disponibilidad por confirmar. El costo incluye el flete atribuible registrado y abrir el proveedor no genera una compra.',
-          style: PurchaseType.meta.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  if (ranking != null && ranking.items.isNotEmpty)
+                    Text(
+                      'Stock no verificado',
+                      style: PurchaseType.meta.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+              // Frames 03/26 en ancho, 16/20 en teléfono.
+              ProviderResultControls(
+                compact: phone,
+                enabled: !_loadingDecision && !_refreshingResults,
+                profileLabel: _serverProfileLabel,
+                viewValue: _tableView,
+                viewOptions: _tableViewOptions,
+                onViewChanged: (view) => setState(() => _tableView = view),
+              ),
+            ],
           ),
-        ),
+        // **La letra chica pertenece a la comparación, no a la pantalla.**
+        // Sin candidatos a la vista, «precios históricos» y «manda el ranking
+        // histórico» quedaban flotando sobre el fondo, encima de una compuerta
+        // que ya decía qué hacer: dos líneas de advertencia sobre una tabla que
+        // no existe. Se publican con la tabla o no se publican.
+        if (ranking != null && ranking.items.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          // La historia informa; la disponibilidad no se afirma desde ella.
+          Text(
+            'Precios históricos; disponibilidad por confirmar. El costo incluye el flete atribuible registrado y abrir el proveedor no genera una compra.',
+            style: PurchaseType.meta.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
         // Qué objetivo está reordenando la lista. Sin esto, un candidato que
         // sube por la marca preferida se ve como un ranking caprichoso.
-        if (_commercialTarget != null) ...[
+        if (_commercialTarget != null &&
+            ranking != null &&
+            ranking.items.isNotEmpty) ...[
           const SizedBox(height: 4),
           Wrap(
             spacing: 10,

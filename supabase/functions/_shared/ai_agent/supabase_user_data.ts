@@ -24,6 +24,8 @@ export class SupabaseUserDataError extends Error {
     /// (`^[a-z][a-z0-9_]{2,63}$`), nunca dato del operador, y sin él un fallo
     /// de este tipo obliga a bisectar en producción para saber dónde ocurrió.
     readonly rpcName?: string,
+    /// Frase fija de la RPC que explica el rechazo, cuando es segura.
+    readonly detail?: string,
   ) {
     super(
       rpcName
@@ -307,7 +309,23 @@ async function sanitizedRpcFailure(
     const value = await readBoundedJson(response, MAX_ERROR_RESPONSE_BYTES, signal);
     if (isRecord(value) && typeof value.code === "string") {
       if (value.code === "22023") {
-        return new SupabaseUserDataError("rpc_invalid_response", false, "idempotency_conflict", name);
+        // El motivo del rechazo viaja, ACOTADO. Nuestras RPC lanzan frases
+        // fijas —«Technical predicates require a resolved category»— sin datos
+        // del tenant; borrarlas dejaba a quien depura sin nada y obligaba a
+        // adivinar la forma exacta del argumento, ronda tras ronda. Sólo pasa
+        // texto corto sin dígitos ni identificadores: cualquier cosa que
+        // parezca un valor se descarta en vez de arriesgar una filtración.
+        const detail = typeof value.message === "string" ? value.message : "";
+        const safe = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ,.:;'()-]{1,120}$/.test(detail)
+          ? detail
+          : undefined;
+        return new SupabaseUserDataError(
+          "rpc_invalid_response",
+          false,
+          "idempotency_conflict",
+          name,
+          safe,
+        );
       }
       if (value.code === "42501") {
         return new SupabaseUserDataError("rpc_invalid_response", false, "forbidden", name);

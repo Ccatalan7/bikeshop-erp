@@ -355,6 +355,12 @@ function geminiFinishReason(value: unknown, calls: readonly AgentToolCall[]): Ag
     case "BLOCKLIST":
     case "PROHIBITED_CONTENT":
       return "blocked";
+    // El modelo quiso llamar una herramienta y escribió JSON inválido. Es un
+    // fallo de formato suyo, no del proveedor, y no es determinista: se
+    // distingue para poder volver a preguntar en vez de perder el turno.
+    case "MALFORMED_FUNCTION_CALL":
+    case "UNEXPECTED_TOOL_CALL":
+      return "malformed_tool_call";
     default:
       return "unknown";
   }

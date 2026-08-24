@@ -79,7 +79,18 @@ export interface AgentUsage {
   cachedInputTokens?: number;
 }
 
-export type AgentFinishReason = "stop" | "tool_calls" | "length" | "blocked" | "unknown";
+/// `malformed_tool_call` es el modelo intentando llamar una herramienta y
+/// produciendo JSON inválido —el `MALFORMED_FUNCTION_CALL` de Gemini—. No es un
+/// proveedor caído ni una respuesta prohibida: es un fallo de formato, y por
+/// eso tiene su propio nombre. Confundirlo con `unknown` mataba la corrida
+/// entera cuando bastaba con volver a preguntar.
+export type AgentFinishReason =
+  | "stop"
+  | "tool_calls"
+  | "length"
+  | "blocked"
+  | "malformed_tool_call"
+  | "unknown";
 
 export interface AgentProviderRequest {
   modelRole: LogicalModelRole;
@@ -161,7 +172,15 @@ export type AgentInventoryAvailabilityFilter = (typeof agentInventoryAvailabilit
  */
 export interface AgentInventoryListRef {
   kind: "inventory";
+  /// Texto para el buscador local del cliente. Con el resultado completo la
+  /// lista navega por ids y esto es sólo un rótulo; con el resultado truncado
+  /// es lo que permite reencontrar las filas.
   query: string;
+  /// Cómo se le nombra al operador lo que está viendo. Es distinto de `query`
+  /// a propósito: la frase que él tipeó («camara 29») y lo que el asistente
+  /// entendió («Cámaras») no son la misma cosa, y una sola cadena obligaba a
+  /// elegir entre rotular mal la lista o hablarle con palabras ajenas.
+  spokenSubject: string;
   availability: AgentInventoryAvailabilityFilter;
   resultCount: number;
   hasMore: boolean;
@@ -301,6 +320,8 @@ export interface AgentToolResultEnvelope {
   items: readonly JsonObject[];
   resultCount: number;
   hasMore: boolean;
+  /// Cuántas coincidencias hay en total, no cuántas cupieron en el tope.
+  totalMatches: number;
 }
 
 export function isLogicalModelRole(value: unknown): value is LogicalModelRole {

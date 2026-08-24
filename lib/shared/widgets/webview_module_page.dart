@@ -24,6 +24,11 @@ import '../../modules/storage/models/app_stored_file.dart';
 import '../../modules/storage/services/app_file_storage_service.dart';
 import '../services/auth_service.dart';
 import '../services/aliexpress_daily_invoice_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/supplier_availability_service.dart';
+import '../services/supplier_portal_probe_service.dart';
+import '../services/supplier_portal_reading.dart';
 import '../services/aliexpress_pending_days_service.dart';
 import '../services/browser_credential_vault.dart';
 import '../services/browser_profile_service.dart';
@@ -163,6 +168,10 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   late final String _browserProfileIdentity;
   Completer<void>? _aliExpressNavigationCompleter;
   String? _aliExpressBridgeSource;
+  String? _supplierProbeSource;
+  bool _runningPortalDiscovery = false;
+  bool _runningAvailabilityCheck = false;
+  String? _availabilityProgress;
   bool _isAliExpressImportRunning = false;
   final Map<String, String> _aliExpressInvoiceImageDataCache = {};
 
@@ -811,6 +820,187 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   bool get _isAliExpressPage => AliExpressDailyInvoiceService.isTrustedUri(
         Uri.tryParse(_currentUrl),
       );
+
+  /// El reconocimiento sólo se ofrece donde puede servir: una página http(s)
+  /// que no es AliExpress —ése tiene su propio puente— y sólo mientras el
+  /// portal no esté configurado. Es una herramienta de puesta en marcha, no un
+  /// botón permanente en la barra del operador.
+  bool get _canDiscoverSupplierPortal {
+    if (_isAliExpressPage) return false;
+    final uri = Uri.tryParse(_currentUrl);
+    if (uri == null) return false;
+    return uri.scheme == 'https' || uri.scheme == 'http';
+  }
+
+  /// Inyecta la sonda, la corre en modo reconocimiento y guarda lo que vio.
+  ///
+  /// No decide nada sobre el portal: distinguir «sin stock» de «se cayó la
+  /// sesión» es una regla de negocio y esta página no tiene contexto para
+  /// tomarla. Sólo trae hechos.
+  Future<void> _discoverSupplierPortal() async {
+    final controller = _controller;
+    if (controller == null || _runningPortalDiscovery) return;
+    setState(() => _runningPortalDiscovery = true);
+    try {
+      _supplierProbeSource ??= await rootBundle.loadString(
+        'assets/browser/supplier_portal_probe.js',
+      );
+      await controller.evaluateJavascript(source: _supplierProbeSource!);
+      final raw = await controller.evaluateJavascript(
+        source: 'JSON.stringify('
+            'globalThis.__vinabikeSupplierProbe.discover())',
+      );
+      final report = SupplierPortalProbeService.decodeReport(raw);
+      if (!mounted) return;
+      if (report == null) {
+        _showPortalDiscoveryMessage(
+          'La página no respondió al reconocimiento. Recárgala e inténtalo otra vez.',
+        );
+        return;
+      }
+      final supplier = await SupplierPortalProbeService(
+        Supabase.instance.client,
+      ).recordDiscovery(originUrl: _currentUrl, report: report);
+      if (!mounted) return;
+      _showPortalDiscoveryMessage(
+        supplier == null
+            // Que no calce no es un fallo: significa que esta pestaña no es el
+            // portal de ningún proveedor registrado, y escribir evidencia a
+            // nombre de nadie sería peor que no escribir.
+            ? 'Esta página no corresponde a un proveedor con credenciales guardadas.'
+            : 'Reconocimiento de $supplier guardado.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showPortalDiscoveryMessage('No se pudo reconocer el portal: $error');
+    } finally {
+      if (mounted) setState(() => _runningPortalDiscovery = false);
+    }
+  }
+
+  /// **Confirmar disponibilidad con el proveedor abierto.**
+  ///
+  /// Recorre los códigos que vale la pena preguntar, navega a la ficha de cada
+  /// uno y anota lo que el portal contestó. No decide ni compra: deja hechos
+  /// con su hora y su fuente.
+  ///
+  /// Es lento por naturaleza —una navegación por código— así que informa
+  /// avance y se puede mirar. El operador ve exactamente lo que la sonda ve.
+  Future<void> _confirmSupplierAvailability() async {
+    final controller = _controller;
+    if (controller == null || _runningAvailabilityCheck) return;
+    final origin = _currentUrl;
+    final service = SupplierAvailabilityService(Supabase.instance.client);
+    setState(() {
+      _runningAvailabilityCheck = true;
+      _availabilityProgress = 'Buscando qué confirmar…';
+    });
+    try {
+      final supplierId = await SupplierPortalProbeService(
+        Supabase.instance.client,
+      ).supplierForOrigin(origin);
+      if (supplierId == null) {
+        _showPortalDiscoveryMessage(
+          'Esta página no corresponde a un proveedor con credenciales guardadas.',
+        );
+        return;
+      }
+      final probe = await service.enabledProbe(supplierId);
+      if (probe == null) {
+        // Configurada pero apagada, o sin configurar: las dos cosas se
+        // arreglan fuera de acá y ninguna es un error del chequeo.
+        _showPortalDiscoveryMessage(
+          'Este portal todavía no tiene una consulta habilitada.',
+        );
+        return;
+      }
+      final targets = await service.targets(supplierId);
+      if (targets.isEmpty) {
+        _showPortalDiscoveryMessage(
+          'No hay productos de este proveedor bajo su mínimo para confirmar.',
+        );
+        return;
+      }
+      _supplierProbeSource ??= await rootBundle.loadString(
+        'assets/browser/supplier_portal_probe.js',
+      );
+
+      var confirmados = 0;
+      for (var index = 0; index < targets.length; index++) {
+        if (!mounted || !_runningAvailabilityCheck) break;
+        final target = targets[index];
+        setState(() => _availabilityProgress =
+            'Confirmando ${index + 1} de ${targets.length}: ${target.name}');
+        final url = probe.urlForCode(target.supplierCode);
+        await controller.loadUrl(
+          urlRequest: URLRequest(url: WebUri(url)),
+        );
+        // El portal es de los noventa en algunos casos: se le da tiempo a
+        // dibujar antes de leerlo, o la sonda leería una página a medias y
+        // eso se informaría como «ilegible» sin serlo.
+        await Future<void>.delayed(const Duration(milliseconds: 2600));
+        await controller.evaluateJavascript(source: _supplierProbeSource!);
+        final raw = await controller.evaluateJavascript(
+          source: 'JSON.stringify(globalThis.__vinabikeSupplierProbe.probe('
+              '${jsonEncode(target.supplierCode)}))',
+        );
+        final report = SupplierPortalProbeService.decodeReport(raw);
+        if (report == null) continue;
+        final body = report['bodySample']?.toString() ?? '';
+        final session = report['session'];
+        final reading = readSupplierPortal(
+          SupplierPortalObservation(
+            code: target.supplierCode,
+            url: url,
+            bodyText: body,
+            hasPasswordField:
+                session is Map && session['hasPasswordField'] == true,
+          ),
+          probe,
+        );
+        await service.record(
+          supplierId: supplierId,
+          target: target,
+          reading: reading,
+          sourceUrl: url,
+          evidenceSample: body,
+        );
+        confirmados++;
+        // Una sesión caída invalida todo lo que venga después: seguir
+        // preguntando escribiría una fila de «no encontrado» por cada
+        // producto, y eso es peor que no preguntar.
+        if (reading.status == SupplierAvailabilityStatus.sessionExpired) {
+          _showPortalDiscoveryMessage(
+            'La sesión del portal se cayó. Se anotó y se detuvo: '
+            'vuelve a entrar y reintenta.',
+          );
+          return;
+        }
+      }
+      if (!mounted) return;
+      _showPortalDiscoveryMessage(
+        'Listo: $confirmados de ${targets.length} confirmados con el proveedor.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showPortalDiscoveryMessage(
+        'No se pudo confirmar durante '
+        '${_availabilityProgress ?? 'la consulta'}: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _runningAvailabilityCheck = false;
+          _availabilityProgress = null;
+        });
+      }
+    }
+  }
+
+  void _showPortalDiscoveryMessage(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
+  }
 
   bool get _isAliExpressOrderDetailPage {
     if (!kDebugMode) return false;
@@ -2498,6 +2688,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         break;
       case _BrowserMenuAction.bookmarks:
         await _showBrowserLibraryDialog(_BrowserLibraryKind.bookmarks);
+      case _BrowserMenuAction.discoverSupplierPortal:
+        await _discoverSupplierPortal();
+        break;
+      case _BrowserMenuAction.confirmSupplierAvailability:
+        await _confirmSupplierAvailability();
+        break;
       case _BrowserMenuAction.clearData:
         await _confirmClearBrowserData();
       case _BrowserMenuAction.forgetSiteCredentials:
@@ -5874,6 +6070,24 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                           title: Text('Olvidar credenciales del sitio'),
                         ),
                       ),
+                      if (_canDiscoverSupplierPortal)
+                        const PopupMenuItem(
+                          value: _BrowserMenuAction.confirmSupplierAvailability,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.fact_check_outlined),
+                            title: Text('Confirmar disponibilidad'),
+                          ),
+                        ),
+                      if (kDebugMode && _canDiscoverSupplierPortal)
+                        const PopupMenuItem(
+                          value: _BrowserMenuAction.discoverSupplierPortal,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.travel_explore_outlined),
+                            title: Text('Reconocer este portal'),
+                          ),
+                        ),
                       const PopupMenuItem(
                         value: _BrowserMenuAction.clearData,
                         child: ListTile(
@@ -6496,6 +6710,10 @@ enum _BrowserMenuAction {
   bookmarks,
   favoritesBar,
   forgetSiteCredentials,
+  // Puesta en marcha de un portal de proveedor: vive en el menú y no en la
+  // barra porque se usa una vez por proveedor, no todos los días.
+  discoverSupplierPortal,
+  confirmSupplierAvailability,
   clearData,
   openInChrome,
   openExternal,

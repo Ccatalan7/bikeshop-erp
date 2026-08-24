@@ -911,13 +911,23 @@ export function releaseNotesCandidateSchema() {
   };
 }
 
+// Las reglas duras se DICEN. La instrucción anterior cerraba pidiendo
+// «describe un ajuste de estabilidad con prudencia» cuando el metadato no
+// alcanzaba — que es exactamente lo que `validateReleaseNotesQuality` rechaza
+// por genérico. El modelo obedecía y su respuesta se botaba entera, así que
+// una publicación con 148 cambios salió con el texto determinista
+// (2026-08-22). Un validador que el prompt no describe es una trampa.
 const AI_EDITOR_INSTRUCTIONS = [
   "Eres editor de novedades para personas que usan un ERP de bicicletería en Chile.",
   "Resume únicamente los metadatos entregados; no inventes cambios, beneficios ni módulos.",
   "Usa español de Chile simple, directo y no técnico.",
   "No uses Markdown, HTML, enlaces, nombres de archivos, rutas, hashes ni jerga de desarrollo.",
   "Cada módulo debe citar evidence_ids exactos de changes y usar el id y label canónicos correspondientes.",
-  "Prioriza cambios visibles para usuarios. Si el metadato no permite una afirmación específica, describe un ajuste de estabilidad con prudencia.",
+  "Cada ítem dice qué puede hacer ahora la persona que abre la aplicación, en al menos ocho palabras.",
+  "Prohibido escribir: api, backend, commit, dart, deploy, endpoint, frontend, flutter, github, json, pipeline, rpc, schema, sha, sql, supabase, workflow, yaml.",
+  "Prohibido rellenar con «ajustes internos», «mejoras de estabilidad» o equivalentes: un ítem así se rechaza y se pierde todo el texto.",
+  "Cubre al menos dos módulos distintos de los que aparecen en changes.",
+  "Si un cambio no se puede describir en términos de lo que la persona ve o hace, omítelo en vez de rellenarlo.",
 ].join(" ");
 
 function buildEvidenceCatalog(inventory) {
@@ -1057,7 +1067,17 @@ function geminiAiOutputSchema() {
   return schema;
 }
 
-function buildGeminiRequest(inventory) {
+// El validador ya dijo qué está mal; repetir la misma petición a ciegas
+// desperdicia el intento. Su mensaje vuelve al modelo como corrección.
+function correctionPrompt(correction) {
+  return [
+    "Tu respuesta anterior fue rechazada por este motivo:",
+    correction,
+    "Corrígela respetando todas las reglas y responde de nuevo en el mismo formato.",
+  ].join(" ");
+}
+
+function buildGeminiRequest(inventory, correction = null) {
   return {
     systemInstruction: {
       parts: [{ text: AI_EDITOR_INSTRUCTIONS }],
@@ -1065,7 +1085,10 @@ function buildGeminiRequest(inventory) {
     contents: [
       {
         role: "user",
-        parts: [{ text: JSON.stringify(buildAiMetadata(inventory)) }],
+        parts: [
+          { text: JSON.stringify(buildAiMetadata(inventory)) },
+          ...(correction ? [{ text: correctionPrompt(correction) }] : []),
+        ],
       },
     ],
     generationConfig: {
@@ -1735,11 +1758,12 @@ export async function generateReleaseNotes({
   let activeGeminiModel = normalizeGeminiModel(geminiModel);
   let activeEndpoint = safeEndpoint;
   let finalReason = "ai_unavailable";
+  let validationCorrection = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const result = await requestAiCandidate({
       requestBody:
         provider === "gemini"
-          ? buildGeminiRequest(inventory)
+          ? buildGeminiRequest(inventory, validationCorrection)
           : buildOpenAiRequest(inventory, model),
       requestHeaders:
         provider === "gemini"
@@ -1777,8 +1801,16 @@ export async function generateReleaseNotes({
           inventory,
           release_notes: aiNotes,
         };
-      } catch {
-        finalReason = "invalid_ai_release_notes";
+      } catch (error) {
+        // El motivo se DICE: antes «cuota agotada» y «rechazado por genérico»
+        // salían como la misma etiqueta, y el operador diagnosticaba lo que no
+        // era. Con el motivo a la vista, el segundo intento lo usa.
+        const detail = error instanceof Error ? error.message : "";
+        validationCorrection = detail || null;
+        finalReason = detail
+          ? `invalid_ai_release_notes: ${detail}`.slice(0, 160)
+          : "invalid_ai_release_notes";
+        if (attempt < attempts) continue;
         break;
       }
     }
@@ -1848,11 +1880,10 @@ function printUsage() {
       "    --output <release-notes.json>",
       "",
       "Optional environment:",
-      "  GEMINI_RELEASE_API_KEY (preferred when present)",
+      "  GEMINI_RELEASE_API_KEY (the only automated AI provider)",
       "  GEMINI_RELEASE_NOTES_MODEL (default: gemini-3.1-flash-lite)",
-      "  CODEX_RELEASE_NOTES_CANDIDATE_B64 (optional validated local draft)",
-      "  OPENAI_API_KEY",
-      "  OPENAI_RELEASE_NOTES_MODEL (default: gpt-5-mini)",
+      "  GEMINI_RELEASE_NOTES_TIMEOUT_MS",
+      "  GEMINI_RELEASE_NOTES_MAX_ATTEMPTS",
       "",
     ].join("\n"),
   );
@@ -1865,9 +1896,6 @@ async function main() {
     return;
   }
 
-  const codexCandidate = decodeCodexReleaseEnvelopeBase64(
-    process.env.CODEX_RELEASE_NOTES_CANDIDATE_B64 ?? "",
-  );
   const result = await generateReleaseNotes({
     repoDir: process.cwd(),
     fromCommit: args.from_commit,
@@ -1875,14 +1903,8 @@ async function main() {
     outputPath: args.output,
     geminiApiKey: process.env.GEMINI_RELEASE_API_KEY ?? "",
     geminiModel: process.env.GEMINI_RELEASE_NOTES_MODEL || DEFAULT_GEMINI_MODEL,
-    apiKey: process.env.OPENAI_API_KEY ?? "",
-    model: process.env.OPENAI_RELEASE_NOTES_MODEL || DEFAULT_MODEL,
-    endpoint: process.env.OPENAI_RELEASE_NOTES_ENDPOINT || DEFAULT_ENDPOINT,
-    timeoutMs: process.env.OPENAI_RELEASE_NOTES_TIMEOUT_MS,
-    maxAttempts: process.env.OPENAI_RELEASE_NOTES_MAX_ATTEMPTS,
-    codexCandidateEnvelope: codexCandidate.envelope,
-    codexCandidateProvided: codexCandidate.provided,
-    codexCandidateTransportReason: codexCandidate.reason,
+    timeoutMs: process.env.GEMINI_RELEASE_NOTES_TIMEOUT_MS,
+    maxAttempts: process.env.GEMINI_RELEASE_NOTES_MAX_ATTEMPTS,
   });
   const suffix = result.reason ? ` (${result.reason})` : "";
   const modelSuffix =

@@ -688,3 +688,24 @@ tokens of context, a hot reload is a few hundred bytes of log.
   rollout that complete an implementation/fix/ship are agent-owned and are
   routed from Claude to Codex when the Claude guard denies them.
 - Anything typed into Design, or any message sent on their behalf.
+
+## `shot` no ve el navegador integrado, ni ninguna vista nativa (2026-08-23)
+
+`app_control.sh shot` pide `_flutter.screenshot` al VM service, así que devuelve
+**el frame que dibuja Flutter**. El navegador integrado es un `WKWebView`: una
+vista nativa que macOS compone *encima* de la superficie de Flutter. En ese
+frame no existe, y sale **en blanco siempre** — haya cargado la página o no.
+
+**El costo real:** reporté dos veces al dueño que el CTA «Entrar al portal»
+abría el sitio y la página quedaba en blanco, como posible defecto del producto.
+No lo era: teknobike.cl cargaba perfecto y él lo vio en su propia pantalla. Dos
+rondas perdidas y un defecto inventado.
+
+Para cualquier superficie compuesta por el sistema —navegador integrado, visor
+de PDF, video, mapas— la captura es `app_control.sh window`, que hace
+`screencapture` del marco real de la ventana. Cuesta permiso de Grabación de
+pantalla y la ventana no puede estar tapada, pero es lo único que muestra lo que
+el operador ve.
+
+Regla corta: **si lo que quieres verificar no lo dibuja Flutter, `shot` no
+sirve como evidencia de que falta; sólo prueba que Flutter no lo dibujó.**

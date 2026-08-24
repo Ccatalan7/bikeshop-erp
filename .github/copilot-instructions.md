@@ -124,6 +124,401 @@ for raw UTF-8 limits must use `Response.bytes` or set
 `content-type: application/json; charset=utf-8`; then assert the application
 boundary rather than the mock encoder.
 
+### Una fixture copiada del validador no prueba nada (2026-08-24)
+
+**Costo real: una prueba verde todo el día mientras la herramienta que
+supuestamente guardaba fallaba el 100 % de las veces en producción.**
+
+La fila de la fixture de `rank_purchase_suppliers` se había escrito copiando la
+lista de campos del propio validador del ejecutor. Por construcción coincidían —
+y era exactamente esa coincidencia lo que había que poner en duda: un validador
+y su fuente son dos artefactos que se despliegan por separado (la RPC en una
+migración, la lista en el Edge Function), así que el único riesgo real es que se
+separen. Una fixture derivada de uno de los dos lados vuelve ese riesgo
+indetectable. Es probar una traducción con el diccionario que se usó para
+escribirla.
+
+Dos consecuencias que valen para cualquier prueba de contrato, no sólo aquí:
+
+- **La fixture se escribe como espejo de lo que publica la fuente**, leído de
+  la fuente en producción, no de la estructura que el código espera.
+- **Una prueba nueva se prueba.** Se rompe el código a propósito, se la ve
+  roja, se restaura y se la ve verde. Cuesta dos comandos y es lo que separa
+  una guardia de un adorno. Sin ese paso no se puede afirmar que algo «queda
+  cubierto».
+
+### Una herramienta se elige por su descripción, no por su nombre (2026-08-23)
+
+`analyze_cash_and_receivables` se describía como «analiza el saldo contable de
+cuentas configuradas y facturas por cobrar en un horizonte cerrado». Es exacto y
+no se parece a nada que el operador pregunte, así que ante «¿a quién le cobro
+primero?» el modelo usaba `search_sales_invoices` —que sin término devuelve las
+más recientes, **cobradas o no**— y la respuesta mezclaba cuentas vencidas con
+facturas de saldo cero.
+
+Arreglo: la descripción abre con las preguntas reales que contesta («cuánto me
+deben», «a quién le cobro primero», «qué está vencido») y dice explícitamente
+que no hace falta combinarla con la búsqueda genérica. Verificado en la app: la
+llamada quedó en una sola herramienta y desaparecieron los saldos cero.
+
+Al agregar o corregir una herramienta, la primera línea de su descripción son
+**las palabras del operador**, no la definición técnica de lo que hace.
+
+### Confirmar disponibilidad en el portal del proveedor (2026-08-23)
+
+El historial dice A QUIÉN le compramos algo; no dice si HOY lo tiene. Esa
+segunda respuesta ahora existe y **convive** con la primera, sin reemplazarla.
+
+**Cómo está armado, y por qué así:**
+
+- **La sonda de cada portal es DATO, no código** (`supplier_portal_probes`):
+  cómo se busca, cómo se ve una sesión caída, cómo se lee precio y stock.
+  El precedente de la casa es `aliexpress_invoice_content.js`, 5.863 líneas para
+  UN proveedor; por ahí un cambio de HTML del proveedor es un despliegue.
+- **Corre sin ventana y sin operador**, en un `HeadlessInAppWebView` que comparte
+  cookies con la pestaña visible —en macOS el almacén es del proceso y la app no
+  usa incógnito—. Medido: 12 productos de RBX en 31 segundos.
+- **No inicia sesión.** Ese camino tiene sus comprobaciones de autoridad y
+  duplicarlo crearía un segundo lugar donde se manejan credenciales. Sin sesión
+  se detiene y lo dice.
+- **Los cuatro estados no se mezclan nunca:** `available` · `out_of_stock` (un
+  cero LEÍDO) · `not_found` (el portal no lo mostró) · `session_expired`. La
+  base rechaza precio o cantidad en los tres últimos: un cero que nadie
+  demostró no entra.
+
+**Tres defectos que sólo aparecieron corriéndolo, y cómo se encontraron:**
+
+1. **El portal de RBX es un frameset de siete marcos.** La sonda leía sólo el
+   documento de arriba y devolvía un informe vacío con la página llena.
+2. **`textContent` incluye el código de los `<script>`.** RBX imprime el precio
+   con un script en la propia celda, así que la página se leía
+   `... CHINA $document.write(formatear_numero("2240",0));2.240` y las doce
+   consultas salieron «ilegible». **Se vio en la evidencia guardada, no en la
+   pantalla** — por eso cada chequeo guarda un trozo del texto que leyó.
+3. **El precio es la ÚLTIMA coincidencia.** Una ficha con descuento muestra
+   «Antes $8.850» y «$6.195»; tomar la primera informa 43% de más.
+
+Regla para agregar un proveedor: **reconocer primero, configurar después.** El
+modo `discover` de la sonda corre dentro de la sesión y reporta qué buscadores
+hay y qué se parece a un precio; con eso se escribe la fila. Configurar no es
+autorizar: la sonda nace apagada.
+
+### «No encontrado» nunca significa «no lo vende» (2026-08-23)
+
+Reconociendo el portal de MKR concluí que un código del catálogo del taller
+«ya no existe en su portal». **Corrección del dueño:** «no necesariamente, a
+veces es sólo que el producto está sin stock y por eso al buscarlo no se
+encuentra». Verificado en el portal, con su sesión:
+
+    ?q=N1010            → Sin resultados
+    ?q=N1010&stock=1    → Cod: N1010 · Stock: 0 · No Disponible
+
+El producto existe. Yo había agregado `&stock=1` a la sonda **por esa misma
+razón** y aun así saqué la conclusión de la consulta sin él.
+
+**La regla:** un listado que no muestra algo prueba que no lo mostró, y nada
+más. Puede faltar por estar agotado, por un filtro por omisión, por un código
+que cambió o por un buscador que no calza exacto. Son causas distintas, con
+acciones distintas, y **sólo una** justifica dejar de pedirle ese producto a ese
+proveedor.
+
+Donde el portal permite incluir lo agotado, la sonda **debe** usarlo: es lo
+único que separa «lo vende y está en cero» de «no lo mostró». Donde no lo
+permite —RBX no publica cantidad—, el «no encontrado» es ambiguo y se informa
+como ambiguo.
+
+Es la misma familia que la quinta compuerta y que la sesión caída: **el estado
+que parece un cero casi nunca es un cero.**
+
+### La ficha está vacía: el nombre es la única evidencia que hay (2026-08-23)
+
+Dato medido sobre producción, y explica media docena de síntomas:
+
+| Cámaras activas | Con «29» en el nombre | **Con ficha poblada** |
+|---|---|---|
+| 128 | 25 | **4** |
+
+Exigir `product_spec_values` para reconocer una medida deja fuera al **97%** del
+catálogo real. El evaluador ya sabía leer la medida del nombre —devuelve
+`identity_fallback`—, pero la escalera de estados dejaba que un criterio
+`unresolved` ganara sobre uno ya establecido:
+
+    CAMARA 29 X 1.75/2.35 V/AMERICANA → wheel_size identity_fallback
+                                         valve_type unresolved      → unverified
+    CAMARA 26 X 2.30/2.50             → ambos unresolved            → unverified
+
+Las dos salían idénticas. La cámara que **dice 29 en su propio nombre** se
+presentaba igual que una de 26, y el paso ofrecía 124 alternativas
+indistinguibles donde el operador quería ver 25.
+
+**Lo que sí se estableció gana sobre lo que no se sabe.** La escalera quedó:
+`conflict` → `strong` (todo por ficha) → `weak` (algo establecido, nada
+contradice) → `unverified` (nada establecido). `weak` ya se rotula «coincide por
+el nombre, no por la ficha», que es exactamente lo que pasó, así que ninguna app
+instalada ve un estado nuevo.
+
+Es el mismo defecto que ya se corrigió en el ranking de proveedores: **un
+criterio desconocido borraba la evidencia del que sí calzó.** Cuando aparezca
+por tercera vez, buscarlo con ese nombre.
+
+### La bodega tiene que contestar una descripción (2026-08-23)
+
+El módulo promete «revisa primero la bodega y, si falta, encuentra dónde
+comprarlo». Medido con «Cámaras 29 Schrader»: el paso **Stock interno** quedaba
+**completamente vacío** teniendo el taller SIETE unidades de «CAMARA 29 X
+1.75/2.35 V/AMERICANA 48mm» —americana es Schrader—, más una KENDA y una MAXXIS
+de 29. El operador habría salido a comprar lo que ya tenía.
+
+`get_supply_need_inventory_snapshot_v1` exige `product_id` confirmado y sin él
+responde `identity_unresolved` con cero componentes. Y la necesidad se guarda
+sin `category_id` porque el modelo nunca resuelve una referencia de categoría,
+así que todo lo que cuelga de la categoría queda sin conjunto.
+
+**La identidad exacta es un requisito para RESERVAR, no para MIRAR.**
+`supply_need_stock_candidates_v1` resuelve la descripción con el mismo
+resolvedor del ranking, sobre el catálogo completo, y muestra lo que hay con su
+stock. Confirmar el producto sigue siendo del operador, y es lo que habilita
+reservar y comparar por identidad exacta — sólo que ahora lo decide **con la
+bodega a la vista**.
+
+Regla general: cuando un paso exige un dato que el operador todavía no tiene,
+pregúntate si lo exige para **escribir** o sólo para **leer**. Si es para leer,
+no lo exijas.
+
+### Una lista cuesta lecturas por línea, y hay DOS topes (2026-08-23)
+
+Escribir «necesito pastillas de freno shimano, sellante tubeless y cámaras 29»
+en el compositor del Asistente de compras gastaba las ocho llamadas del tope
+—una búsqueda y una inspección por línea, más un reintento— y la corrida moría
+antes de armar el borrador. El operador leía «no pude cerrar el análisis con
+evidencia suficiente» y **perdía la lista entera**, sin que fallara una sola
+herramienta: las ocho corrieron bien.
+
+El tope de 8 está calibrado para UNA necesidad, y el Asistente de compras es
+justo la superficie donde el taller escribe varias de una vez. Ahora vale 18 en
+esa superficie: dos lecturas por cada una de las ocho líneas que el borrador
+admite, más el borrador.
+
+**El tope vive en DOS lugares y los dos tienen que decir lo mismo:** el guard de
+`assistant_begin_run_v1` y la constante `MAX_TOOL_CALLS` del gateway. Subir sólo
+el de la base no cambió nada —la corrida siguió muriendo, ahora a los 28 s— y
+costó una ronda entera de diagnóstico creer que el arreglo no había servido.
+
+### Una línea que no bloquea no puede traer preguntas (2026-08-23)
+
+Con el presupuesto ya suficiente, `prepare_supply_request` se rechazó TRES veces
+seguidas con `invalid_tool_arguments` y la lista se perdió igual. Ninguna de las
+tres necesidades tenía nada malo: el contrato exige `clarificationPrompts: []`
+cuando `clarificationRequired` es false, y el modelo deja las preguntas puestas
+de todas formas.
+
+Sobra: se vacía. Perder la petición por un campo que el propio contrato declaró
+irrelevante es el mismo defecto de siempre — se repara la forma, no se rechaza
+al operador.
+
+### La QUINTA compuerta: el tope del recibo (2026-08-23)
+
+Las cuatro compuertas conocidas hablan de la **forma** de la llamada. Hay una
+quinta que habla del **tamaño del resultado**, se evalúa después de que la
+herramienta ya corrió bien, y su desacuerdo no se parece a un límite: se parece
+a que el asistente se cayó.
+
+`assistant_tool_receipt_contract_internal_v1` anuncia `max_result_count` por
+herramienta, y `assistant_record_tool_receipt_v1` rechaza con 22023 cualquier
+recibo que lo pase. Medido: el contrato decía 4, el esquema de la herramienta
+permite pedir 5, la llamada pidió 5 y la corrida entera murió con
+`assistant_unavailable_record_tool_receipt_v2_rpc_invalid_response` **sin
+registrar un solo recibo** — así que en la traza no había ninguna herramienta a
+la cual culpar, y la pantalla sólo decía «no pude procesar esa solicitud».
+
+**Al registrar una herramienta, el `max_result_count` del contrato de recibos y
+el máximo de `limit` de su esquema tienen que ser el mismo número.**
+
+### Tres preguntas iguales son una sola pregunta (2026-08-23)
+
+Ante «necesito rayos 27.5, cámaras 29 y cadenas de 11v, ¿a quién le pido todo
+eso?» el modelo llama la herramienta de una frase **una vez por línea**, aun
+teniendo anunciada y descrita la de canasta. Medido dos veces en producción:
+
+- la primera agotó el presupuesto del turno a los 38,7 s y la respuesta se
+  perdió entera;
+- la segunda alcanzó a contestar y concluyó «no hay un único proveedor que
+  concentre los tres» **cuando sí lo había** —RBX cubre las tres—, porque tres
+  respuestas por separado no contienen esa decisión: nadie las cruza.
+
+La corrección no fue insistirle al modelo. Fue **fusionar las N llamadas en una
+sola en el runtime**, y calcular la cobertura y el reparto donde están los
+datos. Resultado: 3 llamadas → 1, 15,9 s → 10,4 s, y la respuesta correcta.
+
+Es la misma disciplina que ya gobierna los argumentos —se repara la forma, no se
+le pide al modelo que acierte—, aplicada a la ELECCIÓN de herramienta. Sólo se
+fusiona lo idéntico en intención: misma herramienta, mismo turno, sin filtros
+propios. Si cada llamada traía su marca o su categoría, querían cosas distintas
+y se dejan como están.
+
+### La respuesta baja un escalón; no se cae de golpe (2026-08-23)
+
+Segunda ronda del Asistente de compras. Con la rigidez ya quitada, seguía
+devolviendo cero ante frases normales del taller. Medido sobre producción:
+
+| Frase del operador | Antes | Causa real |
+|---|---|---|
+| «aros 26» | 0 proveedores | el catálogo los llama **Llantas** |
+| «llanta 26» | 0 proveedores | la rama SÍ resuelve, pero las llantas no traen `wheel_size` poblado |
+| «platos» | 0 · «plato» sí | el **plural** decidía |
+| «bielas» sí · «biela» | 0 | el **singular** decidía |
+| «platos y bielas» | 0 | son dos cosas y ningún producto se llama las dos |
+
+Ninguno es falta de datos. Todos son **nuestro vocabulario impuesto al
+operador**: cómo bautizamos las categorías, qué campos poblamos, en qué número
+quedó escrito un producto. Nada de eso lo puede saber quien pregunta.
+
+La regla que quedó: **se sueltan filtros de a uno, del más frágil al más firme,
+y la respuesta declara lo que soltó.**
+
+1. todo tal cual;
+2. sin el texto libre que no calzó (`droppedWords`);
+3. sin la medida técnica sin cobertura (`droppedFilters`);
+4. con UNA palabra suya, no todas.
+
+La **rama nunca se suelta**: es lo que separa «te muestro Ruedas» de «te muestro
+todo lo que compramos». Y ningún escalón corre si nada se resolvió, así que «qué
+me falta comprar» sigue devolviendo cero — que ahí sí es la respuesta correcta.
+
+Dos precisiones que costaron una medición cada una:
+
+- **Palabra completa, no subcadena.** Por trozo, «race» de «ARDENT RACE»
+  enganchaba dentro de «RaceLub» y el análisis devolvía un lubricante como si
+  fuera un neumático.
+- **Un resultado ensanchado se rotula distinto.** La tarjeta dice «le compramos
+  **algo así**», no «esto», y nombra lo que soltó. Un resultado exacto por
+  dentro y presentado como literal es la forma más silenciosa de mentir.
+
+### El Asistente de compras: la rigidez era el defecto (2026-08-23)
+
+Fallaba en el 38% de las corridas (15 de 39 medidas) y el dueño lo describió
+como «puras trabas». No era el modelo: `prepare_supply_request` —la herramienta
+con la que termina TODO el flujo— exigía **once campos por línea** para expresar
+dos, qué y cuántos. Los otros nueve son formalidades con neutro evidente.
+
+Y encima cinco compuertas discrepaban entre sí. Encontradas midiendo:
+
+1. La traducción del runtime **descartaba `commercialTarget`** y el ejecutor lo
+   exigía entre sus claves exactas: la herramienta no podía pasar nunca.
+2. Al arreglar (1), el validador del RESULTADO tampoco lo conocía y rechazaba
+   el borrador ya construido.
+3. `gama` acepta exactamente `alta|media|economica`: «gama media» —con la
+   palabra, que es como se habla— mataba la petición completa.
+4. Un tope de costo en `0` —que un modelo escribe queriendo decir «sin tope»—
+   la mataba también.
+5. Un filtro técnico sin categoría resuelta la mataba, y ése es el caso típico
+   del taller: «neumáticos 29 de gama media», donde el 29 ya va en la
+   descripción.
+
+**Corrección del dueño que gobierna el diseño:** mencionó «con buen margen» como
+un ejemplo al pasar y quedó convertido en requisito obligatorio. La gama, el
+margen y el objetivo comercial **se consideran, no se exigen**. Una línea con
+una gama que no se entiende pierde la gama, no la necesidad; una pregunta que no
+se puede mostrar se degrada a advertencia, no tumba la petición. Lo único que
+sigue siendo rechazo es la contradicción: una duda bloqueante junto a un
+producto exacto ya elegido.
+
+Medido después: 3 de 3 borradores sin un solo rechazo, con las frases reales del
+taller («necesito rayos 27.5», «faltan neumáticos 29 de gama media y alta»).
+
+### Los argumentos pasan por TRES compuertas, y tienen que decir lo mismo (2026-08-23)
+
+Una llamada del modelo se valida en **cuatro** lugares independientes:
+
+1. el **esquema JSON** del registro (`tool_registry.ts`), que es lo único que el
+   modelo puede leer;
+2. el **ejecutor** (`validateRpcParameters` en `tool_executor.ts`);
+3. el **guard de la RPC** en PostgreSQL, que lanza SQLSTATE 22023;
+4. la **revalidación posterior** (`validateInventorySearch`,
+   `validateInventoryOrder`, `inventoryOperationalPredicateMatches`), que
+   comprueba el RESULTADO contra los argumentos y descarta la respuesta entera
+   si no reconoce un campo.
+
+**Corrección del 2026-08-23, el mismo día:** este apartado decía «tres» y por eso
+al agregar `sold_recently` actualicé el esquema, el ejecutor y la base, y dejé
+la cuarta afuera. La base respondía 10 filas correctas y el ejecutor las tiraba
+con `tool_source_unavailable`. El modelo pidió exactamente lo que correspondía y
+falló igual — que es la forma más cara de romper esto, porque parece que el
+modelo no entiende cuando el defecto es nuestro. Un campo nuevo se busca con
+`grep` por su nombre en TODO `tool_executor.ts`, no sólo donde uno se acuerda.
+
+Cuando una compuerta es más estricta que la anterior, el modelo hace todo bien y
+la llamada muere igual — y el recibo dice `tool_arguments_invalid`, que manda a
+revisar justo lo que no estaba mal. Encontrados en un día:
+
+- `sort` permitía `relevance` + `asc` en el esquema y el ejecutor lo rechazaba.
+  Si una combinación no significa nada, se **normaliza**, no se castiga.
+- `search_sales_invoices` declaraba `query` nullable con la descripción «usa
+  null para pedir el listado sin filtrar», y su RPC exigía largo ≥ 1. Sus tres
+  hermanas ya estaban corregidas; ésta quedó atrás.
+
+Al tocar cualquiera de las tres, se revisan las otras dos. Y el read-back de una
+migración que cambia un guard tiene que ejercitar **la forma que el esquema
+promete**, no sólo la que ya funcionaba.
+
+**Trampa de nombres:** el outcome `idempotency_conflict` de
+`SupabaseUserDataError` NO es un choque de idempotencia — es el SQLSTATE 22023,
+o sea la RPC rechazando argumentos. Perseguir el nombre en vez del código costó
+una ronda entera.
+
+### Una clave nueva en una tarjeta rompe las apps ya instaladas (2026-08-23)
+
+El decodificador del cliente exige **claves exactas** en `listRef`, `entityRef`,
+`approvalRef` y en la tarjeta misma. Agregar un campo al contrato de tarjetas y
+desplegarlo hace que toda app ya instalada —macOS y Android publicados el
+2026-08-22— **rechace la tarjeta entera**, no que ignore el campo.
+
+Antes de agregar un campo, pregunta si el cliente lo necesita. Si sólo lo usa el
+servidor —por ejemplo para redactar la frase final, que se arma antes de
+proyectar— vive en el modelo interno y se **quita al proyectar**, en
+`cardsForClient`. Ese embudo es único, así que un solo lugar lo garantiza para
+todas las superficies.
+
+Cuando el cliente sí lo necesite, el campo viaja sólo después de que haya una
+versión publicada capaz de leerlo, y el servidor sigue soportando la forma
+anterior mientras queden apps viejas en uso.
+
+### Repara la forma, rechaza el vocabulario (2026-08-22)
+
+**Medido en producción:** el 50% de las llamadas del modelo a `search_inventory`
+se rechazaba por argumentos inválidos. Cada rechazo gasta una de las cinco
+rondas del turno, así que el asistente moría en `agent_budget_exhausted` y el
+operador leía «No pude procesar esa solicitud ahora. Intenta de nuevo en unos
+segundos» — para una pregunta perfectamente respondible.
+
+La causa no era el modelo: el esquema exige **nueve** campos obligatorios para
+buscar un producto —el repo obliga a que toda propiedad sea `required`—, entre
+ellos dos arreglos casi siempre vacíos y un objeto `sort` con dos subcampos.
+
+El arreglo NO es aflojar el esquema. Es completar y reparar la **entrada** antes
+de validar (`withMechanicalDefaults` en `tool_registry.ts`), con una línea
+divisoria que conviene respetar:
+
+- **Errores de forma se reparan**, porque tienen una sola lectura posible:
+  `sort: "relevance"` → `{field, direction}`; `limit: "10"` → `10`;
+  `{value: x}` → `{values: [x]}`; `values: "29"` → `["29"]`; `values: []` →
+  se descarta el predicado; `query: ""` → `null`. Ninguna puede esconder un
+  defecto: el valor resultante es el único que la frase admitía.
+- **Errores de vocabulario se rechazan**: `availability: "stock"`,
+  `operator: "like"`, `selectionMode: "all"`. Ahí adivinar sería inventar una
+  intención que nadie expresó, y el esquema ya le dice al modelo los valores.
+
+Y una combinación que el esquema ofrece no puede rechazarse más abajo: `sort`
+permitía `relevance` + `asc` y el ejecutor lo botaba. Si no significa nada, se
+normaliza; no se castiga.
+
+Resultado medido tras el cambio: **0 rechazos** en 6 llamadas de 4 preguntas.
+
+Cuando un rechazo sea legítimo, que **diga qué campo** (`schemaMismatch`
+devuelve la ruta exacta). El código del recibo se mantiene estable
+—`invalid_tool_arguments`— porque es lo que permite agruparlos; el detalle viaja
+en el mensaje que recibe el modelo, que es quien tiene que corregirlo.
+
 ### Model-visible AI tools must close the durable receipt contract
 
 **2026-08-16 — one real provider run was lost to this split contract.** Adding
@@ -970,8 +1365,8 @@ Each preparation dependency checks its desktop Production branch boundary,
 safely fast-forwards a behind branch only when Git can preserve all local work,
 and normalizes the pinned Flutter dependencies before staging. Diverged history
 or overlapping local changes must stop before publication. Preparation creates
-at most one new commit, asks the locally authenticated Codex CLI at most once
-for one shared candidate, pushes that commit once, and writes a private
+at most one new commit, resolves the shared release-note base, pushes that
+commit once, and writes a private
 schema-v2 exact-SHA state file under the current Git directory. Only after
 preparation succeeds, a single qualifier waits a bounded time for the
 push-triggered exact-SHA `ERP Integrity Gate`. If path filters did not create
@@ -982,7 +1377,8 @@ does VS Code launch the selected desktop GitHub Actions publisher and the
 protected Android GitHub Actions publisher in parallel, each in its own
 dedicated terminal pane. Both children must revalidate the state age,
 repository, clean worktree, branch, local `HEAD`, live remote branch,
-release-note base, candidate checksum, and qualification binding. Each
+release-note base, and qualification binding. The legacy candidate fields stay
+empty for schema compatibility and are not consumed by the standard workflows. Each
 platform workflow then queries GitHub Actions independently and accepts that
 proof only when the canonical integrity workflow completed successfully for
 the exact repository, branch, commit, and attempt.
@@ -995,7 +1391,7 @@ non-ancestral, or ambiguous Android evidence fails closed before publication.
 On a same-commit retry, Android evidence must match the exact prepared
 `from_commit`; a well-formed manifest from another range is not idempotent
 success. A schema-v3 state is the qualified form of the same schema-v2 handoff,
-so exact-SHA/base Codex-candidate reuse must accept both forms.
+so exact-SHA/base validation must accept both forms.
 
 2026-07-31 correction: a paired release must not call the complete integrity
 workflow once per platform in addition to the push gate. The only valid order
@@ -1015,12 +1411,12 @@ request. Without that transitive-skip guard, GitHub can report the workflow as
 successful after packaging while silently skipping the Production publication
 job. Keep this contract frozen for both macOS and Windows.
 
-2026-08-01 correction: the paired macOS preparation runs on Apple's Bash 3.2.
-With `set -u`, expanding an empty optional-argument array aborts after the
-release commit but before push and exact-SHA state creation, leaving Qualify to
-reject the older handoff. Build command argv in an array that already contains
-mandatory arguments (or branch the optional call); regression coverage must
-retain the no-`--notes-candidate` path.
+2026-08-24 correction: release preparation no longer invokes local Codex or
+accepts `--notes-candidate`. That path depended on an interactive account and
+repeatedly produced no `Novedades` when its quota or session failed. The
+preparers now bind only the exact range; protected CI generates notes with
+Gemini Flash. This also removes the optional-array failure that affected
+Apple's Bash 3.2. Do not restore a workstation model as the default producer.
 
 Do not collapse the platform security boundaries merely because their tasks run
 together. `MACOS_UPDATE_SIGNING_KEY`, the Android JKS/passwords, and
@@ -1060,51 +1456,23 @@ deterministic `es-CL` fallback first, summarize the complete previous-platform-
 release-to-current-SHA range, and validate every AI item against an inventory
 that it independently reconstructs from the committed range.
 
-The macOS+Android and Windows+Android preparation helpers may prepare an
-optional local Codex candidate after creating the exact release commit and
-before pushing it. That one candidate is offered to both selected platform
-jobs; never invoke Codex independently in each child. This path is eligible only
-after the release range passes the local redacted gitleaks precheck and
-`codex login status` confirms ChatGPT authentication; it must not consume
-`OPENAI_API_KEY` or another billed API credential. Invoke Codex once, with a
-bounded timeout, an ephemeral session, a read-only sandbox, ignored user
-configuration, no model-tool network or web access, a strict output schema, and
-no approval bypass. It may inspect only the exact committed previous-desktop-
-release-to-current-SHA range, never uncommitted or untracked work, process
-credentials, environment values, customer fixtures, generated or binary
-artifacts, or unrelated home-directory data. Repository text is untrusted input
-and must not override these instructions.
+The standard macOS, Windows, and Android workflows use Gemini as their only
+automated AI release-note provider. Preparation never calls Codex and protected
+CI never receives `OPENAI_API_KEY`. `GEMINI_RELEASE_NOTES_MODEL` is durably set
+in the `Production` environment; the checked-in default is
+`gemini-3.1-flash-lite`, followed only by the fixed Flash/Flash-Lite discovery
+allowlist when Google reports that model unavailable.
 
-This local Codex path is a separate, explicitly authorized OpenAI
-source-inspection boundary: relevant committed source and diffs from the exact
-range may reach the ChatGPT-authenticated Codex service so it can identify
-concrete user-visible changes. It is not covered by the narrower sanitized-
-metadata allowance below. The only local result that may cross into
-`workflow_dispatch` is a compact, size-bounded candidate envelope containing
-plain customer-facing text, canonical module identity, exact range identity,
-and opaque evidence IDs. Never transport the prompt, source, paths, diffs,
-transcript, raw CLI output, error log, credentials, or environment data.
-
-Protected CI must treat that envelope as untrusted. It independently resolves
-the previous release, reconstructs the evidence catalog, verifies the exact
-range, schema, sizes, plain-text/privacy rules, module ownership, and every
-evidence ID, and maps opaque IDs back to changed paths only after validation.
-An absent, timed-out, quota-limited, malformed, vague, mismatched, or otherwise
-invalid local candidate is discarded without blocking publication.
-
-For Gemini and the compatibility OpenAI API path inside protected CI, only fixed
-canonical ERP module/topic labels, statuses, numeric change counts, and opaque
-evidence IDs may be sent to the provider. Commit subjects, commit SHAs,
+Only fixed canonical ERP module/topic labels, statuses, numeric change counts,
+and opaque evidence IDs may be sent to the provider. Commit subjects, commit SHAs,
 raw/current/previous paths, source, diffs, credentials, generated bundles,
 binary contents, customer data, and other personal or confidential information
 must stay inside the protected job.
 
-`GEMINI_RELEASE_API_KEY` and the compatibility `OPENAI_API_KEY` are optional
-`Production` environment secrets and must never enter Flutter builds, artifacts,
-manifests, logs, pull-request jobs, or artifact-only release jobs. Prefer Gemini
-when there is no accepted local Codex candidate and its key exists; do not send
-the same release metadata to the compatibility OpenAI API after a Gemini
-failure. Missing credentials, timeouts, quota exhaustion, API errors, invalid
+`GEMINI_RELEASE_API_KEY` is a `Production` environment secret and must never
+enter Flutter builds, artifacts, manifests, logs, pull-request jobs, or
+artifact-only release jobs. Missing credentials, timeouts, quota exhaustion,
+API errors, invalid
 JSON, unsupported evidence, vague or oversized text must retain the
 deterministic fallback and must not block signing or publication. Logs may
 identify only the selected source and a fixed sanitized failure category; they
@@ -6748,3 +7116,179 @@ JSON-LD, snapshots/sitemap, external catalog publishers, and Firebase deploy.
   their overlay before navigation.
 - Verify Back/forward history, exact-origin return, reduced motion, semantics,
   and absence of route/layout exceptions.
+
+## El pedido al proveedor es el MISMO documento de compra
+
+**Corrección del 2026-08-23, sobre una decisión mía del mismo día.** Primero
+razoné que un pedido no es una factura —`purchase_invoices` guarda lo que el
+proveedor nos emitió, y su flujo contable asume una deuda— y lo guardé en
+`purchase_orders`, con sus propias funciones, su propia lista y su propio ciclo.
+El dueño lo llamó por su nombre: «creaste un servicio de facturas paralelo».
+Tenía razón, y la razón es de negocio, no de esquema.
+
+El pedido y la factura son **el mismo documento en dos momentos**. Nace como
+`purchase_invoices` en `draft`, con un número provisorio `PED-…`; cuando llega
+la factura del proveedor, a esa misma fila se le pone el folio real y se marca
+recibida. Sin conversión, sin retipear líneas, sin una segunda lista que
+mantener y sin dos lugares donde buscar un documento del mismo proveedor.
+
+Lo que hacía falta comprobar antes era una sola cosa, y sale de la base:
+**un borrador no toca la contabilidad.** Los asientos los crean los
+disparadores al pasar a `received`; el borrador que ya existía en producción
+tiene cero asientos. Con eso, guardar el pedido ahí no tiene ningún costo
+contable.
+
+El estado hace el resto del trabajo: `draft` es lo que se está armando, `sent`
+es lo que ya salió al proveedor, y sólo pasa a `sent` cuando el transporte
+confirmó la salida —al revés, un envío fallido deja un documento marcado como
+enviado que el proveedor nunca vio—.
+
+**La regla general:** antes de crear una tabla, una lista o un servicio nuevo
+para algo que se parece a lo que ya existe, la pregunta no es «¿son
+conceptualmente distintos?» sino **«¿el operador los va a buscar en el mismo
+lugar?»**. Si la respuesta es sí, es el mismo módulo aunque el modelo de
+dominio diga que son dos cosas.
+
+### Trampas que costaron una ronda cada una (2026-08-23)
+
+Salieron mientras el pedido todavía vivía en `purchase_orders`. Dos de ellas
+importan igual, porque son de la base y no de aquella decisión:
+
+- **`trg_purchase_item` sumaba al inventario al insertar la línea.** Guardar un
+  pedido daba por recibida la mercadería e insertaba movimientos de bodega. No
+  llegó a ocurrir sólo porque el tenant no tiene bodega configurada y moría
+  antes. Se corrigió: ahora exige `status = 'received'`. **Antes de escribir en
+  una tabla que nadie usaba, lee sus disparadores.**
+- **`purchase_orders.created_by` apunta a `users_profiles`, que está vacía.** La
+  app mantiene `user_profiles` (singular) — son tablas distintas.
+- **Un `catch` que dice «no se pudo guardar» esconde la causa.** Las dos
+  anteriores salieron recién al publicar el mensaje del servidor en la pantalla.
+  El motivo se publica: al operador no le sirve un mensaje que no dice qué pasó,
+  y a quien lo arregla tampoco.
+
+## La vista previa de un documento no se rasteriza en cada tecla
+
+Un documento que se arma en vivo se dibuja con widgets, no rasterizando el PDF:
+rasterizar tarda cientos de milisegundos y la hoja parpadea, así que el operador
+ve un archivo recargándose en vez de un documento armándose.
+
+El riesgo de dibujarlo dos veces es que diverjan. Se resuelve con **un solo
+modelo ya formateado** —`PurchaseOrderDocument`— del que salen tanto la vista
+previa como el PDF: quien dibuja elige tipografía y color, los números ya están
+decididos. Ahí no hay widgets ni `pw.` de ninguna clase.
+
+## Una vista previa de mensaje que miente es peor que no tenerla
+
+WhatsApp sólo permite texto libre dentro de las 24 h siguientes al último
+mensaje del contacto. Fuera de esa ventana sale una plantilla aprobada. Dibujar
+la burbuja como si el texto fuera a salir tal cual muestra un mensaje que el
+proveedor no va a leer: la ventana se dice **junto a la burbuja**, antes de
+enviar, y después se reporta cuál de las dos salió.
+
+Y el campo de texto dentro de una burbuja necesita `filled: false` explícito:
+el tema de la app rellena sus campos y ese relleno claro tapa el mensaje.
+
+## El flete no es parte del precio del proveedor
+
+Todo el módulo publicaba el costo **con flete prorrateado** y no había forma de
+ver lo otro. Pero lo que se negocia con un proveedor es la mercadería: el flete
+lo pagamos aparte, y meterlo en la cifra que se compara —y peor, en la que se le
+propone en un pedido— es pedirle que cobre por algo que él no despacha.
+
+Ahora `purchase_line_landed_cost_observations_v1` publica los dos por todas las
+puertas: `averageBaseUnitCostNet` en el motor de concentración,
+`lastBaseUnitCostNet` en la ficha del proveedor y `baseUnitCostNet` en la
+evidencia. **Sin flete es el estado normal.** El aterrizado sigue a un toque,
+porque para decidir a quién comprarle el costo puesto en bodega sí manda.
+
+Dos reglas que se descubrieron implementándolo:
+
+- **El eje es uno solo para todo el bloque** —tabla, ficha y lo que se propone
+  al agregar una línea al pedido—. Dos ejes distintos en la misma pantalla
+  hacen que un precio parezca mejor que otro por estar medido distinto.
+- **La salvedad al pie sigue al eje.** Publicar «costos con flete prorrateado»
+  mientras se muestra el neto describe otra tabla.
+
+Y sobre `create or replace` en funciones vivas: **los defaults de los
+parámetros se conservan exactamente como están**. Cambiarlos hace que Postgres
+se niegue —«cannot remove parameter defaults from existing function»— y
+obligaría a un `drop` que rompe a todo el que la llama. Se leen con
+`pg_get_function_arguments` antes de escribir el reemplazo. Agregar un
+parámetro nuevo, en cambio, **sobrecarga** en vez de reemplazar y deja las
+llamadas ambiguas: ahí sí va un `drop function` explícito de la firma vieja.
+
+## No le prohíbas al modelo usar lo que nunca le mostraste (2026-08-23)
+
+El asistente contestaba «cámaras 26 con válvula VA de 48mm» abriendo una lista
+**vacía**, teniendo 126 cámaras con ficha cargada. Tres defectos encadenados, y
+ninguno era del modelo:
+
+1. **La instrucción se contradecía.** El esquema de `search_inventory` decía
+   «predicados sobre claves que anunció `inspect_inventory_schema`; no inventes
+   claves» y, en la misma frase, «los valores van **como los dijo el
+   operador**». O sea: no uses claves que no te mostramos —y nunca se le
+   mostraba ninguna—, y encima pasa las palabras sin traducir. El modelo
+   obedeció y mandó `technicalPredicates: []`.
+2. **La compuerta era de un solo lado.** Sólo se disparaba cuando el modelo
+   mandaba predicados sin haber inspeccionado. No estructurar nada pasaba libre,
+   así que el camino premiado era justo el que no usa la ficha.
+3. **La tarjeta tiraba los resultados.** `cards.ts` mandaba `entityIds: null`
+   cuando `hasMore`, «para que una página truncada no afirme ids exactas». Sin
+   ids, el cliente caía a buscar la frase como texto contra el nombre del
+   producto: **mientras más acertaba la búsqueda, más vacía salía la lista.**
+
+Lo que hay que entender del diseño: `inspect_inventory_schema` **ya anuncia todo
+lo necesario** —`valve_type · single_select · allowedValues [Presta…, Schrader…]
+· populatedCount 126`—. Con eso al frente, traducir «VA» a Schrader es trivial
+para el modelo, que es el mejor traductor de la pila. El emparejamiento de
+texto en la base es el **respaldo** para cuando el modelo no estructura, no el
+mecanismo principal; mejorarlo con sinónimos es tratar el síntoma.
+
+Las tres reglas que quedan:
+
+- **Si una herramienta exige vocabulario, el vocabulario tiene que llegar al
+  modelo** —por una llamada obligada o inlineado—. Prohibir sin mostrar produce
+  un modelo que correctamente no hace nada.
+- **La compuerta va en los dos sentidos**, y sólo sobre lo que el operador va a
+  mirar: una búsqueda con `presentation: "answer"` es un paso interno —así el
+  armado de canastas resuelve cada línea— y exigirle inspección deja la canasta
+  sin resolver. Se gatilla en `open_list`, con un número que sea token propio
+  («26», «48mm»), no con «trae dígitos»: `RD-M6100` y un SKU también los traen y
+  para ésos buscar por nombre es lo correcto.
+- **Un resultado truncado entrega las filas que pudo mostrar.** `hasMore` dice
+  que no son todas; mandar `null` para no mentir producía una lista vacía, que
+  miente peor. Ese invariante vivía en **cuatro** lugares —`cards.ts` al
+  construir, `validateListRef` al leer, el parser de Dart y dos pruebas—: se
+  corrige en los cuatro o no se corrigió.
+
+### Procesar números y medidas (2026-08-24)
+
+Casi todo lo que el taller pide es una medida, así que esto no es un extra.
+Después de lo anterior, «48mm» seguía sin resolverse **en ninguna redacción**.
+Tres causas, en capas distintas:
+
+1. **`is_filterable = false`.** `valve_length_mm` tenía la bandera apagada y la
+   inferencia sólo considera campos filtrables: el campo nunca fue candidato,
+   con 94 hechos cargados esperando. Había tres medidas más en la misma
+   situación. **Una medida que no se puede filtrar es una medida invisible** —
+   revisar la bandera antes de culpar al lenguaje.
+2. **El tokenizador no despega la unidad.** El separador corta por caracteres no
+   alfanuméricos, así que «48mm» quedaba de una pieza y jamás igualaba al rótulo
+   «48». Y nadie escribe «48 mm» con espacio: el catálogo mismo dice «48MM».
+   Ahora un número pegado a un sufijo de **letras** entrega también el número
+   suelto, con la misma `ordinality` para no romper la adyacencia. «26x1.95»
+   queda fuera a propósito: es un calce de neumático, y partirlo inventaría un
+   valor que nadie pidió.
+3. **El rango lo traduce el modelo, no el servidor.** «Cámara para un neumático
+   2.1» es `tube_width_min_in ≤ 2.1` y `tube_width_max_in ≥ 2.1`. Un número
+   suelto es ambiguo entre varios campos numéricos y el servidor no debe
+   adivinar; el modelo sí puede, porque `inspect_inventory_schema` le anuncia
+   cada campo con su tipo, su unidad, sus operadores (`lte`, `gte`, `between`) y
+   cuántos productos lo tienen cargado. Verificado en la app: la tarjeta sale
+   con los chips `26" · ≤ 2.1 · ≥ 2.1` y la respuesta agrupa por tipo de válvula
+   con stock, precio y largo.
+
+**El reparto que queda claro:** el emparejamiento del servidor resuelve
+vocabulario cerrado —medida de rueda, tipo de válvula, largo— y es el respaldo.
+El modelo resuelve lo que exige criterio: rangos, contención, comparaciones. Se
+le dan las dos cosas y cada uno hace lo suyo.

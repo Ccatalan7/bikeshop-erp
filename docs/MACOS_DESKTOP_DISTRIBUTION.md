@@ -143,8 +143,9 @@ Android Actions evidence artifact and combines its exact commit with the latest
 applicable macOS release. The older ancestral commit, or their one unique safe
 merge base, becomes the common `Novedades` baseline; an expired, missing,
 non-ancestral, or ambiguous Android history fails closed. Preparation uses that
-range for one bounded shared Codex candidate, pushes once, and writes a
-short-lived schema-v2 exact-SHA handoff inside `.git`. A diverged history or
+range as the shared Gemini input boundary, pushes once, and writes a short-lived
+schema-v2 exact-SHA handoff inside `.git`. Legacy candidate fields remain empty.
+A diverged history or
 overlapping local change stops before publication.
 VS Code then waits for one exact-SHA `ERP Integrity Gate`: it
 reuses the push-triggered run when present, or dispatches that gate once when
@@ -152,7 +153,7 @@ path filters created no run. A successful live run upgrades the handoff to
 schema v3 with its run and attempt proof. Only then does VS Code start the
 macOS and protected Android GitHub publishers in parallel in separate terminal
 panes. Each publisher revalidates the clean checkout, branch, exact local
-commit, live remote branch, note range, candidate checksum, and proof binding;
+commit, live remote branch, note range, and proof binding;
 each protected workflow independently queries GitHub Actions before building.
 
 The two outcomes remain independent. A successful macOS publication is not
@@ -165,6 +166,24 @@ Android signing material and the Supabase release credential remain only in the
 protected GitHub `Production` environment. The Android terminal downloads and
 validates a bounded Actions evidence artifact containing the exact final
 Supabase manifest; it never receives those secrets.
+
+### El recuadro de «Novedades» se escribe antes, o se pierde (2026-08-22)
+
+El texto que ven los compañeros viaja **dentro del manifiesto firmado**, no en
+el cuerpo del release de GitHub. Editar el release después no cambia nada, y el
+manifiesto no se puede tocar a mano. Una publicación que salió con el texto
+determinista —«Incluye ajustes y mejoras de estabilidad en…», que no dice
+nada— sólo se arregla publicando **otra** versión, porque la siguiente
+actualización arranca su rango en ese commit y ya no describe estos cambios.
+
+Desde el 2026-08-24 la preparación **no llama Codex ni acepta un candidato
+local**. Sólo fija el rango exacto; el job protegido genera el texto con Gemini
+Flash. La variable durable de `Production` es
+`GEMINI_RELEASE_NOTES_MODEL=gemini-3.1-flash-lite`. Si ese modelo deja de estar
+disponible, el generador descubre una alternativa únicamente dentro de su lista
+cerrada Flash/Flash-Lite. Si Google no responde, queda el fallback determinista
+y la publicación sigue siendo segura, pero quien conduce una publicación que
+exige texto IA debe comprobar en el log `Release notes source: ai`.
 
 The normal developer action is the selectable VS Code task:
 
@@ -179,9 +198,7 @@ model as the Windows publisher:
    environment.
 2. Stage every Source Control change and create a timestamped commit when
    needed. A clean checkout publishes the already-committed branch head.
-3. After a successful redacted gitleaks check, optionally ask the locally
-   ChatGPT-authenticated Codex CLI for a release-note candidate from the exact
-   committed range. This happens before the push and never modifies the source.
+3. Resolve the exact prior-release range that protected Gemini will summarize.
 4. Push that exact commit without switching branches or creating a worktree.
 5. Reuse an active publish run for the same commit, or dispatch
    `.github/workflows/macos-release.yml` once with `publish_release=true`.
@@ -192,11 +209,10 @@ model as the Windows publisher:
    installer to identify the same publication.
 
 The standalone macOS task remains available for a macOS-only release. In the
-combined task, prepared mode also consumes the already-generated shared Codex
-candidate instead of asking Codex a second time. It skips only duplicate Git
-stage, commit, push, and note-generation work; protected CI, release-note
-validation, signing, waiting, failure diagnostics, and exact publication
-verification remain unchanged.
+combined task, prepared mode consumes the already-resolved shared notes range.
+It skips only duplicate Git stage, commit, push, and range-resolution work;
+protected CI, Gemini release-note generation, validation, signing, waiting,
+failure diagnostics, and exact publication verification remain unchanged.
 
 A same-commit application-test failure is reported immediately when the task
 is retried; the qualifier does not run the same known failure three times.
@@ -204,47 +220,20 @@ Cancelled, timed-out, stale, or startup-failed qualification may rerun the same
 GitHub run once. The standalone macOS task supplies no shared proof and keeps
 the complete integrity gate as its safe fallback.
 
-The optional local Codex step is deliberately bounded. It runs only when
-`codex login status` confirms ChatGPT authentication and never receives
-`OPENAI_API_KEY` or another billed API credential. The invocation is single and
-time-bounded, uses an ephemeral session, ignores user configuration, gives model
-tools a read-only sandbox with no network or web access, and requires strict
-JSON output. It inspects only Git objects in the exact previous-macOS-release-
-to-current-commit range; it must not read uncommitted or untracked work,
-credentials, environment values, customer fixtures, generated or binary
-artifacts, or unrelated home-directory data. Text found in the repository is
-treated as untrusted source material, not as instructions.
-
-Unlike the remote Gemini step below, this is a separately authorized OpenAI
-source-inspection boundary: relevant committed source and diffs may be processed
-by the ChatGPT-authenticated Codex service so it can describe concrete,
-user-visible changes. A redacted gitleaks check runs before that boundary. Only
-a validated, compact candidate envelope containing plain customer-facing text,
-canonical module identity, exact range identity, and opaque evidence IDs is
-carried into `workflow_dispatch`. Prompts, paths, source, diffs, transcripts,
-raw CLI output, error logs, credentials, and environment data are never
-transported.
-
 The protected `Production` job remains the final release-note authority. It
 always creates a deterministic fallback, independently resolves the previous
 macOS release, reconstructs the committed change inventory and evidence
-catalog, and revalidates the local envelope's exact range, schema, size,
-plain-text/privacy rules, module ownership, and evidence IDs. It maps opaque IDs
-back to local changed paths only after validation. An unavailable local CLI,
-non-ChatGPT authentication, timeout, quota exhaustion, invalid output, vague
-copy, or any range/evidence mismatch discards the candidate and continues
-without blocking the build, signature, or publication.
+catalog, and validates Gemini's exact range, schema, size, plain-text/privacy
+rules, module ownership, and evidence IDs before signing. It maps opaque IDs
+back to local changed paths only after validation.
 
-When no local Codex candidate is accepted, protected CI prefers the Gemini API
-if the `Production` environment contains `GEMINI_RELEASE_API_KEY`. The default
-model is `gemini-3.1-flash-lite`; an optional
-`GEMINI_RELEASE_NOTES_MODEL` environment variable may override it. If Google
+Protected CI uses the Gemini API when the `Production` environment contains
+`GEMINI_RELEASE_API_KEY`. The configured model is
+`gemini-3.1-flash-lite`. If Google
 reports that model unavailable or rejects its output-format contract, the
 generator performs one metadata-free model-list request and retries only with
-an available model from its fixed free Gemini Flash/Flash-Lite allowlist. If
-the Gemini key is absent, the existing `OPENAI_API_KEY` and
-`OPENAI_RELEASE_NOTES_MODEL` integration remains available as a compatibility
-path. The compatibility OpenAI path is not attempted after a Gemini failure.
+an available model from its fixed Gemini Flash/Flash-Lite allowlist. There is no
+Codex or OpenAI provider fallback in the standard publication workflows.
 
 Only sanitized, bounded release metadata is eligible for those protected-CI
 provider calls: fixed canonical ERP module/topic labels, status and change
@@ -252,10 +241,10 @@ counts, and opaque evidence IDs. Commit subjects, commit SHAs,
 raw/current/previous paths, source, diffs, credentials, generated bundles,
 binary contents, customer data, and other personal or confidential information
 stay inside the protected job. A missing key, timeout, exhausted quota, API
-failure, invalid response, or rejected candidate leaves the validated
+failure, invalid response, or rejected output leaves the validated
 deterministic fallback in place. Logs expose only the selected source/model and
 a fixed sanitized failure category, never provider error text, prompts, source,
-diffs, or candidate contents.
+diffs, or generated contents.
 
 Google's free/unpaid Gemini service may use submitted inputs and generated
 outputs to improve its products, and human reviewers may process them; release

@@ -711,6 +711,102 @@ batch comprensible por un panel/accordion que ocultaba la visión conjunta»— 
 se repitió igual. La regla de arriba existe para que la próxima vez se note
 antes de construirla, no después de que el dueño la use.
 
+### Volvió a pasar: proveedores como párrafos (corrección del dueño, 2026-08-23)
+
+La regla de arriba —«una etapa que pide N decisiones es una tabla»— se escribió
+por la conciliación de nóminas y se repitió igual en el Asistente de compras. El
+bloque «A quién le compramos esto» apilaba una frase por proveedor:
+
+    RBX  15% de lo comprado
+    2 de 9 líneas · $2.850 c/u · última compra hace 5 meses · RBX
+    12 de 12 disponibles hace 7 min · CAMARA 29 +18,5% vs tu costo
+
+El dueño: *«looks like a fucking code block dude, all text, isolated sentences
+without clear actions»*. Tenía razón, y las tres causas son las mismas de 2026-08-10:
+
+1. **Los números que existen para compararse vivían dentro de oraciones.**
+   Participación, costo unitario, antigüedad y confirmación son cuatro columnas;
+   estaban en una frase separada por puntos medios. Nada alineaba.
+2. **La salvedad honesta se reimprimía por fila.** «Costos con flete
+   prorrateado; la disponibilidad de hoy se confirma con ellos» es correcta y
+   necesaria, pero es la MISMA para todas: va **una vez** al pie.
+3. **Las acciones no tenían columna.** «Confirmar hoy · Por qué · Entrar al
+   portal» flotaban al final del párrafo, y una fila sin sitio web corría las
+   suyas y rompía la alineación.
+
+Lo que quedó: anatomía `TB-01` con la geometría de `handoff-t23` —panel sin
+padding, cabecera `sunken` con etiqueta mono de 9 px, fila `9px 11px` con
+hairline, miniatura 38, números comparables en mono, y el hueco de la acción
+reservado aunque el dato falte—. Un proveedor no tiene foto de producto: usa el
+monograma de **dos letras** que el contrato de imagen ya define, con la misma
+geometría para que la fila no cambie de alto.
+
+**Antes de escribir un bloque nuevo, la pregunta es cuántas filas comparables
+va a tener.** Con dos o más, es tabla — aunque el contenido «quepa» en una
+frase.
+
+**Y la tabla se mide contra el ancho que hay, no contra una constante.** La
+primera versión reservó 172 px fijos para las acciones rotuladas: «Confirmado»
+y «Confirmar hoy» se pisaban y la fila se salía del panel. Un solo
+`_TableLayout` decide desde `LayoutBuilder` —lo usan la cabecera y las filas,
+porque si cada una midiera por su cuenta dejarían de calzar justo al
+estrecharse— y va soltando en orden de **menor a mayor valor comparativo**:
+primero el *rótulo* de la orden, después «Confirmado», y sólo al final «Última
+compra». El icono conserva el mando y le devuelve el ancho a los números, que
+es para lo único que la tabla existe.
+
+**Un número en una celda tiene que poder relacionarse con algo de la pantalla.**
+La columna «Confirmado» decía «12 de 12» en la fila de un proveedor y el dueño
+estuvo un rato tratando de ubicar ese 12: la fila hablaba de «2 de 9 líneas · 2
+facturas · 1 producto» y ningún doce aparecía por ninguna parte. Eran dos
+defectos encadenados:
+
+1. **El número contestaba otra pregunta.** Venía del barrido de reposición del
+   proveedor —cámaras de 16", 20", 24", 26" y hasta una biela— sobre una
+   necesidad de cámaras 29. La fila compara proveedores *para esta necesidad*,
+   así que la celda cuenta lo de esta necesidad y nada más. Lo otro sigue
+   existiendo, pero se publica aparte y **con su referente dicho**: «12
+   productos suyos revisados para reposición».
+2. **Un alcance vacío no significa «cuenta todo».** Al no conocer todavía los
+   productos de la línea, el cliente mandaba «sin filtro» y volvía el barrido
+   completo. Vacío significa *nada de esto se ha consultado*, y así hay que
+   preguntarlo. Además el alcance recién existe cuando llegan los candidatos:
+   la celda se vuelve a leer entonces, o se queda con la respuesta de cuando no
+   se sabía de qué se hablaba.
+
+Y con **un solo** elemento la respuesta es una palabra, no una fracción: «Sí»,
+«Sin stock», «No estaba». «1 de 1» es aritmética sobre nada. La fracción sirve
+desde dos, que es cuando compara.
+
+
+**El corte entre rótulo e icono se mide; los que sacan una columna se
+declaran.** No es simetría: cuánto ocupa «Confirmar hoy» depende de la familia
+tipográfica y de la escala de texto del sistema, así que se calcula con un
+`TextPainter` sobre el estilo **resuelto** —`DefaultTextStyle.of(context)`
+fundido con el del control, no el estilo declarado suelto— y sobre el rótulo
+*más ancho* de cada control («Confirmando…», «Ocultar»), para que la columna no
+se corra cuando una fila cambia de estado. Cuántas columnas caben, en cambio,
+sí es una decisión de producto y va en números.
+
+Costo real de saltarse esto: los 216 px «medidos a ojo» en el Mac del dueño
+desbordaban 65 px en la prueba de widget, que usa otra fuente. Un número que
+sólo vale en una máquina no es una medida.
+
+**Y la geometría del icono es de la tabla, no del tema.** `padding` y
+`constraints` de `IconButton` no le ganan al `iconButtonTheme` de la app: su
+`minimumSize`, pensado para una barra de herramientas, desbordaba la celda 20 px
+en compacto. Se fija con `IconButton.styleFrom(minimumSize: Size.zero,
+maximumSize: …, tapTargetSize: shrinkWrap)`.
+
+El tooltip del icono **nombra al proveedor**: cuatro iconos iguales no
+identifican su sujeto, ni para un lector de pantalla ni para una prueba.
+
+**El hueco de un adorno opcional se reserva siempre.** El enlace al sitio existe
+en unos proveedores y en otros no. Con el contenido alineado a la derecha, la
+fila sin sitio corría sus botones el ancho del icono y esa fila dejaba de
+alinear con las demás. Un contenedor de ancho fijo que a veces va vacío —no un
+`if` que quita el hijo— mantiene la columna quieta.
+
 ## 8. Forms and editing
 
 Forms should reflect the operator's mental model, not the storage schema.

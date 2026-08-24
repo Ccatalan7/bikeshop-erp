@@ -317,6 +317,63 @@ void main() {
   });
 
   group('AI-first full catalog and grounded adjudication', () {
+    test(
+        'shared deterministic model keeps a longer structured model from rejecting the candidate',
+        () async {
+      final proxy = _Proxy(_typedDecision(
+        decision: 'same',
+        picks: const <Map<String, Object?>>[
+          <String, Object?>{
+            'product_id': 'g3-catalog',
+            'qty': 1,
+            'basis': <String>['model', 'spec'],
+          },
+        ],
+      ));
+      final service = AIAssistantService(geminiProxy: proxy);
+      final matcher = ProductDuplicateMatcherService(
+        inventoryService: _SpyInventoryService(),
+        aiAssistantService: service,
+        categories: _categories,
+        enableVisualReading: false,
+        enableDeterministicRanking: false,
+        persistComputedImageFingerprints: false,
+      );
+
+      final result = await matcher.resolveCandidates(
+        probe: ProductDuplicateProbe(
+          name: 'Rotor de freno G3 160mm',
+          selectedVariant: 'G3 160-160mm',
+          imageBytes: _sourceImageBytes,
+          investigation: _investigation(
+            leafId: 'novel-leaf',
+            objectLabel: 'rotor de freno',
+            modelCode: 'G3CS',
+          ),
+        ),
+        products: <Product>[
+          _product(
+            id: 'g3-catalog',
+            sku: 'AE0212',
+            name: 'Disco de Freno 160mm G3',
+            model: 'G3',
+            categoryId: 'novel-leaf',
+            categoryName: 'Objetos nuevos',
+          ),
+        ],
+      );
+
+      expect(result.normalCandidates, hasLength(1));
+      expect(result.normalCandidates.single.product.id, 'g3-catalog');
+      expect(result.normalCandidates.single.matchedModelCodes, contains('g3'));
+      expect(
+        result.normalCandidates.single.gates.map((gate) => gate.id),
+        isNot(contains('ai:model')),
+      );
+      expect(result.recommendations.single.product.id, 'g3-catalog');
+      service.dispose();
+    });
+
     test('unknown taxonomy term finds the offered-leaf gold with ranking off',
         () async {
       final proxy = _Proxy(_typedDecision(

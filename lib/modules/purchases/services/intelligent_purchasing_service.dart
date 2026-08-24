@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../ai_assistant/models/ai_assistant_turn_contracts.dart';
 import '../models/intelligent_purchasing_models.dart';
+import '../models/supplier_catalog.dart';
 
 class IntelligentPurchasingService {
   IntelligentPurchasingService({SupabaseClient? client})
@@ -264,6 +265,16 @@ class IntelligentPurchasingService {
     return SupplyInventorySnapshot.fromJson(_map(response));
   }
 
+  /// Lo que hay en bodega que se parece a la descripción, cuando todavía no
+  /// hay producto exacto confirmado. No asigna ni reserva nada.
+  Future<StockCandidateReport> stockCandidates(String needId) async {
+    final response = await _client.rpc(
+      'supply_need_stock_candidates_v1',
+      params: {'p_need_id': needId, 'p_limit': 8},
+    );
+    return StockCandidateReport.fromJson(_map(response));
+  }
+
   Future<SupplyNeed> assignFromStock(SupplyNeed need) async {
     final response = await _client.rpc(
       'assign_supply_need_from_stock_v1',
@@ -471,6 +482,109 @@ class IntelligentPurchasingService {
       },
     );
     return PurchaseRanking.fromJson(_map(response));
+  }
+
+  /// A quién le compramos este tipo de producto, según las facturas.
+  ///
+  /// La frase del operador viaja COMPLETA: el servidor la traduce contra el
+  /// vocabulario real de fichas y contra las bandas de gama. Descomponerla aquí
+  /// es lo que rompía el módulo — «gama media» no es el nombre de ningún
+  /// producto, pero sí es una banda que el análisis sabe leer.
+  Future<SupplierConcentrationReport> rankSuppliers({
+    String? query,
+    String? category,
+    String? brand,
+    int limit = 4,
+  }) async {
+    final response = await _client.rpc(
+      'rank_purchase_suppliers_v1',
+      params: {
+        'p_query': query,
+        'p_category': category,
+        'p_brand': brand,
+        'p_limit': limit,
+      },
+    );
+    return SupplierConcentrationReport.fromJson(_map(response));
+  }
+
+  /// A quién le pedimos la lista entera, y si conviene repartirla en dos.
+  ///
+  /// Una llamada por la lista completa, no una por línea: la cobertura y el
+  /// reparto son una decisión sobre el conjunto y ninguna consulta por línea
+  /// la contiene.
+  Future<BasketCoverageReport> rankBasketSuppliers({
+    required List<String> queries,
+    int limit = 4,
+  }) async {
+    final lines = queries
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .take(6)
+        .toList(growable: false);
+    if (lines.length < 2) {
+      throw ArgumentError('La canasta necesita al menos dos líneas.');
+    }
+    final response = await _client.rpc(
+      'rank_basket_suppliers_v1',
+      params: {'p_queries': lines, 'p_limit': limit},
+    );
+    return BasketCoverageReport.fromJson(_map(response));
+  }
+
+  /// Por qué ese proveedor quedó donde quedó: sus compras que calzan con lo
+  /// pedido, con factura y fecha, y las métricas que lo pusieron ahí.
+  Future<SupplierEvidence> supplierEvidence({
+    required String supplierId,
+    required List<String> queries,
+    int limit = 6,
+  }) async {
+    final lines = queries
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .take(6)
+        .toList(growable: false);
+    if (lines.isEmpty) {
+      throw ArgumentError('Se necesita al menos una línea para explicar.');
+    }
+    final response = await _client.rpc(
+      'purchase_supplier_evidence_v1',
+      params: {
+        'p_supplier_id': supplierId,
+        'p_queries': lines,
+        'p_limit': limit,
+      },
+    );
+    return SupplierEvidence.fromJson(_map(response));
+  }
+
+  /// La ficha del proveedor: quién es, sus métricas y su catálogo paginado.
+  ///
+  /// No recibe la necesidad activa a propósito. La evidencia explica un puesto
+  /// en el ranking; esto abre al proveedor entero para poder armarle un pedido
+  /// sin salir del bloque.
+  Future<SupplierCatalogPage> supplierCatalogPage({
+    required String supplierId,
+    String? search,
+    int limit = 40,
+    int offset = 0,
+    /// Lo que el operador venía buscando. Sube al servidor para que lo que
+    /// coincide encabece la lista: se entra a la ficha desde una necesidad
+    /// concreta, y abrirla con otra cosa obliga a buscar de nuevo a mano.
+    String? needPhrase,
+  }) async {
+    final response = await _client.rpc(
+      'supplier_catalog_page_v1',
+      params: {
+        'p_supplier_id': supplierId,
+        'p_search': (search ?? '').trim().isEmpty ? null : search!.trim(),
+        'p_limit': limit,
+        'p_offset': offset,
+        'p_need_phrase':
+            (needPhrase ?? '').trim().isEmpty ? null : needPhrase!.trim(),
+      },
+    );
+    return SupplierCatalogPage.fromJson(_map(response));
   }
 
   Future<PurchaseScenarioResult> buildScenarios({

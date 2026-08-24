@@ -3156,12 +3156,30 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       return 'Falta el SKU reservado en $withoutReservedSku '
           'fila${withoutReservedSku == 1 ? '' : 's'}. Reintenta la reserva.';
     }
+    // **Dos fuentes prueban un pack, y las dos bloquean igual.**
+    //
+    // La primera es el texto de la opción del proveedor (`4 pares`, `10PCS`).
+    // La segunda es la investigación estructurada, y hasta ahora no bloqueaba
+    // nada: por ahí se escapaba el rotor AVID, cuya variante `G3-160-160MM` no
+    // trae ningún token de cantidad. Resultado medido el 2026-08-24: se creaba
+    // como producto simple y la factura anotaba 5 donde llegan 10.
+    //
+    // **Por qué bloquea en vez de multiplicar solo.** Multiplicar exige saber
+    // qué unidad representa la fila del catálogo que se está creando, y eso no
+    // está probado: en dos corridas seguidas la misma IA propuso el nombre
+    // «Rotor de Freno AVID G3CS 160mm» y «Par Rotores Freno Disco Avid G3CS
+    // 160mm» para el MISMO producto. Con el segundo nombre, multiplicar por 2
+    // anota 10 pares —20 rotores— y contar de más es peor que contar de menos.
+    // La unidad de venta la decide el operador, que es justamente lo que esta
+    // compuerta le pide.
     final unresolvedPacks = selected
-        .where((entry) => SupplierOptionEvidence.requiresExplicitCompositionFor(
+        .where((entry) =>
+            SupplierOptionEvidence.requiresExplicitCompositionFor(
               packCount: entry.originalItem.rawPackCount,
               rawUnitToken: entry.originalItem.rawUnitToken,
               packEvidenceConflict: entry.originalItem.rawPackEvidenceConflict,
-            ))
+            ) ||
+            _provenPackUnitsForNewProduct(entry) > 1)
         .length;
     if (unresolvedPacks > 0) {
       return 'Falta confirmar la unidad o composición de $unresolvedPacks '
@@ -4362,6 +4380,25 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       for (final entry in _newProductEntries) {
         final independent = entry.independentDuplicateResult;
         if (independent == null) continue;
+        // **La reconciliación ajusta EVIDENCIA, no decisiones.**
+        //
+        // El armado de `rows` de arriba ya excluye las filas que el operador
+        // resolvió —vinculada, con resolución de proveedor o marcada como
+        // nueva—, y este bucle tiene que excluir exactamente las mismas: sin
+        // esto reaplicaba el resultado de duplicados sobre una fila recién
+        // decidida y `applyReconciledSearchResult` la devolvía a
+        // `reviewRequired`.
+        //
+        // Costo real observado el 2026-08-24 en la factura AE-BULK-428042: al
+        // tocar «Crear nuevo» el SKU **sí** se reservaba —aparecía AE0373 en la
+        // columna— pero la Decisión volvía al candidato y el pie seguía
+        // diciendo «Faltan 4 decisiones». Desde el mesón eso es exactamente
+        // «el botón no funciona», y por eso se reportó así.
+        if (entry.linkedProduct != null ||
+            entry.hasSupplierResolution ||
+            entry.resolutionState == OcrProductResolutionState.newProduct) {
+          continue;
+        }
         final groupResult = reconciled[entry.reviewId];
         final finalResult = groupResult ?? independent;
         if (kDebugMode) {
@@ -4526,6 +4563,53 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         ),
       );
       return false;
+    }
+
+    // **Un pack probado tampoco se vincula como producto simple.**
+    //
+    // Es la misma regla de arriba, con la otra fuente de prueba. El guard
+    // anterior mira el texto de la opción (`2PCS`, `4 pares`); éste mira la
+    // investigación estructurada, que es lo que el contrato de identidad
+    // acepta como demostración de composición. Sin él, el rotor AVID —que la
+    // IA resuelve como 2 unidades por compra— se vinculaba a un producto de
+    // catálogo de 1 unidad y la factura anotaba 5 donde llegan 10.
+    //
+    // Se rechaza en vez de multiplicar porque este camino NO escribe autoridad
+    // duradera —lo dice el comentario de abajo— y fabricar acá una resolución
+    // local haría que el borrador afirme una composición que nadie confirmó.
+    // El operador tiene dos salidas correctas: crear el producto nuevo, que sí
+    // aprende el pack, o resolver la composición explícitamente.
+    final provenUnits = _provenPackUnitsForNewProduct(entry);
+    if (provenUnits > 1 && mounted) {
+      // **Avisa, no bloquea.** La versión anterior de esta guarda rechazaba el
+      // vínculo, y eso dejaba la línea sin salida: el producto SÍ existe en el
+      // catálogo —el rotor G3 es `AE0007`, de una unidad— así que vincular es
+      // la decisión correcta y crear uno nuevo sería el duplicado que toda esta
+      // pantalla existe para evitar. Lo que falta no es el vínculo: es la
+      // cantidad, y ésa se edita en la factura.
+      //
+      // Se dice el número exacto porque «revisa la cantidad» no le sirve a
+      // nadie parado en el mesón.
+      final purchased = entry.originalItem.sourcePurchaseQuantity ??
+          entry.originalItem.quantity;
+      final received = purchased == null ? null : purchased * provenUnits;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          content: Text(
+            received == null
+                ? 'Vinculado. Ojo: esta publicación entrega $provenUnits '
+                    'unidades por cada una comprada, así que revisa la '
+                    'cantidad de la línea en la factura.'
+                : 'Vinculado. Esta publicación entrega $provenUnits unidades '
+                    'por cada una comprada: compraste '
+                    '${_formatQuantity(purchased!)} y llegan '
+                    '${_formatQuantity(received)}. Ajusta la cantidad de la '
+                    'línea en la factura.',
+          ),
+          backgroundColor: VinabikeThemeRoles.of(context).warning.accent,
+        ),
+      );
     }
 
     // A picker decision applies only to this invoice draft. Persisting it here
@@ -5299,6 +5383,40 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       },
     );
   }
+
+  /// Cuántas unidades de inventario entrega UNA unidad comprada, cuando la
+  /// publicación vende un pack de un mismo producto y el producto se está
+  /// creando nuevo.
+  ///
+  /// **El hueco que cierra.** `investigation.packaging` sólo se consultaba en el
+  /// camino que vincula a un producto que ya existe. Si la fila termina en
+  /// «Crear nuevo» —porque el catálogo todavía no lo tiene— el multiplicador se
+  /// perdía y la factura anotaba las unidades compradas en vez de las
+  /// recibidas.
+  ///
+  /// Medido el 2026-08-24 en la factura AE-BULK-428042: 5 líneas de rotor AVID
+  /// G3CS. La IA lo resolvió bien —variante `G3-160-160MM` y la foto con
+  /// `160+160MM`, `packaging.count: 2`, un solo componente repetido 2 veces—,
+  /// pero como no existía en el catálogo se creaba nuevo y el borrador anotaba
+  /// **5 rotores donde llegan 10**.
+  ///
+  /// La prueba es la del contrato de identidad, no una convención: un pack
+  /// homogéneo sólo multiplica cuando la variante inmutable del proveedor y la
+  /// unidad de venta del catálogo lo demuestran. Acá la unidad de venta es la
+  /// que se está creando —el producto es UN rotor, según el propio
+  /// `cleaned_name`— y la variante es la que la IA citó como evidencia. Por eso
+  /// se exige que la composición sea de UN solo componente repetido y que su
+  /// cantidad coincida con el conteo de empaque: si el modelo se contradice
+  /// consigo mismo, no se multiplica nada.
+  int _provenPackUnitsForNewProduct(_NewProductEntry entry) =>
+      provenPackUnitsForNewProduct(entry.aiInvestigation);
+
+  /// «5» y no «5.0»: la cantidad de una factura se lee como la escribe el
+  /// proveedor.
+  static String _formatQuantity(double value) =>
+      value == value.roundToDouble()
+          ? value.round().toString()
+          : value.toStringAsFixed(2);
 
   Future<void> _uploadSelectedEntryImageForCreation(
     _NewProductEntry entry,
@@ -8156,4 +8274,29 @@ class _OCRInvoiceDiagnostics {
 
   bool get shouldWarnBeforeApply =>
       hasTotalMismatch || inconsistentRowCount > 0 || incompleteRowCount > 0;
+}
+
+
+/// Cuántas unidades de inventario entrega UNA unidad comprada.
+///
+/// Pública y pura para que la regla se pueda probar: es la que decide si una
+/// factura anota 5 o 10, y una regla de cantidad sin prueba no se despacha.
+int provenPackUnitsForNewProduct(
+  AIProductIdentityInvestigation? investigation,
+) {
+  if (investigation == null) return 1;
+  if (investigation.packageKind != AIProductPackageKind.composite) return 1;
+  final count = investigation.packaging.count;
+  if (count == null || count < 2) return 1;
+  final components = investigation.composition.components
+      .where((component) =>
+          component.role != AIProductCompositionRole.includedAccessory)
+      .toList(growable: false);
+  // Un solo componente repetido: eso es un pack homogéneo. Dos componentes
+  // distintos son una descomposición y la resuelve el otro camino.
+  if (components.length != 1) return 1;
+  // Y el modelo tiene que estar de acuerdo consigo mismo: si dice «pack de 2»
+  // pero su composición trae 3, no se multiplica nada.
+  if (components.single.quantity != count) return 1;
+  return count;
 }

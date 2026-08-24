@@ -565,9 +565,14 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     }
     final hasMore = listJson['hasMore'] as bool;
     final rawEntityIds = listJson['entityIds'];
-    if ((hasMore && rawEntityIds != null) ||
-        (!hasMore && rawEntityIds is! List)) {
-      _rejectCard('lista_truncada_con_ids');
+    // **Una lista truncada SÍ trae ids.** Antes se rechazaba la tarjeta cuando
+    // `hasMore` venía con ids —para que no afirmara una selección exacta— y el
+    // efecto era peor que el problema: sin ids la pantalla caía a buscar la
+    // frase como texto, que no encuentra nada. `hasMore` es lo que dice que no
+    // son todas. Se sigue aceptando `null` porque una tarjeta guardada por la
+    // versión anterior no las trae.
+    if (!hasMore && rawEntityIds is! List) {
+      _rejectCard('lista_completa_sin_ids');
     }
     List<String>? entityIds;
     if (rawEntityIds is List) {

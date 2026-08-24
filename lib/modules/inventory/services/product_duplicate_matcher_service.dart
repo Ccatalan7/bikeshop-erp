@@ -1678,7 +1678,26 @@ class ProductDuplicateMatcherService {
         .map(_normalizeCode)
         .where((code) => code.isNotEmpty)
         .toSet();
+    // **Un código compartido no es una contradicción de modelo.**
+    //
+    // Esta compuerta existe para cortar cuando los dos lados nombran modelos
+    // que se excluyen (`RT56` contra `RT86`). No cuando la IA leyó una forma
+    // más larga del MISMO código: el rotor Avid es `G3CS` en la publicación y
+    // `G3` en la ficha del catálogo, y el lector determinista ya lo había
+    // resuelto —`matchedModelCodes` trae `g3`—.
+    //
+    // Costo real medido el 2026-08-24 en la factura AE120826: el disco
+    // `AE0007` pasaba familia (Rotor) y medida (160 mm), su marca salía
+    // `notApplicable`, y esta compuerta lo rechazaba igual con
+    // «G3CS ≠ G3». Con él caían los 17 candidatos de la fila, la adjudicación
+    // recibía `viable_count: 0`, respondía `different` y el rotor terminaba
+    // ofreciendo crear un duplicado de un producto que ya estaba en bodega.
+    //
+    // El guardia se conserva entero para el caso que le toca: cuando NO hay
+    // código compartido, `matchedModelCodes` viene vacío y la compuerta corta
+    // igual que antes.
     if (gateId == null &&
+        current.matchedModelCodes.isEmpty &&
         sourceModels.isNotEmpty &&
         candidateModels.isNotEmpty &&
         sourceModels.intersection(candidateModels).isEmpty) {

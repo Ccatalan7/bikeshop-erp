@@ -105,6 +105,41 @@ class _AIChatPanelState extends State<AIChatPanel> {
   /// que usará el envío: su nombre, el del negocio y el de quien tiene la
   /// sesión abierta. Devuelve null si falta algo y la tarjeta cae a lo que
   /// mandó el servidor.
+  /// Continuaciones que una tarjeta puede ofrecer, por su identificador.
+  ///
+  /// El catálogo vive **en el cliente** a propósito: la tarjeta la arma el
+  /// servidor a partir de lo que devolvió una herramienta, así que dejar que
+  /// traiga el texto sería dejar que algo de afuera escriba un mensaje en
+  /// nombre del operador. El servidor elige cuál continuación ofrecer; qué
+  /// dice, lo decide esta lista.
+  static const Map<String, String> _followUpPrompts = <String, String>{
+    'restock_by_supplier':
+        'Agrupa por proveedor lo que tengo que reponer, y dime qué pedirle '
+            'a cada uno.',
+    'restock_only_moving':
+        'Muéstrame sólo lo que necesito reponer y que además se haya vendido '
+            'en los últimos 90 días.',
+    'collections_priority':
+        'De lo que me deben, ¿a quién le cobro primero? Ordénalo por monto y '
+            'por cuánto lleva vencido.',
+    'collections_contact':
+        'Contacta al cliente que más me debe por su factura vencida.',
+    'sales_top_customers':
+        '¿Quién me compró más en ese mismo período?',
+    'sales_compare_previous':
+        'Compara ese período con el anterior: vendido, cobrado y cantidad de '
+            'facturas.',
+    'workshop_blockers':
+        'De esos trabajos, ¿cuáles están frenados y por qué? Separa los que '
+            'esperan repuestos, los que esperan aprobación y los en pausa.',
+    'workshop_notify_ready':
+        'Contacta al cliente del primer trabajo de esa lista para avisarle '
+            'cómo va su bicicleta.',
+    'tasks_overdue_first':
+        'De esas tareas, ¿cuáles están atrasadas? Ordénalas por fecha de '
+            'vencimiento, primero las más vencidas.',
+  };
+
   Future<String?> _previewCardOption(
     AIAssistantActionCard card,
     AIAssistantCardOption option,
@@ -134,6 +169,14 @@ class _AIChatPanelState extends State<AIChatPanel> {
     AIAssistantActionCard card,
     AIAssistantCardOption option,
   ) async {
+    if (card.optionKind == 'follow_up') {
+      final prompt = _followUpPrompts[option.id];
+      // Un id que este cliente no conoce no hace nada. Es la misma disciplina
+      // que las plantillas: lista cerrada acá, elección allá.
+      if (prompt == null) return;
+      await _sendMessage(overrideText: prompt);
+      return;
+    }
     if (card.optionKind != 'whatsapp_template') return;
     final customerId = card.entityRef?.id;
     if (customerId == null) return;
@@ -886,6 +929,20 @@ class _AssistantActionCardState extends State<_AssistantActionCard> {
 
   /// Elegir abre la revisión; nunca envía. El texto se pide resuelto para que
   /// sea el mismo que recibirá el cliente, no una aproximación.
+  /// Sólo se revisa antes de ejecutar lo que sale del taller. Una plantilla
+  /// llega a un cliente y no se puede deshacer; una continuación sólo le
+  /// vuelve a preguntar al asistente, así que exigirle confirmación agrega un
+  /// clic y no protege de nada.
+  bool get _optionNeedsReview => widget.card.optionKind == 'whatsapp_template';
+
+  Future<void> _choose(AIAssistantCardOption option) async {
+    if (!_optionNeedsReview) {
+      widget.onOption(option);
+      return;
+    }
+    await _review(option);
+  }
+
   Future<void> _review(AIAssistantCardOption option) async {
     if (_reviewing?.id == option.id) {
       setState(() {
@@ -1072,7 +1129,7 @@ class _AssistantActionCardState extends State<_AssistantActionCard> {
                                   '-${card.entityRef?.id ?? card.title}'
                                   '-${option.id}',
                                 ),
-                                onPressed: () => _review(option),
+                                onPressed: () => _choose(option),
                                 style: OutlinedButton.styleFrom(
                                   alignment: Alignment.centerLeft,
                                   padding: const EdgeInsets.symmetric(
@@ -1102,10 +1159,18 @@ class _AssistantActionCardState extends State<_AssistantActionCard> {
                                         ),
                                       ),
                                     ),
+                                    // El ícono promete lo que va a pasar. Un
+                                    // chevron dice «esto se despliega», y es
+                                    // cierto para la plantilla, que abre su
+                                    // previsualizado. Una continuación se
+                                    // ejecuta al tocar, así que un chevron ahí
+                                    // sería una promesa falsa.
                                     Icon(
-                                      _reviewing?.id == option.id
-                                          ? Icons.expand_less
-                                          : Icons.expand_more,
+                                      !_optionNeedsReview
+                                          ? Icons.arrow_forward_rounded
+                                          : _reviewing?.id == option.id
+                                              ? Icons.expand_less
+                                              : Icons.expand_more,
                                       size: 18,
                                       color: scheme.onSurfaceVariant,
                                     ),
@@ -1257,8 +1322,12 @@ class _ApprovalControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final stateLabel = switch (approval.state) {
+      // «Vence» a secas se leía como el vencimiento de la TAREA, que puede ser
+      // mañana, cuando en realidad expira la propuesta y le quedan minutos.
+      // Y en UTC: al taller le sobran cuatro horas de diferencia mentales para
+      // algo que se decide ahora. Se dice cuánto queda.
       AIAssistantApprovalState.pending =>
-        'Vence ${_formatUtcApprovalExpiry(approval.expiresAt)}',
+        _approvalCountdownLabel(approval.expiresAt),
       AIAssistantApprovalState.approved => switch (approval.action) {
           AIAssistantApprovalAction.createTask => 'Tarea creada',
           AIAssistantApprovalAction.updateDiagnosis =>
@@ -1380,9 +1449,16 @@ class _ApprovalControls extends StatelessWidget {
   }
 }
 
-String _formatUtcApprovalExpiry(DateTime value) {
-  final utc = value.toUtc();
-  String twoDigits(int part) => part.toString().padLeft(2, '0');
-  return '${utc.year}-${twoDigits(utc.month)}-${twoDigits(utc.day)} · '
-      '${twoDigits(utc.hour)}:${twoDigits(utc.minute)} UTC';
+/// Cuánto le queda a la PROPUESTA, no a lo que propone.
+///
+/// Una cuenta regresiva no necesita zona horaria ni fecha, y por eso no puede
+/// confundirse con la fecha de vencimiento de la tarea que está al lado.
+String _approvalCountdownLabel(DateTime value) {
+  final restante = value.toUtc().difference(DateTime.now().toUtc());
+  if (restante.isNegative) return 'Propuesta vencida';
+  final minutos = restante.inMinutes;
+  if (minutos < 1) return 'Confirma en menos de 1 min';
+  if (minutos < 60) return 'Confirma en $minutos min';
+  final horas = restante.inHours;
+  return 'Confirma en $horas ${horas == 1 ? 'hora' : 'horas'}';
 }

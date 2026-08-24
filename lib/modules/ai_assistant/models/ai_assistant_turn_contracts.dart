@@ -132,7 +132,13 @@ enum AIAssistantInventoryAvailability {
 
 /// One exact server-projected inventory result set.
 ///
-/// When [hasMore] is false, [entityIds] is the complete verified selection.
+/// [entityIds] son las filas que la búsqueda pudo entregar, y **viajan siempre**.
+/// Con [hasMore] en false son la selección completa; con true son las primeras
+/// de más. Antes llegaban nulas al truncarse y el cliente caía a buscar [query]
+/// como texto: la frase sólo funciona a través de la traducción de ficha que
+/// hace el servidor, así que mientras más acertaba la búsqueda, más vacía salía
+/// la lista. Una tarjeta guardada por la versión anterior sí puede traerlas
+/// nulas.
 /// A truncated result intentionally carries no ID list so the client cannot
 /// pretend that the first page is the full catalog result.
 @immutable

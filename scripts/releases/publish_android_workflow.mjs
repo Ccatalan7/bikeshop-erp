@@ -310,7 +310,7 @@ function expectedAndroidRunTitle(state) {
   return [
     "Android publish",
     state.headSha,
-    `notes ${state.releaseNotesCandidateSha256 || "fallback"}`,
+    `notes ${state.releaseNotesCandidateSha256 || "gemini"}`,
     `from ${state.releaseNotesFromCommit || "auto"}`,
     `integrity ${state.integrityRunId || "self"}`,
   ].join(" · ");

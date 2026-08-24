@@ -562,7 +562,11 @@ void main() {
       null,
       <String, Object?>{...base, 'availability': 'available-ish'},
       <String, Object?>{...base, 'resultCount': 2},
-      <String, Object?>{...base, 'hasMore': true},
+      // `hasMore: true` con ids ya NO es contradictorio: son las filas que se
+      // pudieron mostrar, y sin ellas la pantalla caía a buscar la frase como
+      // texto y abría una lista vacía. Lo que sigue siendo imposible es
+      // declarar la lista completa sin decir de cuáles filas se trata.
+      <String, Object?>{...base, 'entityIds': null},
       <String, Object?>{
         ...base,
         'entityIds': <String>['../../product']

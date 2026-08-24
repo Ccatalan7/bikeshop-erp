@@ -2077,3 +2077,657 @@ class SupplyNeedPredicate {
     );
   }
 }
+
+/// A quién le compramos un tipo de producto, según las facturas de compra.
+///
+/// No responde qué producto comprar: responde a **quién** se lo compramos, que
+/// es la pregunta que hace un trabajador sin experiencia cuando está solo en el
+/// local. La señal es la concentración del gasto aterrizado —con el flete ya
+/// prorrateado—, no la cobertura del catálogo: casi todos los proveedores
+/// tienen rayos, y sólo uno concentra las compras de rayos.
+///
+/// [evidencePurchaseLines] viaja con cada fila a propósito: un 57% sobre 17
+/// líneas y un 100% sobre 3 no son la misma conclusión, y la pantalla tiene que
+/// poder distinguirlas sin abrir nada.
+class SupplierConcentration {
+  const SupplierConcentration({
+    required this.supplierId,
+    required this.supplierName,
+    required this.spendSharePercent,
+    required this.purchaseLines,
+    required this.purchaseInvoices,
+    required this.distinctProducts,
+    required this.evidencePurchaseLines,
+    required this.evidenceSuppliers,
+    required this.scopeRelaxed,
+    required this.droppedWords,
+    required this.droppedFilters,
+    required this.averageLandedUnitCostNet,
+    this.averageBaseUnitCostNet,
+    required this.lastPurchaseAt,
+    required this.daysSinceLastPurchase,
+    required this.brands,
+    required this.gamaMix,
+    required this.supplierWebsite,
+    required this.supplierCity,
+    required this.salesRepName,
+    required this.salesRepPhone,
+    required this.salesRepEmail,
+    required this.hasPortalAccount,
+  });
+
+  final String supplierId;
+  final String supplierName;
+  final double spendSharePercent;
+  final int purchaseLines;
+  final int purchaseInvoices;
+  final int distinctProducts;
+  final int evidencePurchaseLines;
+  final int evidenceSuppliers;
+
+  /// El servidor tuvo que ensanchar la pregunta para poder contestarla.
+  ///
+  /// Presentar como literal un resultado que se ensanchó es exacto por dentro
+  /// y engañoso como respuesta: el operador creería que le hablamos de lo que
+  /// escribió.
+  final bool scopeRelaxed;
+
+  /// Palabras suyas que no aparecen en ningún producto del catálogo.
+  final String? droppedWords;
+
+  /// El filtro que hubo que soltar: la medida técnica, o la exigencia de que
+  /// estuvieran todas las palabras.
+  final String? droppedFilters;
+  final double? averageLandedUnitCostNet;
+
+  /// El mismo promedio **sin el flete prorrateado**: es lo que el proveedor
+  /// cobró. La pantalla elige cuál muestra y por defecto muestra éste, porque
+  /// es el que se cotiza con él.
+  final double? averageBaseUnitCostNet;
+  final DateTime? lastPurchaseAt;
+  final int? daysSinceLastPurchase;
+  final String? brands;
+  final String? gamaMix;
+  final String? supplierWebsite;
+  final String? supplierCity;
+  final String? salesRepName;
+  final String? salesRepPhone;
+  final String? salesRepEmail;
+  final bool hasPortalAccount;
+
+  factory SupplierConcentration.fromJson(Map<String, dynamic> json) {
+    double? number(Object? value) =>
+        value is num ? value.toDouble() : double.tryParse('${value ?? ''}');
+    int integer(Object? value) => number(value)?.round() ?? 0;
+    String? text(Object? value) {
+      final raw = value?.toString().trim();
+      return raw == null || raw.isEmpty ? null : raw;
+    }
+
+    return SupplierConcentration(
+      supplierId: json['entityId']?.toString() ?? '',
+      supplierName: text(json['supplierName']) ?? 'Proveedor',
+      spendSharePercent: number(json['spendSharePercent']) ?? 0,
+      purchaseLines: integer(json['purchaseLines']),
+      purchaseInvoices: integer(json['purchaseInvoices']),
+      distinctProducts: integer(json['distinctProducts']),
+      evidencePurchaseLines: integer(json['evidencePurchaseLines']),
+      evidenceSuppliers: integer(json['evidenceSuppliers']),
+      scopeRelaxed: json['scopeRelaxed'] == true,
+      droppedWords: text(json['droppedWords']),
+      droppedFilters: text(json['droppedFilters']),
+      averageLandedUnitCostNet: number(json['averageLandedUnitCostNet']),
+      averageBaseUnitCostNet: number(json['averageBaseUnitCostNet']),
+      lastPurchaseAt: DateTime.tryParse('${json['lastPurchaseAt'] ?? ''}'),
+      daysSinceLastPurchase: number(json['daysSinceLastPurchase'])?.round(),
+      brands: text(json['brands']),
+      gamaMix: text(json['gamaMix']),
+      supplierWebsite: text(json['supplierWebsite']),
+      supplierCity: text(json['supplierCity']),
+      salesRepName: text(json['salesRepName']),
+      salesRepPhone: text(json['salesRepPhone']),
+      salesRepEmail: text(json['salesRepEmail']),
+      hasPortalAccount: json['hasPortalAccount'] == true,
+    );
+  }
+
+  /// Qué se soltó para poder contestar, en las palabras del taller.
+  String? get widenedLabel {
+    if (!scopeRelaxed) return null;
+    if (droppedWords != null) {
+      return 'Sin «$droppedWords»: esa palabra no aparece en ningún producto';
+    }
+    if (droppedFilters != null) {
+      return 'Búsqueda ampliada: se soltó $droppedFilters';
+    }
+    return 'Búsqueda ampliada';
+  }
+
+  /// «hace 4 meses», no «138». El operador decide con la distancia.
+  String? get lastPurchaseLabel {
+    final days = daysSinceLastPurchase;
+    if (days == null || days < 0) return null;
+    if (days == 0) return 'hoy';
+    if (days == 1) return 'ayer';
+    if (days < 30) return 'hace $days días';
+    final months = (days / 30).round();
+    if (months < 12) return 'hace $months ${months == 1 ? 'mes' : 'meses'}';
+    final years = (days / 365).round();
+    return 'hace $years ${years == 1 ? 'año' : 'años'}';
+  }
+}
+
+/// El análisis completo, con la evidencia que lo sostiene.
+class SupplierConcentrationReport {
+  const SupplierConcentrationReport({
+    required this.items,
+    required this.hasMore,
+  });
+
+  final List<SupplierConcentration> items;
+  final bool hasMore;
+
+  bool get isEmpty => items.isEmpty;
+
+  /// Cuántas líneas de compra respaldan todo el análisis. Sale de la primera
+  /// fila porque el servidor la repite en todas: el sobre sólo admite sus
+  /// claves base.
+  int get evidencePurchaseLines =>
+      items.isEmpty ? 0 : items.first.evidencePurchaseLines;
+
+  int get supplierCount => items.isEmpty ? 0 : items.first.evidenceSuppliers;
+
+  factory SupplierConcentrationReport.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'];
+    return SupplierConcentrationReport(
+      items: raw is List
+          ? raw
+              .whereType<Map>()
+              .map((item) => SupplierConcentration.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ))
+              .toList(growable: false)
+          : const <SupplierConcentration>[],
+      hasMore: json['hasMore'] == true,
+    );
+  }
+}
+
+/// A quién le pedimos una LISTA completa, y si conviene repartirla.
+///
+/// La comparación de escenarios (`build_purchase_scenarios`) exige un producto
+/// confirmado en cada línea, que es justo lo que un trabajador sin experiencia
+/// no tiene: llega con «rayos 27.5, cámaras 29 y cadenas de 11v». Esta lectura
+/// contesta esa lista tal como la dijo, con el historial de compras.
+class BasketSupplierCoverage {
+  const BasketSupplierCoverage({
+    required this.supplierId,
+    required this.supplierName,
+    required this.coveredNeeds,
+    required this.totalNeeds,
+    required this.coveredList,
+    required this.missingList,
+    required this.complementSupplierName,
+    required this.complementCoversList,
+    required this.averageSharePercent,
+    required this.daysSinceLastPurchase,
+    required this.brands,
+    required this.supplierWebsite,
+    required this.supplierCity,
+    required this.hasPortalAccount,
+  });
+
+  final String supplierId;
+  final String supplierName;
+  final int coveredNeeds;
+  final int totalNeeds;
+  final String? coveredList;
+
+  /// Lo que este proveedor NO cubre. Sólo la fila de rango 1 lo trae: es su
+  /// decisión de reparto, no un dato del resto.
+  final String? missingList;
+
+  /// Quién completa lo que le falta al principal. Nulo cuando nadie lo cubre,
+  /// y entonces se dice eso y no se inventa un proveedor.
+  final String? complementSupplierName;
+  final String? complementCoversList;
+  final double averageSharePercent;
+  final int? daysSinceLastPurchase;
+  final String? brands;
+  final String? supplierWebsite;
+  final String? supplierCity;
+  final bool hasPortalAccount;
+
+  bool get coversEverything => totalNeeds > 0 && coveredNeeds >= totalNeeds;
+
+  factory BasketSupplierCoverage.fromJson(Map<String, dynamic> json) {
+    double? number(Object? value) =>
+        value is num ? value.toDouble() : double.tryParse('${value ?? ''}');
+    String? text(Object? value) {
+      final raw = value?.toString().trim();
+      return raw == null || raw.isEmpty ? null : raw;
+    }
+
+    return BasketSupplierCoverage(
+      supplierId: json['entityId']?.toString() ?? '',
+      supplierName: text(json['supplierName']) ?? 'Proveedor',
+      coveredNeeds: number(json['coveredNeeds'])?.round() ?? 0,
+      totalNeeds: number(json['totalNeeds'])?.round() ?? 0,
+      coveredList: text(json['coveredList']),
+      missingList: text(json['missingList']),
+      complementSupplierName: text(json['complementSupplierName']),
+      complementCoversList: text(json['complementCoversList']),
+      averageSharePercent: number(json['averageSharePercent']) ?? 0,
+      daysSinceLastPurchase: number(json['daysSinceLastPurchase'])?.round(),
+      brands: text(json['brands']),
+      supplierWebsite: text(json['supplierWebsite']),
+      supplierCity: text(json['supplierCity']),
+      hasPortalAccount: json['hasPortalAccount'] == true,
+    );
+  }
+}
+
+class BasketCoverageReport {
+  const BasketCoverageReport({required this.items});
+
+  final List<BasketSupplierCoverage> items;
+
+  bool get isEmpty => items.isEmpty;
+
+  BasketSupplierCoverage? get leader => items.isEmpty ? null : items.first;
+
+  factory BasketCoverageReport.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'];
+    return BasketCoverageReport(
+      items: raw is List
+          ? raw
+              .whereType<Map>()
+              .map((item) => BasketSupplierCoverage.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ))
+              .toList(growable: false)
+          : const <BasketSupplierCoverage>[],
+    );
+  }
+}
+
+/// Una compra concreta que respalda el puesto de un proveedor.
+class SupplierEvidencePurchase {
+  const SupplierEvidencePurchase({
+    required this.productName,
+    required this.productSku,
+    required this.brand,
+    required this.quantity,
+    required this.landedUnitCostNet,
+    required this.invoiceNumber,
+    required this.purchaseDate,
+    required this.categoryPath,
+  });
+
+  final String productName;
+  final String? productSku;
+  final String? brand;
+  final double? quantity;
+  final double? landedUnitCostNet;
+  final String? invoiceNumber;
+  final DateTime? purchaseDate;
+  final String? categoryPath;
+
+  factory SupplierEvidencePurchase.fromJson(Map<String, dynamic> json) =>
+      SupplierEvidencePurchase(
+        productName: _evidenceText(json['productName']) ?? 'Producto',
+        productSku: _evidenceText(json['productSku']),
+        brand: _evidenceText(json['brand']),
+        quantity: _evidenceNumber(json['quantity']),
+        landedUnitCostNet: _evidenceNumber(json['landedUnitCostNet']),
+        invoiceNumber: _evidenceText(json['invoiceNumber']),
+        purchaseDate: DateTime.tryParse('${json['purchaseDate'] ?? ''}'),
+        categoryPath: _evidenceText(json['categoryPath']),
+      );
+}
+
+/// Un producto catalogado de ese proveedor, cuando NO hay compra que mostrar.
+///
+/// Es otra cosa que una compra y se rotula como otra cosa: no entra al
+/// historial ni al puntaje.
+class SupplierEvidenceCatalogItem {
+  const SupplierEvidenceCatalogItem({
+    required this.productName,
+    required this.productSku,
+    required this.brand,
+    required this.stock,
+    required this.costNet,
+  });
+
+  final String productName;
+  final String? productSku;
+  final String? brand;
+  final double? stock;
+  final double? costNet;
+
+  factory SupplierEvidenceCatalogItem.fromJson(Map<String, dynamic> json) =>
+      SupplierEvidenceCatalogItem(
+        productName: _evidenceText(json['productName']) ?? 'Producto',
+        productSku: _evidenceText(json['productSku']),
+        brand: _evidenceText(json['brand']),
+        stock: _evidenceNumber(json['stock']),
+        costNet: _evidenceNumber(json['costNet']),
+      );
+}
+
+/// Lo que respalda a un proveedor para UNA línea de la petición.
+class SupplierEvidenceNeed {
+  const SupplierEvidenceNeed({
+    required this.need,
+    required this.purchases,
+    required this.catalog,
+  });
+
+  final String need;
+  final List<SupplierEvidencePurchase> purchases;
+  final List<SupplierEvidenceCatalogItem> catalog;
+
+  bool get hasPurchases => purchases.isNotEmpty;
+
+  factory SupplierEvidenceNeed.fromJson(Map<String, dynamic> json) {
+    List<T> parse<T>(Object? raw, T Function(Map<String, dynamic>) build) =>
+        raw is List
+            ? raw
+                .whereType<Map>()
+                .map((item) => build(Map<String, dynamic>.from(item)))
+                .toList(growable: false)
+            : <T>[];
+    return SupplierEvidenceNeed(
+      need: _evidenceText(json['need']) ?? '',
+      purchases: parse(json['purchases'], SupplierEvidencePurchase.fromJson),
+      catalog: parse(json['catalog'], SupplierEvidenceCatalogItem.fromJson),
+    );
+  }
+}
+
+/// **Por qué este proveedor quedó donde quedó.**
+///
+/// El ranking afirma un porcentaje; esto lo demuestra. Mira exactamente los
+/// mismos productos que el ranking —usa el mismo resolvedor de la frase—, así
+/// que el número de arriba y las compras de abajo hablan del mismo conjunto.
+class SupplierEvidence {
+  const SupplierEvidence({
+    required this.supplierName,
+    required this.needs,
+    required this.purchaseLines,
+    required this.purchaseInvoices,
+    required this.distinctProducts,
+    required this.purchasedUnits,
+    required this.landedSpendNet,
+    required this.averageLandedUnitCostNet,
+    required this.firstPurchaseAt,
+    required this.lastPurchaseAt,
+    required this.spendSharePercent,
+    required this.unitsSharePercent,
+    required this.totalPurchaseLines,
+    required this.totalSuppliers,
+  });
+
+  final String supplierName;
+  final List<SupplierEvidenceNeed> needs;
+  final int purchaseLines;
+  final int purchaseInvoices;
+  final int distinctProducts;
+  final double purchasedUnits;
+  final double landedSpendNet;
+  final double? averageLandedUnitCostNet;
+  final DateTime? firstPurchaseAt;
+  final DateTime? lastPurchaseAt;
+  final double spendSharePercent;
+  final double unitsSharePercent;
+  final int totalPurchaseLines;
+  final int totalSuppliers;
+
+  bool get hasAnyPurchase => purchaseLines > 0;
+
+  factory SupplierEvidence.fromJson(Map<String, dynamic> json) {
+    final metrics = json['metrics'] is Map
+        ? Map<String, dynamic>.from(json['metrics'] as Map)
+        : <String, dynamic>{};
+    final supplier = json['supplier'] is Map
+        ? Map<String, dynamic>.from(json['supplier'] as Map)
+        : <String, dynamic>{};
+    final rawNeeds = json['needs'];
+    return SupplierEvidence(
+      supplierName: _evidenceText(supplier['name']) ?? 'Proveedor',
+      needs: rawNeeds is List
+          ? rawNeeds
+              .whereType<Map>()
+              .map((item) => SupplierEvidenceNeed.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ))
+              .toList(growable: false)
+          : const <SupplierEvidenceNeed>[],
+      purchaseLines: _evidenceNumber(metrics['purchaseLines'])?.round() ?? 0,
+      purchaseInvoices:
+          _evidenceNumber(metrics['purchaseInvoices'])?.round() ?? 0,
+      distinctProducts:
+          _evidenceNumber(metrics['distinctProducts'])?.round() ?? 0,
+      purchasedUnits: _evidenceNumber(metrics['purchasedUnits']) ?? 0,
+      landedSpendNet: _evidenceNumber(metrics['landedSpendNet']) ?? 0,
+      averageLandedUnitCostNet:
+          _evidenceNumber(metrics['averageLandedUnitCostNet']),
+      firstPurchaseAt: DateTime.tryParse('${metrics['firstPurchaseAt'] ?? ''}'),
+      lastPurchaseAt: DateTime.tryParse('${metrics['lastPurchaseAt'] ?? ''}'),
+      spendSharePercent: _evidenceNumber(metrics['spendSharePercent']) ?? 0,
+      unitsSharePercent: _evidenceNumber(metrics['unitsSharePercent']) ?? 0,
+      totalPurchaseLines:
+          _evidenceNumber(metrics['totalPurchaseLines'])?.round() ?? 0,
+      totalSuppliers: _evidenceNumber(metrics['totalSuppliers'])?.round() ?? 0,
+    );
+  }
+}
+
+double? _evidenceNumber(Object? value) =>
+    value is num ? value.toDouble() : double.tryParse('${value ?? ''}');
+
+String? _evidenceText(Object? value) {
+  final raw = value?.toString().trim();
+  return raw == null || raw.isEmpty ? null : raw;
+}
+
+/// Lo que hay en bodega que se parece a lo que el operador pidió.
+///
+/// La lectura exacta (`get_supply_need_inventory_snapshot_v1`) exige un producto
+/// confirmado y, sin él, devuelve `identity_unresolved` con cero componentes —
+/// aunque el taller tenga siete unidades de justo eso. Esta lectura responde la
+/// DESCRIPCIÓN, que es lo que el trabajador trae.
+class StockCandidate {
+  const StockCandidate({
+    required this.productId,
+    required this.name,
+    required this.sku,
+    required this.brand,
+    required this.category,
+    required this.available,
+    required this.tracksInventory,
+    required this.priceGross,
+    required this.costNet,
+  });
+
+  final String productId;
+  final String name;
+  final String? sku;
+  final String? brand;
+  final String? category;
+  final double available;
+  final bool tracksInventory;
+  final double? priceGross;
+  final double? costNet;
+
+  bool get hasStock => available > 0;
+
+  factory StockCandidate.fromJson(Map<String, dynamic> json) => StockCandidate(
+        productId: json['productId']?.toString() ?? '',
+        name: _evidenceText(json['name']) ?? 'Producto',
+        sku: _evidenceText(json['sku']),
+        brand: _evidenceText(json['brand']),
+        category: _evidenceText(json['category']),
+        available: _evidenceNumber(json['available']) ?? 0,
+        tracksInventory: json['tracksInventory'] == true,
+        priceGross: _evidenceNumber(json['priceGross']),
+        costNet: _evidenceNumber(json['costNet']),
+      );
+}
+
+class StockCandidateReport {
+  const StockCandidateReport({
+    required this.items,
+    required this.totalMatches,
+    required this.droppedWords,
+    required this.droppedFilters,
+  });
+
+  final List<StockCandidate> items;
+  final int totalMatches;
+  final String? droppedWords;
+  final String? droppedFilters;
+
+  bool get isEmpty => items.isEmpty;
+  int get withStock => items.where((item) => item.hasStock).length;
+
+  /// Qué se soltó para poder contestar. Presentar como literal un resultado
+  /// ensanchado es exacto por dentro y engañoso como respuesta.
+  String? get widenedLabel {
+    if (droppedWords != null) {
+      return 'Sin «$droppedWords»: esa palabra no aparece en ningún producto';
+    }
+    if (droppedFilters != null) {
+      return 'Búsqueda ampliada: se soltó $droppedFilters';
+    }
+    return null;
+  }
+
+  factory StockCandidateReport.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'];
+    return StockCandidateReport(
+      items: raw is List
+          ? raw
+              .whereType<Map>()
+              .map((item) =>
+                  StockCandidate.fromJson(Map<String, dynamic>.from(item)))
+              .toList(growable: false)
+          : const <StockCandidate>[],
+      totalMatches: _evidenceNumber(json['totalMatches'])?.round() ?? 0,
+      droppedWords: _evidenceText(json['droppedWords']),
+      droppedFilters: _evidenceText(json['droppedFilters']),
+    );
+  }
+}
+
+/// Lo que el portal del proveedor contestó la última vez.
+///
+/// Convive con el historial de compras y no lo reemplaza: el historial dice a
+/// quién le compramos esto, y esto dice qué contestó hoy su portal.
+class SupplierConfirmedAvailability {
+  const SupplierConfirmedAvailability({
+    required this.checked,
+    required this.available,
+    required this.outOfStock,
+    required this.notFound,
+    required this.inconclusive,
+    required this.lastCheckedAt,
+    required this.sharpestDriftPercent,
+    required this.sharpestDriftName,
+    this.sweptProducts = 0,
+    this.sweptAvailable = 0,
+  });
+
+  final int checked;
+  final int available;
+  final int outOfStock;
+  final int notFound;
+
+  /// Sesión caída o página ilegible. Se cuenta aparte porque una corrida que
+  /// no concluyó no es una corrida con resultados.
+  final int inconclusive;
+  final DateTime? lastCheckedAt;
+
+  /// La variación de precio más fuerte contra nuestro costo. Es la razón por
+  /// la que un operador mira esto: un 18% arriba cambia a quién le pide.
+  final double? sharpestDriftPercent;
+  final String? sharpestDriftName;
+
+  /// El barrido de reposición del proveedor, **aparte del recuento de la
+  /// fila**. Son dos preguntas distintas: la fila pregunta si tiene lo que
+  /// ando buscando; el barrido, qué le conviene reponer al taller. Publicar el
+  /// segundo en la celda del primero fue lo que dejó un «12 de 12» sin ningún
+  /// referente en pantalla.
+  final int sweptProducts;
+  final int sweptAvailable;
+
+  bool get isEmpty => checked == 0;
+
+  /// Se le consultó al portal, pero nada de esta línea. No es lo mismo que
+  /// «nunca se consultó», y decir lo segundo empuja a repetir un chequeo que
+  /// no va a contestar la pregunta.
+  bool get sweptButNotThis => checked == 0 && sweptProducts > 0;
+
+  /// Lo que va en la celda «Confirmado» de la fila.
+  ///
+  /// **Con un solo producto la respuesta es sí o no, no una fracción.** «1 de
+  /// 1» es un número sin referente, y la pregunta de la columna es si el
+  /// proveedor tiene lo que se está buscando. Con varios, la fracción sí
+  /// compara entre proveedores.
+  String? get rowLabel {
+    if (checked == 0) return null;
+    if (checked == 1) {
+      if (available == 1) return 'Sí';
+      if (outOfStock == 1) return 'Sin stock';
+      if (notFound == 1) return 'No estaba';
+      return 'Sin concluir';
+    }
+    return '$available de $checked';
+  }
+
+  /// «hace 3 min». Un dato de disponibilidad sin su antigüedad no sirve: a las
+  /// dos horas ya es historia, no confirmación.
+  String? get ageLabel {
+    final at = lastCheckedAt;
+    if (at == null) return null;
+    final minutes = DateTime.now().difference(at).inMinutes;
+    if (minutes < 1) return 'recién';
+    if (minutes < 60) return 'hace $minutes min';
+    final hours = (minutes / 60).round();
+    if (hours < 24) return 'hace $hours ${hours == 1 ? 'hora' : 'horas'}';
+    final days = (minutes / 1440).round();
+    return 'hace $days ${days == 1 ? 'día' : 'días'}';
+  }
+
+  factory SupplierConfirmedAvailability.fromJson(Map<String, dynamic> json) {
+    final summary = json['summary'] is Map
+        ? Map<String, dynamic>.from(json['summary'] as Map)
+        : <String, dynamic>{};
+    final raw = json['items'];
+    double? sharpest;
+    String? sharpestName;
+    if (raw is List) {
+      for (final entry in raw.whereType<Map>()) {
+        final item = Map<String, dynamic>.from(entry);
+        final drift = _evidenceNumber(item['driftPercent']);
+        if (drift == null) continue;
+        if (sharpest == null || drift.abs() > sharpest.abs()) {
+          sharpest = drift;
+          sharpestName = _evidenceText(item['name']);
+        }
+      }
+    }
+    return SupplierConfirmedAvailability(
+      checked: _evidenceNumber(summary['checked'])?.round() ?? 0,
+      available: _evidenceNumber(summary['available'])?.round() ?? 0,
+      sweptProducts: _evidenceNumber(summary['sweptProducts'])?.round() ?? 0,
+      sweptAvailable: _evidenceNumber(summary['sweptAvailable'])?.round() ?? 0,
+      outOfStock: _evidenceNumber(summary['outOfStock'])?.round() ?? 0,
+      notFound: _evidenceNumber(summary['notFound'])?.round() ?? 0,
+      inconclusive: _evidenceNumber(summary['inconclusive'])?.round() ?? 0,
+      lastCheckedAt: DateTime.tryParse('${summary['lastCheckedAt'] ?? ''}'),
+      sharpestDriftPercent: sharpest,
+      sharpestDriftName: sharpestName,
+    );
+  }
+}

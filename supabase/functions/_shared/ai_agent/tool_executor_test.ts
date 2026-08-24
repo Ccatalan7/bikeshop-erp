@@ -18,6 +18,16 @@ const authority: AgentAuthority = {
   authorityFingerprint: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 };
 
+function assertThrows(run: () => void, expected: new (...args: never[]) => Error): void {
+  try {
+    run();
+  } catch (error) {
+    if (error instanceof expected) return;
+    throw new Error(`se esperaba ${expected.name} y llegó ${String(error)}`);
+  }
+  throw new Error(`se esperaba ${expected.name} y no falló`);
+}
+
 function assertEquals(actual: unknown, expected: unknown, message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(`${message}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
@@ -311,6 +321,9 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
         brand: "Shimano",
         category: "Transmisión",
         price: 12000,
+        cost: 6000,
+        marginPercent: 50,
+        soldRecently: 0,
         stock: 3,
         minimumStock: 1,
         availability: "in_stock",
@@ -322,6 +335,8 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
         trackedCount: 1,
         totalStock: 3,
         inventoryRetailValue: 36000,
+        inventoryCostValue: 0,
+        costedCount: 0,
         averagePrice: 12000,
         minimumPrice: 12000,
         maximumPrice: 12000,
@@ -365,6 +380,201 @@ Deno.test("server entity IDs remain available for cards but never enter model ou
     "verified tenant field is not model-visible",
   );
   assertEquals(execution.outputText.includes(tenantId), false, "tenant UUID is not model-visible");
+});
+
+Deno.test("los neutros se deducen del esquema, y `null` es uno de ellos", () => {
+  const registry = createDefaultAgentToolRegistry();
+
+  // «¿Qué se me está acabando?» no trae término de búsqueda. Antes moría por
+  // «falta query»; el neutro de un campo nullable es `null`, y una versión de
+  // esta derivación lo perdía por usar `??`, que trata `null` como ausencia.
+  registry.validateProviderCalls([{
+    id: "riesgo-sin-nada",
+    name: "find_inventory_risks",
+    arguments: {} as JsonObject,
+  }], authority);
+
+  // Pero `analyze_sales_period.basis` NO tiene neutro: elegir entre lo emitido
+  // y lo cobrado es la pregunta, no una formalidad. Debe seguir rechazándose.
+  assertThrows(
+    () =>
+      registry.validateProviderCalls([{
+        id: "ventas-sin-base",
+        name: "analyze_sales_period",
+        arguments: { relativePeriod: "this_month" } as JsonObject,
+      }], authority),
+    ToolRegistryError,
+  );
+});
+
+Deno.test("la gama se entiende como la dice el taller y nunca mata la línea", () => {
+  const registry = createDefaultAgentToolRegistry();
+
+  // Una línea con lo mínimo: qué y cuántos. Los otros nueve campos que el
+  // esquema exige son formalidades con neutro obvio, y exigirlos era la causa
+  // principal de que el Asistente de compras fallara.
+  registry.validateProviderCalls([{
+    id: "compra-minima",
+    name: "prepare_supply_request",
+    arguments: {
+      items: [{ description: "Rayos 27,5", quantity: 1 }],
+    } as JsonObject,
+  }], authority);
+
+  // Y el objetivo comercial se CONSIDERA, no se exige: sin él la petición vale.
+  registry.validateProviderCalls([{
+    id: "compra-sin-objetivo",
+    name: "prepare_supply_request",
+    arguments: {
+      items: [{ description: "Neumáticos 29", quantity: 2 }],
+      profile: "profitability",
+    } as JsonObject,
+  }], authority);
+});
+
+Deno.test("omitir un campo mecánico no cuesta una ronda del turno", () => {
+  const registry = createDefaultAgentToolRegistry();
+  // Lo que el modelo realmente decide. El esquema pide nueve campos —el repo
+  // exige que toda propiedad sea obligatoria—, y medido el 2026-08-22 una de
+  // cada dos búsquedas se rechazaba por olvidar uno de los mecánicos. Como
+  // cada rechazo gasta una de las cinco rondas, el turno moría en
+  // `agent_budget_exhausted` sin responder.
+  registry.validateProviderCalls([{
+    id: "buscar",
+    name: "search_inventory",
+    arguments: {
+      query: "camara 29",
+      category: null,
+      availability: "in_stock",
+      presentation: "open_list",
+    },
+  }], authority);
+
+  // Errores de FORMA con una sola lectura posible: se reparan.
+  for (
+    const forma of [
+      { sort: "relevance" },
+      { limit: "10" },
+      { technicalPredicates: [{ field: "wheel_size", operator: "eq", value: "29" }] },
+      { technicalPredicates: [{ field: "wheel_size", operator: "eq", values: "29" }] },
+      { technicalPredicates: [{ field: "wheel_size", operator: "eq", values: [] }] },
+      { query: "" },
+    ] as JsonObject[]
+  ) {
+    registry.validateProviderCalls([{
+      id: `forma-${JSON.stringify(forma).length}`,
+      name: "search_inventory",
+      arguments: {
+        query: "camara 29",
+        category: null,
+        availability: "in_stock",
+        presentation: "open_list",
+        ...forma,
+      } as JsonObject,
+    }], authority);
+  }
+
+  // La cadena vacía es «sin filtro» en cualquier búsqueda, no sólo en
+  // inventario: el mismo rechazo apareció en `search_sales_invoices`.
+  // Una búsqueda simple sólo necesita decir QUÉ se busca: el tope y el «sin
+  // filtro» los pone el servidor. Medido: `search_sales_invoices` moría por
+  // «falta limit» en una batería donde todo lo demás pasaba.
+  for (
+    const forma of [
+      { query: "", limit: 5 },
+      { query: "vencidas" },
+      { limit: 5 },
+      {},
+    ] as JsonObject[]
+  ) {
+    registry.validateProviderCalls([{
+      id: `ventas-${JSON.stringify(forma).length}`,
+      name: "search_sales_invoices",
+      arguments: forma,
+    }], authority);
+  }
+
+  // Pero una clave inventada sigue siendo rechazo: el modelo estaría pidiendo
+  // un filtro que la herramienta no tiene, y silenciarlo daría una respuesta
+  // más amplia que la pedida sin decirlo.
+  assertThrows(
+    () =>
+      registry.validateProviderCalls([{
+        id: "ventas-clave-inventada",
+        name: "search_sales_invoices",
+        arguments: { query: null, limit: 5, status: "overdue" } as JsonObject,
+      }], authority),
+    ToolRegistryError,
+  );
+
+  // Salvo donde la consulta es obligatoria: ahí una cadena vacía es un error.
+  assertThrows(
+    () =>
+      registry.validateProviderCalls([{
+        id: "ficha-sin-consulta",
+        name: "inspect_inventory_schema",
+        arguments: { query: "", category: null } as JsonObject,
+      }], authority),
+    ToolRegistryError,
+  );
+
+  // Errores de VOCABULARIO: repararlos sería inventar una intención que el
+  // operador no expresó, así que siguen siendo rechazo.
+  for (
+    const vocabulario of [
+      { availability: "stock" },
+      { selectionMode: "all" },
+      { presentation: "list" },
+      { technicalPredicates: [{ field: "wheel_size", operator: "like", values: ["29"] }] },
+    ] as JsonObject[]
+  ) {
+    assertThrows(
+      () =>
+        registry.validateProviderCalls([{
+          id: "vocabulario",
+          name: "search_inventory",
+          arguments: {
+            query: "camara 29",
+            category: null,
+            availability: "in_stock",
+            presentation: "open_list",
+            ...vocabulario,
+          } as JsonObject,
+        }], authority),
+      ToolRegistryError,
+    );
+  }
+
+  // Lo que sí sigue siendo un rechazo: una clave desconocida y un valor malo.
+  assertThrows(
+    () =>
+      registry.validateProviderCalls([{
+        id: "clave-inventada",
+        name: "search_inventory",
+        arguments: {
+          query: "camara 29",
+          category: null,
+          availability: "in_stock",
+          presentation: "open_list",
+          inventado: true,
+        },
+      }], authority),
+    ToolRegistryError,
+  );
+  assertThrows(
+    () =>
+      registry.validateProviderCalls([{
+        id: "valor-malo",
+        name: "search_inventory",
+        arguments: {
+          query: "camara 29",
+          category: null,
+          availability: "cuando_quiera",
+          presentation: "open_list",
+        },
+      }], authority),
+    ToolRegistryError,
+  );
 });
 
 Deno.test("purchase ranking is closed, caller-scoped and projected without internal IDs", async () => {
@@ -894,6 +1104,9 @@ Deno.test("inventory availability is mapped before limit and revalidated after t
     brand: null,
     category: "Camaras",
     price: 7000,
+    cost: 3500,
+    marginPercent: 50,
+    soldRecently: 0,
     stock: 0,
     minimumStock: 2,
     availability: "out_of_stock",
@@ -905,6 +1118,8 @@ Deno.test("inventory availability is mapped before limit and revalidated after t
     trackedCount: 1,
     totalStock: 0,
     inventoryRetailValue: 0,
+    inventoryCostValue: 0,
+    costedCount: 0,
     averagePrice: 7000,
     minimumPrice: 7000,
     maximumPrice: 7000,
@@ -995,6 +1210,9 @@ Deno.test("inventory operational thresholds are typed, mapped and revalidated", 
         brand: null,
         category: "Camaras",
         price: 7000,
+        cost: 3500,
+        marginPercent: 50,
+        soldRecently: 0,
         stock: returnedStock,
         minimumStock: 2,
         availability: "in_stock",
@@ -1006,6 +1224,8 @@ Deno.test("inventory operational thresholds are typed, mapped and revalidated", 
         trackedCount: 1,
         totalStock: returnedStock,
         inventoryRetailValue: Math.max(returnedStock, 0) * 7000,
+        inventoryCostValue: Math.max(returnedStock, 0) * 3500,
+        costedCount: 1,
         averagePrice: 7000,
         minimumPrice: 7000,
         maximumPrice: 7000,
@@ -1077,6 +1297,9 @@ Deno.test("inventory top-N order and full-set metrics are server-validated", asy
     brand: null,
     category: "Camaras",
     price: 7000,
+    cost: 3500,
+    marginPercent: 50,
+    soldRecently: 0,
     stock,
     minimumStock: 1,
     availability: "in_stock",
@@ -1088,6 +1311,8 @@ Deno.test("inventory top-N order and full-set metrics are server-validated", asy
     trackedCount: 3,
     totalStock: 15,
     inventoryRetailValue: 105000,
+    inventoryCostValue: 0,
+    costedCount: 0,
     averagePrice: 7000,
     minimumPrice: 7000,
     maximumPrice: 7000,
@@ -1126,6 +1351,8 @@ Deno.test("inventory top-N order and full-set metrics are server-validated", asy
       trackedCount: 2,
       totalStock: 9,
       inventoryRetailValue: 63000,
+      inventoryCostValue: 0,
+      costedCount: 0,
     },
     {
       ...row("88888888-8888-4888-8888-888888888888", 7),
@@ -1133,6 +1360,8 @@ Deno.test("inventory top-N order and full-set metrics are server-validated", asy
       trackedCount: 2,
       totalStock: 9,
       inventoryRetailValue: 63000,
+      inventoryCostValue: 0,
+      costedCount: 0,
     },
   ];
   const invalidOrder = await executor.execute(
@@ -1590,6 +1819,9 @@ Deno.test("public research is conditionally advertised and executes outside ERP 
     "items",
     "resultCount",
     "status",
+    // `totalMatches` es del ERP, no del proveedor: dice cuántas coincidencias
+    // hay más allá del tope. La lista que ve el modelo sigue siendo cerrada.
+    "totalMatches",
   ], "model-visible research envelope has no provider or legacy metadata");
   assertEquals(Object.keys(modelOutput.items[0]).sort(), [
     "publishedAt",
@@ -2684,4 +2916,367 @@ Deno.test("cash summary cannot contradict returned receivables or requested limi
     false,
     "negative or zero-success aggregates fail closed",
   );
+});
+
+Deno.test("supplier history answers by phrase and never by an empty scope", async () => {
+  const seen: JsonObject[] = [];
+  const client: AgentRpcClient = {
+    rpc(_name, parameters) {
+      seen.push(parameters);
+      return Promise.resolve({
+        authorityTenantId: tenantId,
+        asOf: "2026-08-23T06:00:00Z",
+        status: "success",
+        items: [{
+          entityId: "d6214c93-8405-4039-b0ae-4e36d1949ce2",
+          rank: 1,
+          supplierName: "Derman",
+          spendSharePercent: 57.4,
+          landedSpendNet: 62480,
+          purchaseLines: 7,
+          purchaseInvoices: 3,
+          distinctProducts: 7,
+          purchasedUnits: 8,
+          // Espejo EXACTO de lo que publica la RPC en producción. Antes esta
+          // fila se escribía copiando la lista de campos del ejecutor, así que
+          // no podía detectar jamás una divergencia entre el validador y su
+          // fuente: la prueba quedó verde mientras la herramienta fallaba
+          // siempre en producción por esta clave de más.
+          averageBaseUnitCostNet: 7370,
+          averageLandedUnitCostNet: 7810,
+          lastPurchaseAt: "2026-04-07T04:00:00Z",
+          daysSinceLastPurchase: 138,
+          brands: null,
+          gamaMix: "sin banda 7",
+          requestedGamaLines: 0,
+          supplierWebsite: "https://derman.cl/",
+          hasPortalAccount: true,
+          supplierCity: "Santiago",
+          salesRepName: null,
+          salesRepPhone: "+56 9 2749 7948",
+          salesRepEmail: "ventas@derman.cl",
+          scopeRelaxed: false,
+          droppedWords: null,
+          droppedFilters: null,
+          evidencePurchaseLines: 17,
+          evidenceSuppliers: 4,
+          evidenceProductsMatched: 17,
+          concentrationScore: 0.574524,
+          supplierAvailability: "unverified",
+        }],
+        resultCount: 1,
+        hasMore: false,
+        totalMatches: 4,
+      } as unknown as JsonObject);
+    },
+  };
+  const executor = createSupabaseAgentToolExecutor(client);
+  // La frase del operador viaja COMPLETA. Descomponerla es lo que rompía el
+  // módulo: «gama media» no es el nombre de ningún producto, pero sí es una
+  // banda que el servidor sabe leer.
+  const execution = await executor.execute({
+    id: "provs",
+    name: "rank_purchase_suppliers",
+    arguments: {
+      query: "neumáticos 29 de gama media y alta",
+      category: null,
+      brand: null,
+      limit: 5,
+    },
+  }, authority, new AbortController().signal);
+  assertEquals(execution.succeeded, true, "the supplier analysis runs");
+  assertEquals(
+    seen[0].p_query,
+    "neumáticos 29 de gama media y alta",
+    "the operator phrase travels whole",
+  );
+  assertEquals(seen[0].p_limit, 5, "the cap matches the receipt contract");
+  // La evidencia llega al modelo: un 57% sobre 17 líneas y uno sobre 3 no son
+  // la misma respuesta, y sin este campo las presenta igual.
+  assertEquals(
+    execution.outputText.includes("evidencePurchaseLines"),
+    true,
+    "the evidence behind the share reaches the model",
+  );
+  assertEquals(
+    execution.outputText.includes(tenantId),
+    false,
+    "tenant UUID is not model-visible",
+  );
+  // El eje por defecto es «sin flete», así que el costo base es el comparable
+  // entre proveedores y tiene que llegar al modelo.
+  assertEquals(
+    execution.outputText.includes("averageBaseUnitCostNet"),
+    true,
+    "the base cost — the axis the operator compares on — reaches the model",
+  );
+
+  // Sin nada que acotar, la pregunta sería «a quién le compramos todo»: eso
+  // devuelve el ranking completo de proveedores disfrazado de análisis.
+  let rejectedEmptyScope = false;
+  await executor.execute({
+    id: "vacio",
+    name: "rank_purchase_suppliers",
+    arguments: { query: null, category: null, brand: null, limit: 5 },
+  }, authority, new AbortController().signal).then(
+    (result) => {
+      rejectedEmptyScope = !result.succeeded;
+    },
+    () => {
+      rejectedEmptyScope = true;
+    },
+  );
+  assertEquals(rejectedEmptyScope, true, "an unbounded scope is refused");
+});
+
+Deno.test("una lista se resuelve en UNA llamada, y trae la decisión de repartir", async () => {
+  // Medido en producción: pedir tres cosas hacía que el modelo llamara la
+  // herramienta de una frase tres veces, y la corrida moría con
+  // `agent_budget_exhausted` a los 38,7 s sin llegar a redactar la respuesta.
+  const seen: JsonObject[] = [];
+  const client: AgentRpcClient = {
+    rpc(_name, parameters) {
+      seen.push(parameters);
+      return Promise.resolve({
+        authorityTenantId: tenantId,
+        asOf: "2026-08-23T07:44:00Z",
+        status: "success",
+        items: [{
+          entityId: "b33660dc-c38a-4a2d-833f-607bc2b0c2ae",
+          rank: 1,
+          supplierName: "AliExpress",
+          coveredNeeds: 2,
+          totalNeeds: 4,
+          coveredList: "liquido sellante tubeless, pastillas de freno shimano",
+          missingList: "neumaticos 29 de gama media, rayos 27.5",
+          complementSupplierName: "Derman",
+          complementCoversList: "rayos 27.5",
+          averageSharePercent: 40.3,
+          landedSpendNet: 83612.73,
+          lastPurchaseAt: "2026-06-23T04:00:00Z",
+          daysSinceLastPurchase: 61,
+          brands: "KMC, RBX",
+          supplierWebsite: "https://portal.rburgos.cl/",
+          hasPortalAccount: true,
+          supplierCity: "Santiago",
+          salesRepPhone: "+56988182352",
+          salesRepEmail: "rburgos@rburgos.cl",
+          supplierAvailability: "unverified",
+        }],
+        resultCount: 1,
+        hasMore: false,
+        totalMatches: 3,
+      } as unknown as JsonObject);
+    },
+  };
+  const executor = createSupabaseAgentToolExecutor(client);
+  const execution = await executor.execute({
+    id: "canasta",
+    name: "rank_basket_suppliers",
+    arguments: {
+      queries: ["rayos 27.5", "camaras 29", "cadenas de 11 velocidades"],
+      limit: 3,
+    },
+  }, authority, new AbortController().signal);
+  assertEquals(execution.succeeded, true, "the basket resolves in one call");
+  assertEquals(
+    (seen[0].p_queries as string[]).length,
+    3,
+    "the three lines travel together",
+  );
+  // La decisión de repartir llega al modelo ya tomada: si no viaja, la vuelve
+  // a deducir de los porcentajes y la deduce mal.
+  assertEquals(
+    execution.outputText.includes("complementSupplierName"),
+    true,
+    "the split decision reaches the model",
+  );
+
+  // Una sola línea no es una canasta: para eso está la herramienta barata.
+  let rejectedSingleLine = false;
+  await executor.execute({
+    id: "una-sola",
+    name: "rank_basket_suppliers",
+    arguments: { queries: ["rayos 27.5"], limit: 3 },
+  }, authority, new AbortController().signal).then(
+    (result) => {
+      rejectedSingleLine = !result.succeeded;
+    },
+    () => {
+      rejectedSingleLine = true;
+    },
+  );
+  assertEquals(rejectedSingleLine, true, "one line is refused as a basket");
+});
+
+Deno.test("una línea que no bloquea pierde sus preguntas, no la petición", () => {
+  // Medido en el módulo real con «pastillas de freno shimano, sellante
+  // tubeless y cámaras 29»: el borrador se rechazó TRES veces seguidas con
+  // `invalid_tool_arguments` y la lista se perdió entera. Ninguna de las tres
+  // necesidades tenía nada malo: sobraba un arreglo de preguntas que el propio
+  // modelo había marcado como no necesario.
+  const registry = createDefaultAgentToolRegistry();
+  const repaired = registry.repairedCall({
+    id: "borrador",
+    name: "prepare_supply_request",
+    arguments: {
+      profile: "balanced",
+      items: [{
+        description: "Pastillas de freno Shimano",
+        catalogItemRef: null,
+        categoryRef: null,
+        commercialTarget: null,
+        quantity: 2,
+        unit: "unit",
+        technicalPredicates: [],
+        preference: null,
+        clarification: "Se conserva la marca indicada.",
+        clarificationRequired: false,
+        clarificationPrompts: [{
+          id: "pastilla_material",
+          question: "¿Resina o metálica?",
+          inputKind: "single_choice",
+          options: ["Resina", "Metálica"],
+          unit: null,
+          allowUnknown: true,
+        }],
+      }],
+    } as JsonObject,
+  });
+  const items = repaired.arguments.items as JsonObject[];
+  assertEquals(
+    items[0].clarificationPrompts,
+    [],
+    "a line that does not block carries no questions",
+  );
+  // Y no se toca nada más: la necesidad sobrevive entera.
+  assertEquals(
+    items[0].description,
+    "Pastillas de freno Shimano",
+    "the need itself survives untouched",
+  );
+  assertEquals(items[0].clarificationRequired, false, "and stays non-blocking");
+});
+
+/// Un «no tengo» del negocio no puede salir como una fuente caída.
+function rayo(overrides: JsonObject = {}): JsonObject {
+  return {
+    entityId: "88888888-8888-4888-8888-888888888888",
+    name: "RAYO 265MM NAKASAWA NEGRO",
+    sku: "RAY-265",
+    brand: null,
+    category: "Rayos",
+    price: 500,
+    cost: 200,
+    marginPercent: 60,
+    soldRecently: 0,
+    stock: 4,
+    minimumStock: 1,
+    availability: "in_stock",
+    tracksInventory: true,
+    location: null,
+    technicalMatch: "not_applicable",
+    technicalSpecs: "Largo de Rayo (mm): 265",
+    // La fuente ensanchó: la página trae 1 de 48.
+    matchedCount: 48,
+    trackedCount: 48,
+    totalStock: 60,
+    inventoryRetailValue: 30000,
+    inventoryCostValue: 12000,
+    costedCount: 48,
+    averagePrice: 500,
+    minimumPrice: 500,
+    maximumPrice: 500,
+    ...overrides,
+    // El sobre tiene su propia coherencia: los conteos derivados no pueden
+    // superar al conjunto. Sin esto la fila del caso «sí calza» se rechazaba
+    // por un motivo ajeno al que la prueba quiere medir.
+    ...(typeof overrides.matchedCount === "number"
+      ? {
+        trackedCount: overrides.matchedCount,
+        costedCount: overrides.matchedCount,
+      }
+      : {}),
+  };
+}
+
+function spokeSearch(technicalPredicates: JsonObject[]): AgentToolCall {
+  return {
+    id: "rayos",
+    name: "search_inventory",
+    arguments: {
+      query: null,
+      category: "Rayos",
+      availability: "any",
+      presentation: "open_list",
+      sort: { field: "relevance", direction: "desc" },
+      limit: 10,
+      selectionMode: "all_matches",
+      operationalPredicates: [],
+      technicalPredicates,
+    },
+  };
+}
+
+Deno.test("a filter the source dropped means zero, not a source outage", async () => {
+  // Medido en producción el 2026-08-24: `spoke_length_mm eq 264` no calza con
+  // ningún rayo, y la RPC devuelve los 48 con `technicalMatch: not_applicable`
+  // en vez de vacío. El validador lanzaba y el operador leía «No pude procesar
+  // esa solicitud ahora. Intenta de nuevo en unos segundos» — y reintentar no
+  // iba a funcionar nunca, porque no hay rayos de 264.
+  const executor = createSupabaseAgentToolExecutor({
+    rpc: () =>
+      Promise.resolve(
+        { ...envelope([rayo()]), hasMore: true } as unknown as JsonObject,
+      ),
+  });
+  const execution = await executor.execute(
+    spokeSearch([{ field: "spoke_length_mm", operator: "eq", values: [264] }]),
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(execution.succeeded, true, "the turn survives a business «no»");
+  assertEquals(execution.failureCode, undefined, "no fake outage");
+  assertEquals(execution.result?.status, "verifiedEmpty", "zero is the honest answer");
+  assertEquals(execution.result?.resultCount, 0, "the widened rows are not the answer");
+  assertEquals(execution.result?.hasMore, false, "an empty result never has more");
+});
+
+Deno.test("an evaluated row still answers, and a half-evaluated page is still refused", async () => {
+  // Con la medida que SÍ existe, nada cambia: la fila viene evaluada.
+  const evaluado = createSupabaseAgentToolExecutor({
+    rpc: () =>
+      Promise.resolve(
+        envelope([rayo({ technicalMatch: "product_spec", matchedCount: 1 })]) as unknown as JsonObject,
+      ),
+  });
+  const ok = await evaluado.execute(
+    spokeSearch([{ field: "spoke_length_mm", operator: "eq", values: [265] }]),
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(ok.succeeded, true, "an evaluated match is returned as it is");
+  assertEquals(ok.result?.resultCount, 1, "the row survives");
+
+  // Y una página donde SÓLO ALGUNAS filas vienen sin evaluar no es un
+  // ensanchamiento: es una inconsistencia real, y se sigue rechazando.
+  const mezclado = createSupabaseAgentToolExecutor({
+    rpc: () =>
+      Promise.resolve(
+        envelope([
+          rayo({ technicalMatch: "product_spec", matchedCount: 2 }),
+          rayo({
+            entityId: "99999999-9999-4999-8999-999999999999",
+            sku: "RAY-290",
+            matchedCount: 2,
+          }),
+        ]) as unknown as JsonObject,
+      ),
+  });
+  const refused = await mezclado.execute(
+    spokeSearch([{ field: "spoke_length_mm", operator: "eq", values: [265] }]),
+    authority,
+    new AbortController().signal,
+  );
+  assertEquals(refused.succeeded, false, "a half-evaluated page is still a defect");
 });
