@@ -89,8 +89,10 @@ class SupplyNeed {
     required this.unit,
     required this.identityState,
     required this.supplyState,
+    required this.usageState,
     required this.version,
     required this.createdAt,
+    required this.updatedAt,
     this.mechanicJobId,
     this.jobBikeId,
     this.productId,
@@ -111,8 +113,10 @@ class SupplyNeed {
   final String unit;
   final String identityState;
   final String supplyState;
+  final String usageState;
   final int version;
   final DateTime createdAt;
+  final DateTime updatedAt;
   final String? internalStockRejectionReason;
 
   bool get hasConfirmedProduct =>
@@ -132,8 +136,10 @@ class SupplyNeed {
       unit: unit,
       identityState: identityState,
       supplyState: supplyState,
+      usageState: usageState,
       version: version,
       createdAt: createdAt,
+      updatedAt: updatedAt,
       internalStockRejectionReason: internalStockRejectionReason,
     );
   }
@@ -154,8 +160,15 @@ class SupplyNeed {
       unit: json['unit']?.toString() ?? 'unit',
       identityState: json['identity_state']?.toString() ?? 'unresolved',
       supplyState: json['supply_state']?.toString() ?? 'open',
+      usageState: json['usage_state']?.toString() ??
+          (json['origin_kind']?.toString() == 'mechanic_job'
+              ? 'pending'
+              : 'not_applicable'),
       version: _asInt(json['version'], fallback: 1),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       internalStockRejectionReason:
           json['internal_stock_rejection_reason']?.toString(),
@@ -170,6 +183,7 @@ class JobSupplyAttention {
     required this.activeNeedCount,
     required this.unresolvedIdentityCount,
     required this.requiresCapture,
+    this.latestNeedUpdatedAt,
   });
 
   final String jobId;
@@ -177,6 +191,7 @@ class JobSupplyAttention {
   final int activeNeedCount;
   final int unresolvedIdentityCount;
   final bool requiresCapture;
+  final DateTime? latestNeedUpdatedAt;
 
   factory JobSupplyAttention.fromJson(Map<String, dynamic> json) {
     return JobSupplyAttention(
@@ -184,7 +199,12 @@ class JobSupplyAttention {
       promptsSupplyNeedCapture: json['prompts_supply_need_capture'] == true,
       activeNeedCount: _asInt(json['active_need_count']),
       unresolvedIdentityCount: _asInt(json['unresolved_identity_count']),
-      requiresCapture: json['requires_supply_capture'] == true,
+      // This is the exact live projection column. An alias here would let a
+      // client-only fixture hide a drift from the production view again.
+      requiresCapture: json['requires_supply_definition'] == true,
+      latestNeedUpdatedAt: DateTime.tryParse(
+        json['latest_need_updated_at']?.toString() ?? '',
+      ),
     );
   }
 }
@@ -988,7 +1008,8 @@ class SupplyPage {
       total: _asInt(json['total']),
       returned: _asInt(json['returned']),
       hasMore: json['hasMore'] == true,
-      nextOffset: json['nextOffset'] == null ? null : _asInt(json['nextOffset']),
+      nextOffset:
+          json['nextOffset'] == null ? null : _asInt(json['nextOffset']),
     );
   }
 }
@@ -1265,13 +1286,12 @@ class SupplyRequestMatch {
 
   /// Sólo lo que el operador pidió. Una señal no pedida no se muestra: no
   /// aporta nada y llena la superficie de ruido.
-  List<MapEntry<String, SupplySignalEvaluation>> get requestedSignals => signals
-      .entries
-      .where((entry) => entry.value.wasRequested)
-      .toList(growable: false);
+  List<MapEntry<String, SupplySignalEvaluation>> get requestedSignals =>
+      signals.entries
+          .where((entry) => entry.value.wasRequested)
+          .toList(growable: false);
 
-  bool get hasUnknownSignal =>
-      signals.values.any((signal) => signal.isUnknown);
+  bool get hasUnknownSignal => signals.values.any((signal) => signal.isUnknown);
 
   factory SupplyRequestMatch.fromJson(Map<String, dynamic> json) {
     final rawSignals = json['signals'];
@@ -1363,7 +1383,8 @@ class SupplyExternalCandidate extends PurchaseCandidate {
   bool get isUnverified => group == 'unverified';
 
   /// El objetivo movió a este candidato respecto del ranking del kernel.
-  bool get movedByTarget => requestMatch.blendApplied && overallRank != baseRank;
+  bool get movedByTarget =>
+      requestMatch.blendApplied && overallRank != baseRank;
 
   factory SupplyExternalCandidate.fromJson(Map<String, dynamic> json) {
     final rawMatch = json['requestMatch'];

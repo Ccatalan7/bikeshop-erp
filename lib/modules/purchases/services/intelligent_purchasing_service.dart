@@ -21,20 +21,23 @@ class IntelligentPurchasingService {
         .toList(growable: false);
     if (ids.isEmpty) return const {};
 
-    final rows = <Map<String, dynamic>>[];
     const chunkSize = 100;
-    for (var offset = 0; offset < ids.length; offset += chunkSize) {
-      final end = (offset + chunkSize).clamp(0, ids.length);
-      final response = await _client
-          .from('mechanic_job_supply_attention_v1')
-          .select()
-          .inFilter('mechanic_job_id', ids.sublist(offset, end));
-      rows.addAll(
-        (response as List)
-            .whereType<Map>()
-            .map((row) => Map<String, dynamic>.from(row)),
-      );
-    }
+    final chunks = <List<String>>[
+      for (var offset = 0; offset < ids.length; offset += chunkSize)
+        ids.sublist((offset), (offset + chunkSize).clamp(0, ids.length)),
+    ];
+    final responses = await Future.wait<List<dynamic>>(
+      chunks.map(
+        (chunk) async => await _client
+            .from('mechanic_job_supply_attention_v1')
+            .select()
+            .inFilter('mechanic_job_id', chunk) as List<dynamic>,
+      ),
+    );
+    final rows = responses
+        .expand((response) => response)
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row));
 
     return {
       for (final row in rows)
@@ -175,6 +178,27 @@ class IntelligentPurchasingService {
     return _enrichProducts(rows);
   }
 
+  /// Complete workshop trace for one job, newest decision first.
+  ///
+  /// Unlike [fetchOpenNeeds], this deliberately keeps covered and cancelled
+  /// rows: Jobs is the origin surface and must be able to explain what was
+  /// requested even after Purchasing closes it. The global Purchasing inbox
+  /// remains active-only.
+  Future<List<SupplyNeed>> fetchJobNeeds(String mechanicJobId) async {
+    final jobId = mechanicJobId.trim();
+    if (jobId.isEmpty) return const [];
+    final response = await _client
+        .from('supply_needs')
+        .select()
+        .eq('mechanic_job_id', jobId)
+        .order('updated_at', ascending: false);
+    final rows = (response as List)
+        .whereType<Map>()
+        .map((row) => SupplyNeed.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+    return _enrichProducts(rows);
+  }
+
   /// Los criterios con que se interpretó una necesidad, de su última revisión.
   ///
   /// **Un viaje por necesidad seleccionada, no por lista.** La barra muestra
@@ -249,6 +273,38 @@ class IntelligentPurchasingService {
         'p_product_id': productId,
         'p_quantity': quantity ?? need.quantity,
         'p_unit': unit ?? need.unit,
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+    final updated = _needFromCommand(response);
+    final enriched = await _enrichProducts([updated]);
+    return enriched.single;
+  }
+
+  /// Edits a need from its workshop origin, including its bicycle scope.
+  ///
+  /// Purchasing's generic editor intentionally cannot move workshop context.
+  /// This command exists for Jobs, where the operator can verify which bike in
+  /// a multi-bike job will receive the part. The server validates that the
+  /// selected link belongs to the same job and applies optimistic concurrency.
+  Future<SupplyNeed> updateWorkshopNeed(
+    SupplyNeed need, {
+    required String description,
+    required String? productId,
+    required String? jobBikeId,
+    double? quantity,
+    String? unit,
+  }) async {
+    final response = await _client.rpc(
+      'update_workshop_supply_need_v1',
+      params: {
+        'p_need_id': need.id,
+        'p_expected_version': need.version,
+        'p_description': description.trim(),
+        'p_product_id': productId,
+        'p_quantity': quantity ?? need.quantity,
+        'p_unit': unit ?? need.unit,
+        'p_job_bike_id': jobBikeId,
         'p_operation_key': const Uuid().v4(),
       },
     );
@@ -568,6 +624,7 @@ class IntelligentPurchasingService {
     String? search,
     int limit = 40,
     int offset = 0,
+
     /// Lo que el operador venía buscando. Sube al servidor para que lo que
     /// coincide encabece la lista: se entra a la ficha desde una necesidad
     /// concreta, y abrirla con otra cosa obliga a buscar de nuevo a mano.

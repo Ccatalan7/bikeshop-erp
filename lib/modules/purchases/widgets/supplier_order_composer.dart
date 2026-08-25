@@ -43,6 +43,7 @@ class SupplierOrderComposer extends StatelessWidget {
     required this.onSendToSupplier,
     required this.onClosePreview,
     required this.messagePreview,
+    required this.pdfPreview,
     required this.openOrders,
     required this.activeOrderId,
     required this.onResumeOrder,
@@ -60,6 +61,11 @@ class SupplierOrderComposer extends StatelessWidget {
   /// El paso de enviar ocupa el mismo panel derecho: revisar el mensaje no
   /// saca al operador de donde estaba, y volver al pedido es un solo toque.
   final Widget? messagePreview;
+
+  /// **El PDF se mira donde va a vivir, no en un diálogo del sistema.**
+  /// `Printing.sharePdf` abría la hoja de compartir de macOS: el operador
+  /// quería revisar el papel y le salía un menú de AirDrop.
+  final Widget? pdfPreview;
 
   final SupplierCatalogPage page;
   final PurchaseOrderDocument document;
@@ -126,16 +132,17 @@ class SupplierOrderComposer extends StatelessWidget {
                     ? Padding(
                         padding: const EdgeInsets.only(top: 14),
                         child: _Sheet(
-                            document: document,
-                            busy: busy,
-                            savedOrderNumber: savedOrderNumber,
-                            highlightedProductId: highlightedProductId,
-                            height: 460,
-                            messagePreview: messagePreview,
-                            onRemoveLine: onRemoveLine,
-                            onClearOrder: onClearOrder,
-                            onSaveDraft: onSaveDraft,
-                            onOpenPdf: onOpenPdf,
+                          document: document,
+                          busy: busy,
+                          savedOrderNumber: savedOrderNumber,
+                          highlightedProductId: highlightedProductId,
+                          height: 460,
+                          messagePreview: messagePreview,
+                          pdfPreview: pdfPreview,
+                          onRemoveLine: onRemoveLine,
+                          onClearOrder: onClearOrder,
+                          onSaveDraft: onSaveDraft,
+                          onOpenPdf: onOpenPdf,
                           onSendToSupplier: onSendToSupplier,
                           onClosePreview: onClosePreview,
                         ),
@@ -180,6 +187,7 @@ class SupplierOrderComposer extends StatelessWidget {
                             highlightedProductId: highlightedProductId,
                             height: 560,
                             messagePreview: messagePreview,
+                            pdfPreview: pdfPreview,
                             onRemoveLine: onRemoveLine,
                             onClearOrder: onClearOrder,
                             onSaveDraft: onSaveDraft,
@@ -208,6 +216,7 @@ class _Sheet extends StatelessWidget {
     required this.highlightedProductId,
     required this.height,
     required this.messagePreview,
+    required this.pdfPreview,
     required this.onRemoveLine,
     required this.onClearOrder,
     required this.onSaveDraft,
@@ -222,6 +231,7 @@ class _Sheet extends StatelessWidget {
   final String? highlightedProductId;
   final double height;
   final Widget? messagePreview;
+  final Widget? pdfPreview;
   final ValueChanged<String> onRemoveLine;
   final VoidCallback onClearOrder;
   final VoidCallback onSaveDraft;
@@ -237,6 +247,12 @@ class _Sheet extends StatelessWidget {
       return SizedBox(
         height: height + 92,
         child: messagePreview,
+      );
+    }
+    if (pdfPreview != null) {
+      return SizedBox(
+        height: height + 92,
+        child: pdfPreview,
       );
     }
     return Column(
@@ -292,8 +308,7 @@ class _Sheet extends StatelessWidget {
                     'El pedido quedó vacío. Agrega un producto de la lista y '
                     'vuelve a aparecer acá.',
                     textAlign: TextAlign.center,
-                    style:
-                        PurchaseType.meta.copyWith(color: tokens.inkFaint),
+                    style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
                   ),
                 )
               : PurchaseOrderDocumentPreview(

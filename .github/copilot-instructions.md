@@ -916,6 +916,12 @@ workflow UI changes.
   database clock and appends an immutable exact-key receipt. An ordinary job
   save omits those columns entirely so `UPDATE OF` triggers cannot run by
   accident.
+- **Corrected 2026-08-24:** an acknowledged status command returns enough
+  authority to replace that exact tenant/job row. Merge its snapshot
+  surgically, retain derived projections only from the same job/tenant, and
+  reconcile lifecycle metrics with a guarded single-job read; do not follow a
+  successful State-chip change with a full Jobs `_loadData`. A rejected or
+  unresolved outcome still invalidates and takes the full-load fallback.
 - Public-store customer code is read-only for workshop status. Do not restore
   the removed direct approve/reject writers. A future customer approval flow
   requires its own ownership-validating server command and audit receipt; it
@@ -3152,6 +3158,10 @@ policy.
    catalog; do not trust `core_schema.sql` or a schema-only clone
 3. ✅ Adapt Flutter code to match database schema (not vice versa)
 4. ✅ Use column names proved by the live catalog/current generated contract
+   - A client parser for a view must use the exact live projection key. Its
+     regression fixture must copy that key (or be generated from the same
+     contract); a client-only alias is not compatibility, because it can keep a
+     broken production parser green.
 5. ✅ **CHECK EXISTING CODE** for tenant_id handling patterns
 6. ✅ **VERIFY** all queries include `.eq('tenant_id', tenantId)` or use services that filter
 7. ✅ **VERIFY** all inserts include `'tenant_id': tenantId` in data maps
@@ -7292,3 +7302,54 @@ Tres causas, en capas distintas:
 vocabulario cerrado —medida de rueda, tipo de válvula, largo— y es el respaldo.
 El modelo resuelve lo que exige criterio: rangos, contención, comparaciones. Se
 le dan las dos cosas y cada uno hace lo suyo.
+
+## Los dos asistentes son el mismo motor con dos trajes (2026-08-24)
+
+Lo único que separa al **Asistente de compras** del **Asistente IA** es
+`purchasingDraftMode` —`request.viewContext.kind === "intelligent_purchasing"`—
+y eso cambia tres cosas: la lista de herramientas permitidas
+(`PURCHASING_DRAFT_TOOL_NAMES`), la instrucción del sistema (`supplyWorkflowRule`)
+y el presupuesto de llamadas (18 vs 8).
+
+**Todo lo demás es compartido**: el gateway, `search_inventory`,
+`inspect_inventory_schema`, `cards.ts` y las descripciones de
+`tool_registry.ts`. Un párrafo agregado a la descripción de una herramienta
+cambia la conducta de los DOS carriles.
+
+Pasó: el módulo de compras dejó de crear la necesidad y se puso a contestar como
+el general con una tarjeta de Inventario. Dos sesiones habíamos agregado, el
+mismo día, un párrafo cada una a `technicalPredicates`. Ninguna tocó el carril de
+compras y las dos lo cambiaron.
+
+- **Al tocar `tool_registry.ts` o `cards.ts`, se prueban los dos carriles.** Se
+  distinguen en `assistant_runs.tool_call_budget`: **18 = compras, 8 = general**.
+- **Todo arreglo de un carril va guardado por `purchasingDraftMode`.**
+
+### Una instrucción sin guardia no se cumple
+
+`supplyWorkflowRule` decía «termina **siempre** con una única llamada
+`prepare_supply_request`» y nada lo forzaba hasta agotar las cinco rondas.
+
+Pero **`requiredToolName` es una exigencia dura**: `assertRequiredProviderToolTurn`
+tira 502 si el modelo no obedece y el operador pierde el turno entero. El empujón
+va como **mensaje** en la conversación, una sola vez, y si tampoco así la llama se
+entrega el texto que haya — una respuesta imperfecta es mejor que un error.
+
+Dos trampas de esa vía: **un mensaje de asistente con texto vacío llega al
+proveedor como `parts: []` y lo rechaza** (guardar con `turn.text.trim()`), y en
+Gemini el `role: "system"` a mitad de conversación se mapea a `user`, así que no
+aporta autoridad.
+
+### Los pasos aguas abajo tienen que usar los predicados, no la frase
+
+El asistente traduce «camaras 27.5 con válvula de auto» a predicados tipados y
+los guarda en `supply_need_interpretation_revisions.constraints`. El paso de
+bodega los ignoraba y volvía a resolver `original_description` como texto: **33
+alternativas donde la ficha dice 12**, con una cámara de **carretilla** entre las
+opciones de una bicicleta.
+
+Y ahí una regla que se cruza con la de fichas vacías: la elegibilidad incluye lo
+que **no contradice** los criterios —correcto cuando nadie tiene ficha—, así que
+**una medida fuera del vocabulario no se deja vacía: va como `Otra`**. Un aro 8
+no es 27.5, y decirlo es lo que lo saca de la comparación. Dejarlo vacío es
+confundir «no lo sé» con «no aplica».

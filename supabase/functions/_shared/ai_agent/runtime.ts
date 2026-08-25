@@ -235,6 +235,12 @@ export async function executeAgentRun(
       | GroundedPublicResearchTerminalContext
       | undefined;
     let groundedTerminalRecoveryRequired = false;
+    // **El paso 1 de compras cierra creando la necesidad, no mostrando una
+    // búsqueda.** Se registra si `prepare_supply_request` llegó a intentarse:
+    // basta el intento, porque si sus argumentos fueron rechazados el modelo ya
+    // recibió el rechazo y cerrar el turno es legítimo.
+    let supplyRequestAttempted = false;
+    let supplyDraftNudged = false;
     let inventorySchemaSnapshot: InventorySchemaSnapshot | undefined;
     // `open_list` owns a deterministic acknowledgement. A mixed request such
     // as "open the filtered list and tell me what to inspect first" must keep
@@ -442,6 +448,44 @@ export async function executeAgentRun(
             );
           }
           groundedTerminalRecoveryRequired = true;
+          continue;
+        }
+        // **Un turno de compras no puede cerrar sin la necesidad.**
+        //
+        // La instrucción del sistema ya decía «termina siempre con una única
+        // llamada prepare_supply_request», pero nada lo hacía cumplir hasta
+        // agotar las cinco rondas. Medido en producción el 2026-08-24: a
+        // «camaras 27.5 VA» el modelo corrió UNA search_inventory y cerró, y el
+        // paso 1 quedó sin necesidad que revisar — el módulo entero se volvió
+        // un buscador.
+        //
+        // Va como recordatorio y no como `requiredToolName`: esa exigencia es
+        // DURA y `assertRequiredProviderToolTurn` tira 502 si el modelo no
+        // obedece, o sea el operador pierde el turno completo. Se le recuerda
+        // **una vez**; si aun así no la llama, se entrega el texto que haya.
+        // Una respuesta imperfecta es mejor que un error.
+        if (
+          purchasingDraftMode && !supplyRequestAttempted && !supplyDraftNudged &&
+          toolRounds > 0
+        ) {
+          supplyDraftNudged = true;
+          // El texto del turno sólo entra si existe: un mensaje de asistente
+          // vacío llega al proveedor como `parts: []` y lo rechaza — el
+          // operador leía «El análisis no pudo completarse» y perdía la
+          // petición entera. Medido el 2026-08-24.
+          if (turn.text.trim()) {
+            messages.push({ role: "assistant", text: turn.text });
+          }
+          messages.push({
+            role: "user",
+            text:
+              "Este turno todavía no llamó prepare_supply_request y el paso 1 " +
+              "quedaría sin necesidad que revisar. Cierra ahora con UNA sola " +
+              "llamada prepare_supply_request usando lo que ya encontraste: " +
+              "enlaza catalogItemRef sólo si la búsqueda demostró identidad " +
+              "exacta y deja unresolved lo que no. No repitas la búsqueda ni " +
+              "vuelvas a preguntar algo que el operador ya dijo.",
+          });
           continue;
         }
         // **Un JSON mal escrito no vale una corrida entera.**
@@ -665,6 +709,26 @@ export async function executeAgentRun(
         let executableCall: AgentToolCall = options.toolRegistry.repairedCall(
           call,
         );
+        // **En compras, buscar inventario es un paso de resolución, no una
+        // respuesta.** Una tarjeta `open_list` lleva `destination:
+        // inventory_products`, o sea **navega fuera del módulo** — justo lo
+        // que el asistente de compras no debe hacer: su trabajo es capturar la
+        // necesidad y llevarla por bodega, proveedores y plan.
+        //
+        // Se corrige el argumento en vez de rebotar la llamada: rebotar cuesta
+        // una ronda del presupuesto y el modelo ya hizo lo correcto al buscar.
+        // Con `answer` el resultado le llega igual y sigue hacia
+        // `prepare_supply_request`.
+        if (
+          purchasingDraftMode &&
+          executableCall.name === INVENTORY_SEARCH_TOOL_NAME &&
+          inventoryPresentationOpensAList(executableCall.arguments)
+        ) {
+          executableCall = {
+            ...executableCall,
+            arguments: { ...executableCall.arguments, presentation: "answer" },
+          };
+        }
         let forcedCapabilityGapArguments: JsonObject | undefined;
         if (
           clarificationRound && call.name === PREPARE_SUPPLY_REQUEST_TOOL_NAME
@@ -714,6 +778,9 @@ export async function executeAgentRun(
             : undefined;
           if (execution === undefined && call.name === PUBLIC_RESEARCH_TOOL_NAME) {
             publicResearchDispatched = true;
+          }
+          if (call.name === PREPARE_SUPPLY_REQUEST_TOOL_NAME) {
+            supplyRequestAttempted = true;
           }
           if (
             execution === undefined &&
@@ -2409,6 +2476,18 @@ const standaloneMeasurement =
 /// decide a qué campo pertenece cada número es el modelo, que tiene el anuncio.
 const compoundMeasurement =
   /(?:^|[\s(])\d{1,4}(?:[.,]\d{1,3})?\s*[x×]\s*\d{1,4}(?:[.,]\d{1,3})?/i;
+
+/// Si la búsqueda pretende **abrir una lista para el operador**.
+///
+/// Se había usado para eximir de la compuerta lo que no se mira, y esa
+/// exención se retiró el 2026-08-24 por estar trazada en el eje equivocado.
+/// Vuelve con otro propósito: en el carril de compras, abrir la lista general
+/// de inventario es navegar fuera del módulo, y ahí la búsqueda tiene que ser
+/// un paso de resolución.
+function inventoryPresentationOpensAList(argumentsValue: JsonObject): boolean {
+  return argumentsValue.presentation === "open_list" ||
+    argumentsValue.presentation === "open_list_with_analysis";
+}
 
 function inventoryQueryNamesAMeasurement(argumentsValue: JsonObject): boolean {
   const query = typeof argumentsValue.query === "string"

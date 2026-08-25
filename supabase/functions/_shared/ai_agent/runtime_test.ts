@@ -7297,3 +7297,201 @@ Deno.test("the purchasing lane keeps resolving each line without inspection", as
     "el borrador de compras no queda sin resolver ni una línea",
   );
 });
+
+Deno.test("el carril de compras no abre la lista general de inventario", async () => {
+  // **Medido el 2026-08-24 en producción.** En el Asistente de compras,
+  // «camaras 27.5 VA» corrió una única `search_inventory` con
+  // `presentation: open_list` y cerró el turno mostrando una tarjeta de
+  // Inventario con `destination: inventory_products` — o sea, un enlace FUERA
+  // del módulo, encima de un paso cuyo trabajo es capturar la necesidad.
+  //
+  // La búsqueda ahí es un paso de resolución. Se corrige el argumento en vez
+  // de rebotar la llamada: rebotar cuesta una ronda y el modelo ya hizo lo
+  // correcto al buscar.
+  const store = new TestRunStore();
+  let providerCalls = 0;
+  const presentations: unknown[] = [];
+  await executeAgentRun(
+    {
+      ...request({ kind: "intelligent_purchasing", jobIds: [], truncated: false }),
+      message: "camaras 27.5 VA",
+    },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        providerCalls++;
+        if (providerCalls === 1) {
+          return Promise.resolve<AgentProviderTurn>(
+            inventorySearchTurn("camaras 27.5 VA", "open_list"),
+          );
+        }
+        return Promise.resolve(finalTurn("Listo"));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: {
+        execute: (call) => {
+          presentations.push(call.arguments.presentation);
+          const result = {
+            authorityTenantId: tenantId,
+            asOf: "2026-08-24T12:00:00Z",
+            status: "verifiedEmpty" as const,
+            items: [],
+            resultCount: 0,
+            hasMore: false,
+            totalMatches: 0,
+          };
+          const outputText = JSON.stringify(result);
+          return Promise.resolve({
+            result,
+            outputText,
+            outputBytes: new TextEncoder().encode(outputText).byteLength,
+            succeeded: true,
+          });
+        },
+        workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+      },
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(
+    presentations,
+    ["answer"],
+    "en compras la búsqueda se ejecuta como paso de resolución, no como lista",
+  );
+});
+
+Deno.test("un turno de compras no cierra sin crear la necesidad", async () => {
+  // **Medido el 2026-08-24 en producción.** A «camaras 27.5 VA» el modelo corrió
+  // UNA `search_inventory` y cerró el turno: el paso 1 quedó sin necesidad y el
+  // módulo se volvió un buscador. La instrucción ya lo prohibía y nada lo hacía
+  // cumplir hasta agotar las cinco rondas.
+  //
+  // El recordatorio va como mensaje de sistema y NO como `requiredToolName`:
+  // esa exigencia es dura y tira 502 si el modelo no obedece — el operador
+  // perdería el turno entero.
+  const store = new TestRunStore();
+  let providerCalls = 0;
+  const executed: string[] = [];
+  await executeAgentRun(
+    {
+      ...request({ kind: "intelligent_purchasing", jobIds: [], truncated: false }),
+      message: "camaras 27.5 VA",
+    },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        providerCalls++;
+        if (providerCalls === 1) {
+          return Promise.resolve<AgentProviderTurn>(
+            inventorySearchTurn("camaras 27.5 VA", "answer"),
+          );
+        }
+        // Segunda vuelta: el modelo cierra en prosa, sin crear la necesidad.
+        // El servidor le recuerda y le da una vuelta más.
+        return Promise.resolve(finalTurn("Encontré varias cámaras 27.5."));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: {
+        execute: (call) => {
+          executed.push(call.name);
+          const result = {
+            authorityTenantId: tenantId,
+            asOf: "2026-08-24T12:00:00Z",
+            status: "verifiedEmpty" as const,
+            items: [],
+            resultCount: 0,
+            hasMore: false,
+            totalMatches: 0,
+          };
+          const outputText = JSON.stringify(result);
+          return Promise.resolve({
+            result,
+            outputText,
+            outputBytes: new TextEncoder().encode(outputText).byteLength,
+            succeeded: true,
+          });
+        },
+        workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+      },
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+
+  // Se le pidió una vuelta más: tres llamadas al proveedor en vez de dos.
+  assertEquals(
+    providerCalls,
+    3,
+    "el servidor recuerda cerrar con prepare_supply_request antes de rendirse",
+  );
+  // Y si aun así no la llama, el turno entrega el texto en vez de tirar 502.
+  assertEquals(
+    executed,
+    ["search_inventory"],
+    "el recordatorio no repite la búsqueda ni pierde el turno",
+  );
+});
+
+Deno.test("el recordatorio de compras no rompe con un turno sin texto", async () => {
+  // Un mensaje de asistente vacío llega al proveedor como `parts: []` y lo
+  // rechaza: el operador leía «El análisis no pudo completarse» y perdía la
+  // petición. Medido en producción el 2026-08-24 con «camaras 27.5 VA».
+  const store = new TestRunStore();
+  let providerCalls = 0;
+  const response = await executeAgentRun(
+    {
+      ...request({ kind: "intelligent_purchasing", jobIds: [], truncated: false }),
+      message: "camaras 27.5 VA",
+    },
+    authority,
+    {
+      providerRouter: providerRouter(() => {
+        providerCalls++;
+        if (providerCalls === 1) {
+          return Promise.resolve<AgentProviderTurn>(
+            inventorySearchTurn("camaras 27.5 VA", "answer"),
+          );
+        }
+        // El modelo cierra SIN texto: es el caso que rompía.
+        if (providerCalls === 2) {
+          return Promise.resolve(finalTurn(""));
+        }
+        return Promise.resolve(finalTurn("Listo, dejé la necesidad anotada."));
+      }),
+      toolRegistry: createDefaultAgentToolRegistry(),
+      toolExecutor: {
+        execute: () => {
+          const result = {
+            authorityTenantId: tenantId,
+            asOf: "2026-08-24T12:00:00Z",
+            status: "verifiedEmpty" as const,
+            items: [],
+            resultCount: 0,
+            hasMore: false,
+            totalMatches: 0,
+          };
+          const outputText = JSON.stringify(result);
+          return Promise.resolve({
+            result,
+            outputText,
+            outputBytes: new TextEncoder().encode(outputText).byteLength,
+            succeeded: true,
+          });
+        },
+        workshopViewContext: () => Promise.reject(new Error("unexpected view context")),
+      },
+      runStore: store,
+      auditHmacKey: hmacKey,
+      pricingCatalog,
+    },
+    new AbortController().signal,
+  );
+
+  assertEquals(response.status, "completed", "el turno se entrega, no se pierde");
+});

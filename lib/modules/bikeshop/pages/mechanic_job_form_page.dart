@@ -4889,6 +4889,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               jobId,
               targetStatusId,
               operationKey: operationKey,
+              targetStatus: _selectedCustomStatus,
             );
           } else {
             await bikeshopService.transitionJobStatusByLegacyStatus(

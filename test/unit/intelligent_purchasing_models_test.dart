@@ -40,13 +40,30 @@ void main() {
       'prompts_supply_need_capture': true,
       'active_need_count': 0,
       'unresolved_identity_count': 0,
-      'requires_supply_capture': true,
+      'requires_supply_definition': true,
+      'latest_need_updated_at': '2026-08-24T12:30:00Z',
     });
 
     expect(attention.jobId, 'job-a');
     expect(attention.promptsSupplyNeedCapture, isTrue);
     expect(attention.requiresCapture, isTrue);
     expect(attention.activeNeedCount, 0);
+    expect(
+      attention.latestNeedUpdatedAt,
+      DateTime.parse('2026-08-24T12:30:00Z'),
+    );
+  });
+
+  test('job attention rejects the former client-only projection alias', () {
+    final attention = JobSupplyAttention.fromJson({
+      'mechanic_job_id': 'job-a',
+      'prompts_supply_need_capture': true,
+      'active_need_count': 0,
+      'unresolved_identity_count': 0,
+      'requires_supply_capture': true,
+    });
+
+    expect(attention.requiresCapture, isFalse);
   });
 
   test('supply need keeps identity, workflow and optimistic version separate',
@@ -62,13 +79,17 @@ void main() {
       'unit': 'unit',
       'identity_state': 'confirmed',
       'supply_state': 'open',
+      'usage_state': 'pending',
       'version': 4,
       'created_at': '2026-08-16T12:00:00Z',
+      'updated_at': '2026-08-16T12:05:00Z',
     });
 
     expect(need.hasConfirmedProduct, isTrue);
     expect(need.quantity, 2);
     expect(need.version, 4);
+    expect(need.usageState, 'pending');
+    expect(need.updatedAt, DateTime.parse('2026-08-16T12:05:00Z'));
     expect(need.mechanicJobId, 'job-a');
     expect(need.jobBikeId, isNull);
   });
@@ -627,7 +648,8 @@ void main() {
     });
 
     test('cada estado vacío dice su causa y su acción, y no se colapsan', () {
-      Map<String, dynamic> envelope(String status, [Map<String, dynamic>? more]) =>
+      Map<String, dynamic> envelope(String status,
+              [Map<String, dynamic>? more]) =>
           <String, dynamic>{
             'needId': 'n',
             'status': status,
@@ -680,7 +702,8 @@ void main() {
       // Un conjunto sin historial no es lo mismo que uno sin productos.
       expect(
         supplyExternalStatusCopy(
-          SupplyExternalCandidates.fromJson(envelope('no_historical_candidates')),
+          SupplyExternalCandidates.fromJson(
+              envelope('no_historical_candidates')),
         ).actionLabel,
         'Registrar una compra local',
       );

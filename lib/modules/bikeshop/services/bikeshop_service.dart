@@ -7,6 +7,7 @@ import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
 import 'mechanic_job_form_persistence_policy.dart';
+import 'mechanic_job_cache_reconciler.dart';
 import 'mechanic_job_intake_classification_coordinator.dart';
 import 'mechanic_job_quotation_command_coordinator.dart';
 import 'mechanic_job_sale_classification_coordinator.dart';
@@ -2965,9 +2966,7 @@ class BikeshopService extends ChangeNotifier {
         );
       }
 
-      jobs = await _hydrateJobSubjects(jobs);
-      jobs = await _hydrateServiceWarranties(jobs);
-      jobs = await _hydrateJobTimeMetrics(jobs);
+      jobs = await _hydrateJobOperationalProjections(jobs);
 
       if (searchTerm != null && searchTerm.isNotEmpty) {
         final searchLower = searchTerm.toLowerCase();
@@ -3010,21 +3009,10 @@ class BikeshopService extends ChangeNotifier {
 
       if (data == null) return null;
       final job = MechanicJob.fromJson(data);
-      final subjectHydration = _hydrateJobSubjects([job]);
       if (!includeOperationalProjections) {
-        return (await subjectHydration).first;
+        return (await _hydrateJobSubjects([job])).first;
       }
-
-      final hydratedSlices = await Future.wait<List<MechanicJob>>([
-        subjectHydration,
-        _hydrateServiceWarranties([job]),
-        _hydrateJobTimeMetrics([job]),
-      ]);
-      return job.copyWith(
-        subjectData: hydratedSlices[0].first.subjectData,
-        serviceWarranty: hydratedSlices[1].first.serviceWarranty,
-        timeMetrics: hydratedSlices[2].first.timeMetrics,
-      );
+      return (await _hydrateJobOperationalProjections([job])).first;
     } catch (e) {
       if (kDebugMode) print('Error fetching job: $e');
       rethrow;
@@ -3064,6 +3052,30 @@ class BikeshopService extends ChangeNotifier {
       }
       return jobs;
     }
+  }
+
+  /// The three read-only job projections have independent server owners.
+  /// Hydrating them concurrently keeps a cold Jobs load to one projection
+  /// round-trip instead of three, while each owner retains its own fallback.
+  Future<List<MechanicJob>> _hydrateJobOperationalProjections(
+    List<MechanicJob> jobs,
+  ) async {
+    if (jobs.isEmpty) return jobs;
+    final hydratedSlices = await Future.wait<List<MechanicJob>>([
+      _hydrateJobSubjects(jobs),
+      _hydrateServiceWarranties(jobs),
+      _hydrateJobTimeMetrics(jobs),
+    ]);
+
+    return List<MechanicJob>.generate(
+      jobs.length,
+      (index) => jobs[index].copyWith(
+        subjectData: hydratedSlices[0][index].subjectData,
+        serviceWarranty: hydratedSlices[1][index].serviceWarranty,
+        timeMetrics: hydratedSlices[2][index].timeMetrics,
+      ),
+      growable: false,
+    );
   }
 
   Future<List<MechanicJob>> _hydrateServiceWarranties(
@@ -3448,10 +3460,11 @@ class BikeshopService extends ChangeNotifier {
   Future<void> _logJobCompletionBikeEvent({
     required MechanicJob? previousJob,
     required MechanicJob updatedJob,
+    JobStatus? previousStatus,
   }) async {
     final bikeId = updatedJob.bikeId;
     if (bikeId == null || bikeId.isEmpty) return;
-    final previousStatus = previousJob?.status;
+    final effectivePreviousStatus = previousStatus ?? previousJob?.status;
     final newStatus = updatedJob.status;
     final completionStatuses = {
       JobStatus.finalizado,
@@ -3459,7 +3472,7 @@ class BikeshopService extends ChangeNotifier {
     };
 
     if (!completionStatuses.contains(newStatus) ||
-        completionStatuses.contains(previousStatus)) {
+        completionStatuses.contains(effectivePreviousStatus)) {
       return;
     }
 
@@ -3528,13 +3541,15 @@ class BikeshopService extends ChangeNotifier {
     String jobId,
     String statusId, {
     required String operationKey,
+    JobStatusCustom? targetStatus,
   }) async {
     final request = MechanicJobStatusTransitionRequest(
       jobId: jobId,
       statusId: statusId,
       operationKey: operationKey,
     );
-    final previousJob = await getJobById(request.jobId);
+    final cacheLease = _cacheScope.capture();
+    final cachedPreviousJob = _cachedJobById(request.jobId);
     final coordinator = MechanicJobStatusTransitionCoordinator(
       send: (params) => _db.rpc(
         'transition_mechanic_job_status',
@@ -3546,21 +3561,54 @@ class BikeshopService extends ChangeNotifier {
 
     try {
       final result = await coordinator.execute(request);
-      final updatedJob = MechanicJob.fromJson(
+      final authoritativeJob = MechanicJob.fromJson(
         result.authoritativeJobSnapshot,
       );
+      final updatedJob = reconcileMechanicJobCacheProjection(
+        authoritative: authoritativeJob,
+        cached: cachedPreviousJob,
+        targetStatus: targetStatus,
+      );
+
+      final canPublishToCache = cacheLease != null &&
+          _cacheScope.owns(cacheLease) &&
+          authoritativeJob.tenantId == cacheLease.scope.tenantId &&
+          _cachedJobs != null;
+      if (canPublishToCache) {
+        _surgicalUpdateJob(updatedJob);
+        if (mounted) notifyListeners();
+        if (result.changed) {
+          unawaited(_refreshJobTimeMetricsAfterTransition(
+            updatedJob,
+            cacheLease,
+          ));
+        }
+      } else {
+        // No eligible list projection exists. Consumers can use the returned
+        // row immediately, while cache listeners take the documented full-load
+        // fallback instead of publishing into an unknown authority scope.
+        invalidateJobsCache();
+        _debouncedNotify();
+      }
+
       if (result.changed) {
+        final receiptStatus = result.receipt['from_legacy_status']?.toString();
         await _logJobCompletionBikeEvent(
-          previousJob: previousJob,
+          previousJob: cachedPreviousJob,
+          previousStatus: cachedPreviousJob == null && receiptStatus != null
+              ? JobStatus.fromDbValue(receiptStatus)
+              : null,
           updatedJob: updatedJob,
         );
       }
       return updatedJob;
-    } finally {
+    } catch (_) {
       // The server may have committed even when the acknowledgement was lost.
-      // Never leave a cached list authoritative after any attempt.
+      // An unresolved or rejected attempt therefore cannot leave the prior
+      // list projection claiming authority.
       invalidateJobsCache();
       _debouncedNotify();
+      rethrow;
     }
   }
 
@@ -3578,12 +3626,13 @@ class BikeshopService extends ChangeNotifier {
     }
     final row = await Supabase.instance.client
         .from('job_statuses')
-        .select('id')
+        .select()
         .eq('tenant_id', tenantId)
         .eq('code', status.dbValue)
         .eq('is_active', true)
         .maybeSingle();
-    final statusId = row?['id']?.toString();
+    final targetStatus = row == null ? null : JobStatusCustom.fromJson(row);
+    final statusId = targetStatus?.id;
     if (statusId == null || statusId.isEmpty) {
       throw StateError(
         'No existe un estado activo para ${status.displayName}.',
@@ -3593,6 +3642,7 @@ class BikeshopService extends ChangeNotifier {
       jobId,
       statusId,
       operationKey: operationKey,
+      targetStatus: targetStatus,
     );
   }
 
@@ -4560,7 +4610,7 @@ class BikeshopService extends ChangeNotifier {
       if (data != null &&
           _cacheScope.owns(lease) &&
           data['tenant_id']?.toString() == lease.scope.tenantId) {
-        final hydrated = await _hydrateJobSubjects([
+        final hydrated = await _hydrateJobOperationalProjections([
           MechanicJob.fromJson(data),
         ]);
         if (!_cacheScope.owns(lease)) return;
@@ -4582,12 +4632,49 @@ class BikeshopService extends ChangeNotifier {
     if (_cachedJobs == null) return;
 
     final index = _cachedJobs!.indexWhere((j) => j.id == job.id);
+    final cached = index >= 0 ? _cachedJobs![index] : null;
+    final reconciled = reconcileMechanicJobCacheProjection(
+      authoritative: job,
+      cached: cached,
+    );
     if (index >= 0) {
-      _cachedJobs![index] = job; // Update in-place
+      _cachedJobs![index] = reconciled; // Update in-place
     } else {
-      _cachedJobs!.add(job); // New record
+      _cachedJobs!.add(reconciled); // New record
       _cachedJobs!.sort((a, b) => b.arrivalDate.compareTo(a.arrivalDate));
     }
+  }
+
+  MechanicJob? _cachedJobById(String jobId) {
+    final jobs = _cachedJobs;
+    if (jobs == null) return null;
+    for (final job in jobs) {
+      if (job.id == jobId) return job;
+    }
+    return null;
+  }
+
+  /// Refreshes only the lifecycle projection after the acknowledged row has
+  /// already reached the UI. The generation/status guards prevent a slower
+  /// projection request from overwriting a newer status transition.
+  Future<void> _refreshJobTimeMetricsAfterTransition(
+    MechanicJob authoritativeJob,
+    AuthorityCacheLease lease,
+  ) async {
+    final withoutMetrics = authoritativeJob.copyWith(timeMetrics: null);
+    final hydrated = (await _hydrateJobTimeMetrics([withoutMetrics])).first;
+    final metrics = hydrated.timeMetrics;
+    if (metrics == null || !_cacheScope.owns(lease)) return;
+
+    final current = _cachedJobById(authoritativeJob.id ?? '');
+    if (current == null ||
+        current.statusId != authoritativeJob.statusId ||
+        current.updatedAt != authoritativeJob.updatedAt) {
+      return;
+    }
+
+    _surgicalUpdateJob(current.copyWith(timeMetrics: metrics));
+    if (mounted) notifyListeners();
   }
 
   /// Surgically remove a job from the cache

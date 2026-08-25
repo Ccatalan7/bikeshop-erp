@@ -19,6 +19,7 @@ enum _ProductCompatibilityBrowseMode {
 /// - Adding notes/descriptions to catalog products
 class ProductAutocompleteField extends StatefulWidget {
   final Function(ProductSelection) onProductSelected;
+  final ValueChanged<String>? onTextChanged;
   final TextEditingController? controller;
   final FocusNode? focusNode; // Allow external focus control
   final String? initialValue;
@@ -38,6 +39,7 @@ class ProductAutocompleteField extends StatefulWidget {
   const ProductAutocompleteField({
     super.key,
     required this.onProductSelected,
+    this.onTextChanged,
     this.controller,
     this.focusNode,
     this.initialValue,
@@ -206,13 +208,12 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller ?? TextEditingController();
+    _controller = widget.controller ??
+        TextEditingController(text: widget.initialValue ?? '');
     _focusNode = widget.focusNode ?? FocusNode();
     _compatibilityEngineEnabled = widget.compatibilityResolver != null;
     _inventoryService =
         Provider.of<shared_inventory.InventoryService>(context, listen: false);
-    _controller.text = widget.initialValue ?? '';
-
     if ((widget.preloadCatalog || widget.autoFocus) && _hasSufficientQuery) {
       // Defer loading to avoid "setState() called during build" if the
       // service notifies synchronously.
@@ -1484,6 +1485,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   void _onTextChanged(String value) {
+    widget.onTextChanged?.call(value);
+
     if (!_hasSufficientQuery) {
       _debounce?.cancel();
       ++_catalogRequestSerial;

@@ -41,6 +41,8 @@ class PegasCalendarWidget extends StatefulWidget {
 
   /// Callback when data needs to be refreshed (for external data mode)
   final VoidCallback? onRefreshNeeded;
+  final Future<bool> Function(MechanicJob, JobStatusCustom)?
+      onStatusChangeRequested;
   final bool? useCompactLayout;
   final PegasCalendarSession? session;
 
@@ -50,6 +52,7 @@ class PegasCalendarWidget extends StatefulWidget {
     this.customers,
     this.bikes,
     this.onRefreshNeeded,
+    this.onStatusChangeRequested,
     this.useCompactLayout,
     this.session,
   });
@@ -2584,20 +2587,36 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
       MechanicJob job, JobStatusCustom newStatus) async {
     if (newStatus.id == job.statusId) return;
 
+    final parentWriter = widget.onStatusChangeRequested;
+    if (parentWriter != null) {
+      await parentWriter(job, newStatus);
+      return;
+    }
+
     try {
-      await context.read<BikeshopService>().transitionJobStatus(
-            job.id!,
-            newStatus.id!,
-            operationKey: const Uuid().v4(),
-          );
+      final updatedJob =
+          await context.read<BikeshopService>().transitionJobStatus(
+                job.id!,
+                newStatus.id!,
+                operationKey: const Uuid().v4(),
+                targetStatus: newStatus,
+              );
       if (_useExternalData) {
-        widget.onRefreshNeeded?.call();
+        if (mounted) setState(() => _selectedJob = updatedJob);
       } else {
-        await _loadJobs();
+        final jobs = List<MechanicJob>.from(_internalJobs);
+        final index = jobs.indexWhere((item) => item.id == updatedJob.id);
+        if (index >= 0) {
+          jobs[index] = updatedJob;
+        }
+        if (mounted) {
+          setState(() {
+            _internalJobs = jobs;
+            _selectedJob = updatedJob;
+          });
+        }
       }
       if (mounted) {
-        final refreshed = _jobs.where((item) => item.id == job.id).firstOrNull;
-        if (refreshed != null) setState(() => _selectedJob = refreshed);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Estado cambiado a ${newStatus.name}'),

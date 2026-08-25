@@ -100,6 +100,43 @@ void main() {
   });
 
   testWidgets(
+    'external controller keeps its text and reports user edits',
+    (tester) async {
+      final inventory = _RecordingInventoryService();
+      final controller = TextEditingController(text: 'Disco de freno');
+      addTearDown(controller.dispose);
+      final changes = <String>[];
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<InventoryService>.value(
+          value: inventory,
+          child: MaterialApp(
+            home: Scaffold(
+              body: ProductAutocompleteField(
+                controller: controller,
+                preloadCatalog: false,
+                minimumSearchCharacters: 2,
+                onTextChanged: changes.add,
+                onProductSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.text, 'Disco de freno');
+      expect(find.text('Disco de freno'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'Disco delantero');
+      await tester.pump();
+
+      expect(controller.text, 'Disco delantero');
+      expect(changes, ['Disco delantero']);
+    },
+  );
+
+  testWidgets(
     'compact deferred search stays closed until the query is useful',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1000, 700));

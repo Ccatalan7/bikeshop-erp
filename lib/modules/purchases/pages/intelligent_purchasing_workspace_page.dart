@@ -289,6 +289,11 @@ class _IntelligentPurchasingWorkspacePageState
   final TextEditingController _orderMessageBody = TextEditingController();
   bool _sendingOrder = false;
 
+  /// El PDF que se está mirando. **Se dibuja en el mismo panel del documento**,
+  /// no en la hoja de compartir del sistema: el operador aprieta «Ver el PDF»
+  /// para revisar el papel y le salía un menú de AirDrop.
+  Uint8List? _orderPdfBytes;
+
   /// Lo que ya existe guardado con el proveedor abierto. Se lee al abrir la
   /// ficha y se refresca al guardar: un pedido que se guardó y no aparece en la
   /// lista de al lado hace dudar de si se guardó.
@@ -2868,8 +2873,7 @@ class _IntelligentPurchasingWorkspacePageState
       // El vocabulario de unidades tiene un dueño único en este módulo; el
       // inspector lo recibe concordado en vez de asumir «u.».
       unitLabel: purchaseUnitLabel(need?.unit ?? 'unit', quantity),
-      onQuantityChanged: (value) =>
-          setState(() => _inspectorQuantity = value),
+      onQuantityChanged: (value) => setState(() => _inspectorQuantity = value),
       onToggleCollapsed: collapsible
           ? () => setState(
                 () => _inspectorCollapsed = !_inspectorCollapsed,
@@ -4846,7 +4850,8 @@ class _IntelligentPurchasingWorkspacePageState
   }
 
   /// es lo que rompía el módulo.
-  Future<void> _loadSupplierHistory(SupplyNeed need, {bool force = false}) async {
+  Future<void> _loadSupplierHistory(SupplyNeed need,
+      {bool force = false}) async {
     if (!force && _supplierHistoryNeedId == need.id) return;
     _supplierHistoryNeedId = need.id;
     try {
@@ -5008,8 +5013,8 @@ class _IntelligentPurchasingWorkspacePageState
         targets: targets,
         onProgress: (done, total, name) {
           if (!mounted) return;
-          setState(() => _checkProgress =
-              'Confirmando \${done + 1} de \$total: \$name');
+          setState(() =>
+              _checkProgress = 'Confirmando \${done + 1} de \$total: \$name');
         },
       );
       if (!mounted) return;
@@ -5101,6 +5106,7 @@ class _IntelligentPurchasingWorkspacePageState
       // pedirle a RBX lo que se eligió en el catálogo de Vittal.
       _orderLines.clear();
       _orderPreviewOpen = false;
+      _orderPdfBytes = null;
       _savedOrderId = null;
       _savedOrderNumber = null;
       _orderMessage = null;
@@ -5110,8 +5116,7 @@ class _IntelligentPurchasingWorkspacePageState
     await _loadOpenOrders(supplierId);
   }
 
-  Future<void> _loadSupplierCatalog(String supplierId,
-      {String? search}) async {
+  Future<void> _loadSupplierCatalog(String supplierId, {String? search}) async {
     try {
       final page = await _service.supplierCatalogPage(
         supplierId: supplierId,
@@ -5139,7 +5144,8 @@ class _IntelligentPurchasingWorkspacePageState
   Future<void> _loadOpenOrders(String supplierId) async {
     try {
       final purchases = context.read<PurchaseService>();
-      final documentos = await purchases.getPurchaseInvoices(forceRefresh: true);
+      final documentos =
+          await purchases.getPurchaseInvoices(forceRefresh: true);
       if (!mounted || _openSupplierId != supplierId) return;
       final abiertos = documentos
           .where((invoice) =>
@@ -5383,20 +5389,75 @@ class _IntelligentPurchasingWorkspacePageState
   /// de la pantalla y este archivo salen del mismo `PurchaseOrderDocument`, así
   /// que lo que se aprobó es lo que sale.
   Future<void> _openOrderPdf(PurchaseOrderDocument document) async {
+    // Segunda pulsada: vuelve al documento vivo.
+    if (_orderPdfBytes != null) {
+      setState(() => _orderPdfBytes = null);
+      return;
+    }
     try {
       final bytes = await PurchaseOrderPdfGenerator.generateBytes(
         document,
         appearanceService: context.read<AppearanceService>(),
       );
       if (!mounted) return;
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: PurchaseOrderPdfGenerator.fileNameFor(document),
-      );
+      setState(() => _orderPdfBytes = bytes);
     } catch (error) {
       if (!mounted) return;
-      _showCheckMessage('No se pudo generar el PDF del pedido.');
+      _showCheckMessage('No se pudo generar el PDF del pedido: '
+          '${_reason(error)}');
     }
+  }
+
+  /// El PDF real dentro del panel, con la vuelta al documento a la vista.
+  Widget _buildOrderPdfPreview(PurchaseOrderDocument document) {
+    final tokens = PurchaseTokens.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'El PDF que se adjunta',
+                style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+              ),
+            ),
+            Text(
+              PurchaseOrderPdfGenerator.fileNameFor(document),
+              style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: PdfPreview(
+              build: (format) => _orderPdfBytes!,
+              // El papel se mira; imprimir, compartir y cambiar de página son
+              // decisiones que no van en una revisión.
+              allowPrinting: false,
+              allowSharing: false,
+              canChangePageFormat: false,
+              canChangeOrientation: false,
+              canDebug: false,
+              useActions: false,
+              padding: EdgeInsets.zero,
+              scrollViewDecoration: BoxDecoration(color: tokens.sunken),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PurchaseInlineAction(
+            key: const ValueKey('order-close-pdf'),
+            label: 'Volver al pedido',
+            onPressed: () => setState(() => _orderPdfBytes = null),
+          ),
+        ),
+      ],
+    );
   }
 
   /// Prepara el mensaje y lo muestra **antes** de mandarlo.
@@ -5490,9 +5551,8 @@ class _IntelligentPurchasingWorkspacePageState
   /// El motivo, en una línea. Postgres manda el suyo en `message`; lo demás
   /// —traza, contexto— no le sirve a quien está mirando la pantalla.
   static String _reason(Object error) {
-    final texto = error is PostgrestException
-        ? error.message
-        : error.toString();
+    final texto =
+        error is PostgrestException ? error.message : error.toString();
     final limpio = texto.replaceAll(RegExp(r'\s+'), ' ').trim();
     return limpio.length > 160 ? '${limpio.substring(0, 157)}…' : limpio;
   }
@@ -5713,9 +5773,11 @@ class _IntelligentPurchasingWorkspacePageState
               opacity: animation,
               child: SlideTransition(
                 position: Tween<Offset>(
-                  begin: Offset(entrando && _openSupplierId != null
-                      ? 0.04
-                      : (_openSupplierId == null ? -0.04 : 0.04), 0),
+                  begin: Offset(
+                      entrando && _openSupplierId != null
+                          ? 0.04
+                          : (_openSupplierId == null ? -0.04 : 0.04),
+                      0),
                   end: Offset.zero,
                 ).animate(animation),
                 child: child,
@@ -5861,6 +5923,8 @@ class _IntelligentPurchasingWorkspacePageState
         _highlightedOrderLine = null;
       }),
       onSaveDraft: () => unawaited(_savePurchaseOrder(draft)),
+      pdfPreview:
+          _orderPdfBytes == null ? null : _buildOrderPdfPreview(document),
       onOpenPdf: () => unawaited(_openOrderPdf(document)),
       onSendToSupplier: () => unawaited(_prepareOrderMessage(document)),
       onClosePreview: () => setState(() {

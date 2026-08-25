@@ -9,6 +9,10 @@ void main() {
   /// `intelligent_purchasing_decision_surfaces.dart`.
   late String planSurface;
   late String jobs;
+  late String calendar;
+  late String jobNeeds;
+  late String needCapture;
+  late String supplyModels;
   late String routes;
   late String menu;
   late String purchaseForm;
@@ -38,6 +42,18 @@ void main() {
     ).readAsStringSync();
     jobs = File(
       'lib/modules/bikeshop/pages/pegas_table_page.dart',
+    ).readAsStringSync();
+    calendar = File(
+      'lib/modules/bikeshop/widgets/pegas_calendar_widget.dart',
+    ).readAsStringSync();
+    jobNeeds = File(
+      'lib/modules/bikeshop/widgets/job_supply_needs_panel.dart',
+    ).readAsStringSync();
+    needCapture = File(
+      'lib/modules/bikeshop/widgets/supply_need_capture_panel.dart',
+    ).readAsStringSync();
+    supplyModels = File(
+      'lib/modules/purchases/models/intelligent_purchasing_models.dart',
     ).readAsStringSync();
     routes = File('lib/shared/routes/app_router.dart').readAsStringSync();
     menu = File('lib/shared/widgets/main_layout.dart').readAsStringSync();
@@ -170,7 +186,7 @@ void main() {
 
   test('jobs status morphs only through the semantic capability flag', () {
     expect(jobs, contains('status.promptsSupplyNeedCapture'));
-    expect(jobs, contains('SupplyNeedCapturePanel('));
+    expect(jobs, contains('JobSupplyNeedsPanel('));
     expect(jobs, contains("ValueKey('supply-need-back-to-statuses')"));
     expect(jobs, contains("semanticLabel: 'Volver a estados'"));
     expect(jobs, contains('_supplyCaptureHasOpened'));
@@ -178,15 +194,54 @@ void main() {
     expect(jobs, contains("'Repuestos sin definir'"));
     expect(jobs, contains("'Solicitar captura de repuestos'"));
     expect(jobs, contains('final succeeded = await widget.onStatusSelected'));
+    final selectStatus = jobs.substring(
+      jobs.indexOf('Future<void> _selectStatus'),
+      jobs.indexOf('Future<void> _saveStatus'),
+    );
     expect(
-      jobs.indexOf('final succeeded = await widget.onStatusSelected'),
-      lessThan(jobs.indexOf('_isCapturingSupplyNeed = true')),
+      selectStatus.indexOf('final succeeded = await widget.onStatusSelected'),
+      lessThan(selectStatus.indexOf('_openSupplyPanel(create: true)')),
       reason: 'The form may appear only after a confirmed status transition.',
     );
     expect(
       jobs,
       isNot(contains("status.name.toLowerCase() == 'repuestos'")),
       reason: 'Status names are editable and cannot own behavior.',
+    );
+  });
+
+  test('Jobs keeps a visible editable trace into canonical purchasing', () {
+    expect(jobs, contains("ValueKey('workshop-supply-trace-entry')"));
+    expect(jobs, contains("'1 repuesto registrado'"));
+    expect(jobs, contains('onSupplyNeedCreated'));
+    expect(jobNeeds, contains('fetchJobNeeds(jobId)'));
+    expect(jobNeeds, contains("ValueKey('workshop-supply-need-"));
+    expect(jobNeeds, contains("tooltip: 'Abrir en Asistente de Compras'"));
+    expect(jobNeeds, contains('need.createdAt.toLocal()'));
+    expect(needCapture, contains("label: 'Aplicar en'"));
+    expect(
+      needCapture,
+      contains("ValueKey('workshop-supply-automatic-scope')"),
+    );
+    expect(needCapture, contains('if (linkedBikes.length <= 1)'));
+    expect(needCapture, contains('autoFocus: false'));
+    expect(needCapture, contains('_willDiscardCatalogIdentity'));
+    expect(needCapture, contains('return null;'));
+    expect(needCapture, contains('_service.updateWorkshopNeed('));
+    expect(jobNeeds, contains('initialJobBikeId'));
+    expect(jobs, contains('initialSupplyJobBikeId: jobBike.id'));
+    expect(calendar, contains('onStatusChangeRequested'));
+    expect(
+        jobs, contains('onStatusChangeRequested: _changeStatusFromCalendar'));
+    expect(supplyService, contains("'update_workshop_supply_need_v1'"));
+    expect(supplyModels, contains("json['requires_supply_definition']"));
+    expect(
+      routes,
+      contains("initialNeedId: state.uri.queryParameters['need']"),
+    );
+    expect(
+      routes,
+      contains("mechanicJobId: state.uri.queryParameters['job']"),
     );
   });
 

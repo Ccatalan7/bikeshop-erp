@@ -188,6 +188,27 @@ Comportamiento vigente:
 - `_surgicalUpdateJob` y `_surgicalRemoveJob` siguen siendo dueños de los
   deltas realtime; no se sustituyeron por recargas completas.
 
+**Corrección 2026-08-24 — transición de estado sin recarga universal.**
+`transition_mechanic_job_status` ya devolvía la fila base autoritativa, pero la
+tabla la descartaba y esperaba otra `_loadData` de toda la mesa. El servicio
+ahora fusiona ese snapshot en el caché del lease exacto, preserva únicamente
+las proyecciones derivadas del mismo trabajo/tenant y la superficie reemplaza
+esa fila sin perder filtros, orden, selección ni scroll. La ficha del estado
+elegido sólo decora el snapshot cuando coincide en ID y tenant; nunca sustituye
+la autoridad del RPC. La proyección temporal se reconcilia después con una
+lectura acotada y guardas de status/`updated_at`, por lo que una respuesta lenta
+no puede revertir una transición posterior. Un resultado fallido o todavía
+ambiguo sí invalida y recarga: esa sigue siendo la frontera segura.
+
+La transición tampoco hace una prelectura del trabajo: el recibo inmutable ya
+contiene el estado anterior para el evento de término. Los tres hidratadores
+independientes de una carga completa —objeto recibido, garantía de servicio y
+métricas— salen en paralelo, igual que los lotes acotados de atención de
+abastecimiento. La regresión vive en
+`test/unit/workshop_job_status_cache_reconciliation_test.dart` y prueba el
+merge tenant/job, la ausencia de `_loadData` en éxito y la concurrencia de los
+lotes; la falla conserva el fallback autoritativo.
+
 Esto protege el flujo multiusuario: un cambio de trabajos hecho desde otro
 cliente llega por el canal tenant-scoped, actualiza la fila/cache y repinta la
 tabla sin reiniciar toda la colección. Las proyecciones derivadas que no tienen

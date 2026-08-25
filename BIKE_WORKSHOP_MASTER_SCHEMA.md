@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-08-21
+Last updated: 2026-08-24
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, supply needs and commitments, bike memory kernel, sync pipeline, and visible bike history
 
@@ -1200,6 +1200,35 @@ status cannot change this behavior. Selecting such a status first completes
 the canonical job transition; only after success may its anchored surface
 offer product-autocomplete or verbatim-description capture.
 
+**Jobs traceability correction (2026-08-24).** The status is only an invitation
+to capture demand; it is never the demand record. Jobs now reads the exact live
+`mechanic_job_supply_attention_v1.requires_supply_definition` projection,
+keeps the active-need count visible even after the job leaves the prompting
+status, and exposes the complete job-origin history (including covered and
+cancelled rows) with product/SKU or verbatim description, quantity, bicycle
+scope, lifecycle state and timestamps. One linked bicycle is selected
+automatically and shown as read-only context. Two or more linked bicycles have
+no honest default: the operator must choose one exact
+`mechanic_job_bikes.id` or intentional `General` scope before save. The same
+status writer is used by the Jobs list, embedded calendar and per-bike status
+host; a per-bike transition starts with that exact bike selected.
+
+`20260824720000_workshop_supply_need_traceability.sql` adds
+`update_workshop_supply_need_v1`. It is the only Jobs-origin editor for product
+identity, original description, quantity/unit and job-bike attribution. The
+command validates tenant, optimistic version, editable lifecycle, same-job
+bicycle and active physical product, serializes its replay key, appends the
+normal `supply_need_events` receipt, and creates an interpretation revision only
+when interpretation actually changed. A bike-only correction therefore leaves
+the product interpretation history honest. Jobs and Intelligent Purchasing
+read the same `supply_needs` row; `/purchases/assistant?need=<id>&job=<id>` is
+only a context-preserving handoff, not a copy. The legacy
+`smart_purchase_list` remains a separate historical feature and must not become
+a second owner of workshop demand. The migration was applied, read back and
+registered in Viñabike production on 2026-08-24; the live function grants
+execute only to `authenticated` and its definition contains the same-job bike,
+optimistic-version, durable-receipt and replay-serialization guards.
+
 `workshop_inventory_commitments` is the pre-invoice physical promise for a
 confirmed need. It is versioned by append-only
 `workshop_inventory_commitment_events`, reduces common ATP, and never writes
@@ -1511,6 +1540,35 @@ incrementally; extract a shared coordinator only after multiple proven users
 show the same invariant. Minimum regression for Jobs remains out-of-order
 success/error, authority cancellation, dispose, current real error and proof
 that service notifications keep the cache-only surgical route.
+
+#### Status-transition delta closure (2026-08-24)
+
+The State chip no longer throws away the authoritative job snapshot returned
+by `transition_mechanic_job_status` and then reloads the complete Jobs graph.
+`BikeshopService.transitionJobStatus` publishes that one row only into the
+still-owned tenant lease; `PegasTablePage` adopts the same row directly while
+preserving filters, sort, selection and scroll, and the calendar uses the same
+delta. The server remains the sole owner of `status`, `status_id`, lifecycle
+timestamps, invoice serialization and the immutable receipt.
+
+The cache merge may retain `subjectData`, service-warranty and lifecycle
+projections only from the exact same job and tenant. The selected custom status
+is display metadata and decorates the row only when its ID and tenant match the
+acknowledged snapshot. Lifecycle metrics refresh asynchronously for that one
+job with lease, status and `updated_at` guards; an older projection response
+cannot overwrite a newer transition. Realtime row refreshes hydrate those same
+three projections concurrently, and a cold full Jobs load now hydrates them in
+one parallel round instead of three sequential rounds. Supply-attention chunks
+are parallel too. A rejection or unresolved acknowledgement invalidates the
+cache and retains the full-load fallback; success does not.
+
+Canonical implementation and regression:
+
+- `lib/modules/bikeshop/services/mechanic_job_cache_reconciler.dart`
+- `lib/modules/bikeshop/services/bikeshop_service.dart`
+- `lib/modules/bikeshop/pages/pegas_table_page.dart`
+- `lib/modules/bikeshop/widgets/pegas_calendar_widget.dart`
+- `test/unit/workshop_job_status_cache_reconciliation_test.dart`
 
 The routed/embedded existing-job editor follows the same ownership boundary at
 the detail level. Its blocking load contains only the exact job, linked
@@ -3387,9 +3445,12 @@ the retained audit row.
 
 This strengthens centralization around bike profile truth because real service flows can now create the first durable `bike_profiles.technical_profile.values` record for bikes that previously had no profile at all, while historical data remains untouched until there is real structured evidence worth promoting. It also strengthens validation discipline because compatibility/backbone work now has a repeatable hidden debug harness instead of relying on production-visible test UI or repeated manual setup.
 
-## Next Session Priority Queue (2026-07-16)
+## Next Session Priority Queue (reviewed 2026-08-24)
 
 This is the ordered queue a fresh agent should assume unless the user explicitly redirects the work.
+
+The Jobs status-latency slice above is closed and does not add an open queue
+item; the remaining priorities retain their existing order.
 
 Validation rule for every queued item below: use the debug-only `Prueba rápida` harness in `lib/modules/bikeshop/pages/pegas_table_page.dart` and record which scenario/stage proved the change before widening scope or calling the slice done.
 

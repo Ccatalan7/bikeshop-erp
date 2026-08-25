@@ -35,6 +35,11 @@ select has_function(
   'need editing is versioned through one command'
 );
 select has_function(
+  'public', 'update_workshop_supply_need_v1',
+  array['uuid', 'bigint', 'text', 'uuid', 'numeric', 'text', 'uuid', 'text'],
+  'Jobs can edit a need and its validated bicycle attribution atomically'
+);
+select has_function(
   'public', 'cancel_supply_need_v1',
   array['uuid', 'bigint', 'text', 'text'],
   'need cancellation is an audited command'
@@ -93,6 +98,7 @@ insert into public.customers(id, tenant_id, name) values
 
 insert into public.bikes(id, tenant_id, customer_id, brand, model) values
   ('99b10000-0000-4000-8000-000000000012', '99b10000-0000-4000-8000-000000000001', '99b10000-0000-4000-8000-000000000011', 'QA', 'Bike A'),
+  ('99b10000-0000-4000-8000-000000000013', '99b10000-0000-4000-8000-000000000001', '99b10000-0000-4000-8000-000000000011', 'QA', 'Bike A2'),
   ('99b10000-0000-4000-8000-000000000022', '99b10000-0000-4000-8000-000000000002', '99b10000-0000-4000-8000-000000000021', 'QA', 'Bike B');
 
 insert into public.job_statuses(
@@ -113,6 +119,7 @@ insert into public.mechanic_job_bikes(
   id, tenant_id, job_id, bike_id, order_index
 ) values
   ('99b10000-0000-4000-8000-000000000051', '99b10000-0000-4000-8000-000000000001', '99b10000-0000-4000-8000-000000000041', '99b10000-0000-4000-8000-000000000012', 0),
+  ('99b10000-0000-4000-8000-000000000053', '99b10000-0000-4000-8000-000000000001', '99b10000-0000-4000-8000-000000000041', '99b10000-0000-4000-8000-000000000013', 1),
   ('99b10000-0000-4000-8000-000000000052', '99b10000-0000-4000-8000-000000000002', '99b10000-0000-4000-8000-000000000042', '99b10000-0000-4000-8000-000000000022', 0);
 
 insert into public.products(
@@ -298,6 +305,67 @@ select is(
   (select receipt->'need'->>'job_bike_id' from supply_formal_result),
   null,
   'General attribution is represented by a durable null bike link'
+);
+
+create temporary table supply_workshop_update_result as
+select public.update_workshop_supply_need_v1(
+  (select (receipt->>'need_id')::uuid from supply_formal_result),
+  1,
+  'Piñón Shimano para el trabajo',
+  '99b10000-0000-4000-8000-000000000061',
+  1,
+  'unit',
+  '99b10000-0000-4000-8000-000000000053',
+  'supply-workshop-assign-bike'
+) as receipt;
+select is(
+  (select receipt->'need'->>'job_bike_id' from supply_workshop_update_result),
+  '99b10000-0000-4000-8000-000000000053',
+  'Jobs can move a pending need from General to one exact linked bike'
+);
+select is(
+  (select (receipt->>'version')::bigint from supply_workshop_update_result),
+  2::bigint,
+  'changing workshop scope participates in optimistic concurrency'
+);
+select is(
+  (
+    select count(*)::integer
+    from public.supply_need_interpretation_revisions
+    where supply_need_id = (
+      select (receipt->>'need_id')::uuid from supply_formal_result
+    )
+  ),
+  1,
+  'a bike-only correction does not invent a new product interpretation'
+);
+select is(
+  (public.update_workshop_supply_need_v1(
+    (select (receipt->>'need_id')::uuid from supply_formal_result),
+    1,
+    'Piñón Shimano para el trabajo',
+    '99b10000-0000-4000-8000-000000000061',
+    1,
+    'unit',
+    '99b10000-0000-4000-8000-000000000053',
+    'supply-workshop-assign-bike'
+  )->>'replay')::boolean,
+  true,
+  'an exact workshop edit replays before its stale version is evaluated'
+);
+select throws_ok(
+  format(
+    'select public.update_workshop_supply_need_v1(%L::uuid, 2, %L, %L::uuid, 1, %L, %L::uuid, %L)',
+    (select receipt->>'need_id' from supply_formal_result),
+    'Piñón Shimano para el trabajo',
+    '99b10000-0000-4000-8000-000000000061',
+    'unit',
+    '99b10000-0000-4000-8000-000000000052',
+    'supply-workshop-foreign-bike'
+  ),
+  '23514',
+  'La bicicleta no pertenece a este trabajo.',
+  'Jobs cannot move a need to another job or tenant bicycle'
 );
 
 select throws_ok(
