@@ -215,6 +215,19 @@ tabla sin reiniciar toda la colección. Las proyecciones derivadas que no tienen
 evento suficiente todavía pueden requerir una reconciliación acotada; eso debe
 documentarse por consumidor, no ocultarse bajo un reload universal.
 
+**Corrección 2026-08-26 — el snapshot cacheado debe aceptar cambios de
+cardinalidad.** La hidratación paralela anterior devolvía una
+`List.generate(..., growable: false)`. Reemplazar una fila existente seguía
+funcionando y por eso la transición de estado era instantánea, pero un INSERT
+realtime fallaba en `_cachedJobs.add` con `Unsupported operation: Cannot add to
+a fixed-length list`; Notificaciones veía el alta mientras Trabajos quedaba
+obsoleto hasta un refresh completo. DELETE tenía la misma incompatibilidad
+latente. El reconciliador de la colección ahora aplica insert/update/delete
+sobre una copia growable y publica esa proyección, aunque el snapshot entrante
+sea fixed-length. La regresión debe comenzar deliberadamente con una lista de
+tamaño fijo y probar las tres operaciones; probar sólo el reemplazo de estado
+no certifica actualizaciones quirúrgicas.
+
 El cierre actual prueba ownership entre cargas completas y conserva el camino
 realtime que ya existía. No pretende certificar por sí solo toda la futura
 adopción app-wide. En particular, cualquier cambio posterior que mezcle un

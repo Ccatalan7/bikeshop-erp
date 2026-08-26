@@ -1593,6 +1593,16 @@ Canonical implementation and regression:
 - `lib/modules/bikeshop/widgets/pegas_calendar_widget.dart`
 - `test/unit/workshop_job_status_cache_reconciliation_test.dart`
 
+The collection reconciler is also the cardinality boundary for realtime
+changes. Since 2026-08-26 it copies any incoming full-load snapshot into a
+growable projection before insert/update/delete. The preceding parallel
+hydrator returned a fixed-length list: status replacement still worked, while
+new jobs raised `Unsupported operation: Cannot add to a fixed-length list` and
+were visible in the independent notification projection but not in Jobs until
+a full refresh. The regression therefore starts with a fixed-length snapshot
+and proves all three surgical operations; an existing-row status test alone is
+not sufficient evidence for realtime freshness.
+
 The routed/embedded existing-job editor follows the same ownership boundary at
 the detail level. Its blocking load contains only the exact job, linked
 invoice/payment state, exact customer and bicycles, persisted job-bike/item

@@ -4629,20 +4629,13 @@ class BikeshopService extends ChangeNotifier {
 
   /// Surgically update or add a job in the cache without invalidating it
   void _surgicalUpdateJob(MechanicJob job) {
-    if (_cachedJobs == null) return;
+    final cachedJobs = _cachedJobs;
+    if (cachedJobs == null) return;
 
-    final index = _cachedJobs!.indexWhere((j) => j.id == job.id);
-    final cached = index >= 0 ? _cachedJobs![index] : null;
-    final reconciled = reconcileMechanicJobCacheProjection(
+    _cachedJobs = upsertMechanicJobCacheProjection(
+      cachedJobs: cachedJobs,
       authoritative: job,
-      cached: cached,
     );
-    if (index >= 0) {
-      _cachedJobs![index] = reconciled; // Update in-place
-    } else {
-      _cachedJobs!.add(reconciled); // New record
-      _cachedJobs!.sort((a, b) => b.arrivalDate.compareTo(a.arrivalDate));
-    }
   }
 
   MechanicJob? _cachedJobById(String jobId) {
@@ -4679,7 +4672,12 @@ class BikeshopService extends ChangeNotifier {
 
   /// Surgically remove a job from the cache
   void _surgicalRemoveJob(String jobId) {
-    _cachedJobs?.removeWhere((j) => j.id == jobId);
+    final cachedJobs = _cachedJobs;
+    if (cachedJobs == null) return;
+    _cachedJobs = removeMechanicJobCacheProjection(
+      cachedJobs: cachedJobs,
+      jobId: jobId,
+    );
   }
 
   /// Setup realtime subscription for sales_invoices (for invoice status updates)

@@ -110,6 +110,128 @@ void main() {
     });
   });
 
+  group('surgical Jobs collection reconciliation', () {
+    final older = DateTime.utc(2026, 8, 24, 10);
+    final newer = DateTime.utc(2026, 8, 24, 11);
+
+    MechanicJob job({
+      required String id,
+      required String number,
+      required DateTime arrivalDate,
+      JobStatus status = JobStatus.pendiente,
+      String? diagnosis,
+    }) {
+      return MechanicJob(
+        id: id,
+        tenantId: 'tenant-1',
+        customerId: 'customer-1',
+        jobNumber: number,
+        arrivalDate: arrivalDate,
+        status: status,
+        diagnosis: diagnosis,
+      );
+    }
+
+    test('inserts a realtime row into a fixed-length full-load snapshot', () {
+      final existing = job(
+        id: 'job-1',
+        number: 'PG-00001',
+        arrivalDate: older,
+      );
+      final inserted = job(
+        id: 'job-2',
+        number: 'PG-00002',
+        arrivalDate: newer,
+      );
+      final fixedSnapshot = List<MechanicJob>.of(
+        [existing],
+        growable: false,
+      );
+
+      final reconciled = upsertMechanicJobCacheProjection(
+        cachedJobs: fixedSnapshot,
+        authoritative: inserted,
+      );
+
+      expect(reconciled.map((job) => job.id), ['job-2', 'job-1']);
+      expect(fixedSnapshot.map((job) => job.id), ['job-1']);
+      expect(
+        () => reconciled.add(job(
+          id: 'job-3',
+          number: 'PG-00003',
+          arrivalDate: newer,
+        )),
+        returnsNormally,
+        reason: 'the next realtime insert must remain legal',
+      );
+    });
+
+    test('updates only the matching realtime row', () {
+      final untouched = job(
+        id: 'job-1',
+        number: 'PG-00001',
+        arrivalDate: older,
+      );
+      final previous = job(
+        id: 'job-2',
+        number: 'PG-00002',
+        arrivalDate: newer,
+        diagnosis: 'Anterior',
+      );
+      final updated = job(
+        id: 'job-2',
+        number: 'PG-00002',
+        arrivalDate: newer,
+        status: JobStatus.enCurso,
+        diagnosis: 'Actualizado',
+      );
+
+      final reconciled = upsertMechanicJobCacheProjection(
+        cachedJobs: List<MechanicJob>.of(
+          [previous, untouched],
+          growable: false,
+        ),
+        authoritative: updated,
+      );
+
+      expect(reconciled, hasLength(2));
+      expect(reconciled.firstWhere((job) => job.id == 'job-2').status,
+          JobStatus.enCurso);
+      expect(reconciled.firstWhere((job) => job.id == 'job-2').diagnosis,
+          'Actualizado');
+      expect(
+          reconciled.firstWhere((job) => job.id == 'job-1'), same(untouched));
+    });
+
+    test('deletes a realtime row from a fixed-length snapshot', () {
+      final first = job(
+        id: 'job-1',
+        number: 'PG-00001',
+        arrivalDate: older,
+      );
+      final second = job(
+        id: 'job-2',
+        number: 'PG-00002',
+        arrivalDate: newer,
+      );
+
+      final reconciled = removeMechanicJobCacheProjection(
+        cachedJobs: List<MechanicJob>.of(
+          [second, first],
+          growable: false,
+        ),
+        jobId: 'job-2',
+      );
+
+      expect(reconciled.map((job) => job.id), ['job-1']);
+      expect(
+        () => reconciled.add(second),
+        returnsNormally,
+        reason: 'a later realtime insert must remain legal after a delete',
+      );
+    });
+  });
+
   test('the single-row table transition has no full reload on success', () {
     final source = File(
       'lib/modules/bikeshop/pages/pegas_table_page.dart',
