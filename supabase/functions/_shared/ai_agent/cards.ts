@@ -478,7 +478,11 @@ function inventoryPredicateLabel(operator: string, values: readonly string[]): s
 export function autoOpenListAnswer(
   cards: readonly AgentActionCard[],
   supportsResultLists: boolean,
+  surface: AgentCardSurface,
 ): string | undefined {
+  // El Asistente de compras no redacta la respuesta del operador con una frase
+  // de otro módulo. Ver `purchasingSurfaceCards`.
+  if (surface === "purchasing_draft") return undefined;
   if (cards.length !== 1) return undefined;
   const listRef = cards[0].listRef;
   if (!listRef?.autoOpen || listRef.kind !== "inventory") return undefined;
@@ -517,14 +521,59 @@ function withoutServerOnlyListFields(
   }));
 }
 
+/**
+ * En qué superficie se va a leer la tarjeta.
+ *
+ * **No tiene default a propósito.** Un parámetro opcional deja que un sitio de
+ * proyección nuevo herede «general» sin decirlo, que es justo la falla que se
+ * está cerrando: la superficie se declara o el build no compila.
+ */
+export type AgentCardSurface = "general" | "purchasing_draft";
+
+/**
+ * Lo único que el Asistente de compras acepta como salida: el borrador tipado.
+ *
+ * **Una tarjeta dentro de un flujo dedicado es evidencia, nunca una salida.**
+ * `search_inventory` proyecta una tarjeta de Inventario con `destination:
+ * inventory_products` — o sea un enlace FUERA del módulo, encima de un paso
+ * cuyo trabajo es capturar la necesidad. El decodificador del cliente EXIGE ese
+ * destino cuando viaja un `listRef` (`lista_solo_para_inventario`), así que la
+ * tarjeta no se puede sanear campo por campo sin romper las apps instaladas:
+ * en esta superficie no se emite.
+ *
+ * Lo que el operador ve en su lugar no es menos, es lo suyo: el borrador de
+ * 1–8 líneas, su aclaración tipada, y la resolución contra bodega que el propio
+ * módulo lee con su servicio — evidencia más rica que un conteo con un botón
+ * para irse a otra parte.
+ *
+ * Se filtra por lo permitido y no por lo prohibido: una herramienta nueva del
+ * carril de compras no se cuela por no estar en una lista negra.
+ */
+function purchasingSurfaceCards(
+  cards: readonly AgentActionCard[],
+): readonly AgentActionCard[] {
+  if (cards.every((item) => item.kind === "supply_need_draft")) return cards;
+  return Object.freeze(
+    cards.filter((item) => item.kind === "supply_need_draft"),
+  );
+}
+
 export function cardsForClient(
   rawCards: readonly AgentActionCard[],
+  surface: AgentCardSurface,
   supportsResultLists: boolean,
   supportsStructuredClarifications = false,
 ): readonly AgentActionCard[] {
   // El embudo único hacia el cliente: aplicarlo acá cubre los diez lugares que
-  // proyectan tarjetas, en vez de diez parches que se desincronizan.
-  const cards = withoutServerOnlyListFields(dropSearchScaffolding(rawCards));
+  // proyectan tarjetas, en vez de diez parches que se desincronizan. La
+  // superficie entra por acá por la misma razón, y antes que cualquier otra
+  // compatibilidad: lo que no corresponde a esta superficie no se proyecta ni
+  // se persiste, así que un replay tampoco lo devuelve.
+  const cards = surface === "purchasing_draft"
+    ? purchasingSurfaceCards(
+      withoutServerOnlyListFields(dropSearchScaffolding(rawCards)),
+    )
+    : withoutServerOnlyListFields(dropSearchScaffolding(rawCards));
   if (
     (supportsResultLists || !cards.some((item) => item.listRef)) &&
     (supportsStructuredClarifications ||
@@ -966,6 +1015,10 @@ function basketSupplierCards(items: readonly JsonObject[]): readonly AgentAction
       : null;
     const missing = optionalText(item, "missingList");
     const complement = optionalText(item, "complementSupplierName");
+    const approximate = typeof item.approximateNeeds === "number"
+      ? item.approximateNeeds
+      : 0;
+    const approximateList = optionalText(item, "approximateList");
     return card({
       kind: "supplier",
       eyebrow: covered !== null && total !== null && covered === total
@@ -984,6 +1037,11 @@ function basketSupplierCards(items: readonly JsonObject[]): readonly AgentAction
           ? `Le falta ${missing} — eso se lo compramos a ${complement}`
           : missing
           ? `Le falta ${missing}, y no hay historial de eso con nadie más`
+          : undefined,
+        approximate > 0
+          ? `${approximate} ${approximate === 1 ? "línea parecida" : "líneas parecidas"} no cuentan como cobertura exacta${
+            approximateList ? `: ${approximateList}` : ""
+          }`
           : undefined,
         daysSinceLabel(days),
         optionalText(item, "brands"),

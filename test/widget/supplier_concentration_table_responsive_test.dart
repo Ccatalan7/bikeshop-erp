@@ -50,7 +50,11 @@ SupplierConcentration _supplier({
   );
 }
 
-Future<void> _pump(WidgetTester tester, double width) {
+Future<void> _pump(
+  WidgetTester tester,
+  double width, {
+  bool includeExact = false,
+}) {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = Size(width, 900);
   addTearDown(tester.view.reset);
@@ -61,34 +65,62 @@ Future<void> _pump(WidgetTester tester, double width) {
         brightness: Brightness.dark,
       ),
       home: Scaffold(
-        body: SupplierConcentrationTable(
-          report: SupplierConcentrationReport(
-            items: [
-              _supplier(
-                id: 's1',
-                name: 'TeknoBike',
-                website: 'https://teknobike.cl',
-              ),
-              // Sin sitio: es la fila que antes corría sus acciones y rompía
-              // la alineación de la columna.
-              _supplier(id: 's2', name: 'Vittal'),
-            ],
-            hasMore: false,
+        body: SingleChildScrollView(
+          child: SupplierConcentrationTable(
+            exactProducts: includeExact
+                ? <SupplyStockOption>[
+                    SupplyStockOption.fromJson(<String, dynamic>{
+                      'productId': 'p-exact',
+                      'name': 'Cámara aro 29 Presta 60 mm',
+                      'sku': '160-4',
+                      'atp': 0,
+                      'coverage': 'none',
+                      'matchState': 'strong',
+                      'blocksExternal': false,
+                      'evidenceState': 'catalog_assignment',
+                      'supplierId': 's-derman',
+                      'supplierName': 'Derman',
+                      'purchaseCount': 0,
+                      'availabilityFresh': false,
+                      'catalogCostNet': 3396,
+                      'catalogCostCurrency': 'CLP',
+                      'supplierCode': '160-4',
+                      'automaticAvailabilityEnabled': false,
+                    }),
+                  ]
+                : const <SupplyStockOption>[],
+            plannedProductIds: const <String>{},
+            onAddExactProduct: (_) {},
+            onCheckExactProduct: (_) {},
+            onOpenExactSupplier: (_) {},
+            report: SupplierConcentrationReport(
+              items: [
+                _supplier(
+                  id: 's1',
+                  name: 'TeknoBike',
+                  website: 'https://teknobike.cl',
+                ),
+                // Sin sitio: es la fila que antes corría sus acciones y rompía
+                // la alineación de la columna.
+                _supplier(id: 's2', name: 'Vittal'),
+              ],
+              hasMore: false,
+            ),
+            confirmedLabelFor: (id) => id == 's1' ? '12 de 12' : null,
+            confirmedAgeFor: (id) => id == 's1' ? 'hace 2 horas' : null,
+            confirmedDetailFor: (id) =>
+                id == 's1' ? '12 de 12 disponibles hace 2 horas' : null,
+            checkProgress: null,
+            busySupplierId: null,
+            expandedSupplierId: null,
+            onConfirm: (_) {},
+            onExplain: (_) {},
+            onOpenPortal: (_) {},
+            onOpenSupplier: (_) {},
+            basis: PurchaseCostBasis.sinFlete,
+            onBasisChanged: (_) {},
+            evidencePanelBuilder: (_) => const SizedBox.shrink(),
           ),
-          confirmedLabelFor: (id) => id == 's1' ? '12 de 12' : null,
-          confirmedAgeFor: (id) => id == 's1' ? 'hace 2 horas' : null,
-          confirmedDetailFor: (id) =>
-              id == 's1' ? '12 de 12 disponibles hace 2 horas' : null,
-          checkProgress: null,
-          busySupplierId: null,
-          expandedSupplierId: null,
-          onConfirm: (_) {},
-          onExplain: (_) {},
-          onOpenPortal: (_) {},
-          onOpenSupplier: (_) {},
-          basis: PurchaseCostBasis.sinFlete,
-          onBasisChanged: (_) {},
-          evidencePanelBuilder: (_) => const SizedBox.shrink(),
         ),
       ),
     ),
@@ -103,10 +135,10 @@ void main() {
         (tester) async {
       await _pump(tester, 1400);
 
-      expect(find.text('ÚLTIMA COMPRA'), findsOneWidget);
-      expect(find.text('CONFIRMADO'), findsOneWidget);
+      expect(find.text('EVIDENCIA'), findsOneWidget);
+      expect(find.text('DISPONIBLE HOY'), findsOneWidget);
       // Con espacio, la orden se lee: el rótulo dice qué hace sin hover.
-      expect(find.text('Confirmar hoy'), findsNWidgets(2));
+      expect(find.text('Consultar portal'), findsNWidgets(2));
       expect(find.text('Por qué'), findsNWidgets(2));
     });
 
@@ -116,14 +148,14 @@ void main() {
 
       // Ningún dato se fue todavía: lo primero que cede es el rótulo, no la
       // columna, porque los números son lo que la tabla existe para comparar.
-      expect(find.text('ÚLTIMA COMPRA'), findsOneWidget);
-      expect(find.text('CONFIRMADO'), findsOneWidget);
-      expect(find.text('Confirmar hoy'), findsNothing);
+      expect(find.text('EVIDENCIA'), findsOneWidget);
+      expect(find.text('DISPONIBLE HOY'), findsNothing);
+      expect(find.text('Consultar portal'), findsNothing);
 
       // El tooltip nombra al proveedor: cuatro iconos iguales no identifican su
       // sujeto, ni para un lector de pantalla ni para esta prueba.
       expect(
-        find.byTooltip('Confirmar hoy con TeknoBike'),
+        find.byTooltip('Consultar el portal de TeknoBike'),
         findsOneWidget,
       );
       expect(find.byTooltip('Por qué Vittal quedó acá'), findsOneWidget);
@@ -133,20 +165,44 @@ void main() {
         (tester) async {
       await _pump(tester, 700);
 
-      expect(find.text('ÚLTIMA COMPRA'), findsOneWidget);
-      expect(find.text('CONFIRMADO'), findsNothing);
-      expect(find.byTooltip('Confirmar hoy con TeknoBike'), findsOneWidget);
+      expect(find.text('EVIDENCIA'), findsNothing);
+      expect(find.text('DISPONIBLE HOY'), findsNothing);
+      expect(
+          find.byTooltip('Consultar el portal de TeknoBike'), findsOneWidget);
     });
 
     testWidgets('en compacto queda el ranking y la orden, nunca un desborde',
         (tester) async {
       await _pump(tester, 520);
 
-      expect(find.text('PARTICIPACIÓN'), findsOneWidget);
-      expect(find.text('COSTO UNITARIO'), findsOneWidget);
-      expect(find.text('ÚLTIMA COMPRA'), findsNothing);
-      expect(find.text('CONFIRMADO'), findsNothing);
-      expect(find.byTooltip('Confirmar hoy con Vittal'), findsOneWidget);
+      expect(find.text('CALCE'), findsNothing);
+      expect(find.text('COSTO UNITARIO'), findsNothing);
+      expect(find.text('PARECIDO · NO PRUEBA EL CALCE EXACTO'), findsNothing);
+      expect(find.text('COMPRADO ANTES · MISMO ALCANCE'), findsOneWidget);
+      expect(find.text('Consultar portal'), findsNWidgets(2));
+    });
+
+    testWidgets('en compacto el exacto sigue primero y explica su procedencia',
+        (tester) async {
+      await _pump(tester, 390, includeExact: true);
+
+      expect(
+        find.text('EXACTO · CUMPLE LA FICHA TÉCNICA PEDIDA'),
+        findsOneWidget,
+      );
+      expect(find.text('Derman'), findsOneWidget);
+      expect(find.textContaining(r'$3.396'), findsOneWidget);
+      expect(find.text('Llevar al plan'), findsOneWidget);
+      expect(
+        find.byTooltip(
+          'Derman todavía no tiene consulta automática para este producto',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getTopLeft(find.text('Derman')).dy,
+        lessThan(tester.getTopLeft(find.text('TeknoBike')).dy),
+      );
     });
 
     testWidgets('el proveedor sin sitio conserva el hueco del icono',
@@ -156,8 +212,8 @@ void main() {
       // Un solo enlace: el de TeknoBike. Si el hueco de Vittal se colapsara,
       // sus acciones correrían y la columna dejaría de alinear.
       expect(find.byIcon(Icons.open_in_new), findsOneWidget);
-      final teknoBike = tester.getTopLeft(find.text('Confirmar hoy').at(0));
-      final vittal = tester.getTopLeft(find.text('Confirmar hoy').at(1));
+      final teknoBike = tester.getTopLeft(find.text('Consultar portal').at(0));
+      final vittal = tester.getTopLeft(find.text('Consultar portal').at(1));
       expect(teknoBike.dx, vittal.dx);
     });
   });

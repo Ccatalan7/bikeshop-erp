@@ -101,6 +101,12 @@ const toolContracts = {
       "coveredNeeds",
       "totalNeeds",
       "coveredList",
+      // Las coincidencias ampliadas son sugerencias, no cobertura. Viajan en
+      // campos propios para que el modelo no complete una línea exacta con una
+      // medida o especificación distinta.
+      "approximateNeeds",
+      "approximateList",
+      "coverageSemantics",
       // La decisión de repartir, ya calculada en la base. Sólo la fila de
       // rango 1 la trae poblada.
       "missingList",

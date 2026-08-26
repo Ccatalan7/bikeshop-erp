@@ -12,7 +12,13 @@ import type {
   AgentUsage,
   JsonObject,
 } from "./contracts.ts";
-import { autoOpenListAnswer, cardsForClient, cardsForToolResult, mergeCards } from "./cards.ts";
+import {
+  type AgentCardSurface,
+  autoOpenListAnswer,
+  cardsForClient,
+  cardsForToolResult,
+  mergeCards,
+} from "./cards.ts";
 import {
   type AgentRunLease,
   type AgentRunStore,
@@ -183,6 +189,11 @@ export async function executeAgentRun(
     );
     const advertisedTools = options.toolRegistry.advertisedFor(authority);
     const purchasingDraftMode = request.viewContext.kind === "intelligent_purchasing";
+    // La superficie viaja a TODA proyección de tarjetas, incluida la que se
+    // persiste: una tarjeta guardada se vuelve a entregar en el replay.
+    const cardSurface: AgentCardSurface = purchasingDraftMode
+      ? "purchasing_draft"
+      : "general";
     // La tarjeta pregunta un dato a la vez y el cliente devuelve lo respondido
     // como un mensaje de operador con forma JSON. Sin reconocerlo, el modelo lo
     // leía como texto libre: copiaba el JSON dentro de `description` y volvía a
@@ -388,7 +399,7 @@ export async function executeAgentRun(
           // capability. The durable v1 ledger intentionally does not know
           // about it, so persist the canonical compatible card and add the
           // prompts only to this immediate response below.
-          cards: cardsForClient(cards, true, false),
+          cards: cardsForClient(cards, cardSurface, true, false),
         }, signal);
         finalized = true;
         if (completion.terminalErrorCode === "run_cancelled") {
@@ -416,6 +427,7 @@ export async function executeAgentRun(
           text: persisted.content,
           cards: cardsForClient(
             cards,
+            cardSurface,
             options.supportsResultLists === true,
             options.supportsStructuredClarifications === true,
           ),
@@ -519,7 +531,11 @@ export async function executeAgentRun(
           );
         }
         const autoOpenAnswer = publicSourceUrls.length === 0
-          ? autoOpenListAnswer(cards, options.supportsResultLists === true)
+          ? autoOpenListAnswer(
+            cards,
+            options.supportsResultLists === true,
+            cardSurface,
+          )
           : undefined;
         const text = lastCapabilityFailureCode
           ? renderToolExecutionFailure(lastCapabilityFailureCode)
@@ -543,7 +559,7 @@ export async function executeAgentRun(
           lease,
           status: "succeeded",
           content: text,
-          cards: cardsForClient(cards, true, false),
+          cards: cardsForClient(cards, cardSurface, true, false),
         }, signal);
         finalized = true;
         if (completion.terminalErrorCode === "run_cancelled") {
@@ -571,6 +587,7 @@ export async function executeAgentRun(
           text: persisted.content,
           cards: cardsForClient(
             cards,
+            cardSurface,
             options.supportsResultLists === true,
             options.supportsStructuredClarifications === true,
           ),
@@ -1022,8 +1039,14 @@ export async function executeAgentRun(
             );
           }
           if (call.name === INVENTORY_SEARCH_TOOL_NAME) {
+            // **Los argumentos que gobiernan son los que se ejecutaron.**
+            // `call` es la llamada cruda del modelo y no se reasigna nunca;
+            // toda reparación vive en `executableCall`. Leer `call` acá partía
+            // el turno en dos mitades que se contradecían: el ejecutor buscaba
+            // como `answer` mientras la tarjeta y la frase se construían desde
+            // el `open_list` original.
             inventoryListNarrativeRequested =
-              call.arguments.presentation === "open_list_with_analysis";
+              executableCall.arguments.presentation === "open_list_with_analysis";
           }
           // **Un borrador que no valida no puede caer en un 500 genérico.**
           //
@@ -1039,7 +1062,11 @@ export async function executeAgentRun(
           try {
             cards = mergeCards(
               cards,
-              cardsForToolResult(call.name, execution.result, call.arguments),
+              cardsForToolResult(
+                call.name,
+                execution.result,
+                executableCall.arguments,
+              ),
             );
           } catch (error) {
             if (error instanceof AgentRuntimeError) throw error;
@@ -1084,7 +1111,7 @@ export async function executeAgentRun(
             lease,
             status: "succeeded",
             content: text,
-            cards: cardsForClient(cards, true, false),
+            cards: cardsForClient(cards, cardSurface, true, false),
           }, signal);
           finalized = true;
           if (completion.terminalErrorCode === "run_cancelled") {
@@ -1104,6 +1131,7 @@ export async function executeAgentRun(
             text: completion.response.content,
             cards: cardsForClient(
               cards,
+              cardSurface,
               options.supportsResultLists === true,
               options.supportsStructuredClarifications === true,
             ),
@@ -1126,7 +1154,7 @@ export async function executeAgentRun(
             lease,
             status: "succeeded",
             content: text,
-            cards: cardsForClient(cards, true, false),
+            cards: cardsForClient(cards, cardSurface, true, false),
           }, signal);
           finalized = true;
           if (completion.terminalErrorCode === "run_cancelled") {
@@ -1146,6 +1174,7 @@ export async function executeAgentRun(
             text: completion.response.content,
             cards: cardsForClient(
               cards,
+              cardSurface,
               options.supportsResultLists === true,
               options.supportsStructuredClarifications === true,
             ),
@@ -1162,7 +1191,7 @@ export async function executeAgentRun(
             lease,
             status: "succeeded",
             content: text,
-            cards: cardsForClient(cards, true, false),
+            cards: cardsForClient(cards, cardSurface, true, false),
           }, signal);
           finalized = true;
           if (completion.terminalErrorCode === "run_cancelled") {
@@ -1182,6 +1211,7 @@ export async function executeAgentRun(
             text: completion.response.content,
             cards: cardsForClient(
               cards,
+              cardSurface,
               options.supportsResultLists === true,
               options.supportsStructuredClarifications === true,
             ),
@@ -2236,7 +2266,7 @@ function buildSystemInstruction(
     : "Si la inspección muestra populatedCount=0, una igualdad o membresía exacta (eq/in) todavía puede consultar search_inventory: PostgreSQL la comprueba sólo contra identidad curada de nombre/modelo y rotula cada fila identity_fallback. Explica esa procedencia y no la presentes como ficha técnica poblada. Para rangos, desigualdades, contains u otra comparación sin cobertura, no uses nombres: ejecuta igualmente search_inventory con la frase del operador y, sólo si esa búsqueda ya corrió y el campo sigue sin cobertura, llama report_capability_gap con missing_structured_data y field igual a la clave exacta inspeccionada.";
   const supplyWorkflowRule = purchasingDraftMode
     ? "Este workspace está en la etapa de capturar y revisar necesidades, no en la etapa de elegir proveedor. Después de inspeccionar la ficha y consultar inventario, termina siempre con una única llamada prepare_supply_request: enlaza catalogItemRef sólo si search_inventory demostró una identidad exacta y deja unresolved cualquier alternativa o carencia. Conserva margen, gama, marca, urgencia y demás objetivos comerciales en preference/profile para que los pasos posteriores calculen el ranking. No compares proveedores ni construyas escenarios de canasta durante esta etapa, aunque el operador mencione rentabilidad o varios productos; prepara una línea por producto y deja que el flujo guiado revise primero el stock."
-    : "Si existe stock interno suficiente, preséntalo antes de proveedores. Sólo compara compra externa cuando el stock sea insuficiente, esté agotado o el operador descarte explícitamente una alternativa interna. Cuando la pregunta es por TIPO de producto y características —«necesito rayos 27.5», «faltan neumáticos 29 de gama media y alta», «a quién le compramos cámaras»— la herramienta es rank_purchase_suppliers, y se le manda la frase del operador COMPLETA, sin descomponerla y sin quitarle las palabras de gama: el servidor la traduce. Si el operador nombra DOS O MÁS cosas, usa rank_basket_suppliers UNA vez con todas las líneas: llamar la herramienta de una frase varias veces agota el presupuesto del turno y la respuesta se pierde entera. Esa herramienta ya trae decidido si conviene un proveedor o repartir en dos —`missingList` y `complementSupplierName` en la fila de rango 1—: dilo tal cual y no lo recalcules. Contesta con el proveedor concentrado y la evidencia que lo sostiene —«de 17 líneas de rayos, 7 son de Derman: el 57% del gasto»—, di hace cuánto fue la última compra, y no la presentes como disponibilidad actual. rank_purchase_candidates acepta una catalogItemRef exacta o una identidad breve, nunca ambas; sus proveedores son alternativas históricas con disponibilidad no verificada. Para una canasta, resuelve primero cada producto exacto y luego usa build_purchase_scenarios con sus referencias, cantidades y un máximo de proveedores; externalOnly sólo puede ser true por descarte explícito del operador. Explica costo aterrizado, margen, historial, recencia, cobertura y calidad de evidencia sin presentar el score como certeza, esconder líneas faltantes ni crear una compra.";
+    : "Si existe stock interno suficiente, preséntalo antes de proveedores. Sólo compara compra externa cuando el stock sea insuficiente, esté agotado o el operador descarte explícitamente una alternativa interna. Cuando la pregunta es por TIPO de producto y características —«necesito rayos 27.5», «faltan neumáticos 29 de gama media y alta», «a quién le compramos cámaras»— la herramienta es rank_purchase_suppliers, y se le manda la frase del operador COMPLETA, sin descomponerla y sin quitarle las palabras de gama: el servidor la traduce. Si el operador nombra DOS O MÁS cosas, usa rank_basket_suppliers UNA vez con todas las líneas: llamar la herramienta de una frase varias veces agota el presupuesto del turno y la respuesta se pierde entera. Esa herramienta cuenta sólo calces exactos en `coveredNeeds`; `approximateNeeds` y `approximateList` son alternativas parecidas que JAMÁS completan una línea exacta. Ya trae decidido si conviene un proveedor o repartir en dos —`missingList` y `complementSupplierName` en la fila de rango 1—: dilo tal cual y no lo recalcules. Contesta con el proveedor concentrado y la evidencia que lo sostiene —«de 17 líneas de rayos, 7 son de Derman: el 57% del gasto»—, di hace cuánto fue la última compra, y no la presentes como disponibilidad actual. rank_purchase_candidates acepta una catalogItemRef exacta o una identidad breve, nunca ambas; sus proveedores son alternativas históricas con disponibilidad no verificada. Para una canasta, resuelve primero cada producto exacto y luego usa build_purchase_scenarios con sus referencias, cantidades y un máximo de proveedores; externalOnly sólo puede ser true por descarte explícito del operador. Explica costo aterrizado, margen, historial, recencia, cobertura y calidad de evidencia sin presentar el score como certeza, esconder líneas faltantes ni crear una compra.";
   let base = configured?.trim() ||
     "Eres el agente operativo general de Viñabike. Interpreta el objetivo del operador desde lenguaje libre y el contexto visible, planifica los pasos necesarios y usa cualquier combinación de herramientas anunciadas que aporte evidencia útil. Puedes encadenar múltiples lecturas ERP e investigación pública en un mismo turno para comparar, priorizar, diagnosticar y conectar ideas; no exijas frases exactas ni supongas una sola intención. Si el operador pide explícitamente consultar la web, información actual, opiniones públicas o una fuente o sitio nombrado, y research_public_web está anunciada, debes usarla: no digas que careces de esa capacidad. Sintetiza conclusiones accionables y ofrece las tarjetas pertinentes, sin afirmar acciones que no ejecutaste. Una herramienta de preparación sólo crea una propuesta: nunca digas que la acción fue ejecutada y deja su confirmación al operador en la tarjeta. Responde con la menor extensión que complete bien el objetivo; para investigación pública usa como máximo 800 palabras, no copies JSON ni repitas el payload de fuentes. Cita cada fuente web con su URL HTTPS exacta. No inventes datos, permisos, resultados ni fuentes. Distingue un resultado vacío de una fuente parcial o no disponible.";
   // La respuesta se lee en una columna de chat, no en una página. Una tabla

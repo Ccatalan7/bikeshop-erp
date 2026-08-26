@@ -2,9 +2,42 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../ai_assistant/models/ai_assistant_turn_contracts.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../models/intelligent_purchasing_models.dart';
 import '../widgets/purchase_visual_language.dart';
+
+/// Procedencia de abastecimiento en palabras que no mezclan catálogo,
+/// historial ni disponibilidad.
+String supplySourcingLabel(SupplyStockOption option) {
+  final rawSupplier = option.supplierName?.trim();
+  final supplier =
+      rawSupplier == null || rawSupplier.isEmpty ? null : rawSupplier;
+  return switch (option.evidenceState) {
+    'erp_purchase_history' => supplier == null
+        ? 'Con compras registradas en este ERP'
+        : 'Comprado a $supplier en este ERP',
+    'fresh_supplier_check' => supplier == null
+        ? 'Disponible según portal · revisado ${supplySourcingDateLabel(option.availabilityCheckedAt)}'
+        : 'Disponible según portal de $supplier · revisado ${supplySourcingDateLabel(option.availabilityCheckedAt)}',
+    'catalog_assignment' => option.availabilityFresh &&
+            option.availabilityStatus == 'out_of_stock'
+        ? 'Proveedor en ficha: ${supplier ?? 'sin identificar'} · portal sin stock · revisado ${supplySourcingDateLabel(option.availabilityCheckedAt)}'
+        : supplier == null
+            ? 'Proveedor de ficha sin identificar · disponibilidad sin verificar'
+            : 'Proveedor en ficha: $supplier · disponibilidad sin verificar',
+    'no_erp_history' => 'Sin compras registradas en este ERP',
+    _ => 'Procedencia de compra todavía no verificada',
+  };
+}
+
+String supplySourcingDateLabel(DateTime? value) {
+  if (value == null) return 'sin fecha';
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(local.day)}/${two(local.month)}/${local.year} '
+      '${two(local.hour)}:${two(local.minute)}';
+}
 
 /// Composiciones del módulo de abastecimiento — handoff-t23.
 ///
@@ -667,6 +700,7 @@ class InternalStockSurface extends StatelessWidget {
     required this.busy,
     this.countedAtLabel,
     this.rejectionReason,
+    this.sourcingByProduct = const <String, SupplyStockOption>{},
   });
 
   final List<SupplyInventoryComponent> components;
@@ -678,6 +712,7 @@ class InternalStockSurface extends StatelessWidget {
   final bool busy;
   final String? countedAtLabel;
   final String? rejectionReason;
+  final Map<String, SupplyStockOption> sourcingByProduct;
 
   int get _coveredUnits => components.isEmpty
       ? 0
@@ -726,6 +761,7 @@ class InternalStockSurface extends StatelessWidget {
               for (final component in components)
                 _StockCard(
                   component: component,
+                  sourcing: sourcingByProduct[component.productId],
                   countedAtLabel: countedAtLabel,
                   assignable: assignable,
                   busy: busy,
@@ -744,6 +780,7 @@ class InternalStockSurface extends StatelessWidget {
                     for (final component in components)
                       _StockRow(
                         component: component,
+                        sourcing: sourcingByProduct[component.productId],
                         countedAtLabel: countedAtLabel,
                         assignable: assignable,
                         busy: busy,
@@ -858,6 +895,7 @@ class _StockRow extends StatelessWidget {
     required this.assignable,
     required this.busy,
     required this.onAssign,
+    this.sourcing,
   });
 
   final SupplyInventoryComponent component;
@@ -865,6 +903,7 @@ class _StockRow extends StatelessWidget {
   final bool assignable;
   final bool busy;
   final VoidCallback? onAssign;
+  final SupplyStockOption? sourcing;
 
   @override
   Widget build(BuildContext context) {
@@ -900,6 +939,15 @@ class _StockRow extends StatelessWidget {
                   style: PurchaseType.meta
                       .copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
+                if (sourcing != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    supplySourcingLabel(sourcing!),
+                    style: PurchaseType.meta.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -955,6 +1003,7 @@ class _StockCard extends StatelessWidget {
     required this.assignable,
     required this.busy,
     required this.onAssign,
+    this.sourcing,
   });
 
   final SupplyInventoryComponent component;
@@ -962,6 +1011,7 @@ class _StockCard extends StatelessWidget {
   final bool assignable;
   final bool busy;
   final VoidCallback? onAssign;
+  final SupplyStockOption? sourcing;
 
   @override
   Widget build(BuildContext context) {
@@ -1032,6 +1082,15 @@ class _StockCard extends StatelessWidget {
                   .copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
+          if (sourcing != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              supplySourcingLabel(sourcing!),
+              style: PurchaseType.meta.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
           if (assignable && onAssign != null) ...[
             const SizedBox(height: 10),
             SizedBox(
@@ -1050,5 +1109,260 @@ class _StockCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// **Lo que el asistente miró, dicho dentro de Compras.**
+///
+/// Una tarjeta del gateway es un enlace a otro módulo: lleva un `destination`
+/// de superficie agregada y, con `autoOpen`, se dispara sola. Dentro de un
+/// flujo dedicado eso no es una acción útil sino una salida — el operador
+/// estaba capturando una necesidad y aparecía en Inventario.
+///
+/// Esta proyección conserva lo único que aportaba —qué se miró y con qué
+/// filtro— y le quita la capacidad de navegar. No tiene `onTap`, no tiene CTA
+/// y no conoce ningún destino: la evidencia se lee donde se produjo.
+@immutable
+class PurchaseAssistantEvidence {
+  const PurchaseAssistantEvidence({
+    required this.title,
+    this.detail,
+    this.chips = const <String>[],
+  });
+
+  factory PurchaseAssistantEvidence.fromCard(AIAssistantActionCard card) {
+    return PurchaseAssistantEvidence(
+      title: card.title,
+      detail: card.subtitle ?? card.description,
+      chips: card.chips,
+    );
+  }
+
+  final String title;
+  final String? detail;
+  final List<String> chips;
+}
+
+/// Una fila de evidencia: se lee, no se toca.
+///
+/// **Su anatomía no es nueva y por eso no trae medidas nuevas.** Es la misma
+/// fila de lectura que ya usa la línea de un escenario en este módulo —
+/// `ListTile` con `contentPadding: EdgeInsets.zero`, título y detalle— así que
+/// el ritmo vertical lo pone Material y no un número elegido a ojo. Los estilos
+/// son los del módulo (`PurchaseType`) atados a roles (`PurchaseTokens`); no
+/// hay un literal visual acá.
+class PurchaseAssistantEvidenceRow extends StatelessWidget {
+  const PurchaseAssistantEvidenceRow({super.key, required this.evidence});
+
+  final PurchaseAssistantEvidence evidence;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final evidenceDetail = evidence.detail;
+    final detail = <String>[
+      if (evidenceDetail != null) evidenceDetail,
+      if (evidence.chips.isNotEmpty) evidence.chips.join(' · '),
+    ].where((part) => part.trim().isNotEmpty).join(' · ');
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        evidence.title,
+        style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+      ),
+      subtitle: detail.isEmpty
+          ? null
+          : Text(
+              detail,
+              style: PurchaseType.body.copyWith(color: tokens.inkMuted),
+            ),
+    );
+  }
+}
+
+/// **Qué está resolviendo el operador.** Un solo valor, no cinco banderas.
+///
+/// El módulo tenía `_showScenarios`, `_selectingBasket`, `_selectedNeed`,
+/// `_openSupplierId` y `_returnToScenarios` como campos independientes, escritos
+/// a mano en más de treinta lugares. Nada garantizaba que una combinación
+/// existiera de verdad, y dos caminos al MISMO escenario dejaban cromos
+/// distintos: entrar desde la cola de prioridad no tocaba `_selectedNeed`, así
+/// que la barra de necesidad no salía; entrar desde el modo canasta venía con
+/// una necesidad ya elegida, y la barra salía mostrando **una necesidad ajena a
+/// la canasta**, con el contador del paso leyendo la de ella.
+///
+/// Con un valor sellado esa combinación no se puede escribir: el foco de
+/// canasta no tiene una necesidad individual que mostrar, y el cuerpo, la barra
+/// y el contador se derivan todos de aquí.
+///
+/// Las cuatro etapas (`PurchaseStep`) son el otro eje y siguen siendo suyas:
+/// una canasta también pasa por Stock interno, Proveedores y Plan. Single need
+/// y canasta son modos del contenido, no pantallas de otro sistema.
+sealed class PurchaseFocus {
+  const PurchaseFocus();
+
+  /// El foco al que vuelve el «volver», o nulo si este es la raíz.
+  PurchaseFocus? get parent;
+}
+
+/// La cola de prioridad y la captura: todavía no se eligió nada.
+final class PurchaseNoFocus extends PurchaseFocus {
+  const PurchaseNoFocus();
+
+  @override
+  PurchaseFocus? get parent => null;
+}
+
+/// Una necesidad. `parent` recuerda de dónde se entró — desde la comparación de
+/// una canasta, volver tiene que devolver a esa canasta y no a la lista.
+final class PurchaseNeedFocus extends PurchaseFocus {
+  const PurchaseNeedFocus(this.needId, {PurchaseFocus? from, this.fromStep})
+      : parent = from;
+
+  final String needId;
+
+  /// La etapa en la que estaba el foco anterior cuando se entró acá.
+  ///
+  /// **Volver devuelve lo que el operador estaba mirando**, no lo reprocesa: si
+  /// salió de la comparación de la canasta para precisar una línea, el volver
+  /// tiene que traer la comparación, no hacerlo entrar de nuevo por bodega.
+  /// Sin esto, la regla de «stock interno primero» —que es correcta al
+  /// *entrar*— se aplicaba también al retroceder y le comía el resultado.
+  final PurchaseStep? fromStep;
+
+  @override
+  final PurchaseFocus? parent;
+}
+
+/// De dos a ocho necesidades resueltas juntas.
+///
+/// `scenarios` distingue las dos caras del mismo trabajo: elegir cuáles entran,
+/// y comparar el resultado. No son dos pantallas.
+final class PurchaseBasketFocus extends PurchaseFocus {
+  const PurchaseBasketFocus._({
+    required this.needIds,
+    required this.scenarios,
+    required this.from,
+  });
+
+  /// **La única forma de construirlo**, porque aplica la regla del dominio:
+  /// una canasta con menos de dos líneas no tiene nada que comparar, así que
+  /// vuelve a la selección en vez de quedar en una comparación imposible.
+  factory PurchaseBasketFocus.resolve(
+    Iterable<String> needIds, {
+    required bool scenarios,
+    PurchaseFocus? from,
+  }) {
+    final ids = Set<String>.unmodifiable(needIds.take(basketMaxNeeds));
+    return PurchaseBasketFocus._(
+      needIds: ids,
+      scenarios: scenarios && ids.length >= basketMinNeeds,
+      from: from,
+    );
+  }
+
+  /// Lo que estaba abierto antes de armar la canasta. Salir de ella devuelve
+  /// ahí: armar una canasta y arrepentirse no puede costarle al operador la
+  /// necesidad que ya tenía en pantalla.
+  final PurchaseFocus? from;
+
+  /// El rango que el servidor resuelve en una llamada.
+  static const int basketMinNeeds = 2;
+  static const int basketMaxNeeds = 8;
+
+  final Set<String> needIds;
+  final bool scenarios;
+
+  bool get canCompare => needIds.length >= basketMinNeeds;
+
+  /// **Cambiar la membresía deja la comparación sin valor, y el tipo lo sabe.**
+  ///
+  /// Una comparación es la respuesta a una lista concreta. Si esa lista cambia,
+  /// lo que está en pantalla dejó de describirla: no es una vista un poco
+  /// desactualizada, es la respuesta a otra pregunta. Conservar `scenarios` acá
+  /// permitía volver al paso Necesidad desde una comparación, sacar o agregar
+  /// una línea, y regresar a Proveedores para leer el reparto de la canasta
+  /// **anterior** como si fuera el de la nueva.
+  ///
+  /// Por eso el cambio de membresía devuelve a la selección: comparar otra vez
+  /// es un acto explícito del operador. Quien edita la canasta desde dentro de
+  /// la comparación —la pestaña Líneas— vuelve a pedir la comparación en la
+  /// misma acción, que es su intención evidente; lo que no puede pasar es que
+  /// nadie la pida y la pantalla siga afirmando el resultado viejo.
+  PurchaseBasketFocus withNeeds(Iterable<String> ids) {
+    final next = PurchaseBasketFocus.resolve(
+      ids,
+      scenarios: false,
+      from: from,
+    );
+    // Una «modificación» que no modifica nada no invalida nada.
+    if (scenarios && _sameNeeds(next.needIds)) {
+      return PurchaseBasketFocus.resolve(ids, scenarios: true, from: from);
+    }
+    return next;
+  }
+
+  bool _sameNeeds(Set<String> other) =>
+      other.length == needIds.length && other.every(needIds.contains);
+
+  PurchaseBasketFocus comparing(bool value) =>
+      PurchaseBasketFocus.resolve(needIds, scenarios: value, from: from);
+
+  /// La pila completa: la comparación vuelve a la selección, y la selección
+  /// vuelve a lo que hubiera antes de armarla.
+  @override
+  PurchaseFocus? get parent => scenarios
+      ? PurchaseBasketFocus.resolve(needIds, scenarios: false, from: from)
+      : from;
+}
+
+/// La ficha de un proveedor, montada **sobre** el foco al que se vuelve.
+///
+/// No reemplaza lo que se estaba resolviendo: mirar a un proveedor no puede
+/// perder la necesidad ni la canasta, que es exactamente por lo que esta ficha
+/// es embebida y no una ruta.
+final class PurchaseSupplierFocus extends PurchaseFocus {
+  const PurchaseSupplierFocus({required this.supplierId, required this.under});
+
+  final String supplierId;
+  final PurchaseFocus under;
+
+  @override
+  PurchaseFocus? get parent => under;
+}
+
+/// Lo que el foco dice de sí mismo, sin que cada pantalla lo vuelva a deducir.
+extension PurchaseFocusReading on PurchaseFocus {
+  /// El foco de trabajo por debajo de la ficha del proveedor.
+  ///
+  /// La ficha se turna con la tabla en el mismo panel: la necesidad o la
+  /// canasta que se está resolviendo siguen mandando el cromo.
+  PurchaseFocus get working {
+    final self = this;
+    return self is PurchaseSupplierFocus ? self.under.working : self;
+  }
+
+  /// La necesidad individual, o nulo. **Una canasta no tiene una**, y por eso
+  /// la barra de necesidad no puede contradecirla.
+  String? get needId {
+    final self = working;
+    return self is PurchaseNeedFocus ? self.needId : null;
+  }
+
+  Set<String> get basketNeedIds {
+    final self = working;
+    return self is PurchaseBasketFocus ? self.needIds : const <String>{};
+  }
+
+  bool get isSelectingBasket => working is PurchaseBasketFocus;
+
+  bool get showsScenarios {
+    final self = working;
+    return self is PurchaseBasketFocus && self.scenarios;
+  }
+
+  String? get openSupplierId {
+    final self = this;
+    return self is PurchaseSupplierFocus ? self.supplierId : null;
   }
 }

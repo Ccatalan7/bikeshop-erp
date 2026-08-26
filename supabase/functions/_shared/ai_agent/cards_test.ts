@@ -188,7 +188,7 @@ Deno.test("structured supply requests project one strict review card", () => {
     1,
     "the next generic question remains typed",
   );
-  const legacyCard = cardsForClient(cards, true, false)[0] as unknown as {
+  const legacyCard = cardsForClient(cards, "general", true, false)[0] as unknown as {
     supplyNeedDraft: { lines: Array<Record<string, unknown>> };
   };
   assertEquals(
@@ -197,7 +197,7 @@ Deno.test("structured supply requests project one strict review card", () => {
     "capability negotiation preserves the strict v1 wire shape",
   );
   assertEquals(
-    cardsForClient(cards, true, true)[0].supplyNeedDraft?.lines[1]
+    cardsForClient(cards, "general", true, true)[0].supplyNeedDraft?.lines[1]
       .clarificationPrompts.length,
     1,
     "negotiated clients receive the structured prompt",
@@ -292,23 +292,23 @@ Deno.test("inventory search projects one exact compact result set instead of arb
   // lista con lo que el operador tipeó en vez de con lo que se entendió. Una
   // marca sí agrega —«Shimano» sobrevive, y eso lo cuida runtime_test.
   assertEquals(
-    autoOpenListAnswer(cards, true),
+    autoOpenListAnswer(cards, true, "general"),
     'Abrí 2 resultados coincidentes para “Cámaras” en Inventario con el filtro “En stock · 29"”.',
     "model prose cannot diverge from an explicit list action",
   );
   assertEquals(
-    autoOpenListAnswer(cards, false),
+    autoOpenListAnswer(cards, false, "general"),
     'Encontré 2 resultados coincidentes para “Cámaras” en Inventario con el filtro “En stock · 29"”. Usa la tarjeta para abrirlos.',
     "an older client gets truthful server-owned click guidance",
   );
   validateStoredCards(cards);
   assertEquals(
-    cardsForClient(cards, false)[0].listRef ?? null,
+    cardsForClient(cards, "general", false)[0].listRef ?? null,
     null,
     "older strict clients receive the aggregate action without the new field",
   );
   assertEquals(
-    cardsForClient(cards, true)[0].listRef,
+    cardsForClient(cards, "general", true)[0].listRef,
     // Lo mismo que guarda el servidor MENOS `spokenSubject`, que es interno:
     // el decodificador del cliente exige claves exactas, así que una clave de
     // más rompería las apps ya instaladas.
@@ -319,7 +319,7 @@ Deno.test("inventory search projects one exact compact result set instead of arb
     })(),
     "capable clients receive the typed result set",
   );
-  validateStoredCards(cardsForClient(cards, false));
+  validateStoredCards(cardsForClient(cards, "general", false));
 });
 
 Deno.test("el campo interno de la lista no viaja al cliente", () => {
@@ -349,7 +349,7 @@ Deno.test("el campo interno de la lista no viaja al cliente", () => {
 
   // Afuera no existe: el decodificador de las apps ya instaladas exige claves
   // exactas en `listRef`, así que una clave nueva las rompería enteras.
-  const wire = cardsForClient(cards, true)[0].listRef as unknown as Record<string, unknown>;
+  const wire = cardsForClient(cards, "general", true)[0].listRef as unknown as Record<string, unknown>;
   assertEquals(
     Object.hasOwn(wire, "spokenSubject"),
     false,
@@ -389,7 +389,7 @@ Deno.test("inventory cards preserve operational thresholds in the visible filter
     "the compact card exposes every accumulated filter",
   );
   assertEquals(
-    autoOpenListAnswer(cards, true),
+    autoOpenListAnswer(cards, true, "general"),
     'Abrí 1 resultado coincidente para “Cámaras” en Inventario con el filtro “En stock · 29" · Stock > 5”.',
     "the server-owned answer cannot hide or weaken an exact numeric threshold",
   );
@@ -468,7 +468,7 @@ Deno.test("inventory empty and truncated result sets remain truthful", () => {
   })[0];
   assertEquals(emptyCard.listRef?.entityIds, [], "verified empty is an exact empty selection");
   assertEquals(
-    autoOpenListAnswer([emptyCard], true),
+    autoOpenListAnswer([emptyCard], true, "general"),
     'No encontré resultados para “camara 31” con el filtro “En stock · 31"”. Abrí Inventario para que puedas revisarlo o ajustarlo.',
     "empty output is not rewritten as source failure",
   );
@@ -537,7 +537,7 @@ Deno.test("inventory empty and truncated result sets remain truthful", () => {
     "the total never reaches listRef, whose client decoder demands exact keys",
   );
   assertEquals(
-    autoOpenListAnswer([truncated], true) ?? null,
+    autoOpenListAnswer([truncated], true, "general") ?? null,
     null,
     "informational reads never auto-open",
   );

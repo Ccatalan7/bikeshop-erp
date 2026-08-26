@@ -10,7 +10,6 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
@@ -24,12 +23,9 @@ import '../../../shared/services/supplier_portal_headless_runner.dart';
 import '../../../shared/widgets/vb_money_text.dart';
 import '../../../shared/widgets/vb_notice.dart';
 import '../../ai_assistant/config/ai_assistant_runtime_config.dart';
-import '../../ai_assistant/models/ai_assistant_destination.dart';
 import '../../ai_assistant/models/ai_agent_gateway_contracts.dart';
 import '../../ai_assistant/models/ai_assistant_turn_contracts.dart';
 import '../../ai_assistant/services/ai_agent_gateway_client.dart';
-import '../../ai_assistant/widgets/ai_assistant_compact_action_tile.dart';
-import '../../inventory/services/inventory_service.dart';
 import '../models/intelligent_purchasing_models.dart';
 import '../../../shared/models/product.dart';
 import '../models/purchase_invoice_draft_seed.dart';
@@ -128,8 +124,123 @@ class _IntelligentPurchasingWorkspacePageState
   List<PurchasePrioritySuggestion> _priority = const [];
   bool _priorityUnavailable = false;
   String? _takingPriorityId;
+  final Set<String> _selectedPriorityIds = <String>{};
+  bool _takingPriorityBatch = false;
+
+  /// Conservada cuando la respuesta es incierta: reintentar usa el mismo
+  /// recibo de servidor y nunca crea sólo "la mitad de la canasta" otra vez.
+  String? _priorityBatchOperationKey;
   List<SupplyNeed> _needs = const [];
-  SupplyNeed? _selectedNeed;
+
+  /// **Qué está resolviendo el operador.** Único dueño de la navegación
+  /// interna del módulo: necesidad, canasta, escenarios y ficha de proveedor
+  /// son valores de esto, no banderas sueltas que se puedan contradecir.
+  /// Ver `PurchaseFocus`.
+  PurchaseFocus _focusValue = const PurchaseNoFocus();
+
+  PurchaseFocus get _focus => _focusValue;
+
+  /// **La única escritura del foco, de verdad.**
+  ///
+  /// El campo es privado y sólo se llega a él por acá, así que toda transición
+  /// —haya una o veinte— pasa por la misma puerta y por la misma comprobación.
+  /// Lo que la puerta garantiza es que la etapa vigente exista para el foco
+  /// nuevo: una canasta no puede quedar parada en un paso que sólo tiene
+  /// sentido con una necesidad individual, ni al revés.
+  set _focus(PurchaseFocus value) {
+    _focusValue = value;
+    if (!_enabledStepsFor(value).contains(_step)) {
+      _step = _stepForFocus(value);
+    }
+  }
+
+  /// La necesidad abierta, resuelta contra la lista viva.
+  ///
+  /// Se deriva en vez de guardarse: antes había una copia en el `State` que
+  /// tres comandos tenían que acordarse de actualizar junto con `_needs`, y
+  /// olvidarlo dejaba la barra mostrando la cantidad anterior.
+  SupplyNeed? get _selectedNeed {
+    final id = _focus.needId;
+    if (id == null) return null;
+    return _firstWhereOrNull(_needs, (need) => need.id == id);
+  }
+
+  Set<String> get _basketNeedIds => _focus.basketNeedIds;
+  bool get _selectingBasket => _focus.isSelectingBasket;
+  bool get _showScenarios => _focus.showsScenarios;
+  String? get _openSupplierId => _focus.openSupplierId;
+
+  /// Transición simple: cambia el foco y deja que la puerta acote la etapa.
+  void _goTo(PurchaseFocus focus) => setState(() => _focus = focus);
+
+  /// La etapa que un foco implica, cuando la implica.
+  ///
+  /// La canasta se arma en `Necesidad` y se compara en `Proveedores`: son dos
+  /// caras del mismo trabajo y cada una vive en su etapa. Una necesidad
+  /// individual no implica etapa —se resuelve por Stock, Proveedores y Plan—,
+  /// así que ahí manda la que el operador tenga abierta.
+  PurchaseStep _stepForFocus(PurchaseFocus focus) {
+    final working = focus.working;
+    if (working is PurchaseBasketFocus && !working.scenarios) {
+      return PurchaseStep.need;
+    }
+    final enabled = _enabledStepsFor(focus);
+    if (working is PurchaseBasketFocus) {
+      // **Bodega primero.** Si la etapa vigente no sirve para esta canasta se
+      // entra por Stock interno y no por el comparador; si ya estaba más
+      // adelante, no se la devuelve hacia atrás.
+      return enabled.contains(_step) && _step != PurchaseStep.need
+          ? _step
+          : PurchaseStep.stock;
+    }
+    return enabled.contains(_step) ? _step : PurchaseStep.need;
+  }
+
+  /// Ir a un foco y a la etapa que ese foco implica, juntos. Separarlos es lo
+  /// que dejaba la comparación arriba con la etapa de otra cosa.
+  void _goToFocus(PurchaseFocus focus, {PurchaseStep? step}) {
+    setState(() {
+      _step = step ?? _stepForFocus(focus);
+      // La puerta acota si esa etapa no existe para el foco nuevo.
+      _focus = focus;
+    });
+  }
+
+  /// El foco que sigue siendo verdad después de releer las necesidades.
+  ///
+  /// Una canasta manda sobre la necesidad de cortesía que trae la recarga: si
+  /// el operador está comparando dos líneas, abrirle una tercera suelta encima
+  /// es lo que producía el cromo contradictorio. Y una ficha de proveedor
+  /// abierta sobrevive a la recarga, porque mirar a un proveedor no es haber
+  /// abandonado lo que se estaba resolviendo.
+  PurchaseFocus _reconciledFocus(
+    List<SupplyNeed> needs,
+    SupplyNeed? selected,
+  ) {
+    final live = needs.map((need) => need.id).toSet();
+    final current = _focus;
+    final working = current.working;
+    PurchaseFocus resolved;
+    if (working is PurchaseBasketFocus) {
+      final kept = working.needIds.where(live.contains);
+      resolved =
+          kept.isEmpty ? _focusOnNeed(selected, live) : working.withNeeds(kept);
+    } else {
+      resolved = _focusOnNeed(selected, live);
+    }
+    if (current is PurchaseSupplierFocus) {
+      return PurchaseSupplierFocus(
+        supplierId: current.supplierId,
+        under: resolved,
+      );
+    }
+    return resolved;
+  }
+
+  PurchaseFocus _focusOnNeed(SupplyNeed? selected, Set<String> live) =>
+      selected != null && live.contains(selected.id)
+          ? PurchaseNeedFocus(selected.id)
+          : const PurchaseNoFocus();
   SupplyInventorySnapshot? _inventorySnapshot;
   PurchaseRanking? _ranking;
 
@@ -203,7 +314,6 @@ class _IntelligentPurchasingWorkspacePageState
   SupplyNeedCriteria _needCriteria = SupplyNeedCriteria.empty;
   bool _showNeedCriteria = false;
   ProductSelection? _identitySelection;
-  final Set<String> _basketNeedIds = <String>{};
   bool _loadingNeeds = true;
   bool _loadingDecision = false;
   bool _loadingScenarios = false;
@@ -213,7 +323,6 @@ class _IntelligentPurchasingWorkspacePageState
 
   /// Frame 13 — la captura de compra local está abierta como panel anclado.
   bool _showLocalPurchaseSheet = false;
-  bool _showScenarios = false;
 
   /// Frame 20 — subestado visible de la canasta. Cambiar de pestaña no
   /// descarta escenarios, selección ni cantidades: son dos vistas del mismo
@@ -223,9 +332,8 @@ class _IntelligentPurchasingWorkspacePageState
   /// Escenario elegido. Sobrevive al ida y vuelta entre pestañas.
   String? _selectedScenarioKey;
   String? _basketBusyNeedId;
-  bool _selectingBasket = false;
-  bool _returnToScenarios = false;
   String? _addingCandidateId;
+  String? _addingQuoteProductId;
   String? _preparingScenarioKey;
   String? _removingPlanLineId;
   String? _updatingPlanLineId;
@@ -263,7 +371,6 @@ class _IntelligentPurchasingWorkspacePageState
   // ── La ficha del proveedor, dentro del bloque ──────────────────────────────
   /// Qué proveedor está abierto. Nulo = se ve la tabla. Es lo único que decide
   /// cuál de las dos superficies vive en el panel.
-  String? _openSupplierId;
   SupplierCatalogPage? _supplierCatalog;
   bool _loadingSupplierCatalog = false;
   bool _loadingMoreCatalog = false;
@@ -316,7 +423,22 @@ class _IntelligentPurchasingWorkspacePageState
   String? _evidenceError;
   String? _assistantText;
   String? _assistantError;
-  List<AIAssistantActionCard> _assistantCards = const [];
+
+  /// **Lo que el asistente miró, dentro de Compras.**
+  ///
+  /// No son acciones. Una tarjeta del gateway lleva un `destination` de módulo
+  /// entero —`inventory_products`— y tocarla sacaba al operador del Asistente
+  /// de compras hacia Inventario, mutando de paso el buscador compartido de esa
+  /// otra pantalla. Con una sola tarjeta la salida ni siquiera esperaba el
+  /// toque: se disparaba sola en el post-frame.
+  ///
+  /// El servidor ya no proyecta esas tarjetas en esta superficie
+  /// (`purchasingSurfaceCards`). Esto es la otra mitad del cierre: aquí no
+  /// existe despachador de destinos, así que una tarjeta guardada por una
+  /// versión anterior, o servida por un gateway sin desplegar, se lee como
+  /// evidencia y no puede navegar a ninguna parte.
+  List<PurchaseAssistantEvidence> _assistantEvidence =
+      const <PurchaseAssistantEvidence>[];
   AIAssistantSupplyNeedDraft? _supplyNeedDraft;
   String? _supplyNeedBatchOperationKey;
   String? _supplyNeedSaveError;
@@ -421,7 +543,15 @@ class _IntelligentPurchasingWorkspacePageState
     try {
       final priority = await _service.fetchPurchasePriority();
       if (!mounted) return;
-      setState(() => _priority = priority);
+      final availableIds = priority.map((item) => item.entityId).toSet();
+      setState(() {
+        _priority = priority;
+        final before = _selectedPriorityIds.length;
+        _selectedPriorityIds.retainAll(availableIds);
+        if (_selectedPriorityIds.length != before) {
+          _priorityBatchOperationKey = null;
+        }
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() => _priorityUnavailable = true);
@@ -480,10 +610,11 @@ class _IntelligentPurchasingWorkspacePageState
       }
       setState(() {
         _needs = needs;
-        _basketNeedIds.removeWhere(
-          (id) => needs.every((need) => need.id != id),
-        );
-        _selectedNeed = selected;
+        // **Una recarga no puede dejar un foco imposible.** Si la necesidad
+        // abierta o una línea de la canasta ya no existe —la resolvió otro, o
+        // el trabajo se cerró—, el foco se reconcilia contra la lista real en
+        // vez de quedar apuntando a algo que la pantalla no puede dibujar.
+        _focus = _reconciledFocus(needs, selected);
         _loadingNeeds = false;
       });
       if (selected != null) await _loadDecision(selected);
@@ -506,11 +637,14 @@ class _IntelligentPurchasingWorkspacePageState
       _step = need.hasConfirmedProduct
           ? PurchaseStep.stock
           : PurchaseStep.providers;
-      _selectedNeed = need;
+      // **Elegir una necesidad SIEMPRE cambia la superficie.** Antes esto
+      // asignaba la necesidad y dejaba `_showScenarios` en pie: la rama de
+      // escenarios ganaba en el cuerpo y el toque del operador no se veía.
+      // Con un foco único la comparación no sobrevive a elegir una línea.
+      _focus = PurchaseNeedFocus(need.id);
       _inspectedCandidateId = null;
       _inspectorQuantity = null;
       _editingNeed = false;
-      _returnToScenarios = false;
       _identitySelection = null;
       _identityController.clear();
       _showStockRejection = false;
@@ -818,13 +952,12 @@ class _IntelligentPurchasingWorkspacePageState
           _clarificationInputs.clear();
         }
         _replayIsClarificationAnswer = false;
-        _assistantCards = response.cards
+        _assistantEvidence = response.cards
             .where(
               (card) =>
-                  card.approvalRef == null &&
-                  card.supplyNeedDraft == null &&
-                  card.destination.isRegistered,
+                  card.approvalRef == null && card.supplyNeedDraft == null,
             )
+            .map(PurchaseAssistantEvidence.fromCard)
             .toList(growable: false);
         _supplyNeedDraft = supplyDrafts.isEmpty ? null : supplyDrafts.single;
         _supplyNeedBatchOperationKey = null;
@@ -836,14 +969,6 @@ class _IntelligentPurchasingWorkspacePageState
         _replayMessage = null;
         _composerController.clear();
       });
-      final autoOpenCards = _assistantCards
-          .where((card) => card.inventoryListRef?.autoOpen == true)
-          .toList(growable: false);
-      if (autoOpenCards.length == 1) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _handleAssistantCard(autoOpenCards.single);
-        });
-      }
     } on AIAgentGatewayException catch (error) {
       if (!mounted) return;
       if (kDebugMode) {
@@ -900,47 +1025,6 @@ class _IntelligentPurchasingWorkspacePageState
     }
   }
 
-  void _handleAssistantCard(AIAssistantActionCard card) {
-    final inventoryList = card.inventoryListRef;
-    if (inventoryList != null) {
-      context.read<InventoryService>().applyExternalSearch(
-            inventoryList.entityIds == null ? inventoryList.query : '',
-            matchedProductIds: inventoryList.entityIds,
-            stockFilter: switch (inventoryList.availability) {
-              AIAssistantInventoryAvailability.any =>
-                InventoryExternalStockFilter.any,
-              AIAssistantInventoryAvailability.inStock =>
-                InventoryExternalStockFilter.inStock,
-              AIAssistantInventoryAvailability.lowStock =>
-                InventoryExternalStockFilter.lowStock,
-              AIAssistantInventoryAvailability.outOfStock =>
-                InventoryExternalStockFilter.outOfStock,
-            },
-          );
-    }
-
-    final workspaceManager = context.read<WorkspaceManager>();
-    final toolbar = context.read<RightToolbarService>();
-    final resolver = AIAssistantDestinationResolver(
-      navigateWorkspace: (route) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          workspaceManager.openRouteInWorkspace(route);
-        });
-      },
-      openToolbarTool: toolbar.openTool,
-    );
-    final dispatched = resolver.dispatch(
-      card.destination,
-      entityRef: card.entityRef,
-    );
-    if (!dispatched && kDebugMode) {
-      debugPrint(
-        '[IntelligentPurchasing] ignored incompatible action destination '
-        '${card.destination}',
-      );
-    }
-  }
-
   Future<void> _saveSupplyNeedDraft() async {
     final originalRequest = _lastUserMessage;
     final draft = _supplyNeedDraft;
@@ -977,11 +1061,11 @@ class _IntelligentPurchasingWorkspacePageState
         _supplyNeedSaveError = null;
         _step = PurchaseStep.providers;
         if (esLista) {
-          _selectingBasket = true;
-          _basketNeedIds
-            ..clear()
-            ..addAll(needs.take(8).map((need) => need.id));
-          _showScenarios = true;
+          _focus = PurchaseBasketFocus.resolve(
+            needs.map((need) => need.id),
+            scenarios: true,
+          );
+          _step = PurchaseStep.stock;
           _scenarioResult = null;
           _scenarioError = null;
           _basketCoverage = null;
@@ -1111,7 +1195,6 @@ class _IntelligentPurchasingWorkspacePageState
       );
       if (!mounted) return;
       setState(() {
-        _selectedNeed = updated;
         _runningCommand = false;
         _needs = _needs
             .map((item) => item.id == updated.id ? updated : item)
@@ -1495,22 +1578,52 @@ class _IntelligentPurchasingWorkspacePageState
     setState(() {
       // La canasta se arma en el paso Necesidad: alternar el modo no puede
       // sacar al operador del paso donde está eligiendo.
-      _selectingBasket = !_selectingBasket;
-      _showScenarios = false;
+      //
+      // Salir de la canasta vuelve a la lista, no a una necesidad suelta: la
+      // que estaba abierta antes de armarla ya no es la que él está mirando.
+      final focus = _focus.working;
+      _focus = focus is PurchaseBasketFocus
+          ? (focus.from ?? const PurchaseNoFocus())
+          : PurchaseBasketFocus.resolve(
+              const <String>[],
+              scenarios: false,
+              from: focus,
+            );
       _scenarioResult = null;
       _scenarioError = null;
-      _returnToScenarios = false;
-      if (!_selectingBasket) _basketNeedIds.clear();
     });
   }
 
   void _toggleBasketNeed(SupplyNeed need) {
     if (!_isBasketEligible(need)) return;
+    final focus = _focus.working;
+    if (focus is! PurchaseBasketFocus) return;
+    final next = <String>{...focus.needIds};
+    if (!next.remove(need.id) &&
+        next.length < PurchaseBasketFocus.basketMaxNeeds) {
+      next.add(need.id);
+    }
+    final destino = focus.withNeeds(next);
     setState(() {
-      if (!_basketNeedIds.remove(need.id) && _basketNeedIds.length < 8) {
-        _basketNeedIds.add(need.id);
-      }
+      // El tipo ya devolvió a la selección; acá se botan los resultados que
+      // describían la canasta anterior. Ver `_invalidateBasketResults`.
+      if (!destino.scenarios) _invalidateBasketResults();
+      _focus = destino;
     });
+  }
+
+  /// **Lo que dejó de ser verdad al cambiar la canasta, y sólo eso.**
+  ///
+  /// El reparto por escenario, la cobertura por proveedor y el escenario
+  /// elegido son respuestas a una lista concreta de necesidades: cambiada la
+  /// lista, no describen nada. La selección, el perfil de ranking, el tope de
+  /// proveedores, el plan ya guardado y el foco previo **no** dependen de la
+  /// membresía y se conservan: botarlos sería castigar al operador por editar.
+  void _invalidateBasketResults() {
+    _scenarioResult = null;
+    _scenarioError = null;
+    _basketCoverage = null;
+    _selectedScenarioKey = null;
   }
 
   /// **Una necesidad sin producto confirmado también entra a la canasta.**
@@ -1532,11 +1645,13 @@ class _IntelligentPurchasingWorkspacePageState
 
   Future<void> _compareBasket() async {
     if (_basketNeedIds.length < 2 || _loadingScenarios) return;
+    final focus = _focus.working;
+    if (focus is! PurchaseBasketFocus) return;
     setState(() {
-      // La comparación de la canasta vive en el paso Proveedores.
-      _step = PurchaseStep.providers;
-      _showScenarios = true;
-      _returnToScenarios = false;
+      // Stock interno antes que proveedores: la misma llamada resuelve las dos
+      // mitades y el recorrido entra por la que va primero.
+      _step = PurchaseStep.stock;
+      _focus = focus.comparing(true);
       _scenarioResult = null;
       _scenarioError = null;
     });
@@ -1657,10 +1772,13 @@ class _IntelligentPurchasingWorkspacePageState
     if (need == null) return;
     setState(() {
       _step = PurchaseStep.providers;
-      _showScenarios = false;
-      _selectingBasket = false;
-      _returnToScenarios = true;
-      _selectedNeed = need;
+      // El foco recuerda la canasta de la que salió: «volver» devuelve a la
+      // comparación, sin una bandera puesta a mano en seis lugares.
+      _focus = PurchaseNeedFocus(
+        need.id,
+        from: _focus.working,
+        fromStep: _step,
+      );
       _identitySelection = null;
       _identityController.clear();
       _showStockRejection = false;
@@ -1697,6 +1815,45 @@ class _IntelligentPurchasingWorkspacePageState
         _addingCandidateId = null;
         _decisionError =
             'No se pudo guardar la alternativa en el plan. Recarga y vuelve a intentarlo.';
+      });
+    }
+  }
+
+  Future<void> _addProductQuoteToPlan(SupplyStockOption product) async {
+    final need = _selectedNeed;
+    if (need == null || _addingQuoteProductId != null) return;
+    setState(() {
+      _addingQuoteProductId = product.productId;
+      _decisionError = null;
+    });
+    try {
+      final plan = await _service.prepareProductQuoteLine(
+        need: need,
+        product: product,
+        profile: _rankingProfile,
+        plan: _plan,
+        quantity: _inspectorQuantity?.toDouble(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _plan = plan;
+        _addingQuoteProductId = null;
+      });
+    } on PostgrestException catch (error) {
+      if (!mounted) return;
+      final conflict = error.code == '40001';
+      setState(() {
+        _addingQuoteProductId = null;
+        _needsReload = conflict;
+        _decisionError = conflict
+            ? 'El producto ya tiene nueva evidencia de compra. Recarga para usarla.'
+            : 'No se pudo llevar el producto al plan.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _addingQuoteProductId = null;
+        _decisionError = 'No se pudo llevar el producto al plan.';
       });
     }
   }
@@ -1903,24 +2060,33 @@ class _IntelligentPurchasingWorkspacePageState
               );
               return;
             }
-            if (_showScenarios) {
-              setState(() => _showScenarios = false);
-              return;
-            }
-            if (_returnToScenarios) {
-              setState(() {
-                _returnToScenarios = false;
-                _selectingBasket = true;
-                _showScenarios = true;
-              });
-              return;
-            }
-            if (!desktop && _selectedNeed != null) {
-              setState(() => _selectedNeed = null);
-              return;
-            }
-            if (_selectingBasket) {
+            // **El volver es el foco, no seis banderas.** Cada foco sabe de
+            // dónde salió: la comparación vuelve a la selección, y una línea
+            // abierta desde la comparación vuelve a la comparación. Antes eso
+            // era `_returnToScenarios`, un booleano puesto a mano en seis
+            // lugares que cualquier camino nuevo podía olvidar.
+            final actual = _focus;
+            // Salir del modo canasta es una transición con nombre, y la flecha
+            // compacta la ejecuta igual que `exit-basket`: así las dos salidas
+            // no pueden divergir —`_toggleBasketMode` además suelta los
+            // resultados de la canasta, que el salto genérico al padre no
+            // haría—. La canasta que está comparando NO entra acá: su volver es
+            // hacia su propia selección, y eso sí es el padre.
+            final trabajando = actual.working;
+            if (trabajando is PurchaseBasketFocus && !trabajando.scenarios) {
               _toggleBasketMode();
+              return;
+            }
+            final parent = actual.parent;
+            if (parent != null) {
+              _goToFocus(
+                parent,
+                step: actual is PurchaseNeedFocus ? actual.fromStep : null,
+              );
+              return;
+            }
+            if (!desktop && _focus is PurchaseNeedFocus) {
+              _goTo(const PurchaseNoFocus());
               return;
             }
             // La captura anclada se cierra antes que nada: es la superficie
@@ -1974,8 +2140,30 @@ class _IntelligentPurchasingWorkspacePageState
 
   /// Un paso está disponible sólo cuando su dato de entrada existe. Navegar
   /// entre pasos nunca destruye el borrador, la selección ni el scroll.
-  Set<PurchaseStep> get _enabledSteps {
-    final need = _selectedNeed;
+  Set<PurchaseStep> get _enabledSteps => _enabledStepsFor(_focus);
+
+  /// Qué etapas existen **para este foco**.
+  ///
+  /// Antes esto sólo miraba `_selectedNeed`, que una canasta no tiene: la
+  /// comparación de dos necesidades se dibujaba con el paso Proveedores activo
+  /// **y deshabilitado a la vez** —lo confirmé en la app: «Proveedores · botón
+  /// DESHABILITADO seleccionado»—. El eje de etapas y el foco tienen que salir
+  /// del mismo valor o se contradicen.
+  Set<PurchaseStep> _enabledStepsFor(PurchaseFocus focus) {
+    final working = focus.working;
+    if (working is PurchaseBasketFocus) {
+      // La canasta se arma en Necesidad. Bodega y proveedores existen cuando la
+      // llamada única ya resolvió la lista: es el mismo resultado el que dice
+      // qué cubre la bodega y qué hay que comprar afuera.
+      final resolved = working.scenarios;
+      return {
+        PurchaseStep.need,
+        if (resolved) PurchaseStep.stock,
+        if (resolved) PurchaseStep.providers,
+        if (_plan != null) PurchaseStep.plan,
+      };
+    }
+    final need = working is PurchaseNeedFocus ? _selectedNeed : null;
     return {
       PurchaseStep.need,
       // El paso de stock existe en los dos carriles: el conjunto elegible de
@@ -1986,7 +2174,44 @@ class _IntelligentPurchasingWorkspacePageState
     };
   }
 
-  Map<PurchaseStep, String> get _stepMeta {
+  Map<PurchaseStep, String> get _stepMeta => _stepMetaFor(_focus);
+
+  /// El recuento de cada etapa, **para este foco**.
+  ///
+  /// `_inventorySnapshot`, `_stockResolution` y `_ranking` son cachés de UNA
+  /// necesidad. Leerlos con una canasta abierta ponía el conteo de la necesidad
+  /// anterior encima de la comparación —«128 alternativas» sobre una canasta de
+  /// dos líneas, medido en la app—: un número que no describe nada de lo que
+  /// está en pantalla. Una canasta cuenta lo suyo, y si todavía no lo sabe no
+  /// cuenta nada.
+  Map<PurchaseStep, String> _stepMetaFor(PurchaseFocus focus) {
+    final working = focus.working;
+    if (working is PurchaseBasketFocus) {
+      final result = _scenarioResult;
+      return {
+        PurchaseStep.need: 'petición y revisión',
+        if (result != null)
+          PurchaseStep.stock: '${result.internalLineCount} de '
+              '${result.inputCount} en bodega',
+        if (result != null)
+          PurchaseStep.providers: _countLabel(
+            result.externalLineCount,
+            'línea por comprar',
+            'líneas por comprar',
+          ),
+        if (_plan != null)
+          PurchaseStep.plan:
+              _countLabel(_plan!.lines.length, 'línea', 'líneas'),
+      };
+    }
+    if (working is! PurchaseNeedFocus) {
+      return {
+        PurchaseStep.need: 'petición y revisión',
+        if (_plan != null)
+          PurchaseStep.plan:
+              _countLabel(_plan!.lines.length, 'línea', 'líneas'),
+      };
+    }
     final snapshot = _inventorySnapshot;
     final resolution = _stockResolution;
     final ranking = _ranking;
@@ -2010,9 +2235,8 @@ class _IntelligentPurchasingWorkspacePageState
           'alternativa',
           'alternativas',
         ),
-      if (ranking != null)
-        PurchaseStep.providers:
-            _countLabel(ranking.items.length, 'opción', 'opciones'),
+      if (ranking != null || _catalogQuoteProducts.isNotEmpty)
+        PurchaseStep.providers: _providerStepMeta(ranking),
       if (_plan != null)
         PurchaseStep.plan: _countLabel(_plan!.lines.length, 'línea', 'líneas'),
     };
@@ -2023,6 +2247,21 @@ class _IntelligentPurchasingWorkspacePageState
   static String _countLabel(num count, String singular, String plural) {
     final rounded = count is int ? count : count.round();
     return '$rounded ${rounded == 1 ? singular : plural}';
+  }
+
+  /// El paso cuenta por calce, no por la procedencia del dato. La asignación de
+  /// ficha de Derman y el historial parecido responden la misma pregunta, pero
+  /// no compiten dentro del mismo ranking.
+  String _providerStepMeta(PurchaseRanking? ranking) {
+    final exactCount = _catalogQuoteProducts.length;
+    if (exactCount == 0) {
+      return _countLabel(ranking?.items.length ?? 0, 'opción', 'opciones');
+    }
+    final exactLabel = _countLabel(exactCount, 'exacta', 'exactas');
+    final similarCount = _supplierHistory?.supplierCount ?? 0;
+    if (similarCount == 0) return exactLabel;
+    return '$exactLabel · '
+        '${_countLabel(similarCount, 'similar', 'similares')}';
   }
 
   void _openWorkspaceSection(PurchaseStep section) {
@@ -2243,7 +2482,6 @@ class _IntelligentPurchasingWorkspacePageState
       setState(() {
         _editingNeed = false;
         _runningCommand = false;
-        _selectedNeed = updated;
         _needs = _needs
             .map((item) => item.id == updated.id ? updated : item)
             .toList(growable: false);
@@ -2260,6 +2498,7 @@ class _IntelligentPurchasingWorkspacePageState
 
   /// Paso 2 — la bodega antes de cotizar.
   Widget _buildStockStep() {
+    if (_focus.working is PurchaseBasketFocus) return _buildBasketStockStep();
     final need = _selectedNeed;
     final snapshot = _inventorySnapshot;
     final resolution = _stockResolution;
@@ -2402,6 +2641,10 @@ class _IntelligentPurchasingWorkspacePageState
     }
     final stockSurface = InternalStockSurface(
       components: snapshot.components,
+      sourcingByProduct: {
+        for (final option in resolution?.items ?? const <SupplyStockOption>[])
+          option.productId: option,
+      },
       requestedQuantity: need.quantity,
       compact: compact,
       assignable: snapshot.assignable &&
@@ -2591,6 +2834,30 @@ class _IntelligentPurchasingWorkspacePageState
                             .copyWith(color: tokens.ink),
                       ),
                     ),
+                    // **Una sola salida visible por host.**
+                    //
+                    // Bajo 900 `MainLayout` es el dueño único del cromo y
+                    // dibuja su flecha `Volver`, que ejecuta exactamente esta
+                    // misma transición (ver `onBackPressed`). Sobre 900 esa
+                    // flecha no existe, y sin esta acción armar una canasta
+                    // dejaba al operador sin forma visible de salir. Poner las
+                    // dos en el mismo ancho serían dos afordancias para una
+                    // sola cosa, que es el defecto contrario.
+                    //
+                    // El umbral es el del propio shell —`desktopMin`—, no uno
+                    // elegido acá: si el shell cambia de opinión sobre dónde
+                    // dibuja su flecha, esto lo sigue.
+                    if (_needs.length > 1 &&
+                        _selectingBasket &&
+                        MediaQuery.sizeOf(context).width >=
+                            ResponsiveBreakpoints.desktopMin) ...[
+                      PurchaseInlineAction(
+                        key: const ValueKey('exit-basket'),
+                        label: 'Salir de la canasta',
+                        onPressed: _loadingScenarios ? null : _toggleBasketMode,
+                      ),
+                      const SizedBox(width: PurchaseMetrics.actionsGap),
+                    ],
                     if (_needs.length > 1)
                       PurchaseInlineAction(
                         key: const ValueKey('compare-basket'),
@@ -2938,6 +3205,10 @@ class _IntelligentPurchasingWorkspacePageState
             PurchasePriorityPanel(
               suggestions: _priority,
               busyEntityId: _takingPriorityId,
+              selectedEntityIds: _selectedPriorityIds,
+              searchingSelection: _takingPriorityBatch,
+              onSelectionChanged: _setPrioritySelection,
+              onSearchSelected: () => unawaited(_takePrioritySelection()),
               onTake: _takePriority,
             ),
             const SizedBox(height: PurchaseMetrics.stageGap),
@@ -3023,9 +3294,9 @@ class _IntelligentPurchasingWorkspacePageState
     if (supplyDraft != null) {
       return _buildSupplyNeedDraftReview(supplyDraft);
     }
-    final visibleActions = _showAllAssistantActions
-        ? _assistantCards
-        : _assistantCards.take(2).toList(growable: false);
+    final visibleEvidence = _showAllAssistantActions
+        ? _assistantEvidence
+        : _assistantEvidence.take(2).toList(growable: false);
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -3051,17 +3322,13 @@ class _IntelligentPurchasingWorkspacePageState
               data: _assistantText ?? '',
               selectable: true,
             ),
-            if (visibleActions.isNotEmpty) ...[
+            if (visibleEvidence.isNotEmpty) ...[
               const SizedBox(height: 8),
               const Divider(height: 1),
-              ...visibleActions.map(
-                (card) => AIAssistantCompactActionTile(
-                  card: card,
-                  includeFilterSummary: false,
-                  onTap: () => _handleAssistantCard(card),
-                ),
+              ...visibleEvidence.map(
+                (evidence) => PurchaseAssistantEvidenceRow(evidence: evidence),
               ),
-              if (_assistantCards.length > 2)
+              if (_assistantEvidence.length > 2)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton(
@@ -3072,7 +3339,7 @@ class _IntelligentPurchasingWorkspacePageState
                     child: Text(
                       _showAllAssistantActions
                           ? 'Mostrar menos'
-                          : 'Ver ${_assistantCards.length - 2} acciones más',
+                          : 'Ver ${_assistantEvidence.length - 2} más',
                     ),
                   ),
                 ),
@@ -4398,7 +4665,6 @@ class _IntelligentPurchasingWorkspacePageState
         _needs = _needs
             .map((item) => item.id == updated.id ? updated : item)
             .toList(growable: false);
-        if (_selectedNeed?.id == updated.id) _selectedNeed = updated;
         // Los escenarios se calcularon con la cantidad anterior: dejan de ser
         // verdad y se piden de nuevo en vez de mostrarse desactualizados.
         _scenarioResult = null;
@@ -4418,34 +4684,39 @@ class _IntelligentPurchasingWorkspacePageState
   /// Quitar una línea saca la necesidad de la canasta; nunca borra la
   /// necesidad, que sigue viva en su propio paso.
   Future<void> _removeBasketLine(BasketRequestLine line) async {
-    if (!_basketNeedIds.contains(line.id)) return;
-    setState(() {
-      _basketNeedIds.remove(line.id);
-      _scenarioResult = null;
-      _selectedScenarioKey = null;
-    });
-    if (_basketNeedIds.length < 2) {
-      // Con menos de dos líneas no hay canasta que comparar: la salida honesta
-      // es volver a la selección, no dejar una comparación imposible.
-      setState(() {
-        _showScenarios = false;
-        _selectingBasket = true;
-        _step = PurchaseStep.need;
-      });
+    final focus = _focus.working;
+    if (focus is! PurchaseBasketFocus || !focus.needIds.contains(line.id)) {
       return;
     }
+    // Con menos de dos líneas no hay canasta que comparar: la salida honesta
+    // es volver a la selección, no dejar una comparación imposible. Esa regla
+    // ya no se escribe acá — vive en `PurchaseBasketFocus.resolve`, así que
+    // ningún camino puede saltársela.
+    final sinLaLinea = focus.withNeeds(
+      focus.needIds.where((id) => id != line.id),
+    );
+    // Editar desde dentro de la comparación es pedirla de nuevo: se recalcula
+    // en el mismo acto en vez de dejar al operador frente a un resultado que
+    // ya no corresponde. Con menos de dos líneas no hay nada que recalcular y
+    // el tipo ya devolvió a la selección.
+    final destino = sinLaLinea.canCompare && focus.scenarios
+        ? sinLaLinea.comparing(true)
+        : sinLaLinea;
+    setState(() {
+      _invalidateBasketResults();
+      _focus = destino;
+      _step = _stepForFocus(destino);
+    });
+    if (!destino.scenarios) return;
     await _loadScenarios();
   }
 
   /// Agregar línea vuelve al paso donde se eligen necesidades, con el modo de
   /// selección ya activo.
   void _addBasketLine() {
-    setState(() {
-      _showScenarios = false;
-      _selectingBasket = true;
-      _returnToScenarios = true;
-      _step = PurchaseStep.need;
-    });
+    final focus = _focus.working;
+    if (focus is! PurchaseBasketFocus) return;
+    _goToFocus(focus.comparing(false));
   }
 
   /// Resolver la precisión lleva a la necesidad concreta para confirmar su
@@ -4454,12 +4725,209 @@ class _IntelligentPurchasingWorkspacePageState
     final need = _needById(line.id);
     if (need == null) return;
     setState(() {
-      _selectedNeed = need;
-      _showScenarios = false;
-      _selectingBasket = false;
-      _returnToScenarios = true;
+      _focus = PurchaseNeedFocus(
+        need.id,
+        from: _focus.working,
+        fromStep: _step,
+      );
       _step = PurchaseStep.need;
     });
+  }
+
+  void _backToBasketSelection() {
+    final focus = _focus.working;
+    if (focus is! PurchaseBasketFocus) return;
+    _goToFocus(focus.comparing(false));
+  }
+
+  /// **Bodega antes que proveedores, también con una canasta.**
+  ///
+  /// La resolución de la canasta es UNA llamada que devuelve las dos mitades:
+  /// `internalLineCount` —lo que la bodega ya cubre— y `externalLineCount` —lo
+  /// que hay que comprar—. Esa revisión existía en el dato y no en el recorrido:
+  /// tomar la cola de prioridad saltaba directo a Proveedores y el paso «Stock
+  /// interno» quedaba deshabilitado y en blanco, así que el orden del stepper
+  /// afirmaba un stock-first que el operador nunca veía.
+  ///
+  /// Acá se ve: qué líneas cubre la bodega, con su ATP contra lo pedido, y
+  /// cuántas siguen necesitando proveedor. La continuación es explícita.
+  Widget _buildBasketStockStep() {
+    final tokens = PurchaseTokens.of(context);
+    final result = _scenarioResult;
+    if (_loadingScenarios && result == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    // **Faltar una decisión no es haber fallado.** El stock interno se compara
+    // contra un producto exacto; sin él la revisión no corrió, y decirlo como
+    // error mandaría al operador a buscar una causa que no existe. El módulo ya
+    // hace esta distinción en `_loadScenarios` y acá se respeta.
+    if (result == null && !_basketCanPriceScenarios) {
+      return _buildBasketStockPending(tokens);
+    }
+    if (result == null) {
+      return SingleChildScrollView(
+        key: const ValueKey('basket-stock-error'),
+        child: VbNotice(
+          title: _scenarioError ??
+              'No se pudo revisar el stock interno de la canasta. La '
+                  'selección sigue guardada para reintentar.',
+          tone: VbNoticeTone.warning,
+          action: TextButton(
+            onPressed: _loadingScenarios ? null : _loadScenarios,
+            child: const Text('Reintentar'),
+          ),
+        ),
+      );
+    }
+    // El reparto interno/externo es del resultado, no de un escenario: no
+    // depende de a qué proveedor se le termine comprando.
+    final scenario = _firstWhereOrNull(
+          result.scenarios,
+          (item) => item.key == _selectedScenarioKey,
+        ) ??
+        (result.scenarios.isEmpty ? null : result.scenarios.first);
+    final internas = (scenario?.lines ?? const <PurchaseScenarioLine>[])
+        .where((line) => line.sourcing == 'internal')
+        .toList(growable: false);
+    return ListView(
+      key: const ValueKey('basket-stock-step'),
+      padding: const EdgeInsets.only(top: PurchaseMetrics.stagePadding),
+      children: [
+        PurchasePanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                result.internalLineCount == 0
+                    ? 'La bodega no cubre ninguna línea de esta lista'
+                    : 'La bodega ya cubre '
+                        '${result.internalLineCount} de ${result.inputCount}',
+                style: PurchaseType.panelTitle.copyWith(color: tokens.ink),
+              ),
+              const SizedBox(height: PurchaseMetrics.labelGap),
+              Text(
+                'Se revisó el stock interno de las ${result.inputCount} líneas '
+                'en la misma consulta. Quedan '
+                '${_countLabel(result.externalLineCount, 'línea', 'líneas')} '
+                'que hay que comprar afuera.',
+                style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+              ),
+              if (internas.isNotEmpty) ...[
+                const SizedBox(height: PurchaseMetrics.stageGap),
+                for (final line in internas)
+                  ListTile(
+                    key: ValueKey('basket-stock-line-${line.lineRef}'),
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.inventory_2_outlined),
+                    title: Text(
+                      line.productName,
+                      style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+                    ),
+                    subtitle: Text(
+                      'Stock interno · ATP ${line.availableToPromise} para '
+                      '${_formatSupplyQuantity(line.requestedQuantity)}',
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
+                  ),
+              ],
+              const SizedBox(height: PurchaseMetrics.actionsTopGap),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton(
+                  key: const ValueKey('basket-stock-continue'),
+                  onPressed: () =>
+                      _openWorkspaceSection(PurchaseStep.providers),
+                  child: Text(
+                    result.externalLineCount == 0
+                        ? 'Ver igualmente a los proveedores'
+                        : 'Continuar a proveedores',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// La canasta todavía no puede revisar bodega línea por línea.
+  ///
+  /// Dice cuántas líneas lo impiden y por qué, y deja las dos salidas reales:
+  /// resolver esas líneas —que es el trabajo que desbloquea la revisión— o
+  /// seguir a proveedores, donde la cobertura sí responde sin producto exacto.
+  Widget _buildBasketStockPending(PurchaseTokens tokens) {
+    final needs = _selectedBasketNeeds;
+    final pendientes = needs
+        .where((need) => !need.hasConfirmedProduct)
+        .toList(growable: false);
+    return ListView(
+      key: const ValueKey('basket-stock-pending'),
+      padding: const EdgeInsets.only(top: PurchaseMetrics.stagePadding),
+      children: [
+        PurchasePanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'La bodega se revisa contra el producto exacto',
+                style: PurchaseType.panelTitle.copyWith(color: tokens.ink),
+              ),
+              const SizedBox(height: PurchaseMetrics.labelGap),
+              Text(
+                // El plural se concuerda: el módulo ya rechazó «1 opciones».
+                '${pendientes.length} de ${needs.length} líneas todavía '
+                '${pendientes.length == 1 ? 'no tiene' : 'no tienen'} producto '
+                'confirmado, así que su stock interno no se puede comparar. '
+                'A quién le compramos cada cosa sí se puede responder ahora.',
+                style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+              ),
+              if (pendientes.isNotEmpty) ...[
+                const SizedBox(height: PurchaseMetrics.stageGap),
+                for (final need in pendientes)
+                  ListTile(
+                    key: ValueKey('basket-stock-pending-${need.id}'),
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.help_outline),
+                    title: Text(
+                      need.productName ?? need.description,
+                      style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+                    ),
+                    subtitle: Text(
+                      'falta confirmar el producto exacto',
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
+                  ),
+              ],
+              const SizedBox(height: PurchaseMetrics.actionsTopGap),
+              // Dos acciones que en teléfono no caben en una fila: se
+              // reacomodan en vez de recortarse.
+              Wrap(
+                spacing: PurchaseMetrics.actionsGap,
+                runSpacing: PurchaseMetrics.actionsGap,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  FilledButton(
+                    key: const ValueKey('basket-stock-continue'),
+                    onPressed: () =>
+                        _openWorkspaceSection(PurchaseStep.providers),
+                    child: const Text('Continuar a proveedores'),
+                  ),
+                  TextButton(
+                    key: const ValueKey('basket-stock-resolve-lines'),
+                    onPressed: () {
+                      setState(() => _basketSection = BasketSection.lines);
+                      _openWorkspaceSection(PurchaseStep.providers);
+                    },
+                    child: const Text('Resolver esas líneas'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildScenarioSurface() {
@@ -4474,7 +4942,7 @@ class _IntelligentPurchasingWorkspacePageState
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
-            onPressed: () => setState(() => _showScenarios = false),
+            onPressed: _backToBasketSelection,
             icon: const Icon(Icons.arrow_back, size: 18),
             label: const Text('Volver a la selección'),
           ),
@@ -4982,6 +5450,89 @@ class _IntelligentPurchasingWorkspacePageState
   /// No inicia sesión por su cuenta —ese camino tiene sus propias
   /// comprobaciones y no se duplica—, así que si no hay sesión lo dice y se
   /// detiene en vez de anotar una fila falsa por cada producto.
+  Future<void> _checkExactProductAvailability(
+    SupplyStockOption product,
+  ) async {
+    if (_checkingSupplierId != null) return;
+    final supplierId = product.supplierId;
+    final supplierName = product.supplierName?.trim();
+    final supplierCode = product.supplierCode?.trim();
+    if (supplierId == null ||
+        supplierName == null ||
+        supplierName.isEmpty ||
+        supplierCode == null ||
+        supplierCode.isEmpty) {
+      _showCheckMessage(
+        'La ficha no tiene proveedor y código suficientes para consultar este producto.',
+      );
+      return;
+    }
+    if (!product.automaticAvailabilityEnabled) {
+      _showCheckMessage(
+        '$supplierName todavía no tiene una consulta automática para este producto.',
+      );
+      return;
+    }
+
+    final service = SupplierAvailabilityService(Supabase.instance.client);
+    setState(() {
+      _checkingSupplierId = supplierId;
+      _checkProgress = 'Consultando ${product.name}…';
+    });
+    try {
+      final probe = await service.enabledProbe(supplierId);
+      if (probe == null) {
+        _showCheckMessage(
+          '$supplierName ya no tiene una consulta automática habilitada.',
+        );
+        return;
+      }
+      final summary = await SupplierPortalHeadlessRunner(service).run(
+        supplierId: supplierId,
+        probe: probe,
+        targets: <SupplierAvailabilityTarget>[
+          SupplierAvailabilityTarget(
+            productId: product.productId,
+            name: product.name,
+            supplierCode: supplierCode,
+          ),
+        ],
+        onProgress: (_, __, name) {
+          if (mounted) setState(() => _checkProgress = 'Consultando $name…');
+        },
+      );
+      if (!mounted) return;
+      if (summary.needsLogin) {
+        _showCheckMessage(
+          'No hay sesión abierta con $supplierName. Abre su ficha, entra al portal y vuelve a intentarlo.',
+        );
+      } else if (summary.checked == 1) {
+        _showCheckMessage(
+          'Se registró la respuesta del portal para ${product.name}.',
+        );
+        final need = _selectedNeed;
+        if (need != null) await _loadDecision(need);
+      } else {
+        _showCheckMessage(
+          'El portal de $supplierName no pudo responder por este producto.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showCheckMessage(
+          'No se pudo consultar ${product.name} con $supplierName.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingSupplierId = null;
+          _checkProgress = null;
+        });
+      }
+    }
+  }
+
   Future<void> _confirmAvailabilityWithSupplier(
     String supplierId,
     String supplierName,
@@ -5014,7 +5565,7 @@ class _IntelligentPurchasingWorkspacePageState
         onProgress: (done, total, name) {
           if (!mounted) return;
           setState(() =>
-              _checkProgress = 'Confirmando \${done + 1} de \$total: \$name');
+              _checkProgress = 'Consultando ${done + 1} de $total: $name');
         },
       );
       if (!mounted) return;
@@ -5027,7 +5578,8 @@ class _IntelligentPurchasingWorkspacePageState
         );
       } else {
         _showCheckMessage(
-          'Confirmados \${summary.checked} productos con $supplierName.',
+          'Se registró la respuesta para ${summary.checked} productos de '
+          '$supplierName.',
         );
       }
       await _loadSupplierHistory(_selectedNeed!, force: true);
@@ -5098,7 +5650,13 @@ class _IntelligentPurchasingWorkspacePageState
     // anterior mostraría un catálogo recortado sin decir por qué.
     _supplierCatalogSearch.clear();
     setState(() {
-      _openSupplierId = supplierId;
+      // La ficha se monta SOBRE lo que se estaba resolviendo: mirar a un
+      // proveedor no puede perder la necesidad ni la canasta, y cerrarla
+      // devuelve exactamente ahí.
+      _focus = PurchaseSupplierFocus(
+        supplierId: supplierId,
+        under: _focus.working,
+      );
       _supplierCatalog = null;
       _supplierCatalogError = null;
       _loadingSupplierCatalog = true;
@@ -5222,7 +5780,8 @@ class _IntelligentPurchasingWorkspacePageState
   void _closeSupplierWorkspace() {
     _supplierCatalogDebounce?.cancel();
     setState(() {
-      _openSupplierId = null;
+      final focus = _focus;
+      _focus = focus is PurchaseSupplierFocus ? focus.under : focus;
       _supplierCatalog = null;
       _supplierCatalogError = null;
       _loadingSupplierCatalog = false;
@@ -5640,15 +6199,18 @@ class _IntelligentPurchasingWorkspacePageState
     }
     final missing = leader.missingList;
     final complement = leader.complementSupplierName;
+    final approximate = leader.approximateNeeds > 0
+        ? ' Tiene ${leader.approximateNeeds} ${leader.approximateNeeds == 1 ? 'alternativa parecida' : 'alternativas parecidas'}, pero no cuentan como cobertura exacta.'
+        : '';
     if (missing != null && complement != null) {
       return 'Ninguno cubre la lista completa. ${leader.supplierName} cubre '
           '${leader.coveredNeeds} de ${leader.totalNeeds}; para $missing '
-          'conviene $complement.';
+          'conviene $complement.$approximate';
     }
     if (missing != null) {
       return 'Ninguno cubre la lista completa. ${leader.supplierName} cubre '
           '${leader.coveredNeeds} de ${leader.totalNeeds}, y de $missing no hay '
-          'historial de compra con nadie.';
+          'historial de compra exacto con nadie.$approximate';
     }
     return 'Cobertura según el historial de compras; no valida stock de hoy.';
   }
@@ -5659,6 +6221,8 @@ class _IntelligentPurchasingWorkspacePageState
   ) {
     final detail = <String>[
       if (supplier.coveredList != null) supplier.coveredList!,
+      if (supplier.approximateList != null)
+        'Parecidos, no cobertura: ${supplier.approximateList}',
       if (supplier.brands != null) supplier.brands!,
     ];
     return Row(
@@ -5679,7 +6243,9 @@ class _IntelligentPurchasingWorkspacePageState
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '${supplier.coveredNeeds} de ${supplier.totalNeeds}',
+                    supplier.approximateNeeds > 0
+                        ? '${supplier.coveredNeeds} exactas · ${supplier.approximateNeeds} parecidas'
+                        : '${supplier.coveredNeeds} de ${supplier.totalNeeds}',
                     style: PurchaseType.rowTitle.copyWith(color: tokens.act),
                   ),
                 ],
@@ -5747,14 +6313,18 @@ class _IntelligentPurchasingWorkspacePageState
   /// seleccionada y la evidencia abierta siguen ahí cuando se vuelve. Salir del
   /// bloque para mirar a un proveedor —y tener que rehacer el camino— es lo que
   /// hace que nadie lo mire.
-  List<Widget> _buildSupplierHistoryBlock() {
+  List<Widget> _buildSupplierHistoryBlock({
+    List<SupplyStockOption> exactProducts = const <SupplyStockOption>[],
+  }) {
     final report = _supplierHistory;
     // La ficha del proveedor es del proveedor, no de la línea: llegando desde
     // «Pedidos» no hay necesidad elegida y la ficha igual tiene que abrirse.
     if (_openSupplierId != null) {
       return <Widget>[_buildSupplierWorkspace(), const SizedBox(height: 12)];
     }
-    if (report == null || report.isEmpty) return const <Widget>[];
+    if ((report == null || report.isEmpty) && exactProducts.isEmpty) {
+      return const <Widget>[];
+    }
     return <Widget>[
       AnimatedSize(
         duration: const Duration(milliseconds: 220),
@@ -5785,7 +6355,14 @@ class _IntelligentPurchasingWorkspacePageState
             );
           },
           child: _openSupplierId == null
-              ? _buildSupplierTable(report)
+              ? _buildSupplierTable(
+                  report ??
+                      const SupplierConcentrationReport(
+                        items: <SupplierConcentration>[],
+                        hasMore: false,
+                      ),
+                  exactProducts: exactProducts,
+                )
               : _buildSupplierWorkspace(),
         ),
       ),
@@ -5793,10 +6370,31 @@ class _IntelligentPurchasingWorkspacePageState
     ];
   }
 
-  Widget _buildSupplierTable(SupplierConcentrationReport report) {
+  Widget _buildSupplierTable(
+    SupplierConcentrationReport report, {
+    required List<SupplyStockOption> exactProducts,
+  }) {
+    final plannedProductIds = _plan?.lines
+            .where((line) => line.sourceNeedId == _selectedNeed?.id)
+            .map((line) => line.productId)
+            .toSet() ??
+        const <String>{};
     return SupplierConcentrationTable(
       key: const ValueKey('tabla'),
       report: report,
+      exactProducts: exactProducts,
+      requestedLabel: _selectedNeed?.productName ?? _selectedNeed?.description,
+      plannedProductIds: plannedProductIds,
+      addingProductId: _addingQuoteProductId,
+      onAddExactProduct: (product) =>
+          unawaited(_addProductQuoteToPlan(product)),
+      onCheckExactProduct: (product) =>
+          unawaited(_checkExactProductAvailability(product)),
+      onOpenExactSupplier: (product) {
+        final supplierId = product.supplierId;
+        if (supplierId == null) return;
+        unawaited(_openSupplierWorkspace(supplierId));
+      },
       // Un recuento y su antigüedad: «12 de 12» y «hace 7 min». Separados
       // porque uno compara y el otro fecha.
       confirmedDetailFor: _confirmedLabel,
@@ -5936,6 +6534,24 @@ class _IntelligentPurchasingWorkspacePageState
 
   /// «17 líneas de compra entre 4 proveedores» — la base, dicha antes que
   /// cualquier porcentaje.
+  List<SupplyStockOption> get _catalogQuoteProducts {
+    final need = _selectedNeed;
+    final resolution = _stockResolution;
+    if (need == null ||
+        !need.hasConfirmedProduct ||
+        resolution == null ||
+        !resolution.isOk ||
+        resolution.isFamilyLane) {
+      return const <SupplyStockOption>[];
+    }
+    return resolution.items
+        .where(
+          (option) =>
+              option.productId == need.productId && option.requiresQuote,
+        )
+        .toList(growable: false);
+  }
+
   Widget _buildCandidateSection({
     required bool phone,
     Widget? identityFallback,
@@ -5954,6 +6570,8 @@ class _IntelligentPurchasingWorkspacePageState
         resolution.isOk &&
         resolution.blocksExternal &&
         !resolution.externalAllowed;
+    final quoteProducts =
+        blockedByStock ? const <SupplyStockOption>[] : _catalogQuoteProducts;
     final width = MediaQuery.sizeOf(context).width;
     final usableWidth =
         width - (_inspectedCandidate != null ? _inspectorWidth : 0);
@@ -5971,8 +6589,12 @@ class _IntelligentPurchasingWorkspacePageState
       key: const ValueKey('provider-results'),
       padding: const EdgeInsets.only(top: 14),
       children: [
-        // Antes que la tabla de productos: a quién le compramos esto.
-        ..._buildSupplierHistoryBlock(),
+        // El calce exacto manda sobre la historia parecida. Si el producto
+        // existe pero no tiene compras en este ERP, se conserva arriba y la
+        // evidencia histórica ampliada queda como contexto, no como sustituto.
+        // Una sola superficie, ordenada por calce. La ficha exacta y el
+        // historial parecido conservan su procedencia dentro de cada fila.
+        ..._buildSupplierHistoryBlock(exactProducts: quoteProducts),
         // **Un encabezado sin su tabla no encabeza nada.** «Sin opciones
         // visibles» con un selector de vista al lado, sobre una compuerta que
         // ya dice qué decidir primero, es un rótulo de una cosa que no está.
@@ -6153,7 +6775,9 @@ class _IntelligentPurchasingWorkspacePageState
         // Los siete estados en que no se propone comprar tienen cada uno su
         // causa y su acción. Colapsarlos en «sin resultados» le quitaría al
         // operador justamente lo que tiene que hacer después.
-        else if (external != null && !external.isSuccess)
+        else if (external != null &&
+            !external.isSuccess &&
+            quoteProducts.isEmpty)
           ExternalCandidatesStateSurface(
             result: external,
             onEditNeed: () => setState(() => _step = PurchaseStep.need),
@@ -6163,6 +6787,7 @@ class _IntelligentPurchasingWorkspacePageState
         // un conjunto que sólo trae opciones por verificar no es «no hay
         // compras comparables», y su grupo se dibuja más abajo.
         else if ((ranking == null || ranking.items.isEmpty) &&
+            quoteProducts.isEmpty &&
             (external == null || external.unverifiedItems.isEmpty))
           // Superficie de decisión alineada a la izquierda, sin isla flotante.
           Container(
@@ -6195,6 +6820,8 @@ class _IntelligentPurchasingWorkspacePageState
         // Frame 10 — existen opciones pero el filtro activo las esconde todas.
         // No se confunde con «no hay compras históricas comparables», que es
         // otra causa y tiene su propia superficie.
+        else if (quoteProducts.isNotEmpty)
+          const SizedBox.shrink()
         else if (_allCandidatesHiddenByFilters)
           NoMatchSurface(
             causeSentence: _noMatchCause,
@@ -6677,21 +7304,22 @@ class _IntelligentPurchasingWorkspacePageState
   /// sugerencia trae producto exacto, la necesidad nace confirmada y el
   /// recorrido puede ir directo a bodega.
   Future<void> _takePriority(PurchasePrioritySuggestion suggestion) async {
-    if (_takingPriorityId != null) return;
+    if (_takingPriorityId != null || _takingPriorityBatch) return;
     setState(() => _takingPriorityId = suggestion.entityId);
     try {
-      final need = await _service.createNeed(
-        description: suggestion.title,
-        quantity: suggestion.suggestedQuantity,
-        unit: suggestion.unit,
-        productId: suggestion.productId,
-      );
+      final need = await _service.takePrioritySuggestion(suggestion);
       if (!mounted) return;
       setState(() {
         _priority = _priority
             .where((item) => item.entityId != suggestion.entityId)
             .toList(growable: false);
-        _needs = [need, ..._needs];
+        _needs = [
+          need,
+          ..._needs.where((item) => item.id != need.id),
+        ];
+        if (_selectedPriorityIds.remove(suggestion.entityId)) {
+          _priorityBatchOperationKey = null;
+        }
         _takingPriorityId = null;
       });
       _selectNeed(need);
@@ -6700,6 +7328,81 @@ class _IntelligentPurchasingWorkspacePageState
       setState(() {
         _takingPriorityId = null;
         _decisionError = 'No se pudo tomar «${suggestion.title}»: $error';
+      });
+    }
+  }
+
+  void _setPrioritySelection(Set<String> ids) {
+    if (_takingPriorityBatch) return;
+    final available = _priority.map((item) => item.entityId).toSet();
+    final next = ids.where(available.contains).take(8).toSet();
+    if (setEquals(next, _selectedPriorityIds)) return;
+    setState(() {
+      _selectedPriorityIds
+        ..clear()
+        ..addAll(next);
+      // A changed payload is a different operation. Only a retry of the exact
+      // same selection keeps the old key.
+      _priorityBatchOperationKey = null;
+    });
+  }
+
+  /// Turns the checked rows into the module's existing supplier-comparison
+  /// basket. It is one server command, not N simulated taps: workshop rows are
+  /// re-read without writes and stock signals are created atomically under one
+  /// replay receipt.
+  Future<void> _takePrioritySelection() async {
+    if (_takingPriorityBatch || _takingPriorityId != null) return;
+    final selected = _priority
+        .where((item) => _selectedPriorityIds.contains(item.entityId))
+        .take(8)
+        .toList(growable: false);
+    if (selected.length < 2) return;
+    final operationKey = _priorityBatchOperationKey ?? const Uuid().v4();
+    setState(() {
+      _takingPriorityBatch = true;
+      _priorityBatchOperationKey = operationKey;
+      _decisionError = null;
+    });
+    try {
+      final needs = await _service.takePriorityBatch(
+        suggestions: selected,
+        operationKey: operationKey,
+      );
+      if (!mounted) return;
+      final selectedIds = selected.map((item) => item.entityId).toSet();
+      final needIds = needs.map((need) => need.id).toSet();
+      setState(() {
+        _priority = _priority
+            .where((item) => !selectedIds.contains(item.entityId))
+            .toList(growable: false);
+        _selectedPriorityIds.removeAll(selectedIds);
+        _priorityBatchOperationKey = null;
+        _takingPriorityBatch = false;
+        _needs = [
+          ...needs,
+          ..._needs.where((need) => !needIds.contains(need.id)),
+        ];
+        // **El mismo foco que produce el camino manual.** Éste era el sitio
+        // que no asignaba la necesidad y el otro sí, y por eso la misma
+        // comparación salía con cromo distinto según por dónde se hubiera
+        // llegado. Ahora los dos construyen el mismo valor.
+        _focus = PurchaseBasketFocus.resolve(
+          needs.map((need) => need.id),
+          scenarios: true,
+        );
+        _step = PurchaseStep.stock;
+        _scenarioResult = null;
+        _scenarioError = null;
+        _basketCoverage = null;
+      });
+      await _loadScenarios();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _takingPriorityBatch = false;
+        _decisionError =
+            'No se pudo confirmar si la canasta quedó preparada. Reintenta: se usará la misma operación y no se duplicarán repuestos.';
       });
     }
   }
@@ -6765,6 +7468,9 @@ class _PurchaseScenarioPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final missing = scenario.totalLineCount - scenario.coverageLineCount;
     final externalCandidates = scenario.externalCandidates;
+    final sourcingReviewRequired = scenario.lines
+        .where((line) => line.needsSourcingReview)
+        .toList(growable: false);
     final firstLine = scenario.lines.isEmpty ? null : scenario.lines.first;
     return ExpansionTile(
       key: PageStorageKey<String>('purchase-scenario-${scenario.key}'),
@@ -6795,7 +7501,7 @@ class _PurchaseScenarioPanel extends StatelessWidget {
         ],
       ),
       subtitle: Text(
-        '${scenario.coverageLineCount} de ${scenario.totalLineCount} cubiertos · ${scenario.supplierCount} ${scenario.supplierCount == 1 ? 'proveedor' : 'proveedores'}${missing > 0 ? ' · faltan $missing' : ''}',
+        '${scenario.coverageLineCount} de ${scenario.totalLineCount} cubiertos · ${scenario.supplierCount} ${scenario.supplierCount == 1 ? 'proveedor' : 'proveedores'}${missing > 0 ? ' · faltan $missing' : ''}${sourcingReviewRequired.isEmpty ? '' : ' · ${sourcingReviewRequired.length} ${sourcingReviewRequired.length == 1 ? 'pendiente de resolver' : 'pendientes de resolver'}'}',
       ),
       children: [
         ...scenario.lines.map(
@@ -6805,16 +7511,49 @@ class _PurchaseScenarioPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
+        if (sourcingReviewRequired.isNotEmpty) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${sourcingReviewRequired.length == 1 ? 'El producto exacto' : 'Los productos exactos'} '
+              '${sourcingReviewRequired.length == 1 ? 'sigue' : 'siguen'} en la lista, '
+              'pero este escenario no ${sourcingReviewRequired.length == 1 ? 'le asigna' : 'les asigna'} '
+              'proveedor. Abre ${sourcingReviewRequired.length == 1 ? 'la línea' : 'cada línea'} '
+              'para comparar otro proveedor o dejarla por cotizar según su evidencia.',
+              style: PurchaseType.meta.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         Align(
           alignment: Alignment.centerRight,
-          child: externalCandidates.isEmpty
-              ? OutlinedButton.icon(
+          child: Wrap(
+            spacing: PurchaseMetrics.actionsGap,
+            runSpacing: PurchaseMetrics.actionsGap,
+            alignment: WrapAlignment.end,
+            children: [
+              if (sourcingReviewRequired.isNotEmpty)
+                OutlinedButton.icon(
+                  key: ValueKey<String>('quote-scenario-${scenario.key}'),
+                  onPressed: () => onReviewLine(sourcingReviewRequired.first),
+                  icon: const Icon(Icons.request_quote_outlined, size: 18),
+                  label: Text(
+                    sourcingReviewRequired.length == 1
+                        ? 'Resolver línea pendiente'
+                        : 'Resolver ${sourcingReviewRequired.length} pendientes',
+                  ),
+                ),
+              if (externalCandidates.isEmpty && sourcingReviewRequired.isEmpty)
+                OutlinedButton.icon(
                   onPressed:
                       firstLine == null ? null : () => onReviewLine(firstLine),
                   icon: const Icon(Icons.inventory_2_outlined, size: 18),
                   label: const Text('Revisar stock interno'),
                 )
-              : FilledButton.icon(
+              else if (externalCandidates.isNotEmpty)
+                FilledButton.icon(
                   key: ValueKey<String>('prepare-scenario-${scenario.key}'),
                   onPressed: commandsEnabled ? onPrepare : null,
                   icon: preparing
@@ -6827,6 +7566,8 @@ class _PurchaseScenarioPanel extends StatelessWidget {
                     'Agregar ${externalCandidates.length} ${externalCandidates.length == 1 ? 'alternativa' : 'alternativas'} al plan',
                   ),
                 ),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -6854,7 +7595,9 @@ class _ScenarioLineTile extends StatelessWidget {
         'Stock interno · ATP ${line.availableToPromise} para ${_formatSupplyQuantity(line.requestedQuantity)}',
       'external' =>
         '${line.supplierName ?? 'Proveedor histórico'} · disponibilidad por confirmar${margin == null ? '' : ' · margen ${(margin * 100).toStringAsFixed(1)}%'}',
-      _ => 'Sin alternativa histórica · revisar identidad o proveedor',
+      _ => line.needsSourcingReview
+          ? 'Producto exacto · sin cobertura en este escenario · abrir para resolver'
+          : 'Sin alternativa histórica · revisar identidad o proveedor',
     };
     final icon = switch (line.sourcing) {
       'internal' => Icons.inventory_2_outlined,

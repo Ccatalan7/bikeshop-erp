@@ -628,6 +628,38 @@ When a full route is justified, preserve the shell and an exact return path.
 When an inline, pane, popover, or sheet version exposes the same operation, it
 must delegate to the same canonical command as the routed version.
 
+### El cromo y el cuerpo se derivan del mismo valor (2026-08-25)
+
+**Costo real: la misma pantalla salía distinta según por dónde se hubiera
+llegado, y el dueño lo describió como «se comporta como si hubiera dos
+implementaciones paralelas».**
+
+Cuando la navegación interna de un módulo se guarda como varias banderas
+independientes —`_showScenarios`, `_selectingBasket`, la entidad seleccionada,
+la ficha abierta—, nada obliga a que la combinación exista de verdad. En el
+Asistente de compras eso produjo tres defectos a la vez, todos medidos en la app
+real: una comparación de dos necesidades con la barra de **una** necesidad ajena
+encima; la etapa activa marcada **y deshabilitada** al mismo tiempo; y el
+recuento de la etapa mostrando «128 alternativas» de la necesidad anterior sobre
+una lista de dos líneas.
+
+Las reglas que quedan:
+
+- **Un valor sellado por módulo**, y el encabezado, la barra de contexto, las
+  etapas habilitadas, sus recuentos y el cuerpo se derivan todos de él. Un
+  recuento que viene de una caché de otra entidad no describe nada de lo que
+  está en pantalla.
+- **Dos caminos al mismo estado tienen que construir el mismo valor.** Si uno
+  asigna un campo que el otro no, el cromo difiere aunque el cuerpo coincida —y
+  ésa es la variabilidad que el operador siente y no puede explicar.
+- **«Volver» es la pila de ese valor, no un booleano.** Cada estado sabe de
+  dónde salió, y devuelve también la etapa en la que se lo dejó: una regla de
+  entrada correcta (revisar bodega primero) aplicada al retroceder le come al
+  operador el resultado que estaba mirando.
+- Una regla de dominio del recorrido —«menos de dos líneas no es una canasta»—
+  vive en el constructor del tipo, no repetida en cada camino que puede
+  quebrarla.
+
 ## 7. Lists, tables, cards, and detail workspaces
 
 Select the representation that best supports scanning and action:
@@ -806,6 +838,33 @@ en unos proveedores y en otros no. Con el contenido alineado a la derecha, la
 fila sin sitio corría sus botones el ancho del icono y esa fila dejaba de
 alinear con las demás. Un contenedor de ancho fijo que a veces va vacío —no un
 `if` que quita el hijo— mantiene la columna quieta.
+
+### La procedencia no parte una decisión que el operador compara (corrección del dueño, 2026-08-25)
+
+El Asistente de compras separó un producto exacto de catálogo en una tarjeta y
+los proveedores con compras parecidas en otra tabla. La separación era
+técnicamente honesta —ficha no es factura—, pero visualmente invertía la
+pregunta: el operador pregunta primero **quién puede vender lo pedido**, no en
+qué tabla nació cada evidencia. El único proveedor del producto exacto quedó
+fuera de la comparación, mientras los proveedores de otra medida parecían más
+confiables por traer porcentajes y fechas.
+
+Cuando varias fuentes responden una misma decisión:
+
+1. Se ordenan y agrupan por la dimensión que decide el trabajo —aquí `Exacto`
+   antes de `Parecido`— y comparten una sola anatomía de tabla/tarjeta.
+2. La procedencia se rotula dentro de la fila: `de ficha, no pagado`, `comprado
+   en este ERP`, o `portal revisado <fecha>`. No se borra un dato real por no
+   ser histórico, ni se lo disfraza como una factura.
+3. Un dato que no aplica lleva una frase semántica (`sin compras en este ERP`),
+   nunca `0 %` ni un guion ambiguo. Las cifras de un grupo relajado no cruzan al
+   exacto.
+4. El control nombra la acción real. `Llevar al plan` crea una línea de
+   revisión; `Agregar por cotizar` describía un estado interno e insinuaba una
+   comunicación externa que nunca ocurría.
+5. La misma agrupación y el mismo orden sobreviven al reflow compacto. Cambiar
+   de tabla a filas rotuladas no autoriza a esconder el exacto ni a mezclarlo
+   por costo con los parecidos.
 
 ## 8. Forms and editing
 

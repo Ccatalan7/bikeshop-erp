@@ -507,6 +507,15 @@ class PurchaseScenarioLine {
       candidateId != null &&
       candidateId!.isNotEmpty;
 
+  /// Producto resuelto técnicamente que este escenario todavía no cubre.
+  ///
+  /// La ausencia de cobertura no demuestra por sí sola que falte historial:
+  /// el proveedor histórico también puede haber quedado fuera del límite del
+  /// escenario. El flujo individual conserva la decisión de comparar otro
+  /// proveedor o dejar el producto por cotizar.
+  bool get needsSourcingReview =>
+      sourcing == 'uncovered' && !covered && productId.isNotEmpty;
+
   PurchaseCandidate toCandidate({required int rank}) {
     if (!hasExternalCandidate) {
       throw StateError('La línea no contiene una alternativa externa.');
@@ -698,17 +707,28 @@ class PurchasePlanLine {
     required this.unit,
     required this.currency,
     required this.supplierAvailability,
+    this.evidenceState = 'erp_purchase_history',
     this.productName,
     this.landedUnitCostNet,
     this.projectedGrossMarginRatio,
     this.media = ProductMedia.empty,
     this.evidenceAgeDays,
     this.note,
+    this.availabilityStatus,
+    this.availabilityCheckedAt,
+    this.availabilitySourceUrl,
+    this.catalogCostNet,
+    this.catalogCostCurrency,
+    this.catalogProductUpdatedAt,
+    this.supplierCode,
   });
 
   final String id;
   final String sourceNeedId;
-  final String candidateId;
+
+  /// Nulo cuando el catálogo confirma el producto pero este ERP todavía no
+  /// tiene una compra que pueda convertirse en candidato histórico.
+  final String? candidateId;
   final String productId;
   final String? productName;
   final String supplierName;
@@ -718,6 +738,25 @@ class PurchasePlanLine {
   final double? landedUnitCostNet;
   final double? projectedGrossMarginRatio;
   final String supplierAvailability;
+
+  /// `erp_purchase_history` · `fresh_supplier_check` ·
+  /// `catalog_assignment` · `no_erp_history`.
+  ///
+  /// La ausencia de historia nunca se modela como evidencia "incompleta" de
+  /// una compra: es otra clase de evidencia y conserva su nombre propio.
+  final String evidenceState;
+  final String? availabilityStatus;
+  final DateTime? availabilityCheckedAt;
+  final String? availabilitySourceUrl;
+
+  /// Referencia de ficha congelada cuando se llevó la línea al plan. Se
+  /// muestra, pero nunca participa del subtotal de costos aterrizados.
+  final double? catalogCostNet;
+  final String? catalogCostCurrency;
+  final DateTime? catalogProductUpdatedAt;
+  final String? supplierCode;
+
+  bool get requiresQuote => evidenceState != 'erp_purchase_history';
 
   /// Foto de la ficha del producto, resuelta al leer el plan.
   ///
@@ -768,19 +807,27 @@ class PurchasePlanLine {
         landedUnitCostNet: landedUnitCostNet,
         projectedGrossMarginRatio: projectedGrossMarginRatio,
         supplierAvailability: supplierAvailability,
+        evidenceState: evidenceState,
         media: media ?? this.media,
         evidenceAgeDays: evidenceAgeDays,
         note: note,
+        availabilityStatus: availabilityStatus,
+        availabilityCheckedAt: availabilityCheckedAt,
+        availabilitySourceUrl: availabilitySourceUrl,
+        catalogCostNet: catalogCostNet,
+        catalogCostCurrency: catalogCostCurrency,
+        catalogProductUpdatedAt: catalogProductUpdatedAt,
+        supplierCode: supplierCode,
       );
 
   factory PurchasePlanLine.fromJson(Map<String, dynamic> json) {
     return PurchasePlanLine(
       id: json['id']?.toString() ?? '',
       sourceNeedId: json['source_need_id']?.toString() ?? '',
-      candidateId: json['candidate_id']?.toString() ?? '',
+      candidateId: _asNullableText(json['candidate_id']),
       productId: json['product_id']?.toString() ?? '',
       productName: json['product_name']?.toString(),
-      supplierName: json['supplier_name']?.toString() ?? 'Sin proveedor',
+      supplierName: _asNullableText(json['supplier_name']) ?? 'Por cotizar',
       quantity: _asDouble(json['quantity']),
       unit: json['unit']?.toString() ?? 'unit',
       currency: json['currency_code']?.toString() ?? 'CLP',
@@ -789,10 +836,57 @@ class PurchasePlanLine {
           _asNullableDouble(json['projected_gross_margin_ratio']),
       supplierAvailability:
           json['supplier_availability']?.toString() ?? 'unverified',
+      evidenceState: json['evidence_state']?.toString() ??
+          (json['candidate_id'] == null
+              ? 'no_erp_history'
+              : 'erp_purchase_history'),
       media: ProductMedia.fromJson(json),
       evidenceAgeDays: _snapshotEvidenceAgeDays(json['evidence_snapshot']),
       note: json['note']?.toString(),
+      availabilityStatus: _snapshotText(
+        json['evidence_snapshot'],
+        'availability_status',
+      ),
+      availabilityCheckedAt: _snapshotDate(
+        json['evidence_snapshot'],
+        'availability_checked_at',
+      ),
+      availabilitySourceUrl: _snapshotText(
+        json['evidence_snapshot'],
+        'availability_source_url',
+      ),
+      catalogCostNet: _snapshotNumber(
+        json['evidence_snapshot'],
+        'catalog_cost_net',
+      ),
+      catalogCostCurrency: _snapshotText(
+        json['evidence_snapshot'],
+        'catalog_cost_currency',
+      ),
+      catalogProductUpdatedAt: _snapshotDate(
+        json['evidence_snapshot'],
+        'catalog_product_updated_at',
+      ),
+      supplierCode: _snapshotText(
+        json['evidence_snapshot'],
+        'supplier_code',
+      ),
     );
+  }
+
+  static String? _snapshotText(Object? snapshot, String key) {
+    if (snapshot is! Map) return null;
+    return _asNullableText(snapshot[key]);
+  }
+
+  static DateTime? _snapshotDate(Object? snapshot, String key) {
+    final raw = _snapshotText(snapshot, key);
+    return raw == null ? null : DateTime.tryParse(raw);
+  }
+
+  static double? _snapshotNumber(Object? snapshot, String key) {
+    if (snapshot is! Map) return null;
+    return _asNullableDouble(snapshot[key]);
   }
 
   /// Resta las dos fechas que el servidor ya escribió en el snapshot.
@@ -917,6 +1011,67 @@ int _asInt(Object? value, {int fallback = 0}) =>
 ///
 /// `reason` es lo más importante de la fila. Es la experiencia del que sabe,
 /// puesta en palabras: «Se agotó y se vendió 3 veces en los últimos 120 días».
+class PurchasePriorityJobContext {
+  const PurchasePriorityJobContext({
+    required this.mechanicJobId,
+    required this.jobNumber,
+    required this.scope,
+    this.jobBikeId,
+    this.bikeId,
+    this.bikeBrand,
+    this.bikeModel,
+    this.bikeYear,
+    this.bikeSerial,
+  });
+
+  factory PurchasePriorityJobContext.fromJson(Map<String, dynamic> json) {
+    final jobBikeId = _asNullableText(json['jobBikeId']);
+    return PurchasePriorityJobContext(
+      mechanicJobId: json['mechanicJobId']?.toString() ?? '',
+      jobNumber: json['jobNumber']?.toString() ?? '',
+      jobBikeId: jobBikeId,
+      bikeId: _asNullableText(json['bikeId']),
+      bikeBrand: _asNullableText(json['bikeBrand']),
+      bikeModel: _asNullableText(json['bikeModel']),
+      bikeYear: json['bikeYear'] is num
+          ? (json['bikeYear'] as num).toInt()
+          : int.tryParse(json['bikeYear']?.toString() ?? ''),
+      bikeSerial: _asNullableText(json['bikeSerial']),
+      scope: json['scope']?.toString() ??
+          (jobBikeId == null ? 'whole_job' : 'bike'),
+    );
+  }
+
+  final String mechanicJobId;
+  final String jobNumber;
+  final String? jobBikeId;
+  final String? bikeId;
+  final String? bikeBrand;
+  final String? bikeModel;
+  final int? bikeYear;
+  final String? bikeSerial;
+
+  /// `whole_job` preserves the intentional NULL `supply_needs.job_bike_id`.
+  final String scope;
+
+  bool get isWholeJob => scope == 'whole_job';
+
+  String get bikeLabel {
+    if (isWholeJob) return 'Todo el trabajo';
+    final identity = <String?>[
+      bikeBrand,
+      bikeModel,
+    ].whereType<String>().join(' ');
+    final serial = bikeSerial == null ? '' : ' · S/N $bikeSerial';
+    return identity.isEmpty ? 'Bicicleta vinculada' : '$identity$serial';
+  }
+
+  String get displayLabel {
+    final job = jobNumber.trim();
+    return job.isEmpty ? bikeLabel : '$job · $bikeLabel';
+  }
+}
+
 class PurchasePrioritySuggestion {
   const PurchasePrioritySuggestion({
     required this.rank,
@@ -928,9 +1083,12 @@ class PurchasePrioritySuggestion {
     required this.unit,
     required this.reason,
     this.signalAt,
+    this.media = ProductMedia.empty,
+    this.jobContext,
   });
 
   factory PurchasePrioritySuggestion.fromJson(Map<String, dynamic> json) {
+    final rawJobContext = json['jobContext'];
     return PurchasePrioritySuggestion(
       rank: (json['rank'] as num?)?.toInt() ?? 0,
       source: json['source']?.toString() ?? 'stockout',
@@ -941,6 +1099,12 @@ class PurchasePrioritySuggestion {
       unit: json['unit']?.toString() ?? 'unit',
       reason: json['reason']?.toString() ?? '',
       signalAt: DateTime.tryParse(json['signalAt']?.toString() ?? ''),
+      media: ProductMedia.fromJson(json),
+      jobContext: rawJobContext is Map
+          ? PurchasePriorityJobContext.fromJson(
+              Map<String, dynamic>.from(rawJobContext),
+            )
+          : null,
     );
   }
 
@@ -956,7 +1120,35 @@ class PurchasePrioritySuggestion {
 
   /// Por qué esta fila está aquí, en palabras del negocio.
   final String reason;
+
+  /// Momento que explica la entrada a la cola.
+  ///
+  /// Para `workshop` es exactamente `supply_needs.created_at` —la fecha real
+  /// en que Jobs registró el repuesto—. Para señales automáticas es la última
+  /// venta que sostuvo el cálculo de rotación, no una fecha manual de ingreso.
   final DateTime? signalAt;
+
+  /// Foto de la ficha del producto, resuelta en un solo viaje para el feed.
+  final ProductMedia media;
+
+  /// Procedencia durable cuando esta fila ya existe como necesidad de taller.
+  final PurchasePriorityJobContext? jobContext;
+
+  PurchasePrioritySuggestion withMedia(ProductMedia media) {
+    return PurchasePrioritySuggestion(
+      rank: rank,
+      source: source,
+      entityId: entityId,
+      productId: productId,
+      title: title,
+      suggestedQuantity: suggestedQuantity,
+      unit: unit,
+      reason: reason,
+      signalAt: signalAt,
+      media: media,
+      jobContext: jobContext,
+    );
+  }
 
   /// Un trabajo con cliente esperando aprieta distinto que un mínimo.
   bool get isWorkshop => source == 'workshop';
@@ -1027,6 +1219,25 @@ class SupplyStockOption {
     this.sku,
     this.media = ProductMedia.empty,
     this.matchDetail = const [],
+    this.evidenceState = 'unknown',
+    this.candidateId,
+    this.supplierId,
+    this.supplierName,
+    this.purchaseCount = 0,
+    this.lastPurchaseAt,
+    this.catalogSupplierId,
+    this.catalogSupplierName,
+    this.availabilitySupplierId,
+    this.availabilitySupplierName,
+    this.availabilityStatus,
+    this.availabilityCheckedAt,
+    this.availabilitySourceUrl,
+    this.availabilityFresh = false,
+    this.catalogCostNet,
+    this.catalogCostCurrency = 'CLP',
+    this.catalogProductUpdatedAt,
+    this.supplierCode,
+    this.automaticAvailabilityEnabled = false,
   });
 
   final String productId;
@@ -1048,6 +1259,39 @@ class SupplyStockOption {
   /// Esta alternativa, por sí sola, cubre entera la necesidad.
   final bool blocksExternal;
 
+  /// Procedencia comercial separada del calce técnico y del ATP.
+  final String evidenceState;
+  final String? candidateId;
+  final String? supplierId;
+  final String? supplierName;
+  final int purchaseCount;
+  final DateTime? lastPurchaseAt;
+  final String? catalogSupplierId;
+  final String? catalogSupplierName;
+  final String? availabilitySupplierId;
+  final String? availabilitySupplierName;
+  final String? availabilityStatus;
+  final DateTime? availabilityCheckedAt;
+  final String? availabilitySourceUrl;
+  final bool availabilityFresh;
+
+  /// Referencia mutable de la ficha. No es una compra ni un costo aterrizado.
+  final double? catalogCostNet;
+  final String catalogCostCurrency;
+  final DateTime? catalogProductUpdatedAt;
+  final String? supplierCode;
+
+  /// Hay una sonda habilitada capaz de consultar el código de este producto.
+  /// No significa que el portal tenga sesión ni que el producto esté disponible.
+  final bool automaticAvailabilityEnabled;
+
+  bool get hasErpPurchaseHistory => evidenceState == 'erp_purchase_history';
+  bool get requiresQuote => const {
+        'fresh_supplier_check',
+        'catalog_assignment',
+        'no_erp_history',
+      }.contains(evidenceState);
+
   /// «No lo sé» no es «no cumple»: se muestra rotulado, nunca oculto.
   bool get isUnverified => matchState == 'unverified';
 
@@ -1068,6 +1312,33 @@ class SupplyStockOption {
               .toList(growable: false)
           : const [],
       blocksExternal: json['blocksExternal'] == true,
+      evidenceState: json['evidenceState']?.toString() ?? 'unknown',
+      candidateId: _asNullableText(json['candidateId']),
+      supplierId: _asNullableText(json['supplierId']),
+      supplierName: _asNullableText(json['supplierName']),
+      purchaseCount: _asInt(json['purchaseCount']),
+      lastPurchaseAt:
+          DateTime.tryParse(json['lastPurchaseAt']?.toString() ?? ''),
+      catalogSupplierId: _asNullableText(json['catalogSupplierId']),
+      catalogSupplierName: _asNullableText(json['catalogSupplierName']),
+      availabilitySupplierId: _asNullableText(json['availabilitySupplierId']),
+      availabilitySupplierName:
+          _asNullableText(json['availabilitySupplierName']),
+      availabilityStatus: _asNullableText(json['availabilityStatus']),
+      availabilityCheckedAt: DateTime.tryParse(
+        json['availabilityCheckedAt']?.toString() ?? '',
+      ),
+      availabilitySourceUrl: _asNullableText(json['availabilitySourceUrl']),
+      availabilityFresh: json['availabilityFresh'] == true,
+      catalogCostNet: _asNullableDouble(json['catalogCostNet']),
+      catalogCostCurrency:
+          _asNullableText(json['catalogCostCurrency']) ?? 'CLP',
+      catalogProductUpdatedAt: DateTime.tryParse(
+        json['catalogProductUpdatedAt']?.toString() ?? '',
+      ),
+      supplierCode: _asNullableText(json['supplierCode']),
+      automaticAvailabilityEnabled:
+          json['automaticAvailabilityEnabled'] == true,
     );
   }
 }
@@ -1890,9 +2161,10 @@ SupplyExternalStatusCopy supplyExternalStatusCopy(
       );
     case 'no_historical_candidates':
       return const SupplyExternalStatusCopy(
-        title: 'Nunca se ha comprado nada de este conjunto',
-        body: 'Hay productos que sirven, pero ninguno tiene historial de '
-            'compra: no hay proveedor que comparar todavía.',
+        title: 'Productos válidos sin historial en este ERP',
+        body: 'El catálogo sí tiene productos compatibles, pero este ERP '
+            'todavía no registra a quién se compraron. Elige el producto '
+            'exacto para cotizarlo sin inventar proveedor ni precio.',
         actionLabel: 'Registrar una compra local',
       );
     default:
@@ -2287,6 +2559,8 @@ class BasketSupplierCoverage {
     required this.coveredNeeds,
     required this.totalNeeds,
     required this.coveredList,
+    required this.approximateNeeds,
+    required this.approximateList,
     required this.missingList,
     required this.complementSupplierName,
     required this.complementCoversList,
@@ -2303,6 +2577,8 @@ class BasketSupplierCoverage {
   final int coveredNeeds;
   final int totalNeeds;
   final String? coveredList;
+  final int approximateNeeds;
+  final String? approximateList;
 
   /// Lo que este proveedor NO cubre. Sólo la fila de rango 1 lo trae: es su
   /// decisión de reparto, no un dato del resto.
@@ -2335,6 +2611,8 @@ class BasketSupplierCoverage {
       coveredNeeds: number(json['coveredNeeds'])?.round() ?? 0,
       totalNeeds: number(json['totalNeeds'])?.round() ?? 0,
       coveredList: text(json['coveredList']),
+      approximateNeeds: number(json['approximateNeeds'])?.round() ?? 0,
+      approximateList: text(json['approximateList']),
       missingList: text(json['missingList']),
       complementSupplierName: text(json['complementSupplierName']),
       complementCoversList: text(json['complementCoversList']),

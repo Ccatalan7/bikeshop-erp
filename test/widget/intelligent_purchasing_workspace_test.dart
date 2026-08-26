@@ -10,6 +10,7 @@ import 'package:vinabike_erp/modules/ai_assistant/services/ai_agent_gateway_clie
 import 'package:vinabike_erp/modules/ai_assistant/models/ai_assistant_turn_contracts.dart';
 import 'package:vinabike_erp/modules/messaging/providers/chat_provider.dart';
 import 'package:vinabike_erp/modules/purchases/models/intelligent_purchasing_models.dart';
+import 'package:vinabike_erp/modules/purchases/models/supplier_catalog.dart';
 import 'package:vinabike_erp/modules/purchases/pages/intelligent_purchasing_decision_surfaces.dart';
 import 'package:vinabike_erp/modules/purchases/pages/intelligent_purchasing_surfaces.dart';
 import 'package:vinabike_erp/modules/purchases/pages/intelligent_purchasing_workspace_page.dart';
@@ -229,6 +230,96 @@ void main() {
     });
   }
 
+  testWidgets('la selección de prioridad abre la canasta real de proveedores',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1400, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final navigation = NavigationService();
+    final workspaces = WorkspaceManager(
+      sessionIdentity: 'intelligent-purchasing-priority-basket',
+    );
+    final appearance = AppearanceService();
+    final chat = ChatProvider();
+    final profile = CurrentUserProfileService();
+    final workspace = workspaces.activeWorkspace!;
+    final service = _PriorityBasketService();
+    addTearDown(navigation.dispose);
+    addTearDown(workspaces.dispose);
+    addTearDown(appearance.dispose);
+    addTearDown(chat.dispose);
+    addTearDown(profile.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<NavigationService>.value(value: navigation),
+          ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+          ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+          ChangeNotifierProvider<ChatProvider>.value(value: chat),
+          ChangeNotifierProvider<CurrentUserProfileService>.value(
+            value: profile,
+          ),
+          Provider<Workspace>.value(value: workspace),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.all.first,
+            brightness: Brightness.light,
+          ),
+          home: IntelligentPurchasingWorkspacePage(
+            service: service,
+            gatewayClient: AIAgentGatewayClient(
+              transport: _NeverGatewayTransport(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final id in const ['need-a', 'product-b']) {
+      final checkbox = find.byKey(ValueKey('purchase-priority-select-$id'));
+      await tester.ensureVisible(checkbox);
+      await tester.tap(checkbox);
+      await tester.pump();
+    }
+    final bulk =
+        find.byKey(const ValueKey('purchase-priority-search-selected'));
+    await tester.ensureVisible(bulk);
+    await tester.tap(bulk);
+    await tester.pumpAndSettle();
+
+    expect(service.batchCalls, 1);
+    expect(service.lastBatchSources, ['workshop', 'stockout']);
+    expect(find.text('Qué hay que comprar'), findsNothing);
+
+    // **Stock interno antes que proveedores, también acá.** Tomar la cola
+    // saltaba directo al comparador y dejaba el paso 2 deshabilitado y en
+    // blanco: el orden del stepper afirmaba un stock-first que el operador
+    // nunca veía. La revisión sale de la misma llamada única.
+    expect(find.byKey(const ValueKey('basket-stock-step')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('basket-stock-continue')));
+    await tester.pumpAndSettle();
+    expect(find.text('Mejor equilibrio'), findsWidgets);
+
+    // **El cromo de una canasta no puede nombrar una necesidad suelta.**
+    // Éste era el camino que NO asignaba la necesidad abierta, y el toggle
+    // manual sí: la misma comparación salía con barra de necesidad en un
+    // camino y sin ella en el otro, y cuando salía mostraba una necesidad
+    // ajena a la canasta con el contador leyendo la de ella.
+    expect(find.byType(SupplyNeedBar), findsNothing);
+    // Y las cuatro etapas siguen siendo el mismo shell: la canasta es un modo
+    // del contenido, no otra pantalla.
+    expect(
+      find.byKey(const ValueKey('intelligent-purchasing-sections')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'opens deterministic purchasing tools when the AI rollout is unavailable',
       (tester) async {
@@ -365,7 +456,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shows an AI inventory result as one compact action',
+  testWidgets(
+      'una lista de inventario dentro de Compras es evidencia, no una salida',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(900, 900);
@@ -414,6 +506,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final routeHistoryBefore = List<String>.from(workspace.routeHistory);
+    final routeBefore = workspace.currentRoute;
+
     await tester.enterText(
       find.byKey(const ValueKey('intelligent-purchasing-composer')),
       'busca el pedal exacto',
@@ -424,17 +519,35 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Lo que el asistente miró se sigue viendo: no se pierde información.
     expect(find.text('Hay una coincidencia exacta en stock.'), findsOneWidget);
     expect(find.text('1 resultado'), findsOneWidget);
-    expect(find.text('Pedal ENLEE CR-2'), findsOneWidget);
-    expect(find.text('En stock'), findsNothing);
-    expect(find.text('Top 5'), findsNothing);
+    expect(find.textContaining('Pedal ENLEE CR-2'), findsOneWidget);
+
+    // **Y no se puede salir por ahí.** La tarjeta llega con `autoOpen: true`,
+    // que es el caso que sacaba al operador del módulo sin que tocara nada:
+    // un post-frame abría `/inventory/products` y mutaba el buscador
+    // compartido de Inventario. Ya no existe el despachador, así que ni el
+    // automático ni el toque tienen a dónde ir.
     expect(
       find.byKey(
         const ValueKey('ai-action-card-inventory-inventoryProducts'),
       ),
-      findsOneWidget,
+      findsNothing,
     );
+    expect(find.text('Abrir Inventario'), findsNothing);
+    expect(find.text('Ver resultados'), findsNothing);
+    expect(
+      workspace.routeHistory,
+      routeHistoryBefore,
+      reason: 'ninguna tarjeta del asistente navega fuera del Asistente de '
+          'compras',
+    );
+    expect(workspace.currentRoute, routeBefore);
+
+    // `InventoryService` no está entre los providers de esta prueba a
+    // propósito: si el módulo volviera a leerlo para aplicar una búsqueda
+    // externa, `context.read` lanzaría y esto lo atraparía.
     expect(tester.takeException(), isNull);
   });
 
@@ -807,6 +920,9 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('compare-basket')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('basket-stock-step')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('basket-stock-continue')));
+    await tester.pumpAndSettle();
     expect(find.text('Comparación de la canasta'), findsOneWidget);
     expect(find.text('Mejor equilibrio'), findsOneWidget);
     expect(find.textContaining('2 de 2 cubiertos'), findsOneWidget);
@@ -821,6 +937,668 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Plan borrador'), findsOneWidget);
     expect(find.textContaining('nada comprado'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'los dos caminos a la comparación dejan el mismo cromo, y volver es el '
+      'foco', (tester) async {
+    // **La misma comparación se alcanzaba con dos cromos distintos.** Desde la
+    // cola de prioridad el foco quedaba sin necesidad abierta y la barra no
+    // salía; desde el modo canasta venía una necesidad ya elegida y la barra
+    // salía nombrando una línea que no era la canasta, con el contador de la
+    // etapa leyendo la de ella. Con un foco sellado esa combinación no se
+    // puede escribir, y esta prueba lo fija por el lado del camino manual —el
+    // de la cola de prioridad lo fija su propia prueba, con las mismas
+    // afirmaciones.
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 1100);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final navigation = NavigationService();
+    final workspaces = WorkspaceManager(
+      sessionIdentity: 'intelligent-purchasing-basket-chrome',
+    );
+    final appearance = AppearanceService();
+    final chat = ChatProvider();
+    final profile = CurrentUserProfileService();
+    final workspace = workspaces.activeWorkspace!;
+    addTearDown(navigation.dispose);
+    addTearDown(workspaces.dispose);
+    addTearDown(appearance.dispose);
+    addTearDown(chat.dispose);
+    addTearDown(profile.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<NavigationService>.value(value: navigation),
+          ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+          ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+          ChangeNotifierProvider<ChatProvider>.value(value: chat),
+          ChangeNotifierProvider<CurrentUserProfileService>.value(
+            value: profile,
+          ),
+          Provider<Workspace>.value(value: workspace),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.all.first,
+            brightness: Brightness.light,
+          ),
+          home: IntelligentPurchasingWorkspacePage(
+            initialNeedId: _FakeIntelligentPurchasingService.need.id,
+            service: _FakeIntelligentPurchasingService(),
+            gatewayClient: AIAgentGatewayClient(
+              transport: _NeverGatewayTransport(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Se entra con una necesidad abierta: su barra está, y es correcta.
+    expect(find.byType(SupplyNeedBar), findsOneWidget);
+
+    await _goToStep(tester, 'Necesidad');
+    await tester.tap(find.text('Armar canasta'));
+    await tester.pumpAndSettle();
+    // Armar la canasta suelta la necesidad individual: el cromo no puede
+    // seguir nombrando una línea que ya no es lo que se está resolviendo.
+    expect(find.byType(SupplyNeedBar), findsNothing);
+
+    for (final key in const ['supply-need-need-a', 'supply-need-need-b']) {
+      final row = find.byKey(ValueKey(key));
+      await tester.ensureVisible(row);
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.byKey(const ValueKey('compare-basket')));
+    await tester.pumpAndSettle();
+
+    // Igual que por la cola de prioridad: bodega primero.
+    expect(find.byKey(const ValueKey('basket-stock-step')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('basket-stock-continue')));
+    await tester.pumpAndSettle();
+    expect(find.text('Comparación de la canasta'), findsOneWidget);
+    // El mismo cromo que produce la cola de prioridad.
+    expect(find.byType(SupplyNeedBar), findsNothing);
+    expect(
+      find.byKey(const ValueKey('intelligent-purchasing-sections')),
+      findsOneWidget,
+    );
+
+    // Volver es una transición del foco, no una bandera: devuelve a la
+    // selección Y a la etapa donde la canasta se arma.
+    await tester.tap(find.text('Volver a la selección'));
+    await tester.pumpAndSettle();
+    expect(find.text('Comparación de la canasta'), findsNothing);
+    expect(find.text('Comparar canasta (2)'), findsOneWidget);
+    expect(find.byType(SupplyNeedBar), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cerrar y reabrir el módulo empieza una conversación nueva',
+      (tester) async {
+    // **La decisión de ciclo de vida, explícita.** El hilo del Asistente de
+    // compras vive en el `State` de la página: al cerrar el módulo se pierde y
+    // la próxima apertura empieza limpia. Es lo correcto para esta superficie
+    // —el trabajo durable es la necesidad guardada, no la charla— pero era una
+    // consecuencia accidental de dónde estaba declarado el campo, y nada lo
+    // decía ni lo probaba. Lo que esta prueba prohíbe es lo contrario: que el
+    // hilo pase a vivir en un servicio app-scoped y una apertura herede la
+    // conversación de la anterior sin que nadie lo haya decidido.
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final transport = _ActionCardGatewayTransport();
+
+    Future<void> abrirYPreguntar(String sessionIdentity) async {
+      final navigation = NavigationService();
+      final workspaces = WorkspaceManager(sessionIdentity: sessionIdentity);
+      final appearance = AppearanceService();
+      final chat = ChatProvider();
+      final profile = CurrentUserProfileService();
+      final workspace = workspaces.activeWorkspace!;
+      addTearDown(navigation.dispose);
+      addTearDown(workspaces.dispose);
+      addTearDown(appearance.dispose);
+      addTearDown(chat.dispose);
+      addTearDown(profile.dispose);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<NavigationService>.value(value: navigation),
+            ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+            ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+            ChangeNotifierProvider<ChatProvider>.value(value: chat),
+            ChangeNotifierProvider<CurrentUserProfileService>.value(
+              value: profile,
+            ),
+            Provider<Workspace>.value(value: workspace),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.resolve(
+              preset: AppearancePresets.all.first,
+              brightness: Brightness.light,
+            ),
+            home: IntelligentPurchasingWorkspacePage(
+              service: _FakeIntelligentPurchasingService(),
+              gatewayClient: AIAgentGatewayClient(transport: transport),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('intelligent-purchasing-composer')),
+        'busca el pedal exacto',
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('intelligent-purchasing-analyze')),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await abrirYPreguntar('intelligent-purchasing-lifecycle-1');
+    expect(transport.bodies, hasLength(1));
+    expect(transport.bodies.first['threadId'], isNull);
+
+    // Se cierra el módulo — el árbol se reemplaza por completo.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+
+    await abrirYPreguntar('intelligent-purchasing-lifecycle-2');
+    expect(transport.bodies, hasLength(2));
+    expect(
+      transport.bodies.last['threadId'],
+      isNull,
+      reason: 'una apertura nueva no hereda el hilo de la anterior',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a 430 px hay UNA sola salida de la canasta, y es la flecha',
+      (tester) async {
+    // **Dos afordancias para una sola cosa también es un defecto.** Bajo 900
+    // `MainLayout` es el dueño único del cromo y ya dibuja su flecha `Volver`;
+    // `exit-basket` sólo existe sobre ese umbral, donde esa flecha no está. Y
+    // las dos ejecutan la misma transición, no dos parecidas.
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(430, 920);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final navigation = NavigationService();
+    final workspaces = WorkspaceManager(
+      sessionIdentity: 'intelligent-purchasing-basket-exit-compacto',
+    );
+    final appearance = AppearanceService();
+    final chat = ChatProvider();
+    final profile = CurrentUserProfileService();
+    final workspace = workspaces.activeWorkspace!;
+    addTearDown(navigation.dispose);
+    addTearDown(workspaces.dispose);
+    addTearDown(appearance.dispose);
+    addTearDown(chat.dispose);
+    addTearDown(profile.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<NavigationService>.value(value: navigation),
+          ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+          ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+          ChangeNotifierProvider<ChatProvider>.value(value: chat),
+          ChangeNotifierProvider<CurrentUserProfileService>.value(
+            value: profile,
+          ),
+          Provider<Workspace>.value(value: workspace),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.all.first,
+            brightness: Brightness.light,
+          ),
+          home: IntelligentPurchasingWorkspacePage(
+            initialNeedId: _FakeIntelligentPurchasingService.need.id,
+            service: _FakeIntelligentPurchasingService(),
+            gatewayClient: AIAgentGatewayClient(
+              transport: _NeverGatewayTransport(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _goToStep(tester, 'Necesidad');
+    await tester.tap(find.text('Armar canasta'));
+    await tester.pumpAndSettle();
+
+    // Una sola salida: la flecha del shell. La acción del bloque no está.
+    final flecha = find.byTooltip('Volver');
+    expect(flecha, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('exit-basket')),
+      findsNothing,
+      reason: 'bajo 900 la flecha del shell ya es la salida',
+    );
+    expect(find.text('Comparar canasta (0)'), findsOneWidget);
+
+    await tester.tap(flecha);
+    await tester.pumpAndSettle();
+
+    // Y la flecha hizo lo mismo que `exit-basket`: volver al foco previo.
+    expect(find.text('Armar canasta'), findsOneWidget);
+    await _goToStep(tester, 'Stock interno');
+    expect(find.byType(SupplyNeedBar), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'cambiar la canasta después de comparar no deja el resultado anterior en '
+      'pie', (tester) async {
+    // **Un resultado viejo es una respuesta a otra pregunta.** Se podía volver
+    // al paso Necesidad desde una comparación, sacar o agregar una línea, y
+    // regresar a Proveedores para leer el reparto de la canasta ANTERIOR como
+    // si describiera la nueva: `withNeeds` conservaba `scenarios` y nadie
+    // botaba los resultados derivados.
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 1100);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final navigation = NavigationService();
+    final workspaces = WorkspaceManager(
+      sessionIdentity: 'intelligent-purchasing-basket-recompute',
+    );
+    final appearance = AppearanceService();
+    final chat = ChatProvider();
+    final profile = CurrentUserProfileService();
+    final workspace = workspaces.activeWorkspace!;
+    final service = _BasketRecomputeService();
+    addTearDown(navigation.dispose);
+    addTearDown(workspaces.dispose);
+    addTearDown(appearance.dispose);
+    addTearDown(chat.dispose);
+    addTearDown(profile.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<NavigationService>.value(value: navigation),
+          ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+          ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+          ChangeNotifierProvider<ChatProvider>.value(value: chat),
+          ChangeNotifierProvider<CurrentUserProfileService>.value(
+            value: profile,
+          ),
+          Provider<Workspace>.value(value: workspace),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.all.first,
+            brightness: Brightness.light,
+          ),
+          home: IntelligentPurchasingWorkspacePage(
+            service: service,
+            gatewayClient: AIAgentGatewayClient(
+              transport: _NeverGatewayTransport(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Future<void> marcar(String key) async {
+      final row = find.byKey(ValueKey(key));
+      await tester.ensureVisible(row);
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+    }
+
+    await _goToStep(tester, 'Necesidad');
+    await tester.tap(find.text('Armar canasta'));
+    await tester.pumpAndSettle();
+    await marcar('supply-need-need-a');
+    await marcar('supply-need-need-b');
+    await tester.tap(find.byKey(const ValueKey('compare-basket')));
+    await tester.pumpAndSettle();
+    expect(service.scenarioCalls, 1);
+    expect(find.byKey(const ValueKey('basket-stock-step')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('basket-stock-continue')));
+    await tester.pumpAndSettle();
+    expect(find.text('Comparación de la canasta'), findsOneWidget);
+
+    // Volver a Necesidad y AGREGAR una tercera línea: la canasta sigue siendo
+    // comparable (tres ≥ dos), así que ninguna otra regla la salva. Éste es el
+    // caso exacto del defecto.
+    await _goToStep(tester, 'Necesidad');
+    await marcar('supply-need-need-d');
+    expect(find.text('Comparar canasta (3)'), findsOneWidget);
+
+    // Stock y Proveedores dejan de ser alcanzables: no hay nada que mostrar
+    // que sea verdad, y volver a compararlo es un acto del operador.
+    await _goToStep(tester, 'Proveedores');
+    expect(
+      find.text('Comparación de la canasta'),
+      findsNothing,
+      reason: 'la comparación anterior describía otra canasta',
+    );
+    await _goToStep(tester, 'Stock interno');
+    expect(find.byKey(const ValueKey('basket-stock-step')), findsNothing);
+    expect(find.byKey(const ValueKey('basket-stock-pending')), findsNothing);
+    expect(service.scenarioCalls, 1, reason: 'nadie pidió recalcular todavía');
+
+    // Deshacer el cambio tampoco resucita el resultado viejo: la comparación
+    // se pide, no se hereda.
+    await marcar('supply-need-need-d');
+    expect(find.text('Comparar canasta (2)'), findsOneWidget);
+    expect(find.text('Comparación de la canasta'), findsNothing);
+
+    // Recién ahora, y con una resolución nueva.
+    await tester.tap(find.byKey(const ValueKey('compare-basket')));
+    await tester.pumpAndSettle();
+    expect(service.scenarioCalls, 2, reason: 'resultado fresco, no redibujado');
+    expect(find.byKey(const ValueKey('basket-stock-step')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('basket-stock-continue')));
+    await tester.pumpAndSettle();
+    expect(find.text('Comparación de la canasta'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('la ficha del proveedor se abre sobre el foco y lo devuelve',
+      (tester) async {
+    // La prueba del tipo demuestra la pila; ésta protege el cableado: que el
+    // callback de la fila abra la ficha, que la ficha se monte SOBRE la
+    // necesidad —conservando su barra, su etapa y su recuento— y que cerrarla
+    // devuelva exactamente eso y no una pantalla en blanco.
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1400, 1100);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final navigation = NavigationService();
+    final workspaces = WorkspaceManager(
+      sessionIdentity: 'intelligent-purchasing-supplier-ficha',
+    );
+    final appearance = AppearanceService();
+    final chat = ChatProvider();
+    final profile = CurrentUserProfileService();
+    final workspace = workspaces.activeWorkspace!;
+    addTearDown(navigation.dispose);
+    addTearDown(workspaces.dispose);
+    addTearDown(appearance.dispose);
+    addTearDown(chat.dispose);
+    addTearDown(profile.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<NavigationService>.value(value: navigation),
+          ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+          ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+          ChangeNotifierProvider<ChatProvider>.value(value: chat),
+          ChangeNotifierProvider<CurrentUserProfileService>.value(
+            value: profile,
+          ),
+          Provider<Workspace>.value(value: workspace),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.all.first,
+            brightness: Brightness.light,
+          ),
+          home: IntelligentPurchasingWorkspacePage(
+            initialNeedId: _FakeIntelligentPurchasingService.need.id,
+            service: _SupplierFichaService(),
+            gatewayClient: AIAgentGatewayClient(
+              transport: _NeverGatewayTransport(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _goToStep(tester, 'Proveedores');
+    PurchaseProcessBand banda() => tester.widget<PurchaseProcessBand>(
+          find.byKey(const ValueKey('intelligent-purchasing-sections')),
+        );
+    final barraAntes = tester.widget<SupplyNeedBar>(find.byType(SupplyNeedBar));
+    final etapaAntes = banda().active;
+    // El cromo completo, no una muestra: la etapa activa, cuáles existen y qué
+    // cuenta cada una. Un recuento que cambia al abrir una ficha vendría de una
+    // caché de otra cosa.
+    final habilitadasAntes = Set<PurchaseStep>.of(banda().enabled);
+    final metaAntes = Map<PurchaseStep, String>.of(banda().meta);
+
+    final abrir = find.bySemanticsLabel('Abrir la ficha de Andes Industrial');
+    await tester.ensureVisible(abrir);
+    await tester.pumpAndSettle();
+    await tester.tap(abrir);
+    await tester.pumpAndSettle();
+
+    // La ficha está, y el trabajo de abajo sigue mandando el cromo.
+    final volver = find.textContaining('Volver a los proveedores');
+    expect(volver, findsOneWidget);
+    expect(find.byType(SupplyNeedBar), findsOneWidget);
+    expect(
+      tester.widget<SupplyNeedBar>(find.byType(SupplyNeedBar)).title,
+      barraAntes.title,
+    );
+    expect(banda().active, etapaAntes);
+    expect(Set<PurchaseStep>.of(banda().enabled), habilitadasAntes);
+    expect(Map<PurchaseStep, String>.of(banda().meta), metaAntes);
+
+    await tester.tap(volver);
+    await tester.pumpAndSettle();
+
+    // Y cerrarla devuelve exactamente el mismo foco, etapa y barra.
+    expect(volver, findsNothing);
+    expect(abrir, findsOneWidget);
+    expect(
+      tester.widget<SupplyNeedBar>(find.byType(SupplyNeedBar)).title,
+      barraAntes.title,
+    );
+    expect(banda().active, etapaAntes);
+    expect(Set<PurchaseStep>.of(banda().enabled), habilitadasAntes);
+    expect(Map<PurchaseStep, String>.of(banda().meta), metaAntes);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('salir de la canasta devuelve al foco previo, y se ve',
+      (tester) async {
+    // En escritorio no hay flecha de volver —vive en el encabezado compacto—,
+    // así que armar una canasta dejaba al operador sin salida visible.
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1400, 1100);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final navigation = NavigationService();
+    final workspaces = WorkspaceManager(
+      sessionIdentity: 'intelligent-purchasing-basket-exit',
+    );
+    final appearance = AppearanceService();
+    final chat = ChatProvider();
+    final profile = CurrentUserProfileService();
+    final workspace = workspaces.activeWorkspace!;
+    addTearDown(navigation.dispose);
+    addTearDown(workspaces.dispose);
+    addTearDown(appearance.dispose);
+    addTearDown(chat.dispose);
+    addTearDown(profile.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<NavigationService>.value(value: navigation),
+          ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+          ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+          ChangeNotifierProvider<ChatProvider>.value(value: chat),
+          ChangeNotifierProvider<CurrentUserProfileService>.value(
+            value: profile,
+          ),
+          Provider<Workspace>.value(value: workspace),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.all.first,
+            brightness: Brightness.light,
+          ),
+          home: IntelligentPurchasingWorkspacePage(
+            initialNeedId: _FakeIntelligentPurchasingService.need.id,
+            service: _FakeIntelligentPurchasingService(),
+            gatewayClient: AIAgentGatewayClient(
+              transport: _NeverGatewayTransport(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Foco previo: una necesidad abierta, con su barra y sus etapas.
+    expect(find.byType(SupplyNeedBar), findsOneWidget);
+    final tituloPrevio =
+        tester.widget<SupplyNeedBar>(find.byType(SupplyNeedBar)).title;
+
+    await _goToStep(tester, 'Necesidad');
+    // La salida no existe cuando no hay canasta: no duplica nada.
+    expect(find.byKey(const ValueKey('exit-basket')), findsNothing);
+    await tester.tap(find.text('Armar canasta'));
+    await tester.pumpAndSettle();
+
+    final salida = find.byKey(const ValueKey('exit-basket'));
+    expect(salida, findsOneWidget);
+    expect(find.text('Salir de la canasta'), findsOneWidget);
+    expect(find.byType(SupplyNeedBar), findsNothing);
+
+    await tester.tap(salida);
+    await tester.pumpAndSettle();
+
+    // El mismo foco previo, no una pantalla en blanco. En la etapa 1 la barra
+    // de necesidad no se dibuja por contrato, así que lo que demuestra el
+    // retorno es que las etapas de esa necesidad vuelven a ser alcanzables y
+    // que la barra reaparece nombrándola.
+    expect(find.byKey(const ValueKey('exit-basket')), findsNothing);
+    expect(find.text('Armar canasta'), findsOneWidget);
+    await _goToStep(tester, 'Stock interno');
+    expect(find.byType(SupplyNeedBar), findsOneWidget);
+    expect(
+      tester.widget<SupplyNeedBar>(find.byType(SupplyNeedBar)).title,
+      tituloPrevio,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'resolver una línea abre esa necesidad y el volver devuelve la misma '
+      'comparación', (tester) async {
+    // **La versión anterior de esta prueba no llamaba a `_resolveBasketLine`:**
+    // volvía a Necesidad y destildaba un checkbox, que es otra cosa. Ésta toca
+    // el CTA real —«Resolver», que sólo existe en una línea sin producto
+    // exacto— y comprueba la pila del foco de ida y de vuelta.
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(599, 1000);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final navigation = NavigationService();
+    final workspaces = WorkspaceManager(
+      sessionIdentity: 'intelligent-purchasing-basket-resolve',
+    );
+    final appearance = AppearanceService();
+    final chat = ChatProvider();
+    final profile = CurrentUserProfileService();
+    final workspace = workspaces.activeWorkspace!;
+    addTearDown(navigation.dispose);
+    addTearDown(workspaces.dispose);
+    addTearDown(appearance.dispose);
+    addTearDown(chat.dispose);
+    addTearDown(profile.dispose);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<NavigationService>.value(value: navigation),
+          ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+          ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+          ChangeNotifierProvider<ChatProvider>.value(value: chat),
+          ChangeNotifierProvider<CurrentUserProfileService>.value(
+            value: profile,
+          ),
+          Provider<Workspace>.value(value: workspace),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.all.first,
+            brightness: Brightness.light,
+          ),
+          home: IntelligentPurchasingWorkspacePage(
+            service: _BasketPrecisionService(),
+            gatewayClient: AIAgentGatewayClient(
+              transport: _NeverGatewayTransport(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _goToStep(tester, 'Necesidad');
+    await tester.tap(find.text('Armar canasta'));
+    await tester.pumpAndSettle();
+    for (final key in const ['supply-need-need-a', 'supply-need-need-c']) {
+      final row = find.byKey(ValueKey(key));
+      await tester.ensureVisible(row);
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Comparar canasta (2)'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('compare-basket')));
+    await tester.pumpAndSettle();
+
+    // Stock interno primero, de verdad: la canasta aterriza en bodega.
+    // Con una línea sin producto exacto la revisión por línea no puede correr,
+    // y eso se dice como decisión pendiente —no como fallo— con sus dos
+    // salidas reales.
+    expect(find.byKey(const ValueKey('basket-stock-pending')), findsOneWidget);
+    expect(find.byKey(const ValueKey('basket-stock-error')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('basket-stock-resolve-lines')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('basket-stock-continue')));
+    await tester.pumpAndSettle();
+    expect(find.text('Comparación de la canasta'), findsOneWidget);
+
+    // La línea sin producto exacto ofrece resolverse desde la canasta misma.
+    await tester.tap(find.text('Líneas'));
+    await tester.pumpAndSettle();
+    final resolver = find.byKey(const ValueKey('basket-resolve-need-c'));
+    await tester.ensureVisible(resolver);
+    await tester.tap(resolver);
+    await tester.pumpAndSettle();
+
+    // La superficie cambió a esa necesidad, y la comparación se fue.
+    expect(find.text('Comparación de la canasta'), findsNothing);
+    expect(find.text('rayos 27.5 inox'), findsWidgets);
+
+    // Y el volver devuelve la MISMA comparación, con las mismas dos líneas.
+    await tester.tap(find.byTooltip('Volver'));
+    await tester.pumpAndSettle();
+    expect(find.text('Comparación de la canasta'), findsOneWidget);
+    expect(find.textContaining('2 necesidades'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -2272,6 +3050,133 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Registrar una compra local'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'el proveedor exacto comparte tabla, muestra costo de ficha y entra al plan',
+      (tester) async {
+        _FakeIntelligentPurchasingService.overrideStockResolution = {
+          'needId': 'need-family',
+          'needVersion': 1,
+          'revisionNo': 1,
+          'quantity': 2,
+          'unit': 'unit',
+          'lane': 'exact',
+          'status': 'ok',
+          'coverage': 'none',
+          'blocksExternal': false,
+          'items': [
+            {
+              'productId': 'product-a',
+              'name': 'Cámara aro 29 Presta 60 mm',
+              'sku': '160-4',
+              'atp': 0,
+              'coverage': 'none',
+              'matchState': 'strong',
+              'blocksExternal': false,
+              'evidenceState': 'catalog_assignment',
+              'supplierId': 'supplier-derman',
+              'supplierName': 'Derman',
+              'purchaseCount': 0,
+              'availabilityFresh': false,
+              'catalogCostNet': 3396,
+              'catalogCostCurrency': 'CLP',
+              'supplierCode': '160-4',
+              'automaticAvailabilityEnabled': false,
+            },
+          ],
+          'counts': const {'eligible': 1, 'none': 1},
+        };
+        _FakeIntelligentPurchasingService.overrideInventorySnapshot = {
+          'need_id': 'need-family',
+          'need_version': 1,
+          'source_product_id': 'product-a',
+          'source_product_name': 'Cámara aro 29 Presta 60 mm',
+          'requested_quantity': 2,
+          'available_to_promise': 0,
+          'assignable': false,
+          'components': [
+            {
+              'product_id': 'product-a',
+              'name': 'Cámara aro 29 Presta 60 mm',
+              'sku': '160-4',
+              'required_quantity': 2,
+              'atp': 0,
+            },
+          ],
+        };
+        _FakeIntelligentPurchasingService.overrideExternalEnvelope = {
+          'needId': 'need-family',
+          'needVersion': 1,
+          'revisionNo': 1,
+          'status': 'no_historical_candidates',
+          'lane': 'exact',
+          'items': const [],
+          'unverifiedItems': const [],
+          'counts': const {},
+          'page': const {},
+          'unverifiedPage': const {},
+          'target': const <String, dynamic>{},
+        };
+
+        await mount(tester, _ConfirmedExactNoHistoryService(),
+            needId: 'need-family');
+        await _goToStep(tester, 'Stock interno');
+
+        expect(
+            find.textContaining('Proveedor en ficha: Derman'), findsOneWidget);
+        await _goToStep(tester, 'Proveedores');
+
+        expect(
+          find.byKey(const ValueKey('supplier-concentration-table')),
+          findsOneWidget,
+        );
+        expect(find.text('1 exacta · 2 similares'), findsOneWidget);
+        expect(
+          find.text('EXACTO · CUMPLE LA FICHA TÉCNICA PEDIDA'),
+          findsOneWidget,
+        );
+        expect(find.text('Derman'), findsOneWidget);
+        expect(find.text(r'$3.396'), findsOneWidget);
+        expect(find.text('de ficha, no pagado'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('supplier-concentration-table')),
+            matching: find.textContaining('Cámara aro 29 Presta 60 mm'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Catálogo legacy'), findsOneWidget);
+        expect(find.text('sin compras en este ERP'), findsWidgets);
+        expect(
+          find.byTooltip(
+            'Derman todavía no tiene consulta automática para este producto',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('external-state-no_historical_candidates')),
+          findsNothing,
+        );
+
+        await tester.tap(
+          find.byKey(const ValueKey('add-catalog-plan-product-a')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          _FakeIntelligentPurchasingService.commands,
+          contains('quote:need-family:product-a'),
+        );
+        final plannedAction = tester.widget<IconButton>(
+          find.byKey(const ValueKey('add-catalog-plan-product-a')),
+        );
+        expect(plannedAction.onPressed, isNull);
+        expect(
+          find.byTooltip('Cámara aro 29 Presta 60 mm ya está en el plan'),
+          findsOneWidget,
+        );
       },
     );
 
@@ -3962,7 +4867,11 @@ class _CriteriaPurchasingService extends _FakeIntelligentPurchasingService {
     return SupplyNeedCriteria.fromConstraints(
       const <Object?>[
         {'kind': 'ranking_profile', 'value': 'profitability'},
-        {'field': 'ancho', 'values': ['2,0'], 'operator': 'gt'},
+        {
+          'field': 'ancho',
+          'values': ['2,0'],
+          'operator': 'gt'
+        },
         {
           'kind': 'commercial_preference',
           'value': 'Económicos pero con buen margen',
@@ -4036,11 +4945,14 @@ class _TerminalFailureGatewayTransport implements AIAgentGatewayTransport {
 }
 
 class _ActionCardGatewayTransport implements AIAgentGatewayTransport {
+  final List<Map<String, Object?>> bodies = <Map<String, Object?>>[];
+
   @override
   Future<Object?> send(
     Map<String, Object?> body, {
     required Future<void> abortTrigger,
   }) async {
+    bodies.add(body);
     return <String, Object?>{
       'version': 1,
       'threadId': '11111111-1111-4111-8111-111111111111',
@@ -4062,7 +4974,8 @@ class _ActionCardGatewayTransport implements AIAgentGatewayTransport {
             'entityIds': <String>[
               '33333333-3333-4333-8333-333333333333',
             ],
-            'autoOpen': false,
+            // El caso peligroso, no el inocuo: así llegaba de producción.
+            'autoOpen': true,
           },
         },
       ],
@@ -4309,6 +5222,138 @@ class _CoverageNoticeGatewayTransport implements AIAgentGatewayTransport {
         ],
         'status': 'completed',
       };
+}
+
+/// Una canasta con una línea que todavía no tiene producto exacto: es la única
+/// forma de que aparezca el CTA «Resolver», que es lo que conecta con
+/// `_resolveBasketLine`.
+/// Cuenta las resoluciones de canasta: es la única forma de afirmar que una
+/// comparación es **fresca** y no la anterior redibujada.
+class _BasketRecomputeService extends _FakeIntelligentPurchasingService {
+  int scenarioCalls = 0;
+
+  /// Una tercera línea con producto exacto. Sin ella la prueba no toca el
+  /// defecto: quitar una de dos deja la canasta en uno, y ahí `resolve` ya
+  /// apaga la comparación por otra regla —la de «menos de dos no es canasta»—.
+  /// El resultado viejo sobrevive cuando la membresía cambia y **sigue** en dos
+  /// o más.
+  static final tercera = SupplyNeed.fromJson({
+    'id': 'need-d',
+    'origin_kind': 'ad_hoc',
+    'original_description': 'cadena 11 velocidades',
+    'product_id': 'product-d',
+    'product_name': 'Cadena 11v',
+    'quantity': 1,
+    'unit': 'unit',
+    'identity_state': 'confirmed',
+    'supply_state': 'open',
+    'version': 1,
+    'created_at': '2026-08-16T12:03:00Z',
+  });
+
+  @override
+  Future<List<SupplyNeed>> fetchOpenNeeds({String? mechanicJobId}) async => [
+        _FakeIntelligentPurchasingService.need,
+        _FakeIntelligentPurchasingService.secondNeed,
+        tercera,
+      ];
+
+  @override
+  Future<PurchaseScenarioResult> buildScenarios({
+    required List<SupplyNeed> needs,
+    String profile = 'balanced',
+    int maxSuppliers = 2,
+    int limit = 3,
+  }) {
+    scenarioCalls++;
+    return super.buildScenarios(
+      needs: needs,
+      profile: profile,
+      maxSuppliers: maxSuppliers,
+      limit: limit,
+    );
+  }
+}
+
+/// Lo mínimo para que la ficha del proveedor exista: un proveedor con
+/// historial y un catálogo de un producto. Sin esto la pila
+/// `necesidad → ficha → cerrar` no se puede ejecutar en un widget test y el
+/// cableado de los callbacks queda sin guardia.
+class _SupplierFichaService extends _FakeIntelligentPurchasingService {
+  @override
+  Future<SupplierConcentrationReport> rankSuppliers({
+    String? query,
+    String? category,
+    String? brand,
+    int limit = 4,
+  }) async =>
+      SupplierConcentrationReport.fromJson(<String, dynamic>{
+        'hasMore': false,
+        'items': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'entityId': 'sup-1',
+            'supplierName': 'Andes Industrial',
+            'spendSharePercent': 100,
+            'purchaseLines': 3,
+            'purchaseInvoices': 2,
+            'distinctProducts': 1,
+            'evidencePurchaseLines': 3,
+            'evidenceSuppliers': 1,
+          },
+        ],
+      });
+
+  @override
+  Future<SupplierCatalogPage> supplierCatalogPage({
+    required String supplierId,
+    String? search,
+    int limit = 40,
+    int offset = 0,
+    String? needPhrase,
+  }) async =>
+      SupplierCatalogPage.fromJson(<String, dynamic>{
+        'supplier': <String, dynamic>{
+          'id': supplierId,
+          'name': 'Andes Industrial',
+        },
+        'metrics': <String, dynamic>{},
+        'items': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'productId': 'product-a',
+            'productName': 'Kenda Kwick 27,5 × 2,10',
+          },
+        ],
+        'total': 1,
+        'offset': 0,
+        'matched': 1,
+      });
+}
+
+class _BasketPrecisionService extends _FakeIntelligentPurchasingService {
+  static final needSinProducto = SupplyNeed.fromJson({
+    'id': 'need-c',
+    'origin_kind': 'ad_hoc',
+    'original_description': 'rayos 27.5 inox',
+    'quantity': 2,
+    'unit': 'unit',
+    'identity_state': 'pending',
+    'supply_state': 'open',
+    'version': 1,
+    'created_at': '2026-08-16T12:02:00Z',
+  });
+
+  @override
+  Future<List<SupplyNeed>> fetchOpenNeeds({String? mechanicJobId}) async => [
+        _FakeIntelligentPurchasingService.need,
+        _FakeIntelligentPurchasingService.secondNeed,
+        needSinProducto,
+      ];
+
+  @override
+  Future<SupplyNeed?> fetchNeed(String needId) async =>
+      needId == needSinProducto.id
+          ? needSinProducto
+          : _FakeIntelligentPurchasingService.need;
 }
 
 class _FakeIntelligentPurchasingService extends IntelligentPurchasingService {
@@ -4810,6 +5855,57 @@ class _FakeIntelligentPurchasingService extends IntelligentPurchasingService {
   }
 
   @override
+  Future<PurchasePlanDraft> prepareProductQuoteLine({
+    required SupplyNeed need,
+    required SupplyStockOption product,
+    required String profile,
+    PurchasePlanDraft? plan,
+    double? quantity,
+  }) async {
+    commands.add('quote:${need.id}:${product.productId}');
+    return PurchasePlanDraft(
+      id: plan?.id ?? 'plan-quote',
+      title: plan?.title ?? 'Plan de compra 2026-08-25',
+      state: 'draft',
+      objectiveProfile: profile,
+      version: (plan?.version ?? 0) + 1,
+      lines: [
+        PurchasePlanLine(
+          id: 'line-quote',
+          sourceNeedId: need.id,
+          candidateId: null,
+          productId: product.productId,
+          productName: product.name,
+          supplierName: product.supplierName ?? 'Por cotizar',
+          quantity: quantity ?? need.quantity,
+          unit: need.unit,
+          currency: 'CLP',
+          landedUnitCostNet: null,
+          projectedGrossMarginRatio: null,
+          supplierAvailability: 'unverified',
+          evidenceState: product.evidenceState,
+          catalogCostNet: product.catalogCostNet,
+          catalogCostCurrency: product.catalogCostCurrency,
+          supplierCode: product.supplierCode,
+        ),
+      ],
+      supplierGroups: [
+        PurchasePlanSupplierGroup(
+          supplierId: product.supplierId,
+          supplierName: product.supplierName ?? 'Por cotizar',
+          currency: 'CLP',
+          lineCount: 1,
+          totalUnits: quantity ?? need.quantity,
+          historicalLandedSubtotalNet: null,
+          supplierAvailability: 'unverified',
+          freightAssumption:
+              'sum_frozen_line_landed_costs_no_consolidation_saving',
+        ),
+      ],
+    );
+  }
+
+  @override
   Future<PurchasePlanDraft> removePlanLine({
     required PurchasePlanDraft plan,
     required PurchasePlanLine line,
@@ -4870,6 +5966,121 @@ class _FakeIntelligentPurchasingService extends IntelligentPurchasingService {
       ],
     );
   }
+}
+
+class _PriorityBasketService extends _FakeIntelligentPurchasingService {
+  int batchCalls = 0;
+  List<String> lastBatchSources = const [];
+
+  @override
+  Future<List<PurchasePrioritySuggestion>> fetchPurchasePriority({
+    int limit = 40,
+    int rotationDays = 120,
+  }) async =>
+      [
+        PurchasePrioritySuggestion(
+          rank: 1,
+          source: 'workshop',
+          entityId: 'need-a',
+          productId: 'product-a',
+          title: 'Neumático 27,5',
+          suggestedQuantity: 2,
+          unit: 'unit',
+          reason: 'Un trabajo de taller lo está esperando',
+          signalAt: DateTime(2026, 8, 24, 8, 16),
+          jobContext: const PurchasePriorityJobContext(
+            mechanicJobId: 'job-a',
+            jobNumber: 'PG-00525',
+            scope: 'whole_job',
+          ),
+        ),
+        const PurchasePrioritySuggestion(
+          rank: 2,
+          source: 'stockout',
+          entityId: 'product-b',
+          productId: 'product-b',
+          title: 'Piñón 9 velocidades',
+          suggestedQuantity: 1,
+          unit: 'unit',
+          reason: 'Se agotó y se vende',
+        ),
+      ];
+
+  @override
+  Future<List<SupplyNeed>> takePriorityBatch({
+    required List<PurchasePrioritySuggestion> suggestions,
+    required String operationKey,
+    int rotationDays = 120,
+  }) async {
+    batchCalls += 1;
+    lastBatchSources =
+        suggestions.map((suggestion) => suggestion.source).toList();
+    return [
+      _FakeIntelligentPurchasingService.need,
+      _FakeIntelligentPurchasingService.secondNeed,
+    ];
+  }
+
+  @override
+  Future<BasketCoverageReport> rankBasketSuppliers({
+    required List<String> queries,
+    int limit = 4,
+  }) async =>
+      const BasketCoverageReport(items: []);
+}
+
+/// Carril exacto con ficha confirmada y cero compras dentro del ERP.
+class _ConfirmedExactNoHistoryService
+    extends _FakeIntelligentPurchasingService {
+  static final _exactNeed = SupplyNeed.fromJson({
+    'id': 'need-family',
+    'origin_kind': 'ad_hoc',
+    'original_description': 'cámara aro 29 Presta 60 mm',
+    'product_id': 'product-a',
+    'product_name': 'Cámara aro 29 Presta 60 mm',
+    'quantity': 2,
+    'unit': 'unit',
+    'identity_state': 'confirmed',
+    'supply_state': 'open',
+    'version': 1,
+    'created_at': '2026-08-25T12:00:00Z',
+  });
+
+  @override
+  Future<List<SupplyNeed>> fetchOpenNeeds({String? mechanicJobId}) async =>
+      [_exactNeed];
+
+  @override
+  Future<SupplyNeed?> fetchNeed(String needId) async => _exactNeed;
+
+  @override
+  Future<SupplierConcentrationReport> rankSuppliers({
+    String? query,
+    String? category,
+    String? brand,
+    int limit = 4,
+  }) async =>
+      SupplierConcentrationReport.fromJson(<String, dynamic>{
+        'hasMore': false,
+        'items': <Map<String, dynamic>>[
+          for (final (id, name, share) in <(String, String, num)>[
+            ('supplier-comercial-ciclo', 'Comercial Ciclo', 64),
+            ('supplier-teknobike', 'TeknoBike', 36),
+          ])
+            <String, dynamic>{
+              'entityId': id,
+              'supplierName': name,
+              'spendSharePercent': share,
+              'purchaseLines': 1,
+              'purchaseInvoices': 1,
+              'distinctProducts': 1,
+              'evidencePurchaseLines': 2,
+              'evidenceSuppliers': 2,
+              'scopeRelaxed': true,
+              'droppedFilters': 'la medida menos determinante',
+            },
+        ],
+      });
 }
 
 /// Carril familia: la necesidad no tiene producto confirmado, y sólo lo fija

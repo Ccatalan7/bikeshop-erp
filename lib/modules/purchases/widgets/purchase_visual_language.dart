@@ -139,6 +139,24 @@ abstract final class PurchaseMetrics {
   static const double actionsGap = 12;
   static const double actionsTopGap = 9;
 
+  /// Separación entre un rótulo y la línea que lo desarrolla.
+  ///
+  /// **Leído de Design, no del código de al lado.** `GUÍA GENERAL Viñabike -
+  /// Componentes` (proyecto `a0fa3196-6315-4b96-bde7-7cc801e7a74e`), bloque
+  /// **F-04 · Espacio, radio y trazo**, publica la escala
+  /// `2 · 4 · 6 · 8 · 10 · 12 · 14 · 16 · 18 · 24` y acota los impares: «7/9/11/13
+  /// sólo para óptica interna de un control ya definido». El par concreto lo
+  /// fija el componente **T-01 · T-02 · T-03** (`VbTable · VbColumnSpec ·
+  /// VbRow · VbRowDisclosure`), cuya celda de dos líneas separa rótulo y valor
+  /// con `margin-top:4px`.
+  ///
+  /// **Corrección 2026-08-25:** este token se había propuesto en 3 px «porque
+  /// es lo que el módulo ya usa en 29 bloques». Eso es procedencia local, no de
+  /// Design, y 3 no está en la escala F-04 ni entre sus impares permitidos. El
+  /// valor correcto es 4. Los 29 usos previos quedan como están —migrarlos toca
+  /// código ajeno a este cambio— y su desviación se reporta en el handoff.
+  static const double labelGap = 4;
+
   /// Radio del tile de imagen (`image_contract`).
   static const double mediaRadius = 8;
 

@@ -7311,7 +7311,7 @@ Deno.test("el carril de compras no abre la lista general de inventario", async (
   const store = new TestRunStore();
   let providerCalls = 0;
   const presentations: unknown[] = [];
-  await executeAgentRun(
+  const response = await executeAgentRun(
     {
       ...request({ kind: "intelligent_purchasing", jobIds: [], truncated: false }),
       message: "camaras 27.5 VA",
@@ -7361,6 +7361,33 @@ Deno.test("el carril de compras no abre la lista general de inventario", async (
     presentations,
     ["answer"],
     "en compras la búsqueda se ejecuta como paso de resolución, no como lista",
+  );
+  // **Lo que se afirma es la proyección, no el argumento entregado.** Esta
+  // prueba existía y afirmaba SÓLO `presentations`, o sea el lado del ejecutor,
+  // mientras el defecto que su propio comentario describe seguía vivo: la
+  // tarjeta se construía desde `call.arguments` —los originales— y llegaba al
+  // cliente con `autoOpen: true` y `destination: inventory_products`. Verde
+  // todo el día con la fuga en producción.
+  assertEquals(
+    response.cards.filter((item) => item.listRef !== undefined).length,
+    0,
+    "el carril de compras no proyecta una tarjeta de lista de Inventario",
+  );
+  assertEquals(
+    response.cards.filter((item) => item.destination === "inventory_products")
+      .length,
+    0,
+    "ninguna tarjeta de compras conserva un destino fuera del módulo",
+  );
+  assertEquals(
+    response.cards.some((item) => item.listRef?.autoOpen === true),
+    false,
+    "nada se autoabre desde el Asistente de compras",
+  );
+  assertEquals(
+    /Inventario/.test(response.text),
+    false,
+    "la respuesta no redacta al operador con la frase de otro módulo",
   );
 });
 

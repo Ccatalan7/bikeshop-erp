@@ -1,24 +1,21 @@
 /// «Qué hay que comprar»: con esto abre el módulo.
 ///
-/// La brecha más grande de alguien sin experiencia no es a qué proveedor
-/// comprarle: es **no saber que hay que comprar**. Un campo de texto vacío le
-/// pide justo lo que no tiene. Esta superficie se lo dice, y le dice por qué.
+/// La cola es una **tabla de decisiones**, no una lista de párrafos. Producto,
+/// trabajo, bicicleta, fecha de ingreso y cantidad ocupan columnas comparables
+/// en tablet/escritorio. En teléfono la misma información se recompone como
+/// una fila vertical rotulada; nunca se encoge la tabla hasta volverla ilegible.
 ///
-/// Cada fila lleva su razón en palabras —«Se agotó y se vendió 3 veces en los
-/// últimos 120 días»—. Esa línea es la transferencia de experiencia; sin ella
-/// la lista es un inventario más.
-///
-/// Dos decisiones que la hacen mirable y no sólo correcta:
-/// - **Se agrupa por urgencia**, porque la primera pregunta de quien llega en
-///   la mañana es qué es lo más apurado, no a quién comprarle.
-/// - **Se corta la cola larga.** La medición sobre producción da ~100 filas
-///   accionables; mostrarlas todas de golpe vuelve a ser el muro que este panel
-///   existe para evitar.
+/// La selección múltiple no compra nada. Arma la canasta canónica del
+/// asistente para buscar cobertura conjunta entre proveedores. Cada fila de
+/// taller conserva su `supply_need` existente; las señales de stock sólo se
+/// vuelven necesidades al confirmar «Buscar juntos».
 library;
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/utils/chilean_utils.dart';
 import '../models/intelligent_purchasing_models.dart';
+import '../pages/intelligent_purchasing_surfaces.dart';
 import 'purchase_visual_language.dart';
 
 class PurchasePriorityPanel extends StatefulWidget {
@@ -26,13 +23,25 @@ class PurchasePriorityPanel extends StatefulWidget {
     super.key,
     required this.suggestions,
     required this.onTake,
+    required this.selectedEntityIds,
+    required this.onSelectionChanged,
+    required this.onSearchSelected,
     this.busyEntityId,
+    this.searchingSelection = false,
     this.loading = false,
   });
 
   final List<PurchasePrioritySuggestion> suggestions;
   final ValueChanged<PurchasePrioritySuggestion> onTake;
+
+  /// Controlled state: the workspace owns it so selection survives an
+  /// adaptive recomposition between table and phone rows.
+  final Set<String> selectedEntityIds;
+  final ValueChanged<Set<String>> onSelectionChanged;
+  final VoidCallback onSearchSelected;
+
   final String? busyEntityId;
+  final bool searchingSelection;
   final bool loading;
 
   @override
@@ -42,6 +51,9 @@ class PurchasePriorityPanel extends StatefulWidget {
 class _PurchasePriorityPanelState extends State<PurchasePriorityPanel> {
   /// Cuántas filas se ven antes de pedirlo. Lo que un ojo recorre sin barrer.
   static const int _visibleCap = 6;
+
+  /// Es también el límite transaccional del comando y de la canasta canónica.
+  static const int _selectionCap = 8;
 
   bool _expanded = false;
 
@@ -53,40 +65,107 @@ class _PurchasePriorityPanelState extends State<PurchasePriorityPanel> {
         ? all
         : all.take(_visibleCap).toList(growable: false);
     final hidden = all.length - visible.length;
+    final validIds = all.map((item) => item.entityId).toSet();
+    final selected = widget.selectedEntityIds.where(validIds.contains).toSet();
 
     return PurchasePanel(
       padded: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(13, 12, 13, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Qué hay que comprar',
-                  style: PurchaseType.surfaceTitle.copyWith(color: tokens.ink),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _lead(all),
-                  style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
-                ),
-              ],
-            ),
+          _PriorityIntro(
+            lead: _lead(all),
+            selectedCount: selected.length,
+            searching: widget.searchingSelection,
+            onSearch: selected.length >= 2 && !widget.searchingSelection
+                ? widget.onSearchSelected
+                : null,
           ),
-          for (final entry in _grouped(visible)) ...[
-            if (entry.header != null)
-              _GroupHeader(label: entry.header!, count: entry.count),
-            for (final suggestion in entry.items)
-              _PriorityRow(
-                key: ValueKey('purchase-priority-${suggestion.entityId}'),
-                suggestion: suggestion,
-                busy: widget.busyEntityId == suggestion.entityId,
-                onTake: () => widget.onTake(suggestion),
-              ),
-          ],
+          if (visible.isNotEmpty)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final table = constraints.maxWidth >= 600;
+                final visibleIds = visible
+                    .map((item) => item.entityId)
+                    .toList(growable: false);
+                final selectedVisible =
+                    visibleIds.where(selected.contains).length;
+                final bool? allValue = selectedVisible == 0
+                    ? false
+                    : selectedVisible == visibleIds.length
+                        ? true
+                        : null;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (table)
+                      _PriorityTableHeader(
+                        value: allValue,
+                        enabled: !widget.searchingSelection,
+                        onChanged: (value) => _toggleVisible(
+                          visible,
+                          selected,
+                          value == true,
+                        ),
+                      )
+                    else
+                      _CompactSelectionBar(
+                        value: allValue,
+                        selectedCount: selected.length,
+                        enabled: !widget.searchingSelection,
+                        onChanged: (value) => _toggleVisible(
+                          visible,
+                          selected,
+                          value == true,
+                        ),
+                      ),
+                    for (final entry in _grouped(visible)) ...[
+                      if (entry.header != null)
+                        _GroupHeader(label: entry.header!, count: entry.count),
+                      for (final suggestion in entry.items)
+                        if (table)
+                          _PriorityTableRow(
+                            key: ValueKey(
+                              'purchase-priority-${suggestion.entityId}',
+                            ),
+                            suggestion: suggestion,
+                            selected: selected.contains(suggestion.entityId),
+                            selectionEnabled: !widget.searchingSelection &&
+                                (selected.length < _selectionCap ||
+                                    selected.contains(suggestion.entityId)),
+                            busy: widget.busyEntityId == suggestion.entityId ||
+                                widget.searchingSelection,
+                            onSelected: (value) => _toggleOne(
+                              suggestion.entityId,
+                              selected,
+                              value,
+                            ),
+                            onTake: () => widget.onTake(suggestion),
+                          )
+                        else
+                          _PriorityCompactRow(
+                            key: ValueKey(
+                              'purchase-priority-${suggestion.entityId}',
+                            ),
+                            suggestion: suggestion,
+                            selected: selected.contains(suggestion.entityId),
+                            selectionEnabled: !widget.searchingSelection &&
+                                (selected.length < _selectionCap ||
+                                    selected.contains(suggestion.entityId)),
+                            busy: widget.busyEntityId == suggestion.entityId ||
+                                widget.searchingSelection,
+                            onSelected: (value) => _toggleOne(
+                              suggestion.entityId,
+                              selected,
+                              value,
+                            ),
+                            onTake: () => widget.onTake(suggestion),
+                          ),
+                    ],
+                  ],
+                );
+              },
+            ),
           if (hidden > 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(13, 9, 13, 11),
@@ -99,9 +178,48 @@ class _PurchasePriorityPanelState extends State<PurchasePriorityPanel> {
                 ),
               ),
             ),
+          if (all.isNotEmpty && selected.length == 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(13, 0, 13, 10),
+              child: Text(
+                'Selecciona una fila más para buscar proveedores en conjunto.',
+                key: const ValueKey('purchase-priority-selection-hint'),
+                style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  void _toggleOne(String entityId, Set<String> selected, bool value) {
+    if (widget.searchingSelection) return;
+    final next = Set<String>.from(selected);
+    if (value) {
+      if (next.length >= _selectionCap) return;
+      next.add(entityId);
+    } else {
+      next.remove(entityId);
+    }
+    widget.onSelectionChanged(Set<String>.unmodifiable(next));
+  }
+
+  void _toggleVisible(
+    List<PurchasePrioritySuggestion> visible,
+    Set<String> selected,
+    bool value,
+  ) {
+    if (widget.searchingSelection) return;
+    final next = Set<String>.from(selected);
+    if (value) {
+      for (final suggestion in visible) {
+        if (next.length >= _selectionCap) break;
+        next.add(suggestion.entityId);
+      }
+    } else {
+      next.removeAll(visible.map((item) => item.entityId));
+    }
+    widget.onSelectionChanged(Set<String>.unmodifiable(next));
   }
 
   String _lead(List<PurchasePrioritySuggestion> all) {
@@ -124,9 +242,6 @@ class _PurchasePriorityPanelState extends State<PurchasePriorityPanel> {
   }
 
   /// Agrupa conservando el orden de urgencia que ya trae el servidor.
-  ///
-  /// Con una sola familia presente no se dibuja encabezado: rotular un grupo
-  /// único es ruido.
   List<({String? header, int count, List<PurchasePrioritySuggestion> items})>
       _grouped(List<PurchasePrioritySuggestion> items) {
     final groups = <({
@@ -172,6 +287,208 @@ class _PurchasePriorityPanelState extends State<PurchasePriorityPanel> {
       };
 }
 
+class _PriorityIntro extends StatelessWidget {
+  const _PriorityIntro({
+    required this.lead,
+    required this.selectedCount,
+    required this.searching,
+    required this.onSearch,
+  });
+
+  final String lead;
+  final int selectedCount;
+  final bool searching;
+  final VoidCallback? onSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final action = FilledButton.icon(
+      key: const ValueKey('purchase-priority-search-selected'),
+      onPressed: onSearch,
+      icon: searching
+          ? const SizedBox.square(
+              dimension: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.manage_search, size: 18),
+      label: Text(
+        searching
+            ? 'Preparando canasta…'
+            : selectedCount == 0
+                ? 'Buscar juntos'
+                : 'Buscar juntos ($selectedCount)',
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(13, 12, 13, 10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 600;
+          final identity = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Qué hay que comprar',
+                style: PurchaseType.surfaceTitle.copyWith(color: tokens.ink),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                lead,
+                style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+              ),
+            ],
+          );
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                identity,
+                const SizedBox(height: PurchaseMetrics.actionsTopGap),
+                action,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: identity),
+              const SizedBox(width: PurchaseMetrics.actionsGap),
+              action,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PriorityTableHeader extends StatelessWidget {
+  const _PriorityTableHeader({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final bool? value;
+  final bool enabled;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      color: tokens.sunken,
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 36,
+            child: Tooltip(
+              message: 'Seleccionar hasta 8 filas visibles',
+              child: Checkbox(
+                key: const ValueKey('purchase-priority-select-visible'),
+                value: value,
+                tristate: true,
+                onChanged: enabled ? onChanged : null,
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+          const _HeadCell(flex: 25, label: 'Producto'),
+          const _HeadCell(flex: 10, label: 'Trabajo'),
+          const _HeadCell(flex: 15, label: 'Bicicleta'),
+          const _HeadCell(flex: 12, label: 'Ingresado'),
+          const _HeadCell(flex: 5, label: 'Cant.', alignEnd: true),
+          SizedBox(
+            width: purchaseInlineActionWidth(
+              context,
+              const ['Buscar', 'Abriendo…'],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeadCell extends StatelessWidget {
+  const _HeadCell({
+    required this.flex,
+    required this.label,
+    this.alignEnd = false,
+  });
+
+  final int flex;
+  final String label;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        label.toUpperCase(),
+        textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: PurchaseType.label.copyWith(
+          color: PurchaseTokens.of(context).inkFaint,
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactSelectionBar extends StatelessWidget {
+  const _CompactSelectionBar({
+    required this.value,
+    required this.selectedCount,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final bool? value;
+  final int selectedCount;
+  final bool enabled;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      color: tokens.sunken,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      child: Row(
+        children: [
+          SizedBox.square(
+            dimension: PurchaseMetrics.touchTarget,
+            child: Checkbox(
+              key: const ValueKey('purchase-priority-select-visible'),
+              value: value,
+              tristate: true,
+              onChanged: enabled ? onChanged : null,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              'Seleccionar visibles',
+              style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+            ),
+          ),
+          Text(
+            selectedCount == 0 ? 'Máximo 8' : '$selectedCount de 8',
+            style: PurchaseType.metaNumeric.copyWith(color: tokens.inkMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _GroupHeader extends StatelessWidget {
   const _GroupHeader({required this.label, required this.count});
 
@@ -205,73 +522,392 @@ class _GroupHeader extends StatelessWidget {
   }
 }
 
-class _PriorityRow extends StatelessWidget {
-  const _PriorityRow({
+class _PriorityTableRow extends StatelessWidget {
+  const _PriorityTableRow({
     super.key,
     required this.suggestion,
+    required this.selected,
+    required this.selectionEnabled,
     required this.busy,
+    required this.onSelected,
     required this.onTake,
   });
 
   final PurchasePrioritySuggestion suggestion;
+  final bool selected;
+  final bool selectionEnabled;
   final bool busy;
+  final ValueChanged<bool> onSelected;
+  final VoidCallback onTake;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final actionWidth = purchaseInlineActionWidth(
+      context,
+      const ['Buscar', 'Abriendo…'],
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: selected ? tokens.selected : null,
+        border: Border(
+          top: BorderSide(color: tokens.hair),
+          left: BorderSide(
+            color: selected ? tokens.act : Colors.transparent,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 36,
+            child: _PriorityCheckbox(
+              suggestion: suggestion,
+              selected: selected,
+              enabled: selectionEnabled,
+              onChanged: onSelected,
+            ),
+          ),
+          Expanded(
+            flex: 25,
+            child: Row(
+              children: [
+                ProductMediaTile(
+                  key: ValueKey(
+                    'purchase-priority-media-${suggestion.entityId}',
+                  ),
+                  media: suggestion.media,
+                  name: suggestion.title,
+                  size: PurchaseSurfaceGeometry.mediaTableRow,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        suggestion.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            PurchaseType.rowTitle.copyWith(color: tokens.ink),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        suggestion.reason,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _DataCell(
+            flex: 10,
+            key: ValueKey('purchase-priority-job-${suggestion.entityId}'),
+            value: _jobLabel(suggestion),
+          ),
+          _DataCell(
+            flex: 15,
+            key: ValueKey('purchase-priority-bike-${suggestion.entityId}'),
+            value: _bikeLabel(suggestion),
+          ),
+          _DataCell(
+            flex: 12,
+            key: ValueKey('purchase-priority-entered-${suggestion.entityId}'),
+            value: _enteredLabel(suggestion),
+            numeric: suggestion.isWorkshop,
+          ),
+          Expanded(
+            flex: 5,
+            child: Text(
+              _quantityLabel(suggestion),
+              textAlign: TextAlign.end,
+              style: PurchaseType.metricSmall.copyWith(
+                color: tokens.ink,
+                fontFeatures: PurchaseType.tabular,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: actionWidth,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: PurchaseInlineAction(
+                label: busy ? 'Abriendo…' : 'Buscar',
+                onPressed: busy ? null : onTake,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DataCell extends StatelessWidget {
+  const _DataCell({
+    super.key,
+    required this.flex,
+    required this.value,
+    this.numeric = false,
+  });
+
+  final int flex;
+  final String value;
+  final bool numeric;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Expanded(
+      flex: flex,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: (numeric ? PurchaseType.metaNumeric : PurchaseType.meta)
+              .copyWith(color: tokens.inkMuted),
+        ),
+      ),
+    );
+  }
+}
+
+class _PriorityCompactRow extends StatelessWidget {
+  const _PriorityCompactRow({
+    super.key,
+    required this.suggestion,
+    required this.selected,
+    required this.selectionEnabled,
+    required this.busy,
+    required this.onSelected,
+    required this.onTake,
+  });
+
+  final PurchasePrioritySuggestion suggestion;
+  final bool selected;
+  final bool selectionEnabled;
+  final bool busy;
+  final ValueChanged<bool> onSelected;
   final VoidCallback onTake;
 
   @override
   Widget build(BuildContext context) {
     final tokens = PurchaseTokens.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: tokens.hair)),
+        color: selected ? tokens.selected : null,
+        border: Border(
+          top: BorderSide(color: tokens.hair),
+          left: BorderSide(
+            color: selected ? tokens.act : Colors.transparent,
+            width: 3,
+          ),
+        ),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  suggestion.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ProductMediaTile(
+                key: ValueKey(
+                  'purchase-priority-media-${suggestion.entityId}',
                 ),
-                const SizedBox(height: 2),
-                // El porqué, en palabras. Nunca un puntaje.
-                Text(
-                  suggestion.reason,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                media: suggestion.media,
+                name: suggestion.title,
+                size: PurchaseSurfaceGeometry.mediaPhoneCard,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      suggestion.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: PurchaseType.cardTitle.copyWith(color: tokens.ink),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      suggestion.reason,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              SizedBox.square(
+                dimension: PurchaseMetrics.touchTarget,
+                child: _PriorityCheckbox(
+                  suggestion: suggestion,
+                  selected: selected,
+                  enabled: selectionEnabled,
+                  onChanged: onSelected,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Text(
-              _quantityLabel(suggestion),
-              style: PurchaseType.metricSmall.copyWith(color: tokens.ink),
-            ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _CompactField(
+                  label: 'Trabajo',
+                  value: _jobLabel(suggestion),
+                  valueKey: ValueKey(
+                    'purchase-priority-job-${suggestion.entityId}',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _CompactField(
+                  label: 'Bicicleta',
+                  value: _bikeLabel(suggestion),
+                  valueKey: ValueKey(
+                    'purchase-priority-bike-${suggestion.entityId}',
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          PurchaseInlineAction(
-            label: busy ? 'Abriendo…' : 'Buscar',
-            onPressed: busy ? null : onTake,
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: _CompactField(
+                  label: 'Ingresado',
+                  value: _enteredLabel(suggestion),
+                  valueKey: ValueKey(
+                    'purchase-priority-entered-${suggestion.entityId}',
+                  ),
+                  numeric: suggestion.isWorkshop,
+                ),
+              ),
+              const SizedBox(width: 12),
+              _CompactField(
+                label: 'Cantidad',
+                value: _quantityLabel(suggestion),
+                numeric: true,
+              ),
+              const Spacer(),
+              PurchaseInlineAction(
+                label: busy ? 'Abriendo…' : 'Buscar',
+                onPressed: busy ? null : onTake,
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+}
 
-  static String _quantityLabel(PurchasePrioritySuggestion suggestion) {
-    final quantity = suggestion.suggestedQuantity;
-    final rounded = quantity == quantity.roundToDouble()
-        ? quantity.toStringAsFixed(0)
-        : quantity.toStringAsFixed(2);
-    return suggestion.unit == 'unit' ? rounded : '$rounded ${suggestion.unit}';
+class _CompactField extends StatelessWidget {
+  const _CompactField({
+    required this.label,
+    required this.value,
+    this.valueKey,
+    this.numeric = false,
+  });
+
+  final String label;
+  final String value;
+  final Key? valueKey;
+  final bool numeric;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: PurchaseType.label.copyWith(color: tokens.inkFaint),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          key: valueKey,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: (numeric ? PurchaseType.metaNumeric : PurchaseType.meta)
+              .copyWith(color: tokens.ink),
+        ),
+      ],
+    );
   }
+}
+
+class _PriorityCheckbox extends StatelessWidget {
+  const _PriorityCheckbox({
+    required this.suggestion,
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final PurchasePrioritySuggestion suggestion;
+  final bool selected;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: selected
+          ? 'Quitar ${suggestion.title} de la búsqueda conjunta'
+          : 'Agregar ${suggestion.title} a la búsqueda conjunta',
+      child: Checkbox(
+        key: ValueKey('purchase-priority-select-${suggestion.entityId}'),
+        value: selected,
+        onChanged: enabled ? (value) => onChanged(value == true) : null,
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+}
+
+String _jobLabel(PurchasePrioritySuggestion suggestion) {
+  final job = suggestion.jobContext?.jobNumber.trim();
+  return job == null || job.isEmpty ? 'Sin trabajo' : job;
+}
+
+String _bikeLabel(PurchasePrioritySuggestion suggestion) =>
+    suggestion.jobContext?.bikeLabel ?? 'No aplica';
+
+String _enteredLabel(PurchasePrioritySuggestion suggestion) {
+  if (!suggestion.isWorkshop) return 'Automático';
+  final enteredAt = suggestion.signalAt;
+  if (enteredAt == null) return 'Sin fecha';
+  final parts = ChileanUtils.formatDateTime(enteredAt.toLocal()).split(' ');
+  return parts.length == 2 ? '${parts.first}\n${parts.last}' : parts.join(' ');
+}
+
+String _quantityLabel(PurchasePrioritySuggestion suggestion) {
+  final quantity = suggestion.suggestedQuantity;
+  final rounded = quantity == quantity.roundToDouble()
+      ? quantity.toStringAsFixed(0)
+      : quantity.toStringAsFixed(2);
+  return suggestion.unit == 'unit' ? rounded : '$rounded ${suggestion.unit}';
 }

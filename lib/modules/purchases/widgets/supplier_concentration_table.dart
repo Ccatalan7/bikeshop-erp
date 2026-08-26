@@ -24,6 +24,13 @@ class SupplierConcentrationTable extends StatelessWidget {
   const SupplierConcentrationTable({
     super.key,
     required this.report,
+    this.exactProducts = const <SupplyStockOption>[],
+    this.requestedLabel,
+    this.plannedProductIds = const <String>{},
+    this.addingProductId,
+    this.onAddExactProduct,
+    this.onCheckExactProduct,
+    this.onOpenExactSupplier,
     required this.confirmedLabelFor,
     required this.confirmedAgeFor,
     required this.confirmedDetailFor,
@@ -40,6 +47,17 @@ class SupplierConcentrationTable extends StatelessWidget {
   });
 
   final SupplierConcentrationReport report;
+
+  /// Productos que cumplen la ficha, aunque la migración legacy no conserve
+  /// una factura. Comparten la misma superficie con los proveedores
+  /// históricos; el encabezado por calce evita mezclarlos en un solo ranking.
+  final List<SupplyStockOption> exactProducts;
+  final String? requestedLabel;
+  final Set<String> plannedProductIds;
+  final String? addingProductId;
+  final ValueChanged<SupplyStockOption>? onAddExactProduct;
+  final ValueChanged<SupplyStockOption>? onCheckExactProduct;
+  final ValueChanged<SupplyStockOption>? onOpenExactSupplier;
 
   /// «12 de 12» — el recuento de lo confirmado, o nulo si nunca se consultó.
   final String? Function(String supplierId) confirmedLabelFor;
@@ -65,6 +83,7 @@ class SupplierConcentrationTable extends StatelessWidget {
   /// blanco: un chevron que sólo funciona en sus 20 px obliga a apuntar, y lo
   /// que el operador quiere tocar es el proveedor.
   final void Function(SupplierConcentration supplier) onOpenSupplier;
+
   /// Con flete o sin flete. Por defecto sin: es lo que el proveedor cobra, y lo
   /// que se compara al elegir a quién pedirle.
   final PurchaseCostBasis basis;
@@ -74,9 +93,11 @@ class SupplierConcentrationTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (report.isEmpty) return const SizedBox.shrink();
+    if (report.isEmpty && exactProducts.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final tokens = PurchaseTokens.of(context);
-    final relaxed = report.items.first.scopeRelaxed;
+    final relaxed = report.items.isNotEmpty && report.items.first.scopeRelaxed;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -85,20 +106,21 @@ class SupplierConcentrationTable extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                relaxed
-                    ? 'A quién le compramos algo así'
-                    : 'A quién le compramos esto',
+                requestedLabel == null || requestedLabel!.trim().isEmpty
+                    ? 'Proveedores para esta necesidad'
+                    : 'Proveedores para ${requestedLabel!.trim()}',
                 style: PurchaseType.sectionTitle.copyWith(color: tokens.ink),
               ),
             ),
             // El interruptor vive con el título del bloque: manda sobre toda
             // la tabla, no sobre una fila.
-            PurchaseCostBasisToggle(value: basis, onChanged: onBasisChanged),
+            if (!report.isEmpty)
+              PurchaseCostBasisToggle(value: basis, onChanged: onBasisChanged),
           ],
         ),
         const SizedBox(height: 3),
         Text(
-          _evidenceLine(report),
+          _summaryLine(report, exactProducts.length),
           style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
         ),
         const SizedBox(height: 9),
@@ -110,6 +132,9 @@ class SupplierConcentrationTable extends StatelessWidget {
         // hablada.
         LayoutBuilder(
           builder: (context, constraints) {
+            if (constraints.maxWidth < 600) {
+              return _buildCompact(context, relaxed: relaxed);
+            }
             final layout = _TableLayout.of(
               constraints.maxWidth,
               _labelledActionsWidth(context),
@@ -132,8 +157,8 @@ class SupplierConcentrationTable extends StatelessWidget {
                         // acciones se apretaban contra el borde.
                         const _Head(flex: 15, label: 'Proveedor'),
                         const _Head(
-                          flex: 13,
-                          label: 'Participación',
+                          flex: 11,
+                          label: 'Calce',
                           alignEnd: true,
                         ),
                         const _Head(
@@ -141,16 +166,16 @@ class SupplierConcentrationTable extends StatelessWidget {
                           label: 'Costo unitario',
                           alignEnd: true,
                         ),
-                        if (layout.showLastPurchase)
+                        if (layout.showEvidence)
                           const _Head(
-                            flex: 13,
-                            label: 'Última compra',
+                            flex: 15,
+                            label: 'Evidencia',
                             alignEnd: true,
                           ),
-                        if (layout.showConfirmed)
+                        if (layout.showAvailability)
                           const _Head(
                             flex: 14,
-                            label: 'Confirmado',
+                            label: 'Disponible hoy',
                             alignEnd: true,
                           ),
                         // Los números no tocan los botones: sin este respiro,
@@ -164,13 +189,46 @@ class SupplierConcentrationTable extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (exactProducts.isNotEmpty) ...[
+                    _SupplierSectionHeader(
+                      label: 'Exacto · cumple la ficha técnica pedida',
+                      count: exactProducts.length,
+                    ),
+                    for (final product in exactProducts)
+                      _ExactSupplierRow(
+                        product: product,
+                        layout: layout,
+                        adding: addingProductId == product.productId,
+                        alreadyInPlan:
+                            plannedProductIds.contains(product.productId),
+                        anyBusy:
+                            busySupplierId != null || addingProductId != null,
+                        onAdd: onAddExactProduct == null
+                            ? null
+                            : () => onAddExactProduct!(product),
+                        onCheck: onCheckExactProduct == null
+                            ? null
+                            : () => onCheckExactProduct!(product),
+                        onOpenSupplier: onOpenExactSupplier == null ||
+                                product.supplierId == null
+                            ? null
+                            : () => onOpenExactSupplier!(product),
+                      ),
+                  ],
+                  if (report.items.isNotEmpty) ...[
+                    _SupplierSectionHeader(
+                      label: relaxed
+                          ? 'Parecido · la búsqueda se amplió; no prueba el calce exacto'
+                          : 'Comprado antes · cumple el alcance pedido',
+                      count: report.items.length,
+                    ),
+                  ],
                   for (final supplier in report.items) ...[
                     _SupplierRow(
                       supplier: supplier,
                       confirmed: confirmedLabelFor(supplier.supplierId),
                       confirmedAge: confirmedAgeFor(supplier.supplierId),
-                      confirmedDetail:
-                          confirmedDetailFor(supplier.supplierId),
+                      confirmedDetail: confirmedDetailFor(supplier.supplierId),
                       checkProgress: checkProgress,
                       busy: busySupplierId == supplier.supplierId,
                       anyBusy: busySupplierId != null,
@@ -199,8 +257,10 @@ class SupplierConcentrationTable extends StatelessWidget {
         Text(
           // La salvedad sigue al eje: publicar «con flete prorrateado»
           // mientras se muestra el neto describiría otra tabla.
-          '${basis.footnote} El historial dice a quién se lo compramos; la '
-          'disponibilidad de hoy sólo la confirma el proveedor.',
+          '${report.isEmpty ? '' : '${basis.footnote} '}'
+          'El costo de ficha es una referencia, no una factura. Llevar al plan '
+          'no compra ni reserva; la disponibilidad requiere una consulta '
+          'fechada al proveedor.',
           style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
         ),
       ],
@@ -214,6 +274,79 @@ class SupplierConcentrationTable extends StatelessWidget {
         'entre $suppliers ${suppliers == 1 ? 'proveedor' : 'proveedores'}';
     final widened = report.items.first.widenedLabel;
     return widened == null ? base : '$base · $widened';
+  }
+
+  static String _summaryLine(
+    SupplierConcentrationReport report,
+    int exactCount,
+  ) {
+    final parts = <String>[];
+    if (exactCount > 0) {
+      parts.add(
+          '$exactCount ${exactCount == 1 ? 'opción exacta' : 'opciones exactas'} de catálogo');
+    }
+    if (report.items.isNotEmpty) {
+      final suppliers = report.supplierCount;
+      parts.add(report.items.first.scopeRelaxed
+          ? '$suppliers ${suppliers == 1 ? 'proveedor' : 'proveedores'} con compras de productos parecidos'
+          : _evidenceLine(report));
+    }
+    return parts.join(' · ');
+  }
+
+  Widget _buildCompact(BuildContext context, {required bool relaxed}) {
+    return PurchasePanel(
+      padded: false,
+      child: Column(
+        key: const ValueKey('supplier-concentration-table'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (exactProducts.isNotEmpty) ...[
+            _SupplierSectionHeader(
+              label: 'Exacto · cumple la ficha técnica pedida',
+              count: exactProducts.length,
+            ),
+            for (final product in exactProducts)
+              _CompactExactSupplierRow(
+                product: product,
+                adding: addingProductId == product.productId,
+                alreadyInPlan: plannedProductIds.contains(product.productId),
+                anyBusy: busySupplierId != null || addingProductId != null,
+                onAdd: onAddExactProduct == null
+                    ? null
+                    : () => onAddExactProduct!(product),
+                onCheck: onCheckExactProduct == null
+                    ? null
+                    : () => onCheckExactProduct!(product),
+                onOpenSupplier:
+                    onOpenExactSupplier == null || product.supplierId == null
+                        ? null
+                        : () => onOpenExactSupplier!(product),
+              ),
+          ],
+          if (report.items.isNotEmpty) ...[
+            _SupplierSectionHeader(
+              label: relaxed
+                  ? 'Parecido · no prueba el calce exacto'
+                  : 'Comprado antes · mismo alcance',
+              count: report.items.length,
+            ),
+            for (final supplier in report.items)
+              _CompactHistoricalSupplierRow(
+                supplier: supplier,
+                confirmed: confirmedLabelFor(supplier.supplierId),
+                confirmedAge: confirmedAgeFor(supplier.supplierId),
+                busy: busySupplierId == supplier.supplierId,
+                anyBusy: busySupplierId != null,
+                basis: basis,
+                onConfirm: () => onConfirm(supplier),
+                onExplain: () => onExplain(supplier),
+                onOpenSupplier: () => onOpenSupplier(supplier),
+              ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -230,15 +363,19 @@ class SupplierConcentrationTable extends StatelessWidget {
 /// widget, que usa otra fuente, desbordaba 65 px **siempre**. Un número que
 /// sólo vale en una máquina no es una medida.
 double _labelledActionsWidth(BuildContext context) {
+  final plan = purchaseInlineActionWidth(
+    context,
+    const ['Llevar al plan', 'En el plan'],
+  );
   final confirm = purchaseInlineActionWidth(
     context,
-    const ['Confirmar hoy', 'Confirmando…'],
+    const ['Consultar producto', 'Consultando…'],
   );
   final explain = purchaseInlineActionWidth(
     context,
     const ['Por qué', 'Ocultar'],
   );
-  return confirm + 10 + explain + 10 + _kSiteSlot;
+  return plan + 10 + confirm + 10 + explain + 10 + _kSiteSlot;
 }
 
 /// El hueco del enlace al sitio, presente aunque el proveedor no lo tenga.
@@ -267,8 +404,8 @@ const double _kFiveColumnsFloor = 700;
 
 class _TableLayout {
   const _TableLayout({
-    required this.showLastPurchase,
-    required this.showConfirmed,
+    required this.showEvidence,
+    required this.showAvailability,
     required this.compactActions,
     required this.actionsWidth,
   });
@@ -279,15 +416,15 @@ class _TableLayout {
   factory _TableLayout.of(double width, double labelledActions) {
     final labelsFit = width - labelledActions >= _kFiveColumnsFloor;
     return _TableLayout(
-      showLastPurchase: width >= 640,
-      showConfirmed: width >= 820,
+      showEvidence: width >= 760,
+      showAvailability: width >= 920,
       compactActions: !labelsFit,
       actionsWidth: labelsFit ? labelledActions : _kCompactActionsWidth,
     );
   }
 
-  final bool showLastPurchase;
-  final bool showConfirmed;
+  final bool showEvidence;
+  final bool showAvailability;
 
   /// Con la orden como icono, la fila conserva el mando y le devuelve el ancho
   /// a los números, que son lo que la tabla existe para comparar.
@@ -315,6 +452,430 @@ class _Head extends StatelessWidget {
         style: PurchaseType.label.copyWith(
           color: PurchaseTokens.of(context).inkFaint,
         ),
+      ),
+    );
+  }
+}
+
+/// El corte visual responde al calce, que es la primera pregunta del operador.
+/// La procedencia vive en las celdas; no vuelve a partir la pantalla en una
+/// tarjeta de producto y otra tabla de proveedores.
+class _SupplierSectionHeader extends StatelessWidget {
+  const _SupplierSectionHeader({required this.label, required this.count});
+
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: tokens.sunken,
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label.toUpperCase(),
+              style: PurchaseType.label.copyWith(color: tokens.inkMuted),
+            ),
+          ),
+          Text(
+            '$count',
+            style: PurchaseType.label.copyWith(color: tokens.inkMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExactSupplierRow extends StatelessWidget {
+  const _ExactSupplierRow({
+    required this.product,
+    required this.layout,
+    required this.adding,
+    required this.alreadyInPlan,
+    required this.anyBusy,
+    required this.onAdd,
+    required this.onCheck,
+    required this.onOpenSupplier,
+  });
+
+  final SupplyStockOption product;
+  final _TableLayout layout;
+  final bool adding;
+  final bool alreadyInPlan;
+  final bool anyBusy;
+  final VoidCallback? onAdd;
+  final VoidCallback? onCheck;
+  final VoidCallback? onOpenSupplier;
+
+  bool get _canCheck =>
+      product.automaticAvailabilityEnabled &&
+      product.supplierCode != null &&
+      onCheck != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final supplier = product.supplierName?.trim();
+    final supplierLabel = supplier == null || supplier.isEmpty
+        ? 'Proveedor sin identificar'
+        : supplier;
+    final fresh = product.availabilityFresh;
+    final available = fresh && product.availabilityStatus == 'available';
+    final outOfStock = fresh && product.availabilityStatus == 'out_of_stock';
+    final content = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          flex: 15,
+          child: Row(
+            children: [
+              _SupplierMonogram(name: supplierLabel),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      supplierLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+                    ),
+                    Text(
+                      [
+                        product.name,
+                        if (product.sku != null) 'SKU ${product.sku}',
+                      ].join(' · '),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const _Metric(
+          flex: 11,
+          value: 'Exacto',
+          caption: 'ficha técnica',
+          numeric: false,
+        ),
+        _Metric(
+          flex: 13,
+          value: PurchaseMoney.format(
+            product.catalogCostNet,
+            product.catalogCostCurrency,
+          ),
+          caption: product.catalogCostNet == null
+              ? 'sin costo en ficha'
+              : 'de ficha, no pagado',
+        ),
+        if (layout.showEvidence)
+          _Metric(
+            flex: 15,
+            value: 'Catálogo legacy',
+            caption: product.purchaseCount == 0
+                ? 'sin compras en este ERP'
+                : '${product.purchaseCount} compras ERP',
+            numeric: false,
+          ),
+        if (layout.showAvailability)
+          _Metric(
+            flex: 14,
+            value: available
+                ? 'Disponible'
+                : outOfStock
+                    ? 'Sin stock'
+                    : '—',
+            caption: fresh
+                ? 'revisado ${supplySourcingDateLabel(product.availabilityCheckedAt)}'
+                : _canCheck
+                    ? 'sin consultar'
+                    : 'sin consulta automática',
+            emphasis: available,
+            numeric: false,
+          ),
+        const SizedBox(width: 28),
+        SizedBox(
+          width: layout.actionsWidth,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: layout.compactActions
+                ? _compactActions(context, supplierLabel)
+                : _labelledActions(context, supplierLabel),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 6),
+          child: Icon(
+            Icons.chevron_right,
+            size: 18,
+            color:
+                onOpenSupplier == null ? Colors.transparent : tokens.inkFaint,
+          ),
+        ),
+      ],
+    );
+    if (onOpenSupplier == null) {
+      return _PlainSupplierRow(child: content);
+    }
+    return _HoverRow(
+      onTap: onOpenSupplier!,
+      semanticLabel: 'Abrir la ficha de $supplierLabel',
+      child: content,
+    );
+  }
+
+  List<Widget> _compactActions(BuildContext context, String supplierLabel) => [
+        IconButton(
+          key: ValueKey('add-catalog-plan-${product.productId}'),
+          onPressed: anyBusy || alreadyInPlan ? null : onAdd,
+          icon: adding
+              ? const SizedBox.square(
+                  dimension: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  alreadyInPlan
+                      ? Icons.playlist_add_check
+                      : Icons.playlist_add_outlined,
+                  size: 16,
+                ),
+          style: _kIconSlotStyle,
+          tooltip: alreadyInPlan
+              ? '${product.name} ya está en el plan'
+              : 'Llevar ${product.name} al plan',
+        ),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: _canCheck
+              ? 'Consultar este producto en el portal de $supplierLabel'
+              : '$supplierLabel todavía no tiene consulta automática para este producto',
+          child: IconButton(
+            key: ValueKey('check-catalog-product-${product.productId}'),
+            onPressed: anyBusy || !_canCheck ? null : onCheck,
+            icon: const Icon(Icons.fact_check_outlined, size: 16),
+            style: _kIconSlotStyle,
+          ),
+        ),
+      ];
+
+  List<Widget> _labelledActions(BuildContext context, String supplierLabel) => [
+        PurchaseInlineAction(
+          key: ValueKey('add-catalog-plan-${product.productId}'),
+          label: adding
+              ? 'Agregando…'
+              : alreadyInPlan
+                  ? 'En el plan'
+                  : 'Llevar al plan',
+          onPressed: anyBusy || alreadyInPlan ? null : onAdd,
+        ),
+        const SizedBox(width: 10),
+        Tooltip(
+          message: _canCheck
+              ? 'Consulta únicamente ${product.name}'
+              : '$supplierLabel todavía no tiene consulta automática para este producto',
+          child: PurchaseInlineAction(
+            key: ValueKey('check-catalog-product-${product.productId}'),
+            label: 'Consultar producto',
+            onPressed: anyBusy || !_canCheck ? null : onCheck,
+          ),
+        ),
+      ];
+}
+
+class _PlainSupplierRow extends StatelessWidget {
+  const _PlainSupplierRow({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _CompactExactSupplierRow extends StatelessWidget {
+  const _CompactExactSupplierRow({
+    required this.product,
+    required this.adding,
+    required this.alreadyInPlan,
+    required this.anyBusy,
+    required this.onAdd,
+    required this.onCheck,
+    required this.onOpenSupplier,
+  });
+
+  final SupplyStockOption product;
+  final bool adding;
+  final bool alreadyInPlan;
+  final bool anyBusy;
+  final VoidCallback? onAdd;
+  final VoidCallback? onCheck;
+  final VoidCallback? onOpenSupplier;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final supplier = product.supplierName ?? 'Proveedor sin identificar';
+    final canCheck = product.automaticAvailabilityEnabled &&
+        product.supplierCode != null &&
+        onCheck != null;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(supplier,
+              style: PurchaseType.rowTitle.copyWith(color: tokens.ink)),
+          const SizedBox(height: 2),
+          Text(
+            '${product.name}${product.sku == null ? '' : ' · SKU ${product.sku}'}',
+            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${PurchaseMoney.format(product.catalogCostNet, product.catalogCostCurrency)} · '
+            '${product.catalogCostNet == null ? 'sin costo en ficha' : 'de ficha, no pagado'} · '
+            'sin compras en este ERP',
+            style: PurchaseType.body.copyWith(color: tokens.ink),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton(
+                key: ValueKey('add-catalog-plan-${product.productId}'),
+                onPressed: anyBusy || alreadyInPlan ? null : onAdd,
+                child: Text(adding
+                    ? 'Agregando…'
+                    : alreadyInPlan
+                        ? 'En el plan'
+                        : 'Llevar al plan'),
+              ),
+              Tooltip(
+                message: canCheck
+                    ? 'Consulta únicamente ${product.name}'
+                    : '$supplier todavía no tiene consulta automática para este producto',
+                child: TextButton(
+                  key: ValueKey('check-catalog-product-${product.productId}'),
+                  onPressed: anyBusy || !canCheck ? null : onCheck,
+                  child: const Text('Consultar producto'),
+                ),
+              ),
+              if (onOpenSupplier != null)
+                PurchaseInlineAction(
+                  label: 'Ver proveedor',
+                  onPressed: onOpenSupplier,
+                ),
+            ],
+          ),
+          Text(
+            'Llevar al plan no compra ni reserva.',
+            style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactHistoricalSupplierRow extends StatelessWidget {
+  const _CompactHistoricalSupplierRow({
+    required this.supplier,
+    required this.confirmed,
+    required this.confirmedAge,
+    required this.busy,
+    required this.anyBusy,
+    required this.basis,
+    required this.onConfirm,
+    required this.onExplain,
+    required this.onOpenSupplier,
+  });
+
+  final SupplierConcentration supplier;
+  final String? confirmed;
+  final String? confirmedAge;
+  final bool busy;
+  final bool anyBusy;
+  final PurchaseCostBasis basis;
+  final VoidCallback onConfirm;
+  final VoidCallback onExplain;
+  final VoidCallback onOpenSupplier;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final cost = basis.includesFreight
+        ? supplier.averageLandedUnitCostNet
+        : supplier.averageBaseUnitCostNet ?? supplier.averageLandedUnitCostNet;
+    final share = supplier.spendSharePercent;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(supplier.supplierName,
+              style: PurchaseType.rowTitle.copyWith(color: tokens.ink)),
+          const SizedBox(height: 2),
+          Text(
+            '${supplier.scopeRelaxed ? 'Parecido' : 'Exacto'} · '
+            '${PurchaseMoney.format(cost, 'CLP')} promedio · '
+            '${share.toStringAsFixed(share >= 10 ? 0 : 1).replaceAll('.', ',')}% de '
+            '${supplier.evidencePurchaseLines} líneas',
+            style: PurchaseType.body.copyWith(color: tokens.ink),
+          ),
+          Text(
+            [
+              if (supplier.lastPurchaseLabel != null)
+                'última compra ${supplier.lastPurchaseLabel}',
+              confirmed == null
+                  ? 'disponibilidad sin consultar'
+                  : '$confirmed${confirmedAge == null ? '' : ' · $confirmedAge'}',
+            ].join(' · '),
+            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 10,
+            runSpacing: 6,
+            children: [
+              PurchaseInlineAction(
+                label: busy ? 'Consultando…' : 'Consultar portal',
+                onPressed: anyBusy ? null : onConfirm,
+              ),
+              PurchaseInlineAction(label: 'Por qué', onPressed: onExplain),
+              PurchaseInlineAction(
+                label: 'Ver proveedor',
+                onPressed: onOpenSupplier,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -388,8 +949,8 @@ class _SupplierRow extends StatelessWidget {
                             supplier.supplierName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style:
-                                PurchaseType.rowTitle.copyWith(color: tokens.ink),
+                            style: PurchaseType.rowTitle
+                                .copyWith(color: tokens.ink),
                           ),
                           Text(
                             _identity(supplier),
@@ -407,10 +968,12 @@ class _SupplierRow extends StatelessWidget {
             ),
           ),
           _Metric(
-            flex: 13,
-            value: '${share >= 10 ? share.round() : share.toStringAsFixed(1).replaceAll('.', ',')}%',
-            caption: '${supplier.purchaseLines} de '
-                '${supplier.evidencePurchaseLines} líneas',
+            flex: 11,
+            value: supplier.scopeRelaxed ? 'Parecido' : 'Exacto',
+            caption: supplier.scopeRelaxed
+                ? 'búsqueda ampliada'
+                : 'historial del mismo alcance',
+            numeric: false,
           ),
           () {
             // El eje elegido manda. Sin flete es lo que el proveedor cobró;
@@ -421,22 +984,24 @@ class _SupplierRow extends StatelessWidget {
                     supplier.averageLandedUnitCostNet);
             return _Metric(
               flex: 13,
-              value: costo == null
-                  ? '—'
-                  : PurchaseMoney.format(costo, 'CLP'),
+              value: costo == null ? '—' : PurchaseMoney.format(costo, 'CLP'),
               caption: '${supplier.purchaseInvoices} '
                   '${supplier.purchaseInvoices == 1 ? 'factura' : 'facturas'}',
             );
           }(),
-          if (layout.showLastPurchase)
+          if (layout.showEvidence)
             _Metric(
-              flex: 13,
-              value: supplier.lastPurchaseLabel ?? '—',
-              caption: '${supplier.distinctProducts} '
-                  '${supplier.distinctProducts == 1 ? 'producto' : 'productos'}',
+              flex: 15,
+              value:
+                  '${share >= 10 ? share.round() : share.toStringAsFixed(1).replaceAll('.', ',')}%',
+              caption: [
+                '${supplier.purchaseLines} de ${supplier.evidencePurchaseLines} líneas',
+                if (supplier.lastPurchaseLabel != null)
+                  supplier.lastPurchaseLabel!,
+              ].join(' · '),
               numeric: false,
             ),
-          if (layout.showConfirmed)
+          if (layout.showAvailability)
             _Metric(
               flex: 14,
               // Nunca se consultó ≠ se consultó y no hay. Un guion dice lo
@@ -470,16 +1035,14 @@ class _SupplierRow extends StatelessWidget {
                           )
                         : const Icon(Icons.fact_check_outlined, size: 16),
                     style: _kIconSlotStyle,
-                    tooltip: 'Confirmar hoy con ${supplier.supplierName}',
+                    tooltip: 'Consultar el portal de ${supplier.supplierName}',
                   ),
                   const SizedBox(width: 4),
                   IconButton(
                     key: ValueKey('explain-supplier-${supplier.supplierId}'),
                     onPressed: onExplain,
                     icon: Icon(
-                      expanded
-                          ? Icons.expand_less
-                          : Icons.help_outline_rounded,
+                      expanded ? Icons.expand_less : Icons.help_outline_rounded,
                       size: 16,
                     ),
                     style: _kIconSlotStyle,
@@ -490,7 +1053,7 @@ class _SupplierRow extends StatelessWidget {
                 ] else ...[
                   PurchaseInlineAction(
                     key: ValueKey('confirm-supplier-${supplier.supplierId}'),
-                    label: busy ? 'Confirmando…' : 'Confirmar hoy',
+                    label: busy ? 'Consultando…' : 'Consultar portal',
                     onPressed: anyBusy ? null : onConfirm,
                   ),
                   const SizedBox(width: 10),
@@ -583,16 +1146,20 @@ class _HoverRowState extends State<_HoverRow> {
   Widget build(BuildContext context) {
     final tokens = PurchaseTokens.of(context);
     return Semantics(
+      container: true,
+      explicitChildNodes: true,
       button: true,
+      onTap: widget.onTap,
       label: widget.semanticLabel,
-      // Sin esto el rótulo del envoltorio se concatena con el de la fila
-      // entera y no se encuentra ni a mano ni en una prueba.
-      excludeSemantics: true,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovering = true),
         onExit: (_) => setState(() => _hovering = false),
         child: GestureDetector(
+          // El `Semantics` dueño publica la acción de la fila. Así los botones
+          // hijos conservan sus propias acciones en vez de quedar absorbidos
+          // por un segundo nodo de gesto con el mismo tap.
+          excludeFromSemantics: true,
           behavior: HitTestBehavior.opaque,
           onTap: widget.onTap,
           child: AnimatedContainer(
@@ -683,29 +1250,27 @@ class _Metric extends StatelessWidget {
     final cell = Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: (numeric ? PurchaseType.metricSmall : PurchaseType.rowTitle)
-                .copyWith(
-              color: emphasis ? tokens.act : tokens.ink,
-              fontFeatures: numeric ? PurchaseType.tabular : null,
-            ),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: (numeric ? PurchaseType.metricSmall : PurchaseType.rowTitle)
+              .copyWith(
+            color: emphasis ? tokens.act : tokens.ink,
+            fontFeatures: numeric ? PurchaseType.tabular : null,
           ),
-          Text(
-            caption,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
-          ),
+        ),
+        Text(
+          caption,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
+        ),
       ],
     );
     return Expanded(
       flex: flex,
-      child: detail == null
-          ? cell
-          : Tooltip(message: detail!, child: cell),
+      child: detail == null ? cell : Tooltip(message: detail!, child: cell),
     );
   }
 }

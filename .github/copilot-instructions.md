@@ -147,6 +147,32 @@ Dos consecuencias que valen para cualquier prueba de contrato, no sólo aquí:
   una guardia de un adorno. Sin ese paso no se puede afirmar que algo «queda
   cubierto».
 
+### La guardia afirma la proyección, no lo que entró (2026-08-25)
+
+**Costo real: una fuga a otro módulo, viva en producción, con una prueba verde
+escrita para taparla y cuyo propio comentario describía el defecto.**
+
+En el Asistente de compras el runtime reescribía el argumento
+`presentation` antes de ejecutar la herramienta, y la prueba afirmaba
+exactamente eso: que el ejecutor había recibido `answer`. Pero la tarjeta que
+llega al cliente se construía en otra línea, desde `call.arguments` —la llamada
+cruda del modelo, que no se reasigna nunca—, así que seguía viajando con
+`autoOpen: true` y un destino de módulo entero. El turno se partía en dos
+mitades que se contradecían y la prueba miraba la mitad inocente.
+
+La regla, que vale para cualquier contrato cliente-servidor:
+
+- **Se afirma lo que sale hacia afuera** —la respuesta proyectada, la fila
+  persistida, el archivo escrito—, no el argumento que se le pasó a una capa
+  interna. Entre esos dos puntos cabe justo el defecto.
+- **Cuando una reparación existe, hay que buscar la segunda lectura del dato
+  reparado.** Un `let reparado = arreglar(crudo)` deja al crudo vivo y en
+  alcance; el compilador no avisa de quién lo sigue leyendo.
+- Y si el parámetro que decide el comportamiento tiene default, un sitio nuevo
+  hereda el caso equivocado en silencio: **sin default**, y el build obliga a
+  declararlo. Acá eso convirtió diez sitios de proyección en diez errores de
+  compilación, que es exactamente lo que se quería.
+
 ### Una herramienta se elige por su descripción, no por su nombre (2026-08-23)
 
 `analyze_cash_and_receivables` se describía como «analiza el saldo contable de

@@ -235,6 +235,7 @@ void main() {
     expect(scenario.lines.map((line) => line.sourcing),
         <String>['internal', 'external', 'uncovered']);
     expect(scenario.externalCandidates, hasLength(1));
+    expect(scenario.lines.last.needsSourcingReview, isTrue);
     expect(
       scenario.externalCandidates.single.toCandidate(rank: 1).supplierName,
       'Andes Industrial',
@@ -291,6 +292,101 @@ void main() {
     expect(plan.lines.single.media.primaryUrl, 'https://cdn/opt.webp');
     expect(plan.supplierGroups.single.historicalLandedSubtotalNet, 20200);
     expect(plan.supplierGroups.single.supplierAvailability, 'unverified');
+  });
+
+  test('a catalog-only plan line stays quote-required without fake economics',
+      () {
+    final line = PurchasePlanLine.fromJson({
+      'id': 'line-quote',
+      'source_need_id': 'need-camera',
+      'candidate_id': null,
+      'product_id': 'camera-60mm',
+      'supplier_name': 'Derman',
+      'quantity': 1,
+      'unit': 'unit',
+      'currency_code': 'CLP',
+      'landed_unit_cost_net': null,
+      'projected_gross_margin_ratio': null,
+      'supplier_availability': 'unverified',
+      'evidence_state': 'catalog_assignment',
+      'evidence_snapshot': {
+        'availability_status': 'out_of_stock',
+        'availability_checked_at': '2026-08-25T14:30:00Z',
+        'availability_source_url': 'https://supplier.example/camera-60mm',
+      },
+    });
+
+    expect(line.candidateId, isNull);
+    expect(line.requiresQuote, isTrue);
+    expect(line.supplierName, 'Derman');
+    expect(line.landedUnitCostNet, isNull);
+    expect(line.projectedGrossMarginRatio, isNull);
+    expect(line.availabilityStatus, 'out_of_stock');
+    expect(line.availabilitySourceUrl, contains('camera-60mm'));
+  });
+
+  test('stock resolution keeps technical fit separate from sourcing evidence',
+      () {
+    final resolution = SupplyStockResolution.fromJson({
+      'needId': 'need-camera',
+      'needVersion': 2,
+      'revisionNo': 1,
+      'quantity': 1,
+      'unit': 'unit',
+      'lane': 'exact',
+      'status': 'ok',
+      'coverage': 'none',
+      'blocksExternal': false,
+      'items': [
+        {
+          'productId': 'camera-60mm',
+          'name': 'Cámara aro 29 Presta 60 mm',
+          'sku': '160-4',
+          'atp': 0,
+          'coverage': 'none',
+          'matchState': 'strong',
+          'blocksExternal': false,
+          'evidenceState': 'catalog_assignment',
+          'supplierId': 'supplier-derman',
+          'supplierName': 'Derman',
+          'purchaseCount': 0,
+          'availabilityFresh': false,
+        },
+      ],
+      'counts': {'eligible': 1, 'none': 1},
+    });
+
+    final product = resolution.items.single;
+    expect(product.matchState, 'strong');
+    expect(product.requiresQuote, isTrue);
+    expect(product.hasErpPurchaseHistory, isFalse);
+    expect(product.supplierName, 'Derman');
+    expect(product.purchaseCount, 0);
+  });
+
+  test('similar supplier evidence never becomes exact basket coverage', () {
+    final report = BasketCoverageReport.fromJson({
+      'items': [
+        {
+          'entityId': 'supplier-a',
+          'supplierName': 'Comercial Ciclo',
+          'coveredNeeds': 1,
+          'totalNeeds': 2,
+          'coveredList': 'pastillas DS02S',
+          'approximateNeeds': 1,
+          'approximateList': 'cámara 29 Presta 60 mm',
+          'missingList': 'cámara 29 Presta 60 mm',
+          'averageSharePercent': 64,
+          'hasPortalAccount': false,
+        },
+      ],
+    });
+
+    final supplier = report.leader!;
+    expect(supplier.coveredNeeds, 1);
+    expect(supplier.approximateNeeds, 1);
+    expect(supplier.coversEverything, isFalse);
+    expect(supplier.missingList, contains('60 mm'));
   });
 
   group('contrato de imagen del producto', () {

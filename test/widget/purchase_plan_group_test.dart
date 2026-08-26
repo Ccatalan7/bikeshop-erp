@@ -27,11 +27,14 @@ PurchasePlanLine _line({
   double? margin = 0.42,
   ProductMedia media = ProductMedia.empty,
   String unit = 'unit',
+  String? candidateId,
+  String evidenceState = 'erp_purchase_history',
 }) {
   return PurchasePlanLine(
     id: id,
     sourceNeedId: 'need-$id',
-    candidateId: 'candidate-$id',
+    candidateId: candidateId ??
+        (evidenceState == 'erp_purchase_history' ? 'candidate-$id' : null),
     productId: 'product-$id',
     productName: name,
     supplierName: supplier,
@@ -41,6 +44,7 @@ PurchasePlanLine _line({
     landedUnitCostNet: cost,
     projectedGrossMarginRatio: margin,
     supplierAvailability: 'unverified',
+    evidenceState: evidenceState,
     media: media,
   );
 }
@@ -260,6 +264,27 @@ void main() {
         _line(id: 'line-2', name: 'Cámara 27,5', cost: null, margin: null),
       ]);
 
+      expect(find.text('\$17.450'), findsWidgets);
+    });
+
+    testWidgets('un grupo mixto cuenta lo que queda fuera del subtotal',
+        (tester) async {
+      await _pump(tester, [
+        _line(quantity: 2, cost: 8725),
+        _line(
+          id: 'line-2',
+          name: 'Cámara 29 Presta 60 mm',
+          cost: null,
+          margin: null,
+          evidenceState: 'catalog_assignment',
+        ),
+      ]);
+
+      expect(
+        find.textContaining('1 línea está por cotizar y queda fuera'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('suma sólo las líneas'), findsOneWidget);
       expect(find.text('\$17.450'), findsWidgets);
     });
   });

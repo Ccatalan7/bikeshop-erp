@@ -488,7 +488,9 @@ void main() {
     expect(supplyService, contains("'confirm_supply_need_family_choice_v1'"));
     expect(
       supplyService,
-      contains("'get_supply_need_stock_resolution_v1'"),
+      contains("'get_supply_need_stock_resolution_v3'"),
+      reason: 'v3 preserves the v2 stock contract and adds catalog sourcing '
+          'evidence required by the provider decision.',
     );
     expect(
       supplyService,

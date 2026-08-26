@@ -1239,6 +1239,29 @@ online reservations, while `inventory_available_quantity_v1` and
 set-component edits and every physical consumer protect that combined reserved
 floor.
 
+**Purchase-priority provenance correction (2026-08-25).** A workshop entry in
+`purchase_priority_feed_v1` is the existing `supply_needs` row, never a loose
+product suggestion. Its `jobContext` carries the exact `mechanic_job_id`, job
+number, intentional `whole_job` or exact-bike scope, `job_bike_id`, underlying
+bike id and the bicycle identity fields read through the tenant-safe
+`mechanic_job_bikes → bikes` graph. Purchasing renders that job/bicycle scope
+as separate `Trabajo` and `Bicicleta` columns beside the product; `signalAt`
+for this source is the need's immutable `created_at`, shown as `Ingresado`.
+Taking one row rereads and opens the same need; it must not call the ad-hoc
+create command, duplicate demand or sever the provenance that Jobs owns. A
+NULL `job_bike_id` remains `Todo el trabajo` and is never replaced with the
+job's primary bicycle.
+
+`take_purchase_priority_batch_v1` is the 1..8-row handoff from that priority
+table to the existing Purchasing basket. It accepts only opaque
+`source + entityId` pairs and re-reads the authoritative feed in one
+transaction. Workshop rows are returned unchanged; current stock signals use
+the canonical ad-hoc need writer with manual/system provenance rather than an
+AI batch. One immutable receipt makes a lost response replay-safe, and a
+per-product transaction lock makes concurrent priority batches converge on one
+open need. Checking rows performs no write; only `Buscar juntos` invokes this
+command, then the normal basket coverage/scenario workflow continues.
+
 `assign_supply_need_from_stock_v1` atomically proves capacity and creates the
 commitment. `release_supply_need_stock_v1` releases it without a stock
 movement. If assignable stock is deliberately unsuitable, the operator records

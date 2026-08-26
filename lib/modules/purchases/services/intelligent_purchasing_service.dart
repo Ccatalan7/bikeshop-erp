@@ -152,11 +152,97 @@ class IntelligentPurchasingService {
     final payload = _map(response);
     final items = payload['items'];
     if (items is! List) return const [];
-    return items
+    final suggestions = items
         .whereType<Map>()
         .map((row) =>
             PurchasePrioritySuggestion.fromJson(Map<String, dynamic>.from(row)))
         .toList(growable: false);
+    return _enrichPriorityMedia(suggestions);
+  }
+
+  /// Opens an existing workshop need or creates a new ad-hoc need for a stock
+  /// signal. Workshop suggestions are already durable demand: recreating one
+  /// would sever its job and bicycle attribution and duplicate the purchase
+  /// requirement.
+  Future<SupplyNeed> takePrioritySuggestion(
+    PurchasePrioritySuggestion suggestion,
+  ) async {
+    if (!suggestion.isWorkshop) {
+      return createNeed(
+        description: suggestion.title,
+        quantity: suggestion.suggestedQuantity,
+        unit: suggestion.unit,
+        productId: suggestion.productId,
+      );
+    }
+
+    final need = await fetchNeed(suggestion.entityId);
+    if (need == null ||
+        need.originKind != 'mechanic_job' ||
+        need.mechanicJobId == null ||
+        need.supplyState != 'open') {
+      throw StateError('La necesidad del trabajo ya no está pendiente.');
+    }
+    final context = suggestion.jobContext;
+    if (context != null &&
+        (context.mechanicJobId != need.mechanicJobId ||
+            context.jobBikeId != need.jobBikeId)) {
+      throw StateError('La bicicleta asignada cambió; vuelve a cargar.');
+    }
+    return need;
+  }
+
+  /// Takes 2..8 priority rows as one replay-safe purchasing basket.
+  ///
+  /// The server re-reads every opaque feed identity before doing anything:
+  /// workshop rows return their existing durable need, while current stock
+  /// signals create canonical ad-hoc needs. The public [operationKey] belongs
+  /// to the whole selection, so a lost response can be retried without
+  /// duplicating one of the stock rows midway through the basket.
+  Future<List<SupplyNeed>> takePriorityBatch({
+    required List<PurchasePrioritySuggestion> suggestions,
+    required String operationKey,
+    int rotationDays = 120,
+  }) async {
+    if (suggestions.length < 2 || suggestions.length > 8) {
+      throw ArgumentError.value(
+        suggestions.length,
+        'suggestions',
+        'La búsqueda conjunta admite entre 2 y 8 filas.',
+      );
+    }
+    final response = await _client.rpc(
+      'take_purchase_priority_batch_v1',
+      params: {
+        'p_items': [
+          for (final suggestion in suggestions)
+            {
+              'source': suggestion.source,
+              'entityId': suggestion.entityId,
+            },
+        ],
+        'p_rotation_days': rotationDays,
+        'p_operation_key': operationKey,
+      },
+    );
+    final envelope = _map(response);
+    final rawNeeds = envelope['needs'];
+    if (rawNeeds is! List || rawNeeds.length != suggestions.length) {
+      throw const FormatException(
+        'El servidor no confirmó todas las prioridades seleccionadas.',
+      );
+    }
+    final needs = rawNeeds
+        .whereType<Map>()
+        .map((row) => SupplyNeed.fromJson(Map<String, dynamic>.from(row)))
+        .toList(growable: false);
+    if (needs.length != suggestions.length ||
+        needs.any((need) => need.id.isEmpty)) {
+      throw const FormatException(
+        'El servidor no confirmó todas las prioridades seleccionadas.',
+      );
+    }
+    return _enrichProducts(needs);
   }
 
   Future<List<SupplyNeed>> fetchOpenNeeds({String? mechanicJobId}) async {
@@ -375,7 +461,10 @@ class IntelligentPurchasingService {
     int offset = 0,
   }) async {
     final response = await _client.rpc(
-      'get_supply_need_stock_resolution_v1',
+      // v3 conserva el envelope y agrega la referencia de costo de catálogo y
+      // si existe una consulta automática para ESE producto/proveedor. La
+      // referencia sigue separada del costo pagado o aterrizado.
+      'get_supply_need_stock_resolution_v3',
       params: {
         'p_need_id': needId,
         'p_limit': limit,
@@ -715,6 +804,40 @@ class IntelligentPurchasingService {
     return prepared;
   }
 
+  /// Lleva al plan un producto exacto que todavía no tiene compras en este
+  /// ERP. Queda explícitamente "Por cotizar": no fabrica candidato, costo ni
+  /// disponibilidad. Si apareció historia entre la lectura y el toque, el
+  /// servidor responde conflicto para releerlo por el carril histórico.
+  Future<PurchasePlanDraft> prepareProductQuoteLine({
+    required SupplyNeed need,
+    required SupplyStockOption product,
+    required String profile,
+    PurchasePlanDraft? plan,
+    double? quantity,
+  }) async {
+    final response = await _client.rpc(
+      'prepare_purchase_plan_product_v1',
+      params: {
+        'p_plan_id': plan?.id,
+        'p_expected_plan_version': plan?.version,
+        'p_source_need_id': need.id,
+        'p_product_id': product.productId,
+        'p_quantity': quantity ?? need.quantity,
+        'p_profile': profile,
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+    final planId = _map(response)['plan_id']?.toString();
+    if (planId == null || planId.isEmpty) {
+      throw const FormatException('El servidor no devolvió el plan borrador.');
+    }
+    final prepared = await fetchPlan(planId);
+    if (prepared == null) {
+      throw const FormatException('No se pudo leer el plan recién guardado.');
+    }
+    return prepared;
+  }
+
   Future<PurchasePlanDraft> prepareScenario({
     required PurchaseScenario scenario,
     required Iterable<SupplyNeed> needs,
@@ -988,6 +1111,40 @@ class IntelligentPurchasingService {
         sku: product['sku']?.toString(),
       );
     }).toList(growable: false);
+  }
+
+  Future<List<PurchasePrioritySuggestion>> _enrichPriorityMedia(
+    List<PurchasePrioritySuggestion> suggestions,
+  ) async {
+    final ids = suggestions
+        .map((suggestion) => suggestion.productId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) return suggestions;
+
+    try {
+      // Una sola consulta para toda la portada. La imagen es enriquecimiento:
+      // si falla su lectura, las necesidades siguen siendo accionables y el
+      // tile conserva el monograma canónico en vez de ocultar el feed entero.
+      final response = await _client
+          .from('products')
+          .select('id,image_url_optimized,image_url,image_urls')
+          .inFilter('id', ids);
+      final products = <String, ProductMedia>{
+        for (final row in (response as List).whereType<Map>())
+          if (row['id'] != null)
+            row['id'].toString():
+                ProductMedia.fromJson(Map<String, dynamic>.from(row)),
+      };
+      return suggestions.map((suggestion) {
+        final media = products[suggestion.productId];
+        return media == null ? suggestion : suggestion.withMedia(media);
+      }).toList(growable: false);
+    } catch (_) {
+      return suggestions;
+    }
   }
 
   Map<String, dynamic> _map(Object? value) {

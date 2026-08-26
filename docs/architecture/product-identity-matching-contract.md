@@ -73,6 +73,55 @@ size, axle width and diameter, freehub standard, valve standard, front/rear,
 bottom-bracket shell, brake mount. Each gate records what it checked and what it
 found, so the review screen can say *why* — never a percentage.
 
+## Catalog fit is not purchase evidence (2026-08-25)
+
+The migration from Zoho did not preserve every historical purchase. Therefore
+the absence of an ERP purchase line is evidence about this ERP, not evidence
+that a product does not exist or cannot satisfy a request.
+
+Purchasing resolves two independent questions in this order:
+
+1. **Eligibility and fit.** Evaluate the complete active catalog using identity,
+   category and typed technical specifications. Purchase history cannot remove a
+   product from this set.
+2. **Sourcing evidence.** For every eligible product, classify what is actually
+   known: ERP purchase history, a fresh dated supplier check, a catalog supplier
+   assignment, or no sourcing history. Only the first class carries historical
+   purchase economics. A fresh supplier check may carry only what that dated
+   source proved. A catalog assignment may carry its current catalog cost as a
+   labelled `de ficha, no pagado` reference; it is not historical economics and
+   never gains a purchase date, participation, landed cost or availability.
+
+An exact product without ERP history stays visible in the same sourcing surface
+as the supplier alternatives, inside the first `Exacto` section. `Llevar al
+plan` stores a null historical candidate and landed economics, while freezing
+the labelled catalog reference in the evidence snapshot. A later
+real purchase automatically changes subsequent sourcing reads to the historical
+class. The versioned historical writer must compare a nullable prior candidate
+with `IS DISTINCT FROM`, replace the same need line, freeze the observed
+economics and record `changed=true`; a SQL `NULL` may never strand or abort the
+promotion. Already frozen plan evidence remains auditable until that writer
+replaces it.
+
+Relaxation is a retrieval aid, not coverage. When an exclusive measurement or
+other requested predicate is loosened to find nearby purchase history, those
+rows must say they are approximate. They may help identify a supplier to ask,
+but they cannot count toward exact line coverage, complete a basket, or replace
+an eligible exact catalog product. In particular, a 48 mm valve never covers a
+request for 60 mm merely because the shop bought it more often.
+In a basket, an uncovered exact product stays named and opens its individual
+need for sourcing resolution. Basket non-coverage alone does not prove missing
+history: a historical supplier may simply sit outside that scenario's bounded
+supplier set. The individual evidence view therefore decides whether to compare
+another provider or use the exact catalog row's `Llevar al plan` command. The line remains
+outside exact supplier coverage and historical subtotals until it is resolved;
+the UI must state that boundary rather than dropping it.
+
+Step summaries preserve that same separation. A visible exact catalog product
+plus relaxed historical evidence is counted as, for example,
+`1 exacta · 2 similares`; it must never collapse to `0 opciones` merely
+because the exact product has no historical candidate.
+
 ## What a thing *is* versus what it *fits*
 
 Supplier prose names more than one part. The extractor splits every title into

@@ -1787,8 +1787,7 @@ class BasketResultControls extends StatelessWidget {
               for (final entry in maxSuppliersOptions.entries)
                 VbShortSelectOption(value: entry.key, label: entry.value),
             ],
-            onChanged:
-                enabled ? onMaxSuppliersChanged : null,
+            onChanged: enabled ? onMaxSuppliersChanged : null,
             sheetTitle: 'Máximo de proveedores',
             label: 'Proveedores',
           ),
@@ -2312,6 +2311,8 @@ class PlanLineEvidenceNote extends StatefulWidget {
     required this.currency,
     required this.landedUnitCostNet,
     required this.projectedGrossMarginRatio,
+    this.catalogCostNet,
+    this.catalogCostCurrency,
     this.note,
     this.onSaveNote,
     this.onSubstitute,
@@ -2328,6 +2329,8 @@ class PlanLineEvidenceNote extends StatefulWidget {
   final String currency;
   final double? landedUnitCostNet;
   final double? projectedGrossMarginRatio;
+  final double? catalogCostNet;
+  final String? catalogCostCurrency;
 
   /// `frames[plan].with_lines.line_disclosure`: «Alternativa y nota
   /// (sustituir candidato, nota libre)». El desplegable existía pero sólo
@@ -2415,6 +2418,14 @@ class _PlanLineEvidenceNoteState extends State<PlanLineEvidenceNote> {
             label: 'Costo aterrizado unitario',
             value: unitCost == '—' ? 'sin evaluar' : unitCost,
           ),
+          if (widget.catalogCostNet != null)
+            _InspectorRow(
+              label: 'Referencia de ficha',
+              value: '${PurchaseMoney.format(
+                widget.catalogCostNet,
+                widget.catalogCostCurrency ?? widget.currency,
+              )} · no pagado',
+            ),
           _InspectorRow(
             label: 'Margen proyectado',
             value: widget.projectedGrossMarginRatio == null
@@ -3051,6 +3062,11 @@ class PurchasePlanGroup extends StatelessWidget {
   bool get _evidenceComplete =>
       lines.isNotEmpty && lines.every((line) => line.landedUnitCostNet != null);
 
+  bool get _quoteOnly =>
+      lines.isNotEmpty && lines.every((line) => line.requiresQuote);
+
+  int get _quoteLineCount => lines.where((line) => line.requiresQuote).length;
+
   /// Lo que el subtotal **no** dice, en la ranura de nota del pie.
   ///
   /// Son dos advertencias distintas y las dos tienen que sobrevivir. La del
@@ -3060,6 +3076,25 @@ class PurchasePlanGroup extends StatelessWidget {
   /// stock, porque lo único que hay es historial de compra. Enterrarla dentro
   /// del disclosure de cada línea sería quitarla.
   String get _footerCaveat {
+    if (_quoteOnly) {
+      final referenced =
+          lines.where((line) => line.catalogCostNet != null).length;
+      final referenceLabel = referenced == 0
+          ? 'No hay costo de ficha registrado.'
+          : referenced == 1
+              ? '1 línea conserva una referencia de ficha que no suma al subtotal.'
+              : '$referenced líneas conservan referencias de ficha que no suman al subtotal.';
+      return 'Estas líneas no tienen una compra registrada en este ERP. '
+          '$referenceLabel Llevarlas al plan no reserva ni compra nada.';
+    }
+    if (_quoteLineCount > 0) {
+      final label = _quoteLineCount == 1
+          ? '1 línea está por cotizar y queda fuera del subtotal'
+          : '$_quoteLineCount líneas están por cotizar y quedan fuera del '
+              'subtotal';
+      return '$label. El subtotal suma sólo las líneas con costo aterrizado; '
+          'la disponibilidad de todas sigue por confirmar.';
+    }
     final unverified = lines.any(
       (line) => line.supplierAvailability != 'confirmed',
     );
@@ -3114,7 +3149,11 @@ class PurchasePlanGroup extends StatelessWidget {
                   style: PurchaseType.sectionTitle.copyWith(color: tokens.ink),
                 ),
                 Text(
-                  complete ? 'evidencia completa' : 'evidencia parcial',
+                  _quoteOnly
+                      ? 'producto de ficha · sin compra ERP'
+                      : complete
+                          ? 'evidencia completa'
+                          : 'evidencia parcial',
                   style: PurchaseType.meta.copyWith(
                     fontSize: 10.5,
                     color: complete ? tokens.inkFaint : roles.warning.accent,
@@ -3146,9 +3185,8 @@ class PurchasePlanGroup extends StatelessWidget {
                     onSaveNote: onSaveNote == null
                         ? null
                         : (note) => onSaveNote!(line, note),
-                    onSubstitute: onSubstitute == null
-                        ? null
-                        : () => onSubstitute!(line),
+                    onSubstitute:
+                        onSubstitute == null ? null : () => onSubstitute!(line),
                     savingNote: savingNoteLineId == line.id,
                   ),
           // Pie hundido: el subtotal, rotulado con su moneda, y la nota de
@@ -3256,6 +3294,29 @@ class PurchasePlanLineRow extends StatelessWidget {
 
   String get _productLabel => line.productName ?? 'Producto del plan';
 
+  String get _evidenceLabel {
+    switch (line.evidenceState) {
+      case 'fresh_supplier_check':
+        return 'proveedor de ficha · portal consultado · revisado '
+            '${supplySourcingDateLabel(line.availabilityCheckedAt)}';
+      case 'catalog_assignment':
+        if (line.availabilityStatus == 'out_of_stock' &&
+            line.availabilityCheckedAt != null) {
+          return 'proveedor de ficha · portal sin stock · '
+              'revisado ${supplySourcingDateLabel(line.availabilityCheckedAt)}';
+        }
+        return 'proveedor de ficha · sin compras en este ERP';
+      case 'no_erp_history':
+        return 'sin proveedor ni compras en este ERP';
+      default:
+        return line.landedUnitCostNet == null
+            ? 'evidencia incompleta · sin costo aterrizado'
+            : line.evidenceAgeDays == null
+                ? 'evidencia completa'
+                : 'evidencia ${line.evidenceAgeDays} días · completa';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -3289,18 +3350,7 @@ class PurchasePlanLineRow extends StatelessWidget {
             style: PurchaseType.rowTitle.copyWith(color: tokens.ink)),
         const SizedBox(height: 2),
         Text(
-          line.landedUnitCostNet == null
-              // Sin costo aterrizado la línea no tiene evidencia comparable:
-              // se dice, no se rellena con un número.
-              ? 'evidencia incompleta · sin costo aterrizado'
-              // `07 · Plan con líneas` pide «evidencia 18 días · completa»: la
-              // edad va **primero** porque es la que decide si el costo sirve;
-              // «completa» sólo dice que el cálculo no tuvo huecos. Cuando el
-              // snapshot no trae las dos fechas se omite el tramo en vez de
-              // escribir un cero que se leería como «de hoy».
-              : line.evidenceAgeDays == null
-                  ? 'evidencia completa'
-                  : 'evidencia ${line.evidenceAgeDays} días · completa',
+          _evidenceLabel,
           style: PurchaseType.body.copyWith(
             fontSize: 11,
             height: 1.2,
@@ -3318,6 +3368,8 @@ class PurchasePlanLineRow extends StatelessWidget {
           currency: line.currency,
           landedUnitCostNet: line.landedUnitCostNet,
           projectedGrossMarginRatio: line.projectedGrossMarginRatio,
+          catalogCostNet: line.catalogCostNet,
+          catalogCostCurrency: line.catalogCostCurrency,
         ),
       ],
     );
@@ -3344,6 +3396,10 @@ class PurchasePlanLineRow extends StatelessWidget {
       ],
     );
 
+    final referenceUnitCost =
+        line.landedUnitCostNet == null ? line.catalogCostNet : null;
+    final displayedTotal = subtotal ??
+        (referenceUnitCost == null ? null : referenceUnitCost * line.quantity);
     final money = SizedBox(
       width: stacked ? null : _moneyColumnWidth,
       child: Column(
@@ -3352,7 +3408,12 @@ class PurchasePlanLineRow extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            PurchaseMoney.format(subtotal, line.currency),
+            PurchaseMoney.format(
+              displayedTotal,
+              referenceUnitCost == null
+                  ? line.currency
+                  : line.catalogCostCurrency ?? line.currency,
+            ),
             key: ValueKey('plan-line-total-${line.id}'),
             style: PurchaseType.metricSmall.copyWith(
               color: tokens.ink,
@@ -3363,6 +3424,19 @@ class PurchasePlanLineRow extends StatelessWidget {
             Text(
               PurchaseMoney.perUnit(line.landedUnitCostNet, line.currency),
               key: ValueKey('plan-line-unit-${line.id}'),
+              style: PurchaseType.hint.copyWith(
+                fontSize: 9,
+                color: tokens.inkFaint,
+                fontFeatures: PurchaseType.tabular,
+              ),
+            ),
+          if (line.landedUnitCostNet == null && referenceUnitCost != null)
+            Text(
+              '${PurchaseMoney.perUnit(
+                referenceUnitCost,
+                line.catalogCostCurrency ?? line.currency,
+              )} · referencia de ficha',
+              key: ValueKey('plan-line-catalog-unit-${line.id}'),
               style: PurchaseType.hint.copyWith(
                 fontSize: 9,
                 color: tokens.inkFaint,
@@ -4065,7 +4139,8 @@ class FamilyStockOptions extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 8, left: 2),
                     child: Text(
                       _uncheckedBandLabel(unchecked),
-                      style: PurchaseType.label.copyWith(color: tokens.inkFaint),
+                      style:
+                          PurchaseType.label.copyWith(color: tokens.inkFaint),
                     ),
                   ),
                 ],
@@ -4202,6 +4277,13 @@ class _FamilyStockRow extends StatelessWidget {
                   ].join(' · '),
                   style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
                 ),
+                if (option.evidenceState != 'unknown') ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    supplySourcingLabel(option),
+                    style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                  ),
+                ],
               ],
             ),
           ),
@@ -4289,6 +4371,11 @@ class _FamilyStockCard extends StatelessWidget {
                     FamilyStockOptions._matchLabel(option.matchState),
                     style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
                   ),
+                  if (option.evidenceState != 'unknown')
+                    Text(
+                      supplySourcingLabel(option),
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
                 ],
               ),
             ),
