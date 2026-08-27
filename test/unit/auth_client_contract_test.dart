@@ -122,8 +122,14 @@ void main() {
     expect(dartSources, isNot(contains("'temporary_password'")));
     expect(dartSources, isNot(contains("'confirm_email'")));
     expect(dartSources, isNot(contains('Confirmar email manualmente')));
-    expect(employeePageSource, contains("'invitationEmailSent'"));
-    expect(hrServiceSource, contains("result['emailSent'] == true"));
+    expect(
+      employeePageSource,
+      contains("'employee-form-open-access-profile'"),
+    );
+    expect(
+      userManagementServiceSource,
+      contains("result['emailSent'] != true"),
+    );
     expect(
       userManagementPageSource,
       contains('Invitación enviada por correo'),
@@ -146,19 +152,31 @@ void main() {
     );
   });
 
-  test('HR employee access delegates all identity writes to the admin edge',
+  test('employee access delegates identity creation to the canonical admin edge',
       () {
     expect(
-      hrServiceSource,
+      userManagementServiceSource,
       contains("'action': 'create_internal_invitation'"),
     );
     expect(
-      hrServiceSource,
+      userManagementServiceSource,
       contains("'action': 'resend_internal_invitation'"),
     );
     expect(
-      hrServiceSource,
+      userManagementServiceSource,
       contains("'admin-user-management'"),
+    );
+    expect(
+      employeePageSource,
+      contains("'employee-form-open-access-profile'"),
+    );
+    expect(
+      employeePageSource,
+      isNot(contains("'action': 'create_internal_invitation'")),
+    );
+    expect(
+      hrServiceSource,
+      isNot(contains("'action': 'create_internal_invitation'")),
     );
     expect(hrServiceSource, isNot(contains(".from('user_invitations')")));
     expect(hrServiceSource, isNot(contains(".from('user_profiles')")));

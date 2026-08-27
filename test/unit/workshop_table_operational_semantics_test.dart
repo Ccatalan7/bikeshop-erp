@@ -7,6 +7,7 @@ void main() {
   late String form;
   late String logbook;
   late String operationalBadge;
+  late String visibilityPolicy;
 
   setUpAll(() {
     table = File(
@@ -20,6 +21,9 @@ void main() {
     ).readAsStringSync();
     operationalBadge = File(
       'lib/shared/widgets/operational_status_badge.dart',
+    ).readAsStringSync();
+    visibilityPolicy = File(
+      'lib/modules/bikeshop/services/mechanic_job_visibility_policy.dart',
     ).readAsStringSync();
   });
 
@@ -158,13 +162,14 @@ void main() {
     expect(table, contains("'quotations_closed'"));
     expect(table, contains("return 'Cotizaciones cerradas';"));
     expect(
-      table,
+      visibilityPolicy,
       contains(
-        'job.isStandaloneQuotation &&\n              (job.effectiveQuotationStatus == QuotationStatus.rejected',
+        'job.isStandaloneQuotation &&\n      (job.effectiveQuotationStatus == QuotationStatus.rejected',
       ),
       reason:
-          'Rejected or expired standalone quotations leave the active operational queue.',
+          'The canonical active-job policy excludes rejected or expired standalone quotations.',
     );
+    expect(table, contains('isMechanicJobOperationallyActive('));
     expect(table, contains("return 'Componente recibido';"));
     expect(table, contains('_componentObjectLabel(job)'));
     expect(logbook, contains('job.isComponentIntake'));
