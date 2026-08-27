@@ -876,6 +876,10 @@ workflow UI changes.
 ## Workshop Lifecycle Guardrail
 
 - For mechanic jobs, `delivered_at` is a timestamp for the current delivered lifecycle state, not an independent archive flag. Jobs should be treated as delivered only when the current legacy/custom status resolves to `ENTREGADO`; moving a job back to `FINALIZADO`/`Terminado` or any non-delivered state must clear `delivered_at` so `Trabajos: Activos` only hides currently delivered and paid jobs.
+- Any selector labelled as active workshop work must reuse the canonical
+  `isMechanicJobOperationallyActive` policy used by `Trabajos: Activos`; a
+  `deleted_at is null` query is only an archive filter and must never be
+  presented as active-work eligibility.
 
 ## Workshop Job Mode Guardrail
 

@@ -83,6 +83,8 @@ void main() {
         'job_item_id': 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
         'job_id': 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
         'item_name': 'Mantención de motor',
+        'item_instructions':
+            'REVISIÓN DE HORQUILLA Y MANTENCIÓN SI ES NECESARIO',
         'item_type': 'service',
         'job_number': 'PG-001234',
         'bike_label': 'Trek 820',
@@ -91,6 +93,8 @@ void main() {
         'context_changed_at': null,
       });
       expect(link.itemName, 'Mantención de motor');
+      expect(link.itemInstructions,
+          'REVISIÓN DE HORQUILLA Y MANTENCIÓN SI ES NECESARIO');
       expect(link.isInvalidated, isTrue);
       expect(link.contextChanged, isFalse);
       expect(link.jobNumber, 'PG-001234');
@@ -124,6 +128,15 @@ void main() {
         'photo_url': null,
         'access': 'erp',
       });
+      final portal = TaskAssignmentPrincipal.fromJson({
+        'tenant_id': 't',
+        'user_id': 'u2',
+        'employee_id': 'e2',
+        'display_name': 'Fernando Portal',
+        'role': 'worker',
+        'photo_url': null,
+        'access': 'portal',
+      });
       final none = TaskAssignmentPrincipal.fromJson({
         'tenant_id': 't',
         'user_id': null,
@@ -135,8 +148,30 @@ void main() {
       });
       expect(erp.isAssignable, isTrue);
       expect(erp.initials, 'MM');
+      expect(erp.assignmentContextLabel, 'Taller');
+      expect(portal.isAssignable, isTrue);
+      expect(portal.assignmentContextLabel, 'Recibe tareas en su portal');
       expect(none.isAssignable, isFalse);
       expect(none.access, TaskPrincipalAccess.none);
+      expect(none.assignmentContextLabel, 'Sin acceso');
+    });
+
+    test('traduce los roles ERP y nunca publica el código interno', () {
+      String labelFor(String role) => TaskAssignmentPrincipal(
+            tenantId: 't',
+            userId: 'u',
+            employeeId: 'e',
+            displayName: 'Persona',
+            role: role,
+            photoUrl: null,
+            access: TaskPrincipalAccess.erp,
+          ).assignmentContextLabel;
+
+      expect(labelFor('admin'), 'Administración');
+      expect(labelFor('manager'), 'Gerencia');
+      expect(labelFor('accountant'), 'Contabilidad');
+      expect(labelFor('cashier'), 'Caja');
+      expect(labelFor('unknown_backend_role'), 'Equipo ERP');
     });
   });
 
@@ -154,7 +189,11 @@ void main() {
         'job_number': 'PG-001234',
         'bike_labels': ['Trek 820', 'Giant Talon'],
         'job_items': [
-          {'item_name': 'Mantención de motor', 'item_type': 'service'},
+          {
+            'item_name': 'Mantención de motor',
+            'item_instructions': 'Revisar dirección antes de reinstalar',
+            'item_type': 'service',
+          },
           {
             'item_name': 'Limpieza transmisión',
             'item_type': 'service',
@@ -165,6 +204,8 @@ void main() {
       expect(view.bikeLabels, hasLength(2));
       expect(view.displayAssignerName, 'La Manager');
       expect(view.jobItems.last['invalidated'], isTrue);
+      expect(view.jobItems.first['item_instructions'],
+          'Revisar dirección antes de reinstalar');
       expect(view.awaitsAcknowledgement, isTrue);
       expect(view.jobItems.every((item) => !item.containsKey('unit_price')),
           isTrue);
@@ -200,7 +241,7 @@ void main() {
     });
   });
 
-  test('la consulta de pegas desambigua el cliente real en PostgREST', () {
+  test('la consulta de trabajos desambigua el cliente real en PostgREST', () {
     expect(
       taskLinkableJobCustomerEmbed,
       'customers!mechanic_jobs_customer_id_fkey(name)',

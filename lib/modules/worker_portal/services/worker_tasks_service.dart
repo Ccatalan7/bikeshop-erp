@@ -2,7 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 /// Proyección mínima de una tarea para el portal del trabajador
-/// (`get_my_worker_tasks_v1`): pega, bicicletas y servicios sin precios ni
+/// (`get_my_worker_tasks_v1`): trabajo, bicicletas y servicios sin precios ni
 /// PII, y sin hilo — el principal de portal no es principal de mensajería.
 class WorkerTaskView {
   final String id;
@@ -25,7 +25,8 @@ class WorkerTaskView {
   final String? jobNumber;
   final List<String> bikeLabels;
 
-  /// [{item_name, item_type, bike_label, invalidated?, context_changed?}]
+  /// [{item_name, item_instructions, item_type, bike_label, invalidated?,
+  /// context_changed?}]
   final List<Map<String, dynamic>> jobItems;
 
   const WorkerTaskView({

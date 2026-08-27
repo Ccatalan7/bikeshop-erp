@@ -1971,7 +1971,7 @@ This is the correct direction because target metadata belongs to the executed se
 ## Work Tray Layer: Taller ↔ `smart_tasks` (2026-08-27)
 
 La bandeja de trabajo del ERP (`smart_tasks`) es un sistema DISTINTO del
-checklist técnico de la pega, y el vínculo entre ambos quedó normalizado en el
+checklist técnico del trabajo, y el vínculo entre ambos quedó normalizado en el
 kernel `20260826220000_smart_task_work_tray_kernel`:
 
 - **`smart_tasks`** es la bandeja canónica: quién debe hacer qué y cuándo.
@@ -1985,25 +1985,55 @@ kernel `20260826220000_smart_task_work_tray_kernel`:
   `source='direct'`. La bandeja **cancela, no borra**: el DELETE de cliente
   está revocado y el ledger (`FK RESTRICT`) impide el borrado físico.
 - **`mechanic_job_tasks`** sigue siendo el checklist técnico/facturable por
-  línea de la pega (auto-parseado, sincroniza ítems/precios ad-hoc por
+  línea del trabajo (auto-parseado, sincroniza ítems/precios ad-hoc por
   triggers). No tiene asignado ni ciclo de vida y NO se fusiona con la
   bandeja. Desde este kernel sí está en la publicación Realtime (antes su
   suscripción era inerte).
+- **Contexto principal opcional**: una tarea o nota nace neutral y puede quedar
+  sin vínculo, o enlazar exactamente un trabajo del taller, cliente, proveedor,
+  venta/factura o compra/documento. Los catálogos se consultan sólo después de
+  elegir el módulo; el compositor no muestra controles del Taller por defecto.
+  El guard `20260827220000_smart_task_primary_context_guard` impone máximo un
+  contexto y valida que la entidad pertenezca al mismo tenant también para
+  clientes antiguos y escrituras internas. El vínculo aporta navegación y
+  evidencia; completar la tarea no cambia silenciosamente el estado comercial
+  del registro vinculado. Las automatizaciones de negocio requieren una regla
+  explícita y auditada, no se infieren del vínculo.
 - **`smart_task_job_items`** es el puente: una tarea de la bandeja respalda
-  uno o varios servicios REALES de la pega (`mechanic_job_items` de tipo
+  uno o varios servicios REALES del trabajo (`mechanic_job_items` de tipo
   `service`/`adhoc`; nunca productos), con snapshot de contexto (nombre,
-  `job_number`, bicicleta) e identidad propia. Borrar o editar la línea en el
-  taller NO borra el vínculo: lo marca (`invalidated_at` /
-  `context_changed_at`) y la tarea sigue resoluble. Repartir una pega =
+  instrucciones operativas de `mechanic_job_items.notes`, `job_number`,
+  bicicleta) e identidad propia. El nombre identifica el servicio; las
+  instrucciones describen qué debe realizarse y nunca se descartan ni se
+  reemplazan por el título. Borrar o editar la línea en el taller NO borra el
+  vínculo: lo marca (`invalidated_at` / `context_changed_at`) y la tarea sigue
+  resoluble. Una edición de `notes` también marca cambio de contexto, pero no
+  reescribe silenciosamente el snapshot que recibió el trabajador. El detalle
+  de la tarea muestra el texto completo y conduce al trabajo para revisar la
+  versión actual. Repartir un trabajo =
   varias tareas sobre líneas distintas; un solape con otra tarea activa exige
   decisión deliberada (`collaborate`/`transfer`) auditada.
+  Sólo después de elegir `Trabajo del taller` en el contexto opcional, la
+  relación se elige jerárquicamente: primero un trabajo del alcance canónico
+  **Trabajos: Activos** y luego
+  `Trabajo completo` (todas sus líneas reales) o `Por servicios` (una o más
+  líneas explícitas, agrupadas por bicicleta). La solicitud del cliente puede
+  ayudar a buscar el trabajo, pero no se dibuja como una opción hermana de sus
+  servicios. El selector reutiliza la misma política operativa de la tabla:
+  excluye archivados, pruebas, cancelados, cotizaciones cerradas, ventas ya
+  pagadas y entregados que ya salieron del alcance activo; un trabajo
+  finalizado aún no entregado o entregado pendiente de pago sigue activo.
 - **Identidad**: `assigned_to`/`created_by` son usuarios auth. La cara de
   trabajador se resuelve por `get_smart_task_assignment_directory_v1`
   (principals ERP ∪ cuentas de portal activas ∪ empleados sin cuenta como
   `access='none'` para «Invitar»; un principal canónico por persona). El
+  principal corporativo `erp_owner` representa al tenant y permanece sin
+  vínculo a `employees`; su etiqueta es la identidad de cuenta/empresa. La
+  ficha laboral y su autoservicio se vinculan bilateralmente al usuario ERP
+  personal correspondiente, nunca a la cuenta genérica de la empresa. El
   portal del trabajador consume solo `get_my_worker_tasks_v1` (proyección sin
-  precios, multi-bici real desde los vínculos) y `worker_task_command_v1`
-  acotado a su ciclo.
+  precios, multi-bici real, nombre e instrucciones completas de cada servicio
+  desde los vínculos) y `worker_task_command_v1` acotado a su ciclo.
 - **Hilo y notificaciones**: una conversación interna canónica por tarea
   (`smart_task_thread_get_or_create_v1`, índice único parcial sobre
   `conversation_contexts` tipo `task`); el hilo sigue al trabajo — entra el
@@ -2015,7 +2045,7 @@ kernel `20260826220000_smart_task_work_tray_kernel`:
   (defecto heredado, 0/467 filas). La asignación de trabajo vive en la
   bandeja; esa columna no debe reutilizarse mientras la FK esté rota.
 
-Verdad de cada capa: la pega y su checklist responden «qué hay que hacerle a
+Verdad de cada capa: el trabajo y su checklist responden «qué hay que hacerle a
 la bici y qué se cobra»; la bandeja responde «quién lo hace, cuándo y en qué
 estado va». La tarea PROYECTA el contexto del taller (snapshot + marcas),
 nunca lo reescribe.

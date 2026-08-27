@@ -22,6 +22,39 @@ enum TaskKind { task, note }
 /// exista estructura de equipos.
 enum TaskVisibility { private, team, company }
 
+/// Contexto principal opcional de una tarea o nota.
+///
+/// La tarea sigue siendo una entidad neutral: este valor sólo agrega el lugar
+/// del ERP al que pertenece. Taller conserva un segundo nivel propio para sus
+/// servicios; los demás módulos enlazan una única entidad completa.
+enum TaskContextKind {
+  none,
+  workshopJob,
+  customer,
+  supplier,
+  salesInvoice,
+  purchaseInvoice,
+}
+
+/// Proyección mínima y navegable de una entidad vinculable desde Tareas.
+class TaskContextTarget {
+  const TaskContextTarget({
+    required this.kind,
+    required this.id,
+    required this.label,
+    required this.route,
+    this.context,
+    this.searchText,
+  });
+
+  final TaskContextKind kind;
+  final String id;
+  final String label;
+  final String route;
+  final String? context;
+  final String? searchText;
+}
+
 class TaskModel {
   final String? id;
   final String tenantId;
@@ -360,6 +393,57 @@ class TaskModel {
   bool get isDone =>
       status == TaskStatus.completed || status == TaskStatus.cancelled;
   bool get isBlocked => status == TaskStatus.blocked;
+
+  TaskContextKind get contextKind {
+    if (linkedJobId != null) return TaskContextKind.workshopJob;
+    if (linkedCustomerId != null) return TaskContextKind.customer;
+    if (linkedSupplierId != null) return TaskContextKind.supplier;
+    if (linkedSalesInvoiceId != null) return TaskContextKind.salesInvoice;
+    if (linkedPurchaseInvoiceId != null) return TaskContextKind.purchaseInvoice;
+    return TaskContextKind.none;
+  }
+
+  /// Contextos no-Taller. Taller se representa con su cabecera y sus servicios
+  /// reales porque tiene una jerarquía adicional que este resumen no aplana.
+  TaskContextTarget? get linkedContextTarget {
+    if (linkedCustomerId != null) {
+      return TaskContextTarget(
+        kind: TaskContextKind.customer,
+        id: linkedCustomerId!,
+        label: linkedCustomerName ?? 'Cliente',
+        route: '/clientes/${Uri.encodeComponent(linkedCustomerId!)}',
+      );
+    }
+    if (linkedSupplierId != null) {
+      return TaskContextTarget(
+        kind: TaskContextKind.supplier,
+        id: linkedSupplierId!,
+        label: linkedSupplierName ?? 'Proveedor',
+        route: '/purchases/suppliers/${Uri.encodeComponent(linkedSupplierId!)}',
+      );
+    }
+    if (linkedSalesInvoiceId != null) {
+      return TaskContextTarget(
+        kind: TaskContextKind.salesInvoice,
+        id: linkedSalesInvoiceId!,
+        label: linkedSalesInvoiceNumber == null
+            ? 'Venta'
+            : 'Venta #$linkedSalesInvoiceNumber',
+        route: '/sales/invoices/${Uri.encodeComponent(linkedSalesInvoiceId!)}',
+      );
+    }
+    if (linkedPurchaseInvoiceId != null) {
+      return TaskContextTarget(
+        kind: TaskContextKind.purchaseInvoice,
+        id: linkedPurchaseInvoiceId!,
+        label: linkedPurchaseInvoiceNumber == null
+            ? 'Compra'
+            : 'Compra #$linkedPurchaseInvoiceNumber',
+        route: '/purchases/${Uri.encodeComponent(linkedPurchaseInvoiceId!)}',
+      );
+    }
+    return null;
+  }
 
   /// «Por aceptar» para el asignado: asignada y sin acuse de recibo.
   bool get awaitsAcknowledgement =>

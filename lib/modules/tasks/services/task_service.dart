@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
+import 'package:vinabike_erp/modules/bikeshop/services/mechanic_job_visibility_policy.dart';
+import 'package:vinabike_erp/modules/sales/models/sales_models.dart';
 import 'package:vinabike_erp/modules/tasks/models/smart_task_event.dart';
 import 'package:vinabike_erp/modules/tasks/models/smart_task_job_item.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_assignment_principal.dart';
@@ -29,7 +32,7 @@ class TaskVersionConflictException implements Exception {
 
 /// `mechanic_jobs` también conserva un FK legacy `assigned_to -> customers`.
 /// PostgREST exige nombrar el FK del cliente real o rechaza el embed por
-/// ambiguo y el selector de pegas queda vacío.
+/// ambiguo y el selector de trabajos queda vacío.
 @visibleForTesting
 const taskLinkableJobCustomerEmbed =
     'customers!mechanic_jobs_customer_id_fkey(name)';
@@ -60,11 +63,11 @@ class TaskService extends ChangeNotifier {
   List<TaskModel> get tasks => _tasks;
   ErpAuthorityScopeKey? get authorityScope => _cacheScope.key;
 
-  /// Servicios de pega respaldando cada tarea (snapshot + invalidación).
+  /// Servicios del trabajo respaldando cada tarea (snapshot + invalidación).
   List<SmartTaskJobItem> jobItemsOf(String taskId) =>
       _jobItemsByTask[taskId] ?? const [];
 
-  /// Identidad mínima de la pega para tareas/notas con `linked_job_id` pero
+  /// Identidad mínima del trabajo para tareas/notas con `linked_job_id` pero
   /// sin servicios vinculados (hidratada aparte, acotada por IDs).
   TaskLinkableJob? jobHeaderOf(TaskModel task) =>
       task.linkedJobId == null ? null : _jobHeadersById[task.linkedJobId];
@@ -229,6 +232,7 @@ class TaskService extends ChangeNotifier {
             }
             loadedTasks.add(TaskModel.fromJson(map));
           }
+          await _hydrateTaskContexts(lease, loadedTasks);
           loadedTasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
           final linkRows = await _supabase
@@ -253,7 +257,7 @@ class TaskService extends ChangeNotifier {
             stateByTask[map['task_id'].toString()] = map;
           }
 
-          // Pegas vinculadas SIN servicios: su identidad no viene en los
+          // Trabajos vinculados SIN servicios: su identidad no viene en los
           // links; se hidrata en una lectura secundaria acotada por IDs.
           final headerIds = <String>{
             for (final task in loadedTasks)
@@ -301,6 +305,87 @@ class TaskService extends ChangeNotifier {
         debugPrint('❌ [TaskService] Stack: $stackTrace');
       }
       return null;
+    }
+  }
+
+  /// Hidrata sólo la identidad visible de los contextos no-Taller. Se mantiene
+  /// fuera del SELECT principal para que una relación o RLS defectuosa no deje
+  /// la bandeja completa sin tareas.
+  Future<void> _hydrateTaskContexts(
+    AuthorityCacheLease lease,
+    List<TaskModel> tasks,
+  ) async {
+    final customerIds = <String>{
+      for (final task in tasks)
+        if (task.linkedCustomerId != null) task.linkedCustomerId!,
+    };
+    final supplierIds = <String>{
+      for (final task in tasks)
+        if (task.linkedSupplierId != null) task.linkedSupplierId!,
+    };
+    final salesIds = <String>{
+      for (final task in tasks)
+        if (task.linkedSalesInvoiceId != null) task.linkedSalesInvoiceId!,
+    };
+    final purchaseIds = <String>{
+      for (final task in tasks)
+        if (task.linkedPurchaseInvoiceId != null) task.linkedPurchaseInvoiceId!,
+    };
+
+    final customerNames = <String, String>{};
+    final supplierNames = <String, String>{};
+    final salesNumbers = <String, String>{};
+    final purchaseNumbers = <String, String>{};
+
+    Future<void> collect(
+      String table,
+      String projection,
+      Set<String> ids,
+      Map<String, String> target,
+      String valueColumn,
+    ) async {
+      if (ids.isEmpty) return;
+      final rows = await _supabase
+          .from(table)
+          .select('id, tenant_id, $projection')
+          .eq('tenant_id', lease.scope.tenantId)
+          .inFilter('id', ids.toList());
+      _assertOwnedLease(lease);
+      for (final row in (rows as List<dynamic>)) {
+        final map = Map<String, dynamic>.from(row as Map);
+        if (map['tenant_id']?.toString() != lease.scope.tenantId) {
+          throw StateError('$table context query crossed the authority tenant');
+        }
+        final value = map[valueColumn]?.toString().trim();
+        if (value != null && value.isNotEmpty) {
+          target[map['id'].toString()] = value;
+        }
+      }
+    }
+
+    await collect('customers', 'name', customerIds, customerNames, 'name');
+    await collect('suppliers', 'name', supplierIds, supplierNames, 'name');
+    await collect('sales_invoices', 'invoice_number', salesIds, salesNumbers,
+        'invoice_number');
+    await collect('purchase_invoices', 'invoice_number', purchaseIds,
+        purchaseNumbers, 'invoice_number');
+
+    for (var index = 0; index < tasks.length; index++) {
+      final task = tasks[index];
+      tasks[index] = task.copyWith(
+        linkedCustomerName: task.linkedCustomerId == null
+            ? null
+            : customerNames[task.linkedCustomerId],
+        linkedSupplierName: task.linkedSupplierId == null
+            ? null
+            : supplierNames[task.linkedSupplierId],
+        linkedSalesInvoiceNumber: task.linkedSalesInvoiceId == null
+            ? null
+            : salesNumbers[task.linkedSalesInvoiceId],
+        linkedPurchaseInvoiceNumber: task.linkedPurchaseInvoiceId == null
+            ? null
+            : purchaseNumbers[task.linkedPurchaseInvoiceId],
+      );
     }
   }
 
@@ -370,7 +455,7 @@ class TaskService extends ChangeNotifier {
     }
 
     if (current != null && task.linkedJobId != current.linkedJobId) {
-      // La UI legada vincula la pega sin elegir servicios.
+      // La UI legada vincula el trabajo sin elegir servicios.
       await setTaskJobItems(id, jobId: task.linkedJobId);
     }
 
@@ -578,6 +663,7 @@ class TaskService extends ChangeNotifier {
           final changedId = record['id']?.toString();
           if (changedId != null && changedId.isNotEmpty) {
             unawaited(_refreshTaskLinks(lease, changedId));
+            unawaited(_refreshTaskContext(lease, changedId));
           }
           final linkedJobId = record['linked_job_id']?.toString();
           if (linkedJobId != null &&
@@ -858,6 +944,25 @@ class TaskService extends ChangeNotifier {
     }
   }
 
+  Future<void> _refreshTaskContext(
+    AuthorityCacheLease lease,
+    String taskId,
+  ) async {
+    try {
+      final current = _tasks.where((task) => task.id == taskId).firstOrNull;
+      if (current == null) return;
+      final expectedVersion = current.version;
+      final hydrated = <TaskModel>[current];
+      await _hydrateTaskContexts(lease, hydrated);
+      if (_isDisposed || !_cacheScope.owns(lease)) return;
+      final latest = _tasks.where((task) => task.id == taskId).firstOrNull;
+      if (latest == null || latest.version != expectedVersion) return;
+      _upsertTask(hydrated.single);
+    } catch (_) {
+      // El fallback de 30 s reconcilia sin esconder la tarea base.
+    }
+  }
+
   Future<void> _refreshJobHeader(
     AuthorityCacheLease lease,
     String jobId,
@@ -913,6 +1018,7 @@ class TaskService extends ChangeNotifier {
     _upsertTask(task);
     if (task.id != null) {
       unawaited(_refreshTaskLinks(lease, task.id!));
+      unawaited(_refreshTaskContext(lease, task.id!));
     }
     return task;
   }
@@ -1064,37 +1170,240 @@ class TaskService extends ChangeNotifier {
             if (overlapDecision != null) 'overlap_decision': overlapDecision,
           });
 
-  /// Pegas vinculables para el compositor: vivas (no archivadas), recientes.
-  /// La elegibilidad dura la valida el servidor al vincular.
-  Future<List<TaskLinkableJob>> fetchLinkableJobs({int limit = 120}) async {
+  /// Entidades vinculables de los módulos generales. Se cargan únicamente al
+  /// elegir el tipo de vínculo; abrir una tarea neutral no consulta catálogos
+  /// completos ni muestra controles de otro flujo.
+  Future<List<TaskContextTarget>> fetchLinkTargets(
+    TaskContextKind kind,
+  ) async {
+    if (kind == TaskContextKind.none || kind == TaskContextKind.workshopJob) {
+      return const [];
+    }
     final lease = await _requireAuthorityLease();
-    final rows = await _supabase
-        .from('mechanic_jobs')
-        .select(
-            'id, tenant_id, job_number, status, client_request, deleted_at, '
-            '$taskLinkableJobCustomerEmbed')
-        .eq('tenant_id', lease.scope.tenantId)
-        .isFilter('deleted_at', null)
-        .order('created_at', ascending: false)
-        .limit(limit);
-    _assertOwnedLease(lease);
-    return (rows as List<dynamic>).map((row) {
-      final map = Map<String, dynamic>.from(row as Map);
-      if (map['tenant_id']?.toString() != lease.scope.tenantId) {
-        throw StateError('Linkable job query crossed the authority tenant');
+    const pageSize = 500;
+    const maxRows = 3000;
+
+    Future<List<Map<String, dynamic>>> collect(
+      Future<dynamic> Function(int from, int to) loadPage,
+    ) async {
+      final result = <Map<String, dynamic>>[];
+      for (var from = 0; from < maxRows; from += pageSize) {
+        final raw = await loadPage(from, from + pageSize - 1);
+        _assertOwnedLease(lease);
+        final page = (raw as List<dynamic>)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false);
+        for (final row in page) {
+          if (row['tenant_id']?.toString() != lease.scope.tenantId) {
+            throw StateError('Task context query crossed the authority tenant');
+          }
+        }
+        result.addAll(page);
+        if (page.length < pageSize) break;
       }
-      return TaskLinkableJob.fromJson(map);
-    }).toList();
+      return result;
+    }
+
+    String? compactContext(Iterable<dynamic> values) {
+      final parts = values
+          .map((value) => value?.toString().trim() ?? '')
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+      return parts.isEmpty ? null : parts.join(' · ');
+    }
+
+    switch (kind) {
+      case TaskContextKind.customer:
+        final rows = await collect((from, to) async => _supabase
+            .from('customers')
+            .select('id, tenant_id, name, phone, email')
+            .eq('tenant_id', lease.scope.tenantId)
+            .eq('is_active', true)
+            .order('name')
+            .range(from, to));
+        return rows
+            .map((row) => TaskContextTarget(
+                  kind: kind,
+                  id: row['id'].toString(),
+                  label: row['name']?.toString().trim().isNotEmpty == true
+                      ? row['name'].toString().trim()
+                      : 'Cliente sin nombre',
+                  context: compactContext([row['phone'], row['email']]),
+                  searchText:
+                      compactContext([row['name'], row['phone'], row['email']]),
+                  route:
+                      '/clientes/${Uri.encodeComponent(row['id'].toString())}',
+                ))
+            .toList(growable: false);
+      case TaskContextKind.supplier:
+        final rows = await collect((from, to) async => _supabase
+            .from('suppliers')
+            .select('id, tenant_id, name, contact_person, phone')
+            .eq('tenant_id', lease.scope.tenantId)
+            .eq('is_active', true)
+            .order('name')
+            .range(from, to));
+        return rows
+            .map((row) => TaskContextTarget(
+                  kind: kind,
+                  id: row['id'].toString(),
+                  label: row['name']?.toString().trim().isNotEmpty == true
+                      ? row['name'].toString().trim()
+                      : 'Proveedor sin nombre',
+                  context:
+                      compactContext([row['contact_person'], row['phone']]),
+                  searchText: compactContext(
+                      [row['name'], row['contact_person'], row['phone']]),
+                  route:
+                      '/purchases/suppliers/${Uri.encodeComponent(row['id'].toString())}',
+                ))
+            .toList(growable: false);
+      case TaskContextKind.salesInvoice:
+        final rows = await collect((from, to) async => _supabase
+            .from('sales_invoices')
+            .select(
+                'id, tenant_id, invoice_number, customer_name, status, date')
+            .eq('tenant_id', lease.scope.tenantId)
+            .order('updated_at', ascending: false)
+            .range(from, to));
+        return rows.map((row) {
+          final number = row['invoice_number']?.toString().trim();
+          final customer = row['customer_name']?.toString().trim();
+          return TaskContextTarget(
+            kind: kind,
+            id: row['id'].toString(),
+            label: [
+              if (number != null && number.isNotEmpty) '#$number',
+              if (customer != null && customer.isNotEmpty) customer,
+            ].join(' · ').trim().isEmpty
+                ? 'Venta sin número'
+                : [
+                    if (number != null && number.isNotEmpty) '#$number',
+                    if (customer != null && customer.isNotEmpty) customer,
+                  ].join(' · '),
+            context: compactContext([row['status'], row['date']]),
+            searchText:
+                compactContext([number, customer, row['status'], row['date']]),
+            route:
+                '/sales/invoices/${Uri.encodeComponent(row['id'].toString())}',
+          );
+        }).toList(growable: false);
+      case TaskContextKind.purchaseInvoice:
+        final rows = await collect((from, to) async => _supabase
+            .from('purchase_invoices')
+            .select(
+                'id, tenant_id, invoice_number, supplier_name, status, date')
+            .eq('tenant_id', lease.scope.tenantId)
+            .order('updated_at', ascending: false)
+            .range(from, to));
+        return rows.map((row) {
+          final number = row['invoice_number']?.toString().trim();
+          final supplier = row['supplier_name']?.toString().trim();
+          final label = [
+            if (number != null && number.isNotEmpty) '#$number',
+            if (supplier != null && supplier.isNotEmpty) supplier,
+          ].join(' · ');
+          return TaskContextTarget(
+            kind: kind,
+            id: row['id'].toString(),
+            label: label.isEmpty ? 'Compra sin número' : label,
+            context: compactContext([row['status'], row['date']]),
+            searchText:
+                compactContext([number, supplier, row['status'], row['date']]),
+            route: '/purchases/${Uri.encodeComponent(row['id'].toString())}',
+          );
+        }).toList(growable: false);
+      case TaskContextKind.none:
+      case TaskContextKind.workshopJob:
+        return const [];
+    }
   }
 
-  /// Líneas de trabajo reales de la pega (service/adhoc), con su bicicleta,
+  /// Trabajos vinculables para el compositor: exactamente el alcance Activos
+  /// de la tabla de Trabajos, ordenado por recencia.
+  Future<List<TaskLinkableJob>> fetchLinkableJobs({int limit = 120}) async {
+    if (limit <= 0) return const [];
+    final lease = await _requireAuthorityLease();
+    const pageSize = 200;
+    final activeJobs = <TaskLinkableJob>[];
+
+    for (var from = 0; activeJobs.length < limit; from += pageSize) {
+      final rawRows = await _supabase
+          .from('mechanic_jobs')
+          .select('''
+            id, tenant_id, job_number, customer_id, bike_id,
+            job_type, workflow_kind, intake_kind, subject_id, subject_notes,
+            warranty_outcome, quotation_status, quotation_valid_until,
+            arrival_date, status, status_id, client_request, diagnosis,
+            work_performed, notes, total_cost, invoice_id, is_invoiced,
+            is_paid, is_warranty_job, created_at, updated_at, deleted_at,
+            job_status:job_statuses(*),
+            $taskLinkableJobCustomerEmbed,
+            bike:bikes!mechanic_jobs_bike_id_fkey(
+              brand, model, serial_number
+            ),
+            invoice:sales_invoices!mechanic_jobs_invoice_id_fkey(
+              id, tenant_id, status, total, paid_amount
+            )
+          ''')
+          .eq('tenant_id', lease.scope.tenantId)
+          .isFilter('deleted_at', null)
+          .order('created_at', ascending: false)
+          .range(from, from + pageSize - 1);
+      _assertOwnedLease(lease);
+      final page = (rawRows as List<dynamic>)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList(growable: false);
+
+      for (final map in page) {
+        if (map['tenant_id']?.toString() != lease.scope.tenantId) {
+          throw StateError('Linkable job query crossed the authority tenant');
+        }
+
+        final invoiceJson = map['invoice'];
+        Invoice? invoice;
+        if (invoiceJson is Map) {
+          final ownedInvoice = Map<String, dynamic>.from(invoiceJson);
+          if (ownedInvoice['tenant_id']?.toString() != lease.scope.tenantId) {
+            throw StateError(
+              'Linkable job invoice crossed the authority tenant',
+            );
+          }
+          invoice = Invoice.fromJson(ownedInvoice);
+        }
+
+        final customer = map['customers'];
+        final bike = map['bike'];
+        final customerMap = customer is Map ? customer : null;
+        final bikeMap = bike is Map ? bike : null;
+        final job = MechanicJob.fromJson(map);
+        if (!isMechanicJobOperationallyActive(
+          job,
+          invoice: invoice,
+          customerName: customerMap?['name']?.toString(),
+          bikeBrand: bikeMap?['brand']?.toString(),
+          bikeModel: bikeMap?['model']?.toString(),
+          bikeSerialNumber: bikeMap?['serial_number']?.toString(),
+        )) {
+          continue;
+        }
+
+        activeJobs.add(TaskLinkableJob.fromJson(map));
+        if (activeJobs.length == limit) break;
+      }
+      if (page.length < pageSize) break;
+    }
+    return activeJobs;
+  }
+
+  /// Líneas de trabajo reales del trabajo (service/adhoc), con su bicicleta,
   /// para elegir todos o algunos servicios al crear/repartir.
   Future<List<TaskJobWorkItem>> fetchJobWorkItems(String jobId) async {
     final lease = await _requireAuthorityLease();
     final itemRows = await _supabase
         .from('mechanic_job_items')
         .select(
-            'id, tenant_id, product_name, description, item_type, job_bike_id')
+            'id, tenant_id, product_name, description, notes, item_type, job_bike_id')
         .eq('job_id', jobId)
         .eq('tenant_id', lease.scope.tenantId)
         .inFilter('item_type', ['service', 'adhoc']).order('created_at');
@@ -1126,6 +1435,7 @@ class TaskService extends ChangeNotifier {
         throw StateError('Job item query crossed the authority tenant');
       }
       final jobBikeId = map['job_bike_id']?.toString();
+      final instructions = map['notes']?.toString().trim();
       final name = [map['description'], map['product_name']]
           .map((value) => value?.toString().trim() ?? '')
           .firstWhere((value) => value.isNotEmpty, orElse: () => 'Servicio');
@@ -1139,6 +1449,8 @@ class TaskService extends ChangeNotifier {
             : (bikeLabels[jobBikeId]?.isEmpty ?? true)
                 ? null
                 : bikeLabels[jobBikeId],
+        instructions:
+            instructions == null || instructions.isEmpty ? null : instructions,
       );
     }).toList();
   }
@@ -1294,7 +1606,7 @@ class _TaskTrayLoad {
   final Map<String, Map<String, dynamic>> userStateByTask;
 }
 
-/// Una pega elegible del compositor (proyección liviana, sin hidratar).
+/// Un trabajo elegible del compositor (proyección liviana, sin hidratar).
 class TaskLinkableJob {
   const TaskLinkableJob({
     required this.id,
@@ -1322,7 +1634,7 @@ class TaskLinkableJob {
   }
 }
 
-/// Una línea de trabajo real de la pega, elegible para respaldar la tarea.
+/// Una línea de trabajo real, elegible para respaldar la tarea.
 class TaskJobWorkItem {
   const TaskJobWorkItem({
     required this.id,
@@ -1330,6 +1642,7 @@ class TaskJobWorkItem {
     required this.itemType,
     required this.jobBikeId,
     required this.bikeLabel,
+    this.instructions,
   });
 
   final String id;
@@ -1337,4 +1650,5 @@ class TaskJobWorkItem {
   final String? itemType;
   final String? jobBikeId;
   final String? bikeLabel;
+  final String? instructions;
 }

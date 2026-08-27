@@ -8,7 +8,6 @@ import '../../../shared/widgets/search_widget.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/services/job_role_service.dart';
-import '../../../shared/models/job_role.dart';
 import '../models/hr_models.dart';
 import '../services/hr_service.dart';
 import '../widgets/employee_retirement_dialog.dart';
@@ -94,26 +93,12 @@ class _EmployeeListPageState extends State<EmployeeListPage> {
     );
 
     if (result != null) {
-      _loadData();
-
-      final invitationRequested = result['invitationRequested'] == true;
-      final invitationEmailSent = result['invitationEmailSent'] == true;
-      final email = result['email'] as String?;
-
-      if (invitationRequested && mounted) {
-        final destination = email == null || email.isEmpty ? '' : ' a $email';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              invitationEmailSent
-                  ? 'Trabajador creado e invitación enviada$destination.'
-                  : 'Trabajador creado, pero el correo de invitación no fue enviado. Reinténtalo desde Usuarios y roles.',
-            ),
-            backgroundColor: invitationEmailSent ? Colors.green : Colors.orange,
-            duration: const Duration(seconds: 6),
-          ),
-        );
+      final accessEmployeeId = result['openAccessEmployeeId'] as String?;
+      if (accessEmployeeId != null && mounted) {
+        context.push('/hr/employees/$accessEmployeeId');
+        return;
       }
+      _loadData();
     }
   }
 
@@ -644,7 +629,6 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
   EmployeeStatus _status = EmployeeStatus.active;
   DateTime? _birthDate;
   DateTime _hireDate = DateTime.now();
-  bool _grantSystemAccess = false; // NEW: checkbox for user account creation
   bool _isSaving = false;
 
   @override
@@ -715,34 +699,10 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Additional validation for system access
-    if (_grantSystemAccess) {
-      if (_emailController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Se requiere un email para otorgar acceso al sistema'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-      if (_selectedSystemRole == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Se requiere un rol para otorgar acceso al sistema'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-    }
-
     setState(() => _isSaving = true);
 
     try {
       final hrService = context.read<HRService>();
-      final jobRoleService = context.read<JobRoleService>();
 
       final tenantId = await TenantService().getTenantId();
       if (tenantId == null) {
@@ -776,39 +736,10 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
           ? await hrService.createEmployee(employee)
           : await hrService.updateEmployee(employee);
 
-      // If granting system access, create user account
-      var invitationRequested = false;
-      var invitationEmailSent = false;
-      if (_grantSystemAccess &&
-          saved.id != null &&
-          _selectedSystemRole != null) {
-        invitationRequested = true;
-        try {
-          // Get default permissions for the role
-          final permissions =
-              await jobRoleService.getDefaultPermissions(_selectedSystemRole!);
-
-          // Create user invitation (will send email with setup link)
-          invitationEmailSent = await hrService.createUserForEmployee(
-            employeeId: saved.id!,
-            email: _emailController.text,
-            role: _selectedSystemRole!,
-            permissions: permissions,
-            firstName: _firstNameController.text,
-            lastName: _lastNameController.text,
-          );
-        } catch (_) {
-          invitationEmailSent = false;
-        }
-      }
-
       if (!mounted) return;
 
       Navigator.pop(context, {
         'employee': saved,
-        'invitationRequested': invitationRequested,
-        'invitationEmailSent': invitationEmailSent,
-        'email': _emailController.text,
       });
     } catch (_) {
       if (!mounted) return;
@@ -974,15 +905,15 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                           return DropdownButtonFormField<String?>(
                             initialValue: _selectedSystemRole,
                             decoration: const InputDecoration(
-                              labelText: 'Rol del Sistema',
+                              labelText: 'Perfil laboral',
                               helperText:
-                                  'Opcional: vincula al trabajador con permisos predefinidos',
+                                  'No crea acceso. Solo propone permisos si después habilitas una cuenta.',
                               border: OutlineInputBorder(),
                             ),
                             items: [
                               const DropdownMenuItem(
                                 value: null,
-                                child: Text('Sin rol asignado'),
+                                child: Text('Sin perfil asignado'),
                               ),
                               ...roleOptions.map((option) => DropdownMenuItem(
                                     value: option['code'],
@@ -1184,71 +1115,69 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
                         maxLines: 3,
                       ),
                       const SizedBox(height: 24),
-                      // Grant System Access section
-                      if (widget.employee == null ||
-                          widget.employee?.userId == null)
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.blue[50],
-                            border: Border.all(color: Colors.blue[200]!),
-                            borderRadius: BorderRadius.circular(8),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.4),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outlineVariant,
                           ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.security,
-                                      color: Colors.blue[700], size: 20),
+                                  Icon(
+                                    Icons.manage_accounts_outlined,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Acceso al Sistema',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue[900],
-                                      fontSize: 16,
-                                    ),
+                                    'Acceso de la persona',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
-                              CheckboxListTile(
-                                value: _grantSystemAccess,
-                                onChanged: _selectedSystemRole != null
-                                    ? (value) => setState(() =>
-                                        _grantSystemAccess = value ?? false)
-                                    : null,
-                                title:
-                                    const Text('Otorgar acceso al sistema ERP'),
-                                subtitle: Text(
-                                  _selectedSystemRole == null
-                                      ? 'Primero selecciona un rol del sistema arriba'
-                                      : 'Se creará una cuenta de usuario con permisos de ${JobRole.getRoleDisplayName(_selectedSystemRole!)}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: _selectedSystemRole == null
-                                        ? Colors.red[700]
-                                        : Colors.grey[700],
-                                  ),
-                                ),
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
+                              const SizedBox(height: 8),
+                              Text(
+                                widget.employee == null
+                                    ? 'Esta ficha laboral no crea una cuenta automáticamente. Después de guardar podrás elegir si la persona queda sin inicio de sesión, usa Worker Space o entra al ERP.'
+                                    : 'El acceso se administra desde el perfil del trabajador. Allí puedes ver si no tiene inicio de sesión, usa Worker Space o entra al ERP, y moverlo de una modalidad a otra sin perder tareas ni historial.',
                               ),
-                              if (_grantSystemAccess &&
-                                  _emailController.text.isEmpty)
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.only(left: 16, top: 8),
-                                  child: Text(
-                                    '⚠️ Se requiere un email válido para crear la cuenta de usuario',
-                                    style: TextStyle(
-                                        color: Colors.red[700], fontSize: 12),
+                              if (widget.employee?.id != null) ...[
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  key: const Key(
+                                    'employee-form-open-access-profile',
+                                  ),
+                                  onPressed: _isSaving
+                                      ? null
+                                      : () => Navigator.pop(context, {
+                                            'openAccessEmployeeId':
+                                                widget.employee!.id,
+                                          }),
+                                  icon: const Icon(Icons.open_in_new),
+                                  label: const Text(
+                                    'Cerrar y ver acceso en el perfil',
                                   ),
                                 ),
+                              ],
                             ],
                           ),
                         ),
+                      ),
                     ],
                   ),
                 ),

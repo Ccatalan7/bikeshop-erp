@@ -69,8 +69,7 @@ class _FakeWorkerTasksService implements WorkerTasksService {
           payload: {'reason': reason});
   @override
   Future<WorkerTaskView> unblock(String taskId, {int? expectedVersion}) =>
-      sendCommand(taskId,
-          command: 'unblock', expectedVersion: expectedVersion);
+      sendCommand(taskId, command: 'unblock', expectedVersion: expectedVersion);
   @override
   Future<WorkerTaskView> complete(String taskId, {int? expectedVersion}) =>
       sendCommand(taskId,
@@ -80,8 +79,7 @@ class _FakeWorkerTasksService implements WorkerTasksService {
       sendCommand(taskId, command: 'return', payload: {'reason': reason});
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 WorkerTaskView _task() => WorkerTaskView(
@@ -105,13 +103,18 @@ WorkerTaskView _task() => WorkerTaskView(
       jobNumber: 'PG-000123',
       bikeLabels: const ['Trek 820', 'Giant Talon'],
       jobItems: const [
-        {'item_name': 'Mantención de motor', 'item_type': 'service'},
+        {
+          'item_name': 'Mantención de motor',
+          'item_instructions':
+              'REVISIÓN DE HORQUILLA/DIRECCIÓN ANTES DE REINSTALAR',
+          'item_type': 'service',
+        },
       ],
     );
 
 void main() {
   testWidgets(
-      'el portal muestra pega, bicicletas y creador, y Aceptar/Completar '
+      'el portal muestra trabajo, bicicletas y creador, y Aceptar/Completar '
       'recargan la proyección', (tester) async {
     tester.view.physicalSize = const Size(800, 1400);
     tester.view.devicePixelRatio = 1.0;
@@ -134,9 +137,14 @@ void main() {
     expect(find.text('Mantención de motor'), findsWidgets);
     expect(find.textContaining('PG-000123'), findsOneWidget);
     expect(find.textContaining('Trek 820'), findsOneWidget);
+    expect(
+      find.text('REVISIÓN DE HORQUILLA/DIRECCIÓN ANTES DE REINSTALAR'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Asignada por La Manager'), findsOneWidget);
     expect(find.textContaining('La Jefa'), findsNothing,
-        reason: 'con assigned_by presente, el creador no es el nombre mostrado');
+        reason:
+            'con assigned_by presente, el creador no es el nombre mostrado');
     expect(fake.fetchCalls, 1);
 
     await tester.ensureVisible(find.text('Aceptar'));

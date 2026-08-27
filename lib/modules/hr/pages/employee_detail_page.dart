@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import '../../../shared/services/user_management_service.dart';
+import '../../../shared/services/user_management_navigation.dart';
 import '../../../shared/utils/auth_input_validation.dart';
 import '../../../shared/services/return_navigation.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -64,6 +65,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
   bool _isWorkerPortalBusy = false;
   bool _isWorkerPortalLoading = true;
   WorkerPortalAccessState? _workerPortalAccess;
+  EmployeeAccessState? _employeeAccessState;
   String? _workerPortalError;
   int _workerPortalLoadEpoch = 0;
   String? _error;
@@ -583,21 +585,117 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     }
 
     try {
-      final access = await context
-          .read<UserManagementService>()
-          .getWorkerPortalAccess(employeeId: employeeId);
+      final service = context.read<UserManagementService>();
+      final results = await Future.wait<Object>([
+        service.getWorkerPortalAccess(employeeId: employeeId),
+        service.getEmployeeAccessState(employeeId: employeeId),
+      ]);
+      final access = results[0] as WorkerPortalAccessState;
+      final employeeAccess = results[1] as EmployeeAccessState;
       if (!mounted || epoch != _workerPortalLoadEpoch) return;
       setState(() {
         _workerPortalAccess = access;
+        _employeeAccessState = employeeAccess;
         _isWorkerPortalLoading = false;
       });
     } catch (_) {
       if (!mounted || epoch != _workerPortalLoadEpoch) return;
       setState(() {
         _workerPortalError =
-            'No se pudo verificar el estado del acceso trabajador.';
+            'No se pudo verificar el acceso completo de esta persona.';
         _isWorkerPortalLoading = false;
       });
+    }
+  }
+
+  void _openCanonicalAccessManagement() {
+    final access = _employeeAccessState;
+    if (access?.erpUserId != null) {
+      UserManagementNavigation.open(
+        context,
+        audience: UserManagementAudience.staff,
+        target: UserManagementTarget.user,
+        targetId: access!.erpUserId,
+      );
+      return;
+    }
+    if (access?.pendingInvitationId != null) {
+      UserManagementNavigation.open(
+        context,
+        audience: UserManagementAudience.invitations,
+        target: UserManagementTarget.invitation,
+        targetId: access!.pendingInvitationId,
+      );
+      return;
+    }
+    final employeeId = _employee?.id;
+    UserManagementNavigation.open(
+      context,
+      audience: UserManagementAudience.staff,
+      target: employeeId == null ? null : UserManagementTarget.employee,
+      targetId: employeeId,
+    );
+  }
+
+  Future<void> _switchErpAccessToWorker() async {
+    final employee = _employee;
+    final employeeId = employee?.id;
+    final userId = _employeeAccessState?.erpUserId;
+    if (employee == null || employeeId == null || userId == null) return;
+
+    final input = await _showWorkerPortalDialog(
+      suggestedUsername:
+          _workerPortalAccess?.username ?? _suggestWorkerUsername(employee),
+      title: 'Mover acceso a Worker Space',
+      actionLabel: 'Mover a Worker Space',
+      explanation:
+          'La cuenta ERP dejará de estar activa para esta persona y se cerrarán sus sesiones. Sus tareas abiertas pasarán a Worker Space; el historial y los mensajes ERP se conservarán.',
+    );
+    if (input == null || !mounted) return;
+
+    setState(() => _isWorkerPortalBusy = true);
+    try {
+      final result =
+          await context.read<UserManagementService>().switchErpUserToWorker(
+                userId: userId,
+                employeeId: employeeId,
+                username: input.username,
+                password: input.password,
+              );
+      await _loadWorkerPortalAccess();
+      if (!mounted) return;
+      final moved = result['tasksTransferred'] is int
+          ? result['tasksTransferred'] as int
+          : 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            moved == 1
+                ? 'Acceso movido a Worker Space con 1 tarea abierta.'
+                : 'Acceso movido a Worker Space con $moved tareas abiertas.',
+          ),
+        ),
+      );
+    } on UserManagementException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'No se pudo mover el acceso. La cuenta ERP sigue activa.',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isWorkerPortalBusy = false);
     }
   }
 
@@ -763,6 +861,9 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
   Future<_WorkerPortalInput?> _showWorkerPortalDialog({
     required String suggestedUsername,
+    String title = 'Acceso Worker Space',
+    String actionLabel = 'Crear acceso',
+    String? explanation,
   }) async {
     final formKey = GlobalKey<FormState>();
     final usernameController = TextEditingController(text: suggestedUsername);
@@ -773,7 +874,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('Acceso app trabajador'),
+            title: Text(title),
             content: Form(
               key: formKey,
               child: SizedBox(
@@ -781,6 +882,10 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (explanation != null) ...[
+                      Text(explanation),
+                      const SizedBox(height: 16),
+                    ],
                     TextFormField(
                       controller: usernameController,
                       autofocus: true,
@@ -833,7 +938,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                   );
                 },
                 icon: const Icon(Icons.person_add_alt_1_outlined),
-                label: const Text('Crear acceso'),
+                label: Text(actionLabel),
               ),
             ],
           );
@@ -1294,6 +1399,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
   Widget _buildWorkerPortalAccessPanel(ThemeData theme) {
     final access = _workerPortalAccess;
+    final employeeAccess = _employeeAccessState;
     final employeeIsActive = _status == EmployeeStatus.active;
     const actionStyle = ButtonStyle(
       minimumSize: WidgetStatePropertyAll(Size(0, 48)),
@@ -1328,6 +1434,149 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           ),
         ],
       );
+    } else if (employeeAccess == null ||
+        employeeAccess.linkState == EmployeeErpLinkState.inconsistent) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Acceso requiere revisión',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.error,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'La ficha laboral y las identidades de acceso no coinciden. No se cambiarán credenciales hasta revisar el vínculo.',
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _openCanonicalAccessManagement,
+            style: actionStyle,
+            icon: const Icon(Icons.manage_accounts_outlined),
+            label: const Text('Revisar en Usuarios y roles'),
+          ),
+        ],
+      );
+    } else if (employeeAccess.linkState == EmployeeErpLinkState.erpLinked) {
+      final erpAccessIsActive = employeeAccess.erpProfileActive;
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.desktop_windows_outlined,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                erpAccessIsActive ? 'ERP activo' : 'ERP restringido',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            erpAccessIsActive
+                ? 'Esta persona ingresa al ERP completo. Recibe sus tareas en el centro de trabajo y puede usar la mensajería según su rol.'
+                : 'La cuenta ERP sigue vinculada a esta persona, pero el ingreso está restringido. El historial se conserva y puede restaurarse desde Usuarios y roles.',
+          ),
+          if (access?.hasAccess == true) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Worker Space histórico: ${access?.username ?? 'sin usuario'} · inactivo',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (erpAccessIsActive)
+                FilledButton.tonalIcon(
+                  key: const Key('employee-access-switch-to-worker'),
+                  onPressed: !_isWorkerPortalBusy && employeeIsActive
+                      ? _switchErpAccessToWorker
+                      : null,
+                  style: actionStyle,
+                  icon: const Icon(Icons.phone_iphone_outlined),
+                  label: const Text('Mover a Worker Space'),
+                ),
+              OutlinedButton.icon(
+                onPressed: _openCanonicalAccessManagement,
+                style: actionStyle,
+                icon: const Icon(Icons.manage_accounts_outlined),
+                label: const Text('Administrar cuenta ERP'),
+              ),
+            ],
+          ),
+        ],
+      );
+    } else if (employeeAccess.linkState ==
+        EmployeeErpLinkState.workerToErpPending) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Worker Space activo · cambio a ERP pendiente',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text('Usuario Worker: ${employeeAccess.workerUsername}'),
+          const SizedBox(height: 4),
+          Text(
+            'Invitación ERP: ${employeeAccess.pendingInvitationEmail ?? 'destino no disponible'}',
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'La persona no pierde acceso mientras espera. Al aceptar, sus sesiones Worker se cerrarán y sus tareas abiertas pasarán a ERP.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _openCanonicalAccessManagement,
+            style: actionStyle,
+            icon: const Icon(Icons.outgoing_mail),
+            label: const Text('Ver invitación ERP'),
+          ),
+        ],
+      );
+    } else if (employeeAccess.linkState ==
+        EmployeeErpLinkState.pendingInvitation) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Invitación ERP pendiente',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Todavía no hay un acceso activo para esta persona. La invitación fue enviada a ${employeeAccess.pendingInvitationEmail ?? 'un correo no disponible'}.',
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _openCanonicalAccessManagement,
+            style: actionStyle,
+            icon: const Icon(Icons.outgoing_mail),
+            label: const Text('Ver invitación ERP'),
+          ),
+        ],
+      );
     } else if (access == null || !access.hasAccess) {
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1341,21 +1590,34 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           const SizedBox(height: 4),
           Text(
             employeeIsActive
-                ? 'Crea un usuario independiente para la app trabajador.'
+                ? 'Elige dónde trabajará: Worker Space para la bandeja operativa o ERP para el sistema completo. La ficha laboral puede existir sin login.'
                 : 'Sólo un trabajador activo puede recibir acceso.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            key: const Key('worker-access-create'),
-            onPressed: !_isWorkerPortalBusy && employeeIsActive
-                ? _createWorkerPortalAccess
-                : null,
-            style: actionStyle,
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            label: const Text('Crear acceso'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                key: const Key('worker-access-create'),
+                onPressed: !_isWorkerPortalBusy && employeeIsActive
+                    ? _createWorkerPortalAccess
+                    : null,
+                style: actionStyle,
+                icon: const Icon(Icons.phone_iphone_outlined),
+                label: const Text('Crear Worker Space'),
+              ),
+              TextButton.icon(
+                onPressed:
+                    employeeIsActive ? _openCanonicalAccessManagement : null,
+                style: actionStyle,
+                icon: const Icon(Icons.desktop_windows_outlined),
+                label: const Text('Configurar acceso ERP'),
+              ),
+            ],
           ),
         ],
       );
@@ -1457,6 +1719,15 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                         icon: const Icon(Icons.pause_circle_outline),
                         label: const Text('Suspender acceso'),
                       ),
+                      OutlinedButton.icon(
+                        key: const Key('worker-access-move-to-erp'),
+                        onPressed: _isWorkerPortalBusy
+                            ? null
+                            : _openCanonicalAccessManagement,
+                        style: actionStyle,
+                        icon: const Icon(Icons.desktop_windows_outlined),
+                        label: const Text('Cambiar a ERP'),
+                      ),
                     ]
                   : [
                       FilledButton.icon(
@@ -1469,6 +1740,14 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                         style: actionStyle,
                         icon: const Icon(Icons.restart_alt),
                         label: const Text('Reactivar acceso'),
+                      ),
+                      TextButton.icon(
+                        onPressed: _isWorkerPortalBusy
+                            ? null
+                            : _openCanonicalAccessManagement,
+                        style: actionStyle,
+                        icon: const Icon(Icons.desktop_windows_outlined),
+                        label: const Text('Usar ERP en su lugar'),
                       ),
                     ],
             ),
@@ -1504,7 +1783,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Acceso app trabajador',
+                    'Acceso de la persona',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),

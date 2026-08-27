@@ -78,6 +78,7 @@ class VbSearchableSelect<T> extends StatefulWidget {
     this.emptyLabel = 'Nada coincide',
     this.showLabel = true,
     this.allowClear = false,
+    this.clearLabel = 'Sin especificar',
   });
 
   final T? value;
@@ -97,8 +98,12 @@ class VbSearchableSelect<T> extends StatefulWidget {
   final String emptyLabel;
   final bool showLabel;
 
-  /// Offers «Sin especificar» at the top of the list.
+  /// Offers a context-aware empty choice at the top of the list.
   final bool allowClear;
+
+  /// Visible wording for the empty choice. The default preserves the generic
+  /// S-06 vocabulary; domain selectors should name what is being omitted.
+  final String clearLabel;
 
   /// Height of one result row on desktop.
   static const double optionHeight = 34;
@@ -136,7 +141,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
     final result = await pending;
     if (!mounted) return;
     setState(() => _open = false);
-    // A cancelled popover and a deliberate «Sin especificar» must stay
+    // A cancelled popover and a deliberate empty choice must stay
     // distinguishable, so the answer travels wrapped.
     if (result != null) widget.onChanged?.call(result.value);
   }
@@ -151,6 +156,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         searchHint: widget.searchHint,
         emptyLabel: widget.emptyLabel,
         allowClear: widget.allowClear,
+        clearLabel: widget.clearLabel,
       ),
     );
   }
@@ -170,6 +176,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         searchHint: widget.searchHint,
         emptyLabel: widget.emptyLabel,
         allowClear: widget.allowClear,
+        clearLabel: widget.clearLabel,
       ),
     );
   }
@@ -330,6 +337,7 @@ class _VbSearchableMenu<T> extends StatefulWidget {
     required this.searchHint,
     required this.emptyLabel,
     required this.allowClear,
+    this.clearLabel = 'Sin especificar',
   });
 
   final List<VbSearchableSelectOption<T>> options;
@@ -337,6 +345,7 @@ class _VbSearchableMenu<T> extends StatefulWidget {
   final String searchHint;
   final String emptyLabel;
   final bool allowClear;
+  final String clearLabel;
 
   @override
   State<_VbSearchableMenu<T>> createState() => _VbSearchableMenuState<T>();
@@ -449,7 +458,7 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
                         itemBuilder: (context, index) {
                           if (widget.allowClear && index == 0) {
                             return _OptionRow(
-                              label: 'Sin especificar',
+                              label: widget.clearLabel,
                               context: null,
                               selected: widget.value == null,
                               highlighted: false,
@@ -487,6 +496,7 @@ class _VbSearchableSheet<T> extends StatefulWidget {
     required this.searchHint,
     required this.emptyLabel,
     required this.allowClear,
+    this.clearLabel = 'Sin especificar',
   });
 
   final String title;
@@ -495,6 +505,7 @@ class _VbSearchableSheet<T> extends StatefulWidget {
   final String searchHint;
   final String emptyLabel;
   final bool allowClear;
+  final String clearLabel;
 
   @override
   State<_VbSearchableSheet<T>> createState() => _VbSearchableSheetState<T>();
@@ -590,7 +601,7 @@ class _VbSearchableSheetState<T> extends State<_VbSearchableSheet<T>> {
                           if (widget.allowClear && index == 0) {
                             return ListTile(
                               minTileHeight: 48,
-                              title: const Text('Sin especificar'),
+                              title: Text(widget.clearLabel),
                               selected: widget.value == null,
                               onTap: () => Navigator.of(context)
                                   .pop(const _VbSearchableChoice<Never>(null)),
@@ -733,8 +744,8 @@ Future<T?> showVbSearchableOptionPicker<T>({
   String searchHint = 'Buscar…',
   String emptyLabel = 'Nada coincide',
 }) async {
-  final touch = MediaQuery.sizeOf(anchorContext).width <
-      ResponsiveBreakpoints.desktopMin;
+  final touch =
+      MediaQuery.sizeOf(anchorContext).width < ResponsiveBreakpoints.desktopMin;
   final _VbSearchableChoice<T>? choice;
   if (touch) {
     final media = MediaQuery.of(anchorContext);

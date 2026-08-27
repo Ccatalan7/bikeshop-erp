@@ -1,9 +1,9 @@
-/// Un servicio real de la pega respaldando una tarea
+/// Un servicio real del trabajo respaldando una tarea
 /// (`smart_task_job_items`).
 ///
-/// El vínculo conserva snapshot (nombre, pega, bicicleta) y sobrevive a la
-/// línea: si el taller la borra queda `invalidatedAt`; si la edita,
-/// `contextChangedAt`. La UI muestra la marca, nunca esconde la fila.
+/// El vínculo conserva snapshot (nombre, instrucciones, trabajo, bicicleta) y
+/// sobrevive a la línea: si el taller la borra queda `invalidatedAt`; si la
+/// edita, `contextChangedAt`. La UI muestra la marca, nunca esconde la fila.
 class SmartTaskJobItem {
   final String id;
   final String taskId;
@@ -14,6 +14,7 @@ class SmartTaskJobItem {
   final String? itemType;
   final String? jobNumber;
   final String? bikeLabel;
+  final String? itemInstructions;
   final DateTime linkedAt;
   final DateTime? invalidatedAt;
   final DateTime? contextChangedAt;
@@ -28,6 +29,7 @@ class SmartTaskJobItem {
     required this.itemType,
     required this.jobNumber,
     required this.bikeLabel,
+    this.itemInstructions,
     required this.linkedAt,
     required this.invalidatedAt,
     required this.contextChangedAt,
@@ -36,6 +38,7 @@ class SmartTaskJobItem {
   factory SmartTaskJobItem.fromJson(Map<String, dynamic> json) {
     DateTime? parseDate(dynamic value) =>
         value == null ? null : DateTime.tryParse(value.toString());
+    final itemInstructions = json['item_instructions']?.toString().trim();
     return SmartTaskJobItem(
       id: json['id'].toString(),
       taskId: json['task_id'].toString(),
@@ -46,6 +49,9 @@ class SmartTaskJobItem {
       itemType: json['item_type']?.toString(),
       jobNumber: json['job_number']?.toString(),
       bikeLabel: json['bike_label']?.toString(),
+      itemInstructions: itemInstructions == null || itemInstructions.isEmpty
+          ? null
+          : itemInstructions,
       linkedAt: DateTime.tryParse(json['linked_at']?.toString() ?? '') ??
           DateTime.now(),
       invalidatedAt: parseDate(json['invalidated_at']),

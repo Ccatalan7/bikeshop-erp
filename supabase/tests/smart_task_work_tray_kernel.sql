@@ -19,6 +19,8 @@ select has_column('public', 'smart_tasks', 'acknowledged_at', 'recepción separa
 select has_column('public', 'smart_tasks', 'blocked_reason', 'motivo de bloqueo');
 select has_column('public', 'smart_task_job_items', 'invalidated_at', 'evidencia invalidable, no borrable');
 select has_column('public', 'smart_task_job_items', 'context_changed_at', 'edición de la línea marcada');
+select has_column('public', 'smart_task_job_items', 'item_instructions',
+  'snapshot durable de las instrucciones del servicio');
 select has_column('public', 'erp_notifications', 'recipient_user_id', 'notificación dirigida');
 
 select has_function('public', 'smart_task_create_v1', array['jsonb', 'text'],
@@ -35,6 +37,8 @@ select has_function('public', 'smart_task_thread_v1', array['uuid'],
   'hilo canónico consultable');
 select has_function('public', 'smart_task_thread_get_or_create_v1',
   array['uuid'], 'hilo get-or-create server-owned');
+select has_function('public', 'smart_tasks_guard_primary_context',
+  array[]::text[], 'guard de contexto principal');
 
 select ok(
   not has_table_privilege('authenticated', 'public.smart_task_events', 'INSERT')
@@ -45,6 +49,16 @@ select ok(
   not has_table_privilege('authenticated', 'public.smart_task_job_items', 'INSERT')
   and not has_table_privilege('authenticated', 'public.smart_task_job_items', 'DELETE'),
   'los vínculos a servicios solo cambian por comandos');
+select ok(
+  position('new.item_instructions := nullif(btrim(v_item.notes)' in
+    pg_get_functiondef(
+      'public.smart_task_job_items_guard()'::regprocedure)) > 0
+  and position('new.notes is distinct from old.notes' in
+    pg_get_functiondef(
+      'public.smart_task_job_items_mark_context_changed()'::regprocedure)) > 0
+  and position('item_instructions' in pg_get_functiondef(
+    'public.get_my_worker_tasks_v1()'::regprocedure)) > 0,
+  'las instrucciones se capturan, se vigilan y llegan al portal');
 select ok(
   not has_table_privilege('authenticated', 'public.smart_task_command_receipts', 'SELECT'),
   'los recibos idempotentes no son visibles para clientes');
@@ -259,36 +273,77 @@ insert into public.mechanic_job_bikes (id, tenant_id, job_id, bike_id) values
    'a1760000-0000-4000-8000-000000000052');
 
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, job_bike_id, product_name, item_type, quantity, unit_price
+  id, tenant_id, job_id, job_bike_id, product_name, notes, item_type,
+  quantity, unit_price
 ) values
   ('a1760000-0000-4000-8000-000000000081',
    'a1760000-0000-4000-8000-000000000001',
    'a1760000-0000-4000-8000-000000000061',
    'a1760000-0000-4000-8000-000000000071',
-   'Ajuste de cambios', 'service', 1, 0),
+   'Ajuste de cambios', 'AJUSTAR CAMBIO TRASERO Y VERIFICAR TENSIÓN.',
+   'service', 1, 0),
   ('a1760000-0000-4000-8000-000000000082',
    'a1760000-0000-4000-8000-000000000001',
    'a1760000-0000-4000-8000-000000000061',
    'a1760000-0000-4000-8000-000000000071',
-   'Mantención de motor', 'service', 1, 0),
+   'Mantención de motor', 'REVISAR MOTOR Y DOCUMENTAR RUIDOS.',
+   'service', 1, 0),
   ('a1760000-0000-4000-8000-000000000083',
    'a1760000-0000-4000-8000-000000000002',
    'a1760000-0000-4000-8000-000000000062',
    null,
-   'Servicio ajeno', 'service', 1, 0),
+   'Servicio ajeno', null, 'service', 1, 0),
   ('a1760000-0000-4000-8000-000000000084',
    'a1760000-0000-4000-8000-000000000001',
    'a1760000-0000-4000-8000-000000000061',
    'a1760000-0000-4000-8000-000000000072',
-   'Cadena KMC X10', 'product', 1, 15990),
+   'Cadena KMC X10', null, 'product', 1, 15990),
   ('a1760000-0000-4000-8000-000000000085',
    'a1760000-0000-4000-8000-000000000001',
    'a1760000-0000-4000-8000-000000000061',
    'a1760000-0000-4000-8000-000000000072',
-   'Limpieza transmisión', 'service', 1, 0);
+   'Limpieza transmisión', 'LIMPIAR Y LUBRICAR TODA LA TRANSMISIÓN.',
+   'service', 1, 0);
 
 create temp table tray_ctx(key text primary key, id uuid);
 grant select, insert, update on tray_ctx to authenticated;
+
+-- ============================================================================
+-- Una tarea neutral admite un solo contexto, siempre del mismo tenant
+-- ============================================================================
+
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', 'a1760000-0000-4000-8000-000000000011', 'role', 'authenticated'
+)::text, true);
+select set_config('request.jwt.claim.sub',
+  'a1760000-0000-4000-8000-000000000011', true);
+set local role authenticated;
+
+select lives_ok(
+  $$select public.smart_task_create_v1(jsonb_build_object(
+      'title', 'Seguimiento del cliente',
+      'linked_customer_id', 'a1760000-0000-4000-8000-000000000041'
+    ), 'tray-context-customer')$$,
+  'un cliente del tenant puede ser el único contexto de la tarea');
+
+select throws_ok(
+  $$select public.smart_task_create_v1(jsonb_build_object(
+      'title', 'Contexto ajeno',
+      'linked_customer_id', 'a1760000-0000-4000-8000-000000000042'
+    ), 'tray-context-cross-tenant')$$,
+  '23503', null,
+  'un contexto de otro tenant se rechaza aunque el FK exista');
+
+select throws_ok(
+  $$select public.smart_task_create_v1(jsonb_build_object(
+      'title', 'Dos contextos',
+      'linked_job_id', 'a1760000-0000-4000-8000-000000000061',
+      'linked_customer_id', 'a1760000-0000-4000-8000-000000000041'
+    ), 'tray-context-multiple')$$,
+  '23514', null,
+  'una tarea no puede mezclar dos contextos principales');
+
+reset role;
 
 -- ============================================================================
 -- Caso dueño: la manager reparte una pega entre dos mecánicos
@@ -335,6 +390,11 @@ select is(
   (select link.item_name from public.smart_task_job_items link
     where link.task_id = (select id from tray_ctx where key = 'task1')),
   'Ajuste de cambios', 'el snapshot conserva el nombre del servicio');
+select is(
+  (select link.item_instructions from public.smart_task_job_items link
+    where link.task_id = (select id from tray_ctx where key = 'task1')),
+  'AJUSTAR CAMBIO TRASERO Y VERIFICAR TENSIÓN.',
+  'el snapshot conserva las instrucciones completas del servicio');
 select is(
   (select link.bike_label from public.smart_task_job_items link
     where link.task_id = (select id from tray_ctx where key = 'task1')),
@@ -790,6 +850,12 @@ select * from public.get_smart_task_assignment_directory_v1();
 
 reset role;
 
+select results_eq(
+  $$select display_name, employee_id is null
+      from tray_directory
+      where user_id = 'a1760000-0000-4000-8000-000000000011'$$,
+  $$values ('La Manager'::text, true)$$,
+  'el owner corporativo conserva identidad de cuenta y no se finge trabajador');
 select is(
   (select access from tray_directory
     where user_id = 'a1760000-0000-4000-8000-000000000012'),
@@ -843,6 +909,12 @@ select is(
     where item ? 'unit_price' or item ? 'total_price' or item ? 'adhoc_price'),
   0, 'la proyección del portal no expone precios');
 select is(
+  (select count(*)::int
+     from public.get_my_worker_tasks_v1() task,
+          jsonb_array_elements(task.job_items) item
+    where nullif(btrim(item->>'item_instructions'), '') is not null),
+  2, 'el portal recibe las instrucciones de todos sus servicios vinculados');
+select is(
   (select count(*)::int from public.smart_tasks
     where assigned_to <> 'a1760000-0000-4000-8000-000000000014'),
   0, 'el portal solo alcanza sus propias tareas por cualquier vía');
@@ -893,6 +965,16 @@ select ok(
      from public.smart_task_job_items
     where job_item_id = 'a1760000-0000-4000-8000-000000000082'),
   'editar la línea marca context_changed_at sin invalidar');
+
+update public.mechanic_job_items
+   set notes = 'INSTRUCCIÓN ACTUALIZADA DESPUÉS DE ASIGNAR.'
+ where id = 'a1760000-0000-4000-8000-000000000081';
+select results_eq(
+  $$select item_instructions, context_changed_at is not null
+      from public.smart_task_job_items
+     where job_item_id = 'a1760000-0000-4000-8000-000000000081'$$,
+  $$values ('AJUSTAR CAMBIO TRASERO Y VERIFICAR TENSIÓN.'::text, true)$$,
+  'editar instrucciones marca el contexto y preserva el snapshot asignado');
 
 delete from public.mechanic_job_items
  where id = 'a1760000-0000-4000-8000-000000000085';

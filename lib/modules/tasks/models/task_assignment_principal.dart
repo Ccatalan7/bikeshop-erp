@@ -44,8 +44,23 @@ class TaskAssignmentPrincipal {
     );
   }
 
-  bool get isAssignable =>
-      userId != null && access != TaskPrincipalAccess.none;
+  bool get isAssignable => userId != null && access != TaskPrincipalAccess.none;
+
+  /// Contexto operativo para elegir un responsable. Los valores de seguridad
+  /// (`portal`, `worker`, `admin`, etc.) pertenecen al contrato interno y no
+  /// son lenguaje para el operador.
+  String get assignmentContextLabel => switch (access) {
+        TaskPrincipalAccess.portal => 'Recibe tareas en su portal',
+        TaskPrincipalAccess.erp => switch (role.trim().toLowerCase()) {
+            'admin' => 'Administración',
+            'manager' => 'Gerencia',
+            'accountant' => 'Contabilidad',
+            'mechanic' => 'Taller',
+            'cashier' => 'Caja',
+            _ => 'Equipo ERP',
+          },
+        TaskPrincipalAccess.none => 'Sin acceso',
+      };
 
   String get initials {
     final words = displayName

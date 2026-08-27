@@ -24,13 +24,30 @@ import 'vb_status_badge.dart';
 /// coordinación del tenant; `personal` mis tareas privadas.
 enum TaskTrayScope { inbox, team, personal }
 
-/// Abre el detalle routed de la pega respetando el contrato de retorno:
+/// Alcance de una tarea vinculada al taller.
+///
+/// El trabajo es el primer nivel de la jerarquía. Sólo después de elegirlo se
+/// decide si la tarea cubre todo el trabajo o una selección explícita de sus
+/// servicios; trabajo y servicio nunca son opciones hermanas del mismo selector.
+enum TaskJobScope { wholeJob, selectedServices }
+
+/// Abre el detalle routed del trabajo respetando el contrato de retorno:
 /// SIEMPRE `push` (el detalle cierra por `ReturnNavigation.close`, nunca con
 /// un `go` a la lista que borra el origen).
 Future<void> openWorkshopJobFromTray(BuildContext context, String jobId) async {
   await context.read<WorkspaceManager>().pushActiveWorkspace<void>(
         '/taller/pegas/${Uri.encodeComponent(jobId)}',
       );
+}
+
+/// Abre el registro principal vinculado sin reemplazar el origen del panel.
+Future<void> openTaskContextFromTray(
+  BuildContext context,
+  TaskContextTarget target,
+) async {
+  await context
+      .read<WorkspaceManager>()
+      .pushActiveWorkspace<void>(target.route);
 }
 
 /// Borrador del compositor: vive en el panel (no en la superficie O-02/O-05)
@@ -42,7 +59,10 @@ class TaskComposerDraft {
   TaskPriority priority = TaskPriority.normal;
   DateTime? dueDate;
   String? assigneeId;
+  TaskContextKind contextKind = TaskContextKind.none;
+  TaskContextTarget? contextTarget;
   String? jobId;
+  TaskJobScope jobScope = TaskJobScope.wholeJob;
   Set<String> selectedItemIds = {};
   TaskVisibility visibility = TaskVisibility.team;
 
@@ -51,6 +71,8 @@ class TaskComposerDraft {
       description.isEmpty &&
       dueDate == null &&
       assigneeId == null &&
+      contextKind == TaskContextKind.none &&
+      contextTarget == null &&
       jobId == null;
 
   void reset() {
@@ -60,7 +82,10 @@ class TaskComposerDraft {
     priority = TaskPriority.normal;
     dueDate = null;
     assigneeId = null;
+    contextKind = TaskContextKind.none;
+    contextTarget = null;
     jobId = null;
+    jobScope = TaskJobScope.wholeJob;
     selectedItemIds = {};
     visibility = TaskVisibility.team;
   }
@@ -92,11 +117,12 @@ class QuickTaskPanelSession {
 /// Bandeja rápida de Tareas del rail derecho.
 ///
 /// Columna: selector de alcance (S-04), lista agrupada (filas T-01) y una
-/// barra inferior con «Nueva tarea», que abre el compositor progresivo del
-/// caso dueño en su host canónico — popover O-02 anclado en escritorio, hoja
-/// O-05 en compacto: trabajador → pega activa → todos o algunos servicios
-/// reales agrupados por bicicleta. El detalle reemplaza la lista in-pane con
-/// acciones de ciclo de vida según autoridad y el hilo canónico por tarea.
+/// barra inferior con «Nueva tarea», que abre el compositor neutral en su host
+/// canónico — popover O-02 anclado en escritorio, hoja O-05 en compacto. Un
+/// único vínculo opcional revela bajo demanda Cliente, Proveedor, Venta,
+/// Compra o, sólo para Taller, trabajo → todos/algunos servicios reales por
+/// bicicleta. El detalle reemplaza la lista in-pane con acciones de ciclo de
+/// vida según autoridad y el hilo canónico por tarea.
 class QuickTaskPanel extends StatefulWidget {
   const QuickTaskPanel({super.key});
 
@@ -115,9 +141,10 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
   final TaskComposerDraft _draft = TaskComposerDraft();
   bool _composerVisible = false;
 
-  // Directorio y pegas del compositor (se cargan al abrir el panel).
+  // Sólo el directorio se carga al abrir. Los contextos de negocio son
+  // progresivos: se consultan después de que el operador elige uno.
   List<TaskAssignmentPrincipal> _directory = const [];
-  List<TaskLinkableJob> _linkableJobs = const [];
+  final List<TaskLinkableJob> _linkableJobs = const [];
   Map<String, TaskAssignmentPrincipal> _principalsByUser = const {};
 
   RightToolbarService? _toolbarService;
@@ -193,7 +220,10 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
       ..priority = session.draft.priority
       ..dueDate = session.draft.dueDate
       ..assigneeId = session.draft.assigneeId
+      ..contextKind = session.draft.contextKind
+      ..contextTarget = session.draft.contextTarget
       ..jobId = session.draft.jobId
+      ..jobScope = session.draft.jobScope
       ..selectedItemIds = {...session.draft.selectedItemIds}
       ..visibility = session.draft.visibility;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -233,14 +263,6 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
       });
     } catch (error, stackTrace) {
       debugPrint('Task tray assignment directory failed: $error');
-      debugPrintStack(stackTrace: stackTrace);
-    }
-    try {
-      final jobs = await _tasks.fetchLinkableJobs();
-      if (!mounted) return;
-      setState(() => _linkableJobs = jobs);
-    } catch (error, stackTrace) {
-      debugPrint('Task tray linkable jobs failed: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
   }
@@ -676,8 +698,15 @@ class TaskComposerSurface extends StatefulWidget {
 class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _descriptionCtrl;
+  late List<TaskLinkableJob> _workshopJobs;
+  bool _workshopJobsLoading = false;
+  Object? _workshopJobsError;
+  List<TaskContextTarget> _contextTargets = const [];
+  bool _contextTargetsLoading = false;
+  Object? _contextTargetsError;
   List<TaskJobWorkItem> _jobItems = const [];
   bool _jobItemsLoading = false;
+  Object? _jobItemsError;
   bool _saving = false;
 
   TaskComposerDraft get _draft => widget.draft;
@@ -685,6 +714,7 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
   @override
   void initState() {
     super.initState();
+    _workshopJobs = [...widget.linkableJobs];
     _titleCtrl = TextEditingController(text: _draft.title)
       ..addListener(() {
         _draft.title = _titleCtrl.text;
@@ -697,7 +727,19 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
         widget.onDraftChanged();
       });
     if (_draft.jobId != null) {
-      unawaited(_loadJobItems(_draft.jobId!, preserveSelection: true));
+      _draft.contextKind = TaskContextKind.workshopJob;
+    }
+    if (_draft.contextKind == TaskContextKind.workshopJob) {
+      if (_workshopJobs.isEmpty) unawaited(_loadWorkshopJobs());
+      if (_draft.jobId != null) {
+        unawaited(_loadJobItems(_draft.jobId!, preserveSelection: true));
+      }
+    } else if (_draft.contextKind != TaskContextKind.none &&
+        _draft.contextKind != TaskContextKind.workshopJob) {
+      unawaited(_loadContextTargets(
+        _draft.contextKind,
+        preserveSelection: true,
+      ));
     }
   }
 
@@ -713,10 +755,94 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
     widget.onDraftChanged();
   }
 
+  Future<void> _loadWorkshopJobs() async {
+    if (_workshopJobsLoading) return;
+    setState(() {
+      _workshopJobsLoading = true;
+      _workshopJobsError = null;
+    });
+    try {
+      final jobs = await widget.taskService.fetchLinkableJobs();
+      if (!mounted) return;
+      setState(() {
+        _workshopJobsLoading = false;
+        if (_draft.contextKind == TaskContextKind.workshopJob) {
+          _workshopJobs = jobs;
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _workshopJobsLoading = false;
+        if (_draft.contextKind == TaskContextKind.workshopJob) {
+          _workshopJobsError = error;
+        }
+      });
+    }
+  }
+
+  Future<void> _loadContextTargets(
+    TaskContextKind kind, {
+    bool preserveSelection = false,
+  }) async {
+    if (kind == TaskContextKind.none || kind == TaskContextKind.workshopJob) {
+      return;
+    }
+    setState(() {
+      _contextTargetsLoading = true;
+      _contextTargetsError = null;
+      _contextTargets = const [];
+    });
+    try {
+      final targets = await widget.taskService.fetchLinkTargets(kind);
+      if (!mounted || _draft.contextKind != kind) return;
+      _mutate(() {
+        _contextTargets = targets;
+        _contextTargetsLoading = false;
+        if (preserveSelection && _draft.contextTarget != null) {
+          _draft.contextTarget = targets
+              .where((target) => target.id == _draft.contextTarget!.id)
+              .firstOrNull;
+        } else {
+          _draft.contextTarget = null;
+        }
+      });
+    } catch (error) {
+      if (!mounted || _draft.contextKind != kind) return;
+      setState(() {
+        _contextTargetsLoading = false;
+        _contextTargetsError = error;
+      });
+    }
+  }
+
+  void _selectContextKind(TaskContextKind kind) {
+    _mutate(() {
+      _draft.contextKind = kind;
+      _draft.contextTarget = null;
+      _draft.jobId = null;
+      _draft.jobScope = TaskJobScope.wholeJob;
+      _draft.selectedItemIds = {};
+      _jobItems = const [];
+      _jobItemsError = null;
+      _contextTargets = const [];
+      _contextTargetsError = null;
+      if (kind == TaskContextKind.workshopJob) {
+        _draft.visibility = TaskVisibility.team;
+      }
+    });
+    if (kind == TaskContextKind.workshopJob && _workshopJobs.isEmpty) {
+      unawaited(_loadWorkshopJobs());
+    } else if (kind != TaskContextKind.none) {
+      unawaited(_loadContextTargets(kind));
+    }
+  }
+
   Future<void> _loadJobItems(String jobId,
       {bool preserveSelection = false}) async {
     setState(() {
       _jobItemsLoading = true;
+      _jobItemsError = null;
       _jobItems = const [];
     });
     try {
@@ -726,22 +852,49 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
         _jobItems = items;
         _jobItemsLoading = false;
         final ids = items.map((item) => item.id).toSet();
-        if (preserveSelection && _draft.selectedItemIds.isNotEmpty) {
+        if (_draft.jobScope == TaskJobScope.wholeJob) {
+          _draft.selectedItemIds = ids;
+        } else if (preserveSelection && _draft.selectedItemIds.isNotEmpty) {
           _draft.selectedItemIds =
               _draft.selectedItemIds.where(ids.contains).toSet();
         } else {
-          // El caso común es «toda la pega»: parte con todos elegidos.
-          _draft.selectedItemIds = ids;
+          _draft.selectedItemIds = {};
         }
       });
-    } catch (_) {
-      if (mounted) setState(() => _jobItemsLoading = false);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _jobItemsLoading = false;
+          _jobItemsError = error;
+        });
+      }
     }
   }
 
+  bool get _workScopeIsValid {
+    if (_draft.contextKind != TaskContextKind.workshopJob) return true;
+    if (_draft.jobId == null) return false;
+    if (_draft.kind == TaskKind.note) return true;
+    if (_jobItemsLoading || _jobItemsError != null) return false;
+    if (_jobItems.isEmpty || _draft.jobScope == TaskJobScope.wholeJob) {
+      return true;
+    }
+    return _draft.selectedItemIds.isNotEmpty;
+  }
+
+  bool get _contextIsValid => switch (_draft.contextKind) {
+        TaskContextKind.none => true,
+        TaskContextKind.workshopJob => _draft.jobId != null,
+        _ => _draft.contextTarget != null &&
+            !_contextTargetsLoading &&
+            _contextTargetsError == null,
+      };
+
   Future<void> _create({String? overlapDecision}) async {
     final title = _draft.title.trim();
-    if (title.isEmpty || _saving) return;
+    if (title.isEmpty || _saving || !_contextIsValid || !_workScopeIsValid) {
+      return;
+    }
     setState(() => _saving = true);
     final personal = _draft.visibility == TaskVisibility.private;
     try {
@@ -756,10 +909,29 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
         priority: _draft.priority,
         dueDate: _draft.dueDate,
         assignedTo: personal || isNote ? null : _draft.assigneeId,
-        linkedJobId: personal ? null : _draft.jobId,
-        jobItemIds: personal || isNote || _draft.jobId == null
+        linkedJobId: _draft.contextKind == TaskContextKind.workshopJob
+            ? _draft.jobId
+            : null,
+        jobItemIds: isNote ||
+                _draft.contextKind != TaskContextKind.workshopJob ||
+                _draft.jobId == null
             ? null
-            : _draft.selectedItemIds.toList(),
+            : (_draft.jobScope == TaskJobScope.wholeJob
+                ? _jobItems.map((item) => item.id).toList()
+                : _draft.selectedItemIds.toList()),
+        linkedCustomerId: _draft.contextKind == TaskContextKind.customer
+            ? _draft.contextTarget?.id
+            : null,
+        linkedSupplierId: _draft.contextKind == TaskContextKind.supplier
+            ? _draft.contextTarget?.id
+            : null,
+        linkedSalesInvoiceId: _draft.contextKind == TaskContextKind.salesInvoice
+            ? _draft.contextTarget?.id
+            : null,
+        linkedPurchaseInvoiceId:
+            _draft.contextKind == TaskContextKind.purchaseInvoice
+                ? _draft.contextTarget?.id
+                : null,
         overlapDecision: overlapDecision,
       );
       if (!mounted) return;
@@ -812,7 +984,11 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
               _draft.kind = kind;
               if (kind == TaskKind.note) {
                 _draft.assigneeId = null;
+                _draft.jobScope = TaskJobScope.wholeJob;
                 _draft.selectedItemIds = {};
+              } else if (_draft.jobId != null && _jobItems.isNotEmpty) {
+                _draft.selectedItemIds =
+                    _jobItems.map((item) => item.id).toSet();
               }
             }),
           ),
@@ -872,15 +1048,19 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
               VbShortSelectOption(
                   value: TaskVisibility.private, label: 'Personal (solo yo)'),
             ],
-            onChanged: (_draft.assigneeId != null || _draft.jobId != null)
+            onChanged: (_draft.assigneeId != null ||
+                    _draft.contextKind == TaskContextKind.workshopJob)
                 ? null
                 : (value) => _mutate(() => _draft.visibility = value),
           ),
-          if (_draft.assigneeId != null || _draft.jobId != null)
+          if (_draft.assigneeId != null ||
+              _draft.contextKind == TaskContextKind.workshopJob)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Una tarea asignada o de taller es del equipo.',
+                _draft.contextKind == TaskContextKind.workshopJob
+                    ? 'Las tareas vinculadas al Taller son del equipo.'
+                    : 'Una tarea asignada es del equipo.',
                 style: theme.textTheme.labelSmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
@@ -898,9 +1078,7 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
                   VbSearchableSelectOption(
                     value: principal.userId!,
                     label: principal.displayName,
-                    context: principal.access == TaskPrincipalAccess.portal
-                        ? 'Portal · ${principal.role}'
-                        : principal.role,
+                    context: principal.assignmentContextLabel,
                   ),
               ],
               onChanged: (value) => _mutate(() => _draft.assigneeId = value),
@@ -921,35 +1099,45 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
                 ),
               ),
           ],
-          if (!personal) ...[
-            const SizedBox(height: 10),
-            VbSearchableSelect<String>(
-              value: _draft.jobId,
-              label: 'Pega del taller',
-              sheetTitle: 'Vincular pega',
-              placeholder: 'Sin pega',
-              allowClear: true,
-              options: [
-                for (final job in widget.linkableJobs)
-                  VbSearchableSelectOption(
-                    value: job.id,
-                    label:
-                        '#${job.jobNumber}${job.customerName != null ? ' · ${job.customerName}' : ''}',
-                    context: job.clientRequest,
-                    searchText:
-                        '${job.jobNumber} ${job.customerName ?? ''} ${job.clientRequest ?? ''}',
-                  ),
-              ],
-              onChanged: (value) {
-                _mutate(() {
-                  _draft.jobId = value;
-                  _jobItems = const [];
-                  _draft.selectedItemIds = {};
-                });
-                if (value != null) unawaited(_loadJobItems(value));
-              },
-            ),
-            if (_draft.jobId != null && !isNote) _buildServicePicker(theme),
+          const SizedBox(height: 10),
+          VbShortSelect<TaskContextKind>(
+            value: _draft.contextKind,
+            label: 'Vincular a (opcional)',
+            sheetTitle: 'Vincular tarea o nota',
+            options: const [
+              VbShortSelectOption(
+                value: TaskContextKind.none,
+                label: 'Sin vínculo',
+              ),
+              VbShortSelectOption(
+                value: TaskContextKind.workshopJob,
+                label: 'Trabajo del taller',
+              ),
+              VbShortSelectOption(
+                value: TaskContextKind.customer,
+                label: 'Cliente',
+              ),
+              VbShortSelectOption(
+                value: TaskContextKind.supplier,
+                label: 'Proveedor',
+              ),
+              VbShortSelectOption(
+                value: TaskContextKind.salesInvoice,
+                label: 'Venta / factura',
+              ),
+              VbShortSelectOption(
+                value: TaskContextKind.purchaseInvoice,
+                label: 'Compra / documento',
+              ),
+            ],
+            onChanged: _selectContextKind,
+          ),
+          if (_draft.contextKind != TaskContextKind.none) ...[
+            const SizedBox(height: 8),
+            if (_draft.contextKind == TaskContextKind.workshopJob)
+              _buildWorkshopPicker(theme, isNote: isNote)
+            else
+              _buildEntityContextPicker(theme),
           ],
           const SizedBox(height: 12),
           Row(
@@ -964,7 +1152,10 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
               const SizedBox(width: 8),
               Flexible(
                 child: FilledButton.icon(
-                  onPressed: _saving || _draft.title.trim().isEmpty
+                  onPressed: _saving ||
+                          _draft.title.trim().isEmpty ||
+                          !_contextIsValid ||
+                          !_workScopeIsValid
                       ? null
                       : () => unawaited(_create()),
                   icon: _saving
@@ -1054,104 +1245,342 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
     );
   }
 
-  /// Todos o algunos servicios reales de la pega, agrupados por bicicleta.
-  Widget _buildServicePicker(ThemeData theme) {
-    if (_jobItemsLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
+  Widget _buildWorkshopPicker(ThemeData theme, {required bool isNote}) {
+    if (_workshopJobsLoading) {
+      return _loadingRow(theme, 'Cargando trabajos activos…');
+    }
+    if (_workshopJobsError != null) {
+      return _loadErrorRow(
+        theme,
+        'No se pudieron cargar los trabajos.',
+        _loadWorkshopJobs,
+      );
+    }
+    if (_workshopJobs.isEmpty) {
+      return Text(
+        'No hay trabajos activos disponibles para vincular.',
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        VbSearchableSelect<String>(
+          value: _draft.jobId,
+          label: '1 · Trabajo',
+          semanticLabel: '1 · Trabajo',
+          sheetTitle: 'Elige un trabajo del taller',
+          placeholder: 'Selecciona un trabajo',
+          helperText: _draft.jobId == null
+              ? 'Después podrás vincular el trabajo completo o elegir servicios.'
+              : null,
+          allowClear: true,
+          clearLabel: 'Sin trabajo seleccionado',
+          options: [
+            for (final job in _workshopJobs)
+              VbSearchableSelectOption(
+                value: job.id,
+                label:
+                    '#${job.jobNumber}${job.customerName != null ? ' · ${job.customerName}' : ''}',
+                searchText:
+                    '${job.jobNumber} ${job.customerName ?? ''} ${job.clientRequest ?? ''}',
+              ),
+          ],
+          onChanged: (value) {
+            _mutate(() {
+              _draft.jobId = value;
+              _draft.jobScope = TaskJobScope.wholeJob;
+              _jobItems = const [];
+              _jobItemsError = null;
+              _draft.selectedItemIds = {};
+            });
+            if (value != null) unawaited(_loadJobItems(value));
+          },
+        ),
+        if (_draft.jobId != null && !isNote) _buildServicePicker(theme),
+        if (_draft.jobId != null && isNote)
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Text(
+              'La nota quedará vinculada al trabajo completo.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
           ),
-        ),
+      ],
+    );
+  }
+
+  Widget _buildEntityContextPicker(ThemeData theme) {
+    final kind = _draft.contextKind;
+    if (_contextTargetsLoading) {
+      return _loadingRow(theme, 'Cargando ${_contextPlural(kind)}…');
+    }
+    if (_contextTargetsError != null) {
+      return _loadErrorRow(
+        theme,
+        'No se pudieron cargar ${_contextPlural(kind)}.',
+        () => _loadContextTargets(kind, preserveSelection: true),
       );
     }
-    if (_jobItems.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(
-          'Esta pega aún no tiene servicios; la tarea quedará vinculada a la '
-          'pega completa.',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
+    if (_contextTargets.isEmpty) {
+      return Text(
+        'No hay ${_contextPlural(kind)} disponibles para vincular.',
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
       );
     }
+    return VbSearchableSelect<String>(
+      value: _draft.contextTarget?.id,
+      label: _contextSingular(kind),
+      semanticLabel: _contextSingular(kind),
+      sheetTitle: 'Seleccionar ${_contextSingular(kind).toLowerCase()}',
+      placeholder: 'Selecciona ${_contextSingular(kind).toLowerCase()}',
+      allowClear: true,
+      clearLabel: 'Sin selección',
+      options: [
+        for (final target in _contextTargets)
+          VbSearchableSelectOption(
+            value: target.id,
+            label: target.label,
+            context: target.context,
+            searchText: target.searchText,
+          ),
+      ],
+      onChanged: (value) => _mutate(() {
+        _draft.contextTarget = value == null
+            ? null
+            : _contextTargets.where((target) => target.id == value).firstOrNull;
+      }),
+    );
+  }
 
-    final byBike = <String, List<TaskJobWorkItem>>{};
-    for (final item in _jobItems) {
-      byBike.putIfAbsent(item.bikeLabel ?? 'Sin bicicleta', () => []).add(item);
-    }
-    final allSelected = _draft.selectedItemIds.length == _jobItems.length;
+  Widget _loadingRow(ThemeData theme, String label) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 8),
+            Text(label, style: theme.textTheme.bodySmall),
+          ],
+        ),
+      );
 
+  Widget _loadErrorRow(
+    ThemeData theme,
+    String label,
+    Future<void> Function() retry,
+  ) =>
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.error),
+            ),
+          ),
+          TextButton(
+            onPressed: () => unawaited(retry()),
+            child: const Text('Reintentar'),
+          ),
+        ],
+      );
+
+  String _contextSingular(TaskContextKind kind) => switch (kind) {
+        TaskContextKind.customer => 'Cliente',
+        TaskContextKind.supplier => 'Proveedor',
+        TaskContextKind.salesInvoice => 'Venta / factura',
+        TaskContextKind.purchaseInvoice => 'Compra / documento',
+        TaskContextKind.workshopJob => 'Trabajo',
+        TaskContextKind.none => 'Contexto',
+      };
+
+  String _contextPlural(TaskContextKind kind) => switch (kind) {
+        TaskContextKind.customer => 'clientes',
+        TaskContextKind.supplier => 'proveedores',
+        TaskContextKind.salesInvoice => 'ventas',
+        TaskContextKind.purchaseInvoice => 'compras',
+        TaskContextKind.workshopJob => 'trabajos',
+        TaskContextKind.none => 'registros',
+      };
+
+  /// Todos o algunos servicios reales del trabajo, agrupados por bicicleta.
+  Widget _buildServicePicker(ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text('Servicios de la tarea',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-              const Spacer(),
-              TextButton(
-                onPressed: () => _mutate(() {
-                  if (allSelected) {
-                    _draft.selectedItemIds = {};
-                  } else {
-                    _draft.selectedItemIds =
-                        _jobItems.map((item) => item.id).toSet();
-                  }
-                }),
-                child: Text(allSelected ? 'Ninguno' : 'Todos'),
-              ),
-            ],
+          Text(
+            '2 · Alcance de la tarea',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          for (final entry in byBike.entries) ...[
-            if (byBike.length > 1)
-              Padding(
-                padding: const EdgeInsets.only(top: 4, bottom: 2),
-                child: Text(entry.key,
+          const SizedBox(height: 5),
+          if (_jobItemsLoading)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('Cargando servicios del trabajo…',
+                      style: theme.textTheme.bodySmall),
+                ],
+              ),
+            )
+          else if (_jobItemsError != null)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    'No se pudieron cargar los servicios de este trabajo.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.error),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => unawaited(_loadJobItems(_draft.jobId!)),
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            )
+          else if (_jobItems.isEmpty)
+            Text(
+              'Este trabajo aún no tiene servicios cargados. La tarea quedará '
+              'vinculada al trabajo completo.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            )
+          else ...[
+            VbSegmented<TaskJobScope>(
+              groupLabel: 'Alcance de la tarea en el trabajo',
+              options: const [
+                VbSegmentedOption(
+                  value: TaskJobScope.wholeJob,
+                  label: 'Trabajo completo',
+                ),
+                VbSegmentedOption(
+                  value: TaskJobScope.selectedServices,
+                  label: 'Por servicios',
+                ),
+              ],
+              value: _draft.jobScope,
+              onChanged: (scope) => _mutate(() {
+                _draft.jobScope = scope;
+                _draft.selectedItemIds = scope == TaskJobScope.wholeJob
+                    ? _jobItems.map((item) => item.id).toSet()
+                    : <String>{};
+              }),
+            ),
+            const SizedBox(height: 5),
+            if (_draft.jobScope == TaskJobScope.wholeJob)
+              Text(
+                _jobItems.length == 1
+                    ? 'Se incluirá el único servicio de este trabajo.'
+                    : 'Se incluirán los ${_jobItems.length} servicios de este trabajo.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              )
+            else ...[
+              Text(
+                'Elige uno o más servicios:',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              for (final entry in _jobItemsByBike.entries) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, bottom: 2),
+                  child: Text(
+                    entry.key,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
-                    )),
-              ),
-            for (final item in entry.value)
-              InkWell(
-                onTap: () => _mutate(() {
-                  _draft.selectedItemIds.contains(item.id)
-                      ? _draft.selectedItemIds.remove(item.id)
-                      : _draft.selectedItemIds.add(item.id);
-                }),
-                child: Row(
-                  children: [
-                    Checkbox(
-                      value: _draft.selectedItemIds.contains(item.id),
-                      onChanged: (checked) => _mutate(() {
-                        checked == true
-                            ? _draft.selectedItemIds.add(item.id)
-                            : _draft.selectedItemIds.remove(item.id);
-                      }),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    Expanded(
-                      child: Text(item.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                for (final item in entry.value)
+                  InkWell(
+                    onTap: () => _toggleJobItem(item.id),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: _draft.selectedItemIds.contains(item.id),
+                          onChanged: (_) => _toggleJobItem(item.id),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (item.instructions != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.instructions!,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+              if (_draft.selectedItemIds.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Selecciona al menos un servicio.',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.error),
+                  ),
+                ),
+            ],
           ],
         ],
       ),
     );
+  }
+
+  Map<String, List<TaskJobWorkItem>> get _jobItemsByBike {
+    final result = <String, List<TaskJobWorkItem>>{};
+    for (final item in _jobItems) {
+      result.putIfAbsent(item.bikeLabel ?? 'Sin bicicleta', () => []).add(item);
+    }
+    return result;
+  }
+
+  void _toggleJobItem(String itemId) {
+    _mutate(() {
+      if (!_draft.selectedItemIds.remove(itemId)) {
+        _draft.selectedItemIds.add(itemId);
+      }
+    });
   }
 }
 
@@ -1277,6 +1706,7 @@ class _TaskRow extends StatelessWidget {
         : links.isNotEmpty
             ? links.first.jobNumber
             : jobHeader?.jobNumber;
+    final linkedContext = task.linkedContextTarget;
 
     final isNote = task.kind == TaskKind.note;
     return Opacity(
@@ -1377,6 +1807,14 @@ class _TaskRow extends StatelessWidget {
                             Text(
                               '#$jobNumber'
                               '${liveLinks.isNotEmpty ? ' · ${liveLinks.length} serv.' : ''}',
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(color: theme.colorScheme.primary),
+                            ),
+                          if (linkedContext != null)
+                            Text(
+                              '${_taskContextTypeLabel(linkedContext.kind)} · ${linkedContext.label}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.labelSmall
                                   ?.copyWith(color: theme.colorScheme.primary),
                             ),
@@ -1590,6 +2028,13 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                       widget.links.isNotEmpty
                           ? widget.links.first.jobId
                           : widget.task.linkedJobId!),
+                ),
+              ],
+              if (task.linkedContextTarget case final linkedContext?) ...[
+                const SizedBox(height: 14),
+                _TaskContextCard(
+                  target: linkedContext,
+                  onOpen: () => openTaskContextFromTray(context, linkedContext),
                 ),
               ],
               const SizedBox(height: 14),
@@ -1817,9 +2262,7 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
           VbSearchableSelectOption(
             value: principal.userId!,
             label: principal.displayName,
-            context: principal.access == TaskPrincipalAccess.portal
-                ? 'Portal · ${principal.role}'
-                : principal.role,
+            context: principal.assignmentContextLabel,
           ),
       ],
     );
@@ -1861,7 +2304,7 @@ class _JobContextCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text('PEGA #${jobNumber ?? '—'}',
+                child: Text('TRABAJO #${jobNumber ?? '—'}',
                     style: theme.textTheme.labelSmall?.copyWith(
                       letterSpacing: 0.8,
                       fontWeight: FontWeight.w700,
@@ -1871,7 +2314,7 @@ class _JobContextCard extends StatelessWidget {
               TextButton.icon(
                 onPressed: onOpenJob,
                 icon: const Icon(Icons.open_in_new, size: 14),
-                label: const Text('Abrir pega'),
+                label: const Text('Abrir trabajo'),
               ),
             ],
           ),
@@ -1882,7 +2325,7 @@ class _JobContextCard extends StatelessWidget {
                 if (jobHeader!.customerName != null) jobHeader!.customerName!,
                 if ((jobHeader!.clientRequest ?? '').isNotEmpty)
                   jobHeader!.clientRequest!,
-                'Pega completa (sin servicios elegidos)',
+                'Trabajo completo (sin servicios elegidos)',
               ].join(' — '),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -1891,8 +2334,9 @@ class _JobContextCard extends StatelessWidget {
             ),
           for (final link in links)
             Padding(
-              padding: const EdgeInsets.only(bottom: 3),
+              padding: const EdgeInsets.only(bottom: 6),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     link.isInvalidated ? Icons.link_off : Icons.build_outlined,
@@ -1903,17 +2347,50 @@ class _JobContextCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Text(
-                      '${link.itemName}'
-                      '${link.bikeLabel != null ? ' · ${link.bikeLabel}' : ''}'
-                      '${link.isInvalidated ? ' (línea eliminada)' : link.contextChanged ? ' (línea editada)' : ''}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        decoration: link.isInvalidated
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${link.itemName}'
+                          '${link.bikeLabel != null ? ' · ${link.bikeLabel}' : ''}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            decoration: link.isInvalidated
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        if (link.itemInstructions != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            link.itemInstructions!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              decoration: link.isInvalidated
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                        ],
+                        if (link.isInvalidated) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Este servicio fue eliminado del trabajo después de asignar la tarea.',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: roles?.danger.accent ??
+                                  theme.colorScheme.error,
+                            ),
+                          ),
+                        ] else if (link.contextChanged) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'El servicio o sus instrucciones cambiaron después de asignar la tarea. Abre el trabajo para revisar la versión actual.',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.tertiary,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],
@@ -1924,3 +2401,80 @@ class _JobContextCard extends StatelessWidget {
     );
   }
 }
+
+class _TaskContextCard extends StatelessWidget {
+  const _TaskContextCard({required this.target, required this.onOpen});
+
+  final TaskContextTarget target;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final typeLabel = _taskContextTypeLabel(target.kind);
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            _taskContextIcon(target.kind),
+            size: 18,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  typeLabel.toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  target.label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onOpen,
+            icon: const Icon(Icons.open_in_new, size: 14),
+            label: const Text('Abrir'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _taskContextTypeLabel(TaskContextKind kind) => switch (kind) {
+      TaskContextKind.customer => 'Cliente',
+      TaskContextKind.supplier => 'Proveedor',
+      TaskContextKind.salesInvoice => 'Venta',
+      TaskContextKind.purchaseInvoice => 'Compra',
+      TaskContextKind.workshopJob => 'Trabajo',
+      TaskContextKind.none => 'Sin vínculo',
+    };
+
+IconData _taskContextIcon(TaskContextKind kind) => switch (kind) {
+      TaskContextKind.customer => Icons.person_outline,
+      TaskContextKind.supplier => Icons.storefront_outlined,
+      TaskContextKind.salesInvoice => Icons.receipt_long_outlined,
+      TaskContextKind.purchaseInvoice => Icons.shopping_cart_outlined,
+      TaskContextKind.workshopJob => Icons.build_outlined,
+      TaskContextKind.none => Icons.link_off,
+    };

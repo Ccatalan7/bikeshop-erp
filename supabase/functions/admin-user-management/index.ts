@@ -33,6 +33,7 @@ interface RequestBody {
   isActive?: boolean;
   password?: string;
   deleteCustomerRecord?: boolean;
+  transitionFromWorker?: boolean;
 }
 
 interface CallerContext {
@@ -242,6 +243,8 @@ export async function handler(req: Request) {
         );
       case "get_worker_portal_access":
         return respond(await getWorkerPortalAccess(serviceClient, caller, body));
+      case "get_employee_access_state":
+        return respond(await getEmployeeAccessState(serviceClient, caller, body));
       case "check_internal_invitation_identity":
         return respond(
           await checkInternalInvitationIdentity(serviceClient, caller, body),
@@ -301,6 +304,15 @@ export async function handler(req: Request) {
         return respond(await resetWorkerPortalPassword(serviceClient, caller, body));
       case "set_worker_portal_access":
         return respond(await setWorkerPortalAccess(serviceClient, caller, body));
+      case "switch_erp_user_to_worker":
+        return respond(
+          await switchErpUserToWorker(
+            userClient,
+            serviceClient,
+            caller,
+            body,
+          ),
+        );
       case "create_customer_account":
         return respond(await createCustomerAccount(serviceClient, caller, body));
       case "set_customer_access":
@@ -474,7 +486,7 @@ async function getOverview(
     employeeAccessStates,
     summary,
   ] = await Promise.all([
-    getStaffUsers(serviceClient, caller.tenantId),
+    getStaffUsers(serviceClient, caller),
     getPendingInvitations(serviceClient, caller.tenantId),
     getCustomerAccounts(
       serviceClient,
@@ -558,7 +570,29 @@ export async function getWorkerPortalAccess(
   };
 }
 
-async function getStaffUsers(serviceClient: SupabaseClient, tenantId: string) {
+export async function getEmployeeAccessState(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
+  const employeeId = required(body.employeeId, "employeeId");
+  const states = await getEmployeeAccessStates(serviceClient, caller.tenantId);
+  const state = states.find((candidate: any) => candidate.employeeId === employeeId);
+  if (!state) {
+    throw new HttpError(
+      404,
+      "employee_not_found",
+      "Employee not found in this tenant",
+    );
+  }
+  return state;
+}
+
+async function getStaffUsers(
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+) {
+  const tenantId = caller.tenantId;
   const { data, error } = await serviceClient
     .from("user_profiles")
     .select("id, user_id, role, permissions, is_active, created_at, updated_at, employee_id")
@@ -573,6 +607,13 @@ async function getStaffUsers(serviceClient: SupabaseClient, tenantId: string) {
     const employee = profile.employee_id
       ? await getEmployeeName(serviceClient, profile.employee_id, tenantId)
       : null;
+    const isPrincipalOwner =
+      (profile.user_id === caller.userId && caller.isPrincipalOwner === true) ||
+      derivePrincipalOwnerIdentity({
+        tenantId,
+        tenantOwnerEmail: caller.tenantOwnerEmail ?? null,
+        authUser,
+      });
 
     return {
       kind: "staff",
@@ -590,6 +631,7 @@ async function getStaffUsers(serviceClient: SupabaseClient, tenantId: string) {
       createdAt: authUser?.created_at ?? profile.created_at,
       employeeId: profile.employee_id,
       employeeName: employee,
+      isPrincipalOwner,
       bannedUntil: authUser?.banned_until ?? null,
     };
   }));
@@ -618,11 +660,11 @@ export async function getEmployeeAccessStates(
       .not("employee_id", "is", null),
     serviceClient
       .from("employee_portal_accounts")
-      .select("employee_id, username, is_active")
+      .select("id, employee_id, auth_user_id, username, is_active")
       .eq("tenant_id", tenantId),
     serviceClient
       .from("user_invitations")
-      .select("employee_id")
+      .select("id, employee_id, email, metadata, created_at")
       .eq("tenant_id", tenantId)
       .eq("status", "pending")
       .not("employee_id", "is", null),
@@ -638,11 +680,7 @@ export async function getEmployeeAccessStates(
 
   const profileRows = Array.isArray(profiles) ? profiles : [];
   const workerRows = Array.isArray(workerAccounts) ? workerAccounts : [];
-  const pendingEmployeeIds = new Set(
-    (Array.isArray(invitations) ? invitations : [])
-      .map((row: any) => row.employee_id)
-      .filter((value: unknown): value is string => typeof value === "string" && value.length > 0),
-  );
+  const invitationRows = Array.isArray(invitations) ? invitations : [];
 
   return (Array.isArray(employees) ? employees : []).map((employee: any) => {
     const employeeProfiles = profileRows.filter((profile: any) =>
@@ -654,7 +692,14 @@ export async function getEmployeeAccessStates(
     const activeProfiles = employeeProfiles.filter((profile: any) => profile.is_active === true);
     const worker = workerRows.find((account: any) => account.employee_id === employee.id) ?? null;
     const workerAccessActive = worker?.is_active === true;
-    const hasPendingInvitation = pendingEmployeeIds.has(employee.id);
+    const invitation = invitationRows.find((row: any) => row.employee_id === employee.id) ?? null;
+    const hasPendingInvitation = invitation != null;
+    const transitionMetadata = invitation?.metadata?.access_transition;
+    const workerToErpPending = workerAccessActive &&
+      transitionMetadata?.kind === "worker_to_erp" &&
+      transitionMetadata?.employee_id === employee.id &&
+      transitionMetadata?.portal_account_id === worker?.id &&
+      transitionMetadata?.worker_auth_user_id === worker?.auth_user_id;
     const hasEmployeeSide = typeof employee.user_id === "string" &&
       employee.user_id.length > 0;
     const hasProfileSide = employeeProfiles.length > 0;
@@ -665,11 +710,13 @@ export async function getEmployeeAccessStates(
       employeeProfiles.length > 1 ||
       activeProfiles.length > 1 ||
       (workerAccessActive && (hasEmployeeSide || hasProfileSide)) ||
-      (hasPendingInvitation && (hasEmployeeSide || hasProfileSide || workerAccessActive));
+      (hasPendingInvitation && (hasEmployeeSide || hasProfileSide)) ||
+      (hasPendingInvitation && workerAccessActive && !workerToErpPending);
 
     let linkState:
       | "available"
       | "pending_invitation"
+      | "worker_to_erp_pending"
       | "erp_linked"
       | "worker_active"
       | "worker_suspended"
@@ -678,6 +725,8 @@ export async function getEmployeeAccessStates(
       linkState = "inconsistent";
     } else if (exactBidirectionalLink) {
       linkState = "erp_linked";
+    } else if (workerToErpPending) {
+      linkState = "worker_to_erp_pending";
     } else if (workerAccessActive) {
       linkState = "worker_active";
     } else if (hasPendingInvitation) {
@@ -697,8 +746,14 @@ export async function getEmployeeAccessStates(
         (employeeProfiles.length === 1 ? employeeProfiles[0].user_id : null),
       erpProfileActive: exactProfile?.is_active === true,
       pendingInvitation: hasPendingInvitation,
+      pendingInvitationId: invitation?.id ?? null,
+      pendingInvitationEmail: invitation?.email ?? null,
+      pendingInvitationCreatedAt: invitation?.created_at ?? null,
+      pendingTransitionFromWorker: workerToErpPending,
       workerAccessExists: worker != null,
       workerAccessActive,
+      workerPortalAccountId: worker?.id ?? null,
+      workerAuthUserId: worker?.auth_user_id ?? null,
       workerUsername: worker?.username ?? null,
       linkState,
     };
@@ -907,11 +962,13 @@ export async function createInternalInvitation(
     body.permissions,
   );
   const employeeId = body.employeeId == null ? null : required(body.employeeId, "employeeId");
+  let employeeAccess: Awaited<ReturnType<typeof assertActiveEmployeeForInvitation>> | null = null;
   if (employeeId) {
-    await assertActiveEmployeeForInvitation(
+    employeeAccess = await assertActiveEmployeeForInvitation(
       serviceClient,
       caller.tenantId,
       employeeId,
+      { transitionFromWorker: body.transitionFromWorker === true },
     );
   }
   await assertInvitationEmailNotActiveStaff(
@@ -922,7 +979,7 @@ export async function createInternalInvitation(
 
   const { data: existing, error: existingError } = await serviceClient
     .from("user_invitations")
-    .select("id, role, permissions, employee_id")
+    .select("id, role, permissions, employee_id, metadata")
     .eq("tenant_id", caller.tenantId)
     .eq("email", email)
     .eq("status", "pending")
@@ -940,11 +997,16 @@ export async function createInternalInvitation(
           existing.employee_id.trim().length > 0
       ? existing.employee_id
       : undefined;
+    const storedTransition = workerToErpTransitionMetadata(
+      existing.metadata,
+    );
+    const requestedTransition = employeeAccess?.transitionMetadata ?? null;
     if (
       storedEmployeeId === undefined ||
       storedAuthority.role !== role ||
       !sameCanonicalPermissions(storedAuthority.permissions, permissions) ||
-      storedEmployeeId !== employeeId
+      storedEmployeeId !== employeeId ||
+      !sameWorkerToErpTransition(storedTransition, requestedTransition)
     ) {
       throw new HttpError(
         409,
@@ -995,6 +1057,9 @@ export async function createInternalInvitation(
           first_name: body.name?.trim() || email.split("@")[0],
           last_name: "",
           invited_from: "settings_user_management",
+          ...(employeeAccess?.transitionMetadata
+            ? { access_transition: employeeAccess.transitionMetadata }
+            : {}),
         },
       })
       .select("id")
@@ -1026,6 +1091,7 @@ export async function checkInternalInvitationIdentity(
       serviceClient,
       caller.tenantId,
       employeeId,
+      { transitionFromWorker: body.transitionFromWorker === true },
     );
   }
   return evaluateInvitationIdentity(
@@ -1182,6 +1248,7 @@ export async function assertActiveEmployeeForInvitation(
   serviceClient: SupabaseClient,
   tenantId: string,
   employeeId: string,
+  options: { transitionFromWorker?: boolean } = {},
 ) {
   const { data, error } = await serviceClient
     .from("employees")
@@ -1212,7 +1279,7 @@ export async function assertActiveEmployeeForInvitation(
   ] = await Promise.all([
     serviceClient
       .from("employee_portal_accounts")
-      .select("id")
+      .select("id, auth_user_id")
       .eq("employee_id", employeeId)
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
@@ -1233,10 +1300,28 @@ export async function assertActiveEmployeeForInvitation(
     );
   }
   if (workerAccount) {
+    if (options.transitionFromWorker !== true) {
+      throw new HttpError(
+        409,
+        "worker_access_conflict",
+        "Choose the guided Worker to ERP transition for this employee",
+      );
+    }
+    if (
+      typeof workerAccount.id !== "string" ||
+      typeof workerAccount.auth_user_id !== "string"
+    ) {
+      throw new HttpError(
+        409,
+        "worker_identity_conflict",
+        "The active Worker identity cannot be verified",
+      );
+    }
+  } else if (options.transitionFromWorker === true) {
     throw new HttpError(
       409,
-      "worker_access_conflict",
-      "The employee already has active worker access",
+      "employee_access_transition_invalid",
+      "This employee no longer has active Worker access",
     );
   }
   if (
@@ -1250,7 +1335,17 @@ export async function assertActiveEmployeeForInvitation(
     );
   }
 
-  return data;
+  return {
+    employee: data,
+    transitionMetadata: workerAccount
+      ? {
+        kind: "worker_to_erp" as const,
+        employee_id: employeeId,
+        portal_account_id: workerAccount.id,
+        worker_auth_user_id: workerAccount.auth_user_id,
+      }
+      : null,
+  };
 }
 
 export async function sendInvitationEmail(
@@ -1544,7 +1639,23 @@ export async function linkInternalUserEmployee(
     userId,
   );
   assertEmployeeLinkTargetAllowed(caller, target);
-  if (!target.isActive) {
+
+  const { data: activeWorker, error: workerError } = await serviceClient
+    .from("employee_portal_accounts")
+    .select("id")
+    .eq("tenant_id", caller.tenantId)
+    .eq("employee_id", employeeId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (workerError) {
+    throw new HttpError(
+      503,
+      "employee_access_lookup_failed",
+      "Unable to verify employee access",
+    );
+  }
+
+  if (!target.isActive && !activeWorker) {
     throw new HttpError(
       409,
       "employee_erp_link_conflict",
@@ -1553,7 +1664,7 @@ export async function linkInternalUserEmployee(
   }
 
   const { data, error } = await userClient.rpc(
-    "link_erp_user_to_employee",
+    activeWorker ? "switch_worker_to_erp_user" : "link_erp_user_to_employee",
     {
       p_user_id: userId,
       p_employee_id: employeeId,
@@ -1561,11 +1672,17 @@ export async function linkInternalUserEmployee(
   );
   if (error) throw mapEmployeeAccessError(error);
 
-  return requireEmployeeLinkResult(data, {
+  const verified = requireEmployeeLinkResult(data, {
     userId,
     employeeId,
     linked: true,
   });
+  return {
+    ...verified,
+    accessMode: "erp",
+    transitionedFromWorker: activeWorker != null,
+    tasksTransferred: transitionCount(data, "tasksTransferred"),
+  };
 }
 
 export async function unlinkInternalUserEmployee(
@@ -1641,6 +1758,16 @@ function requireEmployeeLinkResult(
   };
 }
 
+function transitionCount(value: unknown, key: string): number {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return 0;
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === "number" &&
+      Number.isInteger(candidate) &&
+      candidate >= 0
+    ? candidate
+    : 0;
+}
+
 function requireEmployeeDetachResult(
   value: unknown,
   expectedUserId: string,
@@ -1697,6 +1824,13 @@ export function mapEmployeeAccessError(error: unknown): HttpError {
       "This Auth identity belongs to the Worker portal",
     );
   }
+  if (evidence.includes("employee_access_transition_invalid")) {
+    return new HttpError(
+      409,
+      "employee_access_transition_invalid",
+      "Employee access changed; reload and retry the transition",
+    );
+  }
   if (
     evidence.includes("employee_erp_link_conflict") ||
     evidence.includes("employees_one_erp_user_uidx") ||
@@ -1737,7 +1871,7 @@ export function mapEmployeeAccessError(error: unknown): HttpError {
     return new HttpError(
       403,
       "principal_owner_protected",
-      "Only the tenant principal can change their own employee link",
+      "The company owner identity cannot represent one employee",
     );
   }
   if (evidence.includes("staff_hierarchy_forbidden")) {
@@ -2094,6 +2228,260 @@ export async function setWorkerPortalAccess(
     caller.tenantId,
   );
   return { success: true, authBanned: false, revokedSessions };
+}
+
+export async function switchErpUserToWorker(
+  userClient: SupabaseClient,
+  serviceClient: SupabaseClient,
+  caller: CallerContext,
+  body: RequestBody,
+) {
+  const userId = required(body.userId, "userId");
+  const employeeId = required(body.employeeId, "employeeId");
+  const username = normalizeWorkerUsername(required(body.username, "username"));
+  const password = requireStrongAdminPassword(body.password);
+  if (userId === caller.userId) {
+    throw new HttpError(
+      403,
+      "self_access_transition_forbidden",
+      "You cannot move your own active session to Worker Space",
+    );
+  }
+
+  const target = await getStaffTargetContext(serviceClient, caller, userId);
+  assertEmployeeLinkTargetAllowed(caller, target);
+  if (!target.isActive) {
+    throw new HttpError(
+      409,
+      "employee_access_transition_invalid",
+      "Only the active ERP identity can be moved to Worker Space",
+    );
+  }
+
+  const { data: employee, error: employeeError } = await serviceClient
+    .from("employees")
+    .select("id, first_name, last_name, status, user_id")
+    .eq("id", employeeId)
+    .eq("tenant_id", caller.tenantId)
+    .maybeSingle();
+  if (employeeError) {
+    throw new HttpError(
+      503,
+      "employee_access_lookup_failed",
+      "Unable to verify employee access",
+    );
+  }
+  if (
+    !employee ||
+    employee.status !== "active" ||
+    employee.user_id !== userId
+  ) {
+    throw new HttpError(
+      409,
+      "employee_access_transition_invalid",
+      "The ERP user is no longer linked to this active employee",
+    );
+  }
+
+  const loginEmail = await buildWorkerLoginEmail(caller.tenantId, username);
+  const { data: existingRows, error: existingError } = await serviceClient
+    .from("employee_portal_accounts")
+    .select("id, employee_id, auth_user_id, username, login_email, is_active")
+    .eq("tenant_id", caller.tenantId)
+    .or(`employee_id.eq.${employeeId},username.eq.${username}`);
+  if (existingError) throw existingError;
+
+  const rows = existingRows ?? [];
+  if (rows.some((row: any) => row.username === username && row.employee_id !== employeeId)) {
+    throw new HttpError(
+      409,
+      "worker_username_conflict",
+      "That Worker username belongs to another employee",
+    );
+  }
+
+  const existingForEmployee = rows.find((row: any) => row.employee_id === employeeId) ?? null;
+  if (existingForEmployee?.is_active === true) {
+    throw new HttpError(
+      409,
+      "employee_access_transition_invalid",
+      "Worker Space is already the active access for this employee",
+    );
+  }
+
+  let authUser = existingForEmployee?.auth_user_id
+    ? await getAuthUser(serviceClient, existingForEmployee.auth_user_id)
+    : null;
+  let createdAuthUserId: string | null = null;
+  let reusedOrphanAuth = false;
+  if (authUser) {
+    if (!hasAuthoritativeWorkerIdentity(authUser, caller.tenantId, employeeId)) {
+      throw new HttpError(
+        409,
+        "worker_identity_conflict",
+        "The historical Worker identity cannot be safely reused",
+      );
+    }
+  } else if (existingForEmployee?.auth_user_id) {
+    throw new HttpError(
+      409,
+      "worker_identity_conflict",
+      "The historical Worker identity is no longer available",
+    );
+  } else {
+    const existingAuthUser = await findAuthUserByEmail(serviceClient, loginEmail);
+    if (existingAuthUser) {
+      authUser = await assertReusableWorkerOrphan(
+        serviceClient,
+        existingAuthUser,
+        caller.tenantId,
+        employeeId,
+        loginEmail,
+      );
+      reusedOrphanAuth = true;
+    }
+  }
+
+  const metadata = buildWorkerAuthMetadata({
+    tenantId: caller.tenantId,
+    employeeId,
+    username,
+    name: `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim(),
+  });
+  if (!authUser) {
+    const { data, error } = await serviceClient.auth.admin.createUser({
+      email: loginEmail,
+      password,
+      email_confirm: true,
+      user_metadata: metadata.userMetadata,
+      app_metadata: metadata.appMetadata,
+    });
+    if (error) throw error;
+    authUser = data.user;
+    if (!authUser?.id) {
+      throw new HttpError(
+        502,
+        "worker_auth_create_failed",
+        "The Worker identity could not be created",
+      );
+    }
+    createdAuthUserId = authUser.id;
+  }
+
+  const basePayload = {
+    tenant_id: caller.tenantId,
+    employee_id: employeeId,
+    auth_user_id: authUser.id,
+    username,
+    login_email: loginEmail,
+    is_active: false,
+  };
+  let portalAccountId: string;
+  if (existingForEmployee) {
+    const { data, error } = await serviceClient
+      .from("employee_portal_accounts")
+      .update({ ...basePayload, updated_at: new Date().toISOString() })
+      .eq("id", existingForEmployee.id)
+      .eq("tenant_id", caller.tenantId)
+      .eq("is_active", false)
+      .select("id")
+      .maybeSingle();
+    if (error) throw mapEmployeeAccessError(error);
+    if (!data?.id) {
+      throw new HttpError(
+        409,
+        "employee_access_transition_invalid",
+        "Worker access changed; reload and retry",
+      );
+    }
+    portalAccountId = data.id;
+  } else {
+    portalAccountId = await persistNewWorkerPortalAccount(serviceClient, {
+      payload: {
+        ...basePayload,
+        created_by: caller.userId,
+        updated_at: new Date().toISOString(),
+      },
+      tenantId: caller.tenantId,
+      employeeId,
+      username,
+      loginEmail,
+      authUserId: authUser.id,
+      createdAuthUserId,
+    });
+  }
+
+  const passwordResetRequiredAt = await prepareWorkerTransitionCredential(
+    serviceClient,
+    portalAccountId,
+    caller.tenantId,
+  );
+  const currentAuthUser = reusedOrphanAuth
+    ? authUser
+    : await getAuthUser(serviceClient, authUser.id);
+  if (!currentAuthUser) {
+    throw new HttpError(
+      503,
+      "worker_identity_conflict",
+      "The Worker identity could not be verified",
+    );
+  }
+  const { error: authUpdateError } = await serviceClient.auth.admin.updateUserById(
+    authUser.id,
+    {
+      email: loginEmail,
+      password,
+      email_confirm: true,
+      user_metadata: sanitizeWorkerDisplayMetadata(
+        currentAuthUser.user_metadata,
+        metadata.userMetadata,
+      ),
+      app_metadata: mergeWorkerAppMetadata(
+        currentAuthUser.app_metadata,
+        metadata.appMetadata,
+      ),
+    },
+  );
+  if (authUpdateError) {
+    throw new HttpError(
+      503,
+      "worker_credential_update_failed",
+      "The Worker credential could not be prepared",
+    );
+  }
+  await revokeWorkerPortalSessions(
+    serviceClient,
+    portalAccountId,
+    caller.tenantId,
+  );
+  await finishWorkerTransitionCredential(
+    serviceClient,
+    portalAccountId,
+    caller.tenantId,
+    passwordResetRequiredAt,
+  );
+
+  const { data: transition, error: transitionError } = await userClient.rpc(
+    "switch_erp_user_to_worker",
+    {
+      p_user_id: userId,
+      p_employee_id: employeeId,
+      p_portal_account_id: portalAccountId,
+    },
+  );
+  if (transitionError) throw mapEmployeeAccessError(transitionError);
+  const verified = requireEmployeeLinkResult(transition, {
+    userId,
+    employeeId,
+    linked: false,
+  });
+  return {
+    ...verified,
+    accessMode: "worker",
+    username,
+    credentialConfigured: true,
+    tasksTransferred: transitionCount(transition, "tasksTransferred"),
+  };
 }
 
 export async function createCustomerAccount(
@@ -3451,6 +3839,43 @@ function sameCanonicalPermissions(
   return canonicalPermissionKeys.every((key) => left[key] === right[key]);
 }
 
+type WorkerToErpTransitionMetadata = {
+  kind: "worker_to_erp";
+  employee_id: string;
+  portal_account_id: string;
+  worker_auth_user_id: string;
+};
+
+function workerToErpTransitionMetadata(
+  value: unknown,
+): WorkerToErpTransitionMetadata | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const metadata = value as Record<string, unknown>;
+  const nested = metadata.access_transition;
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) return null;
+  const transition = nested as Record<string, unknown>;
+  if (
+    transition.kind !== "worker_to_erp" ||
+    typeof transition.employee_id !== "string" ||
+    typeof transition.portal_account_id !== "string" ||
+    typeof transition.worker_auth_user_id !== "string"
+  ) {
+    return null;
+  }
+  return transition as WorkerToErpTransitionMetadata;
+}
+
+function sameWorkerToErpTransition(
+  left: WorkerToErpTransitionMetadata | null,
+  right: WorkerToErpTransitionMetadata | null,
+) {
+  if (left == null || right == null) return left === right;
+  return left.kind === right.kind &&
+    left.employee_id === right.employee_id &&
+    left.portal_account_id === right.portal_account_id &&
+    left.worker_auth_user_id === right.worker_auth_user_id;
+}
+
 export function assertStaffTargetMutationAllowed(
   caller: CallerContext,
   target: StaffTargetContext,
@@ -3486,13 +3911,10 @@ export function assertEmployeeLinkTargetAllowed(
   target: StaffTargetContext,
 ) {
   if (target.isPrincipalOwner) {
-    if (caller.isPrincipalOwner === true && caller.userId === target.userId) {
-      return;
-    }
     throw new HttpError(
       403,
       "principal_owner_protected",
-      "Only the tenant principal can link their own employee record",
+      "The company owner identity cannot represent one employee",
     );
   }
 
@@ -3707,6 +4129,58 @@ export async function finishWorkerPasswordCredentialIssue(
   return requireCredentialIssueTimestamp(
     data,
     "worker_credential_issue_finish_failed",
+  );
+}
+
+export async function prepareWorkerTransitionCredential(
+  serviceClient: SupabaseClient,
+  portalAccountId: string,
+  tenantId: string,
+): Promise<string> {
+  const { data, error } = await serviceClient.rpc(
+    "prepare_worker_transition_credential",
+    {
+      p_portal_account_id: portalAccountId,
+      p_tenant_id: tenantId,
+    },
+  );
+  if (error) {
+    throw new HttpError(
+      503,
+      "worker_transition_credential_prepare_failed",
+      "Unable to prepare the Worker credential",
+    );
+  }
+  return requireCredentialIssueTimestamp(
+    data,
+    "worker_transition_credential_prepare_failed",
+  );
+}
+
+export async function finishWorkerTransitionCredential(
+  serviceClient: SupabaseClient,
+  portalAccountId: string,
+  tenantId: string,
+  passwordResetRequiredAt: string,
+): Promise<string> {
+  const { data, error } = await serviceClient.rpc(
+    "finish_worker_transition_credential",
+    {
+      p_portal_account_id: portalAccountId,
+      p_tenant_id: tenantId,
+      p_password_reset_required_at: passwordResetRequiredAt,
+    },
+  );
+  if (error) {
+    throw new HttpError(
+      503,
+      "worker_transition_credential_finish_failed",
+      "Unable to finalize the Worker credential",
+    );
+  }
+  return requireCredentialIssueTimestamp(
+    data,
+    "worker_transition_credential_finish_failed",
   );
 }
 

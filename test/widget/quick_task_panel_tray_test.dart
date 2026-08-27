@@ -18,9 +18,34 @@ import 'package:vinabike_erp/shared/widgets/quick_task_panel.dart';
 const _me = '11111111-1111-4111-8111-111111111111';
 
 class _FakeTaskService extends ChangeNotifier implements TaskService {
-  _FakeTaskService(this._tasks);
+  _FakeTaskService(
+    this._tasks, {
+    List<TaskAssignmentPrincipal> directory = const [],
+    List<TaskLinkableJob> linkableJobs = const [],
+    Map<String, List<TaskJobWorkItem>> jobItemsByJob = const {},
+    Map<String, List<SmartTaskJobItem>> jobLinksByTask = const {},
+    Map<TaskContextKind, List<TaskContextTarget>> contextTargetsByKind =
+        const {},
+  })  : _directory = directory,
+        _linkableJobs = linkableJobs,
+        _jobItemsByJob = jobItemsByJob,
+        _jobLinksByTask = jobLinksByTask,
+        _contextTargetsByKind = contextTargetsByKind;
 
   final List<TaskModel> _tasks;
+  final List<TaskAssignmentPrincipal> _directory;
+  final List<TaskLinkableJob> _linkableJobs;
+  final Map<String, List<TaskJobWorkItem>> _jobItemsByJob;
+  final Map<String, List<SmartTaskJobItem>> _jobLinksByTask;
+  final Map<TaskContextKind, List<TaskContextTarget>> _contextTargetsByKind;
+
+  String? createdLinkedJobId;
+  List<String>? createdJobItemIds;
+  String? createdLinkedCustomerId;
+  String? createdLinkedSupplierId;
+  String? createdLinkedPurchaseInvoiceId;
+  String? createdLinkedSalesInvoiceId;
+  int fetchLinkableJobsCalls = 0;
 
   @override
   List<TaskModel> get tasks => _tasks;
@@ -32,7 +57,8 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
   ErpAuthorityScopeKey? get authorityScope => null;
 
   @override
-  List<SmartTaskJobItem> jobItemsOf(String taskId) => const [];
+  List<SmartTaskJobItem> jobItemsOf(String taskId) =>
+      _jobLinksByTask[taskId] ?? const [];
 
   @override
   TaskLinkableJob? jobHeaderOf(TaskModel task) => task.linkedJobId == null
@@ -50,11 +76,64 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
 
   @override
   Future<List<TaskAssignmentPrincipal>> fetchAssignmentDirectory() async =>
-      const [];
+      _directory;
 
   @override
-  Future<List<TaskLinkableJob>> fetchLinkableJobs({int limit = 120}) async =>
-      const [];
+  Future<List<TaskLinkableJob>> fetchLinkableJobs({int limit = 120}) async {
+    fetchLinkableJobsCalls++;
+    return _linkableJobs;
+  }
+
+  @override
+  Future<List<TaskContextTarget>> fetchLinkTargets(
+          TaskContextKind kind) async =>
+      _contextTargetsByKind[kind] ?? const [];
+
+  @override
+  Future<List<TaskJobWorkItem>> fetchJobWorkItems(String jobId) async =>
+      _jobItemsByJob[jobId] ?? const [];
+
+  @override
+  Future<TaskModel> createTrayTask({
+    required String title,
+    String? description,
+    TaskKind kind = TaskKind.task,
+    TaskVisibility visibility = TaskVisibility.team,
+    TaskPriority priority = TaskPriority.normal,
+    DateTime? dueDate,
+    String? assignedTo,
+    String? linkedJobId,
+    List<String>? jobItemIds,
+    String? overlapDecision,
+    String? linkedCustomerId,
+    String? linkedSupplierId,
+    String? linkedPurchaseInvoiceId,
+    String? linkedSalesInvoiceId,
+    String? idempotencyKey,
+  }) async {
+    createdLinkedJobId = linkedJobId;
+    createdJobItemIds = jobItemIds == null ? null : [...jobItemIds];
+    createdLinkedCustomerId = linkedCustomerId;
+    createdLinkedSupplierId = linkedSupplierId;
+    createdLinkedPurchaseInvoiceId = linkedPurchaseInvoiceId;
+    createdLinkedSalesInvoiceId = linkedSalesInvoiceId;
+    return TaskModel(
+      id: '99999999-9999-4999-8999-999999999999',
+      tenantId: 't',
+      title: title,
+      createdBy: _me,
+      assignedTo: assignedTo,
+      kind: kind,
+      visibility: visibility,
+      priority: priority,
+      dueDate: dueDate,
+      linkedJobId: linkedJobId,
+      linkedCustomerId: linkedCustomerId,
+      linkedSupplierId: linkedSupplierId,
+      linkedPurchaseInvoiceId: linkedPurchaseInvoiceId,
+      linkedSalesInvoiceId: linkedSalesInvoiceId,
+    );
+  }
 
   @override
   Future<List<SmartTaskEvent>> fetchEvents(String taskId,
@@ -80,15 +159,16 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
   }
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 TaskModel _task(int index,
     {DateTime? due,
     DateTime? acknowledged,
     TaskKind kind = TaskKind.task,
-    String? linkedJobId}) {
+    String? linkedJobId,
+    String? linkedCustomerId,
+    String? linkedCustomerName}) {
   final now = DateTime.now();
   final isNote = kind == TaskKind.note;
   return TaskModel(
@@ -99,6 +179,8 @@ TaskModel _task(int index,
     assignedTo: isNote ? null : _me,
     kind: kind,
     linkedJobId: linkedJobId,
+    linkedCustomerId: linkedCustomerId,
+    linkedCustomerName: linkedCustomerName,
     dueDate: due ?? DateTime(now.year, now.month, now.day, 12),
     acknowledgedAt: acknowledged,
   );
@@ -121,6 +203,17 @@ Widget _host(TaskService tasks, RightToolbarService toolbar,
   );
 }
 
+Future<void> _chooseComposerContext(
+  WidgetTester tester,
+  String label,
+) async {
+  await tester.ensureVisible(find.text('Sin vínculo'));
+  await tester.tap(find.text('Sin vínculo'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   SharedPreferences.setMockInitialValues({});
@@ -141,8 +234,8 @@ void main() {
 
     var visible = 0;
     for (var i = 1; i <= 9; i++) {
-      final row =
-          find.byKey(ValueKey('task-row-00000000-0000-4000-8000-0000000000$i$i'));
+      final row = find
+          .byKey(ValueKey('task-row-00000000-0000-4000-8000-0000000000$i$i'));
       if (row.evaluate().isEmpty) continue;
       final rect = tester.getRect(row);
       if (rect.bottom <= 824 && rect.top >= 0) visible++;
@@ -167,6 +260,315 @@ void main() {
     expect(find.text('HOY'), findsOneWidget);
   });
 
+  testWidgets('el selector explica el acceso sin filtrar roles internos',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = _FakeTaskService(
+      [_task(1, acknowledged: DateTime.now())],
+      directory: const [
+        TaskAssignmentPrincipal(
+          tenantId: 't',
+          userId: 'owner',
+          employeeId: null,
+          displayName: 'Viñabike',
+          role: 'admin',
+          photoUrl: null,
+          access: TaskPrincipalAccess.erp,
+        ),
+        TaskAssignmentPrincipal(
+          tenantId: 't',
+          userId: 'portal',
+          employeeId: 'employee',
+          displayName: 'Fernando José Tapia Carrillo',
+          role: 'worker',
+          photoUrl: null,
+          access: TaskPrincipalAccess.portal,
+        ),
+      ],
+    );
+    await tester.pumpWidget(_host(tasks, RightToolbarService()));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('Nueva tarea'));
+    await tester.pumpAndSettle();
+    final assigneeField = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          widget.properties.label == 'Trabajador responsable',
+    );
+    expect(assigneeField, findsOneWidget);
+    await tester.tap(assigneeField);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Administración'), findsOneWidget);
+    expect(find.text('Recibe tareas en su portal'), findsOneWidget);
+    expect(find.textContaining('Portal ·'), findsNothing);
+    expect(find.text('worker'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'el compositor nace neutral y ofrece contextos sin mostrar sus controles',
+      (tester) async {
+    tester.view.physicalSize = const Size(1100, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = _FakeTaskService([
+      _task(1, acknowledged: DateTime.now()),
+    ]);
+    await tester.pumpWidget(_host(tasks, RightToolbarService()));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('Nueva tarea'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vincular a (opcional)'), findsOneWidget);
+    expect(find.text('Sin vínculo'), findsOneWidget);
+    expect(find.text('1 · Trabajo'), findsNothing);
+    expect(find.text('2 · Alcance de la tarea'), findsNothing);
+
+    await tester.tap(find.text('Sin vínculo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Trabajo del taller'), findsOneWidget);
+    expect(find.text('Cliente'), findsOneWidget);
+    expect(find.text('Proveedor'), findsOneWidget);
+    expect(find.text('Venta / factura'), findsOneWidget);
+    expect(find.text('Compra / documento'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'el compositor elige primero un trabajo y después su alcance de servicios',
+      (tester) async {
+    tester.view.physicalSize = const Size(1100, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = _FakeTaskService(
+      [_task(1, acknowledged: DateTime.now())],
+      linkableJobs: const [
+        TaskLinkableJob(
+          id: 'job-528',
+          jobNumber: 'PG-00528',
+          status: 'EN_PROCESO',
+          customerName: 'Vicente Hernandez',
+          clientRequest: 'Cambio de cadena, regulación de cambios y frenos.',
+        ),
+        TaskLinkableJob(
+          id: 'job-527',
+          jobNumber: 'PG-00527',
+          status: 'EN_PROCESO',
+          customerName: 'Exequiel Araya',
+          clientRequest: 'Revisión de cambio trasero',
+        ),
+      ],
+      jobItemsByJob: const {
+        'job-528': [
+          TaskJobWorkItem(
+            id: 'service-chain',
+            name: 'Cambio de cadena',
+            itemType: 'service',
+            jobBikeId: 'bike-1',
+            bikeLabel: 'Trek Marlin 7',
+            instructions: 'CAMBIAR CADENA Y AJUSTAR TENSIÓN.',
+          ),
+          TaskJobWorkItem(
+            id: 'service-gears',
+            name: 'Regulación de cambios y frenos',
+            itemType: 'service',
+            jobBikeId: 'bike-1',
+            bikeLabel: 'Trek Marlin 7',
+          ),
+        ],
+      },
+    );
+    await tester.pumpWidget(_host(tasks, RightToolbarService()));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('Nueva tarea'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Título de la tarea…'),
+      'Realizar trabajo de Vicente',
+    );
+    await _chooseComposerContext(tester, 'Trabajo del taller');
+
+    final jobField = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics && widget.properties.label == '1 · Trabajo',
+    );
+    expect(jobField, findsOneWidget);
+    await tester.tap(jobField);
+    await tester.pumpAndSettle();
+
+    // El primer nivel contiene sólo trabajos. La solicitud sigue indexada para
+    // buscar, pero no se imprime como si fuera otra opción de servicio.
+    expect(find.text('#PG-00528 · Vicente Hernandez'), findsOneWidget);
+    expect(find.text('#PG-00527 · Exequiel Araya'), findsOneWidget);
+    expect(find.text('Sin trabajo seleccionado'), findsWidgets);
+    expect(find.text('Sin especificar'), findsNothing);
+    expect(
+      find.text('Cambio de cadena, regulación de cambios y frenos.'),
+      findsNothing,
+    );
+    expect(find.text('Revisión de cambio trasero'), findsNothing);
+
+    await tester.tap(find.text('#PG-00528 · Vicente Hernandez'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 · Alcance de la tarea'), findsOneWidget);
+    expect(find.text('Trabajo completo'), findsOneWidget);
+    expect(find.text('Por servicios'), findsOneWidget);
+    expect(find.text('Se incluirán los 2 servicios de este trabajo.'),
+        findsOneWidget);
+    expect(find.text('Cambio de cadena'), findsNothing);
+
+    await tester.tap(find.text('Por servicios'));
+    await tester.pump();
+
+    expect(find.text('Cambio de cadena'), findsOneWidget);
+    expect(find.text('CAMBIAR CADENA Y AJUSTAR TENSIÓN.'), findsOneWidget);
+    expect(find.text('Regulación de cambios y frenos'), findsOneWidget);
+    expect(find.text('Selecciona al menos un servicio.'), findsOneWidget);
+    expect(
+      tester
+          .widgetList<Checkbox>(find.byType(Checkbox))
+          .every((checkbox) => checkbox.value == false),
+      isTrue,
+    );
+
+    await tester.tap(find.text('Cambio de cadena'));
+    await tester.pump();
+    expect(find.text('Selecciona al menos un servicio.'), findsNothing);
+
+    await tester.ensureVisible(find.text('Crear tarea'));
+    await tester.tap(find.text('Crear tarea'));
+    await tester.pumpAndSettle();
+
+    expect(tasks.createdLinkedJobId, 'job-528');
+    expect(tasks.createdJobItemIds, ['service-chain']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('trabajo completo envía todos sus servicios reales',
+      (tester) async {
+    tester.view.physicalSize = const Size(1100, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = _FakeTaskService(
+      [_task(1, acknowledged: DateTime.now())],
+      linkableJobs: const [
+        TaskLinkableJob(
+          id: 'job-1',
+          jobNumber: 'PG-00001',
+          status: 'EN_PROCESO',
+          customerName: 'Cliente Uno',
+          clientRequest: 'Solicitud',
+        ),
+      ],
+      jobItemsByJob: const {
+        'job-1': [
+          TaskJobWorkItem(
+            id: 'service-a',
+            name: 'Servicio A',
+            itemType: 'service',
+            jobBikeId: null,
+            bikeLabel: null,
+          ),
+          TaskJobWorkItem(
+            id: 'service-b',
+            name: 'Servicio B',
+            itemType: 'adhoc',
+            jobBikeId: null,
+            bikeLabel: null,
+          ),
+        ],
+      },
+    );
+    await tester.pumpWidget(_host(tasks, RightToolbarService()));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('Nueva tarea'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Título de la tarea…'),
+      'Resolver trabajo completo',
+    );
+    await _chooseComposerContext(tester, 'Trabajo del taller');
+    await tester.tap(find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics && widget.properties.label == '1 · Trabajo',
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('#PG-00001 · Cliente Uno'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Crear tarea'));
+    await tester.tap(find.text('Crear tarea'));
+    await tester.pumpAndSettle();
+
+    expect(tasks.createdLinkedJobId, 'job-1');
+    expect(
+        tasks.createdJobItemIds, unorderedEquals(['service-a', 'service-b']));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('un vínculo a cliente se carga bajo demanda y viaja solo',
+      (tester) async {
+    tester.view.physicalSize = const Size(1100, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = _FakeTaskService(
+      [_task(1, acknowledged: DateTime.now())],
+      contextTargetsByKind: const {
+        TaskContextKind.customer: [
+          TaskContextTarget(
+            kind: TaskContextKind.customer,
+            id: 'customer-1',
+            label: 'María González',
+            context: '+56 9 1234 5678',
+            route: '/clientes/customer-1',
+          ),
+        ],
+      },
+    );
+    await tester.pumpWidget(_host(tasks, RightToolbarService()));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('Nueva tarea'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Título de la tarea…'),
+      'Llamar por retiro',
+    );
+    await _chooseComposerContext(tester, 'Cliente');
+
+    final customerField = find.byWidgetPredicate(
+      (widget) => widget is Semantics && widget.properties.label == 'Cliente',
+    );
+    expect(customerField, findsOneWidget);
+    await tester.tap(customerField);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('María González'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Crear tarea'));
+    await tester.pumpAndSettle();
+
+    expect(tasks.createdLinkedCustomerId, 'customer-1');
+    expect(tasks.createdLinkedJobId, isNull);
+    expect(tasks.createdLinkedSupplierId, isNull);
+    expect(tasks.createdLinkedPurchaseInvoiceId, isNull);
+    expect(tasks.createdLinkedSalesInvoiceId, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'la sesión del panel preserva alcance y borrador al cerrar y reabrir',
       (tester) async {
@@ -175,7 +577,18 @@ void main() {
     addTearDown(tester.view.reset);
 
     final toolbar = RightToolbarService();
-    final tasks = _FakeTaskService([_task(1, acknowledged: DateTime.now())]);
+    final tasks = _FakeTaskService(
+      [_task(1, acknowledged: DateTime.now())],
+      linkableJobs: const [
+        TaskLinkableJob(
+          id: 'job-active',
+          jobNumber: 'PG-00042',
+          status: 'EN_CURSO',
+          customerName: 'Cliente Activo',
+          clientRequest: 'Ajuste general',
+        ),
+      ],
+    );
 
     await tester.pumpWidget(_host(tasks, toolbar));
     await tester.pump(const Duration(milliseconds: 100));
@@ -190,6 +603,8 @@ void main() {
         find.widgetWithText(TextField, 'Título de la tarea…'),
         'Ajuste de cambios Trek');
     await tester.pump();
+    await _chooseComposerContext(tester, 'Trabajo del taller');
+    expect(tasks.fetchLinkableJobsCalls, 1);
 
     // Cerrar la superficie (tap en la barrera) NO bota el borrador…
     await tester.tapAt(const Offset(10, 10));
@@ -197,8 +612,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     // …y cerrar el panel desmonta el widget (comportamiento real del rail).
-    await tester.pumpWidget(
-        _host(tasks, toolbar, child: const SizedBox.shrink()));
+    await tester
+        .pumpWidget(_host(tasks, toolbar, child: const SizedBox.shrink()));
     await tester.pump(const Duration(milliseconds: 100));
 
     // Reabrir: alcance restaurado y el borrador esperando en el compositor.
@@ -210,10 +625,13 @@ void main() {
 
     expect(find.text('Ajuste de cambios Trek'), findsOneWidget);
     expect(find.text('Crear tarea'), findsOneWidget);
+    expect(tasks.fetchLinkableJobsCalls, 2);
+    expect(find.text('No hay trabajos activos disponibles para vincular.'),
+        findsNothing);
   });
 
   testWidgets(
-      'una Nota conserva la pega, oculta responsable y dice Guardar nota',
+      'una Nota neutral oculta responsable y conserva contextos opcionales',
       (tester) async {
     tester.view.physicalSize = const Size(420, 1200);
     tester.view.devicePixelRatio = 1.0;
@@ -235,9 +653,11 @@ void main() {
     await tester.tap(find.text('Nota'));
     await tester.pump(const Duration(milliseconds: 200));
 
-    // Como Nota: sin responsable ni servicios, la pega sigue disponible.
+    // Como Nota: sin responsable ni flujo del Taller impuesto de antemano.
     expect(find.text('Trabajador responsable'), findsNothing);
-    expect(find.text('Pega del taller'), findsOneWidget);
+    expect(find.text('Vincular a (opcional)'), findsOneWidget);
+    expect(find.text('Sin vínculo'), findsOneWidget);
+    expect(find.text('1 · Trabajo'), findsNothing);
     expect(find.text('Guardar nota'), findsOneWidget);
     expect(find.text('Título de la nota…'), findsOneWidget);
 
@@ -246,7 +666,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   });
 
-  testWidgets('Abrir pega usa push y conserva el retorno', (tester) async {
+  testWidgets('Abrir trabajo usa push y conserva el retorno', (tester) async {
     final router = GoRouter(
       initialLocation: '/origen',
       routes: [
@@ -255,9 +675,9 @@ void main() {
           builder: (context, state) => Scaffold(
             body: Builder(
               builder: (buttonContext) => TextButton(
-                onPressed: () => openWorkshopJobFromTray(
-                    buttonContext, 'job con espacios'),
-                child: const Text('Abrir pega'),
+                onPressed: () =>
+                    openWorkshopJobFromTray(buttonContext, 'job con espacios'),
+                child: const Text('Abrir trabajo'),
               ),
             ),
           ),
@@ -283,7 +703,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('Abrir pega'));
+    await tester.tap(find.text('Abrir trabajo'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Detalle'), findsOneWidget);
@@ -293,7 +713,7 @@ void main() {
     expect(router.canPop(), isTrue);
     router.pop();
     await tester.pumpAndSettle();
-    expect(find.text('Abrir pega'), findsOneWidget);
+    expect(find.text('Abrir trabajo'), findsOneWidget);
     expect(workspaces.activeWorkspace!.currentRoute, '/origen');
     expect(workspaces.activeWorkspace!.canGoForward, isTrue);
   });
@@ -329,8 +749,7 @@ void main() {
     expect(find.byTooltip('Conversar'), findsNothing);
   });
 
-  testWidgets(
-      'una pega vinculada sin servicios es visible en fila y detalle',
+  testWidgets('un trabajo vinculado sin servicios es visible en fila y detalle',
       (tester) async {
     tester.view.physicalSize = const Size(420, 1000);
     tester.view.devicePixelRatio = 1.0;
@@ -345,15 +764,91 @@ void main() {
     await tester.tap(find.text('Equipo'));
     await tester.pump();
 
-    // La fila muestra la identidad de la pega aunque no haya servicios.
+    // La fila muestra la identidad del trabajo aunque no haya servicios.
     expect(find.textContaining('#PG-000777'), findsOneWidget);
 
     await tester.tap(find.text('N3'));
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text('PEGA #PG-000777'), findsOneWidget);
-    expect(find.text('Abrir pega'), findsOneWidget);
-    expect(find.textContaining('Pega completa'), findsOneWidget);
+    expect(find.text('TRABAJO #PG-000777'), findsOneWidget);
+    expect(find.text('Abrir trabajo'), findsOneWidget);
+    expect(find.textContaining('Trabajo completo'), findsOneWidget);
+  });
+
+  testWidgets(
+      'el detalle conserva el nombre y las instrucciones completas del servicio',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 1100);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    const taskId = '00000000-0000-4000-8000-000000000066';
+    final tasks = _FakeTaskService(
+      [_task(6, acknowledged: DateTime.now(), linkedJobId: 'job-527')],
+      jobLinksByTask: {
+        taskId: [
+          SmartTaskJobItem(
+            id: 'link-1',
+            taskId: taskId,
+            jobItemId: 'service-1',
+            jobId: 'job-527',
+            jobBikeId: 'bike-1',
+            itemName: 'Mecánica Media',
+            itemType: 'service',
+            jobNumber: 'PG-00527',
+            bikeLabel: 'Totem 4423',
+            itemInstructions:
+                'REVISIÓN DE HORQUILLA/DIRECCIÓN + MANTENCIÓN SI ES NECESARIO AL REINSTALAR',
+            linkedAt: DateTime(2026, 8, 27),
+            invalidatedAt: null,
+            contextChangedAt: null,
+          ),
+        ],
+      },
+    );
+    await tester.pumpWidget(_host(tasks, RightToolbarService()));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('Equipo'));
+    await tester.pump();
+    await tester.tap(find.text('T6'));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('TRABAJO #PG-00527'), findsOneWidget);
+    expect(find.textContaining('Mecánica Media'), findsOneWidget);
+    expect(
+      find.text(
+          'REVISIÓN DE HORQUILLA/DIRECCIÓN + MANTENCIÓN SI ES NECESARIO AL REINSTALAR'),
+      findsOneWidget,
+    );
+    expect(find.text('Abrir trabajo'), findsOneWidget);
+  });
+
+  testWidgets('un cliente vinculado queda visible en fila y detalle',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final tasks = _FakeTaskService([
+      _task(
+        5,
+        acknowledged: DateTime.now(),
+        linkedCustomerId: 'customer-5',
+        linkedCustomerName: 'María González',
+      ),
+    ]);
+    await tester.pumpWidget(_host(tasks, RightToolbarService()));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Cliente · María González'), findsOneWidget);
+    await tester.tap(find.text('T5'));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('CLIENTE'), findsOneWidget);
+    expect(find.text('María González'), findsOneWidget);
+    expect(find.text('Abrir'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

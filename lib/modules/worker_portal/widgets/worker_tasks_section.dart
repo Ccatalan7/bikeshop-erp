@@ -9,12 +9,13 @@ import '../services/worker_tasks_service.dart';
 
 /// «Mis tareas» del portal del trabajador.
 ///
-/// Proyección mínima y segura (`get_my_worker_tasks_v1`): pega, bicicletas y
-/// servicios sin precios, instrucciones, plazo y creador. Acciones acotadas al
+/// Proyección mínima y segura (`get_my_worker_tasks_v1`): trabajo, bicicletas y
+/// servicios e instrucciones sin precios, plazo y creador. Acciones acotadas al
 /// propio ciclo: Aceptar / Devolver / Iniciar / Bloquear / Desbloquear /
 /// Completar. Sin hilo: el principal de portal no es principal de mensajería.
 class WorkerTasksSection extends StatefulWidget {
-  const WorkerTasksSection({super.key, this.service, this.enableRealtime = true});
+  const WorkerTasksSection(
+      {super.key, this.service, this.enableRealtime = true});
 
   /// Inyectable para pruebas; por defecto habla con las RPC del portal.
   final WorkerTasksService? service;
@@ -163,33 +164,38 @@ class _WorkerTasksSectionState extends State<WorkerTasksSection> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final task in open) _WorkerTaskCard(
-              task: task,
-              busy: _busy.contains(task.id),
-              onAcknowledge: () =>
-                  _run(task, () => _service.acknowledge(task.id)),
-              onReturn: (anchor) => _askReasonAnd(anchor, task, 'Devolver',
-                  '¿Por qué la devuelves?', (r) => _service.returnTask(task.id, r)),
-              onStart: () => _run(
-                  task,
-                  () =>
-                      _service.start(task.id, expectedVersion: task.version)),
-              onBlock: (anchor) => _askReasonAnd(
-                  anchor,
-                  task,
-                  'Bloquear',
-                  '¿Qué te falta? (ej: repuesto)',
-                  (r) => _service.block(task.id, r,
-                      expectedVersion: task.version)),
-              onUnblock: () => _run(
-                  task,
-                  () => _service.unblock(task.id,
-                      expectedVersion: task.version)),
-              onComplete: () => _run(
-                  task,
-                  () => _service.complete(task.id,
-                      expectedVersion: task.version)),
-            ),
+            for (final task in open)
+              _WorkerTaskCard(
+                task: task,
+                busy: _busy.contains(task.id),
+                onAcknowledge: () =>
+                    _run(task, () => _service.acknowledge(task.id)),
+                onReturn: (anchor) => _askReasonAnd(
+                    anchor,
+                    task,
+                    'Devolver',
+                    '¿Por qué la devuelves?',
+                    (r) => _service.returnTask(task.id, r)),
+                onStart: () => _run(
+                    task,
+                    () =>
+                        _service.start(task.id, expectedVersion: task.version)),
+                onBlock: (anchor) => _askReasonAnd(
+                    anchor,
+                    task,
+                    'Bloquear',
+                    '¿Qué te falta? (ej: repuesto)',
+                    (r) => _service.block(task.id, r,
+                        expectedVersion: task.version)),
+                onUnblock: () => _run(
+                    task,
+                    () => _service.unblock(task.id,
+                        expectedVersion: task.version)),
+                onComplete: () => _run(
+                    task,
+                    () => _service.complete(task.id,
+                        expectedVersion: task.version)),
+              ),
             if (done.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text('COMPLETADAS RECIENTES',
@@ -249,7 +255,8 @@ class _WorkerTaskCard extends StatelessWidget {
     final actions = <Widget>[];
     if (task.awaitsAcknowledgement) {
       actions.add(FilledButton(
-          onPressed: busy ? null : onAcknowledge, child: const Text('Aceptar')));
+          onPressed: busy ? null : onAcknowledge,
+          child: const Text('Aceptar')));
       actions.add(Builder(
           builder: (buttonContext) => OutlinedButton(
               onPressed: busy ? null : () => onReturn(buttonContext),
@@ -259,16 +266,14 @@ class _WorkerTaskCard extends StatelessWidget {
           onPressed: busy ? null : onUnblock,
           child: const Text('Desbloquear')));
       actions.add(OutlinedButton(
-          onPressed: busy ? null : onComplete,
-          child: const Text('Completar')));
+          onPressed: busy ? null : onComplete, child: const Text('Completar')));
     } else {
       if (task.status == 'pending') {
         actions.add(FilledButton(
             onPressed: busy ? null : onStart, child: const Text('Iniciar')));
       }
       actions.add(FilledButton.tonal(
-          onPressed: busy ? null : onComplete,
-          child: const Text('Completar')));
+          onPressed: busy ? null : onComplete, child: const Text('Completar')));
       actions.add(Builder(
           builder: (buttonContext) => OutlinedButton(
               onPressed: busy ? null : () => onBlock(buttonContext),
@@ -320,17 +325,15 @@ class _WorkerTaskCard extends StatelessWidget {
           if ((task.description ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child:
-                  Text(task.description!, style: theme.textTheme.bodySmall),
+              child: Text(task.description!, style: theme.textTheme.bodySmall),
             ),
           if (task.jobNumber != null || task.bikeLabels.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
                 [
-                  if (task.jobNumber != null) 'Pega #${task.jobNumber}',
-                  if (task.bikeLabels.isNotEmpty)
-                    task.bikeLabels.join(' · '),
+                  if (task.jobNumber != null) 'Trabajo #${task.jobNumber}',
+                  if (task.bikeLabels.isNotEmpty) task.bikeLabels.join(' · '),
                 ].join(' — '),
                 style: theme.textTheme.labelMedium
                     ?.copyWith(color: theme.colorScheme.primary),
@@ -343,11 +346,58 @@ class _WorkerTaskCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final item in task.jobItems)
-                    Text(
-                      '• ${item['item_name']}'
-                      '${item['invalidated'] == true ? ' (línea eliminada de la pega)' : ''}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '• ${item['item_name']}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              decoration: item['invalidated'] == true
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                          if ((item['item_instructions']
+                                  ?.toString()
+                                  .trim()
+                                  .isNotEmpty ??
+                              false))
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12, top: 2),
+                              child: Text(
+                                item['item_instructions'].toString().trim(),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  decoration: item['invalidated'] == true
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          if (item['invalidated'] == true)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12, top: 2),
+                              child: Text(
+                                'Este servicio fue eliminado del trabajo después de asignar la tarea.',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.error,
+                                ),
+                              ),
+                            )
+                          else if (item['context_changed'] == true)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12, top: 2),
+                              child: Text(
+                                'El servicio o sus instrucciones cambiaron después de asignar la tarea.',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.tertiary,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                 ],

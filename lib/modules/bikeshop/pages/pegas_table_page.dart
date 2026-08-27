@@ -1889,25 +1889,19 @@ class _PegasTablePageState extends State<PegasTablePage>
       // Smart filter (Activos, Completados, etc.) - uses phase
       switch (_statusFilter) {
         case 'active':
-          if (job.isSaleWorkflow) {
-            if (!isMechanicJobSaleActive(job, invoice)) return false;
-            break;
-          }
-          if (job.isStandaloneQuotation &&
-              (job.effectiveQuotationStatus == QuotationStatus.rejected ||
-                  job.effectiveQuotationStatus == QuotationStatus.expired)) {
+          final customer = _customers[job.customerId];
+          final bike = _bikes[job.bikeId];
+          if (!isMechanicJobOperationallyActive(
+            job,
+            invoice: invoice,
+            customerName: customer?.name,
+            bikeName: bike?.displayName,
+            bikeBrand: bike?.brand,
+            bikeModel: bike?.model,
+            bikeSerialNumber: bike?.serialNumber,
+          )) {
             return false;
           }
-          // Activos: include Terminados/Finalizados.
-          // Filter out only: Cancelados, and Entregados that are already paid.
-          if (job.status == JobStatus.cancelado) return false;
-
-          if (isDelivered && isInvoicedEffective && isPaidEffective) {
-            return false;
-          }
-
-          // Also exclude finished warranties from active list
-          if (isFinishedWarranty) return false;
           break;
         case 'warranty_completed':
           if (!isFinishedWarranty) return false;

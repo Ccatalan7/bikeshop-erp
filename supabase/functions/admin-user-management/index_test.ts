@@ -876,7 +876,7 @@ Deno.test("principal owner can legitimately manage an admin and canonical permis
   });
 });
 
-Deno.test("employee link target policy permits owner self-link but protects another principal", () => {
+Deno.test("employee link target policy keeps the company owner outside HR identities", () => {
   const tenantId = "22222222-2222-4222-8222-222222222222";
   const owner = {
     userId: "11111111-1111-4111-8111-111111111111",
@@ -885,14 +885,19 @@ Deno.test("employee link target policy permits owner self-link but protects anot
     permissions: {},
     isPrincipalOwner: true,
   };
-  assertEmployeeLinkTargetAllowed(owner, {
-    userId: owner.userId,
-    role: "admin",
-    permissions: {},
-    isActive: true,
-    updatedAt: "2026-07-26T12:00:00.000Z",
-    isPrincipalOwner: true,
-  });
+  assertThrowsCode(
+    () =>
+      assertEmployeeLinkTargetAllowed(owner, {
+        userId: owner.userId,
+        role: "admin",
+        permissions: {},
+        isActive: true,
+        updatedAt: "2026-07-26T12:00:00.000Z",
+        isPrincipalOwner: true,
+      }),
+    "principal_owner_protected",
+    "the company principal never represents one employee",
+  );
   assertThrowsCode(
     () =>
       assertEmployeeLinkTargetAllowed(
@@ -962,6 +967,9 @@ Deno.test("explicit employee link actions use caller JWT RPCs and verify exact r
       linked: true,
       userId,
       employeeId,
+      accessMode: "erp",
+      transitionedFromWorker: false,
+      tasksTransferred: 0,
     },
     "link action verifies the exact database receipt",
   );
@@ -1135,6 +1143,14 @@ Deno.test("employee access overview exposes inactive exact links and every acces
       status: "active",
       user_id: null,
     },
+    {
+      id: "employee-worker-transition",
+      first_name: "Worker",
+      last_name: "Transition",
+      email: "transition@example.invalid",
+      status: "active",
+      user_id: null,
+    },
   ]);
   client.rows.set("user_profiles", [
     {
@@ -1145,18 +1161,49 @@ Deno.test("employee access overview exposes inactive exact links and every acces
   ]);
   client.rows.set("employee_portal_accounts", [
     {
+      id: "portal-worker",
+      auth_user_id: "auth-worker",
       employee_id: "employee-worker",
       username: "worker",
       is_active: true,
     },
     {
+      id: "portal-suspended",
+      auth_user_id: "auth-suspended",
       employee_id: "employee-suspended-worker",
       username: "suspended",
       is_active: false,
     },
+    {
+      id: "portal-transition",
+      auth_user_id: "auth-transition",
+      employee_id: "employee-worker-transition",
+      username: "transition",
+      is_active: true,
+    },
   ]);
   client.rows.set("user_invitations", [
-    { employee_id: "employee-pending" },
+    {
+      id: "invite-pending",
+      employee_id: "employee-pending",
+      email: "pending@example.invalid",
+      metadata: {},
+      created_at: "2026-08-27T10:00:00.000Z",
+    },
+    {
+      id: "invite-transition",
+      employee_id: "employee-worker-transition",
+      email: "transition@example.invalid",
+      created_at: "2026-08-27T10:05:00.000Z",
+      metadata: {
+        access_transition: {
+          kind: "worker_to_erp",
+          employee_id: "employee-worker-transition",
+          portal_account_id: "portal-transition",
+          worker_auth_user_id: "auth-transition",
+        },
+      },
+    },
   ]);
 
   const states = await getEmployeeAccessStates(client, tenantId);
@@ -1190,6 +1237,12 @@ Deno.test("employee access overview exposes inactive exact links and every acces
         employeeId: "employee-suspended-worker",
         status: "active",
         linkState: "worker_suspended",
+        erpProfileActive: false,
+      },
+      {
+        employeeId: "employee-worker-transition",
+        status: "active",
+        linkState: "worker_to_erp_pending",
         erpProfileActive: false,
       },
     ],
@@ -2067,8 +2120,13 @@ Deno.test("internal invitation employee must be active in the caller tenant", as
 
   const workerClient = new FakeServiceClient();
   workerClient.evidenceTables.add("employees");
+  workerClient.singleRows.set("employees", {
+    id: employeeId,
+    user_id: null,
+  });
   workerClient.singleRows.set("employee_portal_accounts", {
     id: "55555555-5555-4555-8555-555555555555",
+    auth_user_id: "77777777-7777-4777-8777-777777777777",
   });
   await assertRejectsCode(
     () =>
@@ -2079,6 +2137,24 @@ Deno.test("internal invitation employee must be active in the caller tenant", as
       ),
     "worker_access_conflict",
     "an employee with active worker access cannot receive ERP access",
+  );
+  assertEquals(
+    await assertActiveEmployeeForInvitation(
+      workerClient,
+      tenantId,
+      employeeId,
+      { transitionFromWorker: true },
+    ),
+    {
+      employee: { id: employeeId, user_id: null },
+      transitionMetadata: {
+        kind: "worker_to_erp",
+        employee_id: employeeId,
+        portal_account_id: "55555555-5555-4555-8555-555555555555",
+        worker_auth_user_id: "77777777-7777-4777-8777-777777777777",
+      },
+    },
+    "the explicit transition captures the exact still-active Worker identity",
   );
 
   const linkedClient = new FakeServiceClient();
@@ -2773,8 +2849,8 @@ Deno.test("worker Auth updates preserve shared identity and provider metadata", 
   const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
   assertEquals(
     source.match(/app_metadata: mergeWorkerAppMetadata/g)?.length ?? 0,
-    3,
-    "orphan retry, existing-worker recreation and password reset must merge app_metadata",
+    4,
+    "orphan retry, existing-worker recreation, password reset and ERP transition must merge app_metadata",
   );
   const newWorkerCreate = source.slice(
     source.indexOf("auth.admin.createUser"),

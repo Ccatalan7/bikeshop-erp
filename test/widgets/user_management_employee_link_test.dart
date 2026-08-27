@@ -87,7 +87,7 @@ void main() {
       );
       final workerActiveItem =
           tester.widget<DropdownMenuItem<String>>(workerActiveFinder.last);
-      expect(workerActiveItem.enabled, isFalse);
+      expect(workerActiveItem.enabled, isTrue);
 
       await tester.tap(
         find.text('Ana Mecánica — Disponible para vincular').last,
@@ -201,6 +201,80 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'the company owner is explicit and cannot be linked or moved as an employee',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final tenantService = TenantService.testing(
+        currentUserId: () => null,
+        profileLookup: (_) async => const [],
+      );
+      final userService = _FakeUserManagementService(
+        tenantService,
+        overview: _overview(
+          staffUsers: [
+            {
+              'id': 'company-owner',
+              'email': 'owner@example.com',
+              'displayName': 'Viñabike',
+              'role': 'admin',
+              'permissions': <String, bool>{},
+              'isActive': true,
+              'profileActive': true,
+              'emailConfirmed': true,
+              'employeeId': null,
+              'isPrincipalOwner': true,
+            },
+          ],
+          employeeStates: [
+            _employeeState(
+              id: 'worker-active',
+              name: 'Trabajador disponible',
+              email: 'worker@example.com',
+              linkState: 'worker_active',
+              workerAccessExists: true,
+              workerAccessActive: true,
+              workerUsername: 'trabajador.disponible',
+            ),
+          ],
+        ),
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TenantService>.value(value: tenantService),
+            Provider<UserManagementService>.value(value: userService),
+          ],
+          child: const MaterialApp(home: UserManagementPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Identidad de la empresa · Owner'), findsOneWidget);
+      expect(find.text('Empresa (owner)'), findsOneWidget);
+      expect(
+        find.textContaining('No se puede vincular a un trabajador'),
+        findsOneWidget,
+      );
+      expect(find.text('Vincular trabajador'), findsNothing);
+      expect(find.text('Mover a Worker Space'), findsNothing);
+      expect(find.text('Dar de baja cuenta interna'), findsNothing);
+
+      final editAccess = find.ancestor(
+        of: find.text('Editar rol y permisos'),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is ButtonStyleButton,
+        ),
+      );
+      expect(editAccess, findsOneWidget);
+      expect(tester.widget<ButtonStyleButton>(editAccess).onPressed, isNull);
       expect(tester.takeException(), isNull);
     },
   );
@@ -355,6 +429,7 @@ class _FakeUserManagementService extends UserManagementService {
   Future<InvitationIdentityCheck> checkInternalInvitationIdentity({
     required String email,
     String? employeeId,
+    bool transitionFromWorker = false,
   }) async {
     identityCheckCount += 1;
     return identityCheck;
@@ -367,6 +442,7 @@ class _FakeUserManagementService extends UserManagementService {
     required Map<String, bool> permissions,
     String? name,
     String? employeeId,
+    bool transitionFromWorker = false,
   }) async {
     invitationCount += 1;
     final error = invitationError;
@@ -408,8 +484,14 @@ Map<String, dynamic> _employeeState({
     'erpUserId': erpUserId,
     'erpProfileActive': erpProfileActive,
     'pendingInvitation': pendingInvitation,
+    'pendingInvitationId': pendingInvitation ? 'invitation-$id' : null,
+    'pendingInvitationEmail': pendingInvitation ? email : null,
+    'pendingInvitationCreatedAt': null,
+    'pendingTransitionFromWorker': false,
     'workerAccessExists': workerAccessExists,
     'workerAccessActive': workerAccessActive,
+    'workerPortalAccountId': workerAccessExists ? 'portal-$id' : null,
+    'workerAuthUserId': workerAccessExists ? 'worker-auth-$id' : null,
     'workerUsername': workerUsername,
     'linkState': linkState,
   };

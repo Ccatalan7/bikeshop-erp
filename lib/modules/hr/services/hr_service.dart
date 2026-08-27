@@ -1168,34 +1168,6 @@ class HRService extends ChangeNotifier {
     }
   }
 
-  // ============================================================================
-  // USER ACCOUNT CREATION FOR EMPLOYEES
-  // ============================================================================
-
-  /// Creates a user invitation for an employee, granting them system access
-  /// This will send an email invitation to set up their account
-  /// Returns whether the invitation email was confirmed as sent.
-  Future<bool> createUserForEmployee({
-    required String employeeId,
-    required String email,
-    required String role,
-    required Map<String, dynamic> permissions,
-    required String firstName,
-    required String lastName,
-  }) async {
-    final result = await _invokeIdentityAdmin({
-      'action': 'create_internal_invitation',
-      'email': email.toLowerCase().trim(),
-      'role': role,
-      'permissions': permissions,
-      'employeeId': employeeId,
-      'name': '$firstName $lastName'.trim(),
-    });
-    final emailSent = result['success'] == true && result['emailSent'] == true;
-    notifyListeners();
-    return emailSent;
-  }
-
   /// Resends a pending invitation through the tenant-authorized admin service.
   Future<void> resendInvitation(String invitationId) async {
     final result = await _invokeIdentityAdmin({
