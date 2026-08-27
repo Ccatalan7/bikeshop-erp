@@ -42,6 +42,19 @@ String withNotificationOpenRequest(
   ).toString();
 }
 
+/// Pseudo-ruta de una notificación cuyo destino es una herramienta del rail,
+/// no una ruta de GoRouter. El panel de notificaciones la intercepta y abre
+/// la bandeja de Tareas directamente en esa tarea.
+const String taskToolRoutePrefix = 'tool:tasks';
+
+String buildTaskToolRoute(String taskId) =>
+    '$taskToolRoutePrefix?taskId=${Uri.encodeComponent(taskId)}';
+
+String? taskIdFromToolRoute(String route) {
+  if (!route.startsWith(taskToolRoutePrefix)) return null;
+  return Uri.tryParse(route)?.queryParameters['taskId'];
+}
+
 String resolveErpNotificationRoute(Map<String, dynamic> row) {
   final type = _text(row['type']);
   final entityType = _text(row['entity_type']);
@@ -49,6 +62,11 @@ String resolveErpNotificationRoute(Map<String, dynamic> row) {
       ? Map<String, dynamic>.from(row['data'] as Map)
       : const <String, dynamic>{};
   final storedRoute = _text(row['route']);
+
+  if (entityType == 'smart_task') {
+    final taskId = _firstText([row['entity_id'], data['task_id']]);
+    if (taskId != null) return buildTaskToolRoute(taskId);
+  }
 
   // Meta interaction URLs go through the dedicated trusted-host validator at
   // navigation time. Keep their exact stored destination intact here.

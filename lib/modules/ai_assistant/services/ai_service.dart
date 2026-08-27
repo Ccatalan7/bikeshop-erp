@@ -5246,6 +5246,7 @@ END_CANONICAL_RESPONSE_SCHEMA_JSON
   String _taskStatusLabel(TaskStatus status) => switch (status) {
         TaskStatus.pending => 'Pendiente',
         TaskStatus.inProgress => 'En curso',
+        TaskStatus.blocked => 'Bloqueada',
         TaskStatus.completed => 'Completada',
         TaskStatus.cancelled => 'Cancelada',
       };

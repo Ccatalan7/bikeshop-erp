@@ -1457,6 +1457,63 @@ class WorkspaceManager extends ChangeNotifier {
     }
   }
 
+  /// Pushes a routed detail from global shell UI that lives outside the
+  /// active workspace's GoRouter subtree (for example, the right toolbar).
+  ///
+  /// Unlike [navigateActiveWorkspace], this preserves the Navigator return
+  /// stack required by routed details. A pinned workspace that cannot host the
+  /// destination opens a compatible workspace with a durable return milestone.
+  Future<T?> pushActiveWorkspace<T>(String route) async {
+    if (_workspaces.isEmpty) return Future<T?>.value();
+
+    final activeWorkspace = _workspaces[_activeIndex];
+    if (!activeWorkspace.allowsRoute(route)) {
+      openRouteInWorkspace(route, returnRoute: activeWorkspace.currentRoute);
+      return Future<T?>.value();
+    }
+
+    final router = activeWorkspace.router;
+    if (router == null) {
+      debugPrint(
+          '⚠️ [WorkspaceManager] Cannot push: active workspace router is null');
+      return Future<T?>.value();
+    }
+
+    debugPrint('🧭 [WorkspaceManager] External push triggered to: $route');
+    final sourceRoute = activeWorkspace.currentRoute;
+    final resultFuture = router.push<T>(route);
+
+    // The production workspace view also observes the delegate, but keeping
+    // this owner self-contained prevents a shell-only caller from leaving the
+    // tab identity stale while the pushed detail is visible.
+    handleWorkspaceRouteChange(activeWorkspace.id, route);
+
+    final result = await resultFuture;
+    if (!identical(workspaceById(activeWorkspace.id)?.router, router)) {
+      return result;
+    }
+
+    final returnedRoute = workspaceRouteIdentity(
+      router.routerDelegate.currentConfiguration.uri.toString(),
+    );
+    final durableSource = workspaceRouteIdentity(sourceRoute);
+    if (returnedRoute == durableSource) {
+      // A routed `pop` is history traversal, not a brand-new visit to the
+      // source. Reconcile the workspace cursor so Back/Forward and the tab
+      // title describe the Navigator stack that is actually on screen.
+      final sourceIndex = activeWorkspace.routeHistory.lastIndexOf(
+        durableSource,
+        activeWorkspace.routeHistoryIndex - 1,
+      );
+      if (sourceIndex >= 0) {
+        activeWorkspace.routeHistoryIndex = sourceIndex;
+        activeWorkspace.isApplyingHistoryNavigation = true;
+      }
+    }
+    handleWorkspaceRouteChange(activeWorkspace.id, returnedRoute);
+    return result;
+  }
+
   /// Navigate from an in-app shared link while preserving a useful back
   /// milestone. If the active workspace is pinned and cannot leave its module,
   /// the destination workspace still gets a return entry back to the source.

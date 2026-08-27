@@ -39,6 +39,17 @@ void main() {
       expect(segments[0], isA<TextSegment>());
     });
 
+    test('parses #TASK references with a task id', () {
+      final segments = MessageParser.parse(
+        'Quedó lista #TASK-7c2f0a1e-0000-4000-8000-000000000001, avísame',
+      );
+
+      final refs = segments.whereType<ReferenceSegment>().toList();
+      expect(refs, hasLength(1));
+      expect(refs.single.type, RefType.task);
+      expect(refs.single.id, '7c2f0a1e-0000-4000-8000-000000000001');
+    });
+
     test('parses shared Vinabike route links', () {
       final segments = MessageParser.parse(
         'Mira vinabike://app/open?route=%2Fsales%2Finvoices&title=Facturas',

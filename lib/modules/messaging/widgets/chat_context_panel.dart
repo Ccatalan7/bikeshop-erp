@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../shared/services/right_toolbar_service.dart';
+import '../../tasks/services/task_service.dart';
+import '../../tasks/models/task_model.dart';
+import '../../tasks/models/smart_task_job_item.dart';
 
 import '../../bikeshop/models/bikeshop_models.dart';
 import '../../bikeshop/services/bikeshop_service.dart';
@@ -63,6 +67,8 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
     }
   }
 
+  List<SmartTaskJobItem> _taskLinks = const [];
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -70,6 +76,7 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
       _data = null;
       _bike = null;
       _linkedSale = null;
+      _taskLinks = const [];
     });
 
     try {
@@ -140,6 +147,20 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
             _data = supplier;
           }
           break;
+        case 'task':
+          final taskService = context.read<TaskService>();
+          final task = taskService.tasks
+              .where((task) => task.id == widget.contextId)
+              .firstOrNull;
+          if (task == null) {
+            // Puede ser privada de otra persona o estar fuera de la caché.
+            _error = 'No se encontró la tarea vinculada (o no es visible '
+                'para ti).';
+          } else {
+            _data = task;
+            _taskLinks = taskService.jobItemsOf(widget.contextId);
+          }
+          break;
         default:
           _error = 'Este tipo de contexto todavía no está disponible.';
       }
@@ -196,6 +217,7 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
           'Ficha de abastecimiento',
           Icons.storefront_outlined
         ),
+      'task' => ('Tarea', 'Bandeja de trabajo', Icons.task_alt),
       _ => ('Contexto', 'Información vinculada', Icons.info_outline),
     };
     final subtitle = _headerSubtitle(fallbackSubtitle);
@@ -279,6 +301,9 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
           : fallback;
     }
     if (data is shared_supplier.Supplier) return data.displayName;
+    if (data is TaskModel) {
+      return data.title.trim().isNotEmpty ? data.title.trim() : fallback;
+    }
     return fallback;
   }
 
@@ -309,8 +334,79 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
         PurchaseInvoice purchase => _buildPurchaseContent(theme, purchase),
         shared_supplier.Supplier supplier =>
           _buildSupplierContent(theme, supplier),
+        TaskModel task => _buildTaskContent(theme, task),
         _ => _buildErrorState(theme, 'No hay información para mostrar.'),
       },
+    );
+  }
+
+
+  Widget _buildTaskContent(ThemeData theme, TaskModel task) {
+    final colorScheme = theme.colorScheme;
+    final statusLabel = switch (task.status) {
+      TaskStatus.pending =>
+        task.awaitsAcknowledgement ? 'Por aceptar' : 'Pendiente',
+      TaskStatus.inProgress => 'En curso',
+      TaskStatus.blocked => 'Bloqueada',
+      TaskStatus.completed => 'Completada',
+      TaskStatus.cancelled => 'Cancelada',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(task.title,
+            style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        Text(
+          [
+            statusLabel,
+            if (task.dueDate != null)
+              'plazo ${task.dueDate!.day.toString().padLeft(2, '0')}/'
+                  '${task.dueDate!.month.toString().padLeft(2, '0')}',
+            if (task.assigneeName != null) 'para ${task.assigneeName}',
+          ].join(' · '),
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: colorScheme.onSurfaceVariant),
+        ),
+        if (task.status == TaskStatus.blocked && task.blockedReason != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Bloqueada: ${task.blockedReason}',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: colorScheme.error)),
+          ),
+        if ((task.description ?? '').isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(task.description!, style: theme.textTheme.bodySmall),
+          ),
+        if (_taskLinks.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          for (final link in _taskLinks)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Text(
+                '• ${link.itemName}'
+                '${link.bikeLabel != null ? ' · ${link.bikeLabel}' : ''}'
+                '${link.isInvalidated ? ' (línea eliminada)' : ''}',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: colorScheme.onSurfaceVariant),
+              ),
+            ),
+        ],
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () {
+            context.read<RightToolbarService>().openConversation(
+                  tool: ToolbarTool.tasks,
+                  conversationId: widget.contextId,
+                );
+          },
+          icon: const Icon(Icons.open_in_new, size: 16),
+          label: const Text('Abrir en Tareas'),
+        ),
+      ],
     );
   }
 

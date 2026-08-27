@@ -80,7 +80,8 @@ class Conversation {
         contextType == 'invoice' ||
         contextType == 'order' ||
         contextType == 'purchase_invoice' ||
-        contextType == 'supplier';
+        contextType == 'supplier' ||
+        contextType == 'task';
   }
 
   bool get isInternal => channel == 'internal' || type == 'internal';

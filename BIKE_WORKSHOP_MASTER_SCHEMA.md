@@ -1968,6 +1968,59 @@ Recent implementation moved service targeting inline on the row:
 
 This is the correct direction because target metadata belongs to the executed service line, not hidden in a disconnected modal.
 
+## Work Tray Layer: Taller ↔ `smart_tasks` (2026-08-27)
+
+La bandeja de trabajo del ERP (`smart_tasks`) es un sistema DISTINTO del
+checklist técnico de la pega, y el vínculo entre ambos quedó normalizado en el
+kernel `20260826220000_smart_task_work_tray_kernel`:
+
+- **`smart_tasks`** es la bandeja canónica: quién debe hacer qué y cuándo.
+  Tipo `task`/`note`, visibilidad `private`/`team`/`company`, ciclo de vida
+  `pending → in_progress → blocked → completed/cancelled` con recepción
+  separada (`acknowledged_at`), versión optimista y sellos de actor. Toda
+  mutación va por comandos RPC idempotentes (`smart_task_create_v1`,
+  `smart_task_command_v1`); la escritura directa legada sigue admitida en
+  fase de compatibilidad, pero el guard de la base la limita por actor y los
+  triggers la auditan (INSERT y UPDATE) en `smart_task_events` con
+  `source='direct'`. La bandeja **cancela, no borra**: el DELETE de cliente
+  está revocado y el ledger (`FK RESTRICT`) impide el borrado físico.
+- **`mechanic_job_tasks`** sigue siendo el checklist técnico/facturable por
+  línea de la pega (auto-parseado, sincroniza ítems/precios ad-hoc por
+  triggers). No tiene asignado ni ciclo de vida y NO se fusiona con la
+  bandeja. Desde este kernel sí está en la publicación Realtime (antes su
+  suscripción era inerte).
+- **`smart_task_job_items`** es el puente: una tarea de la bandeja respalda
+  uno o varios servicios REALES de la pega (`mechanic_job_items` de tipo
+  `service`/`adhoc`; nunca productos), con snapshot de contexto (nombre,
+  `job_number`, bicicleta) e identidad propia. Borrar o editar la línea en el
+  taller NO borra el vínculo: lo marca (`invalidated_at` /
+  `context_changed_at`) y la tarea sigue resoluble. Repartir una pega =
+  varias tareas sobre líneas distintas; un solape con otra tarea activa exige
+  decisión deliberada (`collaborate`/`transfer`) auditada.
+- **Identidad**: `assigned_to`/`created_by` son usuarios auth. La cara de
+  trabajador se resuelve por `get_smart_task_assignment_directory_v1`
+  (principals ERP ∪ cuentas de portal activas ∪ empleados sin cuenta como
+  `access='none'` para «Invitar»; un principal canónico por persona). El
+  portal del trabajador consume solo `get_my_worker_tasks_v1` (proyección sin
+  precios, multi-bici real desde los vínculos) y `worker_task_command_v1`
+  acotado a su ciclo.
+- **Hilo y notificaciones**: una conversación interna canónica por tarea
+  (`smart_task_thread_get_or_create_v1`, índice único parcial sobre
+  `conversation_contexts` tipo `task`); el hilo sigue al trabajo — entra el
+  nuevo responsable ERP y sale el anterior salvo creador/manager, también en
+  la ruta directa. Un principal de portal no es principal de mensajería y no
+  se le finge hilo. Las notificaciones de tarea son dirigidas
+  (`erp_notifications.recipient_user_id`, upsert por tipo+entidad).
+- **`mechanic_jobs.assigned_to` NO se usa**: su FK apunta a `customers(id)`
+  (defecto heredado, 0/467 filas). La asignación de trabajo vive en la
+  bandeja; esa columna no debe reutilizarse mientras la FK esté rota.
+
+Verdad de cada capa: la pega y su checklist responden «qué hay que hacerle a
+la bici y qué se cobra»; la bandeja responde «quién lo hace, cuándo y en qué
+estado va». La tarea PROYECTA el contexto del taller (snapshot + marcas),
+nunca lo reescribe.
+
+
 ## Guided Service Layer
 
 Current schema anchors:

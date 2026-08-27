@@ -8038,6 +8038,7 @@ class _ChatWindowState extends State<ChatWindow> {
                         unawaited(_sendComposer()),
                   },
                   child: TextField(
+                    key: const ValueKey<String>('chat-message-composer'),
                     controller: _messageController,
                     focusNode: _focusNode,
                     enabled: composerEnabled,
@@ -8090,6 +8091,7 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
             const SizedBox(width: 8),
             FilledButton(
+              key: const ValueKey<String>('chat-message-send'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.square(44),
                 maximumSize: const Size.square(44),

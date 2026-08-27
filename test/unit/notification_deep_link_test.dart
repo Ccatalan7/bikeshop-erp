@@ -196,5 +196,22 @@ void main() {
         '/sales/payments',
       );
     });
+
+    test('a smart_task notification opens the tray, not a router route', () {
+      final route = resolveErpNotificationRoute({
+        'type': 'smart_task_assigned',
+        'entity_type': 'smart_task',
+        'entity_id': 'aaaa1111-0000-4000-8000-000000000001',
+        'data': {'task_id': 'aaaa1111-0000-4000-8000-000000000001'},
+      });
+      expect(route, startsWith(taskToolRoutePrefix));
+      expect(
+        taskIdFromToolRoute(route),
+        'aaaa1111-0000-4000-8000-000000000001',
+      );
+      // La pseudo-ruta no es un destino de GoRouter y no recibe openRequest.
+      expect(withNotificationOpenRequest(route), route);
+      expect(taskIdFromToolRoute('/taller/pegas'), isNull);
+    });
   });
 }

@@ -9,7 +9,17 @@ import 'package:vinabike_erp/modules/bikeshop/widgets/pegas_tasks_widget.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_model.dart';
 import 'package:vinabike_erp/modules/tasks/services/task_service.dart';
 import 'package:vinabike_erp/shared/services/tenant_service.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/services/user_management_service.dart';
+
+
+/// El VbSegmented del alcance exige VinabikeThemeRoles: todo host de prueba
+/// monta el tema canónico, igual que la app real.
+ThemeData _canonicalTheme() => AppTheme.resolve(
+      preset: AppearancePresets.all.first,
+      brightness: Brightness.light,
+    );
 
 void main() {
   setUpAll(() async {
@@ -41,8 +51,9 @@ void main() {
                 value: _EmptyUserManagementService(),
               ),
             ],
-            child: const MaterialApp(
-              home: Scaffold(body: PegasTasksWidget()),
+            child: MaterialApp(
+              theme: _canonicalTheme(),
+              home: const Scaffold(body: PegasTasksWidget()),
             ),
           ),
         );
@@ -203,8 +214,9 @@ void main() {
     await tester.pumpWidget(
       _taskProviders(
         taskService: taskService,
-        child: const MaterialApp(
-          home: Scaffold(body: PegasTasksWidget()),
+        child: MaterialApp(
+          theme: _canonicalTheme(),
+          home: const Scaffold(body: PegasTasksWidget()),
         ),
       ),
     );
@@ -247,8 +259,9 @@ void main() {
                 value: _EmptyUserManagementService(),
               ),
             ],
-            child: const MaterialApp(
-              home: Scaffold(body: PegasTasksWidget()),
+            child: MaterialApp(
+              theme: _canonicalTheme(),
+              home: const Scaffold(body: PegasTasksWidget()),
             ),
           ),
         );
@@ -286,8 +299,9 @@ void main() {
             value: _EmptyUserManagementService(),
           ),
         ],
-        child: const MaterialApp(
-          home: Scaffold(body: PegasTasksWidget()),
+        child: MaterialApp(
+          theme: _canonicalTheme(),
+          home: const Scaffold(body: PegasTasksWidget()),
         ),
       ),
     );
@@ -323,6 +337,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
+          theme: _canonicalTheme(),
           builder: (context, child) {
             return MediaQuery(
               data: MediaQuery.of(context).copyWith(
@@ -370,8 +385,9 @@ void main() {
     await tester.pumpWidget(
       _taskProviders(
         taskService: emptyService,
-        child: const MaterialApp(
-          home: Scaffold(body: PegasTasksWidget()),
+        child: MaterialApp(
+          theme: _canonicalTheme(),
+          home: const Scaffold(body: PegasTasksWidget()),
         ),
       ),
     );
@@ -393,8 +409,9 @@ void main() {
     await tester.pumpWidget(
       _taskProviders(
         taskService: filteredService,
-        child: const MaterialApp(
-          home: Scaffold(body: PegasTasksWidget()),
+        child: MaterialApp(
+          theme: _canonicalTheme(),
+          home: const Scaffold(body: PegasTasksWidget()),
         ),
       ),
     );
@@ -442,6 +459,7 @@ void main() {
       Widget buildSurface() => _taskProviders(
             taskService: taskService,
             child: MaterialApp(
+              theme: _canonicalTheme(),
               home: Scaffold(
                 body: PegasTasksWidget(
                   useCompactLayout: true,
@@ -522,6 +540,7 @@ void main() {
     Widget buildSurface() => _taskProviders(
           taskService: taskService,
           child: MaterialApp(
+            theme: _canonicalTheme(),
             home: Scaffold(
               body: PegasTasksWidget(
                 useCompactLayout: true,
@@ -589,7 +608,10 @@ void main() {
     await tester.pumpWidget(
       _taskProviders(
         taskService: taskService,
-        child: MaterialApp.router(routerConfig: router),
+        child: MaterialApp.router(
+          theme: _canonicalTheme(),
+          routerConfig: router,
+        ),
       ),
     );
     await tester.pump();

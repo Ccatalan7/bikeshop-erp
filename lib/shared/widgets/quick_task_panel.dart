@@ -1,14 +1,102 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../modules/tasks/models/smart_task_event.dart';
+import '../../modules/tasks/models/smart_task_job_item.dart';
+import '../../modules/tasks/models/task_assignment_principal.dart';
 import '../../modules/tasks/models/task_model.dart';
 import '../../modules/tasks/services/task_service.dart';
-import '../services/tenant_service.dart';
-import '../services/user_management_service.dart';
+import '../services/current_user_profile_service.dart';
+import '../services/right_toolbar_service.dart';
+import '../services/workspace_manager.dart';
+import '../themes/vinabike_theme_roles.dart';
+import 'vb_marked_date_picker.dart';
+import 'vb_overlay_surfaces.dart';
+import 'vb_searchable_select.dart';
+import 'vb_segmented.dart';
+import 'vb_short_select.dart';
+import 'vb_status_badge.dart';
 
-/// A lightweight inline panel for quickly adding tasks from the right toolbar.
+/// Alcances de la bandeja. `inbox` es lo asignado a mí; `team` la
+/// coordinación del tenant; `personal` mis tareas privadas.
+enum TaskTrayScope { inbox, team, personal }
+
+/// Abre el detalle routed de la pega respetando el contrato de retorno:
+/// SIEMPRE `push` (el detalle cierra por `ReturnNavigation.close`, nunca con
+/// un `go` a la lista que borra el origen).
+Future<void> openWorkshopJobFromTray(BuildContext context, String jobId) async {
+  await context.read<WorkspaceManager>().pushActiveWorkspace<void>(
+        '/taller/pegas/${Uri.encodeComponent(jobId)}',
+      );
+}
+
+/// Borrador del compositor: vive en el panel (no en la superficie O-02/O-05)
+/// para que cerrar el rail o cruzar un breakpoint nunca lo bote.
+class TaskComposerDraft {
+  TaskKind kind = TaskKind.task;
+  String title = '';
+  String description = '';
+  TaskPriority priority = TaskPriority.normal;
+  DateTime? dueDate;
+  String? assigneeId;
+  String? jobId;
+  Set<String> selectedItemIds = {};
+  TaskVisibility visibility = TaskVisibility.team;
+
+  bool get isEmpty =>
+      title.isEmpty &&
+      description.isEmpty &&
+      dueDate == null &&
+      assigneeId == null &&
+      jobId == null;
+
+  void reset() {
+    kind = TaskKind.task;
+    title = '';
+    description = '';
+    priority = TaskPriority.normal;
+    dueDate = null;
+    assigneeId = null;
+    jobId = null;
+    selectedItemIds = {};
+    visibility = TaskVisibility.team;
+  }
+}
+
+/// Estado de vista del panel: sobrevive cerrar/reabrir el rail y el cruce de
+/// breakpoint, nunca cruza un cambio de tenant (se valida contra el scope de
+/// autoridad del servicio al restaurar).
+class QuickTaskPanelSession {
+  QuickTaskPanelSession({
+    required this.authorityScopeKey,
+    required this.scope,
+    required this.collapsedSections,
+    required this.openTaskId,
+    required this.composerOpen,
+    required this.draft,
+    required this.scrollOffset,
+  });
+
+  final String authorityScopeKey;
+  final TaskTrayScope scope;
+  final Set<String> collapsedSections;
+  final String? openTaskId;
+  final bool composerOpen;
+  final TaskComposerDraft draft;
+  final double scrollOffset;
+}
+
+/// Bandeja rápida de Tareas del rail derecho.
+///
+/// Columna: selector de alcance (S-04), lista agrupada (filas T-01) y una
+/// barra inferior con «Nueva tarea», que abre el compositor progresivo del
+/// caso dueño en su host canónico — popover O-02 anclado en escritorio, hoja
+/// O-05 en compacto: trabajador → pega activa → todos o algunos servicios
+/// reales agrupados por bicicleta. El detalle reemplaza la lista in-pane con
+/// acciones de ciclo de vida según autoridad y el hilo canónico por tarea.
 class QuickTaskPanel extends StatefulWidget {
   const QuickTaskPanel({super.key});
 
@@ -17,882 +105,947 @@ class QuickTaskPanel extends StatefulWidget {
 }
 
 class _QuickTaskPanelState extends State<QuickTaskPanel> {
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _titleFocusNode = FocusNode();
+  static const _tool = ToolbarTool.tasks;
 
-  TaskPriority _priority = TaskPriority.normal;
-  DateTime? _dueDate;
-  String? _assignedToId;
-  String? _assigneeName;
-  bool _isSaving = false;
-  bool _showSuccess = false;
-
-  // ─── In-pane edit state ───────────────────────────────────────────
-  TaskModel? _editingTask;
-  final _editTitleCtrl = TextEditingController();
-  final _editDescCtrl = TextEditingController();
-  TaskPriority _editPriority = TaskPriority.normal;
-  TaskStatus _editStatus = TaskStatus.pending;
-  DateTime? _editDueDate;
-  bool _isSavingEdit = false;
-
-  // filter: false = pending only, true = all tasks
-  bool _showAll = false;
-
-  // sections collapsed by default
+  TaskTrayScope _scope = TaskTrayScope.inbox;
   final Set<String> _collapsedSections = {'Completadas'};
+  String? _openTaskId;
+  final ScrollController _listScroll = ScrollController();
 
-  List<Map<String, dynamic>> _users = [];
-  bool _isLoadingUsers = true;
+  final TaskComposerDraft _draft = TaskComposerDraft();
+  bool _composerVisible = false;
+
+  // Directorio y pegas del compositor (se cargan al abrir el panel).
+  List<TaskAssignmentPrincipal> _directory = const [];
+  List<TaskLinkableJob> _linkableJobs = const [];
+  Map<String, TaskAssignmentPrincipal> _principalsByUser = const {};
+
+  RightToolbarService? _toolbarService;
+  TaskService? _taskServiceRef;
+  String _lastAuthorityKey = '';
+
+  TaskService get _tasks => context.read<TaskService>();
 
   @override
   void initState() {
     super.initState();
-    _loadUsers();
+    _restoreSession();
+    // Una tarea pedida desde afuera (notificación, #TASK en un chat, panel de
+    // contexto) llega por el mecanismo pendiente del rail y gana sobre la
+    // sesión restaurada. Se entrega una sola vez.
+    final pendingTaskId =
+        context.read<RightToolbarService?>()?.takePendingConversation(_tool);
+    if (pendingTaskId != null) {
+      _openTaskId = pendingTaskId;
+      _composerVisible = false;
+    }
+    unawaited(_loadComposerSources());
+    if (_composerVisible) {
+      // La superficie es un overlay: se reabre después del primer frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openComposerFromBar();
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Cacheados para poder guardar desde dispose(), donde el context no sirve.
+    _toolbarService = context.read<RightToolbarService?>();
+    _taskServiceRef = context.read<TaskService?>();
+    _lastAuthorityKey = _taskServiceRef?.authorityScope?.toString() ?? '';
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _titleFocusNode.dispose();
-    _editTitleCtrl.dispose();
-    _editDescCtrl.dispose();
+    _saveSession();
+    _listScroll.dispose();
     super.dispose();
   }
 
-  Future<void> _loadUsers() async {
-    try {
-      final userService = UserManagementService(
-        Provider.of<TenantService>(context, listen: false),
-      );
-      final users = await userService.getTenantUsers();
-      if (mounted) {
-        setState(() {
-          _users = users;
-          _isLoadingUsers = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoadingUsers = false);
+  // ── Sesión de vista ──────────────────────────────────────────────────────
+
+  String get _authorityKey =>
+      _taskServiceRef?.authorityScope?.toString() ??
+      context.read<TaskService>().authorityScope?.toString() ??
+      '';
+
+  void _restoreSession() {
+    final toolbar = context.read<RightToolbarService?>();
+    if (toolbar == null) return;
+    final session = toolbar.panelSession<QuickTaskPanelSession>(_tool);
+    if (session == null) return;
+    if (session.authorityScopeKey != _authorityKey) {
+      toolbar.clearPanelSession(_tool);
+      return;
     }
+    _scope = session.scope;
+    _collapsedSections
+      ..clear()
+      ..addAll(session.collapsedSections);
+    _openTaskId = session.openTaskId;
+    _composerVisible = session.composerOpen;
+    _draft
+      ..kind = session.draft.kind
+      ..title = session.draft.title
+      ..description = session.draft.description
+      ..priority = session.draft.priority
+      ..dueDate = session.draft.dueDate
+      ..assigneeId = session.draft.assigneeId
+      ..jobId = session.draft.jobId
+      ..selectedItemIds = {...session.draft.selectedItemIds}
+      ..visibility = session.draft.visibility;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_listScroll.hasClients) return;
+      final max = _listScroll.position.maxScrollExtent;
+      _listScroll.jumpTo(session.scrollOffset.clamp(0.0, max));
+    });
   }
 
-  Future<void> _save() async {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) return;
-
-    setState(() => _isSaving = true);
-    try {
-      final taskService = context.read<TaskService>();
-      final activeUser = Supabase.instance.client.auth.currentUser;
-      final tenantId = await context.read<TenantService>().getTenantId();
-
-      if (activeUser == null || tenantId == null) {
-        throw Exception('Usuario no autenticado');
-      }
-
-      final task = TaskModel(
-        tenantId: tenantId,
-        title: title,
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
-        priority: _priority,
-        status: TaskStatus.pending,
-        dueDate: _dueDate,
-        assignedTo: _assignedToId,
-        assigneeName: _assigneeName,
-        createdBy: activeUser.id,
-      );
-
-      await taskService.createTask(task);
-
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-          _showSuccess = true;
-        });
-        // Reset after short delay
-        Future.delayed(const Duration(milliseconds: 1200), () {
-          if (mounted) {
-            setState(() {
-              _showSuccess = false;
-              _titleController.clear();
-              _descriptionController.clear();
-              _priority = TaskPriority.normal;
-              _dueDate = null;
-              _assignedToId = null;
-              _assigneeName = null;
-            });
-            _titleFocusNode.requestFocus();
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dueDate ?? DateTime.now().add(const Duration(days: 1)),
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+  void _saveSession() {
+    _toolbarService?.savePanelSession(
+      _tool,
+      QuickTaskPanelSession(
+        authorityScopeKey: _lastAuthorityKey,
+        scope: _scope,
+        collapsedSections: {..._collapsedSections},
+        openTaskId: _openTaskId,
+        composerOpen: _composerVisible,
+        draft: _draft,
+        scrollOffset: _listScroll.hasClients ? _listScroll.offset : 0,
+      ),
     );
-    if (picked != null && mounted) {
-      setState(() => _dueDate = picked);
+  }
+
+  // ── Datos del compositor ─────────────────────────────────────────────────
+
+  Future<void> _loadComposerSources() async {
+    try {
+      final directory = await _tasks.fetchAssignmentDirectory();
+      if (!mounted) return;
+      setState(() {
+        _directory = directory;
+        _principalsByUser = {
+          for (final principal in directory)
+            if (principal.userId != null) principal.userId!: principal,
+        };
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Task tray assignment directory failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+    try {
+      final jobs = await _tasks.fetchLinkableJobs();
+      if (!mounted) return;
+      setState(() => _linkableJobs = jobs);
+    } catch (error, stackTrace) {
+      debugPrint('Task tray linkable jobs failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  // ── Acciones ─────────────────────────────────────────────────────────────
+
+  bool get _isManager =>
+      context.read<CurrentUserProfileService?>()?.profile?.canManageUsers ==
+      true;
+
+  /// Otro responsable ya cubre esos servicios: colaboración o traspaso son
+  /// decisiones del operador. O-03 = Dialog de Material tematizado por el
+  /// resolver (sin wrapper visual): salida segura primero y con foco,
+  /// botones que dicen lo que hacen.
+  Future<String?> _askOverlapDecision(TaskOverlapException overlap) {
+    final theme = Theme.of(context);
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Repartir servicios ya asignados?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Estos servicios ya están en una tarea activa:',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 8),
+            for (final row in overlap.overlaps.take(3))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '• ${row['title'] ?? 'Tarea'}'
+                  '${_principalsByUser[row['assigned_to']]?.displayName != null ? ' — ${_principalsByUser[row['assigned_to']]!.displayName}' : ''}',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Volver'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(dialogContext).pop('collaborate'),
+            child: const Text('Colaborar (compartir)'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop('transfer'),
+            child: const Text('Traspasar aquí'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showError(Object error) {
+    final message = switch (error) {
+      TaskVersionConflictException _ =>
+        'La tarea cambió mientras tanto; se recargó. Intenta de nuevo.',
+      _ => 'No se pudo completar la acción: $error',
+    };
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+    ));
+  }
+
+  Future<void> _runCommand(Future<TaskModel> Function() command) async {
+    try {
+      await command();
+    } on TaskVersionConflictException {
+      if (!mounted) return;
+      unawaited(_tasks.fetchTasks());
+      _showError(TaskVersionConflictException(''));
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error);
+    }
+  }
+
+  Future<void> _openThread(TaskModel task) async {
+    try {
+      final thread = await _tasks.openThread(task.id!);
+      if (!mounted) return;
+      context.read<RightToolbarService>().openConversation(
+            tool: ToolbarTool.messages,
+            conversationId: thread.conversationId,
+          );
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
+  // ── Compositor en host canónico O-02/O-05 ───────────────────────────────
+
+  final GlobalKey _newTaskButtonKey = GlobalKey();
+
+  void _openComposerFromBar() {
+    final anchorContext = _newTaskButtonKey.currentContext ?? context;
+    _composerVisible = true;
+    showVbSurface<void>(
+      anchorContext: anchorContext,
+      title: 'Nueva tarea',
+      minWidth: 340,
+      maxWidth: 460,
+      builder: (surfaceContext) => TaskComposerSurface(
+        draft: _draft,
+        directory: _directory,
+        linkableJobs: _linkableJobs,
+        taskService: _tasks,
+        askOverlapDecision: _askOverlapDecision,
+        onDraftChanged: _saveSession,
+        onCreated: () {
+          _draft.reset();
+          _composerVisible = false;
+          _saveSession();
+          if (mounted) setState(() {});
+        },
+      ),
+    ).whenComplete(() {
+      // Cerrar sin crear conserva el borrador; solo se apaga la marca de
+      // «reabrir al restaurar».
+      _composerVisible = false;
+      _saveSession();
+    });
+    _saveSession();
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final taskService = context.watch<TaskService>();
+    final theme = Theme.of(context);
+
+    final openTask = _openTaskId == null
+        ? null
+        : taskService.tasks.where((task) => task.id == _openTaskId).firstOrNull;
+    if (_openTaskId != null && openTask == null) {
+      // La tarea abierta ya no existe/ya no es visible: volver a la lista.
+      _openTaskId = null;
+    }
+
+    return Column(
+      children: [
+        if (openTask == null) _buildScopeBar(theme),
+        Expanded(
+          child: openTask != null
+              ? _TaskDetailView(
+                  key: ValueKey('task-detail-${openTask.id}'),
+                  task: openTask,
+                  links: taskService.jobItemsOf(openTask.id!),
+                  jobHeader: taskService.jobHeaderOf(openTask),
+                  principalsByUser: _principalsByUser,
+                  isManager: _isManager,
+                  currentUserId: taskService.currentUserId,
+                  onBack: () => setState(() => _openTaskId = null),
+                  onCommand: _runCommand,
+                  onOpenThread: () => _openThread(openTask),
+                  taskService: taskService,
+                )
+              : _buildList(theme, taskService),
+        ),
+        if (openTask == null) _buildBottomBar(theme),
+      ],
+    );
+  }
+
+  Widget _buildScopeBar(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+      child: VbSegmented<TaskTrayScope>(
+        groupLabel: 'Alcance de la bandeja',
+        options: const [
+          VbSegmentedOption(value: TaskTrayScope.inbox, label: 'Mi bandeja'),
+          VbSegmentedOption(value: TaskTrayScope.team, label: 'Equipo'),
+          VbSegmentedOption(value: TaskTrayScope.personal, label: 'Personales'),
+        ],
+        value: _scope,
+        onChanged: (scope) => setState(() => _scope = scope),
+      ),
+    );
+  }
+
+  // Secciones por alcance. El orden es fijo y con intención: primero lo que
+  // exige decisión (por aceptar, bloqueadas), después el calendario.
+  List<_TraySection> _sectionsFor(TaskService service) {
+    final uid = service.currentUserId;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    bool isOverdue(TaskModel task) =>
+        task.dueDate != null && task.dueDate!.isBefore(today) && !task.isDone;
+    bool isToday(TaskModel task) {
+      final due = task.dueDate;
+      if (due == null) return false;
+      final day = DateTime(due.year, due.month, due.day);
+      return day == today;
+    }
+
+    List<TaskModel> sorted(Iterable<TaskModel> source) {
+      final list = source.toList();
+      list.sort((a, b) {
+        if (a.dueDate != null && b.dueDate != null) {
+          return a.dueDate!.compareTo(b.dueDate!);
+        }
+        if (a.dueDate != null) return -1;
+        if (b.dueDate != null) return 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+      return list;
+    }
+
+    switch (_scope) {
+      case TaskTrayScope.inbox:
+        final mine = service.tasks.where(
+            (task) => task.assignedTo == uid && task.kind == TaskKind.task);
+        final open = mine.where((task) => !task.isDone).toList();
+        return [
+          _TraySection('Por aceptar',
+              sorted(open.where((task) => task.awaitsAcknowledgement)),
+              emphasis: _SectionEmphasis.action),
+          _TraySection(
+              'Bloqueadas', sorted(open.where((task) => task.isBlocked)),
+              emphasis: _SectionEmphasis.danger),
+          _TraySection(
+              'Vencidas',
+              sorted(open.where((task) =>
+                  !task.awaitsAcknowledgement &&
+                  !task.isBlocked &&
+                  isOverdue(task))),
+              emphasis: _SectionEmphasis.danger),
+          _TraySection(
+              'Hoy',
+              sorted(open.where((task) =>
+                  !task.awaitsAcknowledgement &&
+                  !task.isBlocked &&
+                  isToday(task)))),
+          _TraySection(
+              'Próximas',
+              sorted(open.where((task) =>
+                  !task.awaitsAcknowledgement &&
+                  !task.isBlocked &&
+                  task.dueDate != null &&
+                  !isOverdue(task) &&
+                  !isToday(task) &&
+                  !task.dueDate!.isBefore(tomorrow)))),
+          _TraySection(
+              'Sin fecha',
+              sorted(open.where((task) =>
+                  !task.awaitsAcknowledgement &&
+                  !task.isBlocked &&
+                  task.dueDate == null))),
+          _TraySection('Completadas',
+              sorted(mine.where((task) => task.isDone)).take(20).toList()),
+        ];
+      case TaskTrayScope.team:
+        final teamAll = service.tasks
+            .where((task) => task.visibility != TaskVisibility.private);
+        final team =
+            teamAll.where((task) => task.kind == TaskKind.task).toList();
+        final notes =
+            teamAll.where((task) => task.kind == TaskKind.note).toList();
+        final open = team.where((task) => !task.isDone).toList();
+        final unassigned =
+            sorted(open.where((task) => task.assignedTo == null));
+        final byAssignee = <String, List<TaskModel>>{};
+        for (final task in open.where((task) => task.assignedTo != null)) {
+          byAssignee.putIfAbsent(task.assignedTo!, () => []).add(task);
+        }
+        final assigneeSections = byAssignee.entries.map((entry) {
+          final name = _principalsByUser[entry.key]?.displayName ??
+              (entry.key == service.currentUserId ? 'Yo' : 'Sin nombre');
+          return _TraySection(name, sorted(entry.value));
+        }).toList()
+          ..sort((a, b) => a.label.compareTo(b.label));
+        return [
+          _TraySection('Sin asignar', unassigned,
+              emphasis: _SectionEmphasis.action),
+          ...assigneeSections,
+          _TraySection('Notas', sorted(notes.where((note) => !note.isDone))),
+          _TraySection('Completadas',
+              sorted(teamAll.where((task) => task.isDone)).take(20).toList()),
+        ];
+      case TaskTrayScope.personal:
+        final personal = service.tasks.where((task) =>
+            task.visibility == TaskVisibility.private && task.createdBy == uid);
+        final open = personal.where((task) => !task.isDone).toList();
+        return [
+          _TraySection('Vencidas', sorted(open.where(isOverdue)),
+              emphasis: _SectionEmphasis.danger),
+          _TraySection('Hoy', sorted(open.where(isToday))),
+          _TraySection('Pendientes',
+              sorted(open.where((task) => !isOverdue(task) && !isToday(task)))),
+          _TraySection('Completadas',
+              sorted(personal.where((task) => task.isDone)).take(20).toList()),
+        ];
+    }
+  }
+
+  Widget _buildList(ThemeData theme, TaskService service) {
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final sections =
+        _sectionsFor(service).where((section) => section.tasks.isNotEmpty);
+
+    if (sections.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.task_alt,
+                size: 44, color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: 8),
+            Text(
+              switch (_scope) {
+                TaskTrayScope.inbox => 'Nada asignado a ti',
+                TaskTrayScope.team => 'Sin tareas de equipo',
+                TaskTrayScope.personal => 'Sin tareas personales',
+              },
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final rows = <Widget>[];
+    for (final section in sections) {
+      final collapsed = _collapsedSections.contains(section.label);
+      rows.add(_SectionHeaderRow(
+        label: section.label,
+        count: section.tasks.length,
+        collapsed: collapsed,
+        emphasis: section.emphasis,
+        onTap: () => setState(() {
+          collapsed
+              ? _collapsedSections.remove(section.label)
+              : _collapsedSections.add(section.label);
+        }),
+      ));
+      if (!collapsed) {
+        for (final task in section.tasks) {
+          rows.add(_TaskRow(
+            key: ValueKey('task-row-${task.id}'),
+            task: task,
+            links: service.jobItemsOf(task.id ?? ''),
+            jobHeader: service.jobHeaderOf(task),
+            showAssignee: _scope == TaskTrayScope.team,
+            assigneeName: task.assignedTo == null
+                ? null
+                : _principalsByUser[task.assignedTo!]?.displayName,
+            unseen: _isUnseen(service, task),
+            roles: roles,
+            onTap: () {
+              setState(() => _openTaskId = task.id);
+              if (task.id != null) {
+                unawaited(service.markSeen(task));
+              }
+            },
+          ));
+        }
+      }
+    }
+
+    return ListView(
+      controller: _listScroll,
+      padding: const EdgeInsets.only(bottom: 8),
+      children: rows,
+    );
+  }
+
+  bool _isUnseen(TaskService service, TaskModel task) {
+    if (task.id == null || task.assignedTo != service.currentUserId) {
+      return false;
+    }
+    final seen =
+        (service.userStateOf(task.id!)?['seen_version'] as num?)?.toInt();
+    return seen == null || seen < task.version;
+  }
+
+  Widget _buildBottomBar(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.tonalIcon(
+          key: _newTaskButtonKey,
+          onPressed: _openComposerFromBar,
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('Nueva tarea'),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Compositor progresivo (contenido del host O-02/O-05) ──────────────────
+
+class TaskComposerSurface extends StatefulWidget {
+  const TaskComposerSurface({
+    super.key,
+    required this.draft,
+    required this.directory,
+    required this.linkableJobs,
+    required this.taskService,
+    required this.askOverlapDecision,
+    required this.onDraftChanged,
+    required this.onCreated,
+  });
+
+  final TaskComposerDraft draft;
+  final List<TaskAssignmentPrincipal> directory;
+  final List<TaskLinkableJob> linkableJobs;
+  final TaskService taskService;
+  final Future<String?> Function(TaskOverlapException) askOverlapDecision;
+  final VoidCallback onDraftChanged;
+  final VoidCallback onCreated;
+
+  @override
+  State<TaskComposerSurface> createState() => _TaskComposerSurfaceState();
+}
+
+class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _descriptionCtrl;
+  List<TaskJobWorkItem> _jobItems = const [];
+  bool _jobItemsLoading = false;
+  bool _saving = false;
+
+  TaskComposerDraft get _draft => widget.draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl = TextEditingController(text: _draft.title)
+      ..addListener(() {
+        _draft.title = _titleCtrl.text;
+        widget.onDraftChanged();
+        if (mounted) setState(() {});
+      });
+    _descriptionCtrl = TextEditingController(text: _draft.description)
+      ..addListener(() {
+        _draft.description = _descriptionCtrl.text;
+        widget.onDraftChanged();
+      });
+    if (_draft.jobId != null) {
+      unawaited(_loadJobItems(_draft.jobId!, preserveSelection: true));
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _descriptionCtrl.dispose();
+    super.dispose();
+  }
+
+  void _mutate(VoidCallback fn) {
+    setState(fn);
+    widget.onDraftChanged();
+  }
+
+  Future<void> _loadJobItems(String jobId,
+      {bool preserveSelection = false}) async {
+    setState(() {
+      _jobItemsLoading = true;
+      _jobItems = const [];
+    });
+    try {
+      final items = await widget.taskService.fetchJobWorkItems(jobId);
+      if (!mounted || _draft.jobId != jobId) return;
+      _mutate(() {
+        _jobItems = items;
+        _jobItemsLoading = false;
+        final ids = items.map((item) => item.id).toSet();
+        if (preserveSelection && _draft.selectedItemIds.isNotEmpty) {
+          _draft.selectedItemIds =
+              _draft.selectedItemIds.where(ids.contains).toSet();
+        } else {
+          // El caso común es «toda la pega»: parte con todos elegidos.
+          _draft.selectedItemIds = ids;
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => _jobItemsLoading = false);
+    }
+  }
+
+  Future<void> _create({String? overlapDecision}) async {
+    final title = _draft.title.trim();
+    if (title.isEmpty || _saving) return;
+    setState(() => _saving = true);
+    final personal = _draft.visibility == TaskVisibility.private;
+    try {
+      final isNote = _draft.kind == TaskKind.note;
+      await widget.taskService.createTrayTask(
+        title: title,
+        description: _draft.description.trim().isEmpty
+            ? null
+            : _draft.description.trim(),
+        kind: _draft.kind,
+        visibility: _draft.visibility,
+        priority: _draft.priority,
+        dueDate: _draft.dueDate,
+        assignedTo: personal || isNote ? null : _draft.assigneeId,
+        linkedJobId: personal ? null : _draft.jobId,
+        jobItemIds: personal || isNote || _draft.jobId == null
+            ? null
+            : _draft.selectedItemIds.toList(),
+        overlapDecision: overlapDecision,
+      );
+      if (!mounted) return;
+      widget.onCreated();
+      Navigator.of(context).pop();
+    } on TaskOverlapException catch (overlap) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      final decision = await widget.askOverlapDecision(overlap);
+      if (decision != null) {
+        await _create(overlapDecision: decision);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo crear la tarea: $error')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final assignables = widget.directory
+        .where((principal) => principal.isAssignable)
+        .toList(growable: false);
+    final nonAssignables = widget.directory
+        .where((principal) => !principal.isAssignable)
+        .toList(growable: false);
+    final personal = _draft.visibility == TaskVisibility.private;
+    final isNote = _draft.kind == TaskKind.note;
 
-    return ColoredBox(
-      color: Colors.transparent,
-      child: _editingTask != null
-          ? _buildEditView(theme, isDark)
-          : Column(
-              children: [
-                // Success banner
-                if (_showSuccess)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    color: const Color(0xFF388E3C).withValues(alpha: 0.12),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check_circle,
-                            size: 18, color: Color(0xFF388E3C)),
-                        SizedBox(width: 6),
-                        Text(
-                          '¡Tarea creada!',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF388E3C),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Filter tabs
-                _buildFilterTabs(theme, isDark),
-
-                // Grouped tasks list
-                Expanded(
-                  child: Consumer<TaskService>(
-                    builder: (context, taskService, _) {
-                      final now = DateTime.now();
-                      final today = DateTime(now.year, now.month, now.day);
-                      final tomorrow = today.add(const Duration(days: 1));
-                      final endOfWeek = today.add(const Duration(days: 7));
-                      final endOf2Weeks = today.add(const Duration(days: 14));
-                      final endOfMonth = today.add(const Duration(days: 30));
-                      final endOf3Months = today.add(const Duration(days: 90));
-
-                      bool isDone(TaskModel t) =>
-                          t.status == TaskStatus.completed ||
-                          t.status == TaskStatus.cancelled;
-
-                      int bucket(TaskModel t) {
-                        if (isDone(t)) return 9;
-                        if (t.dueDate == null) return 6;
-                        final d = DateTime(
-                            t.dueDate!.year, t.dueDate!.month, t.dueDate!.day);
-                        if (d.isBefore(today)) return 0; // Vencidas
-                        if (d == today) return 1; // Hoy
-                        if (d == tomorrow) return 2; // Mañana
-                        if (d.isBefore(endOfWeek)) return 3; // Esta semana
-                        if (d.isBefore(endOf2Weeks)) {
-                          return 4; // Próximas 2 semanas
-                        }
-                        if (d.isBefore(endOfMonth)) return 5; // Este mes
-                        if (d.isBefore(endOf3Months)) {
-                          return 7; // Próximos 3 meses
-                        }
-                        return 8; // Más adelante
-                      }
-
-                      final bucketLabels = {
-                        0: 'Vencidas',
-                        1: 'Hoy',
-                        2: 'Mañana',
-                        3: 'Esta semana',
-                        4: 'Próximas 2 semanas',
-                        5: 'Este mes',
-                        6: 'Sin fecha',
-                        7: 'Próximos 3 meses',
-                        8: 'Más adelante',
-                        9: 'Completadas',
-                      };
-
-                      // Group tasks into ordered sections
-                      final Map<int, List<TaskModel>> groups = {};
-                      for (final t in taskService.tasks) {
-                        if (!_showAll && isDone(t)) continue;
-                        final b = bucket(t);
-                        groups.putIfAbsent(b, () => []).add(t);
-                      }
-                      // Sort within each group
-                      for (final list in groups.values) {
-                        list.sort((a, b) {
-                          if (a.dueDate != null && b.dueDate != null) {
-                            return a.dueDate!.compareTo(b.dueDate!);
-                          }
-                          if (a.dueDate != null) return -1;
-                          if (b.dueDate != null) return 1;
-                          return b.createdAt.compareTo(a.createdAt);
-                        });
-                      }
-
-                      final sortedBuckets = groups.keys.toList()..sort();
-
-                      if (sortedBuckets.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.task_alt,
-                                  size: 48,
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.15)),
-                              const SizedBox(height: 8),
-                              Text(
-                                  _showAll
-                                      ? 'No hay tareas'
-                                      : 'No hay tareas pendientes',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.4),
-                                  )),
-                            ],
-                          ),
-                        );
-                      }
-
-                      // Flatten into: header entries + task entries per section
-                      // _SectionEntry = (label, count) | TaskModel
-                      final List<dynamic> items = [];
-                      for (final b in sortedBuckets) {
-                        final label = bucketLabels[b]!;
-                        final tasks = groups[b]!;
-                        items.add(
-                            _SectionHeader(label: label, count: tasks.length));
-                        if (!_collapsedSections.contains(label)) {
-                          items.addAll(tasks);
-                        }
-                      }
-
-                      final dividerColor = isDark
-                          ? const Color(0xFF2E2E2E)
-                          : const Color(0xFFEEEEEE);
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        itemCount: items.length,
-                        itemBuilder: (ctx, i) {
-                          final item = items[i];
-                          if (item is _SectionHeader) {
-                            final isOverdue = item.label == 'Vencidas';
-                            final isCollapsed =
-                                _collapsedSections.contains(item.label);
-                            return InkWell(
-                              onTap: () => setState(() {
-                                if (isCollapsed) {
-                                  _collapsedSections.remove(item.label);
-                                } else {
-                                  _collapsedSections.add(item.label);
-                                }
-                              }),
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(10, 10, 8, 4),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      item.label.toUpperCase(),
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.8,
-                                        color: isOverdue
-                                            ? Colors.red.withValues(alpha: 0.8)
-                                            : theme.colorScheme.onSurface
-                                                .withValues(alpha: 0.4),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    // Count badge
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: isOverdue
-                                            ? Colors.red.withValues(alpha: 0.12)
-                                            : theme.colorScheme.onSurface
-                                                .withValues(alpha: 0.07),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        '${item.count}',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: isOverdue
-                                              ? Colors.red
-                                                  .withValues(alpha: 0.8)
-                                              : theme.colorScheme.onSurface
-                                                  .withValues(alpha: 0.4),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                        child: Divider(
-                                            height: 1, color: dividerColor)),
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      isCollapsed
-                                          ? Icons.expand_more
-                                          : Icons.expand_less,
-                                      size: 14,
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.3),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-                          final task = item as TaskModel;
-                          final prevIsTask = i > 0 && items[i - 1] is TaskModel;
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (prevIsTask)
-                                Divider(height: 1, color: dividerColor),
-                              _buildTaskRow(task, theme, isDark),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-
-                // Quick-add form at the bottom
-                _buildQuickAddForm(theme, isDark),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildFilterTabs(ThemeData theme, bool isDark) {
-    final borderCol =
-        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFE8EAED);
-    final activeColor = theme.colorScheme.primary;
-    final inactiveColor = theme.colorScheme.onSurface.withValues(alpha: 0.45);
-
-    Widget tab(String label, bool active, VoidCallback onTap) {
-      return Expanded(
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: active ? activeColor : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-            ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                color: active ? activeColor : inactiveColor,
-              ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Tarea = trabajo con responsable y ciclo; Nota = captura general
+          // sin asignación ni ejecución, con sus asociaciones útiles.
+          VbSegmented<TaskKind>(
+            groupLabel: 'Tipo',
+            options: const [
+              VbSegmentedOption(value: TaskKind.task, label: 'Tarea'),
+              VbSegmentedOption(value: TaskKind.note, label: 'Nota'),
+            ],
+            value: _draft.kind,
+            onChanged: (kind) => _mutate(() {
+              _draft.kind = kind;
+              if (kind == TaskKind.note) {
+                _draft.assigneeId = null;
+                _draft.selectedItemIds = {};
+              }
+            }),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _titleCtrl,
+            autofocus: true,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              hintText: isNote ? 'Título de la nota…' : 'Título de la tarea…',
+              isDense: true,
             ),
           ),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: borderCol)),
-      ),
-      child: Row(
-        children: [
-          tab('Pendientes', !_showAll, () => setState(() => _showAll = false)),
-          tab('Todas', _showAll, () => setState(() => _showAll = true)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _descriptionCtrl,
+            maxLines: 2,
+            decoration: InputDecoration(
+              hintText: isNote
+                  ? 'Contenido (opcional)…'
+                  : 'Instrucciones (opcional)…',
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: VbShortSelect<TaskPriority>(
+                  value: _draft.priority,
+                  label: 'Prioridad',
+                  sheetTitle: 'Prioridad',
+                  options: const [
+                    VbShortSelectOption(value: TaskPriority.low, label: 'Baja'),
+                    VbShortSelectOption(
+                        value: TaskPriority.normal, label: 'Normal'),
+                    VbShortSelectOption(
+                        value: TaskPriority.high, label: 'Alta'),
+                    VbShortSelectOption(
+                        value: TaskPriority.urgent, label: 'Urgente'),
+                  ],
+                  onChanged: (value) => _mutate(() => _draft.priority = value),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: _buildDueDateField(theme)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Visibilidad con su control canónico (S-05): Equipo o Personal.
+          VbShortSelect<TaskVisibility>(
+            value: personal ? TaskVisibility.private : TaskVisibility.team,
+            label: 'Visibilidad',
+            sheetTitle: 'Visibilidad',
+            options: const [
+              VbShortSelectOption(value: TaskVisibility.team, label: 'Equipo'),
+              VbShortSelectOption(
+                  value: TaskVisibility.private, label: 'Personal (solo yo)'),
+            ],
+            onChanged: (_draft.assigneeId != null || _draft.jobId != null)
+                ? null
+                : (value) => _mutate(() => _draft.visibility = value),
+          ),
+          if (_draft.assigneeId != null || _draft.jobId != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Una tarea asignada o de taller es del equipo.',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          if (!personal && !isNote) ...[
+            const SizedBox(height: 10),
+            VbSearchableSelect<String>(
+              value: _draft.assigneeId,
+              label: 'Trabajador responsable',
+              sheetTitle: 'Asignar a',
+              placeholder: 'Sin asignar',
+              allowClear: true,
+              options: [
+                for (final principal in assignables)
+                  VbSearchableSelectOption(
+                    value: principal.userId!,
+                    label: principal.displayName,
+                    context: principal.access == TaskPrincipalAccess.portal
+                        ? 'Portal · ${principal.role}'
+                        : principal.role,
+                  ),
+              ],
+              onChanged: (value) => _mutate(() => _draft.assigneeId = value),
+            ),
+            // Los sin cuenta no se esconden: existen, pero no pueden recibir
+            // trabajo hasta que se les invite.
+            if (nonAssignables.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  nonAssignables.length == 1
+                      ? '${nonAssignables.first.displayName} no tiene '
+                          'acceso — se invita desde Usuarios'
+                      : '${nonAssignables.length} trabajadores sin acceso '
+                          '— se invitan desde Usuarios',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+          ],
+          if (!personal) ...[
+            const SizedBox(height: 10),
+            VbSearchableSelect<String>(
+              value: _draft.jobId,
+              label: 'Pega del taller',
+              sheetTitle: 'Vincular pega',
+              placeholder: 'Sin pega',
+              allowClear: true,
+              options: [
+                for (final job in widget.linkableJobs)
+                  VbSearchableSelectOption(
+                    value: job.id,
+                    label:
+                        '#${job.jobNumber}${job.customerName != null ? ' · ${job.customerName}' : ''}',
+                    context: job.clientRequest,
+                    searchText:
+                        '${job.jobNumber} ${job.customerName ?? ''} ${job.clientRequest ?? ''}',
+                  ),
+              ],
+              onChanged: (value) {
+                _mutate(() {
+                  _draft.jobId = value;
+                  _jobItems = const [];
+                  _draft.selectedItemIds = {};
+                });
+                if (value != null) unawaited(_loadJobItems(value));
+              },
+            ),
+            if (_draft.jobId != null && !isNote) _buildServicePicker(theme),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Flexible(
+                child: TextButton(
+                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Cerrar'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: FilledButton.icon(
+                  onPressed: _saving || _draft.title.trim().isEmpty
+                      ? null
+                      : () => unawaited(_create()),
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          isNote
+                              ? Icons.sticky_note_2_outlined
+                              : Icons.add_task,
+                          size: 18),
+                  label: Text(_saving
+                      ? 'Guardando…'
+                      : isNote
+                          ? 'Guardar nota'
+                          : 'Crear tarea'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTaskRow(TaskModel task, ThemeData theme, bool isDark) {
-    final isDone = task.status == TaskStatus.completed ||
-        task.status == TaskStatus.cancelled;
-    final isOverdue = task.dueDate != null &&
-        task.dueDate!.isBefore(DateTime.now()) &&
-        !isDone;
-    final priorityColor = _priorityColor(task.priority);
-
-    return Opacity(
-      opacity: isDone ? 0.5 : 1.0,
-      child: InkWell(
-        onTap: () => _showTaskDetail(task),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Checkbox
-              Padding(
-                padding: const EdgeInsets.only(top: 1),
-                child: GestureDetector(
-                  onTap: () => _toggleTaskStatus(task),
-                  child: Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: task.status == TaskStatus.completed
-                            ? Colors.green
-                            : Colors.grey.shade400,
-                        width: 1.5,
-                      ),
-                      color: task.status == TaskStatus.completed
-                          ? Colors.green
-                          : Colors.transparent,
-                    ),
-                    child: task.status == TaskStatus.completed
-                        ? const Icon(Icons.check, size: 12, color: Colors.white)
-                        : null,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: theme.colorScheme.onSurface,
-                        decoration: isDone ? TextDecoration.lineThrough : null,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        // Priority dot
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: priorityColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        if (task.dueDate != null) ...[
-                          Icon(
-                            isOverdue
-                                ? Icons.warning_amber
-                                : Icons.event_outlined,
-                            size: 11,
-                            color: isOverdue ? Colors.red : Colors.grey,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            DateFormat('dd/MM').format(task.dueDate!),
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isOverdue
-                                  ? Colors.red
-                                  : theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.45),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        if (task.assigneeName != null)
-                          Flexible(
-                            child: Text(
-                              task.assigneeName!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.45),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _toggleTaskStatus(TaskModel task) async {
-    final taskService = context.read<TaskService>();
-    final newStatus = task.status == TaskStatus.completed
-        ? TaskStatus.pending
-        : TaskStatus.completed;
-    try {
-      await taskService.updateTask(task.copyWith(status: newStatus));
-    } catch (_) {}
-  }
-
-  void _showTaskDetail(TaskModel task) {
-    setState(() {
-      _editingTask = task;
-      _editTitleCtrl.text = task.title;
-      _editDescCtrl.text = task.description ?? '';
-      _editPriority = task.priority;
-      _editStatus = task.status;
-      _editDueDate = task.dueDate;
-      _isSavingEdit = false;
-    });
-  }
-
-  Future<void> _saveEdit() async {
-    final task = _editingTask;
-    if (task == null) return;
-    final title = _editTitleCtrl.text.trim();
-    if (title.isEmpty) return;
-    setState(() => _isSavingEdit = true);
-    try {
-      final taskService = context.read<TaskService>();
-      await taskService.updateTask(task.copyWith(
-        title: title,
-        description: _editDescCtrl.text.trim().isEmpty
-            ? null
-            : _editDescCtrl.text.trim(),
-        priority: _editPriority,
-        status: _editStatus,
-        dueDate: _editDueDate,
-      ));
-      if (mounted) setState(() => _editingTask = null);
-    } catch (_) {
-      if (mounted) setState(() => _isSavingEdit = false);
-    }
-  }
-
-  Widget _buildEditView(ThemeData theme, bool isDark) {
-    final borderCol =
-        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
-    final labelStyle = TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
-      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-      letterSpacing: 0.6,
-    );
-
-    InputDecoration fieldDecoration({String? hint}) => InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(
-              fontSize: 12,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.35)),
-          isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: borderCol),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: borderCol),
-          ),
-        );
-
-    Color priorityColor(TaskPriority p) {
-      switch (p) {
-        case TaskPriority.urgent:
-          return const Color(0xFFE53E3E);
-        case TaskPriority.high:
-          return const Color(0xFFED8936);
-        case TaskPriority.normal:
-          return const Color(0xFF4299E1);
-        case TaskPriority.low:
-          return Colors.grey;
-      }
-    }
-
-    String priorityLabel(TaskPriority p) {
-      switch (p) {
-        case TaskPriority.urgent:
-          return 'Urgente';
-        case TaskPriority.high:
-          return 'Alta';
-        case TaskPriority.normal:
-          return 'Normal';
-        case TaskPriority.low:
-          return 'Baja';
-      }
-    }
-
-    String statusLabel(TaskStatus s) {
-      switch (s) {
-        case TaskStatus.pending:
-          return 'Pendiente';
-        case TaskStatus.inProgress:
-          return 'En progreso';
-        case TaskStatus.completed:
-          return 'Completada';
-        case TaskStatus.cancelled:
-          return 'Cancelada';
-      }
-    }
-
+  Widget _buildDueDateField(ThemeData theme) {
+    final label = _draft.dueDate == null
+        ? 'Sin fecha'
+        : DateFormat('dd/MM/yyyy').format(_draft.dueDate!);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.arrow_back,
-                    size: 17,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                tooltip: 'Volver',
-                onPressed: () => setState(() => _editingTask = null),
+        Text('Plazo',
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 5),
+        Semantics(
+          button: true,
+          label: 'Plazo, $label',
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () async {
+              final picked = await showVbMarkedDatePicker(
+                context: context,
+                initialDate: _draft.dueDate ??
+                    DateTime.now().add(const Duration(days: 1)),
+                firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+                markers: const {},
+              );
+              if (picked != null && mounted) {
+                _mutate(() => _draft.dueDate = picked);
+              }
+            },
+            child: Container(
+              height: VbShortSelect.fieldHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.colorScheme.outline),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 2),
-              Text('Editar tarea',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
-                  )),
-              const Spacer(),
-              IconButton(
-                icon: Icon(Icons.delete_outline,
-                    size: 17, color: Colors.red.withValues(alpha: 0.65)),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                tooltip: 'Eliminar',
-                onPressed: () async {
-                  final task = _editingTask!;
-                  setState(() => _editingTask = null);
-                  try {
-                    await context.read<TaskService>().deleteTask(task.id!);
-                  } catch (_) {}
-                },
-              ),
-            ],
-          ),
-        ),
-        Divider(color: borderCol, height: 1),
-        // Scrollable fields
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('TÍTULO', style: labelStyle),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: _editTitleCtrl,
-                  style: TextStyle(
-                      fontSize: 13, color: theme.colorScheme.onSurface),
-                  decoration: fieldDecoration(),
-                ),
-                const SizedBox(height: 12),
-                Text('DESCRIPCIÓN', style: labelStyle),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: _editDescCtrl,
-                  maxLines: 3,
-                  style: TextStyle(
-                      fontSize: 13, color: theme.colorScheme.onSurface),
-                  decoration: fieldDecoration(hint: 'Agregar descripción...'),
-                ),
-                const SizedBox(height: 12),
-                // Priority + Status
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('PRIORIDAD', style: labelStyle),
-                          const SizedBox(height: 4),
-                          DropdownButtonFormField<TaskPriority>(
-                            initialValue: _editPriority,
-                            isDense: true,
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.onSurface),
-                            decoration: fieldDecoration(),
-                            items: TaskPriority.values
-                                .map((p) => DropdownMenuItem(
-                                      value: p,
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 8,
-                                            height: 8,
-                                            decoration: BoxDecoration(
-                                                color: priorityColor(p),
-                                                shape: BoxShape.circle),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(priorityLabel(p),
-                                              style: const TextStyle(
-                                                  fontSize: 12)),
-                                        ],
-                                      ),
-                                    ))
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => _editPriority = v!),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('ESTADO', style: labelStyle),
-                          const SizedBox(height: 4),
-                          DropdownButtonFormField<TaskStatus>(
-                            initialValue: _editStatus,
-                            isDense: true,
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.onSurface),
-                            decoration: fieldDecoration(),
-                            items: TaskStatus.values
-                                .map((s) => DropdownMenuItem(
-                                      value: s,
-                                      child: Text(statusLabel(s),
-                                          style: const TextStyle(fontSize: 12)),
-                                    ))
-                                .toList(),
-                            onChanged: (v) => setState(() => _editStatus = v!),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text('FECHA LÍMITE', style: labelStyle),
-                const SizedBox(height: 4),
-                InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _editDueDate ?? DateTime.now(),
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                    );
-                    if (picked != null && mounted) {
-                      setState(() => _editDueDate = picked);
-                    }
-                  },
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: borderCol),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.event_outlined,
-                            size: 14,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.5)),
-                        const SizedBox(width: 6),
-                        Text(
-                          _editDueDate != null
-                              ? DateFormat('dd/MM/yyyy').format(_editDueDate!)
-                              : 'Sin fecha',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _editDueDate != null
-                                ? theme.colorScheme.onSurface
-                                : theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.4),
-                          ),
-                        ),
-                        const Spacer(),
-                        if (_editDueDate != null)
-                          GestureDetector(
-                            onTap: () => setState(() => _editDueDate = null),
-                            child: Icon(Icons.clear,
-                                size: 14,
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.4)),
-                          ),
-                      ],
-                    ),
+              child: Row(
+                children: [
+                  Icon(Icons.event_outlined,
+                      size: 15, color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Save button
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-              ),
-              onPressed: _isSavingEdit ? null : _saveEdit,
-              child: Text(
-                _isSavingEdit ? 'Guardando...' : 'Guardar',
-                style:
-                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  if (_draft.dueDate != null)
+                    InkWell(
+                      onTap: () => _mutate(() => _draft.dueDate = null),
+                      child: Icon(Icons.close,
+                          size: 14, color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                ],
               ),
             ),
           ),
@@ -901,339 +1054,873 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
     );
   }
 
-  Widget _buildQuickAddForm(ThemeData theme, bool isDark) {
-    final borderColor =
-        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
+  /// Todos o algunos servicios reales de la pega, agrupados por bicicleta.
+  Widget _buildServicePicker(ThemeData theme) {
+    if (_jobItemsLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    if (_jobItems.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(
+          'Esta pega aún no tiene servicios; la tarea quedará vinculada a la '
+          'pega completa.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      );
+    }
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF8F9FA),
-        border: Border(top: BorderSide(color: borderColor)),
-      ),
+    final byBike = <String, List<TaskJobWorkItem>>{};
+    for (final item in _jobItems) {
+      byBike.putIfAbsent(item.bikeLabel ?? 'Sin bicicleta', () => []).add(item);
+    }
+    final allSelected = _draft.selectedItemIds.length == _jobItems.length;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title
-          TextField(
-            controller: _titleController,
-            focusNode: _titleFocusNode,
-            autofocus: true,
-            textInputAction: TextInputAction.next,
-            decoration: InputDecoration(
-              hintText: 'Título de la tarea...',
-              isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              filled: true,
-              fillColor:
-                  isDark ? const Color(0xFF252525) : const Color(0xFFF5F6F8),
-            ),
-            style: const TextStyle(fontSize: 13),
-          ),
-          const SizedBox(height: 6),
-
-          // Description (optional, smaller)
-          TextField(
-            controller: _descriptionController,
-            maxLines: 2,
-            decoration: InputDecoration(
-              hintText: 'Descripción (opcional)...',
-              isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              filled: true,
-              fillColor:
-                  isDark ? const Color(0xFF252525) : const Color(0xFFF5F6F8),
-            ),
-            style: const TextStyle(fontSize: 12),
-          ),
-          const SizedBox(height: 8),
-
-          // Quick options row: priority + due date + assignee
           Row(
             children: [
-              // Priority selector
-              _PriorityChip(
-                priority: _priority,
-                onChanged: (p) => setState(() => _priority = p),
-                theme: theme,
-                isDark: isDark,
+              Text('Servicios de la tarea',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              const Spacer(),
+              TextButton(
+                onPressed: () => _mutate(() {
+                  if (allSelected) {
+                    _draft.selectedItemIds = {};
+                  } else {
+                    _draft.selectedItemIds =
+                        _jobItems.map((item) => item.id).toSet();
+                  }
+                }),
+                child: Text(allSelected ? 'Ninguno' : 'Todos'),
               ),
-              const SizedBox(width: 6),
-
-              // Due date
-              InkWell(
-                onTap: _pickDate,
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: borderColor),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.event_outlined,
-                          size: 14,
-                          color: _dueDate != null
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.5)),
-                      const SizedBox(width: 3),
-                      Text(
-                        _dueDate != null
-                            ? DateFormat('dd/MM').format(_dueDate!)
-                            : 'Fecha',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: _dueDate != null
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.5),
-                        ),
-                      ),
-                      if (_dueDate != null) ...[
-                        const SizedBox(width: 2),
-                        GestureDetector(
-                          onTap: () => setState(() => _dueDate = null),
-                          child: Icon(Icons.close,
-                              size: 12,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.4)),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-
-              // Assignee
-              if (!_isLoadingUsers)
-                Flexible(
-                  child: PopupMenuButton<String?>(
-                    tooltip: 'Asignar',
-                    onSelected: (val) {
-                      setState(() {
-                        _assignedToId = val;
-                        if (val != null) {
-                          final u = _users.firstWhere((u) => u['id'] == val);
-                          _assigneeName = u['full_name'] as String? ??
-                              u['email'] as String?;
-                        } else {
-                          _assigneeName = null;
-                        }
-                      });
-                    },
-                    itemBuilder: (ctx) => [
-                      const PopupMenuItem(
-                          value: null, child: Text('Sin asignar')),
-                      const PopupMenuDivider(),
-                      ..._users.map((u) => PopupMenuItem<String>(
-                            value: u['id'] as String,
-                            child: Text(
-                              u['full_name'] as String? ??
-                                  u['email'] as String? ??
-                                  '?',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          )),
-                    ],
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 5),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.person_outline,
-                              size: 14,
-                              color: _assigneeName != null
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.5)),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              _assigneeName ?? 'Asignar',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: _assigneeName != null
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.5),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: 10),
-
-          // Add button
-          SizedBox(
-            width: double.infinity,
-            height: 38,
-            child: ElevatedButton.icon(
-              onPressed: _isSaving || _titleController.text.trim().isEmpty
-                  ? null
-                  : _save,
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.add_task, size: 18),
-              label: Text(
-                _isSaving ? 'Guardando...' : 'Agregar Tarea',
-                style:
-                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          for (final entry in byBike.entries) ...[
+            if (byBike.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 2),
+                child: Text(entry.key,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    )),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
+            for (final item in entry.value)
+              InkWell(
+                onTap: () => _mutate(() {
+                  _draft.selectedItemIds.contains(item.id)
+                      ? _draft.selectedItemIds.remove(item.id)
+                      : _draft.selectedItemIds.add(item.id);
+                }),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: _draft.selectedItemIds.contains(item.id),
+                      onChanged: (checked) => _mutate(() {
+                        checked == true
+                            ? _draft.selectedItemIds.add(item.id)
+                            : _draft.selectedItemIds.remove(item.id);
+                      }),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    Expanded(
+                      child: Text(item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
+          ],
         ],
       ),
     );
   }
-
-  Color _priorityColor(TaskPriority p) {
-    switch (p) {
-      case TaskPriority.low:
-        return Colors.blue.shade300;
-      case TaskPriority.normal:
-        return Colors.amber;
-      case TaskPriority.high:
-        return Colors.orange;
-      case TaskPriority.urgent:
-        return Colors.red;
-    }
-  }
 }
 
-// ─── Section header data ───────────────────────────────────────────
-class _SectionHeader {
+// ── Secciones y filas ──────────────────────────────────────────────────────
+
+enum _SectionEmphasis { normal, action, danger }
+
+class _TraySection {
+  const _TraySection(this.label, this.tasks,
+      {this.emphasis = _SectionEmphasis.normal});
+  final String label;
+  final List<TaskModel> tasks;
+  final _SectionEmphasis emphasis;
+}
+
+class _SectionHeaderRow extends StatelessWidget {
+  const _SectionHeaderRow({
+    required this.label,
+    required this.count,
+    required this.collapsed,
+    required this.emphasis,
+    required this.onTap,
+  });
+
   final String label;
   final int count;
-  const _SectionHeader({required this.label, required this.count});
-}
-
-// ─── Priority chip selector ────────────────────────────────────────
-class _PriorityChip extends StatelessWidget {
-  final TaskPriority priority;
-  final ValueChanged<TaskPriority> onChanged;
-  final ThemeData theme;
-  final bool isDark;
-
-  const _PriorityChip({
-    required this.priority,
-    required this.onChanged,
-    required this.theme,
-    required this.isDark,
-  });
+  final bool collapsed;
+  final _SectionEmphasis emphasis;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = _color(priority);
-    final borderColor =
-        isDark ? const Color(0xFF2E2E2E) : const Color(0xFFDDE0E4);
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final color = switch (emphasis) {
+      _SectionEmphasis.danger =>
+        roles?.danger.accent ?? theme.colorScheme.error,
+      _SectionEmphasis.action => theme.colorScheme.primary,
+      _SectionEmphasis.normal => theme.colorScheme.onSurfaceVariant,
+    };
 
-    return PopupMenuButton<TaskPriority>(
-      tooltip: 'Prioridad',
-      onSelected: onChanged,
-      itemBuilder: (ctx) => TaskPriority.values.map((p) {
-        return PopupMenuItem<TaskPriority>(
-          value: p,
+    return InkWell(
+      onTap: onTap,
+      child: Semantics(
+        header: true,
+        label: '$label, $count tareas, '
+            '${collapsed ? 'contraída' : 'expandida'}',
+        excludeSemantics: true,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 10, 8, 4),
           child: Row(
             children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration:
-                    BoxDecoration(color: _color(p), shape: BoxShape.circle),
+              Text(
+                label.toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: color,
+                ),
               ),
-              const SizedBox(width: 8),
-              Text(_label(p)),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('$count',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    )),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child:
+                    Divider(height: 1, color: theme.colorScheme.outlineVariant),
+              ),
+              Icon(
+                collapsed ? Icons.expand_more : Icons.expand_less,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ],
           ),
-        );
-      }).toList(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: borderColor),
-          color: color.withValues(alpha: 0.08),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              _label(priority),
-              style: TextStyle(fontSize: 11, color: color),
-            ),
-          ],
         ),
       ),
     );
   }
+}
 
-  Color _color(TaskPriority p) {
-    switch (p) {
-      case TaskPriority.low:
-        return Colors.blue.shade300;
-      case TaskPriority.normal:
-        return Colors.amber.shade700;
-      case TaskPriority.high:
-        return Colors.orange;
-      case TaskPriority.urgent:
-        return Colors.red;
+class _TaskRow extends StatelessWidget {
+  const _TaskRow({
+    super.key,
+    required this.task,
+    required this.links,
+    required this.jobHeader,
+    required this.showAssignee,
+    required this.assigneeName,
+    required this.unseen,
+    required this.roles,
+    required this.onTap,
+  });
+
+  final TaskModel task;
+  final List<SmartTaskJobItem> links;
+  final TaskLinkableJob? jobHeader;
+  final bool showAssignee;
+  final String? assigneeName;
+  final bool unseen;
+  final VinabikeThemeRoles? roles;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isOverdue = task.dueDate != null &&
+        task.dueDate!.isBefore(DateTime.now()) &&
+        !task.isDone;
+    final liveLinks = links.where((link) => !link.isInvalidated).toList();
+    final jobNumber = liveLinks.isNotEmpty
+        ? liveLinks.first.jobNumber
+        : links.isNotEmpty
+            ? links.first.jobNumber
+            : jobHeader?.jobNumber;
+
+    final isNote = task.kind == TaskKind.note;
+    return Opacity(
+      opacity: task.isDone ? 0.55 : 1,
+      child: InkWell(
+        onTap: onTap,
+        child: Semantics(
+          button: true,
+          label: isNote
+              ? 'Nota ${task.title}${task.isDone ? ', archivada' : ''}'
+              : 'Tarea ${task.title}${task.isBlocked ? ', bloqueada' : ''}'
+                  '${unseen ? ', nueva' : ''}',
+          excludeSemantics: true,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Icon(
+                    isNote
+                        ? (task.isDone
+                            ? Icons.archive_outlined
+                            : Icons.sticky_note_2_outlined)
+                        : task.isDone
+                            ? Icons.check_circle
+                            : task.isBlocked
+                                ? Icons.block
+                                : task.status == TaskStatus.inProgress
+                                    ? Icons.play_circle_outline
+                                    : Icons.radio_button_unchecked,
+                    size: 17,
+                    color: isNote
+                        ? theme.colorScheme.onSurfaceVariant
+                        : task.isDone
+                            ? (roles?.success.accent ??
+                                theme.colorScheme.tertiary)
+                            : task.isBlocked
+                                ? (roles?.danger.accent ??
+                                    theme.colorScheme.error)
+                                : task.status == TaskStatus.inProgress
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        task.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight:
+                              unseen ? FontWeight.w700 : FontWeight.w500,
+                          decoration:
+                              task.isDone ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 2,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (isNote && task.isDone)
+                            const VbStatusBadge(
+                                label: 'Archivada',
+                                tone: VbStatusTone.neutral,
+                                dense: true),
+                          if (!isNote &&
+                              task.awaitsAcknowledgement &&
+                              !task.isDone)
+                            const VbStatusBadge(
+                                label: 'Por aceptar',
+                                tone: VbStatusTone.info,
+                                dense: true),
+                          if (task.isBlocked)
+                            const VbStatusBadge(
+                                label: 'Bloqueada',
+                                tone: VbStatusTone.danger,
+                                dense: true),
+                          if (task.dueDate != null)
+                            Text(
+                              DateFormat('dd/MM').format(task.dueDate!),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: isOverdue
+                                    ? (roles?.danger.accent ??
+                                        theme.colorScheme.error)
+                                    : theme.colorScheme.onSurfaceVariant,
+                                fontWeight: isOverdue ? FontWeight.w700 : null,
+                              ),
+                            ),
+                          if (jobNumber != null)
+                            Text(
+                              '#$jobNumber'
+                              '${liveLinks.isNotEmpty ? ' · ${liveLinks.length} serv.' : ''}',
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(color: theme.colorScheme.primary),
+                            ),
+                          if (showAssignee && assigneeName != null)
+                            Text(
+                              assigneeName!,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Detalle in-pane ────────────────────────────────────────────────────────
+
+class _TaskDetailView extends StatefulWidget {
+  const _TaskDetailView({
+    super.key,
+    required this.task,
+    required this.links,
+    required this.jobHeader,
+    required this.principalsByUser,
+    required this.isManager,
+    required this.currentUserId,
+    required this.onBack,
+    required this.onCommand,
+    required this.onOpenThread,
+    required this.taskService,
+  });
+
+  final TaskModel task;
+  final List<SmartTaskJobItem> links;
+  final TaskLinkableJob? jobHeader;
+  final Map<String, TaskAssignmentPrincipal> principalsByUser;
+  final bool isManager;
+  final String? currentUserId;
+  final VoidCallback onBack;
+  final Future<void> Function(Future<TaskModel> Function()) onCommand;
+  final VoidCallback onOpenThread;
+  final TaskService taskService;
+
+  @override
+  State<_TaskDetailView> createState() => _TaskDetailViewState();
+}
+
+class _TaskDetailViewState extends State<_TaskDetailView> {
+  late Future<List<SmartTaskEvent>> _events;
+
+  @override
+  void initState() {
+    super.initState();
+    _events = widget.taskService.fetchEvents(widget.task.id!);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TaskDetailView old) {
+    super.didUpdateWidget(old);
+    if (old.task.version != widget.task.version) {
+      _events = widget.taskService.fetchEvents(widget.task.id!);
     }
   }
 
-  String _label(TaskPriority p) {
-    switch (p) {
-      case TaskPriority.low:
-        return 'Baja';
-      case TaskPriority.normal:
-        return 'Normal';
-      case TaskPriority.high:
-        return 'Alta';
-      case TaskPriority.urgent:
-        return 'Urgente';
+  bool get _isAssignee => widget.task.assignedTo == widget.currentUserId;
+  bool get _isCreator => widget.task.createdBy == widget.currentUserId;
+  bool get _canSupervise => _isCreator || widget.isManager;
+  bool get _isNote => widget.task.kind == TaskKind.note;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final task = widget.task;
+    final service = widget.taskService;
+
+    final creatorName = widget.principalsByUser[task.createdBy]?.displayName;
+    final assigneeName = task.assignedTo == null
+        ? null
+        : widget.principalsByUser[task.assignedTo!]?.displayName ??
+            task.assigneeName;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: 'Volver',
+                icon: const Icon(Icons.arrow_back, size: 18),
+                onPressed: widget.onBack,
+              ),
+              Expanded(
+                child: Text(_isNote ? 'Nota' : 'Tarea',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+              ),
+              // Una nota no conversa: es captura, no trabajo con responsable.
+              if (!_isNote)
+                IconButton(
+                  tooltip: 'Conversar',
+                  icon: const Icon(Icons.forum_outlined, size: 18),
+                  onPressed: (_isAssignee || _canSupervise)
+                      ? widget.onOpenThread
+                      : null,
+                ),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: theme.colorScheme.outlineVariant),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            children: [
+              Text(task.title,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (_isNote)
+                    VbStatusBadge(
+                      label: task.isDone ? 'Archivada' : 'Nota',
+                      tone: VbStatusTone.neutral,
+                    )
+                  else
+                    VbStatusBadge(
+                      label: switch (task.status) {
+                        TaskStatus.pending => task.awaitsAcknowledgement
+                            ? 'Por aceptar'
+                            : 'Pendiente',
+                        TaskStatus.inProgress => 'En curso',
+                        TaskStatus.blocked => 'Bloqueada',
+                        TaskStatus.completed => 'Completada',
+                        TaskStatus.cancelled => 'Cancelada',
+                      },
+                      tone: switch (task.status) {
+                        TaskStatus.pending => VbStatusTone.info,
+                        TaskStatus.inProgress => VbStatusTone.info,
+                        TaskStatus.blocked => VbStatusTone.danger,
+                        TaskStatus.completed => VbStatusTone.success,
+                        TaskStatus.cancelled => VbStatusTone.neutral,
+                      },
+                    ),
+                  if (task.priority != TaskPriority.normal)
+                    VbStatusBadge(
+                      label: switch (task.priority) {
+                        TaskPriority.low => 'Baja',
+                        TaskPriority.normal => 'Normal',
+                        TaskPriority.high => 'Alta',
+                        TaskPriority.urgent => 'Urgente',
+                      },
+                      tone: task.priority == TaskPriority.urgent
+                          ? VbStatusTone.danger
+                          : VbStatusTone.warning,
+                    ),
+                  if (task.dueDate != null)
+                    VbStatusBadge(
+                      label:
+                          'Plazo ${DateFormat('dd/MM').format(task.dueDate!)}',
+                      tone: VbStatusTone.neutral,
+                    ),
+                  if (task.visibility == TaskVisibility.private)
+                    const VbStatusBadge(
+                        label: 'Personal', tone: VbStatusTone.neutral),
+                ],
+              ),
+              if (task.isBlocked && task.blockedReason != null) ...[
+                const SizedBox(height: 8),
+                Text('Motivo: ${task.blockedReason}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color:
+                            roles?.danger.accent ?? theme.colorScheme.error)),
+              ],
+              if ((task.description ?? '').isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(task.description!, style: theme.textTheme.bodySmall),
+              ],
+              const SizedBox(height: 10),
+              Text(
+                [
+                  if (creatorName != null) 'Creada por $creatorName',
+                  if (assigneeName != null) 'para $assigneeName',
+                ].join(' '),
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+              if (widget.links.isNotEmpty ||
+                  (widget.jobHeader != null &&
+                      widget.task.linkedJobId != null)) ...[
+                const SizedBox(height: 14),
+                _JobContextCard(
+                  links: widget.links,
+                  jobHeader: widget.jobHeader,
+                  // Contrato de retorno del routed detail: push, y el
+                  // detalle cierra con ReturnNavigation.close.
+                  onOpenJob: () => openWorkshopJobFromTray(
+                      context,
+                      widget.links.isNotEmpty
+                          ? widget.links.first.jobId
+                          : widget.task.linkedJobId!),
+                ),
+              ],
+              const SizedBox(height: 14),
+              _buildActions(theme),
+              const SizedBox(height: 16),
+              Text('ACTIVIDAD',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  )),
+              const SizedBox(height: 6),
+              FutureBuilder<List<SmartTaskEvent>>(
+                future: _events,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Center(
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    );
+                  }
+                  final events = snapshot.data!;
+                  if (events.isEmpty) {
+                    return Text('Sin actividad registrada',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant));
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final event in events.take(12))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 5),
+                          child: Text(
+                            '${DateFormat('dd/MM HH:mm').format(event.createdAt.toLocal())}'
+                            ' · ${_eventLabel(event)}'
+                            '${event.actorUserId != null ? ' — ${widget.principalsByUser[event.actorUserId!]?.displayName ?? ''}' : ''}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              // Cancelar vive al final, lejos de las acciones frecuentes.
+              if (_canSupervise && !task.isDone && !_isNote) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor:
+                          roles?.danger.accent ?? theme.colorScheme.error,
+                    ),
+                    onPressed: () => widget.onCommand(() => service
+                        .cancelTask(task.id!, expectedVersion: task.version)),
+                    icon: const Icon(Icons.cancel_outlined, size: 16),
+                    label: const Text('Cancelar tarea'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _eventLabel(SmartTaskEvent event) {
+    final base = switch (event.eventType) {
+      'created' => 'Creada',
+      'assigned' => 'Asignada',
+      'unassigned' => 'Sin responsable',
+      'acknowledged' => 'Aceptada',
+      'returned' => 'Devuelta',
+      'started' => 'Iniciada',
+      'blocked' => 'Bloqueada',
+      'unblocked' => 'Desbloqueada',
+      'completed' => 'Completada',
+      'reopened' => 'Reabierta',
+      'cancelled' => 'Cancelada',
+      'details_updated' => 'Editada',
+      'visibility_changed' => 'Visibilidad cambiada',
+      'job_items_linked' => 'Servicios vinculados',
+      'job_items_unlinked' => 'Servicios desvinculados',
+      'conversation_linked' => 'Hilo abierto',
+      _ => event.eventType,
+    };
+    final reason = event.payload['reason']?.toString();
+    return reason == null ? base : '$base · $reason';
+  }
+
+  Widget _buildActions(ThemeData theme) {
+    final task = widget.task;
+    final service = widget.taskService;
+    final actions = <Widget>[];
+
+    if (_isNote) {
+      if (!_canSupervise) return const SizedBox.shrink();
+      return Wrap(spacing: 8, runSpacing: 8, children: [
+        if (!task.isDone)
+          OutlinedButton.icon(
+            onPressed: () => widget.onCommand(() =>
+                service.cancelTask(task.id!, expectedVersion: task.version)),
+            icon: const Icon(Icons.archive_outlined, size: 16),
+            label: const Text('Archivar nota'),
+          )
+        else
+          FilledButton.tonalIcon(
+            onPressed: () => widget.onCommand(() =>
+                service.reopenTask(task.id!, expectedVersion: task.version)),
+            icon: const Icon(Icons.unarchive_outlined, size: 16),
+            label: const Text('Restaurar nota'),
+          ),
+      ]);
     }
+
+    void action(String label, IconData icon, Future<TaskModel> Function() run,
+        {bool filled = false}) {
+      actions.add(filled
+          ? FilledButton.icon(
+              onPressed: () => widget.onCommand(run),
+              icon: Icon(icon, size: 16),
+              label: Text(label),
+            )
+          : OutlinedButton.icon(
+              onPressed: () => widget.onCommand(run),
+              icon: Icon(icon, size: 16),
+              label: Text(label),
+            ));
+    }
+
+    // Los motivos se capturan en el host contextual canónico (O-02 anclado
+    // al botón que lo pide; O-05 en compacto).
+    void reasonAction(String label, IconData icon, String hint,
+        Future<TaskModel> Function(String reason) run) {
+      actions.add(Builder(
+        builder: (buttonContext) => OutlinedButton.icon(
+          onPressed: () async {
+            final reason = await showVbReasonPrompt(
+              anchorContext: buttonContext,
+              title: label,
+              hint: hint,
+              confirmLabel: label,
+            );
+            if (reason == null) return;
+            await widget.onCommand(() => run(reason));
+          },
+          icon: Icon(icon, size: 16),
+          label: Text(label),
+        ),
+      ));
+    }
+
+    if (_isAssignee && task.awaitsAcknowledgement) {
+      action('Aceptar', Icons.check, () => service.acknowledgeTask(task.id!),
+          filled: true);
+      reasonAction('Devolver', Icons.undo, '¿Por qué la devuelves?',
+          (reason) => service.returnTask(task.id!, reason));
+    }
+    if ((_isAssignee || widget.isManager) &&
+        task.status == TaskStatus.pending &&
+        !task.awaitsAcknowledgement) {
+      action('Iniciar', Icons.play_arrow,
+          () => service.startTask(task.id!, expectedVersion: task.version),
+          filled: true);
+    }
+    if ((_isAssignee || _canSupervise) &&
+        (task.status == TaskStatus.pending ||
+            task.status == TaskStatus.inProgress)) {
+      reasonAction(
+          'Bloquear',
+          Icons.block,
+          '¿Qué la bloquea? (ej: falta repuesto)',
+          (reason) => service.blockTask(task.id!, reason,
+              expectedVersion: task.version));
+      action('Completar', Icons.task_alt,
+          () => service.completeTask(task.id!, expectedVersion: task.version),
+          filled: task.status == TaskStatus.inProgress);
+    }
+    if ((_isAssignee || _canSupervise) && task.isBlocked) {
+      action('Desbloquear', Icons.lock_open,
+          () => service.unblockTask(task.id!, expectedVersion: task.version),
+          filled: true);
+      action('Completar', Icons.task_alt,
+          () => service.completeTask(task.id!, expectedVersion: task.version));
+    }
+    if (_canSupervise && task.isDone) {
+      action('Reabrir', Icons.refresh,
+          () => service.reopenTask(task.id!, expectedVersion: task.version));
+    }
+    if (_canSupervise && !task.isDone) {
+      // Elegir persona = S-06 en el host O-02/O-05, anclado a su botón.
+      actions.add(Builder(
+        builder: (buttonContext) => OutlinedButton.icon(
+          onPressed: () => _pickAssignee(buttonContext),
+          icon: const Icon(Icons.person_outline, size: 16),
+          label: Text(task.assignedTo == null ? 'Asignar' : 'Reasignar'),
+        ),
+      ));
+    }
+
+    if (actions.isEmpty) return const SizedBox.shrink();
+    return Wrap(spacing: 8, runSpacing: 8, children: actions);
+  }
+
+  Future<void> _pickAssignee(BuildContext anchorContext) async {
+    final directory = await widget.taskService.fetchAssignmentDirectory();
+    if (!mounted || !anchorContext.mounted) return;
+    // El picker es el owner S-06 real (mismo menú O-02 / hoja O-05 del
+    // campo). Los sin cuenta no son opciones: su afordancia «Invitar» vive en
+    // el compositor y el directorio.
+    final selected = await showVbSearchableOptionPicker<String>(
+      anchorContext: anchorContext,
+      title: 'Asignar a',
+      options: [
+        for (final principal in directory.where((p) => p.isAssignable))
+          VbSearchableSelectOption(
+            value: principal.userId!,
+            label: principal.displayName,
+            context: principal.access == TaskPrincipalAccess.portal
+                ? 'Portal · ${principal.role}'
+                : principal.role,
+          ),
+      ],
+    );
+    if (selected == null || !mounted) return;
+    await widget.onCommand(() => widget.taskService.assignTask(
+        widget.task.id!, selected,
+        expectedVersion: widget.task.version));
+  }
+}
+
+class _JobContextCard extends StatelessWidget {
+  const _JobContextCard({
+    required this.links,
+    required this.jobHeader,
+    required this.onOpenJob,
+  });
+
+  final List<SmartTaskJobItem> links;
+  final TaskLinkableJob? jobHeader;
+  final VoidCallback onOpenJob;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final jobNumber =
+        links.isNotEmpty ? links.first.jobNumber : jobHeader?.jobNumber;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('PEGA #${jobNumber ?? '—'}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      letterSpacing: 0.8,
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    )),
+              ),
+              TextButton.icon(
+                onPressed: onOpenJob,
+                icon: const Icon(Icons.open_in_new, size: 14),
+                label: const Text('Abrir pega'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (links.isEmpty && jobHeader != null)
+            Text(
+              [
+                if (jobHeader!.customerName != null) jobHeader!.customerName!,
+                if ((jobHeader!.clientRequest ?? '').isNotEmpty)
+                  jobHeader!.clientRequest!,
+                'Pega completa (sin servicios elegidos)',
+              ].join(' — '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          for (final link in links)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Row(
+                children: [
+                  Icon(
+                    link.isInvalidated ? Icons.link_off : Icons.build_outlined,
+                    size: 13,
+                    color: link.isInvalidated
+                        ? (roles?.danger.accent ?? theme.colorScheme.error)
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${link.itemName}'
+                      '${link.bikeLabel != null ? ' · ${link.bikeLabel}' : ''}'
+                      '${link.isInvalidated ? ' (línea eliminada)' : link.contextChanged ? ' (línea editada)' : ''}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        decoration: link.isInvalidated
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

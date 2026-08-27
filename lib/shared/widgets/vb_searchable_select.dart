@@ -722,3 +722,50 @@ class _OpenIntentShortcuts extends StatelessWidget {
     );
   }
 }
+
+/// Elección directa de UNA opción con la misma anatomía S-06 del campo:
+/// reutiliza el menú O-02 de escritorio y la hoja O-05 táctil del propio
+/// owner, sin campo persistente. Para comandos del tipo «Reasignar a…».
+Future<T?> showVbSearchableOptionPicker<T>({
+  required BuildContext anchorContext,
+  required String title,
+  required List<VbSearchableSelectOption<T>> options,
+  String searchHint = 'Buscar…',
+  String emptyLabel = 'Nada coincide',
+}) async {
+  final touch = MediaQuery.sizeOf(anchorContext).width <
+      ResponsiveBreakpoints.desktopMin;
+  final _VbSearchableChoice<T>? choice;
+  if (touch) {
+    final media = MediaQuery.of(anchorContext);
+    choice = await showModalBottomSheet<_VbSearchableChoice<T>>(
+      context: anchorContext,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      isScrollControlled: true,
+      constraints: BoxConstraints(maxHeight: media.size.height * 0.75),
+      builder: (_) => _VbSearchableSheet<T>(
+        title: title,
+        options: options,
+        value: null,
+        searchHint: searchHint,
+        emptyLabel: emptyLabel,
+        allowClear: false,
+      ),
+    );
+  } else {
+    choice = await showVbAnchoredPopover<_VbSearchableChoice<T>>(
+      anchorContext: anchorContext,
+      minWidth: 260,
+      barrierLabel: 'Cerrar $title',
+      builder: (_) => _VbSearchableMenu<T>(
+        options: options,
+        value: null,
+        searchHint: searchHint,
+        emptyLabel: emptyLabel,
+        allowClear: false,
+      ),
+    );
+  }
+  return choice?.value;
+}

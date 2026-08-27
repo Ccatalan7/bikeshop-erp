@@ -6,9 +6,9 @@ import '../../tasks/models/task_model.dart';
 import '../../tasks/services/task_service.dart';
 import '../../../shared/services/user_management_service.dart';
 import '../../../shared/services/tenant_service.dart';
+import '../../../shared/widgets/vb_segmented.dart';
 import 'task_form_dialog.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 
 /// Parent-owned compact task browsing context.
@@ -20,6 +20,7 @@ class PegasTasksSession {
     this.statusFilter = TaskStatus.pending,
     this.priorityFilter,
     this.searchQuery = '',
+    this.trayScope = PegasTasksTrayScope.team,
     this.scrollOffset = 0,
     Set<String>? expandedTaskKeys,
   }) : _expandedTaskKeys = {...?expandedTaskKeys};
@@ -27,6 +28,7 @@ class PegasTasksSession {
   TaskStatus? statusFilter;
   TaskPriority? priorityFilter;
   String searchQuery;
+  PegasTasksTrayScope trayScope;
   double scrollOffset;
   Set<String>? _expandedTaskKeys;
 
@@ -34,6 +36,10 @@ class PegasTasksSession {
   // this field after the object had already been created.
   Set<String> get expandedTaskKeys => _expandedTaskKeys ??= <String>{};
 }
+
+/// Alcance de bandeja de la vista completa: coordinación (equipo), lo mío,
+/// o mis privadas. Mismo vocabulario que el panel rápido.
+enum PegasTasksTrayScope { inbox, team, personal }
 
 class PegasTasksWidget extends StatefulWidget {
   const PegasTasksWidget({
@@ -56,6 +62,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   // Filters
   TaskStatus? _statusFilter = TaskStatus.pending;
   TaskPriority? _priorityFilter;
+  PegasTasksTrayScope _trayScope = PegasTasksTrayScope.team;
   String _searchQuery = '';
   late final TextEditingController _searchController;
   late final ScrollController _compactScrollController;
@@ -72,12 +79,22 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   List<Map<String, dynamic>>? _users;
   bool _usersLoading = false;
 
+  // Nombres canónicos por user_id (directorio de asignación): la fila del
+  // RPC trae assigned_to sin assignee_name, y sin esto una asignación
+  // recién hecha se seguía viendo «Sin asignar».
+  Map<String, String> _principalNames = const {};
+
+  String? _assigneeDisplayName(TaskModel task) =>
+      task.assigneeName ??
+      (task.assignedTo == null ? null : _principalNames[task.assignedTo!]);
+
   @override
   void initState() {
     super.initState();
     _localSession = PegasTasksSession();
     _statusFilter = _session.statusFilter;
     _priorityFilter = _session.priorityFilter;
+    _trayScope = _session.trayScope;
     _searchQuery = _session.searchQuery;
     _searchController = TextEditingController(text: _searchQuery);
     _compactScrollController = ScrollController(
@@ -85,6 +102,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     )..addListener(_rememberCompactScroll);
     _titleController = TextEditingController();
     _loadUsers();
+    _loadPrincipalNames();
   }
 
   @override
@@ -108,6 +126,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     _session
       ..statusFilter = _statusFilter
       ..priorityFilter = _priorityFilter
+      ..trayScope = _trayScope
       ..searchQuery = _searchQuery;
     _rememberCompactScroll();
   }
@@ -115,6 +134,23 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   void _updateViewState(VoidCallback mutation) {
     setState(mutation);
     _persistSession();
+  }
+
+  Future<void> _loadPrincipalNames() async {
+    try {
+      final directory =
+          await context.read<TaskService>().fetchAssignmentDirectory();
+      if (!mounted) return;
+      setState(() {
+        _principalNames = {
+          for (final principal in directory)
+            if (principal.userId != null)
+              principal.userId!: principal.displayName,
+        };
+      });
+    } catch (_) {
+      // El nombre denormalizado sigue siendo el fallback.
+    }
   }
 
   Future<void> _loadUsers() async {
@@ -139,7 +175,18 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     final theme = Theme.of(context);
     return Consumer<TaskService>(
       builder: (context, taskService, child) {
-        final allTasks = taskService.tasks;
+        final currentUserId = taskService.currentUserId;
+        final allTasks = taskService.tasks.where((task) {
+          switch (_trayScope) {
+            case PegasTasksTrayScope.inbox:
+              return task.assignedTo == currentUserId;
+            case PegasTasksTrayScope.team:
+              return task.visibility != TaskVisibility.private;
+            case PegasTasksTrayScope.personal:
+              return task.visibility == TaskVisibility.private &&
+                  task.createdBy == currentUserId;
+          }
+        }).toList();
 
         // Filter tasks
         final filteredTasks = allTasks.where((task) {
@@ -319,11 +366,33 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     );
   }
 
+  Widget _buildTrayScopeSelector() {
+    return VbSegmented<PegasTasksTrayScope>(
+      groupLabel: 'Alcance de la bandeja',
+      options: const [
+        VbSegmentedOption(
+            value: PegasTasksTrayScope.inbox, label: 'Mi bandeja'),
+        VbSegmentedOption(value: PegasTasksTrayScope.team, label: 'Equipo'),
+        VbSegmentedOption(
+            value: PegasTasksTrayScope.personal, label: 'Personales'),
+      ],
+      value: _trayScope,
+      onChanged: (scope) => _updateViewState(() => _trayScope = scope),
+    );
+  }
+
   Widget _buildDesktopSearchBar(ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
       child: Row(
         children: [
+          // Un hijo no-flex de un Row recibe ancho no acotado, y la pista de
+          // S-04 usa flex interno: el host debe acotarlo.
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: _buildTrayScopeSelector(),
+          ),
+          const SizedBox(width: 12),
           Expanded(child: _buildSearchField(theme)),
           const SizedBox(width: 12),
           FilledButton.icon(
@@ -426,6 +495,8 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _buildTrayScopeSelector(),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(child: _buildSearchField(theme, compact: true)),
@@ -621,6 +692,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     final selectedCount = switch (_statusFilter) {
       TaskStatus.pending => pendingCount,
       TaskStatus.inProgress => inProgressCount,
+      TaskStatus.blocked => null,
       TaskStatus.completed => completedCount,
       TaskStatus.cancelled => null,
       null => null,
@@ -1197,7 +1269,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
               builder: (anchorContext) => _buildCompactInfoAction(
                 key: ValueKey('workshop-task-compact-assignee-$taskKey'),
                 label: 'Asignación',
-                value: task.assigneeName ?? 'Sin asignar',
+                value: _assigneeDisplayName(task) ?? 'Sin asignar',
                 onTap: () => _showAssigneeMenu(
                   task,
                   anchorContext: anchorContext,
@@ -1239,8 +1311,13 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     final theme = Theme.of(context);
     return PopupMenuButton<String>(
       key: ValueKey('workshop-task-compact-more-$taskKey'),
-      tooltip: 'Editar o eliminar tarea',
-      itemBuilder: _buildTaskActionMenuItems,
+      tooltip: task.kind == TaskKind.note
+          ? 'Editar o archivar nota'
+          : 'Editar o cancelar tarea',
+      itemBuilder: (context) => _buildTaskActionMenuItems(
+        context,
+        isNote: task.kind == TaskKind.note,
+      ),
       onSelected: (value) => _handleMenuAction(value, task),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 48),
@@ -1438,8 +1515,9 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   }
 
   List<PopupMenuEntry<String>> _buildTaskActionMenuItems(
-    BuildContext context,
-  ) {
+    BuildContext context, {
+    bool isNote = false,
+  }) {
     final error = Theme.of(context).colorScheme.error;
     return [
       const PopupMenuItem(
@@ -1457,9 +1535,11 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
         value: 'delete',
         child: Row(
           children: [
-            Icon(Icons.delete_outline, size: 16, color: error),
+            Icon(isNote ? Icons.archive_outlined : Icons.delete_outline,
+                size: 16, color: error),
             const SizedBox(width: 8),
-            Text('Eliminar', style: TextStyle(color: error)),
+            Text(isNote ? 'Archivar nota' : 'Cancelar tarea',
+                style: TextStyle(color: error)),
           ],
         ),
       ),
@@ -1592,9 +1672,18 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete_outline, size: 16, color: error),
+                            Icon(
+                                task.kind == TaskKind.note
+                                    ? Icons.archive_outlined
+                                    : Icons.delete_outline,
+                                size: 16,
+                                color: error),
                             const SizedBox(width: 8),
-                            Text('Eliminar', style: TextStyle(color: error)),
+                            Text(
+                                task.kind == TaskKind.note
+                                    ? 'Archivar nota'
+                                    : 'Cancelar tarea',
+                                style: TextStyle(color: error)),
                           ],
                         ),
                       ),
@@ -1876,10 +1965,11 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
 
   // ── Assignee cell (click → user menu) ──
   Widget _buildAssigneeCell(TaskModel task, ThemeData theme) {
+    final assigneeName = _assigneeDisplayName(task);
     return InkWell(
       onTap: () => _showAssigneeMenu(task),
       borderRadius: BorderRadius.circular(6),
-      child: task.assigneeName != null
+      child: assigneeName != null
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1887,7 +1977,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                   radius: 12,
                   backgroundColor: theme.colorScheme.primaryContainer,
                   child: Text(
-                    task.assigneeName!.substring(0, 1).toUpperCase(),
+                    assigneeName.substring(0, 1).toUpperCase(),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -1898,7 +1988,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
-                    task.assigneeName!,
+                    assigneeName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12),
@@ -2302,9 +2392,18 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
         ),
       );
       if (clear == true) {
-        // We need to set dueDate to null — copyWith can't do this by default
-        // so we update via the service directly
-        await _updateTaskField(task, 'due_date', null);
+        // Limpiar la fecha va por el mismo comando auditado que el resto.
+        if (task.id != null && mounted) {
+          final messenger = ScaffoldMessenger.of(context);
+          final service = context.read<TaskService>();
+          try {
+            await service.updateTaskDetails(task.id!, clearDueDate: true);
+          } catch (e) {
+            if (mounted) {
+              messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
+            }
+          }
+        }
       }
       return;
     }
@@ -2318,6 +2417,9 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     TaskModel task, {
     BuildContext? anchorContext,
   }) {
+    // Una nota no tiene responsable; el servidor lo rechaza y la UI no lo
+    // ofrece.
+    if (task.kind == TaskKind.note) return;
     final menuContext = anchorContext ?? context;
     final RenderBox button = menuContext.findRenderObject() as RenderBox;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -2383,6 +2485,8 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
       ));
     }
 
+    final taskServiceForAssign = context.read<TaskService>();
+    final messengerForAssign = ScaffoldMessenger.of(context);
     showMenu<String?>(
       context: context,
       position: RelativeRect.fromRect(
@@ -2394,7 +2498,17 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
       if (selectedUserId == null) return; // dismissed
 
       if (selectedUserId == '__none__') {
-        _updateTaskField(task, 'assigned_to', null);
+        if (task.id != null) {
+          taskServiceForAssign.assignTask(task.id!, null).catchError(
+            (Object error) {
+              if (mounted) {
+                messengerForAssign.showSnackBar(
+                    SnackBar(content: Text('Error: $error')));
+              }
+              return task;
+            },
+          );
+        }
         return;
       }
 
@@ -2405,8 +2519,18 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
       final name =
           user?['full_name'] as String? ?? user?['email'] as String? ?? '';
 
-      _updateTask(
-          task.copyWith(assignedTo: selectedUserId, assigneeName: name));
+      if (task.id != null) {
+        final service = taskServiceForAssign;
+        final messenger = messengerForAssign;
+        service
+            .assignTask(task.id!, selectedUserId)
+            .catchError((Object error) {
+          if (mounted) {
+            messenger.showSnackBar(SnackBar(content: Text('Error: $error')));
+          }
+          return task.copyWith(assigneeName: name);
+        });
+      }
     });
   }
 
@@ -2415,10 +2539,23 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   // ══════════════════════════════════════════════════════════════════
 
   void _toggleStatus(TaskModel task) {
-    final newStatus = task.status == TaskStatus.completed
-        ? TaskStatus.pending
-        : TaskStatus.completed;
-    _updateTask(task.copyWith(status: newStatus));
+    if (task.id == null) return;
+    final service = context.read<TaskService>();
+    final messenger = ScaffoldMessenger.of(context);
+    // Una nota no se completa: su ida y vuelta es Archivar/Restaurar.
+    final future = task.kind == TaskKind.note
+        ? (task.isDone
+            ? service.reopenTask(task.id!)
+            : service.cancelTask(task.id!))
+        : task.status == TaskStatus.completed
+            ? service.reopenTask(task.id!)
+            : service.completeTask(task.id!);
+    future.catchError((Object error) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text('Error: $error')));
+      }
+      return task;
+    });
   }
 
   Future<bool> _updateTask(TaskModel updatedTask) async {
@@ -2435,29 +2572,6 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   }
 
   /// Update a single field directly (for nullable fields like due_date)
-  Future<void> _updateTaskField(
-      TaskModel task, String field, dynamic value) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final taskService = context.read<TaskService>();
-    try {
-      final tenantId = task.tenantId;
-      if (task.id == null) return;
-
-      await Supabase.instance.client
-          .from('smart_tasks')
-          .update({field: value})
-          .eq('id', task.id!)
-          .eq('tenant_id', tenantId);
-
-      // Refresh from database
-      await taskService.fetchTasks();
-    } catch (e) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    }
-  }
-
   void _handleMenuAction(String value, TaskModel task) async {
     if (value == 'edit') {
       showDialog(
@@ -2468,24 +2582,31 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     }
 
     if (value == 'delete') {
+      final isNote = task.kind == TaskKind.note;
       final messenger = ScaffoldMessenger.of(context);
       final taskService = context.read<TaskService>();
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Eliminar tarea'),
-          content: Text('¿Estás seguro de eliminar "${task.title}"?'),
+          title: Text(isNote ? 'Archivar nota' : 'Cancelar tarea'),
+          content: Text(isNote
+              ? '¿Archivar "${task.title}"? Podrás restaurarla cuando '
+                  'quieras.'
+              : '¿Cancelar "${task.title}"? Su historial se '
+                  'conserva y puede reabrirse.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancelar'),
+              child: const Text('Volver'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(ctx).colorScheme.error,
-              ),
+              style: isNote
+                  ? null
+                  : FilledButton.styleFrom(
+                      backgroundColor: Theme.of(ctx).colorScheme.error,
+                    ),
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Eliminar'),
+              child: Text(isNote ? 'Archivar nota' : 'Cancelar tarea'),
             ),
           ],
         ),
@@ -2493,11 +2614,11 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
 
       if (confirmed == true && task.id != null) {
         try {
-          await taskService.deleteTask(task.id!);
+          await taskService.cancelTask(task.id!);
           if (mounted) {
-            messenger.showSnackBar(
-              const SnackBar(content: Text('Tarea eliminada')),
-            );
+            messenger.showSnackBar(SnackBar(
+                content:
+                    Text(isNote ? 'Nota archivada' : 'Tarea cancelada')));
           }
         } catch (e) {
           if (mounted) {
@@ -2539,6 +2660,8 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
         return scheme.onSurfaceVariant;
       case TaskStatus.inProgress:
         return scheme.primary;
+      case TaskStatus.blocked:
+        return scheme.error;
       case TaskStatus.completed:
         return scheme.tertiary;
       case TaskStatus.cancelled:
@@ -2579,6 +2702,8 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
         return 'Pendiente';
       case TaskStatus.inProgress:
         return 'En Curso';
+      case TaskStatus.blocked:
+        return 'Bloqueada';
       case TaskStatus.completed:
         return 'Completada';
       case TaskStatus.cancelled:

@@ -11,6 +11,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../../../shared/services/auth_service.dart';
 import '../../hr/widgets/attendance_week_calendar.dart';
 import '../../hr/widgets/shift_planning_calendar.dart';
+import '../widgets/worker_tasks_section.dart';
 
 class WorkerHomePage extends StatefulWidget {
   const WorkerHomePage({super.key});
@@ -19,12 +20,13 @@ class WorkerHomePage extends StatefulWidget {
   State<WorkerHomePage> createState() => _WorkerHomePageState();
 }
 
-enum _WorkerPortalSection { resumen, planificacion, asistencias, perfil }
+enum _WorkerPortalSection { resumen, tareas, planificacion, asistencias, perfil }
 
 extension _WorkerPortalSectionMeta on _WorkerPortalSection {
   String get label {
     return switch (this) {
       _WorkerPortalSection.resumen => 'Resumen',
+      _WorkerPortalSection.tareas => 'Mis tareas',
       _WorkerPortalSection.planificacion => 'Planificacion',
       _WorkerPortalSection.asistencias => 'Asistencias',
       _WorkerPortalSection.perfil => 'Mi perfil',
@@ -34,6 +36,7 @@ extension _WorkerPortalSectionMeta on _WorkerPortalSection {
   String get description {
     return switch (this) {
       _WorkerPortalSection.resumen => 'Vista rapida de tu semana',
+      _WorkerPortalSection.tareas => 'Trabajo encargado y su avance',
       _WorkerPortalSection.planificacion =>
         'Turnos, horario base y solicitudes',
       _WorkerPortalSection.asistencias => 'Horas trabajadas y pago estimado',
@@ -44,6 +47,7 @@ extension _WorkerPortalSectionMeta on _WorkerPortalSection {
   IconData get icon {
     return switch (this) {
       _WorkerPortalSection.resumen => Icons.dashboard_outlined,
+      _WorkerPortalSection.tareas => Icons.task_alt,
       _WorkerPortalSection.planificacion => Icons.calendar_month_outlined,
       _WorkerPortalSection.asistencias => Icons.access_time_outlined,
       _WorkerPortalSection.perfil => Icons.person_outline,
@@ -787,10 +791,19 @@ class _WorkerPortalBody extends StatelessWidget {
   List<Widget> _sectionChildren(bool desktop) {
     return switch (selectedSection) {
       _WorkerPortalSection.resumen => _summaryChildren(desktop),
+      _WorkerPortalSection.tareas => _tasksChildren(desktop),
       _WorkerPortalSection.planificacion => _planningChildren(desktop),
       _WorkerPortalSection.asistencias => _attendanceChildren(desktop),
       _WorkerPortalSection.perfil => _profileChildren(desktop),
     };
+  }
+
+  List<Widget> _tasksChildren(bool desktop) {
+    return [
+      const _PortalSectionHeader(section: _WorkerPortalSection.tareas),
+      const SizedBox(height: 12),
+      const WorkerTasksSection(),
+    ];
   }
 
   List<Widget> _summaryChildren(bool desktop) {

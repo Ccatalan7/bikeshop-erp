@@ -614,6 +614,19 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                               },
                               onTap: (item) {
                                 _markActivityRead(item);
+                                final taskId =
+                                    taskIdFromToolRoute(item.route);
+                                if (taskId != null) {
+                                  // El destino es la bandeja del rail, no una
+                                  // ruta: se abre el panel en esa tarea.
+                                  context
+                                      .read<RightToolbarService>()
+                                      .openConversation(
+                                        tool: ToolbarTool.tasks,
+                                        conversationId: taskId,
+                                      );
+                                  return;
+                                }
                                 widget.onNavigate(item.route);
                               },
                               onExpand: _markActivityRead,

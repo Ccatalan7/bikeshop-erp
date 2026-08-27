@@ -26,7 +26,8 @@ class AppRouteLinkSegment extends MessageSegment {
 enum RefType {
   job,
   invoice,
-  product;
+  product,
+  task;
 
   static RefType? fromPrefix(String prefix) {
     switch (prefix.toUpperCase()) {
@@ -36,6 +37,8 @@ enum RefType {
         return RefType.invoice;
       case 'PROD':
         return RefType.product;
+      case 'TASK':
+        return RefType.task;
       default:
         return null;
     }
@@ -46,7 +49,7 @@ class MessageParser {
   // Matches #PREFIX-VALUE or #PREFIXVALUE (where VALUE must start with digit if no hyphen)
   // This avoids matching words like #INVALID as an invoice reference.
   static final RegExp _refRegex = RegExp(
-      r'#(JOB|INV|PROD)(?:-([A-Za-z0-9-_]+)|(\d[A-Za-z0-9-_]*))',
+      r'#(JOB|INV|PROD|TASK)(?:-([A-Za-z0-9-_]+)|(\d[A-Za-z0-9-_]*))',
       caseSensitive: false);
 
   static final RegExp _appRouteLinkRegex = RegExp(

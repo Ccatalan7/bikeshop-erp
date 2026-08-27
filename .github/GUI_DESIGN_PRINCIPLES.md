@@ -958,6 +958,12 @@ rendering behavior must be designed together.
   to escape the viewport.
 - Outside click, `Escape`, cancel, selection, route disposal, and host teardown
   must have explicit behavior. Restore focus to the trigger when appropriate.
+- A routed popover/sheet owns every `FocusNode`, `TextEditingController`, and
+  other listenable in a state object mounted inside that route. Do not dispose
+  those resources from the `Future` returned by `Navigator.push`: that future
+  resolves when `pop` starts, while the reverse-transition widgets are still
+  mounted. The regression must submit a value, immediately refresh the owning
+  model, settle the exit transition, and keep `tester.takeException()` null.
 - If the host scrolls or resizes while the surface is open, the surface must
   either follow, recompute, or close. A detached popover is never acceptable.
 

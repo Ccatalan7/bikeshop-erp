@@ -143,6 +143,26 @@ Every ordinary pgTAP rerun reuses the already prepared local database. It does
 not copy production and does not rebuild from scratch unless the local fixture
 inputs actually changed.
 
+**Trampa del seed de tenant en fixtures pgTAP (2026-08-26).** El seed de
+inicialización que corre al insertar una fila en `tenants` deja
+`request.jwt.claim.sub` apuntando **al id del tenant** y no lo restaura. Desde
+ese punto `auth.uid()` devuelve el tenant, y cualquier trigger que capture
+actor (`set_mechanic_job_created_by`, guards de identidad) escribe ese uuid
+como si fuera un usuario: el síntoma es un
+`mechanic_jobs_created_by_fkey violation` en un INSERT de fixture que parecía
+correcto, y costó una ronda completa encontrarlo. Regla: **después de insertar
+tenants y antes de cualquier otra fila**, limpia el contexto:
+
+```sql
+select set_config('request.jwt.claims', '{}', true);
+select set_config('request.jwt.claim.sub', '', true);
+```
+
+Varias suites antiguas (`mechanic_job_archive`,
+`ai_assistant_filtered_operational_reads`, entre otras) no lo hacen y hoy
+abortan en local por esta causa, no por el cambio que estés probando: verifica
+la preexistencia con teardown/reaplicación antes de atribuirte la falla.
+
 Run the full legacy-fixture gate only when `core_schema.sql` or an included
 fixture input changed, or at a deliberate checkpoint:
 
@@ -339,6 +359,22 @@ Use privileged REST only when the behavior under test is explicitly an admin
 consumer. Use that consumer's own approved secret (the local-maintenance key
 for local agent work), load it without printing it, limit the request to the
 required columns/tenant, then unset it.
+
+**2026-08-27 — legacy writes cannot own new evidence or race a decision.**
+When an additive migration must keep an older client writing a shared table,
+every new actor/timestamp/version column remains server-owned: the row guard
+normalizes it on `INSERT` and preserves or derives it on `UPDATE`, even when
+the legacy route itself stays authorized. RLS saying who may update a row does
+not stop that actor from spoofing newly added audit columns. Likewise, a
+read-then-write conflict check is not a concurrency guarantee. If two commands
+decide ownership of the same business identities, take deterministic
+transaction-scoped locks for those identities before checking and writing.
+Every participating command must acquire shared business-identity locks and
+row locks in the same global order; sorting only the identities inside one
+helper does not prevent a cycle if another path already holds its task row.
+The minimum regression must exercise a forged legacy write against a row that
+provably exists and verify the lock is reached before task-row locking on every
+command path that can make the decision.
 
 ## Autonomous finish checklist
 
