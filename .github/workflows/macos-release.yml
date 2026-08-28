@@ -382,20 +382,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          base_commit="$(
+          authoritative_base_commit="$(
             bash scripts/releases/resolve_previous_release_commit.sh \
               macos-v \
               macos-release-manifest.json \
               "$GITHUB_SHA"
           )"
+          base_commit="$authoritative_base_commit"
           if [[ -n "$RELEASE_NOTES_FROM_COMMIT" ]]; then
-            if [[
-              ! "$RELEASE_NOTES_FROM_COMMIT" =~ ^[0-9a-f]{40}$ ||
-              "$RELEASE_NOTES_FROM_COMMIT" != "$base_commit"
-            ]]; then
-              echo 'The shared release-note base does not match the authoritative macOS range.' >&2
+            if [[ ! "$RELEASE_NOTES_FROM_COMMIT" =~ ^[0-9a-f]{40}$ ]] ||
+              ! git cat-file -e "${RELEASE_NOTES_FROM_COMMIT}^{commit}" 2>/dev/null ||
+              ! git merge-base --is-ancestor \
+                "$RELEASE_NOTES_FROM_COMMIT" \
+                "$authoritative_base_commit"; then
+              echo 'The shared release-note base does not safely cover the authoritative macOS range.' >&2
               exit 1
             fi
+            base_commit="$RELEASE_NOTES_FROM_COMMIT"
           fi
 
           node scripts/releases/generate_release_notes.mjs \

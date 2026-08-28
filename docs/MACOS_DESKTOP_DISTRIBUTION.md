@@ -162,6 +162,14 @@ macOS manifest for the same commit instead of creating another macOS release.
 The same-commit Android retry is accepted only when its published manifest uses
 the exact prepared `from_commit`, so valid-looking evidence from another range
 cannot hide different `Novedades`.
+
+**Corrección 2026-08-28:** el job protegido de macOS valida la base común
+preparada contra su historial propio por cobertura, no por igualdad literal.
+La base compartida puede ser la última macOS o un ancestro suyo cuando Android
+viene de una versión anterior; nunca puede ser posterior, paralela o ajena. La
+igualdad literal rechazaba exactamente el caso seguro que el preparador había
+calculado y dejaba Android publicado sin su par macOS.
+
 Android signing material and the Supabase release credential remain only in the
 protected GitHub `Production` environment. The Android terminal downloads and
 validates a bounded Actions evidence artifact containing the exact final

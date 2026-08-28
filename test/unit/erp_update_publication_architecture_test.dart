@@ -284,6 +284,34 @@ void main() {
     }
   });
 
+  test('macOS accepts only a shared baseline that covers its own range', () {
+    final publishJob = macosWorkflow.indexOf('\n  publish:');
+    final androidRoute = macosWorkflow.indexOf('\n  android:', publishJob);
+    final protectedPublish = macosWorkflow.substring(publishJob, androidRoute);
+
+    expect(protectedPublish, contains('authoritative_base_commit'));
+    expect(
+      protectedPublish,
+      contains(
+        'git merge-base --is-ancestor \\\n'
+        '                "\$RELEASE_NOTES_FROM_COMMIT" \\\n'
+        '                "\$authoritative_base_commit"',
+      ),
+    );
+    expect(
+      protectedPublish,
+      contains('base_commit="\$RELEASE_NOTES_FROM_COMMIT"'),
+    );
+    expect(
+      protectedPublish,
+      isNot(
+        contains(
+          '"\$RELEASE_NOTES_FROM_COMMIT" != "\$base_commit"',
+        ),
+      ),
+    );
+  });
+
   test('standalone platform tasks remain selectable', () {
     expect(
       task('🍎 Publish macOS Update (all changes)')['command'],
