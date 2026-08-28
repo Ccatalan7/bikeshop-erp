@@ -254,7 +254,7 @@ const inventorySearchSchema: StrictJsonSchema = {
       minItems: 0,
       maxItems: 8,
       description:
-        "Predicados sobre claves y operadores que anunció inspect_inventory_schema. No inventes claves ni operadores. **Los valores SÍ se traducen**: pasa el vocabulario que anunció el esquema, no las palabras del operador — «VA», «válvula de auto» y «americana» son el valor Schrader, «VF» y «francesa» son Presta, «aro 26» es la medida 26\". Antes decía lo contrario y el resultado era una búsqueda de texto contra el nombre del producto, que ignora la ficha. Usa [] sólo cuando la petición no nombre ninguna medida ni atributo técnico: si nombra una y llegas sin predicados, el servidor te va a pedir inspeccionar primero. **Una cobertura baja NO significa un dato faltante.** El ancho vive en dos campos según la unidad con que el catálogo escribe esa medida —pulgadas en montaña (`*_width*_in`), milímetros en ruta (`*_width*_mm`)—, así que cada campo cubre sólo su mitad del catálogo y su populatedCount se ve bajo aunque para la medida que te pidieron la cobertura sea total. Elige el campo por la UNIDAD de lo que dijo el operador, nunca por su populatedCount: «700x28», «700x25c» y «28C» son milímetros; «26x2.1», «29x2.4» y «27.5x2.25» son pulgadas. **Una fracción de taller es un número:** «1 3/8», «1-3/8» y «1.3/8» son 1.375, y «1 5/8» es 1.625. **Un neumático tiene un ancho y una cámara cubre una banda:** para «qué neumático 2.25» el predicado es una igualdad sobre el ancho del neumático; para «qué cámara le sirve a un neumático 2.25» son dos, ancho mínimo ≤ 2.25 y ancho máximo ≥ 2.25.",
+        'Predicados sobre claves y operadores que anunció inspect_inventory_schema. No inventes claves ni operadores. **Los valores SÍ se traducen**: pasa el vocabulario que anunció el esquema, no las palabras del operador — «VA», «válvula de auto» y «americana» son el valor Schrader, «VF» y «francesa» son Presta, «aro 26» es la medida 26". Antes decía lo contrario y el resultado era una búsqueda de texto contra el nombre del producto, que ignora la ficha. Usa [] sólo cuando la petición no nombre ninguna medida ni atributo técnico: si nombra una y llegas sin predicados, el servidor te va a pedir inspeccionar primero. **Una cobertura baja NO significa un dato faltante.** El ancho vive en dos campos según la unidad con que el catálogo escribe esa medida —pulgadas en montaña (`*_width*_in`), milímetros en ruta (`*_width*_mm`)—, así que cada campo cubre sólo su mitad del catálogo y su populatedCount se ve bajo aunque para la medida que te pidieron la cobertura sea total. Elige el campo por la UNIDAD de lo que dijo el operador, nunca por su populatedCount: «700x28», «700x25c» y «28C» son milímetros; «26x2.1», «29x2.4» y «27.5x2.25» son pulgadas. **Una fracción de taller es un número:** «1 3/8», «1-3/8» y «1.3/8» son 1.375, y «1 5/8» es 1.625. **Un neumático tiene un ancho y una cámara cubre una banda:** para «qué neumático 2.25» el predicado es una igualdad sobre el ancho del neumático; para «qué cámara le sirve a un neumático 2.25» son dos, ancho mínimo ≤ 2.25 y ancho máximo ≥ 2.25.',
       items: {
         type: "object",
         properties: {
@@ -267,7 +267,8 @@ const inventorySearchSchema: StrictJsonSchema = {
           operator: {
             type: "string",
             enum: ["eq", "neq", "lt", "lte", "gt", "gte", "between", "in", "contains"],
-            description: "Operador anunciado para ese campo. En listas, eq/in comparan el vocabulario ya traducido; contains busca por fragmento.",
+            description:
+              "Operador anunciado para ese campo. En listas, eq/in comparan el vocabulario ya traducido; contains busca por fragmento.",
           },
           values: {
             type: "array",
@@ -817,8 +818,7 @@ const boundedSearchSchema: StrictJsonSchema = {
       type: ["string", "null"],
       minLength: 1,
       maxLength: 240,
-      description:
-        "Texto breve y específico para filtrar. Usa null para pedir el listado " +
+      description: "Texto breve y específico para filtrar. Usa null para pedir el listado " +
         "sin filtrar, ordenado por lo más reciente: «qué proveedores tengo», " +
         "«muéstrame mis clientes». Nunca declares que falta una herramienta " +
         "por no tener un término de búsqueda.",
@@ -873,7 +873,6 @@ const purchaseInvoiceSearchSchema: StrictJsonSchema = {
   required: ["query", "relativePeriod", "limit"],
   additionalProperties: false,
 };
-
 
 const attentionItemsSchema: StrictJsonSchema = {
   type: "object",
@@ -1017,7 +1016,6 @@ const salesPeriodSchema: StrictJsonSchema = {
   ],
   additionalProperties: false,
 };
-
 
 const workshopJobContextSchema: StrictJsonSchema = {
   type: "object",
@@ -1414,7 +1412,7 @@ export function createDefaultAgentToolRegistry(options: { publicResearch?: boole
     ),
     readTool(
       "prepare_customer_contact",
-      "Prepara el contacto por WhatsApp con un cliente. Resuelve si la ventana de 24 horas está abierta y ofrece las plantillas aprobadas con su texto exacto. No envía nada: el operador confirma en la tarjeta.",
+      "Prepara el contacto por WhatsApp con un cliente. Resuelve si la ventana de 24 horas está abierta; fuera de ella ofrece los casos utilitarios permitidos por Direct Send con su texto exacto. No envía nada: el operador confirma en la tarjeta.",
       customerContactSchema,
       operationalRead,
     ),
@@ -2072,7 +2070,7 @@ export function withMechanicalDefaults(
   // tiene otro significado posible acá, así que traducirla no puede esconder
   // un error: lo único que evita es perder una ronda del turno por una coma.
   for (const key of normalizaConsultaVacia ? ["query", "category"] : []) {
-    if (completado[key] === "" ) {
+    if (completado[key] === "") {
       completado[key] = null;
       cambio = true;
     }

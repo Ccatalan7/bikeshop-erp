@@ -565,16 +565,25 @@ class MessagingAttachmentService {
   Future<MessagingAttachmentPublishResult> publish({
     required ReservedMessagingAttachment reservation,
     String? caption,
+    String? threadRootMessageId,
   }) async {
     final request = MessagingAttachmentPublishRequest(
       attachmentId: reservation.id,
       caption: caption,
     );
     final coordinator = MessagingAttachmentPublishCoordinator(
-      send: (params) => _client.rpc(
-        'publish_messaging_attachment',
-        params: params,
-      ),
+      send: (params) => threadRootMessageId == null
+          ? _client.rpc(
+              'publish_messaging_attachment',
+              params: params,
+            )
+          : _client.rpc(
+              'publish_messaging_attachment_in_thread_v1',
+              params: {
+                ...params,
+                'p_thread_root_message_id': threadRootMessageId,
+              },
+            ),
       readback: (attachmentId) => _client
           .from('messaging_attachments')
           .select('id, status, message_id, failure_code')

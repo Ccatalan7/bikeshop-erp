@@ -10,6 +10,15 @@ import {
 } from "../_shared/messaging_attachments.ts";
 import { buildJobActionToken } from "../_shared/whatsapp_action_tokens.ts";
 import {
+  buildDirectSendUtilityPayload,
+  directSendUtilityStrategy,
+  resolveDirectSendUtility,
+} from "../_shared/whatsapp_direct_send.ts";
+import {
+  type DirectSendPolicyBlock,
+  directSendPolicyBlockFromEvents,
+} from "../_shared/whatsapp_direct_send_integrity.ts";
+import {
   durableWhatsAppSendReceipt,
   whatsappProviderFailureHttpStatus,
 } from "../_shared/whatsapp_send_receipts.ts";
@@ -24,7 +33,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const WHATSAPP_ACCESS_TOKEN = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
-const WHATSAPP_API_VERSION = Deno.env.get("WHATSAPP_API_VERSION") ?? "v23.0";
+const WHATSAPP_API_VERSION = Deno.env.get("WHATSAPP_API_VERSION") ?? "v26.0";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 type JsonRecord = Record<string, unknown>;
@@ -81,6 +90,7 @@ interface SendRequest {
   templateName?: string;
   templateLanguage?: string;
   templateComponents?: unknown[];
+  deliveryStrategy?: "direct_send_utility";
   interactive?: JsonRecord;
   replyToMessageId?: string;
   // Reacción: el wamid del mensaje anotado y el emoji. Un emoji vacío la
@@ -214,6 +224,26 @@ async function resolveActiveChannel(
   const resolvedChannel = channel as WhatsAppChannelRecord;
   setCached(activeChannelByTenantKey, cacheKey, resolvedChannel);
   return resolvedChannel;
+}
+
+async function resolveDirectSendPolicyBlock(params: {
+  adminClient: SupabaseClientLike;
+  channelId: string;
+  templateName?: string;
+}): Promise<DirectSendPolicyBlock | null> {
+  const { data, error } = await params.adminClient
+    .from("whatsapp_webhook_events")
+    .select("payload, created_at")
+    .eq("channel_id", params.channelId)
+    .eq("event_type", "unknown")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) {
+    console.error("❌ [WHATSAPP-SEND] Direct Send integrity lookup failed", error);
+    return { reason: "integrity_lookup_failed", detail: error.message };
+  }
+
+  return directSendPolicyBlockFromEvents(data ?? [], params.templateName);
 }
 
 function normalizePhoneNumber(phone: string) {
@@ -639,6 +669,13 @@ serve(async (req) => {
   requestBody = normalizeWhatsAppTemplateGreeting(
     requestBody as unknown as JsonRecord,
   ) as unknown as SendRequest;
+  const directSendResolution = resolveDirectSendUtility(requestBody);
+  let directSendPolicyBlock: DirectSendPolicyBlock | null = null;
+  if (directSendResolution.enabled && directSendResolution.body) {
+    // The durable ERP copy must be the exact server-owned body sent to Meta,
+    // never a caller-supplied caption that merely looks like it.
+    requestBody.caption = directSendResolution.body;
+  }
 
   const startedAt = Date.now();
   const clientMessageId = requestBody.metadata?.client_message_id ?? null;
@@ -758,6 +795,14 @@ serve(async (req) => {
 
   if (!channel) {
     return jsonResponse({ error: "No active WhatsApp channel found for tenant" }, 400);
+  }
+
+  if (directSendResolution.enabled) {
+    directSendPolicyBlock = await resolveDirectSendPolicyBlock({
+      adminClient,
+      channelId: channel.id,
+      templateName: directSendResolution.templateName,
+    });
   }
 
   logTiming("channel_resolved", {
@@ -900,6 +945,16 @@ serve(async (req) => {
     ? "action_request"
     : "text";
 
+  const directSendEnabled = directSendResolution.enabled && directSendPolicyBlock == null;
+  let deliveryStrategyUsed = directSendEnabled
+    ? directSendUtilityStrategy
+    : directSendResolution.requested && directSendPolicyBlock != null
+    ? "classic_template_policy_fallback"
+    : requestBody.type === "template"
+    ? "classic_template"
+    : "service";
+  let directSendRejection: unknown = null;
+
   const buildMessageMetadata = (extra: JsonRecord = {}) => ({
     ...Object.fromEntries(
       Object.entries(requestBody.metadata ?? {}).filter(([key]) =>
@@ -928,6 +983,16 @@ serve(async (req) => {
     display_phone_number: channel.display_phone_number,
     external_wa_id: normalizedPhone,
     outbound_type: requestBody.type,
+    delivery_strategy_requested: directSendResolution.requested
+      ? directSendUtilityStrategy
+      : requestBody.type === "template"
+      ? "classic_template"
+      : "service",
+    delivery_strategy: deliveryStrategyUsed,
+    direct_send_eligible: directSendEnabled,
+    direct_send_resolution: directSendPolicyBlock?.reason ?? directSendResolution.reason,
+    direct_send_policy_detail: directSendPolicyBlock?.detail ?? null,
+    direct_send_rejection: directSendRejection,
     ...(prepared.attachment?.metadata ?? {}),
     ...(requestBody.documentFilename
       ? {
@@ -1193,13 +1258,23 @@ serve(async (req) => {
   });
 
   let graphPayload: JsonRecord;
+  let classicTemplatePayload: JsonRecord | null = null;
   try {
-    graphPayload = buildGraphPayload(
+    const standardPayload = buildGraphPayload(
       requestBody,
       normalizedPhone,
       mediaUpload.mediaId,
       actionRevisionMs,
     );
+    if (directSendEnabled && directSendResolution.body) {
+      classicTemplatePayload = standardPayload;
+      graphPayload = buildDirectSendUtilityPayload({
+        to: normalizedPhone,
+        body: directSendResolution.body,
+      });
+    } else {
+      graphPayload = standardPayload;
+    }
   } catch (error) {
     return await persistFailureResponse({
       code: "invalid_graph_payload",
@@ -1216,7 +1291,9 @@ serve(async (req) => {
     });
   }
 
-  logTiming("graph_request_start");
+  logTiming("graph_request_start", {
+    delivery_strategy: deliveryStrategyUsed,
+  });
   let graphResponse: Response;
   try {
     graphResponse = await fetch(
@@ -1245,7 +1322,53 @@ serve(async (req) => {
   }
 
   logTiming("graph_response_headers", { status: graphResponse.status });
-  const graphResult = await graphResponse.json().catch(() => ({}));
+  let graphResult = await graphResponse.json().catch(() => ({}));
+  if (!graphResponse.ok && classicTemplatePayload) {
+    directSendRejection = {
+      http_status: graphResponse.status,
+      response: graphResult,
+    };
+    deliveryStrategyUsed = "classic_template_fallback";
+    graphPayload = classicTemplatePayload;
+    logTiming("direct_send_rejected_fallback_start", {
+      status: graphResponse.status,
+    });
+    try {
+      graphResponse = await fetch(
+        `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${channel.phone_number_id}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(graphPayload),
+        },
+      );
+    } catch (error) {
+      logTiming("direct_send_fallback_outcome_unknown");
+      console.error(
+        "❌ [WHATSAPP-SEND] Classic template fallback outcome unknown",
+        error,
+      );
+      return await persistFailureResponse({
+        code: "whatsapp_graph_outcome_unknown",
+        message: "WhatsApp did not return a fallback delivery receipt",
+        details: { error: String(error) },
+        httpStatus: whatsappProviderFailureHttpStatus({ outcomeUnknown: true }),
+        externalStatus: null,
+        outcomeUnknown: true,
+        metadata: {
+          graph_payload: graphPayload,
+          direct_send_rejection: directSendRejection,
+        },
+      });
+    }
+    graphResult = await graphResponse.json().catch(() => ({}));
+    logTiming("direct_send_fallback_response", {
+      status: graphResponse.status,
+    });
+  }
   if (!graphResponse.ok) {
     logTiming("graph_request_failed", { status: graphResponse.status });
     console.error("❌ [WHATSAPP-SEND] Graph API error", graphResult);
@@ -1259,6 +1382,7 @@ serve(async (req) => {
       metadata: {
         graph_payload: graphPayload,
         graph_response: graphResult,
+        direct_send_rejection: directSendRejection,
       },
     });
   }
@@ -1360,6 +1484,7 @@ serve(async (req) => {
     });
     return jsonResponse({
       ...receipt,
+      delivery_strategy: deliveryStrategyUsed,
       graph_result: graphResult,
     });
   } catch (error) {

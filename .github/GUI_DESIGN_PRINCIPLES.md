@@ -525,6 +525,26 @@ De ahí salen dos reglas que se ven al revés de lo que uno haría:
 El costo real: mensajería enviaba la plantilla en el mismo toque que la elegía,
 sin confirmación y sin mostrar el texto, hasta el 2026-08-21.
 
+### Un hilo tiene raíz y respuestas dentro de un canal (2026-08-28)
+
+Poner una tarjeta de contexto encima de una conversación plana no crea un
+hilo, y crear una conversación aislada por cada entidad tampoco crea un canal.
+La publicación raíz tiene identidad propia y convive con otras publicaciones
+en una conversación de audiencia estable; su contador abre una vista de
+respuestas donde cada mensaje conserva una relación durable con esa raíz.
+Volver al canal muestra todas sus raíces y contadores, no las respuestas
+mezcladas como mensajes normales. Una respuesta sólo aparece además en el
+canal cuando quien la escribe elige explícitamente esa opción.
+
+El compositor también pertenece al nivel visible: en el canal crea una
+publicación nueva, mientras que dentro del hilo agrega una respuesta. En ancho
+de escritorio el hilo se abre en un panel lateral sin esconder el canal; en
+compacto puede ocupar el panel, pero conserva un retorno explícito al canal.
+Un enlace desde otra superficie debe abrir la conversación y la raíz exactas,
+no sólo aterrizar en la bandeja. Esta regla incluye adjuntos y migraciones de
+mensajes existentes; una semejanza visual sin la relación raíz→respuesta en los
+datos sigue siendo un chat plano.
+
 ### Chips, badges, and metrics
 
 Chips and badges are compact semantic tools, not universal containers.

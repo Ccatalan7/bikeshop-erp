@@ -1039,7 +1039,10 @@ class MessagingService {
           context_type, context_id,
           updated_at, last_message_at, staff_last_read_at,
           staff_last_read_message_sequence, created_by,
-          conversation_participants(user_id)
+          conversation_participants(user_id),
+          conversation_contexts(
+            context_type, context_id, is_primary, thread_root_message_id
+          )
         ''';
     final internalConversationSelect = includeContextHints
         ? '*, conversation_participants!inner(user_id), conversation_contexts(*)'
@@ -1048,7 +1051,10 @@ class MessagingService {
           context_type, context_id,
           updated_at, last_message_at, staff_last_read_at,
           staff_last_read_message_sequence, created_by,
-          conversation_participants!inner(user_id)
+          conversation_participants!inner(user_id),
+          conversation_contexts(
+            context_type, context_id, is_primary, thread_root_message_id
+          )
         ''';
 
     List<dynamic> data = [];
@@ -1946,6 +1952,7 @@ class MessagingService {
     required String content,
     String type = 'text',
     Map<String, dynamic>? metadata,
+    String? threadRootMessageId,
     List<String>? participantIds, // Optional: for push notifications
   }) async {
     if (currentUserId == null) throw Exception('Not authenticated');
@@ -1955,7 +1962,13 @@ class MessagingService {
       'sender_id': currentUserId,
       'content': content,
       'type': type,
-      'metadata': metadata ?? {},
+      'metadata': {
+        ...?metadata,
+        if (threadRootMessageId != null)
+          'thread_root_message_id': threadRootMessageId,
+      },
+      if (threadRootMessageId != null)
+        'thread_root_message_id': threadRootMessageId,
     });
     // Trigger updates conversation timestamp automatically via DB trigger
   }

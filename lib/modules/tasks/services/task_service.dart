@@ -1507,15 +1507,24 @@ class TaskService extends ChangeNotifier {
   }
 
   /// Get-or-create del hilo (server-owned; participantes exactos).
-  Future<({String conversationId, bool created})> openThread(
-      String taskId) async {
+  Future<({String conversationId, String rootMessageId, bool created})>
+      openThread(String taskId) async {
     final lease = await _requireAuthorityLease();
     final result = await _supabase.rpc('smart_task_thread_get_or_create_v1',
         params: {'p_task_id': taskId});
     _assertOwnedLease(lease);
     final map = Map<String, dynamic>.from(result as Map);
+    final conversationId = map['conversation_id']?.toString();
+    final rootMessageId = map['root_message_id']?.toString();
+    if (conversationId == null ||
+        conversationId.isEmpty ||
+        rootMessageId == null ||
+        rootMessageId.isEmpty) {
+      throw const FormatException('Invalid task thread descriptor');
+    }
     return (
-      conversationId: map['conversation_id'].toString(),
+      conversationId: conversationId,
+      rootMessageId: rootMessageId,
       created: map['created'] == true,
     );
   }

@@ -56,11 +56,13 @@ void main() {
     final aprobados = _cuerposAprobados();
 
     test('los tres cuerpos de cliente existen en el módulo compartido', () {
-      expect(aprobados.keys, containsAll(<String>[
-        'actualizacion_servicio_bicicleta',
-        'bicicleta_lista_retiro',
-        'seguimiento_presupuesto_bicicleta',
-      ]));
+      expect(
+          aprobados.keys,
+          containsAll(<String>[
+            'actualizacion_servicio_bicicleta',
+            'bicicleta_lista_retiro',
+            'seguimiento_presupuesto_bicicleta',
+          ]));
     });
 
     // Proveedores incluidos: la previsualización de mensajería es la misma
@@ -106,6 +108,25 @@ void main() {
         );
       });
     }
+  });
+
+  test('sólo los casos utilitarios del catálogo habilitan Direct Send', () {
+    expect(
+      WhatsAppService.customerTemplateOptions.every(
+        (option) => option.category == WhatsAppMessageCategory.utility,
+      ),
+      isTrue,
+    );
+    expect(
+      WhatsAppService.supplierTemplateOptions.take(4).every(
+            (option) => option.category == WhatsAppMessageCategory.marketing,
+          ),
+      isTrue,
+    );
+    expect(
+      WhatsAppService.supplierTemplateOptions.last.category,
+      WhatsAppMessageCategory.utility,
+    );
   });
 
   group('customer WhatsApp template greeting', () {

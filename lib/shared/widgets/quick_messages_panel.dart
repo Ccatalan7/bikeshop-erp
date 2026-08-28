@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,6 +17,7 @@ import '../../modules/messaging/widgets/conversation_tile.dart';
 import '../../modules/messaging/widgets/new_chat_dialog.dart';
 import '../services/image_service.dart';
 import '../services/right_toolbar_service.dart';
+import '../services/workspace_manager.dart';
 import 'conversation_inbox_host.dart';
 
 enum _MessageFilter {
@@ -108,10 +108,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
     super.dispose();
   }
 
-
-
-
-
   Future<void> _loadWhatsAppContacts() async {
     if (_isLoadingWhatsAppContacts) return;
     setState(() => _isLoadingWhatsAppContacts = true);
@@ -161,7 +157,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
     );
   }
 
-
   void _showNewChatDialog() {
     showDialog(
       context: context,
@@ -170,14 +165,22 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
   }
 
   void _openFullChat([Conversation? conversation]) {
+    final threadRootMessageId = conversation?.id == selectedConversationId
+        ? selectedThreadRootMessageId
+        : null;
     final route = conversation == null
         ? '/chat'
         : Uri(
             path: '/chat',
-            queryParameters: {'conversation': conversation.id},
+            queryParameters: {
+              'conversation': conversation.id,
+              if (threadRootMessageId != null)
+                'thread_root': threadRootMessageId,
+            },
           ).toString();
+    final workspaceManager = context.read<WorkspaceManager>();
     context.read<RightToolbarService>().close();
-    context.go(route);
+    unawaited(workspaceManager.pushActiveWorkspace<void>(route));
   }
 
   Future<void> _openWhatsAppContact(Customer customer) async {
@@ -277,6 +280,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
           child: Row(
             children: [
               IconButton(
+                key: const ValueKey('quick-messages-back-to-inbox'),
                 icon: Icon(
                   Icons.arrow_back,
                   size: 20,
@@ -294,6 +298,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
                 ),
               ),
               IconButton(
+                key: const ValueKey('quick-messages-open-full'),
                 icon: Icon(
                   Icons.open_in_full,
                   size: 18,
@@ -309,6 +314,7 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
           child: ChatWindow(
             conversation: conversation,
             compact: true,
+            initialThreadRootMessageId: selectedThreadRootMessageId,
           ),
         ),
       ],
@@ -975,8 +981,6 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
     );
   }
 
-
-
   Widget _buildSearchSectionHeader({
     required IconData icon,
     required String title,
@@ -1237,7 +1241,8 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
   }
 
   String _subtitle(Conversation conversation) {
-    final contextLabel = _contextLabel(conversation.contextType);
+    if (conversation.isTaskThread) return 'Canal de tareas';
+    final contextLabel = _contextLabel(conversation.effectiveContextType);
 
     if (conversation.isSupport) {
       final statusLabel = switch (conversation.status) {
@@ -1268,6 +1273,8 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
         return 'Cliente';
       case 'product':
         return 'Producto';
+      case 'task':
+        return 'Tarea';
       default:
         return null;
     }

@@ -15,8 +15,9 @@ abstract final class ConversationChannelPresentation {
   static const Color internalAccent = Color(0xFF475569);
   static const Color pendingAccent = Color(0xFFD97706);
 
-  static IconData icon(Conversation conversation) =>
-      iconForChannel(conversation.channel);
+  static IconData icon(Conversation conversation) => conversation.isTaskThread
+      ? Icons.task_alt_outlined
+      : iconForChannel(conversation.channel);
 
   static IconData iconForChannel(String? channel) {
     return switch (channel?.trim().toLowerCase()) {

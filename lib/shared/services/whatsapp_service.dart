@@ -111,6 +111,8 @@ enum WhatsAppTemplatePurpose {
 
 enum WhatsAppTemplateAudience { customer, supplier }
 
+enum WhatsAppMessageCategory { utility, marketing, authentication }
+
 enum WhatsAppTemplateParameterLayout {
   contactAndAgent,
   contactAndBusiness,
@@ -128,6 +130,7 @@ class WhatsAppTemplateOption {
   final String templateLanguageSettingKey;
   final IconData icon;
   final WhatsAppTemplateAudience audience;
+  final WhatsAppMessageCategory category;
   final WhatsAppTemplateParameterLayout parameterLayout;
   final bool requiresAgentName;
 
@@ -142,6 +145,7 @@ class WhatsAppTemplateOption {
     required this.templateLanguageSettingKey,
     required this.icon,
     required this.audience,
+    required this.category,
     required this.parameterLayout,
     this.requiresAgentName = false,
   });
@@ -162,9 +166,8 @@ class WhatsAppTemplateOption {
     String? agentName,
   }) {
     final greetingName = resolveWhatsAppTemplateGreetingName(contactName);
-    final normalizedSender = agentName == null
-        ? ''
-        : resolveWhatsAppTemplateGreetingName(agentName);
+    final normalizedSender =
+        agentName == null ? '' : resolveWhatsAppTemplateGreetingName(agentName);
     final sender =
         normalizedSender.isNotEmpty ? normalizedSender : 'parte del equipo';
 
@@ -284,6 +287,7 @@ class WhatsAppService {
       templateLanguageSettingKey: firstContactTemplateLanguageSettingKey,
       icon: Icons.waving_hand_outlined,
       audience: WhatsAppTemplateAudience.customer,
+      category: WhatsAppMessageCategory.utility,
       parameterLayout: WhatsAppTemplateParameterLayout.contactAndAgent,
     ),
     WhatsAppTemplateOption(
@@ -297,6 +301,7 @@ class WhatsAppService {
       templateLanguageSettingKey: 'whatsapp_job_update_template_language',
       icon: Icons.build_outlined,
       audience: WhatsAppTemplateAudience.customer,
+      category: WhatsAppMessageCategory.utility,
       parameterLayout: WhatsAppTemplateParameterLayout.contactAndBusiness,
     ),
     WhatsAppTemplateOption(
@@ -310,6 +315,7 @@ class WhatsAppService {
       templateLanguageSettingKey: 'whatsapp_ready_pickup_template_language',
       icon: Icons.task_alt_outlined,
       audience: WhatsAppTemplateAudience.customer,
+      category: WhatsAppMessageCategory.utility,
       parameterLayout: WhatsAppTemplateParameterLayout.contactAndBusiness,
     ),
     WhatsAppTemplateOption(
@@ -323,6 +329,7 @@ class WhatsAppService {
       templateLanguageSettingKey: 'whatsapp_quote_follow_up_template_language',
       icon: Icons.request_quote_outlined,
       audience: WhatsAppTemplateAudience.customer,
+      category: WhatsAppMessageCategory.utility,
       parameterLayout: WhatsAppTemplateParameterLayout.contactAndBusiness,
     ),
   ];
@@ -340,6 +347,7 @@ class WhatsAppService {
           'whatsapp_supplier_introduction_template_language',
       icon: Icons.waving_hand_outlined,
       audience: WhatsAppTemplateAudience.supplier,
+      category: WhatsAppMessageCategory.marketing,
       parameterLayout: WhatsAppTemplateParameterLayout.contactAndAgent,
       requiresAgentName: true,
     ),
@@ -355,6 +363,7 @@ class WhatsAppService {
           'whatsapp_supplier_greeting_template_language',
       icon: Icons.chat_bubble_outline,
       audience: WhatsAppTemplateAudience.supplier,
+      category: WhatsAppMessageCategory.marketing,
       parameterLayout: WhatsAppTemplateParameterLayout.contactOnly,
     ),
     WhatsAppTemplateOption(
@@ -368,6 +377,7 @@ class WhatsAppService {
       templateLanguageSettingKey: 'whatsapp_supplier_resume_template_language',
       icon: Icons.forum_outlined,
       audience: WhatsAppTemplateAudience.supplier,
+      category: WhatsAppMessageCategory.marketing,
       parameterLayout: WhatsAppTemplateParameterLayout.contactOnly,
     ),
     WhatsAppTemplateOption(
@@ -381,6 +391,7 @@ class WhatsAppService {
       templateLanguageSettingKey: 'whatsapp_supplier_news_template_language',
       icon: Icons.mark_chat_unread_outlined,
       audience: WhatsAppTemplateAudience.supplier,
+      category: WhatsAppMessageCategory.marketing,
       parameterLayout: WhatsAppTemplateParameterLayout.contactOnly,
     ),
     WhatsAppTemplateOption(
@@ -396,6 +407,7 @@ class WhatsAppService {
           'whatsapp_supplier_pending_purchase_template_language',
       icon: Icons.shopping_cart_outlined,
       audience: WhatsAppTemplateAudience.supplier,
+      category: WhatsAppMessageCategory.utility,
       parameterLayout: WhatsAppTemplateParameterLayout.contactOnly,
     ),
   ];
@@ -430,8 +442,12 @@ class WhatsAppService {
   /// queda para siempre: así llegó a producción un «tu bicicleta esta lista»
   /// sin tilde. Editar manda la plantilla de vuelta a revisión de Meta, y
   /// mientras esté pendiente el envío con ese nombre puede fallar.
-  Future<({List<String> editadas, List<String> sinCambios, List<String> faltan})>
-      syncApprovedTemplateBodies() async {
+  Future<
+      ({
+        List<String> editadas,
+        List<String> sinCambios,
+        List<String> faltan
+      })> syncApprovedTemplateBodies() async {
     final response = await _client.functions.invoke(
       'whatsapp-template-manager',
       body: const {'action': 'sync_bodies'},
@@ -514,12 +530,13 @@ class WhatsAppService {
   /// Incluye el nombre de quien tiene la sesión abierta: las plantillas de
   /// primer contacto se presentan por persona —«hablas con Claudio»— y ese
   /// dato es el segundo parámetro que recibe Meta, no el del negocio.
-  Future<({
-    String name,
-    String phone,
-    String businessName,
-    String? agentName,
-  })?> customerContactForAssistant(String customerId) async {
+  Future<
+      ({
+        String name,
+        String phone,
+        String businessName,
+        String? agentName,
+      })?> customerContactForAssistant(String customerId) async {
     try {
       final row = await _client
           .from('customers')
@@ -1288,6 +1305,8 @@ Viña Bike
       'type': 'template',
       'templateName': templateSettings.templateName,
       'templateLanguage': templateSettings.templateLanguage,
+      if (option.category == WhatsAppMessageCategory.utility)
+        'deliveryStrategy': 'direct_send_utility',
       'caption': renderedMessage,
       'templateComponents': [
         {
@@ -1308,6 +1327,7 @@ Viña Bike
         'template_purpose': option.key,
         'template_name': templateSettings.templateName,
         'template_language': templateSettings.templateLanguage,
+        'message_category': option.category.name,
       },
     }, resolvedMessageText: renderedMessage);
 

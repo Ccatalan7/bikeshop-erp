@@ -35,6 +35,9 @@ SCREENRC="$RUN_DIR/screenrc"
 FLUTTER="$REPO_ROOT/.fvm/flutter_sdk/bin/flutter"
 TARGET="${NATIVE_SESSION_TARGET:-lib/main.dart}"
 DEBUG_APP_GLOB="build/macos/Build/Products/Debug/vinabike_erp.app/Contents/MacOS/vinabike_erp"
+XCODE_PROJECT="$REPO_ROOT/macos/Runner.xcodeproj"
+EXPECTED_DEBUG_BUNDLE_ID='com.vinabike.vinabikeErp.debug'
+EXPECTED_RELEASE_BUNDLE_ID='com.vinabike.vinabikeErp'
 
 # Closed compile-time rollout inputs. The canonical development session runs the
 # same modern AI gateway as release builds by default; legacy is available only
@@ -94,6 +97,46 @@ vm_uri() {
     tail -1 | sed 's/.*at: //' | tr -d ' \r\n'
 }
 
+effective_bundle_id() { # effective_bundle_id <Debug|Release>
+  local configuration="$1" settings
+  command -v xcodebuild >/dev/null 2>&1 || return 1
+  settings="$(xcodebuild \
+    -project "$XCODE_PROJECT" \
+    -target Runner \
+    -configuration "$configuration" \
+    -showBuildSettings 2>/dev/null)" || return 1
+  printf '%s\n' "$settings" |
+    sed -n 's/^[[:space:]]*PRODUCT_BUNDLE_IDENTIFIER = //p' |
+    sed -n '1p'
+}
+
+verify_bundle_id_separation() {
+  local debug_bundle_id release_bundle_id
+  debug_bundle_id="$(effective_bundle_id Debug)" || {
+    echo 'no pude resolver el bundle ID efectivo de Debug con Xcode.' >&2
+    return 1
+  }
+  release_bundle_id="$(effective_bundle_id Release)" || {
+    echo 'no pude resolver el bundle ID efectivo de Release con Xcode.' >&2
+    return 1
+  }
+
+  if [ "$debug_bundle_id" != "$EXPECTED_DEBUG_BUNDLE_ID" ]; then
+    echo "Debug resolvería el bundle ID inseguro '$debug_bundle_id'." >&2
+    echo "Esperado: $EXPECTED_DEBUG_BUNDLE_ID" >&2
+    return 1
+  fi
+  if [ "$release_bundle_id" != "$EXPECTED_RELEASE_BUNDLE_ID" ]; then
+    echo "Release resolvería un bundle ID inesperado '$release_bundle_id'." >&2
+    echo "Esperado: $EXPECTED_RELEASE_BUNDLE_ID" >&2
+    return 1
+  fi
+  if [ "$debug_bundle_id" = "$release_bundle_id" ]; then
+    echo 'Debug y Release compartirían sesión, preferencias y cachés de macOS.' >&2
+    return 1
+  fi
+}
+
 # `grep -c` prints the count but exits 1 when it is zero, so the old
 # `grep -ac … || echo 0` emitted TWO lines ("0\n0") and every numeric test
 # died with "integer expression expected". Let grep print, ignore its status.
@@ -130,6 +173,7 @@ case "${1:-}" in
       echo "ciérrala desde su ventana (o desde VS Code) antes de continuar." >&2
       exit 1
     fi
+    verify_bundle_id_separation || exit 1
     mkdir -p "$RUN_DIR"
     : > "$LOG"
     # screen 4.x (el de macOS) no acepta -Logfile: el destino se declara aquí.

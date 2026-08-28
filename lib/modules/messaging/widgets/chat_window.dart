@@ -19,6 +19,8 @@ import '../../purchases/models/purchase_invoice.dart';
 import '../../purchases/services/purchase_service.dart';
 import '../../sales/services/sales_service.dart';
 import '../../settings/services/appearance_service.dart';
+import '../../tasks/services/task_service.dart';
+import '../../tasks/widgets/task_thread_root_card.dart';
 import '../../website/services/website_service.dart';
 import '../models/conversation.dart';
 import '../models/conversation_smart_action_capabilities.dart';
@@ -39,6 +41,7 @@ import 'message_delivery_indicator.dart';
 import '../../storage/models/app_stored_file.dart';
 import '../../../shared/services/whatsapp_service.dart';
 import '../../../shared/services/route_share_service.dart';
+import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
@@ -240,7 +243,6 @@ class _RouteSharePreview {
   });
 }
 
-
 class ChatWindow extends StatefulWidget {
   final Conversation conversation;
   final Function(ReferenceSegment)? onReferenceTap;
@@ -248,6 +250,7 @@ class ChatWindow extends StatefulWidget {
   final VoidCallback? onShowContextPanel;
   final List<Widget> headerActions;
   final bool compact;
+  final String? initialThreadRootMessageId;
 
   const ChatWindow({
     super.key,
@@ -257,6 +260,7 @@ class ChatWindow extends StatefulWidget {
     this.onShowContextPanel,
     this.headerActions = const [],
     this.compact = false,
+    this.initialThreadRootMessageId,
   });
 
   @override
@@ -408,6 +412,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _threadScrollController = ScrollController();
   final ScrollController _emojiScrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
   final FocusNode _emojiSearchFocusNode = FocusNode();
@@ -417,10 +422,12 @@ class _ChatWindowState extends State<ChatWindow> {
   final Object _conversationViewOwner = Object();
   ChatProvider? _chatProvider;
   String? _reportedConversationId;
+  String? _taskContextConversationIdLoaded;
   bool? _reportedConversationVisibility;
   bool _isSendingMessage = false;
   bool _isEmojiPickerOpen = false;
   OverlayEntry? _emojiOverlayEntry;
+
   /// Cuando el panel de emojis se abre desde el «+» de una reacción, este es el
   /// mensaje al que va dirigido. Nulo = el panel escribe en el compositor, que
   /// es su uso original.
@@ -439,6 +446,7 @@ class _ChatWindowState extends State<ChatWindow> {
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _composerMenuOverlayEntry;
+
   /// Plantilla que el operador está revisando en el panel, con el texto exacto
   /// que recibirá el contacto. Tocar una plantilla ya no envía: abre esto.
   WhatsAppTemplateOption? _reviewingTemplate;
@@ -446,6 +454,8 @@ class _ChatWindowState extends State<ChatWindow> {
   String? _activeComposerMenuName;
   bool _showAutomaticMessagesPanel = false;
   bool _showChatInfoPanel = false;
+  String? _activeThreadRootMessageId;
+  bool _alsoSendThreadReplyToChannel = false;
   bool _isExportingChatArchive = false;
   bool _isDraggingAttachment = false;
   bool _isSendingPendingAttachments = false;
@@ -597,6 +607,141 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
+  void _openTaskFromThread(String taskId) {
+    if (taskId.trim().isEmpty) return;
+    context.read<RightToolbarService>().openConversation(
+          tool: ToolbarTool.tasks,
+          conversationId: taskId,
+        );
+  }
+
+  void _openTaskThreadRoute(String route) {
+    unawaited(context.read<WorkspaceManager>().pushActiveWorkspace(route));
+  }
+
+  String? _taskIdForRoot(Message root) {
+    final stored = widget.conversation.taskIdForRoot(root.id);
+    if (stored != null && stored.isNotEmpty) return stored;
+    if (root.metadata['task_thread_root'] != true) return null;
+    final metadataTaskId = root.metadata['task_id']?.toString().trim();
+    return metadataTaskId == null || metadataTaskId.isEmpty
+        ? null
+        : metadataTaskId;
+  }
+
+  void _openThreadReplies(String rootMessageId) {
+    _removeOverlay();
+    _removeEmojiOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    setState(() {
+      _activeThreadRootMessageId = rootMessageId;
+      _alsoSendThreadReplyToChannel = false;
+      _showChatInfoPanel = false;
+    });
+    _jumpToLatest();
+  }
+
+  void _returnToTaskConversation() {
+    _removeOverlay();
+    _removeEmojiOverlay();
+    _removeComposerMenuOverlay(notify: false);
+    setState(() {
+      _activeThreadRootMessageId = null;
+      _alsoSendThreadReplyToChannel = false;
+      _showChatInfoPanel = false;
+    });
+  }
+
+  Widget _buildTaskThreadNavigation(BuildContext context, int replyCount) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      key: const ValueKey<String>('task-thread-replies-header'),
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            key: const ValueKey<String>('task-thread-close-replies'),
+            tooltip: 'Volver al canal',
+            onPressed: _returnToTaskConversation,
+            icon: const Icon(Icons.arrow_back, size: 18),
+          ),
+          const SizedBox(width: 2),
+          Expanded(
+            child: Text(
+              replyCount == 1
+                  ? 'Hilo · 1 respuesta'
+                  : 'Hilo · $replyCount respuestas',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskThreadRoot(
+    BuildContext context,
+    String taskId,
+    int replyCount, {
+    String? fallbackTitle,
+    VoidCallback? onOpenReplies,
+  }) {
+    final taskService = context.watch<TaskService>();
+    final matchingTasks = taskService.tasks.where((task) => task.id == taskId);
+    if (matchingTasks.isEmpty) {
+      return TaskThreadRootLoadingCard(
+        title: fallbackTitle ?? 'Tarea vinculada',
+        replyCount: replyCount,
+        onOpenTask: () => _openTaskFromThread(taskId),
+        onOpenReplies: onOpenReplies,
+      );
+    }
+
+    final task = matchingTasks.first;
+    final links = taskService.jobItemsOf(taskId);
+    final jobHeader = taskService.jobHeaderOf(task);
+    final linkedJobId =
+        task.linkedJobId ?? (links.isNotEmpty ? links.first.jobId : null);
+    final jobNumber = task.linkedJobNumber ??
+        (links.isNotEmpty ? links.first.jobNumber : null) ??
+        jobHeader?.jobNumber;
+    final jobSummary = [
+      jobHeader?.customerName,
+      jobHeader?.clientRequest,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' · ');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TaskThreadRootCard(
+        task: task,
+        links: links,
+        replyCount: replyCount,
+        onOpenReplies: onOpenReplies,
+        jobNumber: jobNumber,
+        jobSummary: jobSummary,
+        onOpenTask: () => _openTaskFromThread(taskId),
+        onOpenJob: linkedJobId == null
+            ? null
+            : () => _openTaskThreadRoute('/taller/pegas/$linkedJobId'),
+        onOpenLinkedContext: task.linkedContextTarget == null
+            ? null
+            : () => _openTaskThreadRoute(task.linkedContextTarget!.route),
+      ),
+    );
+  }
+
   bool get _canStartWhatsAppFromConversation =>
       widget.conversation.isSupport && widget.conversation.isWebsitePortal;
 
@@ -668,6 +813,16 @@ class _ChatWindowState extends State<ChatWindow> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _chatProvider = context.read<ChatProvider>();
+    _loadTaskChannelContext();
+  }
+
+  void _loadTaskChannelContext() {
+    if (!widget.conversation.isTaskChannel ||
+        _taskContextConversationIdLoaded == widget.conversation.id) {
+      return;
+    }
+    _taskContextConversationIdLoaded = widget.conversation.id;
+    unawaited(context.read<TaskService>().fetchTasks());
   }
 
   @override
@@ -698,18 +853,35 @@ class _ChatWindowState extends State<ChatWindow> {
       _removeComposerMenuOverlay(notify: false);
       _showAutomaticMessagesPanel = false;
       _showChatInfoPanel = false;
+      _activeThreadRootMessageId =
+          widget.initialThreadRootMessageId?.trim().isNotEmpty == true
+              ? widget.initialThreadRootMessageId!.trim()
+              : null;
+      _alsoSendThreadReplyToChannel = false;
       _historyAutoLoadScheduled = false;
       _selectedChatInfoSection = _ChatInfoSection.info;
+      _loadTaskChannelContext();
       _syncServiceWindowTicker();
       _captureOpeningUnreadCount();
       _loadMessages();
       _applyPendingDraft();
+    } else if (oldWidget.initialThreadRootMessageId !=
+        widget.initialThreadRootMessageId) {
+      _activeThreadRootMessageId =
+          widget.initialThreadRootMessageId?.trim().isNotEmpty == true
+              ? widget.initialThreadRootMessageId!.trim()
+              : null;
+      _alsoSendThreadReplyToChannel = false;
     }
   }
 
   @override
   void initState() {
     super.initState();
+    _activeThreadRootMessageId =
+        widget.initialThreadRootMessageId?.trim().isNotEmpty == true
+            ? widget.initialThreadRootMessageId!.trim()
+            : null;
     _scrollController.addListener(_handleTimelineScroll);
     _captureOpeningUnreadCount();
     _loadMessages();
@@ -731,6 +903,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _historyRequestDebounce?.cancel();
     _scrollController.removeListener(_handleTimelineScroll);
     _scrollController.dispose();
+    _threadScrollController.dispose();
     _emojiScrollController.dispose();
     _focusNode.dispose();
     _emojiSearchFocusNode.dispose();
@@ -839,8 +1012,11 @@ class _ChatWindowState extends State<ChatWindow> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      border:
-                          Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+                      border: Border(
+                          bottom: BorderSide(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant)),
                       color: Theme.of(context).colorScheme.surfaceContainerLow,
                     ),
                     child: const Row(
@@ -1437,8 +1613,12 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   Future<void> _jumpToLatest() async {
-    if (!_scrollController.hasClients) return;
-    await _scrollController.animateTo(
+    final controller =
+        _activeThreadRootMessageId != null && _threadScrollController.hasClients
+            ? _threadScrollController
+            : _scrollController;
+    if (!controller.hasClients) return;
+    await controller.animateTo(
       0,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
@@ -1496,7 +1676,14 @@ class _ChatWindowState extends State<ChatWindow> {
     }
     final chatProvider = context.read<ChatProvider>();
     final pendingText = text;
-    final messageMetadata = <String, dynamic>{...?metadata};
+    final threadRootMessageId = _activeThreadRootMessageId;
+    final messageMetadata = <String, dynamic>{
+      ...?metadata,
+      if (threadRootMessageId != null)
+        'thread_root_message_id': threadRootMessageId,
+      if (threadRootMessageId != null && _alsoSendThreadReplyToChannel)
+        'also_send_to_channel': true,
+    };
 
     if (_isWhatsAppConversation) {
       // Snappy precheck: derive the 24h window state from messages we already
@@ -1549,9 +1736,13 @@ class _ChatWindowState extends State<ChatWindow> {
         await chatProvider.sendMessage(
           pendingText,
           metadata: messageMetadata.isEmpty ? null : messageMetadata,
+          threadRootMessageId: threadRootMessageId,
         );
         if (!mounted) {
           return;
+        }
+        if (threadRootMessageId != null && _alsoSendThreadReplyToChannel) {
+          setState(() => _alsoSendThreadReplyToChannel = false);
         }
         return;
       }
@@ -1930,7 +2121,7 @@ class _ChatWindowState extends State<ChatWindow> {
             pendingText,
             title: 'Mensaje pendiente de ventana WhatsApp',
             subtitle:
-                'Se envió la plantilla aprobada. Cuando el ${isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto.',
+                'Se envió el mensaje autorizado. Cuando el ${isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto libre.',
           );
         } else {
           chatProvider.clearConversationDraft(conversationId);
@@ -1946,6 +2137,8 @@ class _ChatWindowState extends State<ChatWindow> {
             'server_message_id': receipt.messageId,
             'external_status': 'accepted',
             'external_message_id': receipt.externalMessageId,
+            if (receipt.deliveryStrategy != null)
+              'delivery_strategy': receipt.deliveryStrategy,
             if (receipt.usedFirstContactTemplate) 'template_used': true,
           },
         );
@@ -1964,7 +2157,7 @@ class _ChatWindowState extends State<ChatWindow> {
             context: context,
             deliveryMethod: receipt.deliveryMethod,
             successMessage:
-                'Meta pidió plantilla para abrir o reabrir la ventana de WhatsApp. Se envió la plantilla aprobada.',
+                'Se envió el mensaje autorizado para abrir o reabrir WhatsApp.',
             fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
           );
         }
@@ -2030,7 +2223,9 @@ class _ChatWindowState extends State<ChatWindow> {
     } catch (e) {
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
+          SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
         );
       }
     }
@@ -2076,7 +2271,8 @@ class _ChatWindowState extends State<ChatWindow> {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
                       content: Text('Solicitud rechazada'),
-                      backgroundColor: VinabikeThemeRoles.of(context).warning.accent,
+                      backgroundColor:
+                          VinabikeThemeRoles.of(context).warning.accent,
                     ),
                   );
                 }
@@ -2085,12 +2281,14 @@ class _ChatWindowState extends State<ChatWindow> {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
                         content: Text('Error: $e'),
-                        backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
+                        backgroundColor:
+                            VinabikeThemeRoles.of(context).danger.accent),
                   );
                 }
               }
             },
-            style: FilledButton.styleFrom(backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
+            style: FilledButton.styleFrom(
+                backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
             child: const Text('Rechazar'),
           ),
         ],
@@ -2451,7 +2649,9 @@ class _ChatWindowState extends State<ChatWindow> {
               : rejectedCount == 1
                   ? 'No se pudo enviar 1 adjunto.'
                   : 'No se pudieron enviar $rejectedCount adjuntos.'),
-          backgroundColor: unknownCount > 0 ? null : VinabikeThemeRoles.of(context).danger.accent,
+          backgroundColor: unknownCount > 0
+              ? null
+              : VinabikeThemeRoles.of(context).danger.accent,
         ),
       );
     }
@@ -2642,6 +2842,7 @@ class _ChatWindowState extends State<ChatWindow> {
       await _messagingAttachmentService.publish(
         reservation: reservation,
         caption: cleanCaption,
+        threadRootMessageId: _activeThreadRootMessageId,
       );
       return const _AttachmentDispatchResult.confirmed();
     } on MessagingAttachmentPublishOutcomeUnknown {
@@ -2819,7 +3020,7 @@ class _ChatWindowState extends State<ChatWindow> {
           final errorMessage = receipt.errorRequiresServerFix
               ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
               : receipt.errorRequiresCustomerReply
-                  ? 'Meta no permite enviar archivos fuera de la ventana de 24 horas. Envía una plantilla y espera respuesta del cliente antes de compartir la imagen.'
+                  ? 'Meta no permite enviar archivos fuera de la ventana de 24 horas. Envía primero un mensaje autorizado y espera la respuesta antes de compartir la imagen.'
                   : 'No se pudo enviar el archivo por WhatsApp';
           _showErrorSnackBar(context, errorMessage);
         }
@@ -2864,6 +3065,346 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
+  int _replyCountForRoot(List<Message> messages, String rootMessageId) {
+    return messages
+        .where(
+          (message) =>
+              message.threadRootMessageId == rootMessageId &&
+              message.type != 'system',
+        )
+        .length;
+  }
+
+  List<Message> _channelTimelineMessages(List<Message> messages) {
+    return messages
+        .where(
+          (message) =>
+              message.isTopLevelMessage ||
+              message.metadata['also_send_to_channel'] == true,
+        )
+        .toList(growable: false);
+  }
+
+  Widget _buildChannelTimelineEntry(
+    BuildContext context,
+    Message message,
+    List<Message> allMessages,
+    List<Message> channelMessages,
+  ) {
+    final taskId = message.isTopLevelMessage ? _taskIdForRoot(message) : null;
+    final rootMessageId = message.threadRootMessageId ?? message.id;
+    final replyCount = _replyCountForRoot(allMessages, rootMessageId);
+
+    if (taskId != null) {
+      return _buildTaskThreadRoot(
+        context,
+        taskId,
+        replyCount,
+        fallbackTitle: message.content,
+        onOpenReplies: () => _openThreadReplies(message.id),
+      );
+    }
+
+    final canOpenThread = widget.conversation.isInternal &&
+        message.type != 'system' &&
+        message.type != 'action_request';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMessageBubble(context, message, channelMessages),
+        if (canOpenThread || replyCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(left: 38, bottom: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: ValueKey<String>('open-thread-$rootMessageId'),
+                onPressed: () => _openThreadReplies(rootMessageId),
+                icon: const Icon(Icons.forum_outlined, size: 14),
+                label: Text(
+                  message.isThreadReply
+                      ? 'Respuesta en hilo · Ver conversación'
+                      : replyCount == 0
+                          ? 'Responder en hilo'
+                          : replyCount == 1
+                              ? '1 respuesta'
+                              : '$replyCount respuestas',
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildThreadRootEntry(
+    BuildContext context,
+    Message root,
+    List<Message> allMessages,
+  ) {
+    final taskId = _taskIdForRoot(root);
+    final replyCount = _replyCountForRoot(allMessages, root.id);
+    if (taskId != null) {
+      return _buildTaskThreadRoot(
+        context,
+        taskId,
+        replyCount,
+        fallbackTitle: root.content,
+      );
+    }
+    return _buildMessageBubble(context, root, <Message>[root]);
+  }
+
+  Widget _buildThreadPane(
+    BuildContext context,
+    ChatProvider chatProvider,
+    List<Message> allMessages, {
+    required bool canWriteConversation,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final rootMessageId = _activeThreadRootMessageId;
+    if (rootMessageId == null) return const SizedBox.shrink();
+
+    final matchingRoots =
+        allMessages.where((message) => message.id == rootMessageId);
+    final root = matchingRoots.isEmpty ? null : matchingRoots.first;
+    final replies = allMessages
+        .where((message) => message.threadRootMessageId == rootMessageId)
+        .toList(growable: false);
+    final timelineItems = _buildTimelineItems(replies);
+
+    return ColoredBox(
+      key: const ValueKey<String>('message-thread-pane'),
+      color: colorScheme.surface,
+      child: Column(
+        children: [
+          _buildTaskThreadNavigation(context, replies.length),
+          Expanded(
+            child: ColoredBox(
+              color: _chatTimelineBackground(theme),
+              child: root == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      controller: _threadScrollController,
+                      reverse: true,
+                      cacheExtent: 1600,
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+                      itemCount: timelineItems.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index < timelineItems.length) {
+                          final item =
+                              timelineItems[timelineItems.length - 1 - index];
+                          if (item is _UnreadMessagesMarker) {
+                            return const SizedBox.shrink();
+                          }
+                          if (item is _TimelineDaySeparator) {
+                            return _buildTimelineDaySeparator(
+                              context,
+                              item.day,
+                            );
+                          }
+                          return _buildMessageBubble(
+                            context,
+                            item as Message,
+                            replies,
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildThreadRootEntry(
+                              context,
+                              root,
+                              allMessages,
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Divider(
+                                      color: colorScheme.outlineVariant,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    child: Text(
+                                      replies.length == 1
+                                          ? '1 respuesta'
+                                          : '${replies.length} respuestas',
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Divider(
+                                      color: colorScheme.outlineVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ),
+          if (canWriteConversation)
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                border: Border(
+                  top: BorderSide(color: colorScheme.outlineVariant),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _alsoSendThreadReplyToChannel,
+                        onChanged: (value) => setState(
+                          () => _alsoSendThreadReplyToChannel = value ?? false,
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          'También mostrar esta respuesta en el canal',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  _buildComposer(context),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChannelBody(
+    BuildContext context,
+    ChatProvider chatProvider,
+    List<Message> allMessages, {
+    required bool isLoading,
+    required bool canWriteConversation,
+    required bool threadOpenBesideChannel,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final channelMessages = _channelTimelineMessages(allMessages);
+    final timelineItems = _buildTimelineItems(channelMessages);
+    final showHistoryBoundary = channelMessages.isNotEmpty ||
+        chatProvider.isLoadingOlderMessages(widget.conversation.id) ||
+        chatProvider.olderMessagesErrorForConversation(
+              widget.conversation.id,
+            ) !=
+            null;
+
+    return Column(
+      children: [
+        Expanded(
+          child: Container(
+            color: _chatTimelineBackground(theme),
+            child: isLoading && allMessages.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : Stack(
+                    children: [
+                      ListView.builder(
+                        controller: _scrollController,
+                        reverse: true,
+                        cacheExtent: 2400,
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
+                        itemCount: timelineItems.length +
+                            (showHistoryBoundary ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index < timelineItems.length) {
+                            final item =
+                                timelineItems[timelineItems.length - 1 - index];
+                            if (item is _UnreadMessagesMarker) {
+                              return _buildUnreadMessagesMarker(item.count);
+                            }
+                            if (item is _TimelineDaySeparator) {
+                              return _buildTimelineDaySeparator(
+                                context,
+                                item.day,
+                              );
+                            }
+                            return _buildChannelTimelineEntry(
+                              context,
+                              item as Message,
+                              allMessages,
+                              channelMessages,
+                            );
+                          }
+
+                          return _buildHistoryBoundary(
+                            context,
+                            chatProvider,
+                            hasMessages: allMessages.isNotEmpty,
+                            boundaryLabel: 'Inicio del canal',
+                          );
+                        },
+                      ),
+                      Positioned(
+                        right: 14,
+                        bottom: 10,
+                        child: IgnorePointer(
+                          ignoring: !_showJumpToLatest,
+                          child: AnimatedScale(
+                            scale: _showJumpToLatest ? 1 : 0.82,
+                            duration: const Duration(milliseconds: 150),
+                            child: AnimatedOpacity(
+                              opacity: _showJumpToLatest ? 1 : 0,
+                              duration: const Duration(milliseconds: 150),
+                              child: Material(
+                                color: colorScheme.surface,
+                                elevation: 3,
+                                shape: const CircleBorder(),
+                                child: IconButton(
+                                  tooltip: 'Ir al mensaje más reciente',
+                                  onPressed: _jumpToLatest,
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+        if (canWriteConversation && !threadOpenBesideChannel)
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              border: Border(
+                top: BorderSide(color: colorScheme.outlineVariant),
+              ),
+            ),
+            child: _buildComposer(context),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -2874,18 +3415,11 @@ class _ChatWindowState extends State<ChatWindow> {
     final messages =
         chatProvider.messagesForConversation(widget.conversation.id);
     _schedulePendingAttachmentReconciliation(messages);
-    final timelineItems = _buildTimelineItems(messages);
     final isLoading =
         chatProvider.isConversationLoading(widget.conversation.id);
     final streamError = chatProvider.messageStreamErrorForConversation(
       widget.conversation.id,
     );
-    final showHistoryBoundary = messages.isNotEmpty ||
-        chatProvider.isLoadingOlderMessages(widget.conversation.id) ||
-        chatProvider.olderMessagesErrorForConversation(
-              widget.conversation.id,
-            ) !=
-            null;
     // Sólo para el primer llenado: si el timeline aún no alcanza a llenar el
     // viewport no hay scroll que dispare la carga. Con contenido desplazable el
     // dueño de la paginación es el scroll ya detenido, no cada build — dos
@@ -2904,7 +3438,6 @@ class _ChatWindowState extends State<ChatWindow> {
     final chatContent = Column(
       children: [
         _buildHeader(context, chatProvider),
-
         if (pendingDraft != null) _buildPreparedHandoffBanner(pendingDraft),
 
         // Pending Chat Request Banner (for employees reviewing customer requests)
@@ -2923,132 +3456,89 @@ class _ChatWindowState extends State<ChatWindow> {
           Expanded(
             child: _buildChatInfoPanel(context, chatProvider, messages),
           )
-        else ...[
-          // Messages
+        else
           Expanded(
-            child: Container(
-              color: _chatTimelineBackground(theme),
-              child: isLoading && messages.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : Stack(
-                      children: [
-                        ListView.builder(
-                          controller: _scrollController,
-                          reverse: true,
-                          // La extensión de un ListView.builder se ESTIMA con
-                          // los hijos ya medidos. Con alturas dispares —un
-                          // comprobante de pantalla completa entre mensajes de
-                          // una línea— esa estimación oscila cientos de píxeles
-                          // mientras el dedo se mueve, y cada oscilación
-                          // corrige la posición: eso es el «se pega y vibra».
-                          // Medido: saltos de -710 y +1634 px sin que cambiara
-                          // la cantidad de mensajes.
-                          //
-                          // Con más caché quedan más hijos medidos, así que la
-                          // estimación se apoya en una muestra mayor y deja de
-                          // bailar.
-                          cacheExtent: 2400,
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
-                          itemCount: timelineItems.length +
-                              (showHistoryBoundary ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (showHistoryBoundary &&
-                                index == timelineItems.length) {
-                              return _buildHistoryBoundary(
-                                context,
-                                chatProvider,
-                                hasMessages: messages.isNotEmpty,
-                              );
-                            }
-                            final item =
-                                timelineItems[timelineItems.length - 1 - index];
-                            if (item is _UnreadMessagesMarker) {
-                              return _buildUnreadMessagesMarker(item.count);
-                            }
-                            if (item is _TimelineDaySeparator) {
-                              return _buildTimelineDaySeparator(
-                                context,
-                                item.day,
-                              );
-                            }
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final hasOpenThread = _activeThreadRootMessageId != null;
+                // Reuse the same width contract as the canonical messaging
+                // context inspector. Compact/right-rail hosts get a focused
+                // thread screen; the full desktop inbox keeps channel + pane.
+                final showThreadBesideChannel = hasOpenThread &&
+                    !widget.compact &&
+                    constraints.maxWidth >= 760;
 
-                            final msg = item as Message;
-                            return _buildMessageBubble(context, msg, messages);
-                          },
-                        ),
-                        Positioned(
-                          right: 14,
-                          bottom: 10,
-                          child: IgnorePointer(
-                            ignoring: !_showJumpToLatest,
-                            child: AnimatedScale(
-                              scale: _showJumpToLatest ? 1 : 0.82,
-                              duration: const Duration(milliseconds: 150),
-                              child: AnimatedOpacity(
-                                opacity: _showJumpToLatest ? 1 : 0,
-                                duration: const Duration(milliseconds: 150),
-                                child: Material(
-                                  color: colorScheme.surface,
-                                  elevation: 3,
-                                  shape: const CircleBorder(),
-                                  child: IconButton(
-                                    tooltip: 'Ir al mensaje más reciente',
-                                    onPressed: _jumpToLatest,
-                                    icon: const Icon(
-                                      Icons.keyboard_arrow_down_rounded,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                if (hasOpenThread && !showThreadBesideChannel) {
+                  return _buildThreadPane(
+                    context,
+                    chatProvider,
+                    messages,
+                    canWriteConversation: canWriteConversation,
+                  );
+                }
+
+                final channel = _buildChannelBody(
+                  context,
+                  chatProvider,
+                  messages,
+                  isLoading: isLoading,
+                  canWriteConversation: canWriteConversation,
+                  threadOpenBesideChannel: showThreadBesideChannel,
+                );
+                if (!showThreadBesideChannel) return channel;
+
+                final threadPaneWidth =
+                    (constraints.maxWidth * 0.38).clamp(380.0, 440.0);
+                return Row(
+                  children: [
+                    Expanded(child: channel),
+                    VerticalDivider(
+                      width: 1,
+                      color: colorScheme.outlineVariant,
                     ),
-            ),
-          ),
-
-          if (canWriteConversation)
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                border: Border(
-                  top: BorderSide(color: colorScheme.outlineVariant),
-                ),
-              ),
-              child: _buildComposer(context),
-            )
-          else
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest,
-                border: Border(
-                  top: BorderSide(color: colorScheme.outlineVariant),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.inventory_2_outlined,
-                    size: 18,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Text(
-                      'Conversación archivada. El historial se conserva como respaldo y ya no admite nuevos mensajes.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                    SizedBox(
+                      width: threadPaneWidth,
+                      child: _buildThreadPane(
+                        context,
+                        chatProvider,
+                        messages,
+                        canWriteConversation: canWriteConversation,
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                );
+              },
+            ),
+          ),
+        if (!_showChatInfoPanel && !canWriteConversation)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              border: Border(
+                top: BorderSide(color: colorScheme.outlineVariant),
               ),
             ),
-        ],
+            child: Row(
+              children: [
+                Icon(
+                  Icons.inventory_2_outlined,
+                  size: 18,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'Conversación archivada. El historial se conserva como respaldo y ya no admite nuevos mensajes.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
 
@@ -3217,7 +3707,8 @@ class _ChatWindowState extends State<ChatWindow> {
       decoration: BoxDecoration(
         color: VinabikeThemeRoles.of(context).warning.container,
         border: Border(
-          bottom: BorderSide(color: VinabikeThemeRoles.of(context).warning.border),
+          bottom:
+              BorderSide(color: VinabikeThemeRoles.of(context).warning.border),
         ),
       ),
       child: widget.compact
@@ -3227,7 +3718,8 @@ class _ChatWindowState extends State<ChatWindow> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.pending_actions, color: VinabikeThemeRoles.of(context).warning.accent),
+                    Icon(Icons.pending_actions,
+                        color: VinabikeThemeRoles.of(context).warning.accent),
                     const SizedBox(width: 10),
                     textBlock,
                   ],
@@ -3242,7 +3734,8 @@ class _ChatWindowState extends State<ChatWindow> {
             )
           : Row(
               children: [
-                Icon(Icons.pending_actions, color: VinabikeThemeRoles.of(context).warning.accent),
+                Icon(Icons.pending_actions,
+                    color: VinabikeThemeRoles.of(context).warning.accent),
                 const SizedBox(width: 12),
                 textBlock,
                 const SizedBox(width: 12),
@@ -3362,20 +3855,21 @@ class _ChatWindowState extends State<ChatWindow> {
               onPressed: _openCurrentContext,
             ),
           if (!conversation.isSupplierConversation)
-            IconButton(
-              icon: Icon(
-                hasContext ? Icons.link : Icons.link_off,
-                color: hasJobContext
-                    ? jobContextColor
-                    : hasContext
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
+            if (!conversation.isTaskThread)
+              IconButton(
+                icon: Icon(
+                  hasContext ? Icons.link : Icons.link_off,
+                  color: hasJobContext
+                      ? jobContextColor
+                      : hasContext
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                ),
+                tooltip: hasContext
+                    ? '${conversation.hasLinkedContext ? 'Contexto vinculado' : 'Contexto detectado'}: ${_contextLabel(contextType)}'
+                    : 'Vincular contexto del chat',
+                onPressed: () => _showAssignContextDialog(context),
               ),
-              tooltip: hasContext
-                  ? '${conversation.hasLinkedContext ? 'Contexto vinculado' : 'Contexto detectado'}: ${_contextLabel(contextType)}'
-                  : 'Vincular contexto del chat',
-              onPressed: () => _showAssignContextDialog(context),
-            ),
           ...widget.headerActions,
         ],
       ),
@@ -4087,6 +4581,7 @@ class _ChatWindowState extends State<ChatWindow> {
           ? 'Revisar proveedor ${hint!.supplierLabel!.trim()}'
           : 'Revisar proveedor vinculado',
       'order' || 'online_order' => 'Revisar pedido online',
+      'task' => 'Abrir la tarea raíz',
       _ => 'Revisar contexto operativo',
     };
     final contextActionSubtitle = switch (contextType) {
@@ -4110,6 +4605,7 @@ class _ChatWindowState extends State<ChatWindow> {
       'supplier' => hint?.supplierPhone?.trim().isNotEmpty == true
           ? hint!.supplierPhone!.trim()
           : 'Ficha y abastecimiento del proveedor',
+      'task' => 'Ver asignación, trabajo, servicios y ciclo de la tarea',
       _ => 'Abrir sus datos sin abandonar la conversación',
     };
     final canResolve = widget.conversation.type == 'support' &&
@@ -4127,7 +4623,8 @@ class _ChatWindowState extends State<ChatWindow> {
         _buildPanelBlock(
           theme: theme,
           children: [
-            if (!widget.conversation.isSupplierConversation)
+            if (!widget.conversation.isSupplierConversation &&
+                !widget.conversation.isTaskThread)
               _buildManagementActionTile(
                 icon: Icons.link,
                 color: theme.colorScheme.primary,
@@ -5295,7 +5792,9 @@ class _ChatWindowState extends State<ChatWindow> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isMe ? Colors.white.withValues(alpha: 0.3) : Theme.of(context).colorScheme.surfaceContainerLow,
+          color: isMe
+              ? Colors.white.withValues(alpha: 0.3)
+              : Theme.of(context).colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -5303,7 +5802,9 @@ class _ChatWindowState extends State<ChatWindow> {
           children: [
             Icon(
               _getFileIcon(extension),
-              color: isMe ? Theme.of(context).colorScheme.onSurface : Colors.blue[600],
+              color: isMe
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Colors.blue[600],
               size: 32,
             ),
             const SizedBox(width: 8),
@@ -5323,7 +5824,9 @@ class _ChatWindowState extends State<ChatWindow> {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: failed ? VinabikeThemeRoles.of(context).danger.accent : Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: failed
+                          ? VinabikeThemeRoles.of(context).danger.accent
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 11,
                     ),
                     maxLines: 2,
@@ -5342,7 +5845,9 @@ class _ChatWindowState extends State<ChatWindow> {
             else
               Icon(
                 failed ? Icons.refresh : Icons.download,
-                color: failed ? VinabikeThemeRoles.of(context).danger.accent : Theme.of(context).colorScheme.onSurfaceVariant,
+                color: failed
+                    ? VinabikeThemeRoles.of(context).danger.accent
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
                 size: 20,
               ),
           ],
@@ -5828,6 +6333,7 @@ class _ChatWindowState extends State<ChatWindow> {
     BuildContext context,
     ChatProvider provider, {
     required bool hasMessages,
+    String boundaryLabel = 'Inicio de la conversación',
   }) {
     final conversationId = widget.conversation.id;
     final theme = Theme.of(context);
@@ -5885,7 +6391,7 @@ class _ChatWindowState extends State<ChatWindow> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Text(
-        'Inicio de la conversación',
+        boundaryLabel,
         textAlign: TextAlign.center,
         style: theme.textTheme.labelSmall?.copyWith(
           color: colorScheme.onSurfaceVariant,
@@ -5932,6 +6438,12 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   String _buildConversationSubtitle(Conversation conversation) {
+    if (conversation.isTaskThread) {
+      final count = conversation.taskThreadContexts.length;
+      return count == 1
+          ? 'Canal de tareas · 1 tarea'
+          : 'Canal de tareas · $count tareas';
+    }
     final parts = <String>[conversation.channelLabel];
 
     final contextLabel = _contextLabel(conversation.effectiveContextType);
@@ -5951,6 +6463,7 @@ class _ChatWindowState extends State<ChatWindow> {
       'bike' => 'Bicicleta',
       'product' => 'Producto',
       'customer' => 'Cliente',
+      'task' => 'Tarea',
       _ => null,
     };
   }
@@ -5962,6 +6475,7 @@ class _ChatWindowState extends State<ChatWindow> {
       'invoice' => Icons.receipt_long_outlined,
       'purchase_invoice' => Icons.inventory_2_outlined,
       'supplier' => Icons.storefront_outlined,
+      'task' => Icons.task_alt_outlined,
       _ => Icons.article_outlined,
     };
   }
@@ -5983,7 +6497,8 @@ class _ChatWindowState extends State<ChatWindow> {
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         border: Border(
-          bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+          bottom:
+              BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         ),
       ),
       child: Row(
@@ -6005,7 +6520,9 @@ class _ChatWindowState extends State<ChatWindow> {
                 const SizedBox(height: 3),
                 Text(
                   draft.subtitle,
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 8),
                 Container(
@@ -6014,7 +6531,8 @@ class _ChatWindowState extends State<ChatWindow> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                    border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant),
                   ),
                   child: Text(
                     draft.body,
@@ -7117,7 +7635,9 @@ class _ChatWindowState extends State<ChatWindow> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
+          SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
         );
       }
     }
@@ -7315,15 +7835,15 @@ class _ChatWindowState extends State<ChatWindow> {
             ? 'WhatsApp: ventana cerrada'
             : isOpen
                 ? 'WhatsApp: ${_formatWindowDuration(remaining)} disponibles'
-                : 'WhatsApp: requiere plantilla';
+                : 'WhatsApp: sólo mensajes autorizados';
         final color = isOpen ? const Color(0xFF16A34A) : Colors.amber[800]!;
 
         return Tooltip(
           message: lastInboundAt == null
-              ? 'El cliente no ha respondido en esta conversación. Para escribir por Cloud API necesitas una plantilla aprobada.'
+              ? 'El contacto no ha respondido. Puedes iniciar con un mensaje utilitario de Direct Send; marketing aún requiere plantilla.'
               : isOpen
                   ? 'La ventana de 24 horas empezó con la última respuesta del cliente.'
-                  : 'La ventana de 24 horas expiró. El próximo envío debe ser una plantilla aprobada.',
+                  : 'La ventana expiró. El próximo envío debe ser utilitario o una plantilla de marketing aprobada.',
           child: Row(
             children: [
               Icon(
@@ -7338,7 +7858,8 @@ class _ChatWindowState extends State<ChatWindow> {
                   child: LinearProgressIndicator(
                     minHeight: 3,
                     value: isOpen ? progress : 1,
-                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    backgroundColor:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
                     valueColor: AlwaysStoppedAnimation<Color>(color),
                   ),
                 ),
@@ -7611,13 +8132,13 @@ class _ChatWindowState extends State<ChatWindow> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Plantillas WhatsApp',
+                          'Mensajes WhatsApp',
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
                         Text(
                           hasPendingText
-                              ? 'El texto escrito queda como borrador hasta que el $counterparty responda.'
-                              : 'Elige la plantilla aprobada para esta ocasión.',
+                              ? 'El texto libre queda como borrador. Elige un mensaje autorizado para contactar al $counterparty.'
+                              : 'Elige el motivo correcto. Los utilitarios usan Direct Send; marketing usa plantilla.',
                           style: TextStyle(
                             fontSize: 12,
                             color: theme.colorScheme.onSurfaceVariant,
@@ -7697,12 +8218,12 @@ class _ChatWindowState extends State<ChatWindow> {
     bool isCheckingReview = false,
     bool reviewCheckFailed = false,
   }) {
-    // Toda plantilla depende de la aprobación viva de Meta, no sólo las de
-    // proveedor: corregir un texto la manda de vuelta a revisión y el envío
-    // falla con 132001 hasta que la aprueban. Mostrarlo evita que el taller
-    // lea un rechazo temporal como una falla del sistema.
-    const requiresLiveApproval = true;
-    final isEnabled = reviewStatus?.isApproved == true;
+    // Direct Send no necesita una plantilla aprobada. Marketing sí: intentar
+    // quitarle esa puerta sería clasificar publicidad como utilidad y arriesga
+    // que Meta bloquee Direct Send para toda la cuenta.
+    final requiresLiveApproval =
+        option.category != WhatsAppMessageCategory.utility;
+    final isEnabled = !requiresLiveApproval || reviewStatus?.isApproved == true;
     final availabilityLabel = !requiresLiveApproval
         ? null
         : isCheckingReview
@@ -7726,56 +8247,59 @@ class _ChatWindowState extends State<ChatWindow> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           InkWell(
-        // Revisar el texto se puede siempre; enviar, sólo si Meta la aprobó.
-        onTap: () => _reviewWhatsAppTemplate(option),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _accentBlue.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(option.icon, color: _accentBlue, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      option.label,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+            // Revisar el texto se puede siempre. Marketing requiere APPROVED;
+            // utilidad sale por Direct Send y conserva la plantilla como respaldo.
+            onTap: () => _reviewWhatsAppTemplate(option),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: _accentBlue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      option.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    child: Icon(option.icon, color: _accentBlue, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          option.label,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          option.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  if (availabilityLabel == null)
+                    const Icon(Icons.chevron_right, size: 18)
+                  else
+                    Text(
+                      availabilityLabel,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                ],
               ),
-              if (availabilityLabel == null)
-                const Icon(Icons.chevron_right, size: 18)
-              else
-                Text(
-                  availabilityLabel,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-            ],
-          ),
-        ),
+            ),
           ),
           if (_reviewingTemplate?.key == option.key)
             Padding(
@@ -7837,7 +8361,8 @@ class _ChatWindowState extends State<ChatWindow> {
     setState(() => _isSendingMessage = true);
 
     try {
-      if (option.isSupplier) {
+      if (option.isSupplier &&
+          option.category != WhatsAppMessageCategory.utility) {
         final statuses =
             await whatsappService.getSupplierTemplateReviewStatuses();
         final review = statuses[option.defaultTemplateName];
@@ -7845,7 +8370,7 @@ class _ChatWindowState extends State<ChatWindow> {
           throw Exception(
             review?.status == 'PENDING'
                 ? 'Meta todavía está revisando esta plantilla.'
-                : 'Meta no tiene esta plantilla aprobada para enviar.',
+                : 'Meta no tiene este mensaje de marketing aprobado para enviar.',
           );
         }
       }
@@ -7896,7 +8421,7 @@ class _ChatWindowState extends State<ChatWindow> {
       );
 
       if (!receipt.isSuccess) {
-        throw Exception('Meta rechazó la plantilla seleccionada.');
+        throw Exception('Meta rechazó el mensaje seleccionado.');
       }
 
       final pending = pendingText?.trim();
@@ -7906,7 +8431,7 @@ class _ChatWindowState extends State<ChatWindow> {
           pending,
           title: 'Mensaje pendiente de ventana WhatsApp',
           subtitle:
-              'Se envió "${option.label}". Cuando el ${widget.conversation.isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto.',
+              'Se envió "${option.label}". Cuando el ${widget.conversation.isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto libre.',
         );
       }
 
@@ -7918,12 +8443,12 @@ class _ChatWindowState extends State<ChatWindow> {
       _showWhatsAppResultSnackbar(
         context: context,
         deliveryMethod: receipt.deliveryMethod,
-        successMessage: 'Plantilla enviada: ${option.label}',
-        fallbackMessage: 'WhatsApp abierto con la plantilla prellenada',
+        successMessage: 'Mensaje enviado: ${option.label}',
+        fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
       );
     } catch (e) {
       if (!mounted) return;
-      _showErrorSnackBar(context, 'No se pudo enviar la plantilla: $e');
+      _showErrorSnackBar(context, 'No se pudo enviar el mensaje: $e');
     } finally {
       if (mounted) setState(() => _isSendingMessage = false);
     }
@@ -7997,34 +8522,34 @@ class _ChatWindowState extends State<ChatWindow> {
             KeyedSubtree(
               key: _composerActionsButtonKey,
               child: IconButton(
-                  tooltip: hasBlockingOutcomeUnknownAttachment
-                      ? 'Esperando confirmación del adjunto'
-                      : !composerEnabled
-                          ? 'Ventana de respuesta no disponible'
-                          : 'Agregar al mensaje',
-                  onPressed:
-                      hasBlockingOutcomeUnknownAttachment || !composerEnabled
-                          ? null
-                          : () => _showComposerActionsMenu(
-                                context,
-                                showSmartActions: showSmartActions,
-                              ),
-                  style: IconButton.styleFrom(
-                    foregroundColor: colorScheme.onSurfaceVariant,
-                    backgroundColor: colorScheme.surfaceContainerHighest,
-                    // 44 = alto natural del campo con una línea, para que la
-                    // fila quede a ras.
-                    minimumSize: const Size.square(44),
-                  ),
-                  icon: AnimatedRotation(
-                    turns: _activeComposerMenuName == 'composer_actions' ||
-                            _isEmojiPickerOpen
-                        ? 0.125
-                        : 0,
-                    duration: const Duration(milliseconds: 150),
-                    child: const Icon(Icons.add_rounded),
-                  ),
+                tooltip: hasBlockingOutcomeUnknownAttachment
+                    ? 'Esperando confirmación del adjunto'
+                    : !composerEnabled
+                        ? 'Ventana de respuesta no disponible'
+                        : 'Agregar al mensaje',
+                onPressed:
+                    hasBlockingOutcomeUnknownAttachment || !composerEnabled
+                        ? null
+                        : () => _showComposerActionsMenu(
+                              context,
+                              showSmartActions: showSmartActions,
+                            ),
+                style: IconButton.styleFrom(
+                  foregroundColor: colorScheme.onSurfaceVariant,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  // 44 = alto natural del campo con una línea, para que la
+                  // fila quede a ras.
+                  minimumSize: const Size.square(44),
                 ),
+                icon: AnimatedRotation(
+                  turns: _activeComposerMenuName == 'composer_actions' ||
+                          _isEmojiPickerOpen
+                      ? 0.125
+                      : 0,
+                  duration: const Duration(milliseconds: 150),
+                  child: const Icon(Icons.add_rounded),
+                ),
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -8048,13 +8573,15 @@ class _ChatWindowState extends State<ChatWindow> {
                     textInputAction: TextInputAction.newline,
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
-                      hintText: _isMetaConversation && !composerEnabled
-                          ? metaStateError != null
-                              ? 'Verificación de Meta pendiente'
-                              : isCheckingMetaWindow
-                                  ? 'Verificando ventana de respuesta...'
-                                  : 'Espera un nuevo mensaje del cliente'
-                          : 'Escribe un mensaje... (# para ref)',
+                      hintText: _activeThreadRootMessageId != null
+                          ? 'Agregar una respuesta…'
+                          : _isMetaConversation && !composerEnabled
+                              ? metaStateError != null
+                                  ? 'Verificación de Meta pendiente'
+                                  : isCheckingMetaWindow
+                                      ? 'Verificando ventana de respuesta...'
+                                      : 'Espera un nuevo mensaje del cliente'
+                              : 'Escribe un mensaje... (# para ref)',
                       filled: true,
                       fillColor: colorScheme.surfaceContainerLowest,
                       // El texto de ayuda NO envuelve. En un teléfono angosto
@@ -8185,8 +8712,8 @@ class _ChatWindowState extends State<ChatWindow> {
             _buildComposerPopoverAction(
               icon: Icons.dynamic_form_outlined,
               color: const Color(0xFF0F766E),
-              title: 'Plantilla WhatsApp',
-              subtitle: 'Abrir o reabrir la ventana de 24 horas',
+              title: 'Mensaje WhatsApp',
+              subtitle: 'Utilidad por Direct Send o marketing aprobado',
               onTap: () => _showWhatsAppTemplatePicker(
                 pendingText: _messageController.text.trim(),
                 anchorKey: _composerActionsButtonKey,
@@ -9011,7 +9538,9 @@ class _ChatWindowState extends State<ChatWindow> {
           height: 26,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? theme.colorScheme.surfaceContainerHighest : Colors.transparent,
+            color: selected
+                ? theme.colorScheme.surfaceContainerHighest
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(5),
           ),
           child: Text(
@@ -9019,7 +9548,8 @@ class _ChatWindowState extends State<ChatWindow> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: selected ? theme.colorScheme.onSurface : Colors.grey.shade500,
+              color:
+                  selected ? theme.colorScheme.onSurface : Colors.grey.shade500,
             ),
           ),
         ),
@@ -9102,7 +9632,8 @@ class _ChatWindowState extends State<ChatWindow> {
       height: 44,
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+        border:
+            Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -9129,13 +9660,17 @@ class _ChatWindowState extends State<ChatWindow> {
                   height: 34,
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
-                    color: selected ? theme.colorScheme.surfaceContainerHighest : Colors.transparent,
+                    color: selected
+                        ? theme.colorScheme.surfaceContainerHighest
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     item.icon,
                     size: 19,
-                    color: selected ? _accentBlue : theme.colorScheme.onSurfaceVariant,
+                    color: selected
+                        ? _accentBlue
+                        : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -9216,7 +9751,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
   void _showErrorSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
+      SnackBar(
+          content: Text(message),
+          backgroundColor: VinabikeThemeRoles.of(context).danger.accent),
     );
   }
 
@@ -9499,6 +10036,9 @@ class _ChatWindowState extends State<ChatWindow> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMe = msg.isMe;
+        final isThreadReply =
+            widget.conversation.isInternal && msg.isThreadReply;
+        final contentIsMe = isThreadReply ? false : isMe;
         final senderId = msg.senderId;
         final grouping = _messageGroupingFor(msg, messages);
         final bubbleMaxWidth =
@@ -9511,7 +10051,7 @@ class _ChatWindowState extends State<ChatWindow> {
             final senderInfo = snapshot.data;
             final senderName =
                 isMe ? 'Tú' : _resolveIncomingSenderName(msg, senderInfo);
-            final senderAvatar = senderInfo?['avatar_url'];
+            final senderAvatar = senderInfo?['avatar_url']?.toString();
             // Message Content Widget
             Widget contentWidget;
             if (msg.type == 'image') {
@@ -9535,15 +10075,19 @@ class _ChatWindowState extends State<ChatWindow> {
                 );
               }
             } else if (msg.metadata['type'] == 'quote_request') {
-              contentWidget = _buildQuoteCard(context, msg, isMe);
+              contentWidget = _buildQuoteCard(context, msg, contentIsMe);
             } else if (msg.type == 'file') {
               final fileUrl = _messageAttachmentUrl(msg);
               if (fileUrl != null) {
-                contentWidget = _buildFileMessage(context, msg, fileUrl, isMe);
+                contentWidget =
+                    _buildFileMessage(context, msg, fileUrl, contentIsMe);
               } else if (MessagingAttachmentService.hasPrivateReference(msg) ||
                   _messageHasRemoteWhatsAppMedia(msg)) {
-                contentWidget =
-                    _buildDeferredWhatsAppFileMessage(context, msg, isMe);
+                contentWidget = _buildDeferredWhatsAppFileMessage(
+                  context,
+                  msg,
+                  contentIsMe,
+                );
               } else if (_messagingAttachmentService
                       .externalUrlCandidate(msg) !=
                   null) {
@@ -9553,21 +10097,35 @@ class _ChatWindowState extends State<ChatWindow> {
                   context,
                   msg,
                   null,
-                  isMe,
+                  contentIsMe,
                   failed: true,
                 );
               }
             } else if (msg.type == 'action_request') {
               // Staff see the request and its customer response, but never
               // answer an action card on the customer's behalf.
-              contentWidget = _buildActionRequestCard(context, msg, isMe);
+              contentWidget =
+                  _buildActionRequestCard(context, msg, contentIsMe);
             } else {
               // Text Message
-              contentWidget = _buildRouteShareMessage(context, msg, isMe);
+              contentWidget =
+                  _buildRouteShareMessage(context, msg, contentIsMe);
             }
 
             // Timestamp
             final timeStr = DateFormat('HH:mm').format(msg.createdAt);
+
+            if (isThreadReply) {
+              return _buildTaskThreadReply(
+                context,
+                message: msg,
+                isMe: isMe,
+                senderName: senderName,
+                senderAvatar: senderAvatar,
+                timeLabel: timeStr,
+                content: contentWidget,
+              );
+            }
 
             // Bubble Decoration
             // Las burbujas salen de la PALETA elegida en Apariencia, no de un
@@ -9582,7 +10140,8 @@ class _ChatWindowState extends State<ChatWindow> {
             final theme = Theme.of(context);
             final roles = theme.extension<VinabikeThemeRoles>();
             final bubbleColor = isMe
-                ? roles?.selectionContainer ?? theme.colorScheme.primaryContainer
+                ? roles?.selectionContainer ??
+                    theme.colorScheme.primaryContainer
                 : theme.colorScheme.surfaceContainerHigh;
             final onBubbleColor = isMe
                 ? roles?.onSelectionContainer ??
@@ -9636,7 +10195,8 @@ class _ChatWindowState extends State<ChatWindow> {
                       else
                         CircleAvatar(
                           radius: 14,
-                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                          backgroundColor:
+                              theme.colorScheme.surfaceContainerHighest,
                           backgroundImage: senderAvatar != null
                               ? NetworkImage(senderAvatar)
                               : null,
@@ -9656,65 +10216,66 @@ class _ChatWindowState extends State<ChatWindow> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                        Builder(
-                          builder: (bubbleContext) => GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onLongPress: () => _showReactionPicker(
-                            bubbleContext,
-                            msg,
-                            isMe: false,
-                          ),
-                          onSecondaryTap: () => _showReactionPicker(
-                            bubbleContext,
-                            msg,
-                            isMe: false,
-                          ),
-                          child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          constraints: BoxConstraints(
-                            maxWidth: bubbleMaxWidth,
-                          ),
-                          decoration: bubbleDecoration,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Sender Name (Colored)
-                              if (!grouping.withPrevious) ...[
-                                Text(
-                                  senderName,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: _getNameColor(senderName),
-                                  ),
+                            Builder(
+                              builder: (bubbleContext) => GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onLongPress: () => _showReactionPicker(
+                                  bubbleContext,
+                                  msg,
+                                  isMe: false,
                                 ),
-                                const SizedBox(height: 2),
-                              ],
+                                onSecondaryTap: () => _showReactionPicker(
+                                  bubbleContext,
+                                  msg,
+                                  isMe: false,
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  constraints: BoxConstraints(
+                                    maxWidth: bubbleMaxWidth,
+                                  ),
+                                  decoration: bubbleDecoration,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Sender Name (Colored)
+                                      if (!grouping.withPrevious) ...[
+                                        Text(
+                                          senderName,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: _getNameColor(senderName),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                      ],
 
-                              contentWidget,
+                                      contentWidget,
 
-                              // Timestamp
-                              Align(
-                                alignment: Alignment.bottomRight,
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.only(top: 4, left: 8),
-                                  child: Text(
-                                    timeStr,
-                                    style: TextStyle(
-                                      color: onBubbleColor
-                                          .withValues(alpha: 0.65),
-                                      fontSize: 10,
-                                    ),
+                                      // Timestamp
+                                      Align(
+                                        alignment: Alignment.bottomRight,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(
+                                              top: 4, left: 8),
+                                          child: Text(
+                                            timeStr,
+                                            style: TextStyle(
+                                              color: onBubbleColor.withValues(
+                                                  alpha: 0.65),
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                        ),
-                        ),
+                            ),
                             _buildReactionStrip(context, msg, isMe: false),
                           ],
                         ),
@@ -9742,57 +10303,60 @@ class _ChatWindowState extends State<ChatWindow> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                      Builder(
-                        builder: (bubbleContext) => GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onLongPress: () => _showReactionPicker(
-                          bubbleContext,
-                          msg,
-                          isMe: true,
-                        ),
-                        onSecondaryTap: () => _showReactionPicker(
-                          bubbleContext,
-                          msg,
-                          isMe: true,
-                        ),
-                        child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        constraints: BoxConstraints(
-                          maxWidth: bubbleMaxWidth,
-                        ),
-                        decoration: bubbleDecoration,
-                        child: Stack(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (msg.metadata[
-                                          'recovered_outbound_attempt'] ==
-                                      true) ...[
-                                    _buildRecoveredMetaAttemptNotice(msg),
-                                    const SizedBox(height: 5),
-                                  ],
-                                  contentWidget,
-                                ],
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: _buildOutgoingMessageFooter(
+                          Builder(
+                            builder: (bubbleContext) => GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onLongPress: () => _showReactionPicker(
+                                bubbleContext,
                                 msg,
-                                timeStr,
+                                isMe: true,
+                              ),
+                              onSecondaryTap: () => _showReactionPicker(
+                                bubbleContext,
+                                msg,
+                                isMe: true,
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                constraints: BoxConstraints(
+                                  maxWidth: bubbleMaxWidth,
+                                ),
+                                decoration: bubbleDecoration,
+                                child: Stack(
+                                  children: [
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 16),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          if (msg.metadata[
+                                                  'recovered_outbound_attempt'] ==
+                                              true) ...[
+                                            _buildRecoveredMetaAttemptNotice(
+                                                msg),
+                                            const SizedBox(height: 5),
+                                          ],
+                                          contentWidget,
+                                        ],
+                                      ),
+                                    ),
+                                    Positioned(
+                                      bottom: 0,
+                                      right: 0,
+                                      child: _buildOutgoingMessageFooter(
+                                        msg,
+                                        timeStr,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      ),
-                      ),
-                      _buildReactionStrip(context, msg, isMe: true),
+                          ),
+                          _buildReactionStrip(context, msg, isMe: true),
                         ],
                       ),
                     ),
@@ -9803,6 +10367,119 @@ class _ChatWindowState extends State<ChatWindow> {
           },
         );
       },
+    );
+  }
+
+  /// Presentación de una respuesta dentro del hilo canónico de una tarea.
+  ///
+  /// A diferencia de un chat de ida y vuelta, todas las respuestas cuelgan de
+  /// la misma raíz y por eso comparten una sola columna. El autor y la hora se
+  /// mantienen visibles sin convertir cada respuesta en una burbuja aislada.
+  Widget _buildTaskThreadReply(
+    BuildContext context, {
+    required Message message,
+    required bool isMe,
+    required String senderName,
+    required String? senderAvatar,
+    required String timeLabel,
+    required Widget content,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final avatarUrl = senderAvatar?.trim();
+
+    return Semantics(
+      container: true,
+      label: 'Respuesta de $senderName en el hilo',
+      child: SelectionArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(2, 9, 2, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                    ? NetworkImage(avatarUrl)
+                    : null,
+                child: avatarUrl == null || avatarUrl.isEmpty
+                    ? Icon(
+                        Icons.person_outline,
+                        size: 16,
+                        color: colorScheme.onSurfaceVariant,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Builder(
+                  builder: (replyContext) => GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onLongPress: () => _showReactionPicker(
+                      replyContext,
+                      message,
+                      isMe: false,
+                    ),
+                    onSecondaryTap: () => _showReactionPicker(
+                      replyContext,
+                      message,
+                      isMe: false,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                senderName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: isMe
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurface,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if (isMe)
+                              _buildOutgoingMessageFooter(message, timeLabel)
+                            else
+                              Text(
+                                timeLabel,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        if (message.metadata['recovered_outbound_attempt'] ==
+                            true) ...[
+                          _buildRecoveredMetaAttemptNotice(message),
+                          const SizedBox(height: 5),
+                        ],
+                        content,
+                        _buildReactionStrip(
+                          context,
+                          message,
+                          isMe: false,
+                        ),
+                        Divider(
+                          height: 18,
+                          color: colorScheme.outlineVariant,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -9856,61 +10533,61 @@ class _ChatWindowState extends State<ChatWindow> {
           bottom: 2,
         ),
         child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        alignment: isMe ? WrapAlignment.end : WrapAlignment.start,
-        children: [
-          for (final group in groups)
-            Tooltip(
-              message: group.tooltip,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => _toggleReaction(msg, group.emoji),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  // Los dos chips se ven igual, entrante o saliente. La única
-                  // diferencia es un tinte suave cuando la reacción es tuya:
-                  // el anillo de color fuerte los hacía parecer controles
-                  // distintos según de qué lado colgaran.
-                  decoration: BoxDecoration(
-                    color: group.includesCurrentUser
-                        ? theme.colorScheme.primaryContainer
-                            .withValues(alpha: 0.55)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: theme.colorScheme.outlineVariant,
+          spacing: 4,
+          runSpacing: 4,
+          alignment: isMe ? WrapAlignment.end : WrapAlignment.start,
+          children: [
+            for (final group in groups)
+              Tooltip(
+                message: group.tooltip,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _toggleReaction(msg, group.emoji),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 1,
-                        offset: const Offset(0, 1),
+                    // Los dos chips se ven igual, entrante o saliente. La única
+                    // diferencia es un tinte suave cuando la reacción es tuya:
+                    // el anillo de color fuerte los hacía parecer controles
+                    // distintos según de qué lado colgaran.
+                    decoration: BoxDecoration(
+                      color: group.includesCurrentUser
+                          ? theme.colorScheme.primaryContainer
+                              .withValues(alpha: 0.55)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant,
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(group.emoji, style: const TextStyle(fontSize: 13)),
-                      if (group.count > 1) ...[
-                        const SizedBox(width: 3),
-                        Text(
-                          '${group.count}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 1,
+                          offset: const Offset(0, 1),
                         ),
                       ],
-                    ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(group.emoji, style: const TextStyle(fontSize: 13)),
+                        if (group.count > 1) ...[
+                          const SizedBox(width: 3),
+                          Text(
+                            '${group.count}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -10004,8 +10681,8 @@ class _ChatWindowState extends State<ChatWindow> {
               for (final emoji in _quickReactionEmojis)
                 InkWell(
                   borderRadius: BorderRadius.circular(15),
-                  onTap: () => Navigator.of(context, rootNavigator: true)
-                      .pop(emoji),
+                  onTap: () =>
+                      Navigator.of(context, rootNavigator: true).pop(emoji),
                   child: Container(
                     width: emojiSlot,
                     height: emojiSlot,
@@ -10158,10 +10835,15 @@ class _ChatWindowState extends State<ChatWindow> {
     // High contrast colors for both sender (green bubble) and receiver (white bubble)
     // On green bubble (isMe), we use Dark Green/Black text.
     // On white bubble (!isMe), we use Green/Black text.
-    final headerIconColor = isMe ? VinabikeThemeRoles.of(context).success.onContainer : VinabikeThemeRoles.of(context).success.accent;
-    final headerTextColor = isMe ? VinabikeThemeRoles.of(context).success.onContainer : VinabikeThemeRoles.of(context).success.onContainer;
-    final headerBgColor =
-        isMe ? Colors.black.withValues(alpha: 0.05) : VinabikeThemeRoles.of(context).success.container;
+    final headerIconColor = isMe
+        ? VinabikeThemeRoles.of(context).success.onContainer
+        : VinabikeThemeRoles.of(context).success.accent;
+    final headerTextColor = isMe
+        ? VinabikeThemeRoles.of(context).success.onContainer
+        : VinabikeThemeRoles.of(context).success.onContainer;
+    final headerBgColor = isMe
+        ? Colors.black.withValues(alpha: 0.05)
+        : VinabikeThemeRoles.of(context).success.container;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -10202,7 +10884,9 @@ class _ChatWindowState extends State<ChatWindow> {
                 msg.content.split('\n').first,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurface, // Always dark for readability
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface, // Always dark for readability
                 ),
               ),
               const SizedBox(height: 4),
@@ -10227,7 +10911,9 @@ class _ChatWindowState extends State<ChatWindow> {
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Row(
               children: [
-                Icon(Icons.history, size: 15, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                Icon(Icons.history,
+                    size: 15,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
@@ -10249,7 +10935,9 @@ class _ChatWindowState extends State<ChatWindow> {
             child: Center(
               child: Text('✅ Confirmado',
                   style: TextStyle(
-                      color: VinabikeThemeRoles.of(context).success.onContainer, // Always visible
+                      color: VinabikeThemeRoles.of(context)
+                          .success
+                          .onContainer, // Always visible
                       fontWeight: FontWeight.bold)),
             ),
           ),
@@ -10274,8 +10962,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
     Color iconColor;
     Color titleColor = Theme.of(context).colorScheme.onSurface;
-    Color headerBgColor =
-        isMe ? Colors.black.withValues(alpha: 0.05) : Theme.of(context).colorScheme.surfaceContainerLow!;
+    Color headerBgColor = isMe
+        ? Colors.black.withValues(alpha: 0.05)
+        : Theme.of(context).colorScheme.surfaceContainerLow!;
 
     switch (actionType) {
       case 'approve_quote':
@@ -10297,8 +10986,9 @@ class _ChatWindowState extends State<ChatWindow> {
         icon = Icons.payment;
         title = 'Solicitud de Pago';
         accentColor = VinabikeThemeRoles.of(context).success.accent;
-        iconColor =
-            isMe ? VinabikeThemeRoles.of(context).success.onContainer! : accentColor; // Visible green on green
+        iconColor = isMe
+            ? VinabikeThemeRoles.of(context).success.onContainer!
+            : accentColor; // Visible green on green
         break;
       case 'confirm_delivery':
         icon = Icons.local_shipping;
@@ -10320,14 +11010,23 @@ class _ChatWindowState extends State<ChatWindow> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (isMe ? Colors.black : VinabikeThemeRoles.of(context).success.accent).withValues(alpha: 0.05),
+          color: (isMe
+                  ? Colors.black
+                  : VinabikeThemeRoles.of(context).success.accent)
+              .withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: VinabikeThemeRoles.of(context).success.accent.withValues(alpha: 0.5)),
+          border: Border.all(
+              color: VinabikeThemeRoles.of(context)
+                  .success
+                  .accent
+                  .withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, size: 14, color: VinabikeThemeRoles.of(context).success.onContainer),
+            Icon(Icons.check_circle,
+                size: 14,
+                color: VinabikeThemeRoles.of(context).success.onContainer),
             const SizedBox(width: 4),
             Text('Aceptado',
                 style: TextStyle(
@@ -10341,9 +11040,16 @@ class _ChatWindowState extends State<ChatWindow> {
       statusBadge = Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (isMe ? Colors.black : VinabikeThemeRoles.of(context).danger.accent).withValues(alpha: 0.05),
+          color: (isMe
+                  ? Colors.black
+                  : VinabikeThemeRoles.of(context).danger.accent)
+              .withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: VinabikeThemeRoles.of(context).danger.accent.withValues(alpha: 0.5)),
+          border: Border.all(
+              color: VinabikeThemeRoles.of(context)
+                  .danger
+                  .accent
+                  .withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -10394,7 +11100,9 @@ class _ChatWindowState extends State<ChatWindow> {
           child: Text(
             msg.content,
             style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface, fontSize: 13, height: 1.4),
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 13,
+                height: 1.4),
           ),
         ),
         if (responseNote != null && responseNote.isNotEmpty)

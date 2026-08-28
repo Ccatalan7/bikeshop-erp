@@ -2034,12 +2034,26 @@ kernel `20260826220000_smart_task_work_tray_kernel`:
   portal del trabajador consume solo `get_my_worker_tasks_v1` (proyección sin
   precios, multi-bici real, nombre e instrucciones completas de cada servicio
   desde los vínculos) y `worker_task_command_v1` acotado a su ciclo.
-- **Hilo y notificaciones**: una conversación interna canónica por tarea
-  (`smart_task_thread_get_or_create_v1`, índice único parcial sobre
-  `conversation_contexts` tipo `task`); el hilo sigue al trabajo — entra el
-  nuevo responsable ERP y sale el anterior salvo creador/manager, también en
-  la ruta directa. Un principal de portal no es principal de mensajería y no
-  se le finge hilo. Las notificaciones de tarea son dirigidas
+- **Canales, hilos y notificaciones**: las tareas `team/company` comparten el
+  canal interno tenant-wide `Tareas del equipo`; las tareas `private` comparten
+  `Mis tareas` sólo con su dueño. `smart_task_thread_get_or_create_v1` crea una
+  publicación raíz por tarea dentro del canal que corresponde a su audiencia,
+  no una conversación paralela por tarea. `conversation_contexts` conserva la
+  identidad tarea→raíz y `messages.thread_root_message_id` conserva cada
+  respuesta, texto o adjunto. Mensajería intercala las raíces entre las demás
+  publicaciones del canal; el contador abre el hilo exacto y en escritorio lo
+  mantiene al costado del canal, mientras compacto entra al hilo y vuelve al
+  mismo canal. El compositor del hilo dice `Agregar una respuesta…` y puede
+  mostrar además esa respuesta en el canal sólo por decisión explícita. El
+  enlace `Conversar` transporta conversación+raíz y abre directamente ese hilo.
+  El canal compartido nunca proyecta una tarea como contexto escalar —ni desde
+  un `context_hint` rezagado—: la tarea visible la determina exclusivamente la
+  raíz seleccionada, para que otro hilo del mismo canal no invada su panel.
+  Cambiar visibilidad reubica la misma raíz y todas sus respuestas sin perder
+  identidad ni evidencia. La audiencia del canal de equipo sigue los perfiles
+  ERP activos; un principal de portal no es principal de mensajería y no se le
+  finge acceso. El contexto `task` sigue server-owned y no se cambia ni se
+  desvincula desde Mensajería. Las notificaciones de tarea son dirigidas
   (`erp_notifications.recipient_user_id`, upsert por tipo+entidad).
 - **`mechanic_jobs.assigned_to` NO se usa**: su FK apunta a `customers(id)`
   (defecto heredado, 0/467 filas). La asignación de trabajo vive en la

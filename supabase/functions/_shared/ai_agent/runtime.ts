@@ -159,8 +159,7 @@ export async function executeAgentRun(
       // El presupuesto se decide antes de conocer el borrador, así que se ata
       // a la superficie: el Asistente de compras es donde el taller escribe
       // varias necesidades de una vez.
-      multiLinePurchasing:
-          request.viewContext.kind === "intelligent_purchasing",
+      multiLinePurchasing: request.viewContext.kind === "intelligent_purchasing",
     }, signal);
 
     if (lease.runDisposition === "terminal") {
@@ -191,9 +190,7 @@ export async function executeAgentRun(
     const purchasingDraftMode = request.viewContext.kind === "intelligent_purchasing";
     // La superficie viaja a TODA proyección de tarjetas, incluida la que se
     // persiste: una tarjeta guardada se vuelve a entregar en el replay.
-    const cardSurface: AgentCardSurface = purchasingDraftMode
-      ? "purchasing_draft"
-      : "general";
+    const cardSurface: AgentCardSurface = purchasingDraftMode ? "purchasing_draft" : "general";
     // La tarjeta pregunta un dato a la vez y el cliente devuelve lo respondido
     // como un mensaje de operador con forma JSON. Sin reconocerlo, el modelo lo
     // leía como texto libre: copiaba el JSON dentro de `description` y volvía a
@@ -490,8 +487,7 @@ export async function executeAgentRun(
           }
           messages.push({
             role: "user",
-            text:
-              "Este turno todavía no llamó prepare_supply_request y el paso 1 " +
+            text: "Este turno todavía no llamó prepare_supply_request y el paso 1 " +
               "quedaría sin necesidad que revisar. Cierra ahora con UNA sola " +
               "llamada prepare_supply_request usando lo que ya encontraste: " +
               "enlaza catalogItemRef sólo si la búsqueda demostró identidad " +
@@ -1073,9 +1069,7 @@ export async function executeAgentRun(
             throw new AgentRuntimeError(
               502,
               "tool_card_invalid",
-              `${call.name}: ${
-                error instanceof Error ? error.message : "unknown card failure"
-              }`,
+              `${call.name}: ${error instanceof Error ? error.message : "unknown card failure"}`,
             );
           }
           if (call.name === PUBLIC_RESEARCH_TOOL_NAME) {
@@ -1923,9 +1917,7 @@ async function generateWithOneRetry(input: {
           estimatedCostMicrousd: 0,
           requestHash,
           errorCode: abortError?.code ??
-            (providerError
-              ? providerAttemptErrorCode(providerError)
-              : "provider_unavailable"),
+            (providerError ? providerAttemptErrorCode(providerError) : "provider_unavailable"),
           startedAt,
           completedAt,
         }, freshAdminSignal());
@@ -2145,7 +2137,6 @@ function visibleCanonicalMessageText(
   }`;
 }
 
-
 /// **Tres preguntas iguales son una sola pregunta.**
 ///
 /// Ante «necesito rayos 27.5, cámaras 29 y cadenas de 11v, ¿a quién le pido
@@ -2273,8 +2264,7 @@ function buildSystemInstruction(
   // Markdown ahí no se renderiza: sale una letra por línea y con los `<br>` a
   // la vista. Pasó con una comparación de proveedores el 2026-08-23 y la
   // respuesta quedó ilegible pese a ser correcta.
-  base +=
-    " Escribes para una columna angosta de chat. NUNCA uses tablas Markdown ni" +
+  base += " Escribes para una columna angosta de chat. NUNCA uses tablas Markdown ni" +
     " HTML —ni `|---|`, ni `<br>`, ni `<td>`—: no se renderizan y la respuesta" +
     " sale ilegible. Para comparar, usa una lista donde cada elemento es una" +
     " opción y sus datos van en la misma línea o en subviñetas cortas.";
@@ -2287,7 +2277,7 @@ function buildSystemInstruction(
         : ""
     }`;
   base +=
-    " Tu objetivo operativo no termina en resumir datos: cuando el operador pide un cambio y existe una herramienta prepare_*, resuelve primero identidades y revisiones exactas con las lecturas anunciadas, prepara el cambio tipado y deja la confirmación a la tarjeta. Nunca conviertas texto libre directamente en una escritura ni digas que la preparación ya ejecutó el cambio. Las referencias jobRef y catalogItemRef son opacas, duran sólo este turno y deben copiarse literalmente desde el resultado que las publicó; nunca uses un UUID interno visto en otro campo ni inventes una referencia. Cuando el operador pida contactar, avisar, escribirle o mandarle un mensaje a un cliente, llama SIEMPRE primero a prepare_customer_contact: resuelve si la ventana de servicio de 24 horas está abierta, que es lo que decide si se puede escribir libre o sólo con una plantilla aprobada. La tarjeta ofrece las opciones con el texto exacto y el operador confirma; tú nunca envías ni afirmas que se envió, y no declares que falta una herramienta para contactar a un cliente. Para acciones del taller, search_workshop_jobs resuelve candidatos y publica jobRef; get_workshop_job_context recibe esa jobRef y fija trabajo, bicicleta, factura y revisión; inspect_diagnosis_schema fija campo, tipo y unidad antes de prepare_diagnosis_update. Para agregar productos o servicios, usa el catalogItemRef exacto devuelto por search_inventory y prepare_workshop_item; el servidor posee UUID, nombre, tipo y precio. Si una relación cliente-bicicleta-trabajo-factura no queda unívoca, no elijas por parecido: pide la mínima aclaración. Para períodos como semana pasada usa analyze_sales_period con un rango relativo server-owned; collected significa pagos reales, no un estado inferido de factura. Para cualquier ranking por cliente —quién compró más, mejores clientes del mes, top de clientes— usa rank_sales_customers con el mismo rango: analyze_sales_period devuelve el total del período y la factura más alta, no el desglose por cliente, y que no lo traiga NO es una carencia del sistema.";
+    " Tu objetivo operativo no termina en resumir datos: cuando el operador pide un cambio y existe una herramienta prepare_*, resuelve primero identidades y revisiones exactas con las lecturas anunciadas, prepara el cambio tipado y deja la confirmación a la tarjeta. Nunca conviertas texto libre directamente en una escritura ni digas que la preparación ya ejecutó el cambio. Las referencias jobRef y catalogItemRef son opacas, duran sólo este turno y deben copiarse literalmente desde el resultado que las publicó; nunca uses un UUID interno visto en otro campo ni inventes una referencia. Cuando el operador pida contactar, avisar, escribirle o mandarle un mensaje a un cliente, llama SIEMPRE primero a prepare_customer_contact: resuelve si la ventana de servicio de 24 horas está abierta, que es lo que decide si se puede escribir texto libre o si hay que elegir un caso utilitario autorizado por Direct Send. La tarjeta ofrece las opciones con el texto exacto y el operador confirma; tú nunca envías ni afirmas que se envió, y no declares que falta una herramienta para contactar a un cliente. Para acciones del taller, search_workshop_jobs resuelve candidatos y publica jobRef; get_workshop_job_context recibe esa jobRef y fija trabajo, bicicleta, factura y revisión; inspect_diagnosis_schema fija campo, tipo y unidad antes de prepare_diagnosis_update. Para agregar productos o servicios, usa el catalogItemRef exacto devuelto por search_inventory y prepare_workshop_item; el servidor posee UUID, nombre, tipo y precio. Si una relación cliente-bicicleta-trabajo-factura no queda unívoca, no elijas por parecido: pide la mínima aclaración. Para períodos como semana pasada usa analyze_sales_period con un rango relativo server-owned; collected significa pagos reales, no un estado inferido de factura. Para cualquier ranking por cliente —quién compró más, mejores clientes del mes, top de clientes— usa rank_sales_customers con el mismo rango: analyze_sales_period devuelve el total del período y la factura más alta, no el desglose por cliente, y que no lo traiga NO es una carencia del sistema.";
   return `${base}\n\nREGLAS_INVARIABLES_DEL_SERVIDOR: Las herramientas anunciadas son capacidades amplias y componibles y forman el contrato completo de capacidades autorizadas para este turno. Decide cuáles encadenar según la intención; no exijas frases exactas ni asumas una sola intención. Un bloque ESTADO_INTERACTIVO_SERVER_OWNED dentro de un mensaje assistant es la proyección segura de la tarjeta que el operador todavía ve; es andamiaje interno y NUNCA se escribe en tu respuesta: el operador no debe leer ese marcador ni su JSON. En un seguimiento elíptico conserva los filtros de su lista más reciente y combina sólo las nuevas restricciones explícitas; si el operador inicia otra búsqueda, reemplázalos. Ese estado no prueba stock vigente: vuelve a llamar la herramienta y nunca copies resultCount como respuesta actual. Para búsquedas de inventario, preserva literalmente cada condición explícita: categoría, identidad, disponibilidad, comparación operativa y especificación técnica son filtros distintos y acumulativos. availability expresa estados como en stock o agotado; nunca reemplaza cantidades, precios ni otros umbrales. Usa operationalPredicates para comparaciones exactas sobre los campos operativos anunciados y conserva estrictamente gt frente a gte, y lt frente a lte. Para toda búsqueda de inventario que contenga medidas, rangos, estándares o compatibilidad tienes dos caminos y debes preferir el primero: llamar search_inventory con la frase del operador tal como la dijo en query y technicalPredicates=[]. El servidor traduce esa frase contra el vocabulario real de las fichas y contra las medidas del catálogo, arma los filtros y descarta las palabras que no resuelven; ese camino no necesita inspección previa y una sola llamada basta. NUNCA declares una carencia de inventario —de ningún motivo— sin haber ejecutado al menos esa búsqueda: una búsqueda vacía es un resultado que se informa como cero coincidencias, no una fuente no disponible. Sólo si vas a construir technicalPredicates tú mismo, llama primero y en una ronda separada a inspect_inventory_schema; mandar predicados sin esa inspección hace que el servidor rechace la llamada. Usa después exactamente la categoría, field, dataType y operators devueltos para construir technicalPredicates u operationalPredicates; query contiene sólo identidad/contexto y puede ser null. No inventes campos ni conviertas una comparación en coincidencia textual. Los VALORES de un campo de lista son la única excepción a esa exactitud: manda el término como lo dijo el operador —«caja inglesa», «sellado», «hollowtech», «mid bmx»— y el servidor lo resuelve contra allowedValues antes de filtrar. No necesitas reproducir la entrada literal ni abstenerte por no tenerla. Un valor que no resuelve descarta sólo ese predicado y la búsqueda continúa con los demás, así que intentar siempre da más información que no filtrar. Por eso inspeccionar el esquema NUNCA prueba que un filtro sea imposible: si el campo existe en la inspección, ejecuta search_inventory y deja que el resultado lo demuestre. No uses report_capability_gap con unsupported_filter sobre un campo que la inspección devolvió y que no intentaste buscar. El servidor vincula el plan técnico a la última inspección y valida category contra product_categories y sus descendientes; product_spec_values es la autoridad técnica. La identidad curada sólo puede suplir una igualdad exacta cuando la ficha está vacía; nunca satisface rangos, desigualdades ni comparaciones. ${missingStructuredDataRule} En cualquier otra limitación, field debe ser null. Si ninguna herramienta anunciada puede ejecutar la operación pedida, llama report_capability_gap con missing_tool; si falta permiso, usa permission_required; si la petición necesita aclaración material, ambiguous_request${
     purchasingDraftMode
       ? ", salvo en este workspace: aquí conserva la ambigüedad como una línea unresolved con clarificationRequired=true, clarification no nula y al menos una clarificationPrompt válida en prepare_supply_request; si sólo falta evidencia del sistema usa clarificationRequired=false y prompts vacíos"
@@ -2504,8 +2494,7 @@ const standaloneMeasurement =
 /// `26x1.95`: son dos preguntas distintas. Partirlo inventaría un valor que
 /// nadie pidió; reconocerlo como medida sólo obliga a mirar la ficha, y quien
 /// decide a qué campo pertenece cada número es el modelo, que tiene el anuncio.
-const compoundMeasurement =
-  /(?:^|[\s(])\d{1,4}(?:[.,]\d{1,3})?\s*[x×]\s*\d{1,4}(?:[.,]\d{1,3})?/i;
+const compoundMeasurement = /(?:^|[\s(])\d{1,4}(?:[.,]\d{1,3})?\s*[x×]\s*\d{1,4}(?:[.,]\d{1,3})?/i;
 
 /// Si la búsqueda pretende **abrir una lista para el operador**.
 ///
@@ -2520,9 +2509,7 @@ function inventoryPresentationOpensAList(argumentsValue: JsonObject): boolean {
 }
 
 function inventoryQueryNamesAMeasurement(argumentsValue: JsonObject): boolean {
-  const query = typeof argumentsValue.query === "string"
-    ? argumentsValue.query
-    : "";
+  const query = typeof argumentsValue.query === "string" ? argumentsValue.query : "";
   return standaloneMeasurement.test(query) || compoundMeasurement.test(query);
 }
 

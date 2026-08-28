@@ -36,9 +36,12 @@
 - For native macOS iteration, preserve one canonical
   `fvm flutter run -d macos -t lib/main.dart` session and use its terminal for
   `r`/`R`. Before every launch, inspect for an existing matching Flutter process
-  and `vinabike_erp.app`; never start a second session while either is alive. If
-  the terminal handle is unavailable, do not silently kill or replace the live
-  session: report it and recover control deliberately.
+  and Debug `vinabike_erp.app`; never start a second debug session while either
+  is alive. The installed Release app may coexist: Debug owns the distinct
+  `com.vinabike.vinabikeErp.debug` identity/container, while tools still target
+  the exact debug executable path and PID because both executables share the
+  same name. If the terminal handle is unavailable, do not silently kill or
+  replace the live session: report it and recover control deliberately.
 - An agent can own that session end to end — start it, hot reload in 2-5 s,
   click and type in the running app, screenshot the exact rendered frame, and
   capture the Claude **Design** window (only to see what the file API truncates,

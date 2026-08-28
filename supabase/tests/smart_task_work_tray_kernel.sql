@@ -12,6 +12,8 @@ select has_table('public', 'smart_task_events', 'ledger append-only de la bandej
 select has_table('public', 'smart_task_job_items', 'vínculo tarea-servicios existe');
 select has_table('public', 'smart_task_user_state', 'estado por usuario (visto/pin/snooze) existe');
 select has_table('public', 'smart_task_command_receipts', 'recibos idempotentes existen');
+select has_table('public', 'smart_task_message_channels',
+  'los canales compartidos de tareas tienen un registro server-owned');
 select has_column('public', 'smart_tasks', 'task_kind', 'tarea/nota');
 select has_column('public', 'smart_tasks', 'visibility', 'private/team/company');
 select has_column('public', 'smart_tasks', 'version', 'versionado optimista');
@@ -22,6 +24,10 @@ select has_column('public', 'smart_task_job_items', 'context_changed_at', 'edici
 select has_column('public', 'smart_task_job_items', 'item_instructions',
   'snapshot durable de las instrucciones del servicio');
 select has_column('public', 'erp_notifications', 'recipient_user_id', 'notificación dirigida');
+select has_column('public', 'messages', 'thread_root_message_id',
+  'las respuestas conservan su mensaje raíz');
+select has_column('public', 'conversation_contexts', 'thread_root_message_id',
+  'el contexto de tarea apunta a un mensaje raíz real');
 
 select has_function('public', 'smart_task_create_v1', array['jsonb', 'text'],
   'creación idempotente');
@@ -39,6 +45,12 @@ select has_function('public', 'smart_task_thread_get_or_create_v1',
   array['uuid'], 'hilo get-or-create server-owned');
 select has_function('public', 'smart_tasks_guard_primary_context',
   array[]::text[], 'guard de contexto principal');
+select has_function('public', 'messaging_thread_relation_guard_v1',
+  array[]::text[], 'guard de pertenencia del hilo');
+select has_function('public', 'publish_messaging_attachment_in_thread_v1',
+  array['uuid', 'text', 'uuid'], 'adjuntos publicables como respuestas');
+select has_function('public', 'smart_task_channel_for_v1',
+  array['smart_tasks', 'uuid'], 'resolución server-owned del canal por audiencia');
 
 select ok(
   not has_table_privilege('authenticated', 'public.smart_task_events', 'INSERT')
@@ -346,7 +358,7 @@ select throws_ok(
 reset role;
 
 -- ============================================================================
--- Caso dueño: la manager reparte una pega entre dos mecánicos
+-- Caso dueño: la manager reparte un trabajo entre dos mecánicos
 -- ============================================================================
 
 select set_config('request.jwt.claims', jsonb_build_object(
@@ -381,11 +393,11 @@ reset role;
 select is(
   (select count(*)::int from public.smart_tasks
     where id in (select id from tray_ctx where key in ('task1', 'task2'))),
-  2, 'las dos tareas del caso dueño existen sobre la misma pega');
+  2, 'las dos tareas del caso dueño existen sobre el mismo trabajo');
 select is(
   (select count(*)::int from public.smart_task_job_items link
     where link.job_id = 'a1760000-0000-4000-8000-000000000061'),
-  3, 'cada tarea cubre sus propios servicios de la pega');
+  3, 'cada tarea cubre sus propios servicios del trabajo');
 select is(
   (select link.item_name from public.smart_task_job_items link
     where link.task_id = (select id from tray_ctx where key = 'task1')),
@@ -481,7 +493,7 @@ select throws_ok(
   $$update public.smart_tasks set linked_job_id = null
      where id = (select id from tray_ctx where key = 'task4')$$,
   '23514', null,
-  'la ruta directa no puede dejar servicios huérfanos al cambiar la pega');
+  'la ruta directa no puede dejar servicios huérfanos al cambiar el trabajo');
 select lives_ok(
   $$select public.smart_task_command_v1(
       (select id from tray_ctx where key = 'task3'), null, 'cancel',
@@ -543,12 +555,12 @@ select throws_ok(
 
 select throws_ok(
   $$select public.smart_task_create_v1(jsonb_build_object(
-      'title', 'Servicio de otra pega',
+      'title', 'Servicio de otro trabajo',
       'linked_job_id', 'a1760000-0000-4000-8000-000000000061',
       'job_item_ids', jsonb_build_array('a1760000-0000-4000-8000-000000000083')
     ), 'tray-create-foreign-item')$$,
   '23514', null,
-  'un servicio de otra pega (u otro tenant) no se puede vincular');
+  'un servicio de otro trabajo (u otro tenant) no se puede vincular');
 
 select throws_ok(
   $$select public.smart_task_create_v1(jsonb_build_object(
@@ -901,7 +913,7 @@ select results_eq(
       from public.get_my_worker_tasks_v1()$$,
   $$values ('Mantención de motor Trek 820'::text, 'TRAY-JOB-1'::text,
             '["Giant Talon", "Trek 820"]'::jsonb)$$,
-  'el portal ve su tarea con pega y TODAS las bicicletas de sus servicios');
+  'el portal ve su tarea con trabajo y TODAS las bicicletas de sus servicios');
 select is(
   (select count(*)::int
      from public.get_my_worker_tasks_v1() task,
@@ -1002,6 +1014,9 @@ select is(
 insert into tray_ctx
 select 'thread1', ((public.smart_task_thread_get_or_create_v1(
   (select id from tray_ctx where key = 'task1'))) ->> 'conversation_id')::uuid;
+insert into tray_ctx
+select 'thread1_root', ((public.smart_task_thread_get_or_create_v1(
+  (select id from tray_ctx where key = 'task1'))) ->> 'root_message_id')::uuid;
 select is(
   (public.smart_task_thread_get_or_create_v1(
     (select id from tray_ctx where key = 'task1'))) ->> 'created',
@@ -1011,6 +1026,20 @@ select is(
   (select id from tray_ctx where key = 'thread1'),
   'el hilo se consulta desde la tarea');
 
+insert into public.messages (
+  conversation_id, sender_id, tenant_id, content, type, metadata
+) values (
+  (select id from tray_ctx where key = 'thread1'),
+  'a1760000-0000-4000-8000-000000000011',
+  'a1760000-0000-4000-8000-000000000001',
+  'Respuesta vinculada a la tarea',
+  'text',
+  jsonb_build_object(
+    'thread_root_message_id',
+    (select id from tray_ctx where key = 'thread1_root')
+  )
+);
+
 reset role;
 
 select results_eq(
@@ -1018,25 +1047,44 @@ select results_eq(
      where participant.conversation_id = (select id from tray_ctx where key = 'thread1')
      order by participant.user_id$$,
   $$values ('a1760000-0000-4000-8000-000000000011'::uuid),
-           ('a1760000-0000-4000-8000-000000000012'::uuid)$$,
-  'participantes exactos: creadora y asignado, nadie más');
+           ('a1760000-0000-4000-8000-000000000012'::uuid),
+           ('a1760000-0000-4000-8000-000000000013'::uuid)$$,
+  'el canal de equipo incluye exactamente a los usuarios ERP activos');
 select is(
   (select count(*)::int from public.conversation_contexts
     where context_type = 'task'
       and context_id = (select id from tray_ctx where key = 'task1')),
   1, 'el contexto task existe una sola vez en mensajería');
+select is(
+  (select thread_root_message_id from public.conversation_contexts
+    where context_type = 'task'
+      and context_id = (select id from tray_ctx where key = 'task1')),
+  (select id from tray_ctx where key = 'thread1_root'),
+  'la tarea conserva un mensaje raíz canónico');
+select results_eq(
+  $$select type, metadata->>'task_thread_root'
+      from public.messages
+     where id = (select id from tray_ctx where key = 'thread1_root')$$,
+  $$values ('system'::text, 'true'::text)$$,
+  'el mensaje raíz representa la tarea y no finge un comentario humano');
+select is(
+  (select thread_root_message_id from public.messages
+    where content = 'Respuesta vinculada a la tarea'),
+  (select id from tray_ctx where key = 'thread1_root'),
+  'el metadata legado se normaliza a la relación durable de respuesta');
 
--- Quien no es creador/asignado/manager no abre el hilo.
+-- Una tarea de equipo se conversa en el canal compartido: cualquier miembro
+-- ERP que ya puede verla también puede abrir su hilo exacto.
 select set_config('request.jwt.claims', jsonb_build_object(
   'sub', 'a1760000-0000-4000-8000-000000000013', 'role', 'authenticated'
 )::text, true);
 select set_config('request.jwt.claim.sub',
   'a1760000-0000-4000-8000-000000000013', true);
 set local role authenticated;
-select throws_ok(
+select lives_ok(
   $$select public.smart_task_thread_get_or_create_v1(
       (select id from tray_ctx where key = 'task1'))$$,
-  '42501', null, 'un tercero no abre el hilo de una tarea ajena');
+  'un miembro ERP abre el hilo visible del canal de equipo');
 reset role;
 
 -- Hilo de una tarea asignada a portal: sin participante fantasma; y al
@@ -1053,9 +1101,16 @@ select 'thread2', ((public.smart_task_thread_get_or_create_v1(
 reset role;
 select results_eq(
   $$select participant.user_id from public.conversation_participants participant
-     where participant.conversation_id = (select id from tray_ctx where key = 'thread2')$$,
-  $$values ('a1760000-0000-4000-8000-000000000011'::uuid)$$,
-  'a un asignado de portal no se le finge participación en mensajería');
+     where participant.conversation_id = (select id from tray_ctx where key = 'thread2')
+     order by participant.user_id$$,
+  $$values ('a1760000-0000-4000-8000-000000000011'::uuid),
+           ('a1760000-0000-4000-8000-000000000012'::uuid),
+           ('a1760000-0000-4000-8000-000000000013'::uuid)$$,
+  'el canal incluye a ERP y no finge al asignado de portal como principal');
+select is(
+  (select id from tray_ctx where key = 'thread2'),
+  (select id from tray_ctx where key = 'thread1'),
+  'dos tareas de equipo son raíces distintas dentro del mismo canal');
 
 select set_config('request.jwt.claim.sub',
   'a1760000-0000-4000-8000-000000000011', true);
@@ -1170,7 +1225,7 @@ select results_eq(
             true, true, true)$$,
   'el UPDATE directo tampoco puede reescribir evidencia server-owned');
 
--- Tampoco puede enlazar una pega de otro tenant aunque conozca su UUID.
+-- Tampoco puede enlazar un trabajo de otro tenant aunque conozca su UUID.
 select set_config('request.jwt.claim.sub',
   'a1760000-0000-4000-8000-000000000011', true);
 set local role authenticated;
@@ -1184,7 +1239,7 @@ select throws_ok(
       'a1760000-0000-4000-8000-000000000011'
     )$$,
   '23503', null,
-  'la ruta directa rechaza una pega ajena o archivada');
+  'la ruta directa rechaza un trabajo ajeno o archivado');
 reset role;
 
 -- ============================================================================
@@ -1210,8 +1265,9 @@ select results_eq(
      where participant.conversation_id = (select id from tray_ctx where key = 'thread9')
      order by participant.user_id$$,
   $$values ('a1760000-0000-4000-8000-000000000011'::uuid),
-           ('a1760000-0000-4000-8000-000000000012'::uuid)$$,
-  'el hilo nace con creadora y asignado');
+           ('a1760000-0000-4000-8000-000000000012'::uuid),
+           ('a1760000-0000-4000-8000-000000000013'::uuid)$$,
+  'otra raíz de tarea reutiliza el canal de todos los usuarios ERP activos');
 
 select set_config('request.jwt.claim.sub',
   'a1760000-0000-4000-8000-000000000011', true);
@@ -1229,8 +1285,9 @@ select results_eq(
      where participant.conversation_id = (select id from tray_ctx where key = 'thread9')
      order by participant.user_id$$,
   $$values ('a1760000-0000-4000-8000-000000000011'::uuid),
+           ('a1760000-0000-4000-8000-000000000012'::uuid),
            ('a1760000-0000-4000-8000-000000000013'::uuid)$$,
-  'al reasignar, entra el nuevo responsable y sale el anterior');
+  'reasignar no altera la audiencia estable del canal de equipo');
 
 select set_config('request.jwt.claims', jsonb_build_object(
   'sub', 'a1760000-0000-4000-8000-000000000013', 'role', 'authenticated'
@@ -1248,9 +1305,12 @@ reset role;
 
 select results_eq(
   $$select participant.user_id from public.conversation_participants participant
-     where participant.conversation_id = (select id from tray_ctx where key = 'thread9')$$,
-  $$values ('a1760000-0000-4000-8000-000000000011'::uuid)$$,
-  'al devolver, quien devolvió sale del hilo; la creadora permanece');
+     where participant.conversation_id = (select id from tray_ctx where key = 'thread9')
+     order by participant.user_id$$,
+  $$values ('a1760000-0000-4000-8000-000000000011'::uuid),
+           ('a1760000-0000-4000-8000-000000000012'::uuid),
+           ('a1760000-0000-4000-8000-000000000013'::uuid)$$,
+  'devolver una tarea tampoco convierte el canal compartido en un chat privado');
 
 -- ============================================================================
 -- Un supervisor autorizado entra al hilo existente; y la reasignación por
@@ -1285,9 +1345,10 @@ select results_eq(
   $$select participant.user_id from public.conversation_participants participant
      where participant.conversation_id = (select id from tray_ctx where key = 'thread10')
      order by participant.user_id$$,
-  $$values ('a1760000-0000-4000-8000-000000000012'::uuid),
+  $$values ('a1760000-0000-4000-8000-000000000011'::uuid),
+           ('a1760000-0000-4000-8000-000000000012'::uuid),
            ('a1760000-0000-4000-8000-000000000013'::uuid)$$,
-  'el hilo nace con creador (cajero) y asignado (mecánico)');
+  'el hilo nace como otra raíz del mismo canal de equipo');
 
 -- La manager (autorizada, no participante) lo abre después: entra.
 select set_config('request.jwt.claims', jsonb_build_object(
@@ -1324,12 +1385,88 @@ select results_eq(
      where participant.conversation_id = (select id from tray_ctx where key = 'thread10')
      order by participant.user_id$$,
   $$values ('a1760000-0000-4000-8000-000000000011'::uuid),
+           ('a1760000-0000-4000-8000-000000000012'::uuid),
            ('a1760000-0000-4000-8000-000000000013'::uuid)$$,
-  'la reasignación directa sacó al exasignado y mantuvo creador y manager');
+  'la reasignación directa preserva la audiencia completa del canal');
+
+-- Una tarea privada vive en el canal personal de su creador. Al cambiar su
+-- visibilidad, la misma raíz y todas sus respuestas cambian de audiencia; no
+-- se duplica la conversación ni se pierde el hilo.
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', 'a1760000-0000-4000-8000-000000000013', 'role', 'authenticated'
+)::text, true);
+select set_config('request.jwt.claim.sub',
+  'a1760000-0000-4000-8000-000000000013', true);
+set local role authenticated;
+insert into tray_ctx
+select 'task12', ((public.smart_task_create_v1(jsonb_build_object(
+  'title', 'Recordatorio personal',
+  'visibility', 'private'
+), 'tray-create-12')) #>> '{task,id}')::uuid;
+insert into tray_ctx
+select 'thread12', ((public.smart_task_thread_get_or_create_v1(
+  (select id from tray_ctx where key = 'task12'))) ->> 'conversation_id')::uuid;
+insert into tray_ctx
+select 'thread12_root', ((public.smart_task_thread_get_or_create_v1(
+  (select id from tray_ctx where key = 'task12'))) ->> 'root_message_id')::uuid;
+reset role;
+
+select isnt(
+  (select id from tray_ctx where key = 'thread12'),
+  (select id from tray_ctx where key = 'thread1'),
+  'el canal personal no comparte audiencia con el canal del equipo');
+select results_eq(
+  $$select conversation.title, participant.user_id
+      from public.conversations conversation
+      join public.conversation_participants participant
+        on participant.conversation_id = conversation.id
+     where conversation.id = (select id from tray_ctx where key = 'thread12')$$,
+  $$values ('Mis tareas'::text,
+            'a1760000-0000-4000-8000-000000000013'::uuid)$$,
+  'el canal personal incluye sólo a su dueño');
+
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', 'a1760000-0000-4000-8000-000000000011', 'role', 'authenticated'
+)::text, true);
+select set_config('request.jwt.claim.sub',
+  'a1760000-0000-4000-8000-000000000011', true);
+set local role authenticated;
+select throws_ok(
+  $$select public.smart_task_thread_get_or_create_v1(
+      (select id from tray_ctx where key = 'task12'))$$,
+  '42501', null,
+  'ni un manager abre una tarea privada de otra persona');
+reset role;
+
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', 'a1760000-0000-4000-8000-000000000013', 'role', 'authenticated'
+)::text, true);
+select set_config('request.jwt.claim.sub',
+  'a1760000-0000-4000-8000-000000000013', true);
+set local role authenticated;
+select lives_ok(
+  $$select public.smart_task_command_v1(
+      (select id from tray_ctx where key = 'task12'), null,
+      'set_visibility', jsonb_build_object('visibility', 'team'),
+      'tray-publish-12')$$,
+  'el dueño publica su recordatorio al equipo');
+reset role;
+
+select is(
+  public.smart_task_thread_v1((select id from tray_ctx where key = 'task12')),
+  (select id from tray_ctx where key = 'thread1'),
+  'publicar mueve la raíz al canal compartido');
+select is(
+  (select thread_root_message_id
+     from public.conversation_contexts
+    where context_type = 'task'
+      and context_id = (select id from tray_ctx where key = 'task12')),
+  (select id from tray_ctx where key = 'thread12_root'),
+  'el cambio de audiencia conserva exactamente el mismo mensaje raíz');
 
 -- ============================================================================
 -- Contrato de Nota: pending ↔ cancelled (Archivar/Restaurar), nunca el ciclo
--- de tarea; conserva su pega. Y `private` es personal de verdad.
+-- de tarea; conserva su trabajo. Y `private` es personal de verdad.
 -- ============================================================================
 
 select ok(
@@ -1344,7 +1481,7 @@ select ok(exists (
   select 1 from pg_constraint
   where conname = 'smart_tasks_private_is_personal_check'
     and conrelid = 'public.smart_tasks'::regclass
-), 'private implica sin responsable y sin pega, a nivel de base');
+), 'private implica sin responsable y sin trabajo, a nivel de base');
 
 select set_config('request.jwt.claims', jsonb_build_object(
   'sub', 'a1760000-0000-4000-8000-000000000011', 'role', 'authenticated'
@@ -1353,7 +1490,7 @@ select set_config('request.jwt.claim.sub',
   'a1760000-0000-4000-8000-000000000011', true);
 set local role authenticated;
 
--- Una nota puede asociarse a la pega (sin servicios ni responsable).
+-- Una nota puede asociarse al trabajo (sin servicios ni responsable).
 insert into tray_ctx
 select 'note1', ((public.smart_task_create_v1(jsonb_build_object(
   'title', 'Nota general del taller',
@@ -1409,9 +1546,9 @@ select is(
   (select linked_job_id from public.smart_tasks
     where id = (select id from tray_ctx where key = 'note1')),
   'a1760000-0000-4000-8000-000000000061'::uuid,
-  'la nota conserva su asociación a la pega');
+  'la nota conserva su asociación al trabajo');
 
--- Una nota conserva la pega, nunca sus servicios; y una nota jamás reserva
+-- Una nota conserva el trabajo, nunca sus servicios; y una nota jamás reserva
 -- trabajo (overlaps/traspaso miran solo tareas).
 select set_config('request.jwt.claim.sub',
   'a1760000-0000-4000-8000-000000000011', true);
@@ -1440,7 +1577,7 @@ select ok(
     'public.smart_task_transfer_overlaps(uuid,uuid,uuid,uuid[])'::regprocedure)) > 0,
   'solape y traspaso consideran solo tareas: una nota no reserva trabajo');
 
--- private es personal: ni al crear ni por comando puede cargar gente o pega.
+-- private es personal: ni al crear ni por comando puede cargar gente o trabajo.
 select set_config('request.jwt.claim.sub',
   'a1760000-0000-4000-8000-000000000011', true);
 set local role authenticated;
@@ -1453,11 +1590,11 @@ select throws_ok(
   '23514', null, 'una privada no puede nacer con responsable');
 select throws_ok(
   $$select public.smart_task_create_v1(jsonb_build_object(
-      'title', 'Privada con pega',
+      'title', 'Privada con trabajo',
       'visibility', 'private',
       'linked_job_id', 'a1760000-0000-4000-8000-000000000061'
     ), 'tray-private-job')$$,
-  '23514', null, 'una privada no puede nacer con pega');
+  '23514', null, 'una privada no puede nacer con trabajo');
 select throws_ok(
   $$select public.smart_task_command_v1(
       (select id from tray_ctx where key = 'task5'), null, 'set_visibility',

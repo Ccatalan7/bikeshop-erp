@@ -204,7 +204,7 @@ Traps this encodes, each of which cost a full round when hit:
     máquina** (2026-08-06). macOS protege los contenedores de las demás apps:
     un `flutter run` lanzado desde el shell del agente (hijo de Claude.app, con
     o sin sandbox propio) no puede escribir el DevFS en
-    `~/Library/Containers/com.vinabike.vinabikeErp/Data/tmp/` — «Operation not
+    `~/Library/Containers/com.vinabike.vinabikeErp.debug/Data/tmp/` — «Operation not
     permitted». El arranque en frío funciona (instala por el bundle), pero el
     **primer** `r`/`R` imprime «Flutter failed to create file/directory at
     .../Data/tmp/...» y `flutter run` **muere**, llevándose el `screen`. El
@@ -225,6 +225,35 @@ Traps this encodes, each of which cost a full round when hit:
     leer sólo lo nuevo, usa `tail -c`/`tail -n` o marca la posición antes de
     empezar; para empezar de cero, reemplaza la sesión (`stop && start`), que
     reescribe la línea del VM service.
+
+### Debug y la app instalada no comparten identidad (2026-08-27)
+
+La copia instalada y el build Debug llegaron a ejecutarse simultáneamente con
+el mismo bundle ID, `com.vinabike.vinabikeErp`. Para macOS eran la misma app:
+ambas quedaron dentro de un solo sandbox y escribieron el mismo registro de
+Supabase en SharedPreferences. El último inicio de sesión reemplazaba la sesión
+persistida de las dos; la otra ventana podía conservar el usuario antiguo en
+memoria hasta un reinicio o refresh y entonces cambiar de cuenta. El mismo
+choque alcanzaba preferencias, SQLite y datos persistentes de WebKit.
+
+La separación obligatoria es:
+
+- Debug: `com.vinabike.vinabikeErp.debug`;
+- Release y Profile: `com.vinabike.vinabikeErp`.
+
+La identidad se resuelve por configuración en
+`macos/Runner/Configs/{Debug,Release}.xcconfig`; no se arregla cambiando sólo la
+clave local de Supabase, porque eso dejaría todas las demás cachés compartidas.
+`native_session.sh start` lee los build settings efectivos de Xcode y falla
+antes de lanzar Flutter si Debug y Release vuelven a coincidir o si cambia la
+identidad estable de Release.
+
+El primer arranque con la identidad separada crea un contenedor Debug limpio;
+no copies preferencias desde el contenedor Release, porque eso reintroduciría
+la sesión y datos locales que justamente se aislaron. Las dos apps pueden quedar
+abiertas con usuarios distintos. Sus ejecutables aún se llaman
+`vinabike_erp`, así que todo control sigue resolviendo la ruta Debug y el PID
+exactos, nunca el nombre del proceso.
 
 ### Verifying dark and compact without leaving a trace
 
@@ -330,10 +359,11 @@ System Events serializa después esa referencia por **nombre**, y si la copia
 instalada y la debug se llaman ambas `vinabike_erp`, `tell targetProcess`
 resuelve la primera homónima. El síntoma engañoso fue `name of every window`
 como lista anidada y `-1700`, aunque el PID inicial era correcto. Tampoco uses
-`open -a` para enfocar: dos bundles con el mismo identificador pueden activar
-la copia instalada. `choose-file` mantiene ahora el predicado de PID inline y
-enumera cada ventana por índice; esta trampa costó una ronda completa el
-2026-08-01.
+`open -a` para enfocar: aunque Debug y Release ya tienen identificadores
+distintos, ambos ejecutables conservan el nombre `vinabike_erp` y resolver por
+nombre puede activar la copia instalada. `choose-file` mantiene ahora el
+predicado de PID inline y enumera cada ventana por índice; esta trampa costó una
+ronda completa el 2026-08-01.
 
 ### Tap by identity; pixels are a one-frame fallback (2026-07-31)
 

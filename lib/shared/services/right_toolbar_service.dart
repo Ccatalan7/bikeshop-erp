@@ -59,24 +59,37 @@ class RightToolbarService extends ChangeNotifier {
   /// la barra de estado del sistema. El panel del rail derecho ya sabe abrir una
   /// conversación y se monta igual en escritorio y en teléfono, así que la
   /// notificación pide una bandeja y un hilo, y el panel lo recoge al montarse.
-  ({ToolbarTool tool, String conversationId})? _pendingConversation;
+  ({
+    ToolbarTool tool,
+    String conversationId,
+    String? threadRootMessageId,
+  })? _pendingConversation;
 
   void openConversation({
     required ToolbarTool tool,
     required String conversationId,
+    String? threadRootMessageId,
   }) {
-    _pendingConversation = (tool: tool, conversationId: conversationId);
+    _pendingConversation = (
+      tool: tool,
+      conversationId: conversationId,
+      threadRootMessageId: threadRootMessageId,
+    );
     _activeTool = tool;
     notifyListeners();
   }
 
   /// Lo entrega UNA vez: una petición ya atendida no debe reabrir el hilo cada
   /// vez que el panel se reconstruya.
-  String? takePendingConversation(ToolbarTool tool) {
+  ({String conversationId, String? threadRootMessageId})?
+      takePendingConversation(ToolbarTool tool) {
     final pending = _pendingConversation;
     if (pending == null || pending.tool != tool) return null;
     _pendingConversation = null;
-    return pending.conversationId;
+    return (
+      conversationId: pending.conversationId,
+      threadRootMessageId: pending.threadRootMessageId,
+    );
   }
 
   void openTool(ToolbarTool tool) {

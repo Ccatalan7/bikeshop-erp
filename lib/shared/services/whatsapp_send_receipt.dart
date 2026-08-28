@@ -18,6 +18,7 @@ class WhatsAppSendReceipt {
   final String? resolvedMessageText;
   final String? messageId;
   final String? externalMessageId;
+  final String? deliveryStrategy;
   final bool unsafeToFallback;
 
   const WhatsAppSendReceipt({
@@ -27,6 +28,7 @@ class WhatsAppSendReceipt {
     this.resolvedMessageText,
     this.messageId,
     this.externalMessageId,
+    this.deliveryStrategy,
     this.unsafeToFallback = false,
   });
 
@@ -53,6 +55,7 @@ class WhatsAppSendReceipt {
     String? resolvedMessageText,
     String? messageId,
     String? externalMessageId,
+    String? deliveryStrategy,
     bool? unsafeToFallback,
   }) {
     return WhatsAppSendReceipt(
@@ -63,6 +66,7 @@ class WhatsAppSendReceipt {
       resolvedMessageText: resolvedMessageText ?? this.resolvedMessageText,
       messageId: messageId ?? this.messageId,
       externalMessageId: externalMessageId ?? this.externalMessageId,
+      deliveryStrategy: deliveryStrategy ?? this.deliveryStrategy,
       unsafeToFallback: unsafeToFallback ?? this.unsafeToFallback,
     );
   }
@@ -91,6 +95,7 @@ WhatsAppSendReceipt parseDurableWhatsAppSendReceipt(
     resolvedMessageText: resolvedMessageText,
     messageId: payload['message_id']!.toString().trim(),
     externalMessageId: payload['external_message_id']!.toString().trim(),
+    deliveryStrategy: payload['delivery_strategy']?.toString().trim(),
   );
 }
 

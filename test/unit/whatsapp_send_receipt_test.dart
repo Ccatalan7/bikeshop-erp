@@ -20,6 +20,7 @@ void main() {
         'accepted': true,
         'message_id': 'message-1',
         'external_message_id': 'wamid.1',
+        'delivery_strategy': 'direct_send_utility',
       }),
       isTrue,
     );
@@ -39,6 +40,7 @@ void main() {
         'accepted': true,
         'message_id': 'message-1',
         'external_message_id': 'wamid.1',
+        'delivery_strategy': 'direct_send_utility',
       },
       resolvedMessageText: 'hola',
     );
@@ -48,6 +50,7 @@ void main() {
     expect(receipt.deliveryMethod, WhatsAppDeliveryMethod.cloudApi);
     expect(receipt.messageId, 'message-1');
     expect(receipt.externalMessageId, 'wamid.1');
+    expect(receipt.deliveryStrategy, 'direct_send_utility');
     expect(receipt.resolvedMessageText, 'hola');
 
     final second = receipt.copyWith(

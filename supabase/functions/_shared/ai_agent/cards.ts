@@ -1,13 +1,10 @@
+import { defaultWhatsAppTemplates, renderWhatsAppTemplateBody } from "../whatsapp_templates.ts";
 import {
-  defaultWhatsAppTemplates,
-  renderWhatsAppTemplateBody,
-} from "../whatsapp_templates.ts";
-import {
-  type AgentCardOption,
   type AgentActionCard,
   type AgentApprovalRef,
   agentApprovalStates,
   agentCardDestinations,
+  type AgentCardOption,
   type AgentEntityKind,
   type AgentInventoryAvailabilityFilter,
   agentInventoryAvailabilityFilters,
@@ -71,13 +68,11 @@ export function cardsForToolResult(
         kind: "customer_contact",
         eyebrow: "Contactar cliente",
         title: text(item, "customerName", "Cliente"),
-        subtitle: open
-          ? "Ventana de 24 horas abierta"
-          : "Fuera de la ventana de 24 horas",
+        subtitle: open ? "Ventana de 24 horas abierta" : "Fuera de la ventana de 24 horas",
         description: open
           ? "Puedes escribirle directamente. Revisa el texto antes de enviar."
-          : "Meta sólo acepta una plantilla aprobada. Elige cuál, revisa el " +
-            "texto exacto que le llegará y confirma.",
+          : "Elige un mensaje utilitario de Direct Send, revisa el texto " +
+            "exacto que le llegará y confirma.",
         destination: "conversations",
         chips: [
           ...(item.hasContactPhone === true ? [] : ["Sin teléfono"]),
@@ -85,9 +80,9 @@ export function cardsForToolResult(
         ],
         entityRef: entityRef(item, "customer"),
         optionKind: open ? "whatsapp_freeform" : "whatsapp_template",
-        // Fuera de la ventana, la tarjeta ofrece las plantillas aprobadas con
-        // el texto EXACTO que recibirá el cliente. Elegir una no envía nada:
-        // abre esa revisión y el operador confirma.
+        // Fuera de la ventana, la tarjeta ofrece casos utilitarios cerrados
+        // con el texto EXACTO que recibirá el cliente. Elegir uno no envía
+        // nada: abre esa revisión y el operador confirma.
         options: open ? undefined : customerTemplateOptions(
           typeof item.businessName === "string" ? item.businessName : "",
         ),
@@ -662,9 +657,8 @@ function inventoryRiskCards(
     : `${total} ${total === 1 ? "producto en riesgo" : "productos en riesgo"}`;
   // La demanda es lo que convierte la lista en una decisión: sin ella el
   // operador no sabe cuáles de los 1.016 le duelen.
-  const withDemand = items.filter((item) =>
-    typeof item.soldRecently === "number" && item.soldRecently > 0
-  ).length;
+  const withDemand =
+    items.filter((item) => typeof item.soldRecently === "number" && item.soldRecently > 0).length;
   const supplierNames = [
     ...new Set(
       items
@@ -965,17 +959,13 @@ function supplierHistoryCards(items: readonly JsonObject[]): readonly AgentActio
     const evidence = typeof item.evidencePurchaseLines === "number"
       ? item.evidencePurchaseLines
       : null;
-    const days = typeof item.daysSinceLastPurchase === "number"
-      ? item.daysSinceLastPurchase
-      : null;
+    const days = typeof item.daysSinceLastPurchase === "number" ? item.daysSinceLastPurchase : null;
     const cost = typeof item.averageLandedUnitCostNet === "number"
       ? item.averageLandedUnitCostNet
       : null;
     return card({
       kind: "supplier",
-      eyebrow: item.scopeRelaxed === true
-        ? "Le compramos algo así"
-        : "Le compramos esto",
+      eyebrow: item.scopeRelaxed === true ? "Le compramos algo así" : "Le compramos esto",
       title: text(item, "supplierName", "Proveedor"),
       subtitle: share !== null && lines !== null && evidence !== null
         ? `${formatShare(share)} de lo comprado · ${lines} de ${evidence} líneas`
@@ -1010,14 +1000,10 @@ function basketSupplierCards(items: readonly JsonObject[]): readonly AgentAction
   return items.slice(0, 3).map((item) => {
     const covered = typeof item.coveredNeeds === "number" ? item.coveredNeeds : null;
     const total = typeof item.totalNeeds === "number" ? item.totalNeeds : null;
-    const days = typeof item.daysSinceLastPurchase === "number"
-      ? item.daysSinceLastPurchase
-      : null;
+    const days = typeof item.daysSinceLastPurchase === "number" ? item.daysSinceLastPurchase : null;
     const missing = optionalText(item, "missingList");
     const complement = optionalText(item, "complementSupplierName");
-    const approximate = typeof item.approximateNeeds === "number"
-      ? item.approximateNeeds
-      : 0;
+    const approximate = typeof item.approximateNeeds === "number" ? item.approximateNeeds : 0;
     const approximateList = optionalText(item, "approximateList");
     return card({
       kind: "supplier",
@@ -1039,9 +1025,9 @@ function basketSupplierCards(items: readonly JsonObject[]): readonly AgentAction
           ? `Le falta ${missing}, y no hay historial de eso con nadie más`
           : undefined,
         approximate > 0
-          ? `${approximate} ${approximate === 1 ? "línea parecida" : "líneas parecidas"} no cuentan como cobertura exacta${
-            approximateList ? `: ${approximateList}` : ""
-          }`
+          ? `${approximate} ${
+            approximate === 1 ? "línea parecida" : "líneas parecidas"
+          } no cuentan como cobertura exacta${approximateList ? `: ${approximateList}` : ""}`
           : undefined,
         daysSinceLabel(days),
         optionalText(item, "brands"),
@@ -1641,20 +1627,20 @@ function card(value: AgentActionCard): AgentActionCard {
       }
       : {}),
     ...(supplyNeedDraft ? { supplyNeedDraft } : {}),
-    ...(value.optionKind
-      ? { optionKind: projectedText(value.optionKind, 40, true) }
-      : {}),
+    ...(value.optionKind ? { optionKind: projectedText(value.optionKind, 40, true) } : {}),
     ...(value.options && value.options.length > 0
       ? {
-        options: Object.freeze(value.options.slice(0, 6).map((option) =>
-          Object.freeze({
-            id: projectedText(option.id, 64, true),
-            label: projectedText(option.label, 80, true),
-            ...(option.description
-              ? { description: projectedText(option.description, 200, true) }
-              : {}),
-          })
-        )),
+        options: Object.freeze(
+          value.options.slice(0, 6).map((option) =>
+            Object.freeze({
+              id: projectedText(option.id, 64, true),
+              label: projectedText(option.label, 80, true),
+              ...(option.description
+                ? { description: projectedText(option.description, 200, true) }
+                : {}),
+            })
+          ),
+        ),
       }
       : {}),
   });
@@ -2118,7 +2104,6 @@ function hasExactKeys(value: Record<string, unknown>, expected: readonly string[
   return JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...expected].sort());
 }
 
-
 /// Las plantillas de cliente aprobadas, con su cuerpo ya resuelto. El orden es
 /// el del taller: primero avisar que está lista, después una actualización, y
 /// al final el seguimiento de presupuesto.
@@ -2151,7 +2136,6 @@ function customerTemplateOptions(
       ]),
     }));
 }
-
 
 /// Las opciones guardadas se releen con la misma forma cerrada con que se
 /// escribieron: id, rótulo y la revisión que se mostrará antes de confirmar.

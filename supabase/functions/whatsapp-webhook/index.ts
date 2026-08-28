@@ -14,6 +14,11 @@ import {
   type WhatsAppActionTarget,
 } from "../_shared/whatsapp_action_tokens.ts";
 import {
+  directSendIntegrityEventKey,
+  type DirectSendIntegrityNotice,
+  parseDirectSendIntegrityNotice,
+} from "../_shared/whatsapp_direct_send_integrity.ts";
+import {
   parseWhatsAppStatusEmailAlertMetadata,
   renderWhatsAppStatusAlertVerificationEmail,
   renderWhatsAppStatusEmail,
@@ -67,6 +72,11 @@ interface StatusAlertLedger {
   data: JsonRecord;
 }
 
+interface WhatsAppWebhookChannel {
+  id: string;
+  tenant_id: string;
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -76,6 +86,124 @@ function jsonResponse(body: unknown, status = 200) {
 
 function recordValue(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+function webhookOccurredAt(raw: unknown): Date {
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return new Date(seconds * 1000);
+  }
+  const parsed = typeof raw === "string" ? new Date(raw) : null;
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
+}
+
+async function resolveWebhookChannel(params: {
+  supabase: SupabaseClientLike;
+  entryId: string;
+  phoneNumberId: string;
+}): Promise<WhatsAppWebhookChannel | null> {
+  let query = params.supabase
+    .from("whatsapp_channels")
+    .select("id, tenant_id")
+    .eq("is_active", true);
+  query = params.phoneNumberId
+    ? query.eq("phone_number_id", params.phoneNumberId)
+    : query.eq("business_account_id", params.entryId);
+  const { data, error } = await query.limit(1).maybeSingle();
+  if (error) throw error;
+  return data ? { id: String(data.id), tenant_id: String(data.tenant_id) } : null;
+}
+
+async function sourceTemplateNameForIntegrityNotice(params: {
+  supabase: SupabaseClientLike;
+  tenantId: string;
+  notice: DirectSendIntegrityNotice;
+  rawTemplateId: unknown;
+}): Promise<string | null> {
+  if (!params.notice.templateId) return null;
+  const { data, error } = await params.supabase
+    .from("messages")
+    .select("metadata")
+    .eq("tenant_id", params.tenantId)
+    .eq("external_provider", "whatsapp")
+    .contains("metadata", {
+      whatsapp_status_payload: {
+        template_id: params.rawTemplateId,
+      },
+    })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const metadata = recordValue(data?.metadata);
+  return stringValue(metadata.template_name) ?? null;
+}
+
+async function persistDirectSendIntegrityNotice(params: {
+  supabase: SupabaseClientLike;
+  channel: WhatsAppWebhookChannel;
+  entryId: string;
+  entryTime: unknown;
+  field: string;
+  value: JsonRecord;
+  notice: DirectSendIntegrityNotice;
+}) {
+  const occurredAt = webhookOccurredAt(params.entryTime);
+  const sourceTemplateName = await sourceTemplateNameForIntegrityNotice({
+    supabase: params.supabase,
+    tenantId: params.channel.tenant_id,
+    notice: params.notice,
+    rawTemplateId: params.value.message_template_id,
+  });
+  const eventKey = directSendIntegrityEventKey({
+    field: params.field,
+    entryTime: params.entryTime,
+    notice: params.notice,
+  });
+  const payload = {
+    entry_id: params.entryId,
+    entry_time: params.entryTime,
+    field: params.field,
+    value: params.value,
+    direct_send_notice: params.notice,
+    source_template_name: sourceTemplateName,
+  };
+
+  const { error: eventError } = await params.supabase
+    .from("whatsapp_webhook_events")
+    .upsert({
+      tenant_id: params.channel.tenant_id,
+      channel_id: params.channel.id,
+      event_key: eventKey,
+      event_type: "unknown",
+      direction: "system",
+      payload,
+      processed_at: new Date().toISOString(),
+      created_at: occurredAt.toISOString(),
+    }, { onConflict: "channel_id,event_key", ignoreDuplicates: true });
+  if (eventError) throw eventError;
+
+  const { error: notificationError } = await params.supabase
+    .from("erp_notifications")
+    .upsert({
+      tenant_id: params.channel.tenant_id,
+      type: params.notice.notificationType,
+      title: params.notice.title,
+      body: params.notice.body,
+      route: "/settings/whatsapp",
+      entity_type: "whatsapp_channel",
+      entity_id: params.channel.id,
+      severity: params.notice.severity,
+      data: {
+        ...payload,
+        blocks_direct_send: params.notice.blocksDirectSend,
+      },
+      occurred_at: occurredAt.toISOString(),
+      read_at: null,
+    }, { onConflict: "tenant_id,type,entity_type,entity_id" });
+  if (notificationError) throw notificationError;
+
+  return { eventKey, sourceTemplateName, notice: params.notice };
 }
 
 function statusAlertNotificationType(status: WhatsAppTerminalStatus | "verification") {
@@ -826,22 +954,54 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const processedMessages: unknown[] = [];
   const processedStatuses: unknown[] = [];
+  const processedIntegrityNotices: unknown[] = [];
   const automationResults: unknown[] = [];
   const deterministicRejections: unknown[] = [];
   const operationalErrors: string[] = [];
   const entries = Array.isArray(payload.entry) ? payload.entry : [];
 
   for (const entry of entries) {
-    const changes = Array.isArray((entry as JsonRecord).changes)
-      ? (entry as JsonRecord).changes as JsonRecord[]
-      : [];
+    const entryRecord = entry as JsonRecord;
+    const entryId = String(entryRecord.id ?? "");
+    const entryTime = entryRecord.time;
+    const changes = Array.isArray(entryRecord.changes) ? entryRecord.changes as JsonRecord[] : [];
     for (const change of changes) {
       const value = (change.value ?? {}) as JsonRecord;
+      const field = String(change.field ?? "");
       const providerMetadata = (value.metadata ?? {}) as JsonRecord;
       const phoneNumberId = String(providerMetadata.phone_number_id ?? "");
       const contacts = Array.isArray(value.contacts) ? value.contacts as JsonRecord[] : [];
       const messages = Array.isArray(value.messages) ? value.messages as JsonRecord[] : [];
       const statuses = Array.isArray(value.statuses) ? value.statuses as JsonRecord[] : [];
+
+      const integrityNotice = parseDirectSendIntegrityNotice(field, value);
+      if (integrityNotice) {
+        try {
+          const channel = await resolveWebhookChannel({
+            supabase,
+            entryId,
+            phoneNumberId,
+          });
+          if (!channel) throw new Error("direct_send_channel_not_found");
+          processedIntegrityNotices.push(
+            await persistDirectSendIntegrityNotice({
+              supabase,
+              channel,
+              entryId,
+              entryTime,
+              field,
+              value,
+              notice: integrityNotice,
+            }),
+          );
+        } catch (error) {
+          console.error(
+            "❌ [WHATSAPP-WEBHOOK] Direct Send integrity processing error",
+            error,
+          );
+          operationalErrors.push(`direct_send_integrity:${field}:${String(error)}`);
+        }
+      }
 
       for (const status of statuses) {
         const externalMessageId = String(status.id ?? "");
@@ -1000,6 +1160,7 @@ serve(async (req) => {
     retryable: hasOperationalFailure,
     processed_messages: processedMessages.length,
     processed_statuses: processedStatuses.length,
+    processed_integrity_notices: processedIntegrityNotices.length,
     automations: automationResults.length,
     deterministic_rejections: deterministicRejections,
     errors: operationalErrors,

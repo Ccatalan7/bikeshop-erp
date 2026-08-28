@@ -2237,12 +2237,15 @@ class AppRouter {
           path: '/chat',
           pageBuilder: (context, state) {
             final conversationId = state.uri.queryParameters['conversation'];
+            final threadRootMessageId =
+                state.uri.queryParameters['thread_root'];
             return _buildDeferredPageWithNoTransition(
               context,
               state,
               () => MainLayout(
                 child: erp.EmployeeChatPage(
                   initialConversationId: conversationId,
+                  initialThreadRootMessageId: threadRootMessageId,
                 ),
               ),
             );

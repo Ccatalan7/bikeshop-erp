@@ -163,7 +163,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
     final pendingTaskId =
         context.read<RightToolbarService?>()?.takePendingConversation(_tool);
     if (pendingTaskId != null) {
-      _openTaskId = pendingTaskId;
+      _openTaskId = pendingTaskId.conversationId;
       _composerVisible = false;
     }
     unawaited(_loadComposerSources());
@@ -353,6 +353,7 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
       context.read<RightToolbarService>().openConversation(
             tool: ToolbarTool.messages,
             conversationId: thread.conversationId,
+            threadRootMessageId: thread.rootMessageId,
           );
     } catch (error) {
       if (mounted) _showError(error);
@@ -1924,12 +1925,23 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
               ),
               // Una nota no conversa: es captura, no trabajo con responsable.
               if (!_isNote)
-                IconButton(
-                  tooltip: 'Conversar',
-                  icon: const Icon(Icons.forum_outlined, size: 18),
-                  onPressed: (_isAssignee || _canSupervise)
+                Semantics(
+                  label: 'Conversar sobre esta tarea',
+                  button: true,
+                  enabled: _isAssignee || _canSupervise,
+                  onTap: (_isAssignee || _canSupervise)
                       ? widget.onOpenThread
                       : null,
+                  child: ExcludeSemantics(
+                    child: IconButton(
+                      key: const ValueKey('task-detail-open-thread'),
+                      tooltip: 'Conversar',
+                      icon: const Icon(Icons.forum_outlined, size: 18),
+                      onPressed: (_isAssignee || _canSupervise)
+                          ? widget.onOpenThread
+                          : null,
+                    ),
+                  ),
                 ),
             ],
           ),

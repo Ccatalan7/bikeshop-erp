@@ -1,5 +1,20 @@
 import 'conversation_context_hint.dart';
 
+/// One business object published as a root message inside a conversation.
+///
+/// The conversation owns the audience; the root owns the task. Keeping this
+/// list prevents a shared task channel from being collapsed back into the old
+/// "one conversation = one task" assumption.
+class TaskThreadContext {
+  const TaskThreadContext({
+    required this.taskId,
+    required this.rootMessageId,
+  });
+
+  final String taskId;
+  final String rootMessageId;
+}
+
 class Conversation {
   final String id;
   final String type; // 'internal' or 'support'
@@ -32,6 +47,7 @@ class Conversation {
   final String? createdBy; // Customer who created the request
   final String? creatorName; // Name of the creator (for support chats)
   final ConversationContextHint? contextHint;
+  final List<TaskThreadContext> taskThreadContexts;
 
   Conversation({
     required this.id,
@@ -60,6 +76,7 @@ class Conversation {
     this.createdBy,
     this.creatorName,
     this.contextHint,
+    this.taskThreadContexts = const [],
   });
 
   static String normalizeChannel(dynamic rawChannel, String type) {
@@ -114,6 +131,14 @@ class Conversation {
   bool get hasAnyContext =>
       effectiveContextType != null && effectiveContextId != null;
   String? get effectiveContextType {
+    // A shared task channel has no single record context. Inbox hints can lag
+    // behind a task's migration from its old dedicated conversation, so they
+    // must never make the whole channel masquerade as one arbitrary task.
+    // Historical dedicated task conversations retain their explicit scalar
+    // context and continue to expose the legacy context panel.
+    if (isTaskChannel && (contextType == null || contextId == null)) {
+      return null;
+    }
     if (contextType != null &&
         contextId != null &&
         supportsContextPanel(contextType)) {
@@ -127,6 +152,9 @@ class Conversation {
   }
 
   String? get effectiveContextId {
+    if (isTaskChannel && (contextType == null || contextId == null)) {
+      return null;
+    }
     if (contextType != null &&
         contextId != null &&
         supportsContextPanel(contextType)) {
@@ -144,7 +172,29 @@ class Conversation {
   bool get hasSupportedContextPanel =>
       effectiveContextId != null && supportsContextPanel(effectiveContextType);
 
+  /// A task channel is an audience container with one or more task roots.
+  /// Individual tasks never own the conversation.
+  bool get isTaskChannel => isInternal && taskThreadContexts.isNotEmpty;
+
+  /// Compatibility name for callers that only need task-channel presentation.
+  /// New workflow code must use [taskThreadContexts] and target an exact root.
+  bool get isTaskThread => isTaskChannel;
+
+  String? taskIdForRoot(String rootMessageId) {
+    for (final context in taskThreadContexts) {
+      if (context.rootMessageId == rootMessageId) return context.taskId;
+    }
+    return null;
+  }
+
+  /// Only meaningful for historical dedicated conversations. Shared channels
+  /// deliberately return null so no caller silently chooses the first task.
+  String? get taskThreadRootMessageId => taskThreadContexts.length == 1
+      ? taskThreadContexts.single.rootMessageId
+      : null;
+
   String get channelLabel {
+    if (isTaskChannel) return title ?? 'Tareas';
     if (isWhatsApp) {
       return isSupplierConversation ? 'Proveedor WhatsApp' : 'Cliente WhatsApp';
     }
@@ -155,6 +205,7 @@ class Conversation {
   }
 
   String get shortChannelLabel {
+    if (isTaskChannel) return 'Tareas';
     if (isWhatsApp) return 'WhatsApp';
     if (isInstagram) return 'Instagram';
     if (isFacebookMessenger) return 'Messenger';
@@ -182,15 +233,39 @@ class Conversation {
     String? cType = json['context_type'];
     String? cId = json['context_id'];
 
-    if ((cType == null || cId == null) &&
-        json['conversation_contexts'] != null) {
-      final contexts = (json['conversation_contexts'] as List);
+    final taskThreadContexts = <TaskThreadContext>[];
+    if (json['conversation_contexts'] != null) {
+      final contexts = (json['conversation_contexts'] as List)
+          .whereType<Map>()
+          .map((context) => Map<String, dynamic>.from(context))
+          .toList();
       if (contexts.isNotEmpty) {
-        // Try to find primary, otherwise first
-        final primary = contexts.firstWhere((c) => c['is_primary'] == true,
-            orElse: () => contexts.first);
-        cType = primary['context_type'];
-        cId = primary['context_id'];
+        // Only a declared primary may project into the scalar context. A
+        // shared channel intentionally has many non-primary task contexts;
+        // choosing its first row made the whole channel masquerade as one task.
+        final primary = contexts.firstWhere(
+          (context) => context['is_primary'] == true,
+          orElse: () => const <String, dynamic>{},
+        );
+        if (primary.isNotEmpty) {
+          cType ??= primary['context_type'];
+          cId ??= primary['context_id'];
+        }
+
+        for (final context in contexts) {
+          if (context['context_type'] != 'task') continue;
+          final taskId = context['context_id']?.toString().trim();
+          final rootId = context['thread_root_message_id']?.toString().trim();
+          if (taskId == null ||
+              taskId.isEmpty ||
+              rootId == null ||
+              rootId.isEmpty) {
+            continue;
+          }
+          taskThreadContexts.add(
+            TaskThreadContext(taskId: taskId, rootMessageId: rootId),
+          );
+        }
       }
     }
 
@@ -236,6 +311,7 @@ class Conversation {
               Map<String, dynamic>.from(json['context_hint'] as Map),
             )
           : null,
+      taskThreadContexts: List.unmodifiable(taskThreadContexts),
     );
   }
 }

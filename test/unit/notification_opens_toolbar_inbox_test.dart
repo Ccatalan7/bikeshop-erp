@@ -30,7 +30,7 @@ void main() {
     );
     expect(
       service.takePendingConversation(ToolbarTool.supplierMessages),
-      'conv-1',
+      (conversationId: 'conv-1', threadRootMessageId: null),
     );
     expect(
       service.takePendingConversation(ToolbarTool.supplierMessages),
@@ -55,8 +55,27 @@ void main() {
     );
     expect(
       service.takePendingConversation(ToolbarTool.supplierMessages),
-      'conv-1',
+      (conversationId: 'conv-1', threadRootMessageId: null),
       reason: 'y sigue disponible para la suya',
+    );
+  });
+
+  test('una tarea entrega también la raíz exacta que debe abrir', () {
+    final service = RightToolbarService();
+    addTearDown(service.dispose);
+
+    service.openConversation(
+      tool: ToolbarTool.messages,
+      conversationId: 'tasks-channel',
+      threadRootMessageId: 'task-root-527',
+    );
+
+    expect(
+      service.takePendingConversation(ToolbarTool.messages),
+      (
+        conversationId: 'tasks-channel',
+        threadRootMessageId: 'task-root-527',
+      ),
     );
   });
 
@@ -75,7 +94,8 @@ void main() {
     expect(mainSource, contains('isSupplierConversation'));
     expect(
       mainSource,
-      contains('isSupplier ? ToolbarTool.supplierMessages : ToolbarTool.messages'),
+      contains(
+          'isSupplier ? ToolbarTool.supplierMessages : ToolbarTool.messages'),
     );
     // Una notificación sin hilo sólo dice «tienes mensajes».
     expect(mainSource, contains('toolbar.openTool(ToolbarTool.messages)'));

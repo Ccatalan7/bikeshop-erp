@@ -18,9 +18,14 @@ import 'chat_window.dart';
 /// dentro del rail derecho y de la bitácora, donde el inset ya lo consumió el
 /// shell y volver a consumirlo dejaría un hueco.
 class CompactChatRoute extends StatelessWidget {
-  const CompactChatRoute({super.key, required this.conversation});
+  const CompactChatRoute({
+    super.key,
+    required this.conversation,
+    this.initialThreadRootMessageId,
+  });
 
   final Conversation conversation;
+  final String? initialThreadRootMessageId;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +51,11 @@ class CompactChatRoute extends StatelessWidget {
           // barra de gestos, y consumir el inferior le robaría alto.
           top: true,
           bottom: false,
-          child: ChatWindow(conversation: conversation),
+          child: ChatWindow(
+            conversation: conversation,
+            compact: true,
+            initialThreadRootMessageId: initialThreadRootMessageId,
+          ),
         ),
       ),
     );

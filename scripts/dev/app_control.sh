@@ -27,9 +27,9 @@
 #     PointerEvents; the OS backend maps them into screen coordinates.
 #   - Input is posted as CGEvents. AppleScript `click at` does not reach a
 #     Flutter window.
-#   - Everything targets the DEBUG app by executable path. Never target by
-#     process name: an installed old build shares the name and will silently
-#     receive the clicks.
+#   - Everything targets the DEBUG app by executable path. Debug and Release
+#     have separate bundle IDs/containers, but their executable name remains
+#     identical; name-based targeting can still drive the installed copy.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -474,8 +474,8 @@ PY
     # when an installed build and the debug build are both named
     # `vinabike_erp`, later `tell targetProcess` resolves the wrong one. Keep
     # the exact-PID predicate inline at every access. For the same reason do
-    # not use `open -a`: duplicate bundle identifiers may activate the installed
-    # copy even when given the debug bundle path.
+    # not use `open -a`: LaunchServices/name resolution is unnecessary when the
+    # exact debug PID is already known and can activate the installed copy.
     if ! osascript - "$file_path" <<EOF >/dev/null
 on run argv
   set filePath to item 1 of argv

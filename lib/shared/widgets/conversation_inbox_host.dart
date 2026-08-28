@@ -22,6 +22,7 @@ class InboxPanelSession {
   const InboxPanelSession({
     required this.searchText,
     required this.selectedConversationId,
+    this.selectedThreadRootMessageId,
     required this.showOnlyActiveChats,
     required this.scope,
     this.extra,
@@ -29,6 +30,7 @@ class InboxPanelSession {
 
   final String searchText;
   final String? selectedConversationId;
+  final String? selectedThreadRootMessageId;
   final bool showOnlyActiveChats;
 
   /// Usuario y tenant a los que pertenece este estado. `RightToolbarService`
@@ -60,6 +62,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
 
   String searchTerm = '';
   String? selectedConversationId;
+  String? selectedThreadRootMessageId;
   String? panelActiveConversationId;
   bool showOnlyActiveChats = true;
   bool isRefreshing = false;
@@ -196,10 +199,13 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
     final requested = _maybeToolbar()?.takePendingConversation(inboxTool);
     if (requested == null) return;
     setState(() {
-      _setSelectedConversation(requested);
-      panelActiveConversationId = requested;
+      _setSelectedConversation(requested.conversationId);
+      selectedThreadRootMessageId = requested.threadRootMessageId;
+      panelActiveConversationId = requested.conversationId;
     });
-    context.read<ChatProvider>().setActiveConversation(requested);
+    context
+        .read<ChatProvider>()
+        .setActiveConversation(requested.conversationId);
   }
 
   // --- Sesión --------------------------------------------------------------
@@ -220,6 +226,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
 
     showOnlyActiveChats = session.showOnlyActiveChats;
     _setSelectedConversation(session.selectedConversationId);
+    selectedThreadRootMessageId = session.selectedThreadRootMessageId;
     restoreSessionExtra(session.extra);
     if (session.searchText.isNotEmpty) {
       // Asignar el texto dispara el listener, que sincroniza `searchTerm`.
@@ -233,6 +240,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
       InboxPanelSession(
         searchText: searchController.text,
         selectedConversationId: selectedConversationId,
+        selectedThreadRootMessageId: selectedThreadRootMessageId,
         showOnlyActiveChats: showOnlyActiveChats,
         scope: _scope,
         extra: captureSessionExtra(),
@@ -313,6 +321,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
   void openConversationInPanel(String conversationId) {
     setState(() {
       _setSelectedConversation(conversationId);
+      selectedThreadRootMessageId = null;
       panelActiveConversationId = conversationId;
     });
   }
@@ -321,6 +330,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
     final shouldClearActive = panelActiveConversationId == conversationId;
     setState(() {
       _setSelectedConversation(null);
+      selectedThreadRootMessageId = null;
       if (shouldClearActive) {
         panelActiveConversationId = null;
       }

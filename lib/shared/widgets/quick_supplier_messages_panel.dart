@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../modules/messaging/models/conversation.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
@@ -14,8 +12,8 @@ import '../../modules/messaging/widgets/conversation_tile.dart';
 import '../../modules/purchases/models/purchase_invoice.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../models/supplier.dart' as shared_supplier;
-import '../services/authority_scoped_cache.dart';
 import '../services/right_toolbar_service.dart';
+import '../services/workspace_manager.dart';
 import 'conversation_inbox_host.dart';
 
 enum _SupplierMessageFilter { all, unread }
@@ -53,8 +51,7 @@ class QuickSupplierMessagesPanel extends StatefulWidget {
       _QuickSupplierMessagesPanelState();
 }
 
-class _QuickSupplierMessagesPanelState
-    extends State<QuickSupplierMessagesPanel>
+class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
     with ConversationInboxHost<QuickSupplierMessagesPanel> {
   static const double _compactToolbarBreakpoint = 360;
 
@@ -108,7 +105,6 @@ class _QuickSupplierMessagesPanelState
     }
   }
 
-
   List<shared_supplier.Supplier> _visibleSuppliers(
     List<shared_supplier.Supplier> suppliers,
   ) {
@@ -130,11 +126,6 @@ class _QuickSupplierMessagesPanelState
     disposeInboxHost();
     super.dispose();
   }
-
-
-
-
-
 
   Future<void> _loadSupplierData() async {
     if (_isLoadingSuppliers) return;
@@ -172,7 +163,6 @@ class _QuickSupplierMessagesPanelState
     return phone?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
   }
 
-
   void _openFullChat([Conversation? conversation]) {
     final route = conversation == null
         ? '/chat'
@@ -180,8 +170,9 @@ class _QuickSupplierMessagesPanelState
             path: '/chat',
             queryParameters: {'conversation': conversation.id},
           ).toString();
+    final workspaceManager = context.read<WorkspaceManager>();
     context.read<RightToolbarService>().close();
-    context.go(route);
+    unawaited(workspaceManager.pushActiveWorkspace<void>(route));
   }
 
   Conversation? _selectedConversation(List<Conversation> conversations) {
@@ -318,7 +309,6 @@ class _QuickSupplierMessagesPanelState
             tooltip: 'Recargar',
             onPressed: isRefreshing ? null : refreshInbox,
             color: Theme.of(context).colorScheme.onSurface,
-
             icon: isRefreshing
                 ? const SizedBox(
                     width: 18,
@@ -1119,8 +1109,6 @@ class _QuickSupplierMessagesPanelState
       );
     }
   }
-
-
 
   List<_QuickSupplierChatEntry> _filteredSupplierEntries(
     ChatProvider provider,

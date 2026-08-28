@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/models/supplier.dart' as shared_supplier;
@@ -27,8 +26,13 @@ DateTime? _lastHandledTime;
 
 class EmployeeChatPage extends StatefulWidget {
   final String? initialConversationId;
+  final String? initialThreadRootMessageId;
 
-  const EmployeeChatPage({super.key, this.initialConversationId});
+  const EmployeeChatPage({
+    super.key,
+    this.initialConversationId,
+    this.initialThreadRootMessageId,
+  });
 
   @override
   State<EmployeeChatPage> createState() => _EmployeeChatPageState();
@@ -101,11 +105,6 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         _lastHandledConversationId = widget.initialConversationId;
         _lastHandledTime = now;
 
-        // Strip the query param from URL to prevent re-triggering
-        if (mounted) {
-          context.go('/chat');
-        }
-
         debugPrint(
             '🔔 Deep link: selecting conversation ${widget.initialConversationId}');
         provider.setActiveConversation(widget.initialConversationId!);
@@ -135,7 +134,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => CompactChatRoute(conversation: targetConv),
+                builder: (_) => CompactChatRoute(
+                  conversation: targetConv,
+                  initialThreadRootMessageId: widget.initialThreadRootMessageId,
+                ),
               ),
             );
           }
@@ -527,6 +529,11 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
                         child: activeConversation != null
                             ? ChatWindow(
                                 conversation: activeConversation,
+                                initialThreadRootMessageId:
+                                    activeConversation.id ==
+                                            widget.initialConversationId
+                                        ? widget.initialThreadRootMessageId
+                                        : null,
                                 isContextPanelClosed: isContextClosedForChat,
                                 onShowContextPanel: () =>
                                     _reopenConversationContextPanel(
@@ -1722,7 +1729,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
   }
 
   String _getSubtitle(Conversation conv) {
-    final contextLabel = _getContextLabel(conv.contextType);
+    if (conv.isTaskThread) return 'Canal de tareas';
+    final contextLabel = _getContextLabel(conv.effectiveContextType);
 
     if (conv.type == 'support') {
       final statusLabel = switch (conv.status) {
@@ -1749,6 +1757,8 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
         return 'Factura';
       case 'purchase_invoice':
         return 'Compra';
+      case 'task':
+        return 'Tarea';
       case 'supplier':
         return 'Proveedor';
       case 'bike':

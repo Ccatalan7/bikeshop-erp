@@ -336,7 +336,8 @@ class _ConversationTileState extends State<ConversationTile> {
 
   bool _hasContextSummary(Conversation conv) {
     final hint = conv.contextHint;
-    return widget.operationalStatusLabel?.trim().isNotEmpty == true ||
+    return conv.isTaskThread ||
+        widget.operationalStatusLabel?.trim().isNotEmpty == true ||
         widget.secondaryContextLine?.trim().isNotEmpty == true ||
         hint?.hasJob == true ||
         hint?.hasPurchaseInvoice == true ||
@@ -349,6 +350,11 @@ class _ConversationTileState extends State<ConversationTile> {
     var statusLabel = widget.operationalStatusLabel?.trim();
     var statusColor = widget.operationalStatusColor;
     var secondaryLine = widget.secondaryContextLine?.trim();
+
+    if ((statusLabel == null || statusLabel.isEmpty) && conv.isTaskThread) {
+      statusLabel = 'Canal de tareas';
+      statusColor = Theme.of(context).colorScheme.primary;
+    }
 
     if ((statusLabel == null || statusLabel.isEmpty) && hint?.hasJob == true) {
       statusLabel = [
@@ -458,6 +464,8 @@ class _ConversationTileState extends State<ConversationTile> {
       widget.operationalStatusLabel,
       widget.operationalStatusColor?.toARGB32(),
       widget.secondaryContextLine,
+      conv.effectiveContextType,
+      conv.effectiveContextId,
       hint?.jobId,
       hint?.jobNumber,
       hint?.jobStatus,

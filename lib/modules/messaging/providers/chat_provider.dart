@@ -138,6 +138,7 @@ class ChatProvider extends ChangeNotifier {
   // porque son de otra tabla: `messages` se transmite por realtime y un stream
   // de Supabase no trae relaciones embebidas.
   Map<String, List<MessageReaction>> _reactionsByMessageId = const {};
+
   /// Última foto conocida de reacciones por conversación. Sobrevive al cierre
   /// del chat para que reabrirlo pinte los chips en la primera trama, en vez de
   /// dejarlos aparecer cuando llega la consulta inicial del stream. Es el mismo
@@ -839,6 +840,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: old.createdBy,
       creatorName: old.creatorName,
       contextHint: old.contextHint,
+      taskThreadContexts: old.taskThreadContexts,
     );
 
     _sortConversationsByRecentActivity();
@@ -1392,6 +1394,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: conversation.createdBy,
       creatorName: creatorName ?? conversation.creatorName,
       contextHint: contextHint,
+      taskThreadContexts: conversation.taskThreadContexts,
     );
   }
 
@@ -1900,8 +1903,7 @@ class ChatProvider extends ChangeNotifier {
     _reactionsSubscription?.cancel();
     _reactionsByMessageId =
         _reactionsByConversation[conversationId] ?? const {};
-    _reactionsSubscription =
-        _service.getReactionsStream(conversationId).listen(
+    _reactionsSubscription = _service.getReactionsStream(conversationId).listen(
       (grouped) {
         // Un evento tardío de una conversación que ya se cerró no debe pintar
         // reacciones sobre la que está abierta.
@@ -2429,6 +2431,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: old.createdBy,
       creatorName: old.creatorName,
       contextHint: old.contextHint,
+      taskThreadContexts: old.taskThreadContexts,
     );
   }
 
@@ -2474,6 +2477,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: old.createdBy,
       creatorName: old.creatorName,
       contextHint: old.contextHint,
+      taskThreadContexts: old.taskThreadContexts,
     );
   }
 
@@ -2539,6 +2543,7 @@ class ChatProvider extends ChangeNotifier {
       createdBy: old.createdBy,
       creatorName: old.creatorName,
       contextHint: old.contextHint,
+      taskThreadContexts: old.taskThreadContexts,
     );
   }
 
@@ -2661,6 +2666,7 @@ class ChatProvider extends ChangeNotifier {
     String type = 'text',
     Map<String, dynamic>? metadata,
     String? conversationId,
+    String? threadRootMessageId,
   }) async {
     final operationEpoch = _sessionEpoch;
     if (!_isCurrentSession(operationEpoch)) return;
@@ -2691,6 +2697,7 @@ class ChatProvider extends ChangeNotifier {
       type: type,
       metadata: messageMetadata,
       createdAt: DateTime.now(),
+      threadRootMessageId: threadRootMessageId,
       isMe: true,
     );
 
@@ -2719,6 +2726,7 @@ class ChatProvider extends ChangeNotifier {
         content: content,
         type: type,
         metadata: messageMetadata,
+        threadRootMessageId: threadRootMessageId,
       );
       _debugInboxSync(
         'sendMessage:serverDone',
@@ -2951,6 +2959,7 @@ class ChatProvider extends ChangeNotifier {
         metadata: updatedMetadata,
         createdAt: optimisticMessage.createdAt,
         messageSequence: optimisticMessage.messageSequence,
+        threadRootMessageId: optimisticMessage.threadRootMessageId,
         isMe: optimisticMessage.isMe,
       );
       notifyListeners();
@@ -2974,6 +2983,7 @@ class ChatProvider extends ChangeNotifier {
       metadata: updatedMetadata,
       createdAt: existing.createdAt,
       messageSequence: existing.messageSequence,
+      threadRootMessageId: existing.threadRootMessageId,
       isMe: existing.isMe,
     );
 
@@ -3004,6 +3014,7 @@ class ChatProvider extends ChangeNotifier {
         metadata: updatedMetadata,
         createdAt: optimisticMessage.createdAt,
         messageSequence: optimisticMessage.messageSequence,
+        threadRootMessageId: optimisticMessage.threadRootMessageId,
         isMe: optimisticMessage.isMe,
       );
       notifyListeners();
@@ -3029,6 +3040,7 @@ class ChatProvider extends ChangeNotifier {
       metadata: updatedMetadata,
       createdAt: existing.createdAt,
       messageSequence: existing.messageSequence,
+      threadRootMessageId: existing.threadRootMessageId,
       isMe: existing.isMe,
     );
 
