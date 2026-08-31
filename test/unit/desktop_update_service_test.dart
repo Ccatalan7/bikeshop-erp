@@ -141,6 +141,99 @@ void main() {
     );
   });
 
+  List<Map<String, dynamic>> otherPlatformReleases(int count) => List.generate(
+      count,
+      (index) => {
+            'draft': false,
+            'prerelease': false,
+            'tag_name': 'macos-v1.0.3-$index',
+            'assets': [
+              {'name': 'vinabike_erp_macos_1.0.3-$index.zip'},
+            ],
+          });
+
+  test('Windows discovery continues past a full page of macOS releases',
+      () async {
+    final requestedPages = <String?>[];
+    final client = MockClient((request) async {
+      if (request.url.host == 'api.github.com') {
+        final page = request.url.queryParameters['page'] ?? '1';
+        requestedPages.add(page);
+        final releases =
+            page == '1' ? otherPlatformReleases(100) : windowsReleaseResponse();
+        return http.Response(jsonEncode(releases), 200);
+      }
+      return http.Response(jsonEncode(windowsManifest()), 200);
+    });
+    final service = DesktopUpdateService(httpClient: client);
+    addTearDown(service.dispose);
+
+    final update = await service.fetchLatestWindowsReleaseForTesting();
+
+    expect(requestedPages, ['1', '2']);
+    expect(update.tag, windowsTag);
+    expect(update.commit, toCommit);
+    expect(update.releaseNotes?.toCommit, toCommit);
+  });
+
+  test('Windows discovery stops at the end of the release list', () async {
+    var requests = 0;
+    final client = MockClient((request) async {
+      requests += 1;
+      return http.Response(jsonEncode(otherPlatformReleases(3)), 200);
+    });
+    final service = DesktopUpdateService(httpClient: client);
+    addTearDown(service.dispose);
+
+    await expectLater(
+      service.fetchLatestWindowsReleaseForTesting(),
+      throwsA(isA<StateError>()),
+    );
+    expect(requests, 1);
+  });
+
+  test('Windows discovery has a bounded budget when no Windows release exists',
+      () async {
+    var requests = 0;
+    final client = MockClient((request) async {
+      requests += 1;
+      return http.Response(jsonEncode(otherPlatformReleases(100)), 200);
+    });
+    final service = DesktopUpdateService(httpClient: client);
+    addTearDown(service.dispose);
+
+    await expectLater(
+      service.fetchLatestWindowsReleaseForTesting(),
+      throwsA(isA<StateError>()),
+    );
+    expect(requests, 10);
+  });
+
+  test('Windows discovery preserves a later-page HTTP failure', () async {
+    var requests = 0;
+    final client = MockClient((request) async {
+      requests += 1;
+      if (requests == 1) {
+        return http.Response(jsonEncode(otherPlatformReleases(100)), 200);
+      }
+      return http.Response('Unavailable', 503);
+    });
+    final service = DesktopUpdateService(httpClient: client);
+    addTearDown(service.dispose);
+
+    await expectLater(
+      service.fetchLatestWindowsReleaseForTesting(),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'upstream status',
+          contains('503'),
+        ),
+      ),
+    );
+    expect(requests, 2);
+  });
+
   test('macOS ignores remote notes and reads the matching prepared copy',
       () async {
     final temporaryHome =

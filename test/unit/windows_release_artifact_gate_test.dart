@@ -78,6 +78,28 @@ void main() {
     expect(workflow, contains('installer_sha256 = \$installerHash'));
   });
 
+  test('Windows release enables the same production AI gateway as macOS', () {
+    final buildStep = workflow.substring(
+      workflow.indexOf('- name: Build Windows release'),
+      workflow.indexOf(
+        '- name: Validate Windows runtime bundle without launching it',
+      ),
+    );
+    expect(buildStep, contains('secrets.SUPABASE_PUBLISHABLE_KEY'));
+    expect(buildStep, contains('sb_publishable_*'));
+    expect(buildStep, contains('--dart-define=AI_AGENT_GATEWAY_ENABLED=true'));
+    expect(
+      buildStep,
+      contains(
+        r'--dart-define=SUPABASE_PUBLISHABLE_KEY="$env:SUPABASE_PUBLISHABLE_KEY"',
+      ),
+    );
+    expect(
+      workflow,
+      contains('scripts/tests/windows_installer_release_discovery_test.ps1'),
+    );
+  });
+
   test('Windows consumes qualified proof or runs its standalone fallback', () {
     final integrityJob = workflow.indexOf('\n  integrity:');
     final qualificationJob = workflow.indexOf('\n  qualification:');

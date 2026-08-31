@@ -44,6 +44,8 @@ class DesktopUpdateService extends ChangeNotifier {
       'https://github.com/$_repo/releases/download/macos-latest/'
       'macos-release-manifest.json';
   static const _maxReleaseManifestBytes = 128 * 1024;
+  static const _windowsReleasePageSize = 100;
+  static const _maxWindowsReleasePages = 10;
 
   final http.Client _httpClient;
   final bool _ownsHttpClient;
@@ -239,23 +241,33 @@ class DesktopUpdateService extends ChangeNotifier {
     return '$localAppData\\VinabikeERP';
   }
 
-  Future<DesktopUpdateInfo> _fetchLatestWindowsRelease() async {
-    final uri =
-        Uri.parse('https://api.github.com/repos/$_repo/releases?per_page=30');
-    final response = await _httpClient.get(
-      uri,
-      headers: const {'User-Agent': 'VinabikeERP-Updater'},
-    );
-
-    if (response.statusCode != 200) {
-      throw StateError(
-        'GitHub releases request failed with ${response.statusCode}.',
+  Stream<Map<String, dynamic>> _fetchWindowsReleasePages() async* {
+    // Other platforms share this feed and can fill several recent pages.
+    // Keep the same finite discovery budget as the PowerShell installer.
+    for (var page = 1; page <= _maxWindowsReleasePages; page++) {
+      final uri = Uri.parse(
+        'https://api.github.com/repos/$_repo/releases'
+        '?per_page=$_windowsReleasePageSize&page=$page',
       );
+      final response = await _httpClient.get(
+        uri,
+        headers: const {'User-Agent': 'VinabikeERP-Updater'},
+      );
+      if (response.statusCode != 200) {
+        throw StateError(
+          'GitHub releases request failed with ${response.statusCode}.',
+        );
+      }
+      final releases = jsonDecode(response.body) as List<dynamic>;
+      for (final release in releases) {
+        yield release as Map<String, dynamic>;
+      }
+      if (releases.length < _windowsReleasePageSize) return;
     }
+  }
 
-    final releases = jsonDecode(response.body) as List<dynamic>;
-    for (final releaseValue in releases) {
-      final release = releaseValue as Map<String, dynamic>;
+  Future<DesktopUpdateInfo> _fetchLatestWindowsRelease() async {
+    await for (final release in _fetchWindowsReleasePages()) {
       if (release['draft'] == true || release['prerelease'] == true) {
         continue;
       }

@@ -160,6 +160,10 @@ jobs:
       - name: Show Flutter toolchain
         run: flutter doctor -v
 
+      - name: Test installer discovery on Windows PowerShell
+        shell: powershell
+        run: ./scripts/tests/windows_installer_release_discovery_test.ps1
+
       - name: Clean generated Flutter build state
         run: flutter clean
 
@@ -240,7 +244,21 @@ jobs:
           "app_version=$appVersion" >> $env:GITHUB_OUTPUT
 
       - name: Build Windows release
-        run: flutter build windows --release --dart-define=VINABIKE_BUILD_TAG=${{ steps.meta.outputs.release_tag }}
+        env:
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SUPABASE_PUBLISHABLE_KEY -notlike 'sb_publishable_*') {
+            throw 'Missing or invalid SUPABASE_PUBLISHABLE_KEY.'
+          }
+          flutter build windows --release `
+            --dart-define=VINABIKE_BUILD_TAG="$env:RELEASE_TAG" `
+            --dart-define=AI_AGENT_GATEWAY_ENABLED=true `
+            --dart-define=SUPABASE_PUBLISHABLE_KEY="$env:SUPABASE_PUBLISHABLE_KEY"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Windows release compilation failed.'
+          }
 
       # The ERP initializes its production Supabase fallback during startup.
       # A CI process-launch smoke would therefore contact production, so this
@@ -430,8 +448,8 @@ jobs:
 
           Install or update from PowerShell:
 
-              Invoke-WebRequest https://raw.githubusercontent.com/Ccatalan7/bikeshop-erp/main/scripts/install_vinabike_erp.ps1 -OutFile \$env:TEMP\install_vinabike_erp.ps1
-              powershell -ExecutionPolicy Bypass -File \$env:TEMP\install_vinabike_erp.ps1 -Launch
+              Invoke-WebRequest -UseBasicParsing https://github.com/$GH_REPO/releases/download/$RELEASE_TAG/install_vinabike_erp.ps1 -OutFile "\$env:TEMP\install_vinabike_erp.ps1"
+              powershell.exe -NoProfile -ExecutionPolicy Bypass -File "\$env:TEMP\install_vinabike_erp.ps1" -Launch
 
           The installer downloads $ZIP_NAME and verifies its SHA256 checksum before replacing the local app folder.
           Source commit: $GITHUB_SHA

@@ -22,11 +22,36 @@ The setup is intentionally free and low-friction:
 On each Windows computer, run this once in PowerShell:
 
 ```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/Ccatalan7/bikeshop-erp/main/scripts/install_vinabike_erp.ps1 -OutFile $env:TEMP\install_vinabike_erp.ps1
-powershell -ExecutionPolicy Bypass -File $env:TEMP\install_vinabike_erp.ps1 -Launch
+$ErrorActionPreference = 'Stop'
+Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/Ccatalan7/bikeshop-erp/smartpegas1.0/scripts/install_vinabike_erp.ps1 -OutFile "$env:TEMP\install_vinabike_erp.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\install_vinabike_erp.ps1" -Launch
 ```
 
 After that, users open `Vinabike ERP` from the desktop or Start Menu. Future updates are prepared silently in the background and appear inside the Flutter app only when they are ready to apply.
+
+2026-08-31 correction: a source branch is not an installed release. Publishing
+macOS and Android does not publish Windows. Before handing over an installer,
+compare the live Windows manifest commit with the requested branch head; when
+they differ, describe the Windows version as older instead of implying parity.
+Published release notes use that release's immutable installer URL. The
+bootstrap above reads the maintained installer from the canonical branch, but
+still installs only a published, checksummed Windows artifact.
+
+The installer and Flutter updater scan at most ten pages of 100 releases.
+macOS entries can fill an entire first page; absence there is not proof that no
+Windows release exists. Both readers stop at the first matching candidate or
+the end of the feed and preserve network/manifest failures. The PowerShell
+discovery regression executes the real function with fixtures, without running
+the installer entry point, and is also run on Windows PowerShell in CI.
+Assign the REST response before normalizing it with an array expression:
+wrapping the invocation directly nests the JSON array as one pipeline object,
+so a real 100-release page falsely looks like a one-item terminal page. The
+fixtures preserve that actual PowerShell transport behavior.
+
+Windows release builds must explicitly enable the production AI gateway and
+receive the public Supabase publishable key, just like macOS/Android. Missing
+build configuration fails before packaging; a newer Git SHA alone does not
+activate a compile-time-disabled runtime.
 
 ## Publishing An Update
 

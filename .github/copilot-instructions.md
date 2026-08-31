@@ -1585,6 +1585,21 @@ terminal until a new repair commit exists.
 
 ### Windows Current Architecture
 
+2026-08-31 correction: source parity and release parity are separate gates.
+A Windows installation stayed on July's build after a newer macOS/Android
+publication because Windows had not been published. Bind the Windows manifest
+to the requested live branch head before handing over its command. The Windows
+build also needs the explicit production AI gateway/public-key defines; source
+inclusion does not override a disabled compile-time runtime. Both Windows
+release readers paginate with a ten-page/100-entry bound, since other platform
+releases can displace Windows beyond the first page. Use the immutable
+installer attached to the verified release when handing over a specific build;
+do not assume the older bootstrap on another branch contains the same fixes.
+For PowerShell REST pages, assign the response first and normalize the variable,
+not the invocation. Invoke-RestMethod emits its JSON array as one pipeline
+object; wrapping that call directly changes a real 100-entry page into an outer
+array of length one. Discovery fixtures must preserve that transport boundary.
+
 Primary files:
 
 - `.github/workflows/windows-release.yml` always builds, validates, packages,
