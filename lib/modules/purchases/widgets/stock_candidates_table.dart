@@ -60,8 +60,8 @@ class StockCandidatesTable extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'EN BODEGA',
-                        style: PurchaseType.label
-                            .copyWith(color: tokens.inkFaint),
+                        style:
+                            PurchaseType.label.copyWith(color: tokens.inkFaint),
                       ),
                     ),
                     SizedBox(
@@ -69,8 +69,8 @@ class StockCandidatesTable extends StatelessWidget {
                       child: Text(
                         'DISPONIBLE',
                         textAlign: TextAlign.end,
-                        style: PurchaseType.label
-                            .copyWith(color: tokens.inkFaint),
+                        style:
+                            PurchaseType.label.copyWith(color: tokens.inkFaint),
                       ),
                     ),
                     SizedBox(width: _chooseWidth(context)),
@@ -78,7 +78,8 @@ class StockCandidatesTable extends StatelessWidget {
                 ),
               ),
               for (final item in report.items)
-                _StockRow(item: item, busy: busy, onChoose: () => onChoose(item)),
+                _StockRow(
+                    item: item, busy: busy, onChoose: () => onChoose(item)),
             ],
           ),
         ),

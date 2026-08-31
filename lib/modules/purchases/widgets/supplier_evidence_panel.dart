@@ -85,8 +85,12 @@ class SupplierEvidencePanel extends StatelessWidget {
             const SizedBox(height: 5),
             if (need.hasPurchases)
               _EvidenceTable(
-                columns: const ['Producto', 'Cantidad', 'Costo unitario',
-                    'Factura'],
+                columns: const [
+                  'Producto',
+                  'Cantidad',
+                  'Costo unitario',
+                  'Factura'
+                ],
                 rows: [
                   for (final purchase in need.purchases)
                     _EvidenceRow(
@@ -135,9 +139,8 @@ class SupplierEvidencePanel extends StatelessWidget {
                       caption: _catalogCaption(item),
                       cells: [
                         _Cell(
-                          value: item.stock == null
-                              ? '—'
-                              : _quantity(item.stock!),
+                          value:
+                              item.stock == null ? '—' : _quantity(item.stock!),
                           caption: item.stock == null ? null : 'unidades',
                         ),
                         _Cell(
@@ -195,8 +198,18 @@ class SupplierEvidencePanel extends StatelessWidget {
   /// dibuja dentro de una fila y una inicialización de locale que falle dejaría
   /// la evidencia en blanco justo cuando el operador la abrió.
   static const List<String> _meses = <String>[
-    'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-    'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
   ];
 
   static String _date(DateTime value) {
@@ -326,8 +339,8 @@ class _EvidenceTable extends StatelessWidget {
                     flex: 24,
                     child: Text(
                       columns.first.toUpperCase(),
-                      style: PurchaseType.label
-                          .copyWith(color: tokens.inkFaint),
+                      style:
+                          PurchaseType.label.copyWith(color: tokens.inkFaint),
                     ),
                   ),
                   for (var i = 0; i < visible; i++)
@@ -338,8 +351,8 @@ class _EvidenceTable extends StatelessWidget {
                         textAlign: TextAlign.end,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: PurchaseType.label
-                            .copyWith(color: tokens.inkFaint),
+                        style:
+                            PurchaseType.label.copyWith(color: tokens.inkFaint),
                       ),
                     ),
                 ],

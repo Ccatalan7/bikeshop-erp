@@ -3792,9 +3792,16 @@ class DecisionLoadFailedSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     return _DecisionStateBand(
       key: const ValueKey('decision-load-failed'),
-      title: 'No se pudo leer esta necesidad',
-      body: 'La consulta no llegó a responder, así que todavía no sabemos si '
-          'hay stock ni qué proveedores comparar. La necesidad no cambió.',
+      title: 'No se pudo leer la bodega',
+      // **Decía de más y de menos a la vez.** «Todavía no sabemos qué
+      // proveedores comparar» dejó de ser cierto: los proveedores y el recibo
+      // ya consultado no le preguntan nada a la bodega y siguen abajo. Lo que
+      // sí falta es saber qué hay en la tienda, y eso es lo único que bloquea:
+      // mirar y refiltrar se puede; comprometer una compra, no.
+      body: 'La consulta de stock no llegó a responder, así que no sabemos qué '
+          'hay en la tienda. Los proveedores y lo ya consultado siguen abajo: '
+          'se pueden revisar y refiltrar, pero no comprometer una compra hasta '
+          'releerla. La necesidad no cambió.',
       actions: [
         FilledButton(
           key: const ValueKey('retry-decision-load'),

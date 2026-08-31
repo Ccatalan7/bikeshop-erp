@@ -86,7 +86,7 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
         onSave: (spokeData) async {
           try {
             final service = context.read<WheelBuildingService>();
-            
+
             // Convert map to WheelSpoke object
             final spokeModel = WheelSpoke(
               id: spoke?.id,
@@ -105,7 +105,7 @@ class _WheelSpokesPageState extends State<WheelSpokesPage> {
               weightGrams: spokeData['weight_grams'],
               isActive: spoke?.isActive ?? true,
             );
-            
+
             if (spoke == null) {
               await service.createSpoke(spokeModel);
             } else {
@@ -392,7 +392,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
   late TextEditingController _lengthController;
   late TextEditingController _tensileStrengthController;
   late TextEditingController _weightController;
-  
+
   double _gauge = 2.0;
   bool _isButted = false;
   String _material = 'stainless_steel';
@@ -413,7 +413,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
         TextEditingController(text: spoke?.tensileStrengthN?.toString() ?? '');
     _weightController =
         TextEditingController(text: spoke?.weightGrams?.toString() ?? '');
-    
+
     if (spoke != null) {
       _gauge = spoke.gauge;
       _isButted = spoke.isButted;
@@ -482,7 +482,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       Row(
                         children: [
                           Expanded(
@@ -511,7 +511,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Gauge and butted
                       Row(
                         children: [
@@ -553,7 +553,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Material and head type
                       Row(
                         children: [
@@ -605,7 +605,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Finish and optional specs
                       Row(
                         children: [
@@ -647,7 +647,7 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       TextFormField(
                         controller: _weightController,
                         decoration: const InputDecoration(
@@ -675,11 +675,11 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                       if (_formKey.currentState!.validate()) {
                         widget.onSave({
                           'name': _nameController.text,
-                          'manufacturer': _manufacturerController.text.isEmpty 
-                              ? null 
+                          'manufacturer': _manufacturerController.text.isEmpty
+                              ? null
                               : _manufacturerController.text,
-                          'model': _modelController.text.isEmpty 
-                              ? null 
+                          'model': _modelController.text.isEmpty
+                              ? null
                               : _modelController.text,
                           'length_mm': int.parse(_lengthController.text),
                           'gauge': _gauge,
@@ -689,10 +689,10 @@ class _SpokeFormDialogState extends State<_SpokeFormDialog> {
                           'head_type': _headType,
                           'tensile_strength_n':
                               _tensileStrengthController.text.isEmpty
-                              ? null 
-                              : int.parse(_tensileStrengthController.text),
-                          'weight_grams': _weightController.text.isEmpty 
-                              ? null 
+                                  ? null
+                                  : int.parse(_tensileStrengthController.text),
+                          'weight_grams': _weightController.text.isEmpty
+                              ? null
                               : double.parse(_weightController.text),
                         });
                       }

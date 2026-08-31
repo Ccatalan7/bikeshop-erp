@@ -7,33 +7,33 @@ class WheelHub {
   final String? id;
   final String? tenantId;
   final String? productId;
-  
+
   // Basic Info
   final String name;
   final String? manufacturer;
   final String? model;
   final String hubType; // 'front' or 'rear'
-  
+
   // Critical Measurements (mm)
   final double oldMm; // Over Locknut Dimension
   final int spokeHoles; // 24, 28, 32, 36, 40
-  
+
   // Flange Measurements (for spoke calculation)
   final double leftFlangeDiameterMm;
   final double rightFlangeDiameterMm;
   final double centerToLeftFlangeMm;
   final double centerToRightFlangeMm;
-  
+
   // Compatibility
   final String brakeType; // 'rim', 'disc_6bolt', 'disc_centerlock'
   final String driverType; // 'freewheel', 'cassette', 'fixed', 'none'
   final String axleType; // 'quick_release', 'thru_axle_12mm', etc.
-  
+
   // Additional Specs
   final int? weightGrams;
   final String? material;
   final String? bearingType;
-  
+
   // Metadata
   final String? notes;
   final String? imageUrl;
@@ -143,30 +143,30 @@ class WheelRim {
   final String? id;
   final String? tenantId;
   final String? productId;
-  
+
   // Basic Info
   final String name;
   final String? manufacturer;
   final String? model;
-  
+
   // Critical Measurements (mm)
   final double erdMm; // Effective Rim Diameter - CRITICAL for spoke calc
   final int spokeHoles; // 24, 28, 32, 36, 40
   final double internalWidthMm;
   final double? externalWidthMm;
   final double? rimDepthMm;
-  
+
   // Specifications
   final String wheelSize; // '26"', '27.5"', '29"', '700c', '650b'
   final String brakeType; // 'rim', 'disc'
   final String rimType; // 'clincher', 'tubular', 'tubeless_ready', 'hookless'
   final String? material; // 'aluminum', 'carbon', 'steel'
-  
+
   // Technical Details
   final int? maxPressurePsi;
   final int? weightGrams;
   final String? spokeHoleDrilling; // 'straight_pull', 'j_bend'
-  
+
   // Metadata
   final String? notes;
   final String? imageUrl;
@@ -268,27 +268,27 @@ class WheelSpoke {
   final String? id;
   final String? tenantId;
   final String? productId;
-  
+
   // Basic Info
   final String name;
   final String? manufacturer;
   final String? model;
-  
+
   // Critical Specs
   final int lengthMm; // Spoke length (290, 292, 294, etc.)
   final double gauge; // Wire thickness (2.0, 1.8, 2.0-1.8 for butted)
   final bool isButted;
-  
+
   // Specifications
   final String material; // 'stainless_steel', 'brass', 'titanium'
   final String? finish; // 'silver', 'black', 'brass'
   final String headType; // 'j_bend', 'straight_pull'
   final String? threadType; // 'standard', 'lock'
-  
+
   // Technical Details
   final int? tensileStrengthN; // Newtons
   final double? weightGrams;
-  
+
   // Metadata
   final String? notes;
   final String? imageUrl;
@@ -382,34 +382,34 @@ class WheelBuild {
   final String? tenantId;
   final String? bikeId;
   final String? mechanicJobId;
-  
+
   // Build Info
   final String buildName;
   final String wheelPosition; // 'front', 'rear'
   final DateTime? buildDate;
-  
+
   // Components
   final String? hubId;
   final String? rimId;
   final String? spokeId;
-  
+
   // Build Specifications
   final int spokeCount;
   final String
       lacingPattern; // 'radial', '1-cross', '2-cross', '3-cross', '4-cross'
-  
+
   // Calculated Spoke Lengths
   final double? leftSpokeLengthMm;
   final double? rightSpokeLengthMm;
-  
+
   // Actual Products Used
   final String? leftSpokeProductId;
   final String? rightSpokeProductId;
-  
+
   // Additional Components
   final String? nippleType;
   final int? rimTapeWidthMm;
-  
+
   // Metadata
   final String? notes;
   final String? mechanicNotes;

@@ -20,7 +20,13 @@ class WorkerHomePage extends StatefulWidget {
   State<WorkerHomePage> createState() => _WorkerHomePageState();
 }
 
-enum _WorkerPortalSection { resumen, tareas, planificacion, asistencias, perfil }
+enum _WorkerPortalSection {
+  resumen,
+  tareas,
+  planificacion,
+  asistencias,
+  perfil
+}
 
 extension _WorkerPortalSectionMeta on _WorkerPortalSection {
   String get label {

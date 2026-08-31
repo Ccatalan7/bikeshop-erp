@@ -1943,10 +1943,7 @@ class _MainLayoutState extends State<MainLayout> {
             ),
           ],
         ),
-        drawer: isPinnedWorkspace
-            ? null
-            : AppDrawer(
-              ),
+        drawer: isPinnedWorkspace ? null : AppDrawer(),
         drawerScrimColor:
             Theme.of(context).colorScheme.scrim.withValues(alpha: 0.36),
         body: routedContent,
@@ -2160,21 +2157,21 @@ class _CompactSheetFrame extends StatelessWidget {
         Visibility(
           visible: showHeader,
           child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800),
+            padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         ),
         Expanded(child: child),
       ],
@@ -2428,7 +2425,8 @@ class _CompactWorkspaceToolsSheetState
                 // La herramienta abierta se ve marcada: en el drawer anterior
                 // se veía, y sin eso no se sabe a cuál se está volviendo.
                 selected: toolbarService.activeTool == tool,
-                selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+                selectedTileColor:
+                    Theme.of(context).colorScheme.primaryContainer,
                 leading: Icon(presentation.icon),
                 title: Text(presentation.title),
                 trailing: Row(
@@ -2522,8 +2520,7 @@ class _CompactWorkspaceToolsSheetState
     BuildContext context,
     WorkspaceManager manager,
   ) {
-    final atLimit =
-        manager.workspaces.length >= WorkspaceManager.maxWorkspaces;
+    final atLimit = manager.workspaces.length >= WorkspaceManager.maxWorkspaces;
     return ListTile(
       key: const ValueKey('mobile-workspace-new'),
       minTileHeight: 48,
@@ -3469,8 +3466,8 @@ class _AppSidebarState extends State<AppSidebar> {
                                   navigationService: navigationService,
                                 );
                               },
-                              icon: const Icon(Icons.palette_outlined,
-                                  size: 17),
+                              icon:
+                                  const Icon(Icons.palette_outlined, size: 17),
                               label: const Text(
                                 'Apariencia',
                                 maxLines: 1,
@@ -3504,7 +3501,8 @@ class _AppSidebarState extends State<AppSidebar> {
                               minWidth: 36,
                               minHeight: 36,
                             ),
-                            tooltip: isRail ? 'Expandir menú' : 'Compactar menú',
+                            tooltip:
+                                isRail ? 'Expandir menú' : 'Compactar menú',
                             onPressed: () {
                               final nextMode = isRail
                                   ? NavigationChromeMode.expanded
@@ -3925,7 +3923,6 @@ class AppNavigationRail extends StatelessWidget {
           .setPreferredChromeMode(NavigationChromeMode.expanded);
     }
   }
-
 }
 
 /// One rail module trigger. Single-destination modules navigate directly;
@@ -4024,52 +4021,53 @@ class _RailModuleDestinationState extends State<_RailModuleDestination> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-          child: Text(
-            module.title,
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        // The badge's durable action, shared with sidebar and drawer through
-        // the destination model.
-        if (module.resolvedBadgeRoute != null)
-          MenuItemButton(
-            leadingIcon:
-                const Icon(Icons.notifications_active_outlined, size: 18),
-            onPressed: () => context.go(module.resolvedBadgeRoute!),
-            child: Text(
-              'Ver ${module.badgeCount} '
-              '${module.badgeCount == 1 ? 'pendiente' : 'pendientes'}',
-            ),
-          ),
-        for (final item in module.items)
-          if (item.isHeader)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-              child: Text(
-                item.title,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.onSurfaceVariant,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+                child: Text(
+                  module.title,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
-            )
-          else
-            MenuItemButton(
-              leadingIcon: Icon(item.icon, size: 18),
-              trailingIcon: (module.subItemBadgeCounts[item.route] ?? 0) > 0
-                  ? _RailBadge(
-                      count: module.subItemBadgeCounts[item.route]!,
-                    )
-                  : null,
-              onPressed: () => _navigate(item.route),
-              child: Text(item.title),
-            ),
+              // The badge's durable action, shared with sidebar and drawer through
+              // the destination model.
+              if (module.resolvedBadgeRoute != null)
+                MenuItemButton(
+                  leadingIcon:
+                      const Icon(Icons.notifications_active_outlined, size: 18),
+                  onPressed: () => context.go(module.resolvedBadgeRoute!),
+                  child: Text(
+                    'Ver ${module.badgeCount} '
+                    '${module.badgeCount == 1 ? 'pendiente' : 'pendientes'}',
+                  ),
+                ),
+              for (final item in module.items)
+                if (item.isHeader)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                    child: Text(
+                      item.title,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                else
+                  MenuItemButton(
+                    leadingIcon: Icon(item.icon, size: 18),
+                    trailingIcon:
+                        (module.subItemBadgeCounts[item.route] ?? 0) > 0
+                            ? _RailBadge(
+                                count: module.subItemBadgeCounts[item.route]!,
+                              )
+                            : null,
+                    onPressed: () => _navigate(item.route),
+                    child: Text(item.title),
+                  ),
             ],
           ),
         ),
@@ -4151,102 +4149,99 @@ class _RailDestination extends StatelessWidget {
     // panel ya lo encabeza con su nombre, así que el tooltip repetía la palabra
     // y encima flotaba por encima del propio panel.
     final body = Semantics(
-        button: true,
-        selected: selected,
-        expanded: expanded,
-        label: title + (badgeCount > 0 ? ', $badgeCount pendientes' : ''),
-        excludeSemantics: true,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: enabled ? onTap : null,
-            canRequestFocus: enabled && onTap != null,
-            mouseCursor:
-                enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-            hoverColor: chrome.foreground.withValues(alpha: 0.08),
-            focusColor: chrome.foreground.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: AppNavigationRail.railWidth,
-              height: 58,
-              child: Center(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color:
-                            selected ? chrome.accent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      alignment: Alignment.center,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(selected ? activeIcon : icon,
-                              size: 19, color: foreground),
-                          const SizedBox(height: 3),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 3),
-                            child: Text(
-                              title,
-                              maxLines: 2,
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 9.5,
-                                height: 1.1,
-                                letterSpacing: 0,
-                                color: foreground,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                              ),
+      button: true,
+      selected: selected,
+      expanded: expanded,
+      label: title + (badgeCount > 0 ? ', $badgeCount pendientes' : ''),
+      excludeSemantics: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          canRequestFocus: enabled && onTap != null,
+          mouseCursor:
+              enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+          hoverColor: chrome.foreground.withValues(alpha: 0.08),
+          focusColor: chrome.foreground.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            width: AppNavigationRail.railWidth,
+            height: 58,
+            child: Center(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: selected ? chrome.accent : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(selected ? activeIcon : icon,
+                            size: 19, color: foreground),
+                        const SizedBox(height: 3),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: Text(
+                            title,
+                            maxLines: 2,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              height: 1.1,
+                              letterSpacing: 0,
+                              color: foreground,
+                              fontWeight:
+                                  selected ? FontWeight.w700 : FontWeight.w500,
                             ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasSubmenu)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: CustomPaint(
+                        size: const Size(6, 6),
+                        painter: _RailSubmenuCorner(
+                          color: selected
+                              ? chrome.onAccent.withValues(alpha: 0.75)
+                              : chrome.mutedForeground.withValues(alpha: 0.65),
+                        ),
                       ),
                     ),
-                    if (hasSubmenu)
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: CustomPaint(
-                          size: const Size(6, 6),
-                          painter: _RailSubmenuCorner(
-                            color: selected
-                                ? chrome.onAccent.withValues(alpha: 0.75)
-                                : chrome.mutedForeground
-                                    .withValues(alpha: 0.65),
+                  if (badgeCount > 0)
+                    Positioned(
+                      top: -1,
+                      right: 2,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: chrome.attention,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: chrome.canvas,
+                            width: 1.5,
                           ),
                         ),
                       ),
-                    if (badgeCount > 0)
-                      Positioned(
-                        top: -1,
-                        right: 2,
-                        child: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: chrome.attention,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: chrome.canvas,
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
           ),
         ),
+      ),
     );
 
     if (hasSubmenu) return body;
@@ -4336,7 +4331,6 @@ class AppDrawer extends StatefulWidget {
   const AppDrawer({
     super.key,
   });
-
 
   @override
   State<AppDrawer> createState() => _AppDrawerState();
@@ -4648,8 +4642,6 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-
-
   Widget _buildCompactNavigationSearch(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
@@ -4771,13 +4763,6 @@ class _AppDrawerState extends State<AppDrawer> {
       },
     );
   }
-
-
-
-
-
-
-
 
   @override
   Widget build(BuildContext context) {

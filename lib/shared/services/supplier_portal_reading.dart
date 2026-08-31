@@ -10,6 +10,8 @@
 /// acción distinta.
 library;
 
+import 'supplier_need_portal_search.dart';
+
 /// Lo que la sonda encontró en la página, sin interpretar.
 class SupplierPortalObservation {
   const SupplierPortalObservation({
@@ -29,6 +31,11 @@ class SupplierPortalObservation {
 class SupplierPortalProbe {
   const SupplierPortalProbe({
     required this.searchUrlTemplate,
+    this.sessionLoginUrl,
+    this.needSearchUrlTemplate,
+    this.needSearchTermLimit = 40,
+    this.needSearchAdapter,
+    this.catalogTaxonomy,
     this.loggedOutPattern,
     this.notFoundPattern,
     this.pricePattern,
@@ -37,6 +44,15 @@ class SupplierPortalProbe {
   });
 
   final String searchUrlTemplate;
+  final String? sessionLoginUrl;
+  final String? needSearchUrlTemplate;
+  final int needSearchTermLimit;
+  final SupplierNeedPortalAdapter? needSearchAdapter;
+
+  /// La taxonomía que ya se le descubrió a este portal, si alguna. Es caché
+  /// con vencimiento, nunca una tabla escrita a mano por proveedor: cuando
+  /// falta o venció, se vuelve a descubrir.
+  final SupplierPortalCatalogTaxonomy? catalogTaxonomy;
   final String? loggedOutPattern;
   final String? notFoundPattern;
   final String? pricePattern;
@@ -49,6 +65,38 @@ class SupplierPortalProbe {
         '{code}',
         Uri.encodeQueryComponent(code.trim()),
       );
+
+  /// **Una tienda con API no necesita una URL de buscador.** El requisito de
+  /// `{query}` describe el camino por navegador: abrir el buscador del portal
+  /// y leer su HTML. Una tienda WooCommerce o PrestaShop contesta por JSON, y
+  /// exigirle además una plantilla de página la dejaba fuera del barrido
+  /// automático teniendo catálogo, precio y stock publicados.
+  bool get canSearchNeeds =>
+      needSearchAdapter != null &&
+      ((needSearchUrlTemplate?.contains('{query}') ?? false) ||
+          needSearchAdapter!.canReadCatalogApi);
+
+  SupplierNeedSearchPlan? planForNeed(SupplierNeedSearchRequest request) {
+    final adapter = needSearchAdapter;
+    if (!canSearchNeeds || adapter == null) return null;
+    return buildSupplierNeedSearchPlan(
+      request: request,
+      adapter: adapter,
+      maxLength: needSearchTermLimit,
+    );
+  }
+
+  bool canSearchNeed(SupplierNeedSearchRequest request) =>
+      planForNeed(request) != null;
+
+  String? urlForNeedQuery(String query) {
+    final template = needSearchUrlTemplate;
+    if (template == null || !template.contains('{query}')) return null;
+    return template.replaceAll(
+      '{query}',
+      Uri.encodeQueryComponent(query.trim()),
+    );
+  }
 }
 
 enum SupplierAvailabilityStatus {

@@ -1,0 +1,24 @@
+{
+  "source": {
+    "date": "2026-08-31",
+    "needId": "b9484ed6-52d8-45cb-8b50-540caabf1d4e",
+    "revision": 3,
+    "note": "Respuestas finales observadas en las dos llamadas reales de la app canónica al retomar la necesidad. Sólo modelo, texto final y estado; sin headers ni credenciales. No son respuestas sintetizadas por una prueba."
+  },
+  "readings": [
+    {
+      "id": "688162167851609641",
+      "status": 200,
+      "model": "gemini-2.5-flash-lite",
+      "text": "```json\n{\"rows\":[{\"id\":\"peticion\",\"facts\":[\n  {\"field\":\"pad_finned\",\"value\":false,\"quote\":\"sin aletas de refrigeración\",\"relation\":\"same\"},\n  {\"field\":\"compound_type\",\"value\":\"Orgánico\",\"quote\":\"resina\",\"relation\":\"same\"},\n  {\"field\":\"brake_system\",\"value\":\"Shimano\",\"quote\":\"Shimano BR-MT200\",\"relation\":\"same\"}\n]}]}\n```",
+      "finishReason": "STOP"
+    },
+    {
+      "id": "688162167851609642",
+      "status": 200,
+      "model": "gemini-2.5-flash-lite",
+      "text": "```json\n{\"requirements\":[]}\n```",
+      "finishReason": "STOP"
+    }
+  ]
+}

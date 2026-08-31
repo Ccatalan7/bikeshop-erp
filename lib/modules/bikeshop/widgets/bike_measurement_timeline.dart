@@ -109,7 +109,7 @@ class _TimelineSplinePainter extends CustomPainter {
       final normalizedX = points.length == 1 ? 0.5 : i / (points.length - 1);
       final val = points[i].valueNumeric ?? 0.0;
       final normalizedY = (val - minVal) / range;
-      
+
       final x = normalizedX * width;
       final y = height - yPad - (normalizedY * drawableHeight);
       paintPoints.add(Offset(x, y));
@@ -152,7 +152,7 @@ class _TimelineSplinePainter extends CustomPainter {
         ],
       )
       ..style = PaintingStyle.fill;
-    
+
     canvas.drawPath(fillPath, fillPaint);
 
     // Glowing main stroke
@@ -185,12 +185,12 @@ class _TimelineSplinePainter extends CustomPainter {
             point.summary?.isNotEmpty == true ? point.summary! : point.title;
         // Draw little connecting line
         canvas.drawLine(
-          pos, 
-          Offset(pos.dx, pos.dy - 20), 
+            pos,
+            Offset(pos.dx, pos.dy - 20),
             Paint()
               ..color = Colors.grey.shade300
               ..strokeWidth = 1.5);
-        
+
         textPainter.text = TextSpan(
           text: tagText,
           style: TextStyle(
@@ -200,29 +200,29 @@ class _TimelineSplinePainter extends CustomPainter {
           ),
         );
         textPainter.layout();
-        
+
         final rectWidth = textPainter.width + 16;
         final rectHeight = textPainter.height + 10;
         final rectLeft = pos.dx - (rectWidth / 2);
         final rectTop = pos.dy - 20 - rectHeight;
-        
+
         final tagRRect = RRect.fromRectAndRadius(
           Rect.fromLTWH(rectLeft, rectTop, rectWidth, rectHeight),
           const Radius.circular(8),
         );
-        
+
         canvas.drawRRect(
-          tagRRect, 
-          Paint()
-            ..color = isHovered ? Colors.white : Colors.grey.shade50
+            tagRRect,
+            Paint()
+              ..color = isHovered ? Colors.white : Colors.grey.shade50
               ..style = PaintingStyle.fill);
         canvas.drawRRect(
-          tagRRect, 
-          Paint()
-            ..color = isHovered ? Colors.grey.shade400 : Colors.grey.shade200
-            ..style = PaintingStyle.stroke
+            tagRRect,
+            Paint()
+              ..color = isHovered ? Colors.grey.shade400 : Colors.grey.shade200
+              ..style = PaintingStyle.stroke
               ..strokeWidth = 1);
-        
+
         textPainter.paint(canvas, Offset(rectLeft + 8, rectTop + 5));
       }
 

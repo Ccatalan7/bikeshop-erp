@@ -2502,8 +2502,8 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
           taskServiceForAssign.assignTask(task.id!, null).catchError(
             (Object error) {
               if (mounted) {
-                messengerForAssign.showSnackBar(
-                    SnackBar(content: Text('Error: $error')));
+                messengerForAssign
+                    .showSnackBar(SnackBar(content: Text('Error: $error')));
               }
               return task;
             },
@@ -2522,9 +2522,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
       if (task.id != null) {
         final service = taskServiceForAssign;
         final messenger = messengerForAssign;
-        service
-            .assignTask(task.id!, selectedUserId)
-            .catchError((Object error) {
+        service.assignTask(task.id!, selectedUserId).catchError((Object error) {
           if (mounted) {
             messenger.showSnackBar(SnackBar(content: Text('Error: $error')));
           }
@@ -2617,8 +2615,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
           await taskService.cancelTask(task.id!);
           if (mounted) {
             messenger.showSnackBar(SnackBar(
-                content:
-                    Text(isNote ? 'Nota archivada' : 'Tarea cancelada')));
+                content: Text(isNote ? 'Nota archivada' : 'Tarea cancelada')));
           }
         } catch (e) {
           if (mounted) {

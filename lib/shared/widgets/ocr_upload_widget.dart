@@ -5413,10 +5413,9 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
 
   /// «5» y no «5.0»: la cantidad de una factura se lee como la escribe el
   /// proveedor.
-  static String _formatQuantity(double value) =>
-      value == value.roundToDouble()
-          ? value.round().toString()
-          : value.toStringAsFixed(2);
+  static String _formatQuantity(double value) => value == value.roundToDouble()
+      ? value.round().toString()
+      : value.toStringAsFixed(2);
 
   Future<void> _uploadSelectedEntryImageForCreation(
     _NewProductEntry entry,
@@ -8275,7 +8274,6 @@ class _OCRInvoiceDiagnostics {
   bool get shouldWarnBeforeApply =>
       hasTotalMismatch || inconsistentRowCount > 0 || incompleteRowCount > 0;
 }
-
 
 /// Cuántas unidades de inventario entrega UNA unidad comprada.
 ///

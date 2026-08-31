@@ -453,6 +453,7 @@ class AIAssistantSupplyNeedDraft {
 /// server-owned [entityRef]. It never carries a model-authored route. The
 /// application remains the owner of every possible click.
 @immutable
+
 /// Una opción excluyente que el operador puede elegir en la tarjeta. Elegir
 /// NO ejecuta nada: abre la revisión de lo que se hará —el texto exacto de un
 /// mensaje, la línea que se agregará— y recién ahí se confirma.

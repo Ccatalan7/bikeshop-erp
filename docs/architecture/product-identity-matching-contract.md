@@ -573,6 +573,376 @@ Dos trampas que costaron una ronda cada una:
 - **Sin borde de palabra antes de la `V`**, el patrón `V\s*[/.]?\s*A` matchea
   cualquier palabra terminada en «VA»: «cámara nue**VA**» quedaba Schrader, y un
   servicio terminaba con ficha de producto.
+- **`AUTOMATICA` es un adjetivo del producto, no la válvula** (2026-08-30).
+  RBX vende `CAMARA 700 X 25/38C V/DUNLOP 35MM AUTOMATICA`: el tipo declarado es
+  **Dunlop** y la palabra `AUTOMATICA` viene después, describiendo la cámara. Un
+  lector que se quede con la palabra en vez del tipo declarado la mete en una
+  búsqueda de válvula Auto. Lo que manda es el token de tipo —`V/DUNLOP`—, y una
+  contradicción con él elimina, aunque el nombre traiga la palabra.
+
+### «aro 700» es una lectura por marcador (2026-08-30)
+
+Un número suelto no es un tamaño de rueda: `700` puede ser un precio, un código
+o una cantidad, y por eso el lector exige contexto dimensional —`700x28`,
+`700c`, `29"`—. Pero **`aro`, `rodado` y `rin` nombran el tamaño tan
+explícitamente como `V/` nombra la válvula**, y sin leerlos la necesidad real
+«Cámaras aro 700 para reposición del taller» no declaraba su medida: la ficha
+abría muda y el feed se rejuzgaba como «cualquier cámara».
+
+Es lectura por marcador, no un relajamiento del número suelto: «presupuesto 700
+pesos» y «código 700 del proveedor» siguen sin declarar nada.
+
+**El mismo lector lee las dos orillas.** La fila del proveedor y la línea que
+escribe el operador describen el mismo objeto en el mismo idioma; tener dos
+lectores es cómo «Cámaras 700» quedaba muda mientras `CAMARA 700 X 18/25C` sí se
+entendía. Lo único que no comparten son los `capturePatterns`, que pertenecen al
+adaptador de un portal concreto y no describen una petición.
+
+### Un valor de la ficha escrito literal es un dato (2026-08-30)
+
+Si el texto trae **una de las palabras que la propia ficha ofrece** —`6 pernos`,
+`Centerlock`, `Butilo`, `Aluminio`, `700c`, `3/32`—, eso es el dato. No es un
+diccionario nuevo: el vocabulario es el de `allowed_values`, la misma lista que
+el desplegable le muestra al operador. Vale para las dos orillas: él escribe
+`1/8` y el proveedor titula `Cadena 1/2 X 1/8 Kmc`. Sin esta lectura el criterio
+se derivaba y **no eliminaba nada**, porque del lado del catálogo nadie sabía
+leerlo.
+
+Tres guardas, medidas contra cuatro fichas reales:
+
+- **Nada que sea puro número** una vez normalizado (`26"` → `26`, `140`, `32`):
+  un número suelto puede ser cantidad, precio o código. Una **fracción** sí
+  pasa: nadie escribe una cantidad con barra.
+- **Nunca los comodines** —`Otra`, `Otro`, `Desconocido`—: son la forma que
+  tiene la ficha de decir «no consta», y cazarían cualquier «otro» de una frase.
+- **Gana el más largo, y lo contenido en él no es ambigüedad.**
+  `rotor_material` ofrece `Acero` y `Acero Inoxidable`; tratarlos como
+  contradicción cancelaba un criterio que el texto dice sin ninguna duda.
+
+### Un diámetro ETRTO no es una medida francesa (2026-08-30)
+
+`700x28` y `622x30` tienen la misma forma —tres dígitos pegados al ancho— y no
+son lo mismo: el segundo es el código ETRTO, o sea **el mismo aro en
+milímetros**. Leerlo como medida entregaba `622`, que no existe en ninguna
+ficha, así que contradecía `29"` y sacaba del listado la llanta real
+`LLANTA 29 DP-30 NEGRA TR 622X30MM. 32H.` — una exclusión falsa, que es peor que
+no saber.
+
+Los diámetros ETRTO de bicicleta son una lista cerrada del estándar (622, 635,
+630, 584, 571, 559, 547, 540, 507, 451, 406, 349, 305, 203) y se excluyen de esa
+lectura. **No se traducen** a `29"` ni a `700c` porque 622 es los dos: elegir uno
+sería inventar. La fila queda sin dato y se revisa. Una medida ajena de tres
+dígitos —el `350 X 8` de una cámara de carretilla— conserva su contradicción.
+
+### La pulgada se marca con comillas, y el normalizador se las come
+
+`Alexrims Llanta MD30 SSE 27.5" 28h` dice su aro con todas las letras y llegaba
+mudo: el patrón de comillas existía, pero corría sobre el texto ya normalizado,
+donde la comilla no está. Se lee del crudo, por el mismo motivo que la fracción.
+
+### Un número es una medida por su contexto, no por su puntuación (2026-08-30)
+
+Exigir contexto dimensional (`700x28`), comillas (`27.5"`) o un marcador (`aro
+700`) dejaba mudos los nombres que la tienda escribe de verdad: `LLANTA 26
+VISION ALUMINIO`, `Cámaras 29 con válvula Schrader`. Con eso una búsqueda de aro
+29 conservaba llantas 26 y 27.5 **que declaran su medida** — obviamente
+incorrecto.
+
+Lo que convierte un número en medida es **qué palabra tiene al lado**:
+
+- va pegado al `head` de la familia (`camara`, `llanta`, `aro`, `disco`),
+  admitiendo entre medio sólo palabras que no cambian de tema;
+- y es uno de los valores que la ficha ofrece para ese campo.
+
+Lo que queda fuera queda fuera **por su contexto**: `presupuesto 700 pesos` y
+`código 700` tienen otro asunto entre el sustantivo y el número; `llevar 32
+cámaras` lo tiene antes; y `Cámaras 29 unidades` —o `Cámaras 29, unidades`, que
+el normalizador entrega como `29 ~ unidades`— lo tiene después. Ese último guard
+se aplica **al valor, no al camino**: el extractor de identidad leía la cantidad
+como aro igual que la lectura por familia.
+
+Sólo se admite para las medidas que **nombran** el objeto —aro y diámetro de
+disco—, nunca para los radios o el largo de la válvula, que se escriben con su
+propia palabra (`32 hoyos`, `48mm`); si no, «Aro 24» habría declarado además 24
+perforaciones. Y una fila que nombra dos medidas —`CAMARA 700X28C Y 26X1.75
+SURTIDO`— no afirma ninguna, aunque una de las dos no exista en la ficha.
+
+### Un booleano se nombra con el vocabulario de su propio campo (2026-08-30)
+
+Un booleano no tiene `allowed_values`, pero sí etiqueta y descripción. Vale la
+**frase** de la etiqueta sin sus auxiliares (`trae`, `incluye`, `indica`) ni el
+sustantivo de la familia —`Cadena direccional` habría declarado direccional toda
+cadena—, cada palabra suya que se sostenga sola, y los **sinónimos que la ficha
+enumera antes del dos puntos** de su descripción: `Autosellante o anti-pinchazo:
+…`. La prosa posterior no se mina, que es donde vive `pinchazo` a secas — y
+«cámara con pinchazo» es una cámara reventada, no una autosellante.
+
+Cortar por número de letras era arbitrario y dejaba mudo `Incluye missing link`,
+cuya frase es inequívoca aunque sus palabras sean cortas. Se compara por palabra
+completa, nunca por dentro de otra, y la negación se busca en las **dos**
+palabras anteriores: `sin líquido sellante` la pone dos atrás.
+
+**Un sinónimo que la ficha no tiene no se cablea.** El operador dirá «quick
+link» y el campo se llama «missing link»: la corrección es agregarlo al campo.
+
+### Una palabra que nombra un solo valor lo dice (2026-08-30)
+
+Cuando ningún valor de la ficha aparece completo, sirve una palabra distintiva
+que nombre **exactamente uno** de ellos: el taller dice «motor de centro
+**sellado**» y la ficha ofrece `Rodamiento sellado`, `Integrado` y `Cubetas y
+canastillo`. Sigue siendo vocabulario de la ficha —las palabras son de sus
+propios valores— y si alcanza a dos, no elige: `eje cuadrado` no distingue
+`Cuadrado JIS` de `Cuadrado ISO`, y eso es no saber.
+
+**`valve_type` queda fuera de esta ruta.** Sus valores traen `Dunlop`,
+`americana` y `francesa`, que aparecen en cualquier parte de un nombre —y
+`Dunlop` es además una marca: `CAMARA DUNLOP 700X25C` no dice nada de su
+válvula—. La válvula se lee sólo de su marcador, y esta ruta habría entrado por
+la puerta de atrás a ese contrato.
+
+### Una pareja compacta se reparte por los valores de la ficha (2026-08-30)
+
+`Motor de centro 73 x 118` dice las dos medidas, y tirarlas repetía el defecto de
+«Cámaras 700»: un dato explícito convertido en «desconocido» sólo porque no es
+una rueda. El reparto **no usa un orden fijo ni una tabla por familia**: 73 es un
+ancho de caja y no un largo de eje, 118 es un largo de eje y no un ancho de caja,
+así que lo decide `allowed_values`. Por eso funciona también escrito al revés y
+en un nombre de catálogo (`Eje De Motor Sellado 68 X 113mm`), y por eso no toca
+la rueda: una ficha de cámara no tiene dos campos numéricos con valores donde
+repartir `700 x 28`. Si un número calza en dos campos, o los dos en el mismo, no
+hay reparto.
+
+### El nombre reconocido no reemplaza a la petición (2026-08-30)
+
+La página derivaba la ficha y armaba la búsqueda desde
+`productName ?? description`. En cuanto la interpretación reconocía un producto,
+todo lo que el operador había escrito y no cabía en ese nombre dejaba de
+existir: el fake realista del propio módulo tiene `Neumático 27,5` como nombre y
+`neumático económico 27,5 ancho mayor a 2,0` como petición.
+
+**Las dos fuentes se leen por separado y se fusionan por campo:** igual
+conserva, distinto omite, lo que sólo una dice se conserva, y lo guardado manda
+sobre todo. Concatenarlas y pedirle a cada extractor que resolviera
+contradicciones cruzadas fallaba en las dos direcciones —una palabra del nombre
+se pegaba a un número de la petición, y una cantidad de la petición borraba la
+medida del nombre—.
+
+### Qué cuenta como una segunda medida
+
+Sólo lo que el contexto **declara** como medida: la lectura dimensional
+(`700X28C Y 26X1.75`) o la adyacencia al sustantivo (`cámara 700 … cámara aro
+26`). Contar cualquier número permitido que apareciera en el texto borraba el
+dato bueno: `Cámara 700, código 26 del proveedor` decía 700 y quedaba mudo.
+
+Y una segunda medida dimensional **no marca ambigüedad por sí sola**: hay filas
+cuyo segundo número es una nota de equivalencia y no un surtido —`CAMARA 28 X
+1.5/8 … (27X1.1/4)`, donde 28 es la medida—, y eso lo resuelve el extractor de
+identidad. Dos medidas pegadas a un sustantivo sí se anulan: ahí las dos están
+dichas como medida.
+
+Un booleano se lee igual: **todas sus apariciones tienen que coincidir**.
+Quedarse con la primera hacía que «autosellante, la quiero sin sellante»
+declarara que sí lo trae.
+
+### Una medida ya asignada deja de competir (2026-08-30)
+
+`Aro 26 36 hoyos` —como se escribe de verdad— dejaba las perforaciones mudas:
+con dos números pegados el extractor de identidad no separa cuál es cuál, y con
+un `de` en medio (`aro 26 de 36 hoyos`) sí. Una vez que la medida que **nombra**
+el objeto tiene dueño, el texto se relee sin ese número y el resto se desempata
+solo.
+
+No agrega vocabulario: `hoyos` y `agujeros` ya los conoce el extractor, y la
+ficha ni siquiera los nombra —el campo se llama «Número de Rayos /
+Perforaciones»—. Y no quita nada: lo que la primera lectura sí encontró se
+conserva.
+
+### Identidad, specs y compatibilidad son tres ejes (2026-08-31)
+
+Faltar prueba de calce **no** es ser otra clase de pieza. Colapsarlo en
+`product_family` mató las diez filas reales de RBX ante «pastillas para frenos
+Shimano BR-MT200»: todas traían `head = PASTILLA FRENO DISCO` y, a la vez,
+`is_requested = false`.
+
+- **Identidad** — ¿qué pieza es? La decide el `head` **citado** del proveedor
+  contra el vocabulario de la familia, no el veredicto del modelo.
+- **Specs** — ¿qué declara? El lector con cita; una ausencia no cumple.
+- **Compatibilidad** — ¿calza con el modelo pedido? Es un requisito que se
+  **conserva pendiente** mientras nadie lo pruebe, y **nunca elimina por
+  identidad**.
+
+Al lector se le pregunta por **el objeto**, no por la petición: pasarle
+«pastillas para frenos Shimano BR-MT200, de resina y sin aletas» era pedirle
+compatibilidad en el campo de identidad, justo lo que su propio prompt dice que
+no debe decidir.
+
+Y el veredicto pierde el veto: `is_requested` no crea contradicción por sí solo.
+La exclusión real la sostiene la cita —`CUBETA`, `BIELAS`, `FRENO`, `MANGUERA`
+tienen otro sustantivo— y por eso ahora se juzga el `head`, no el texto entero:
+`CUBETA MOTOR 34.8` sigue fuera aunque su fila diga «motor».
+
+**Un patín de V-Brake no es otra familia.** La taxonomía canónica agrupa
+pastilla, zapata y patín en `brake_pad`. Lo que lo separa de una pastilla de
+disco es `brake_type`, que es una **spec** y se lee de su propio nombre.
+Excluirlo por identidad sería inventar una familia que el dominio no tiene.
+
+**Una referencia de fabricante se reconoce por su forma** —letras, guion y
+dígitos: `BR-MT200`, `BP-B05S-RX`, `SM-RT10`—, no por una lista. Si la petición
+la nombra y la fila no la trae, la fila puede listarse pero **no puede ser
+exacta**: cumplir dos specs no es calzar con el modelo.
+
+### Lo que la ficha no sabe expresar sigue siendo un requisito (2026-08-30)
+
+Una plantilla no tiene campo para todo. La de rodamientos trae aplicación y
+código; la de pastillas, el sistema de freno. Cuando el taller pide «con sello
+de goma **a ambos lados**» o «**sin** aletas de refrigeración», ese requisito no
+tiene dónde vivir, y durante un tiempo simplemente desapareció del juicio: una
+fila que no menciona sellos salía **Exacta** por no contradecir nada.
+
+El eje `requested_property` recoge exactamente eso —lo que la petición exige y
+la ficha no absorbió— y se juzga con **cuatro** respuestas, no con una:
+
+| En la fila | Veredicto |
+|---|---|
+| La nombra con la misma polaridad y el alcance pedido | probado |
+| La nombra con la polaridad contraria | contradice |
+| No la nombra | **pendiente** |
+| La nombra con otro alcance (`en un solo lado` ante `a ambos lados`) | **pendiente** |
+
+**La polaridad es del requisito, no de la fila.** El primer intento sólo miraba
+si el proveedor negaba una palabra del pedido, y con eso el juicio quedó
+invertido justo donde más importa: pedir `SIN ALETAS` contra un producto `SIN
+ALETAS` daba contradicción, y contra uno `CON ALETAS` daba exacto. La negación
+además alcanza al sintagma completo —«sin aletas de refrigeración» niega las
+tres palabras—, no sólo a la palabra siguiente.
+
+**`X de Y` nombra una sola cosa.** `motor de centro` es el objeto, no un motor
+con la propiedad «centro»; `aletas de refrigeración` es una exigencia, no dos.
+Sin esa regla cada sintagma del castellano se volvía un requisito extra que
+ninguna fila podía demostrar, y nada volvía a ser exacto.
+
+**No hay vocabulario por referencia.** Una palabra entra si es lo bastante
+específica, no la aporta la familia, no es trámite ni comparador, y ningún
+campo, valor permitido o predicado de la ficha ya la representa. Lo que la ficha
+sí sabe expresar se juzga como criterio, con su operador y su cita.
+
+**Atribuir una frase a un criterio pide evidencia positiva, nunca una cuenta.**
+El primer intento descargaba una palabra suelta contra un criterio que la
+petición no nombraba, suponiendo que el operador lo había escrito con otras
+palabras. No se sostiene: **un criterio puede haberse elegido después**, en
+`Criterios`, sin reescribir la necesidad. Con esa cuenta, un `Aplicación = Maza`
+recién agregado se comía la exigencia «sellados», que no tiene ninguna relación
+con él, y `RODAMIENTO PARA MAZA 6902 ABIERTO SIN SELLOS` salía **Exacto**.
+
+Lo que sí liga una palabra a un campo es el **vocabulario**: sus rótulos, sus
+valores permitidos y las palabras que el dominio reconoce como el mismo valor.
+`kSupplierSpecValueSynonyms` es esa normalización canónica —«resina» y
+`Orgánico` nombran el mismo compuesto—, y **sirve para las dos orillas**: sin
+ella una petición que dice «resina» no reconoce el criterio que ya la
+representa, y una fila que titula `PASTILLA DE RESINA` no demuestra su propio
+compuesto. Es equivalencia de **valor**: la ficha sigue siendo la dueña de qué
+valores existen, y esto nunca decide qué pieza es una fila.
+
+**El participio y el sustantivo son la misma exigencia.** «Rodamientos
+sellados» y «sello de goma» dicen lo mismo, y `ABIERTO SIN SELLOS` contradice a
+la primera aunque no repita su palabra. Con una raíz sólo de plural esa
+contradicción no se veía y la fila quedaba «pendiente» en vez de contradicha.
+
+**El respaldo de un valor tiene un solo dueño.** Un escalar que viaja con la
+fila no prueba por existir: puede venir de un recibo sin cita, o de una lectura
+que confundió al **fabricante** con el sistema al que la pieza sirve. Esa
+decisión estaba escrita dos veces y las dos copias divergieron: la de la
+previsualización no distinguía marca de compatibilidad, así que `MAGURA
+CLARA/LOUISE`, `A10YS` y `D40.11` —pendientes en la lista— salían contradichas
+al abrir la misma ficha **sin cambiar un solo criterio**. Ahora la calcula
+`supplierFactsWithoutBacking`, y la lista, la previsualización y el contador
+leen de ahí.
+
+Y el eje se comporta como los otros dos: **cualquier** requisito pendiente
+—familia, compatibilidad o propiedad pedida— impide llamar cumplida a la fila,
+en la lista, en la previsualización y en el contador. Antes sólo la
+compatibilidad tenía ese poder.
+
+### Dónde está escrito cada criterio, leído y no adivinado (2026-08-31)
+
+Los criterios salen de la petición, pero al guardarlos se pierde con qué
+palabras los escribió el operador: queda `Compuesto = Orgánico` y ya nadie sabe
+que eso se pidió «de resina». Sin ese vínculo el eje de requisitos vuelve a
+exigir la palabra literal y cuenta dos veces lo mismo.
+
+Una lista de sinónimos sólo conoce las palabras que alguien alcanzó a escribir,
+y el objetivo es entender peticiones nuevas. El lector que ya lee la fila de un
+proveedor lee ahora también la petición, y responde **una sola** pregunta: en
+qué palabras está escrito un criterio que ya existe. Se verifican cinco cosas:
+
+1. la cita está **literal** en la petición;
+2. el campo tiene un **criterio vigente** —no puede crear uno—;
+3. el valor leído es **el mismo** que el operador pidió;
+4. la cita **no nombra otro campo** de la ficha, según el vocabulario de la
+   propia ficha —en «… de resina y sin aletas», `Orgánico` citando «sin aletas»
+   pasaba los tres primeros y habría borrado la exigencia equivocada—;
+5. `relation = same`: la ficha dice **lo mismo**, no una familia que lo
+   contenga. «De kevlar» o «titanio» son más específicos que `Orgánico` o
+   `Metálico`; descargarlos dejaría el compuesto demostrado y la fibra no.
+
+**Lo que esto NO prueba, dicho sin adorno.** La cita literal impide inventar
+texto; no impide una conclusión equivocada sobre texto real. Un modelo puede
+responder `same` cuando no lo es, o citar una frase verdadera que no sostiene su
+conclusión, y ninguna de las cinco lo detecta. Lo que sí está acotado —y
+demostrado por regresión— es el daño: un tramo aceptado **remite** la exigencia
+al criterio que la representa y **nunca lo da por demostrado**. Con el mismo
+tramo aceptado y una fila que no prueba el compuesto, la fila sigue sin ser
+exacta. Por eso esta lectura sólo puede descargar lo que ya se está juzgando, y
+por eso cualquier fallo —sin modelo, lento, sin cuota, respuesta ilegible— vuelve
+con cero tramos y el juicio sigue con el vocabulario de la ficha.
+
+`kSupplierSpecValueSynonyms` queda como respaldo sin conexión, no como
+autoridad.
+
+### Lo que la IA aporta, y hasta dónde llega (2026-08-31)
+
+La ficha no puede preguntar por todo. Para lo que queda fuera —«sellados», «a
+ambos lados», «de gel», «3/32», «no cassette»— el módulo usa el mismo lector que
+lee la fila de un proveedor, con dos preguntas y una regla de presentación.
+
+**Qué se le pregunta.** Primero, sobre la petición: *dónde está escrito cada
+criterio vigente* y *qué exige este texto que la ficha no representa*. Se le da
+el texto **completo**, tal como lo escribió el taller, y la lista de lo ya
+representado. La extracción determinista filtra por largo, descarta dígitos y
+absorbe sintagmas —cada filtro por una buena razón— y aun así deja caer
+exigencias antes de que nadie las lea: `gel` por corta, `3/32` por numérica. Lo
+que el lector encuentra se **une** a lo determinista; no lo reemplaza, así que
+sin modelo el juicio sigue siendo el de siempre. Segundo, sobre cada fila: qué
+dice el proveedor de esas exigencias. La exigencia viaja entera —frase del
+taller, polaridad, dimensión y alcance—: preguntar por `3` en vez de `3/32` no
+es una pregunta que nadie pueda contestar.
+
+**Qué se verifica, y qué no.** La cita tiene que estar literal en el texto que
+la origina —petición o fila—, el campo tiene que existir en la ficha, el valor
+tiene que ser el que el operador pidió, la cita no puede nombrar otro campo, y
+`relation = same` distingue un sinónimo de una familia más amplia. Nada de eso
+impide que el modelo se equivoque **dentro** de esos límites: puede responder
+`same` cuando no lo es, o citar una frase real que no sostiene su conclusión. La
+cita literal impide inventar texto, no una conclusión equivocada sobre texto
+real.
+
+**Por eso la frontera es de producto, no de detección.** En la fila se separa
+por **cómo se sabe**: lo dice el proveedor, el proveedor dice lo contrario,
+leído por IA sin confirmar —con su cita, para poder desmentirla—, la IA lo duda,
+o no consta. Una lectura afirmativa nunca se dibuja como cumplimiento; una
+negativa que el código no puede corroborar sobre las palabras citadas es una
+duda y **no descarta la fila**, porque un producto válido perdido por una
+inferencia no vuelve. Y la evidencia directa manda siempre: si el texto del
+proveedor lo dice, eso decide.
+
+**Una lectura pertenece a su pregunta, y ninguna parte suelta la identifica.**
+Se guarda con la exigencia **completa** —la frase del taller, el término, la
+dimensión, la polaridad y el alcance—. El término no basta: «resistente al agua»
+y «resistente al calor» comparten `resistente`, polaridad y alcance. La
+polaridad tampoco: «puños **con** gel» y «puños **sin** gel» comparten palabra y
+frase. Y la frase es además lo que el lector recibe y usa para interpretar, así
+que es parte de la identidad de la pregunta, no un rótulo. Un recibo que no dice
+qué pregunta contestó no reclama ninguna: la exigencia queda desconocida.
 
 ### Un ancho es una medida, no una lista
 

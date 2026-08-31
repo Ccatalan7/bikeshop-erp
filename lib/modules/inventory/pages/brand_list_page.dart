@@ -53,7 +53,7 @@ class _BrandListPageState extends State<BrandListPage> {
     } else {
       setState(() => _isLoading = true);
     }
-    
+
     try {
       final brands = await _brandService.getBrands();
       if (mounted) {

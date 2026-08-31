@@ -1,0 +1,187 @@
+[
+ {
+  "id": 41261,
+  "name": "CAMARA 12X2.125 VALVULA CAUCHO NATURA 34MM RITECH",
+  "sku": "IM04760",
+  "prices": {
+   "price": "1310",
+   "regular_price": "1310",
+   "sale_price": "1310",
+   "price_range": null,
+   "currency_code": "CLP",
+   "currency_symbol": "$",
+   "currency_minor_unit": 0,
+   "currency_decimal_separator": ".",
+   "currency_thousand_separator": ".",
+   "currency_prefix": "$",
+   "currency_suffix": ""
+  },
+  "categories": [
+   {
+    "id": 974,
+    "name": "Camaras",
+    "slug": "camaras-repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/camaras-repuestos/"
+   },
+   {
+    "id": 870,
+    "name": "Repuestos",
+    "slug": "repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/"
+   }
+  ],
+  "is_in_stock": true,
+  "stock_availability": {
+   "text": "999 disponibles",
+   "class": "in-stock wd-style-default"
+  }
+ },
+ {
+  "id": 41253,
+  "name": "CAMARA 26X1.75 2.20 VAL. AUTO 48MM. BUTYL RITECH",
+  "sku": "IM07371",
+  "prices": {
+   "price": "1990",
+   "regular_price": "1990",
+   "sale_price": "1990",
+   "price_range": null,
+   "currency_code": "CLP",
+   "currency_symbol": "$",
+   "currency_minor_unit": 0,
+   "currency_decimal_separator": ".",
+   "currency_thousand_separator": ".",
+   "currency_prefix": "$",
+   "currency_suffix": ""
+  },
+  "categories": [
+   {
+    "id": 974,
+    "name": "Camaras",
+    "slug": "camaras-repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/camaras-repuestos/"
+   },
+   {
+    "id": 870,
+    "name": "Repuestos",
+    "slug": "repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/"
+   }
+  ],
+  "is_in_stock": true,
+  "stock_availability": {
+   "text": "937 disponibles",
+   "class": "in-stock wd-style-default"
+  }
+ },
+ {
+  "id": 40978,
+  "name": "CAMARA 20X4.0 BUTYL VAL. AUTO 48MM. RITECH",
+  "sku": "IM09025",
+  "prices": {
+   "price": "3865",
+   "regular_price": "3865",
+   "sale_price": "3865",
+   "price_range": null,
+   "currency_code": "CLP",
+   "currency_symbol": "$",
+   "currency_minor_unit": 0,
+   "currency_decimal_separator": ".",
+   "currency_thousand_separator": ".",
+   "currency_prefix": "$",
+   "currency_suffix": ""
+  },
+  "categories": [
+   {
+    "id": 974,
+    "name": "Camaras",
+    "slug": "camaras-repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/camaras-repuestos/"
+   },
+   {
+    "id": 870,
+    "name": "Repuestos",
+    "slug": "repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/"
+   }
+  ],
+  "is_in_stock": true,
+  "stock_availability": {
+   "text": "289 disponibles",
+   "class": "in-stock wd-style-default"
+  }
+ },
+ {
+  "id": 40974,
+  "name": "CAMARA 700X28 38C BUTYL VAL. FRANCESA 60MM. RITECH",
+  "sku": "IM09430",
+  "prices": {
+   "price": "2290",
+   "regular_price": "2290",
+   "sale_price": "2290",
+   "price_range": null,
+   "currency_code": "CLP",
+   "currency_symbol": "$",
+   "currency_minor_unit": 0,
+   "currency_decimal_separator": ".",
+   "currency_thousand_separator": ".",
+   "currency_prefix": "$",
+   "currency_suffix": ""
+  },
+  "categories": [
+   {
+    "id": 974,
+    "name": "Camaras",
+    "slug": "camaras-repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/camaras-repuestos/"
+   },
+   {
+    "id": 870,
+    "name": "Repuestos",
+    "slug": "repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/"
+   }
+  ],
+  "is_in_stock": true,
+  "stock_availability": {
+   "text": "927 disponibles",
+   "class": "in-stock wd-style-default"
+  }
+ },
+ {
+  "id": 40971,
+  "name": "CAMARA 14X1.75 2.125 CAUCHO NATURAL VAL. AUTO 48MM. RITECH",
+  "sku": "IM09023",
+  "prices": {
+   "price": "1438",
+   "regular_price": "1438",
+   "sale_price": "1438",
+   "price_range": null,
+   "currency_code": "CLP",
+   "currency_symbol": "$",
+   "currency_minor_unit": 0,
+   "currency_decimal_separator": ".",
+   "currency_thousand_separator": ".",
+   "currency_prefix": "$",
+   "currency_suffix": ""
+  },
+  "categories": [
+   {
+    "id": 974,
+    "name": "Camaras",
+    "slug": "camaras-repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/camaras-repuestos/"
+   },
+   {
+    "id": 870,
+    "name": "Repuestos",
+    "slug": "repuestos",
+    "link": "https://droppbike.cl/categoria-producto/repuestos/"
+   }
+  ],
+  "is_in_stock": true,
+  "stock_availability": {
+   "text": "998 disponibles",
+   "class": "in-stock wd-style-default"
+  }
+ }
+]

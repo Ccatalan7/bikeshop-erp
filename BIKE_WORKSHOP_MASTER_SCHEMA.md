@@ -1426,6 +1426,50 @@ excessive-fanout states remain distinct because they require different next
 actions. Historical purchase evidence never claims current supplier
 availability.
 
+**Need-scoped supplier portal search (2026-08-28).** Supplier history and a
+live portal lookup remain different evidence. The historical supplier row may
+search the open `supply_need` only through a provider-specific
+`need_search_url_template`; it must never substitute the global low-stock
+`supplier_availability_targets_v1` sweep. An exact catalog product keeps the
+separate code/SKU probe. For an unresolved need, `category_id` resolves the
+authoritative `SpecTemplate`; its `technical_family`, field definitions and the
+already validated typed predicates become the request contract. The provider's
+versioned `need_search_adapter` then supplies its search vocabulary, optional
+native navigation, result columns, value aliases and observed composite
+patterns. A provider-wide word search may be enabled only by the reviewed
+`generic_family_search` capability. It requires the durable category and
+technical family, derives the family head from the canonical taxonomy, tries
+that head plus one compact typed identity predicate first, and falls back to
+the head alone only when the narrower query yields no non-conflicting
+candidate. Product names and SKUs never become need-search terms. The portal
+returns catalog rows, and the shared identity extractor
+plus deterministic predicate evaluator eliminate explicit contradictions
+before ranking. `exact` requires every requested predicate to be visible in
+the structured columns or supplier text; an omitted measurement remains
+`possible`. The durable
+`supplier_need_portal_searches` record is tenant-, supplier- and need-scoped,
+so revisiting another need cannot inherit the answer. RBX exposes catalog
+presence and price but not quantity, therefore this result never claims live
+units or stock availability.
+
+This capability is adapter-backed, not a universal promise about arbitrary
+websites. The runner and matcher contain no supplier-hostname or product-family
+branch: a new explicit route/provider-wide word-search is enabled by a reviewed
+adapter row, while a missing or malformed capability fails closed and the
+action is not offered. RBX's legacy empty-result JavaScript alert is
+acknowledged only for its exact known phrase and origin and becomes
+`no_matches`; all other JavaScript alerts remain visible. For
+RBX the configured `bottom_bracket` family navigates the native `TRANSMISION Y
+PARTES > MOTOR (MOVIMIENTO CENTRAL)` category and maps the catalog's composite
+`ancho x largo` notation to its two registered spec keys. The legacy
+catalog requires an authenticated customer session. Its logged-out state does
+not redirect: `Sesion:` is empty and the price query fails near `=`. Both
+signals are classified as `session_expired` before any result is interpreted.
+The modern RBX login page ultimately submits to the supplier's HTTP legacy
+endpoint, so the ERP may prefill but must not silently submit credentials over
+that downgrade; the operator re-establishes the portal session explicitly and
+then retries the need search.
+
 Candidate identity remains product + supplier + currency. The orchestrator
 resolves the complete historical candidate set for every non-conflicting
 eligible product in one view read, then calls the shared scoring kernel once and

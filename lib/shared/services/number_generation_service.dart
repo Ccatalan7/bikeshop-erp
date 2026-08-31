@@ -4,7 +4,7 @@ import 'tenant_service.dart';
 
 /// Service for generating human-friendly sequential document numbers
 /// Format: PREFIX-NNNN (e.g., FV-0143, AS-0324)
-/// 
+///
 /// IMPORTANT: Use preview methods for form display, real methods only when saving!
 /// - previewXxxNumber() → Shows what number WILL be assigned (doesn't increment)
 /// - nextXxxNumber() → Actually assigns and increments (use only when saving)
@@ -66,7 +66,7 @@ class NumberGenerationService {
   // ============================================================
   // PREVIEW METHODS - Use for form display (doesn't increment)
   // ============================================================
-  
+
   /// Preview sales invoice number (e.g., FV-0143)
   Future<String> previewSalesInvoiceNumber() =>
       previewNextNumber('sales_invoice');
@@ -97,7 +97,7 @@ class NumberGenerationService {
   // ============================================================
   // ACTUAL METHODS - Use only when SAVING (increments counter)
   // ============================================================
-  
+
   /// Generate sales invoice number (e.g., FV-0143)
   Future<String> nextSalesInvoiceNumber() => getNextNumber('sales_invoice');
 

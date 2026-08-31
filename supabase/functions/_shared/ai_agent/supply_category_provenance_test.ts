@@ -22,8 +22,7 @@ const authority: AgentAuthority = {
     "ai.read.purchases",
     "ai.read.accounting",
   ],
-  authorityFingerprint:
-    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  authorityFingerprint: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 };
 
 const categoryId = "31313131-3131-4131-8131-313131313131";
@@ -186,6 +185,7 @@ Deno.test("una fila operativa no finge tener identidad de categoría", async () 
 Deno.test("una ficha exacta y una categoría del modelo no pueden convivir", () => {
   const registry = createDefaultAgentToolRegistry();
   let rejected = false;
+  let feedback = "";
   try {
     registry.validateProviderCalls([{
       id: "prepare",
@@ -202,11 +202,89 @@ Deno.test("una ficha exacta y una categoría del modelo no pueden convivir", () 
   } catch (error) {
     rejected = error instanceof ToolRegistryError &&
       error.code === "invalid_tool_arguments";
+    feedback = error instanceof ToolRegistryError ? error.message : "";
   }
   assertEquals(
     rejected,
     true,
     "con producto exacto la categoría la deriva el servidor, no el modelo",
+  );
+  assertEquals(
+    feedback.includes("con catalogItemRef exacto categoryRef debe ser null"),
+    true,
+    "el rechazo le dice al proveedor cómo converger",
+  );
+});
+
+Deno.test("una necesidad general no puede cerrarse eligiendo producto antes de aclarar", () => {
+  const registry = createDefaultAgentToolRegistry();
+  let feedback = "";
+  try {
+    registry.validateProviderCalls([{
+      id: "prepare-general-need",
+      name: "prepare_supply_request",
+      arguments: {
+        items: [draftItem({
+          description: "2 neumáticos aro 29",
+          catalogItemRef: "51515151-5151-4151-8151-515151515151",
+          clarification: "Falta definir el ancho.",
+          clarificationRequired: true,
+          clarificationPrompts: [{
+            id: "tire_width",
+            question: "¿Qué ancho necesitas?",
+            inputKind: "number",
+            options: [],
+            unit: "pulgadas",
+            allowUnknown: true,
+          }],
+        })],
+        profile: "balanced",
+      },
+    }], authority);
+  } catch (error) {
+    feedback = error instanceof ToolRegistryError ? error.message : "";
+  }
+  assertEquals(
+    feedback.includes("catalogItemRef=null"),
+    true,
+    "la reparación conserva la necesidad general en vez de escoger un SKU",
+  );
+});
+
+Deno.test("una opción técnica inválida recibe una corrección accionable", () => {
+  const registry = createDefaultAgentToolRegistry();
+  let feedback = "";
+  try {
+    registry.validateProviderCalls([{
+      id: "prepare-tire-options",
+      name: "prepare_supply_request",
+      arguments: {
+        items: [draftItem({
+          description: "2 neumáticos aro 29",
+          clarification: "Falta definir el ancho.",
+          clarificationRequired: true,
+          clarificationPrompts: [{
+            id: "tire_width",
+            question: "¿Qué ancho necesitas?",
+            inputKind: "single_choice",
+            options: [
+              { value: "2.25", label: "2.25 pulgadas" },
+              { value: "2.40", label: "2.40 pulgadas" },
+            ],
+            unit: null,
+            allowUnknown: true,
+          }],
+        })],
+        profile: "balanced",
+      },
+    }], authority);
+  } catch (error) {
+    feedback = error instanceof ToolRegistryError ? error.message : "";
+  }
+  assertEquals(
+    feedback.includes("value debe usar sólo minúsculas, números, guion o guion bajo"),
+    true,
+    "la medida visible queda en label y el proveedor recibe el formato de value",
   );
 });
 

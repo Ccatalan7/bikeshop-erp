@@ -1,0 +1,45 @@
+{
+  "provenance": "Observed active product names, SKUs, categories and stock quantities from the real tenant catalog, read-only on 2026-08-31. These are not claimed to be fresh results from a supplier portal. Selected from all 60 active products in the Pinones subtree.",
+  "rows": [
+    {
+      "id": "d9bf881d-23b4-442b-861c-ce7ab3b0cacd",
+      "sku": "AE0125",
+      "name": "Espaciador de Cassette RISK 1.5mm Negro",
+      "total": 60,
+      "category": "Espaciadores de Cassette",
+      "stock_quantity": 2
+    },
+    {
+      "id": "b4d84acf-ead7-48d3-a57a-2f7e41fc3439",
+      "sku": "320108",
+      "name": "PIÑON ATORNILLADO DE 7 VELOCIDADES",
+      "total": 60,
+      "category": "Piñones",
+      "stock_quantity": 0
+    },
+    {
+      "id": "a2a80bcc-5555-4427-9a59-e277e0cedd0a",
+      "sku": "S61433",
+      "name": "PIÑON CASSETTE SHIMANO CS-HG200-7, 7-SPEED, 12-14-16-18-21-26-32, BULK ACSHG2007232T",
+      "total": 60,
+      "category": "Cassette",
+      "stock_quantity": 0
+    },
+    {
+      "id": "af11e8dc-f198-4216-8a96-e7ee7b79bbf8",
+      "sku": "18769",
+      "name": "PIÑON FW-734 FOR 7 SPEED 14-34T,COLOR:BR+ED, INDEX WITH FALCON LOGO PACKING:1PCON WHITE BOX",
+      "total": 60,
+      "category": "Piñones",
+      "stock_quantity": 6
+    },
+    {
+      "id": "97d06232-25c4-4d46-9d6b-a64a011b69eb",
+      "sku": "21525",
+      "name": "Piñon SAIGUAN Ruta, CS701, 7 Vel. Cassette, 11/28T, Cromado",
+      "total": 60,
+      "category": "Cassette",
+      "stock_quantity": 0
+    }
+  ]
+}

@@ -67,8 +67,7 @@ void main() {
     expect(opened, 1, reason: 'la CTA tiene que llamar a quien la pasó');
   });
 
-  testWidgets('sin criterios no hay CTA ni separador colgando',
-      (tester) async {
+  testWidgets('sin criterios no hay CTA ni separador colgando', (tester) async {
     await pumpBar(tester, criteriaSummary: 'Solicitud directa');
 
     // El origen sigue ocupando la ranura cuando no hay criterios: es lo único

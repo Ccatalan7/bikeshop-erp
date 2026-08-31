@@ -29,10 +29,8 @@ class WhatsAppOutgoingPreview extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final roles = theme.extension<VinabikeThemeRoles>();
-    final bubbleColor =
-        roles?.selectionContainer ?? scheme.primaryContainer;
-    final onBubble =
-        roles?.onSelectionContainer ?? scheme.onPrimaryContainer;
+    final bubbleColor = roles?.selectionContainer ?? scheme.primaryContainer;
+    final onBubble = roles?.onSelectionContainer ?? scheme.onPrimaryContainer;
 
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 2),
@@ -62,8 +60,8 @@ class WhatsAppOutgoingPreview extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: roles?.shadow ??
-                        scheme.shadow.withValues(alpha: 0.08),
+                    color:
+                        roles?.shadow ?? scheme.shadow.withValues(alpha: 0.08),
                     blurRadius: 4,
                     offset: const Offset(0, 1),
                   ),

@@ -99,7 +99,8 @@ class _PurchaseDocumentPreviewDialogState
         return Dialog(
           insetPadding: const EdgeInsets.all(24),
           clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           child: SizedBox(
             // The document's line rows carry name, SKU, code, quantity, price,
             // discount and amount. Anything narrower than this and the product

@@ -121,8 +121,8 @@ class _OrderRowState extends State<_OrderRow> {
                         // nadie; lo que importa es si el proveedor ya lo tiene.
                         '${order.statusLabel} · ${order.lineCount} '
                         '${order.lineCount == 1 ? 'línea' : 'líneas'}',
-                        style: PurchaseType.meta
-                            .copyWith(color: tokens.inkFaint),
+                        style:
+                            PurchaseType.meta.copyWith(color: tokens.inkFaint),
                       ),
                     ],
                   ),
@@ -141,8 +141,8 @@ class _OrderRowState extends State<_OrderRow> {
                       ),
                       Text(
                         'IVA incluido',
-                        style: PurchaseType.meta
-                            .copyWith(color: tokens.inkFaint),
+                        style:
+                            PurchaseType.meta.copyWith(color: tokens.inkFaint),
                       ),
                     ],
                   ),

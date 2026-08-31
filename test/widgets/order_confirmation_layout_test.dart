@@ -880,7 +880,12 @@ Future<_CallbackHarness> _pumpCallbackHarness(
       orderId: orderId,
       accessToken:
           'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-      expiresAt: DateTime.utc(2026, 8, 28, 13),
+      // **Relativa, no absoluta.** Escrita como `DateTime.utc(2026, 8, 28)`
+      // esta credencial caducó sola el 2026-08-30 y tumbó seis pruebas sin que
+      // cambiara una línea de producción: `_saveOrderAccessUnlocked` exige que
+      // `expiresAt` sea futura. Los otros dos harness de este archivo ya la
+      // escribían relativa.
+      expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
       isReplay: false,
     ),
   );

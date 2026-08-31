@@ -254,7 +254,9 @@ class BikeProductCompatibilityService {
     // donde el valor de una lista es la etiqueta congelada en la fila; ahora la
     // resuelve desde el vocabulario, así que un renombre no rompe una
     // compatibilidad que ya estaba puntuada.
-    final rows = await client.from('spec_facts').select('''
+    final rows = await client
+        .from('spec_facts')
+        .select('''
           subject_id,
           value_text,
           value_number,

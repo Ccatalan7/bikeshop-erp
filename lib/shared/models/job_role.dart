@@ -85,7 +85,7 @@ class JobRole {
   // Helper: Map job title to system role (smart detection)
   static String? inferSystemRole(String jobTitle) {
     final lower = jobTitle.toLowerCase();
-    
+
     if (lower.contains('admin') ||
         lower.contains('dueño') ||
         lower.contains('propietario')) {
@@ -106,7 +106,7 @@ class JobRole {
     if (lower.contains('contador') || lower.contains('contable')) {
       return 'accountant';
     }
-    
+
     return null; // Unknown, user must select
   }
 }

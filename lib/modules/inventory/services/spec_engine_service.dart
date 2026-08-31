@@ -137,8 +137,7 @@ class SpecTemplateField {
           .map(normalizeRuleValue)
           .where((value) => value.isNotEmpty)
           .toSet();
-      narrowed =
-          narrowed == null ? offered : narrowed.intersection(offered);
+      narrowed = narrowed == null ? offered : narrowed.intersection(offered);
     }
     return narrowed;
   }

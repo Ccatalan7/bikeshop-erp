@@ -119,6 +119,7 @@ dependency_overrides:
     path: ./packages/flutter_keyboard_visibility_web
 
 dev_dependencies:
+  fake_async: ^1.3.3
   flutter_test:
     sdk: flutter
   integration_test:

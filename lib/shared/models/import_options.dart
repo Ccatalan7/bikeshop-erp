@@ -2,19 +2,19 @@
 class ImportOptions {
   /// How to handle existing records
   final ImportMode mode;
-  
+
   /// Field to use for matching existing records (e.g., 'sku', 'email', 'rut')
   final String matchField;
-  
+
   /// Which fields to update (null = all fields)
   final List<String>? fieldsToUpdate;
-  
+
   /// Fields to never update (always protected)
   final List<String> protectedFields;
-  
+
   /// Preview changes before applying
   final bool previewMode;
-  
+
   /// Skip records with errors vs. fail entire import
   final bool skipErrors;
 
@@ -49,16 +49,16 @@ class ImportOptions {
 enum ImportMode {
   /// Insert new records only, skip existing (matched by matchField)
   insertOnly,
-  
+
   /// Update existing records only, skip new records
   updateOnly,
-  
+
   /// Insert new records, update existing (UPSERT)
   upsert,
-  
+
   /// Replace ALL fields in existing records (full overwrite)
   replace,
-  
+
   /// Update only changed fields (smart merge)
   updateChanged,
 }

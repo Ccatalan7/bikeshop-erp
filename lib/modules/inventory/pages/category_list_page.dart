@@ -53,12 +53,12 @@ class _CategoryListPageState extends State<CategoryListPage> {
     } else {
       setState(() => _isLoading = true);
     }
-    
+
     try {
       final categories = await _categoryService.getCategories(
         searchTerm: _searchTerm.isEmpty ? null : _searchTerm,
       );
-      
+
       if (mounted) {
         setState(() {
           _categories = categories;

@@ -4,11 +4,11 @@ import 'package:vinabike_erp/modules/bikeshop/services/service_wizard_service.da
 void main() {
   group('ServiceWizardService drivetrain normalization', () {
     test('normalizes weak cable_condition options to diagnosis vocabulary', () {
-      final profile = ServiceWizardProfile(
+      const profile = ServiceWizardProfile(
         id: 'profile-1',
         name: 'Derailleur adjustment',
         serviceFamily: 'drivetrain',
-        questions: const [
+        questions: [
           ServiceProfileQuestion(
             id: 'question-1',
             key: 'cable_condition',
@@ -62,11 +62,11 @@ void main() {
 
     test('normalizes drivetrain cable condition aliases to canonical values',
         () {
-      final profile = ServiceWizardProfile(
+      const profile = ServiceWizardProfile(
         id: 'profile-2',
         name: 'Derailleur adjustment',
         serviceFamily: 'drivetrain',
-        questions: const [
+        questions: [
           ServiceProfileQuestion(
             id: 'question-2',
             key: 'cable_condition',

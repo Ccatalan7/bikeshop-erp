@@ -77,9 +77,8 @@ class WebsiteEditorOAuthIntentGate {
         projectWebsiteEditorModeOntoUri(uri, WebsiteEditorMode.public);
     return Uri(
       path: cleaned.path,
-      query: cleaned.hasQuery && cleaned.query.isNotEmpty
-          ? cleaned.query
-          : null,
+      query:
+          cleaned.hasQuery && cleaned.query.isNotEmpty ? cleaned.query : null,
     ).toString();
   }
 
@@ -223,8 +222,7 @@ class WebsiteEditorOAuthIntentStore {
     required int nowMs,
   }) {
     if (_readRaw() != null) return; // A newer intent owns the key.
-    final intent =
-        WebsiteEditorOAuthIntentGate.decode(taken.raw, nowMs: nowMs);
+    final intent = WebsiteEditorOAuthIntentGate.decode(taken.raw, nowMs: nowMs);
     if (intent == null || intent.nonce != taken.intent.nonce) return;
     _writeRaw(taken.raw);
   }

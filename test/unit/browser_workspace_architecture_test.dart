@@ -269,7 +269,20 @@ void main() {
     expect(registry, contains('ambiguous'));
     expect(registry, contains('exact origin'));
     expect(registry, contains('failed repeated login'));
-    expect(browser, contains('allowInsecureSupplierOrigin: false'));
+    // **El relleno inseguro sólo lo abre una declaración administrada.** Antes
+    // acá se exigía el literal `false`, que dejó de existir cuando el portal
+    // legacy de RBX pasó a estar declarado. Lo que hay que defender no es la
+    // constante: es que la bandera **no tenga otra fuente** que esa
+    // declaración, y que la declaración se lea por la frontera sin secretos
+    // —`supplier_credentials` tiene `revoke all` para `authenticated`—.
+    expect(browser, contains('allowInsecureSupplierOrigin: legacy != null'));
+    expect(browser, isNot(contains('allowInsecureSupplierOrigin: true')));
+    expect(browser, contains('expectedInsecureAction: legacy?.actionUrl'));
+    expect(browser, contains('supplier_legacy_transport_for_origin_v1'));
+    expect(
+      browser,
+      isNot(contains("_db.select( 'supplier_credentials'")),
+    );
     expect(browser, isNot(contains('filled-insecure')));
     expect(supplierForm, contains('canonicalSupplierCredentialOrigin'));
     expect(supplierForm, contains('_obscureSecret = true'));

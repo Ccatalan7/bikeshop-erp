@@ -171,10 +171,15 @@ grep -q 'private.is_locked_employee_advance_storage_object' "$managed_post_late"
 
 grep -q -- '--schema=private' "$ROOT_DIR/scripts/db/production_validation.sh" ||
   fail "production capture omitted the dependency-only private schema"
-grep -q "namespace.nspname in ('public', 'private')" \
+# **Se afirma que `private` entra, no la lista literal de esquemas.** La captura
+# se amplió a `assistant_runtime` el 2026-08-13 y estas dos aserciones seguían
+# pidiendo el literal de dos esquemas, así que el gate quedó rojo por una
+# ampliación correcta. Lo que estas líneas defienden es que la deriva del
+# esquema `private` se capture; ampliar la captura no puede romperlas.
+grep -Eq "namespace\.nspname in \('public', 'private'[,)]" \
   "$ROOT_DIR/scripts/db/production_validation_catalog.sql" ||
   fail "catalog fingerprint omitted private schema drift"
-grep -q "namespace.nspname in ('public', 'private')" \
+grep -Eq "namespace\.nspname in \('public', 'private'[,)]" \
   "$ROOT_DIR/scripts/db/production_validation_acl_roles.sql" ||
   fail "ACL role capture omitted private schema grants"
 

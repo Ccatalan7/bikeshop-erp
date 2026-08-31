@@ -2206,7 +2206,6 @@ class BulkProductEditService {
     });
   }
 
-
   /// El texto buscable de un hecho: las etiquetas de lista si es de lista, o
   /// el escalar en su columna tipada.
   String? _factSearchValue(Map<String, dynamic> row) {

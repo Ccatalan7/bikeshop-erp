@@ -340,7 +340,6 @@ class _ChatContextPanelState extends State<ChatContextPanel> {
     );
   }
 
-
   Widget _buildTaskContent(ThemeData theme, TaskModel task) {
     final colorScheme = theme.colorScheme;
     final statusLabel = switch (task.status) {

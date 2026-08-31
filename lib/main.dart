@@ -2050,8 +2050,7 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     // Si el hilo aún no está cargado se cae a Clientes, que es la general, y la
     // bandeja lo resuelve cuando llegan las conversaciones.
     final chat = Provider.of<ChatProvider>(context, listen: false);
-    final index =
-        chat.conversations.indexWhere((c) => c.id == conversationId);
+    final index = chat.conversations.indexWhere((c) => c.id == conversationId);
     final isSupplier =
         index != -1 && chat.conversations[index].isSupplierConversation;
 

@@ -218,7 +218,7 @@ class _RenderConstraintLayoutBuilder extends RenderBox
 
 /// An even safer version that doesn't use LayoutBuilder at all for simple cases.
 /// Uses MediaQuery for screen-size-based layouts instead.
-/// 
+///
 /// Use this for responsive layouts that only need to know screen dimensions,
 /// not actual parent constraints.
 class MediaQueryLayoutBuilder extends StatelessWidget {
@@ -247,5 +247,5 @@ class MediaQueryLayoutBuilder extends StatelessWidget {
 /// Alias for backward compatibility
 typedef SafeLayoutBuilder = ConstraintLayoutBuilder;
 
-/// Alias for backward compatibility  
+/// Alias for backward compatibility
 typedef DeferredLayoutBuilder = ConstraintLayoutBuilder;

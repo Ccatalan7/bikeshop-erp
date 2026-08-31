@@ -2281,7 +2281,10 @@ class SupplyNeedCriteria {
   const SupplyNeedCriteria({
     required this.predicates,
     this.commercialPreference,
+    this.categoryId,
     this.categoryPath,
+    this.revisionNo,
+    this.technicalFamily,
   });
 
   static const empty = SupplyNeedCriteria(predicates: <SupplyNeedPredicate>[]);
@@ -2293,6 +2296,22 @@ class SupplyNeedCriteria {
 
   /// Ruta legible de la categoría, cuando la interpretación fijó una.
   final String? categoryPath;
+
+  /// Identidad estable de la categoría interpretada. Es la llave que lleva
+  /// al template técnico autoritativo; la ruta legible nunca se usa como
+  /// contrato de matching.
+  final String? categoryId;
+
+  /// Qué revisión de la interpretación produjo estos criterios.
+  ///
+  /// Es el cerrojo de «la pregunta cambió», distinto del `version` de la fila:
+  /// precisar la ficha exige que siga siendo ésta, o se estarían escribiendo
+  /// predicados sobre una categoría que alguien ya reemplazó.
+  final int? revisionNo;
+
+  /// Familia canónica que fija qué se puede enumerar en un proveedor. Viaja
+  /// con la revisión para que el alcance no lo declare cada búsqueda.
+  final String? technicalFamily;
 
   bool get isEmpty =>
       predicates.isEmpty &&
@@ -2307,12 +2326,18 @@ class SupplyNeedCriteria {
 
   factory SupplyNeedCriteria.fromConstraints(
     Object? constraints, {
+    String? categoryId,
     String? categoryPath,
+    int? revisionNo,
+    String? technicalFamily,
   }) {
     if (constraints is! List) {
       return SupplyNeedCriteria(
         predicates: const <SupplyNeedPredicate>[],
+        categoryId: categoryId,
         categoryPath: categoryPath,
+        revisionNo: revisionNo,
+        technicalFamily: technicalFamily,
       );
     }
     final predicates = <SupplyNeedPredicate>[];
@@ -2335,9 +2360,39 @@ class SupplyNeedCriteria {
     return SupplyNeedCriteria(
       predicates: List.unmodifiable(predicates),
       commercialPreference: preference,
+      categoryId: categoryId,
       categoryPath: categoryPath,
+      revisionNo: revisionNo,
+      technicalFamily: technicalFamily,
     );
   }
+
+  /// Si se puede abrir la ficha para precisarla.
+  ///
+  /// Sin categoría no hay template autoritativo que dibujar, y un formulario
+  /// vacío rotulado «precisar» sería una promesa que la pantalla no cumple.
+  bool get canPrecise =>
+      (categoryId?.trim().isNotEmpty ?? false) && revisionNo != null;
+  @override
+  bool operator ==(Object other) =>
+      other is SupplyNeedCriteria &&
+      other.commercialPreference == commercialPreference &&
+      other.categoryId == categoryId &&
+      other.categoryPath == categoryPath &&
+      other.revisionNo == revisionNo &&
+      other.technicalFamily == technicalFamily &&
+      other.predicates.length == predicates.length &&
+      _listEquals(other.predicates, predicates);
+
+  @override
+  int get hashCode => Object.hash(
+        commercialPreference,
+        categoryId,
+        categoryPath,
+        revisionNo,
+        technicalFamily,
+        Object.hashAll(predicates),
+      );
 }
 
 /// Un predicado técnico de la interpretación: «ancho mayor a 2,0».
@@ -2352,6 +2407,29 @@ class SupplyNeedPredicate {
   final String field;
   final String operator;
   final List<Object> values;
+
+  Map<String, Object> toJson() => <String, Object>{
+        'field': field,
+        'operator': operator,
+        'values': values,
+      };
+
+  // **Es un valor, y se compara como tal.** La ficha efectiva se deriva en cada
+  // build, así que sin igualdad por valor cada frame traía una instancia nueva
+  // y `didUpdateWidget` del editor volvía a sembrar el formulario encima de lo
+  // que el operador estuviera escribiendo. Que funcionara antes dependía de que
+  // el estado guardara siempre la MISMA instancia: una condición invisible que
+  // nadie podía ver al leer el widget.
+  @override
+  bool operator ==(Object other) =>
+      other is SupplyNeedPredicate &&
+      other.field == field &&
+      other.operator == operator &&
+      other.values.length == values.length &&
+      _listEquals(other.values, values);
+
+  @override
+  int get hashCode => Object.hash(field, operator, Object.hashAll(values));
 
   /// `null` cuando la entrada no describe un predicado utilizable: sin campo
   /// no hay nada que decir, y escribir «: igual a 9» sería peor que callar.
@@ -3029,4 +3107,15 @@ class SupplierConfirmedAvailability {
       sharpestDriftName: sharpestName,
     );
   }
+}
+
+/// Igualdad elemento a elemento. `List` compara por identidad, que para un
+/// valor derivado en cada build es siempre `false`.
+bool _listEquals(List<Object?> left, List<Object?> right) {
+  if (identical(left, right)) return true;
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }

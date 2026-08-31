@@ -14,9 +14,9 @@ class WheelBuildingService extends ChangeNotifier {
   // ============================================================================
   // SPOKE LENGTH CALCULATOR - ProWheelBuilder Algorithm
   // ============================================================================
-  
+
   /// Calculate spoke length using the ProWheelBuilder formula
-  /// 
+  ///
   /// Formula: L = √(R² + H² + D² - 2*R*H*cos(α))
   /// Where:
   ///   R = Rim radius (ERD/2)
@@ -47,28 +47,28 @@ class WheelBuildingService extends ChangeNotifier {
 
     // Pro Wheel Builder Formula (from official documentation)
     // L = √(R² + F² + C² - 2RF×cos(θ)) - (spoke_hole_diameter / 2)
-    
+
     // Step 1: Compute radii
     final R = erdMm / 2.0; // Rim radius
     final F = flangeDiameterMm / 2.0; // Flange radius (NOT adjusted)
     final C = centerToFlangeMm; // Flange-to-center distance
-    
+
     // Step 2: Compute spoke angle (θ)
     // θ = 360° × crossPattern / (spokeHoles / 2)
     // This is the angle between spokes on the SAME flange side
     final spokesPerSide = spokeHoles / 2.0;
     final thetaDegrees = (360.0 * crossPattern) / spokesPerSide;
     final theta = thetaDegrees * (math.pi / 180.0); // Convert to radians
-    
+
     // Step 3: Apply law of cosines
     final uncorrectedLength = math
         .sqrt((R * R) + (F * F) + (C * C) - (2.0 * R * F * math.cos(theta)));
-    
+
     // Step 4: Apply spoke hole offset correction
     // Subtract half the spoke hole diameter because the spoke sits at the hole edge
     final spokeHoleCorrection = spokeHoleDiameterMm / 2.0;
     final spokeLength = uncorrectedLength - spokeHoleCorrection;
-    
+
     // Round to 0.1mm precision
     return (spokeLength * 10).round() / 10.0;
   }

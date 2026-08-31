@@ -75,8 +75,8 @@ class PurchaseOrderSummary {
       ivaAmount: invoice.ivaAmount,
       total: invoice.total,
       lineCount: invoice.items.length,
-      unitCount: invoice.items
-          .fold<double>(0, (total, item) => total + item.quantity),
+      unitCount:
+          invoice.items.fold<double>(0, (total, item) => total + item.quantity),
     );
   }
 

@@ -23,6 +23,7 @@ class SupplierWorkspaceView extends StatelessWidget {
     required this.loadingMore,
     required this.searchController,
     required this.addedProductIds,
+    this.highlightedProductIds,
     required this.onBack,
     required this.onSearch,
     required this.onLoadMore,
@@ -62,6 +63,9 @@ class SupplierWorkspaceView extends StatelessWidget {
   final ValueChanged<SupplierCatalogItem> onToggleLine;
   final VoidCallback onOpenPortal;
   final VoidCallback onAddPhoto;
+
+  /// Los productos que el juicio compartido acepta destacar como coincidencia.
+  final Set<String>? highlightedProductIds;
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +117,7 @@ class SupplierWorkspaceView extends StatelessWidget {
             addedProductIds: addedProductIds,
             onToggleLine: onToggleLine,
             needPhrase: page.needPhrase,
+            highlightedProductIds: highlightedProductIds,
             widenedLabel: page.widenedLabel,
             basis: basis,
           ),
@@ -240,7 +245,8 @@ class _Identity extends StatelessWidget {
                 children: [
                   Text(
                     profile.name,
-                    style: PurchaseType.sectionTitle.copyWith(color: tokens.ink),
+                    style:
+                        PurchaseType.sectionTitle.copyWith(color: tokens.ink),
                   ),
                   if (profile.legalName != null &&
                       profile.legalName != profile.name)
@@ -248,8 +254,7 @@ class _Identity extends StatelessWidget {
                       profile.legalName!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:
-                          PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
                     ),
                   if (detalle.isNotEmpty)
                     Padding(
@@ -547,11 +552,16 @@ class _CatalogTable extends StatelessWidget {
     required this.addedProductIds,
     required this.onToggleLine,
     required this.needPhrase,
+    this.highlightedProductIds,
     required this.widenedLabel,
     required this.basis,
   });
 
   final String? needPhrase;
+
+  /// Los productos que el juicio compartido acepta destacar. `null` cuando no
+  /// hay ficha con que juzgar: entonces manda lo que dijo el servidor.
+  final Set<String>? highlightedProductIds;
   final String? widenedLabel;
   final PurchaseCostBasis basis;
   final List<SupplierCatalogItem> items;
@@ -561,8 +571,17 @@ class _CatalogTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = PurchaseTokens.of(context);
-    final coinciden = items.where((item) => item.matchesNeed).toList();
-    final resto = items.where((item) => !item.matchesNeed).toList();
+    // **El mismo juicio que la lista de proveedores decide qué se destaca.**
+    // `supplier_catalog_page_v1` marca `matchesNeed` con un criterio propio y
+    // ancho; lo que no pasa la compuerta compartida no se esconde, baja al
+    // resto del catálogo, que sigue accesible y paginado igual.
+    final destacados = highlightedProductIds;
+    final coinciden = items
+        .where((item) => destacados == null
+            ? item.matchesNeed
+            : destacados.contains(item.productId))
+        .toList();
+    final resto = items.where((item) => !coinciden.contains(item)).toList();
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 720;
@@ -586,8 +605,8 @@ class _CatalogTable extends StatelessWidget {
                       flex: 34,
                       child: Text(
                         'PRODUCTO',
-                        style: PurchaseType.label
-                            .copyWith(color: tokens.inkFaint),
+                        style:
+                            PurchaseType.label.copyWith(color: tokens.inkFaint),
                       ),
                     ),
                     if (wide)
@@ -605,8 +624,8 @@ class _CatalogTable extends StatelessWidget {
                       child: Text(
                         'COSTO UNITARIO',
                         textAlign: TextAlign.end,
-                        style: PurchaseType.label
-                            .copyWith(color: tokens.inkFaint),
+                        style:
+                            PurchaseType.label.copyWith(color: tokens.inkFaint),
                       ),
                     ),
                     if (medium)
@@ -739,7 +758,8 @@ class _CatalogRow extends StatelessWidget {
       if (item.sku != null) 'SKU ${item.sku}',
     ];
     final costo = item.suggestedUnitCostNet(withFreight: basis.includesFreight);
-    final deFicha = item.suggestedCostIsCatalog(withFreight: basis.includesFreight);
+    final deFicha =
+        item.suggestedCostIsCatalog(withFreight: basis.includesFreight);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
@@ -785,9 +805,7 @@ class _CatalogRow extends StatelessWidget {
             ),
           _Value(
             flex: 16,
-            value: costo == null
-                ? '—'
-                : PurchaseMoney.format(costo, 'CLP'),
+            value: costo == null ? '—' : PurchaseMoney.format(costo, 'CLP'),
             // El rótulo distingue lo pagado de lo declarado. Sin esto, un costo
             // de ficha que nadie verificó se lee como precio de compra.
             caption: costo == null
@@ -800,9 +818,7 @@ class _CatalogRow extends StatelessWidget {
           if (medium)
             _Value(
               flex: 12,
-              value: item.available == null
-                  ? '—'
-                  : _quantity(item.available!),
+              value: item.available == null ? '—' : _quantity(item.available!),
               caption: (item.available ?? 0) > 0 ? 'unidades' : 'sin stock',
             ),
           const SizedBox(width: 16),
@@ -884,8 +900,7 @@ class _ProductThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = PurchaseTokens.of(context);
     const side = PurchaseSurfaceGeometry.mediaTableRow;
-    final radius =
-        BorderRadius.circular(PurchaseSurfaceGeometry.mediaRadius);
+    final radius = BorderRadius.circular(PurchaseSurfaceGeometry.mediaRadius);
     final url = item.imageUrl;
     return Container(
       width: side,

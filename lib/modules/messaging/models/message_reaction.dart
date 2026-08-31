@@ -48,8 +48,7 @@ class MessageReaction {
       reactorUserId: json['reactor_user_id']?.toString(),
       reactorWaId: json['reactor_wa_id']?.toString(),
       reactorName: json['reactor_name']?.toString(),
-      createdAt:
-          DateTime.parse(json['created_at'].toString()).toLocal(),
+      createdAt: DateTime.parse(json['created_at'].toString()).toLocal(),
     );
   }
 }

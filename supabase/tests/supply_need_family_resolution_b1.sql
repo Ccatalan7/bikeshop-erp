@@ -233,18 +233,23 @@ insert into public.products(
     '99d40000-0000-4000-8000-000000000011', false, 9990, true, 40
   );
 
-insert into public.product_spec_values(
-  id, tenant_id, product_id, spec_definition_id, value_number
+-- El matcher lee spec_facts desde 20260821250000 y el escritor cambió de
+-- dirección en 20260821260000. Sembrar el espejo retirado no construye una
+-- ficha real: hacía que estas pruebas juzgaran sólo el nombre del producto.
+insert into public.spec_facts(
+  id, tenant_id, subject_type, subject_id, spec_definition_id, value_number
 ) values
   (
     '99d40000-0000-4000-8000-000000000071',
     '99d40000-0000-4000-8000-000000000001',
+    'product',
     '99d40000-0000-4000-8000-000000000061',
     '99d40000-0000-4000-8000-000000000021', 10
   ),
   (
     '99d40000-0000-4000-8000-000000000072',
     '99d40000-0000-4000-8000-000000000001',
+    'product',
     '99d40000-0000-4000-8000-000000000062',
     '99d40000-0000-4000-8000-000000000021', 11
   );

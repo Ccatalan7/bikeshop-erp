@@ -144,15 +144,26 @@ export function createSupabaseRuntimeStoreClient(
 
 /**
  * RFC-8259 JSON subset used by the runtime attestation. Object keys are ASCII
- * and sorted bytewise, arrays retain order, and numbers are safe integers.
- * Optional values must be represented explicitly as null by the caller.
+ * and sorted bytewise, arrays retain order, and numbers use the fixed-point
+ * form emitted by JSON.stringify inside the safe JavaScript range. Optional
+ * values must be represented explicitly as null by the caller.
  */
 export function canonicalJson(value: unknown): string {
   if (value === null) return "null";
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") {
-    if (!Number.isSafeInteger(value)) throw new Error("Attested JSON number is invalid");
-    return JSON.stringify(value);
+    if (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER) {
+      throw new Error("Attested JSON number is invalid");
+    }
+    const encoded = JSON.stringify(value);
+    // PostgreSQL jsonb does not preserve exponent notation. Keeping the
+    // attested subset in fixed-point form lets Edge and PostgreSQL rebuild the
+    // exact same bytes while still carrying real technical measurements such
+    // as 2.25 inches. JSON.stringify(-0) intentionally canonicalizes to `0`.
+    if (!/^-?(0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(encoded)) {
+      throw new Error("Attested JSON number is invalid");
+    }
+    return encoded;
   }
   if (typeof value === "string") {
     rejectUnpairedSurrogates(value);

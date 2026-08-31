@@ -14,6 +14,7 @@ import 'package:vinabike_erp/modules/purchases/models/supplier_catalog.dart';
 import 'package:vinabike_erp/modules/purchases/pages/intelligent_purchasing_decision_surfaces.dart';
 import 'package:vinabike_erp/modules/purchases/pages/intelligent_purchasing_surfaces.dart';
 import 'package:vinabike_erp/modules/purchases/pages/intelligent_purchasing_workspace_page.dart';
+import 'package:vinabike_erp/modules/purchases/services/supply_purchase_authorization.dart';
 import 'package:vinabike_erp/modules/purchases/services/intelligent_purchasing_service.dart';
 import 'package:vinabike_erp/modules/settings/services/appearance_service.dart';
 import 'package:vinabike_erp/shared/services/navigation_service.dart';
@@ -114,6 +115,11 @@ Future<void> _goToStep(WidgetTester tester, String label) async {
   }
 }
 
+/// Esta suite no mide la lectura con modelo. Sin un lector inyectado, cada caso
+/// dispara la llamada real contra un Supabase que no existe y deja su
+/// temporizador de plazo en vuelo al desmontar el árbol.
+Future<Object?> _lectorInerte(String prompt) async => '{"rows":[]}';
+
 void main() {
   // La escala del asistente resuelve sus familias con `google_fonts`. En las
   // pruebas se prohíbe la descarga en tiempo de ejecución: sin esto el
@@ -176,6 +182,7 @@ void main() {
               brightness: Brightness.light,
             ),
             home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
               initialNeedId: _FakeIntelligentPurchasingService.need.id,
               service: _FakeIntelligentPurchasingService(),
               gatewayClient: AIAgentGatewayClient(
@@ -270,6 +277,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             service: service,
             gatewayClient: AIAgentGatewayClient(
               transport: _NeverGatewayTransport(),
@@ -360,6 +368,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
           ),
@@ -429,6 +438,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(transport: transport),
           ),
@@ -496,6 +506,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
               transport: _ActionCardGatewayTransport(),
@@ -592,6 +603,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             service: service,
             gatewayClient: AIAgentGatewayClient(transport: transport),
           ),
@@ -772,6 +784,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
@@ -895,6 +908,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
               transport: _NeverGatewayTransport(),
@@ -988,6 +1002,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
@@ -1088,6 +1103,7 @@ void main() {
               brightness: Brightness.light,
             ),
             home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
               service: _FakeIntelligentPurchasingService(),
               gatewayClient: AIAgentGatewayClient(transport: transport),
             ),
@@ -1167,6 +1183,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
@@ -1248,6 +1265,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             service: service,
             gatewayClient: AIAgentGatewayClient(
               transport: _NeverGatewayTransport(),
@@ -1358,6 +1376,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _SupplierFichaService(),
             gatewayClient: AIAgentGatewayClient(
@@ -1456,6 +1475,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
@@ -1545,6 +1565,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             service: _BasketPrecisionService(),
             gatewayClient: AIAgentGatewayClient(
               transport: _NeverGatewayTransport(),
@@ -1645,6 +1666,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(transport: transport),
           ),
@@ -2312,6 +2334,7 @@ void main() {
             brightness: brightness,
           ),
           home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
           ),
@@ -2621,6 +2644,7 @@ void main() {
               brightness: Brightness.light,
             ),
             home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
               initialNeedId: _FakeIntelligentPurchasingService.need.id,
               service: _FakeIntelligentPurchasingService(),
               gatewayClient: AIAgentGatewayClient(
@@ -2753,6 +2777,7 @@ void main() {
               brightness: Brightness.light,
             ),
             home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
               service: _FakeIntelligentPurchasingService(),
               gatewayClient: AIAgentGatewayClient(
                 transport: _SupplyDraftGatewayTransport(),
@@ -2873,6 +2898,7 @@ void main() {
               brightness: Brightness.light,
             ),
             home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
               initialNeedId: needId,
               service: service,
             ),
@@ -4181,12 +4207,18 @@ void main() {
         await mount(tester, _FamilyLaneService(), needId: 'need-family');
         await _goToStep(tester, 'Proveedores');
 
+        // **Lo dice en su lugar, sin vaciar la pantalla.** Hasta el
+        // 2026-08-31 un fallo de la lectura externa escondía también la bodega
+        // ya resuelta; con una necesidad real de pastillas, el `statement
+        // timeout` de la comparación tiró un stock que había respondido 200.
+        // Lo que no cambia es lo que esta prueba defiende: no se concluye nada
+        // sobre datos que nunca llegaron.
         expect(
-          find.byKey(const ValueKey('decision-load-failed')),
+          find.byKey(const ValueKey('provider-results-external-error')),
           findsOneWidget,
         );
         expect(
-          find.byKey(const ValueKey('retry-decision-load')),
+          find.byKey(const ValueKey('provider-results-external-retry')),
           findsOneWidget,
         );
         expect(
@@ -4194,13 +4226,26 @@ void main() {
           findsNothing,
         );
         expect(find.text('Falta confirmar qué producto es'), findsNothing);
+        // **Y la evidencia que sí llegó sigue en pantalla.** Devolver la
+        // sección entera como un mensaje de error escondía el ranking y el
+        // recibo del portal ya recalculados: el 2026-08-31, con la comparación
+        // en 500, la pantalla mostraba sólo la causa mientras el log traía las
+        // diez filas de RBX. La causa encabeza; lo demás se conserva y se
+        // puede seguir refinando.
+        expect(
+          find.byKey(const ValueKey('provider-results')),
+          findsOneWidget,
+          reason: 'la sección se conserva; lo que falló se dice dentro',
+        );
 
         // Y reintentar recupera la decisión de verdad.
-        await tester.tap(find.byKey(const ValueKey('retry-decision-load')));
+        await tester.tap(
+          find.byKey(const ValueKey('provider-results-external-retry')),
+        );
         await tester.pumpAndSettle();
 
         expect(
-          find.byKey(const ValueKey('decision-load-failed')),
+          find.byKey(const ValueKey('provider-results-external-error')),
           findsNothing,
         );
         expect(find.text('Kenda Kwick 27,5 × 2,10'), findsWidgets);
@@ -4398,10 +4443,15 @@ void main() {
         await _goToStep(tester, 'Proveedores');
 
         // La superficie es dueña del caso; el aviso genérico repetiría el
-        // mismo problema en la misma columna.
+        // mismo problema en la misma columna. Desde el 2026-08-31 la dueña es
+        // la sección externa —la que falló—, no la pantalla entera.
+        expect(
+          find.byKey(const ValueKey('provider-results-external-error')),
+          findsOneWidget,
+        );
         expect(
           find.byKey(const ValueKey('decision-load-failed')),
-          findsOneWidget,
+          findsNothing,
         );
         expect(
           find.byKey(const ValueKey('decision-recoverable-error')),
@@ -4409,10 +4459,13 @@ void main() {
         );
         // Y un solo botón de reintento, no dos.
         expect(
-          find.byKey(const ValueKey('retry-decision-load')),
+          find.byKey(const ValueKey('provider-results-external-retry')),
           findsOneWidget,
         );
-        expect(find.widgetWithText(TextButton, 'Reintentar'), findsNothing);
+        expect(
+          find.byKey(const ValueKey('retry-decision-load')),
+          findsNothing,
+        );
       },
     );
 
@@ -4498,9 +4551,13 @@ void main() {
         await mount(tester, _FamilyLaneService(), needId: 'need-family');
         await _goToStep(tester, 'Stock interno');
 
+        // **La bodega ya no paga el fallo de la comparación.** Se leyó bien y
+        // se muestra; lo que falló tiene su propio dueño en la sección de
+        // proveedores. Y lo que esta prueba defiende sigue en pie: ni una banda
+        // genérica duplicada, ni una afirmación falsa sobre el stock.
         expect(
           find.byKey(const ValueKey('decision-load-failed')),
-          findsOneWidget,
+          findsNothing,
         );
         expect(
           find.byKey(const ValueKey('decision-recoverable-error')),
@@ -4680,6 +4737,7 @@ void main() {
               brightness: Brightness.light,
             ),
             home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
               initialNeedId: _FakeIntelligentPurchasingService.need.id,
               service: service,
               gatewayClient: AIAgentGatewayClient(
@@ -4746,6 +4804,7 @@ void main() {
               brightness: Brightness.light,
             ),
             home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
               initialNeedId: _FakeIntelligentPurchasingService.need.id,
               service: service,
               gatewayClient: AIAgentGatewayClient(
@@ -4781,13 +4840,10 @@ void main() {
       );
     });
 
-    /// **El cableado, no el widget.** `SupplyNeedBar` ya aceptaba
-    /// `onOpenCriteria` y nadie se lo pasaba: la CTA que el contrato nombra
-    /// era código muerto y la ranura del resumen recibía el **origen**. Una
-    /// prueba sobre el widget suelto no habría visto nada de eso, porque el
-    /// widget siempre estuvo bien. Ésta monta el espacio de trabajo real.
-    testWidgets('los criterios de la necesidad llegan a su barra',
-        (tester) async {
+    /// **El cableado, no el widget.** Los dos botones de la barra abren dos
+    /// operaciones distintas: la petición original nunca comparte superficie
+    /// con la ficha técnica derivada de ella.
+    testWidgets('Criterios abre sólo la ficha técnica', (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1400, 900);
       addTearDown(tester.view.resetPhysicalSize);
@@ -4825,6 +4881,7 @@ void main() {
               brightness: Brightness.light,
             ),
             home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
               initialNeedId: _FakeIntelligentPurchasingService.need.id,
               service: _CriteriaPurchasingService(),
               gatewayClient: AIAgentGatewayClient(
@@ -4841,20 +4898,213 @@ void main() {
       expect(find.textContaining('mayor a 2,0'), findsWidgets);
       expect(find.text('Solicitud directa'), findsNothing);
 
-      // Y la CTA que el contrato nombra existe y despliega.
+      // «Editar necesidad» conserva exactamente la fila breve histórica.
+      await tester.tap(
+        find.byKey(const ValueKey('edit-supply-need-inline')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+          find.byKey(const ValueKey('need-original-editor')), findsOneWidget);
+      expect(find.byKey(const ValueKey('need-inline-description')),
+          findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('need-inline-quantity')), findsOneWidget);
+      expect(find.byKey(const ValueKey('need-criteria-editor')), findsNothing);
+      // **La edición breve NO estrena scroll.** Sigue viviendo inline en la
+      // barra anclada; sólo la ficha larga se va al scroll de la superficie.
+      expect(
+        find.byKey(const ValueKey('need-criteria-editor-scroll')),
+        findsNothing,
+      );
+      await tester.tap(find.text('Cancelar').first);
+      await tester.pumpAndSettle();
+      // Cancelar vuelve a la barra plegada, sin dejar ninguna de las dos
+      // superficies montadas.
+      expect(find.byKey(const ValueKey('need-original-editor')), findsNothing);
+      expect(find.byKey(const ValueKey('need-criteria-editor')), findsNothing);
+
+      // Y la CTA abre el editor de ficha, no la edición de la petición.
       final criterios = find.byKey(const ValueKey('open-need-criteria'));
       expect(criterios, findsOneWidget);
       await tester.tap(criterios);
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey('need-criteria-disclosure')),
+        find.byKey(const ValueKey('need-criteria-editor')),
         findsOneWidget,
       );
-      expect(find.text('Criterios interpretados'), findsOneWidget);
-      // La preferencia se muestra sin dejar creer que ordena la lista.
+      expect(find.byKey(const ValueKey('need-original-editor')), findsNothing);
       expect(
-        find.text('Nota del operador. No ordena los proveedores.'),
+          find.byKey(const ValueKey('need-inline-description')), findsNothing);
+      expect(find.byKey(const ValueKey('need-inline-quantity')), findsNothing);
+      expect(
+        find.text(
+          'Falta identificar la categoría; cambia lo que estás buscando.',
+        ),
         findsOneWidget,
+      );
+      // La ficha larga sí toma el scroll de la superficie: es la única de las
+      // dos que puede no caber.
+      expect(
+        find.byKey(const ValueKey('need-criteria-editor-scroll')),
+        findsOneWidget,
+      );
+
+      // Y su `Cancelar` devuelve la barra plegada igual que el otro camino.
+      await tester.tap(find.text('Cancelar').first);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('need-criteria-editor')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('need-criteria-editor-scroll')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('open-need-criteria')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('edit-supply-need-inline')),
+        findsOneWidget,
+        reason: 'las dos acciones vuelven a estar disponibles e independientes',
+      );
+    });
+  });
+
+  group('la bodega caída no borra la evidencia del proveedor', () {
+    /// **El recorrido real del 2026-08-31.** Recargar y tocar `Reintentar` con
+    /// `supply_need_stock_bundle_internal_v1` devolviendo `500 / 57014` —la
+    /// sesión autenticada, el resto de las consultas respondiendo 200— dejaba
+    /// la pantalla sin proveedores y sin volver a juzgar el recibo ya guardado:
+    /// la lista sólo se pedía **después** de que la bodega terminara bien.
+    ///
+    /// Lo que este caso fija son las dos mitades de la frontera: el fallo se
+    /// ve, la evidencia que no depende de la bodega se conserva, y nada de eso
+    /// autoriza a comprometer una compra.
+    testWidgets('se pide igual, sobrevive al reintento y no autoriza comprar',
+        (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      _FakeIntelligentPurchasingService.resetSupplyState();
+      _FakeIntelligentPurchasingService.failStock = true;
+      _FakeIntelligentPurchasingService.serveSupplierRanking = true;
+      addTearDown(_FakeIntelligentPurchasingService.resetSupplyState);
+
+      final navigation = NavigationService();
+      final workspaces = WorkspaceManager(
+        sessionIdentity: 'intelligent-purchasing-stock-down',
+      );
+      final appearance = AppearanceService();
+      final chat = ChatProvider();
+      final profile = CurrentUserProfileService();
+      final workspace = workspaces.activeWorkspace!;
+      addTearDown(navigation.dispose);
+      addTearDown(workspaces.dispose);
+      addTearDown(appearance.dispose);
+      addTearDown(chat.dispose);
+      addTearDown(profile.dispose);
+
+      final service = _FakeIntelligentPurchasingService();
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<NavigationService>.value(value: navigation),
+            ChangeNotifierProvider<WorkspaceManager>.value(value: workspaces),
+            ChangeNotifierProvider<AppearanceService>.value(value: appearance),
+            ChangeNotifierProvider<ChatProvider>.value(value: chat),
+            ChangeNotifierProvider<CurrentUserProfileService>.value(
+              value: profile,
+            ),
+            Provider<Workspace>.value(value: workspace),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.resolve(
+              preset: AppearancePresets.all.first,
+              brightness: Brightness.light,
+            ),
+            home: IntelligentPurchasingWorkspacePage(
+              specExtractor: _lectorInerte,
+              initialNeedId: _FakeIntelligentPurchasingService.need.id,
+              service: service,
+              gatewayClient: AIAgentGatewayClient(
+                transport: _NeverGatewayTransport(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // La bodega falló y se dice; y se dice también qué NO se perdió.
+      expect(
+        find.textContaining('No se pudo leer la bodega'),
+        findsWidgets,
+        reason: 'el fallo sigue visible con su causa',
+      );
+      // Y se pidió igual: no cuelga de que la bodega termine bien.
+      expect(
+        _FakeIntelligentPurchasingService.commands,
+        contains('rank'),
+        reason: 'la evidencia del proveedor no depende de la bodega',
+      );
+
+      // Y el proveedor está a la vista, que es lo que desaparecía.
+      expect(
+        find.text('RBX'),
+        findsWidgets,
+        reason: 'la lista de proveedores no desaparece con la bodega caída',
+      );
+
+      // Reintentar con la bodega todavía caída no vuelve a vaciar lo que ya
+      // estaba: se pide la bodega otra vez y el proveedor sigue ahí.
+      _FakeIntelligentPurchasingService.commands.clear();
+      await tester.tap(find.byKey(const ValueKey('retry-decision-load')));
+      await tester.pumpAndSettle();
+      expect(
+        _FakeIntelligentPurchasingService.commands
+            .where((command) => command.startsWith('stock:')),
+        isNotEmpty,
+        reason: 'el reintento vuelve a pedir la bodega',
+      );
+      expect(
+        _FakeIntelligentPurchasingService.commands,
+        isNot(contains('rank')),
+        reason: 'lo ya traído para esta necesidad no se vuelve a pedir ni se '
+            'vacía durante el intento',
+      );
+      expect(
+        find.textContaining('No se pudo leer la bodega'),
+        findsWidgets,
+      );
+      expect(
+        find.text('RBX'),
+        findsWidgets,
+        reason: 'el reintento fallido tampoco borra la evidencia',
+      );
+    });
+
+    test('no saber qué hay en bodega no autoriza a comprar', () {
+      expect(
+        supplyPurchaseAuthorized(hasSelectedNeed: true, resolution: null),
+        isFalse,
+        reason: 'una lectura caída es no saber, no un permiso',
+      );
+      expect(
+        supplyPurchaseAuthorized(
+          hasSelectedNeed: true,
+          resolution: SupplyStockResolution.fromJson(<String, dynamic>{
+            'needId': 'need-a',
+            'needVersion': 1,
+            'revisionNo': 1,
+            'quantity': 2,
+            'unit': 'unit',
+            'lane': 'family',
+            'status': 'ok',
+            'coverage': 'none',
+            'blocksExternal': false,
+            'items': const <Map<String, dynamic>>[],
+            'counts': const <String, dynamic>{'eligible': 0},
+          }),
+        ),
+        isTrue,
+        reason: 'cobertura cero SÍ es saber: ahí se compra',
       );
     });
   });
@@ -5523,6 +5773,12 @@ class _FakeIntelligentPurchasingService extends IntelligentPurchasingService {
   /// La próxima lectura externa falla una vez.
   static bool failNextExternal = false;
 
+  /// La bodega responde `500 / 57014` mientras el resto responde 200.
+  static bool failStock = false;
+
+  /// Sirve el ranking de proveedores en vez de dejarlo caer.
+  static bool serveSupplierRanking = false;
+
   /// El corte accionable quedó truncado: es lo que hace aparecer «Continuar
   /// análisis», que es el control de recarga incremental del grupo principal.
   static bool actionablePageHasMore = false;
@@ -5549,9 +5805,40 @@ class _FakeIntelligentPurchasingService extends IntelligentPurchasingService {
     supplyLane = 'exact';
     externalDelay = Duration.zero;
     failNextExternal = false;
+    failStock = false;
+    serveSupplierRanking = false;
     actionablePageHasMore = false;
     overrideInventorySnapshot = null;
     commands.clear();
+  }
+
+  @override
+  Future<SupplierConcentrationReport> rankSuppliers({
+    String? query,
+    String? category,
+    String? brand,
+    int limit = 4,
+  }) async {
+    commands.add('rank');
+    // Por omisión se comporta como siempre —la lectura real no llega a
+    // ninguna parte en pruebas—, para no cambiarle la composición a los casos
+    // que nunca tuvieron historial. Sólo el caso de la bodega caída la sirve.
+    if (!serveSupplierRanking) return super.rankSuppliers(query: query);
+    return SupplierConcentrationReport.fromJson(<String, dynamic>{
+      'hasMore': false,
+      'items': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'entityId': 'supplier-rbx',
+          'supplierName': 'RBX',
+          'spendSharePercent': 71,
+          'purchaseLines': 3,
+          'purchaseInvoices': 2,
+          'distinctProducts': 2,
+          'evidencePurchaseLines': 3,
+          'evidenceSuppliers': 1,
+        },
+      ],
+    });
   }
 
   @override
@@ -5561,6 +5848,7 @@ class _FakeIntelligentPurchasingService extends IntelligentPurchasingService {
     int offset = 0,
   }) async {
     commands.add('stock:$limit');
+    if (failStock) throw StateError('canceling statement due to statement timeout');
     return SupplyStockResolution.fromJson(
       overrideStockResolution ??
           <String, dynamic>{

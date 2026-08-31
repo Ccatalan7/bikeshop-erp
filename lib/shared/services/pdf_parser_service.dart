@@ -6,11 +6,11 @@ import 'invoice_parser_service.dart';
 // import 'invoice_parser_api_service.dart';
 
 /// Service for extracting text from PDF files
-/// 
+///
 /// **Parsing Strategy:**
 /// 1. Try Python API service first (most accurate, handles complex layouts)
 /// 2. Fallback to Dart parser if API unavailable
-/// 
+///
 /// For scanned PDFs, users should:
 /// 1. Take photo of the PDF on screen, OR
 /// 2. Convert PDF to image first, then use OCR camera/gallery feature
@@ -20,7 +20,7 @@ class PDFParserService {
   // final InvoiceParserApiService _apiService = InvoiceParserApiService();
 
   /// Extract text from a PDF file (digital PDFs only)
-  /// 
+  ///
   /// Works for PDFs with selectable text. For scanned PDFs, use camera/gallery OCR instead.
   Future<PDFExtractionResult> extractTextFromPDF(String filePath) async {
     try {
@@ -29,7 +29,7 @@ class PDFParserService {
 
       // Try direct text extraction (digital PDFs)
       final directText = await _extractTextDirect(filePath);
-      
+
       if (_isValidExtraction(directText)) {
         debugPrint(
             '✅ PDFParserService: Direct text extraction successful (${directText.length} chars)');
@@ -44,7 +44,7 @@ class PDFParserService {
           '⚠️ PDFParserService: PDF appears to be scanned (no selectable text)');
       debugPrint(
           '💡 Please use camera/gallery feature to scan the document instead');
-      
+
       return PDFExtractionResult(
         text: '',
         method: PDFExtractionMethod.scanned,
@@ -58,20 +58,20 @@ class PDFParserService {
   }
 
   /// Parse invoice data from PDF file path (native platforms)
-  /// 
+  ///
   /// Extracts text and parses invoice information (RUT, date, total, etc.)
   Future<ParsedInvoice?> parseInvoiceFromPDF(String filePath) async {
     try {
       final result = await extractTextFromPDF(filePath);
-      
+
       if (result.text.isEmpty) {
         debugPrint('⚠️ No text extracted - likely a scanned PDF');
         return null;
       }
-      
+
       debugPrint(
           '📄 PDFParserService: Parsing invoice from extracted text (method: ${result.method.name})');
-      
+
       // Parse the plain text
       return _invoiceParser.parseInvoiceFromText(result.text);
     } catch (e) {
@@ -81,13 +81,13 @@ class PDFParserService {
   }
 
   /// Parse invoice data from PDF bytes (web platform)
-  /// 
+  ///
   /// Strategy: Using Dart parser only (API integration disabled)
   Future<ParsedInvoice?> parseInvoiceFromBytes(Uint8List bytes,
       {String filename = 'invoice.pdf'}) async {
     try {
       debugPrint('🔍 Using Dart parser for invoice extraction...');
-      
+
       // API integration disabled - uncomment below to re-enable
       /*
       final isApiAvailable = await _apiService.isServiceAvailable();
@@ -100,18 +100,18 @@ class PDFParserService {
         }
       }
       */
-      
+
       // Dart parser (original implementation)
       final result = await _extractTextFromBytes(bytes);
-      
+
       if (result.text.isEmpty) {
         debugPrint('⚠️ No text extracted - likely a scanned PDF');
         return null;
       }
-      
+
       debugPrint(
           '📄 PDFParserService: Parsing invoice from extracted text (method: ${result.method.name})');
-      
+
       // Parse the plain text
       return _invoiceParser.parseInvoiceFromText(result.text);
     } catch (e) {
@@ -127,7 +127,7 @@ class PDFParserService {
       debugPrint('🔍 PDFParserService: Extracting text from PDF bytes');
 
       final directText = await _extractTextDirectFromBytes(bytes);
-      
+
       if (_isValidExtraction(directText)) {
         debugPrint(
             '✅ PDFParserService: Direct text extraction successful (${directText.length} chars)');
@@ -140,7 +140,7 @@ class PDFParserService {
 
       debugPrint(
           '⚠️ PDFParserService: PDF appears to be scanned (no selectable text)');
-      
+
       return PDFExtractionResult(
         text: '',
         method: PDFExtractionMethod.scanned,
@@ -194,7 +194,7 @@ class PDFParserService {
   }
 
   /// Extract text directly from PDF using Syncfusion PDF library
-  /// 
+  ///
   /// Works for digital PDFs with selectable text. Fast and accurate.
   Future<String> _extractTextDirect(String filePath) async {
     try {
@@ -265,7 +265,7 @@ class PDFExtractionResult {
 enum PDFExtractionMethod {
   /// Direct text extraction (digital PDF)
   direct,
-  
+
   /// Scanned PDF detected (no text extraction possible, use camera OCR instead)
   scanned,
 }

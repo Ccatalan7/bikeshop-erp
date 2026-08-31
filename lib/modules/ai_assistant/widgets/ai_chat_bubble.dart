@@ -124,8 +124,7 @@ class _AIChatPanelState extends State<AIChatPanel> {
             'por cuánto lleva vencido.',
     'collections_contact':
         'Contacta al cliente que más me debe por su factura vencida.',
-    'sales_top_customers':
-        '¿Quién me compró más en ese mismo período?',
+    'sales_top_customers': '¿Quién me compró más en ese mismo período?',
     'sales_compare_previous':
         'Compara ese período con el anterior: vendido, cobrado y cantidad de '
             'facturas.',
@@ -908,6 +907,7 @@ class _AssistantActionCard extends StatefulWidget {
   final AIAssistantActionCard card;
   final VoidCallback onTap;
   final void Function(AIAssistantCardOption option) onOption;
+
   /// Devuelve el texto EXACTO que se enviará, resuelto con los mismos valores
   /// que usa el envío: cliente, negocio y quien tiene la sesión abierta.
   final Future<String?> Function(AIAssistantCardOption option) onOptionPreview;
@@ -1186,7 +1186,8 @@ class _AssistantActionCardState extends State<_AssistantActionCard> {
                               child: SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               ),
                             ),
                           ),

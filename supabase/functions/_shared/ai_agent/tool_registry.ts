@@ -656,6 +656,8 @@ const prepareSupplyRequestSchema: StrictJsonSchema = {
                         type: "string",
                         minLength: 1,
                         maxLength: 64,
+                        description:
+                          "Identificador estable en minúsculas para la opción: sólo a-z, 0-9, guion o guion bajo. Conserva medidas y texto visible en label; por ejemplo value=2_25 y label=2.25 pulgadas.",
                       },
                       label: {
                         type: "string",
@@ -1599,41 +1601,79 @@ function validatePrepareSupplyRequestProjection(
       "AI tool arguments are invalid",
     );
   }
-  for (const item of argumentsValue.items) {
+  for (let index = 0; index < argumentsValue.items.length; index += 1) {
+    const item = argumentsValue.items[index];
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const clarification = "clarification" in item ? item.clarification : null;
     const required = "clarificationRequired" in item ? item.clarificationRequired : false;
     const prompts = "clarificationPrompts" in item ? item.clarificationPrompts : null;
     const catalogItemRef = "catalogItemRef" in item ? item.catalogItemRef : null;
     const categoryRef = "categoryRef" in item ? item.categoryRef : null;
-    if (
-      (required === true && typeof clarification !== "string") ||
-      (required === true && typeof catalogItemRef === "string") ||
-      // La ficha exacta manda sobre la categoría: si la línea trae producto,
-      // el servidor deriva su categoría y una enviada por el modelo sólo
-      // podría contradecirla.
-      (typeof catalogItemRef === "string" && typeof categoryRef === "string") ||
-      !validSupplyClarificationPrompts(prompts, required === true)
-    ) {
-      throw new ToolRegistryError(
+    const path = `prepare_supply_request items[${index}]`;
+    if (required === true && typeof clarification !== "string") {
+      throw invalidSupplyDraftProjection(
         status,
-        "invalid_tool_arguments",
-        "AI tool arguments are invalid",
+        `${path}: clarificationRequired=true exige clarification con la duda concreta`,
+      );
+    }
+    if (required === true && typeof catalogItemRef === "string") {
+      throw invalidSupplyDraftProjection(
+        status,
+        `${path}: una línea que todavía requiere aclaración debe conservar catalogItemRef=null; no elijas un producto exacto antes de la respuesta`,
+      );
+    }
+    // La ficha exacta manda sobre la categoría: si la línea trae producto,
+    // el servidor deriva su categoría y una enviada por el modelo sólo podría
+    // contradecirla.
+    if (typeof catalogItemRef === "string" && typeof categoryRef === "string") {
+      throw invalidSupplyDraftProjection(
+        status,
+        `${path}: con catalogItemRef exacto categoryRef debe ser null`,
+      );
+    }
+    const promptMismatch = supplyClarificationPromptsMismatch(
+      prompts,
+      required === true,
+    );
+    if (promptMismatch !== null) {
+      throw invalidSupplyDraftProjection(
+        status,
+        `${path}.clarificationPrompts: ${promptMismatch}`,
       );
     }
   }
 }
 
-function validSupplyClarificationPrompts(
+function invalidSupplyDraftProjection(
+  status: 400 | 502,
+  detail: string,
+): ToolRegistryError {
+  return new ToolRegistryError(
+    status,
+    "invalid_tool_arguments",
+    `AI tool arguments are invalid — ${detail}`,
+  );
+}
+
+function supplyClarificationPromptsMismatch(
   value: unknown,
   required: boolean,
-): boolean {
-  if (!Array.isArray(value) || value.length > 3) return false;
-  if (!required) return value.length === 0;
-  if (value.length < 1) return false;
+): string | null {
+  if (!Array.isArray(value)) return "debe ser un arreglo";
+  if (value.length > 3) return "admite como máximo 3 preguntas";
+  if (!required) {
+    return value.length === 0 ? null : "debe ser [] cuando clarificationRequired=false";
+  }
+  if (value.length < 1) {
+    return "requiere al menos una pregunta cuando clarificationRequired=true";
+  }
   const ids = new Set<string>();
-  for (const prompt of value) {
-    if (!prompt || typeof prompt !== "object" || Array.isArray(prompt)) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const prompt = value[index];
+    const path = `[${index}]`;
+    if (!prompt || typeof prompt !== "object" || Array.isArray(prompt)) {
+      return `${path} debe ser un objeto`;
+    }
     const item = prompt as Record<string, unknown>;
     if (
       !hasExactKeys(item, [
@@ -1643,40 +1683,71 @@ function validSupplyClarificationPrompts(
         "options",
         "unit",
         "allowUnknown",
-      ]) ||
-      typeof item.id !== "string" || !/^[a-z][a-z0-9_]{1,31}$/.test(item.id) ||
-      ids.has(item.id) || typeof item.question !== "string" ||
-      !item.question.trim() || utf8Bytes(item.question.trim()) > 320 ||
-      !["single_choice", "text", "number"].includes(String(item.inputKind)) ||
-      !Array.isArray(item.options) || item.options.length > 5 ||
-      typeof item.allowUnknown !== "boolean" ||
+      ])
+    ) return `${path} debe usar exactamente los seis campos declarados`;
+    if (typeof item.id !== "string" || !/^[a-z][a-z0-9_]{1,31}$/.test(item.id)) {
+      return `${path}.id debe ser snake_case estable de 2 a 32 caracteres`;
+    }
+    if (ids.has(item.id)) return `${path}.id no puede repetirse`;
+    if (
+      typeof item.question !== "string" || !item.question.trim() ||
+      utf8Bytes(item.question.trim()) > 320
+    ) return `${path}.question debe contener una sola pregunta breve`;
+    if (!["single_choice", "text", "number"].includes(String(item.inputKind))) {
+      return `${path}.inputKind debe ser single_choice, text o number`;
+    }
+    if (!Array.isArray(item.options) || item.options.length > 5) {
+      return `${path}.options debe ser un arreglo de hasta 5 opciones`;
+    }
+    if (typeof item.allowUnknown !== "boolean") {
+      return `${path}.allowUnknown debe ser booleano`;
+    }
+    if (
       !(item.unit === null ||
         (typeof item.unit === "string" && item.unit.trim() &&
           utf8Bytes(item.unit.trim()) <= 32))
-    ) return false;
+    ) {
+      return `${path}.unit debe ser null o una unidad breve`;
+    }
     ids.add(item.id);
     if (item.inputKind === "single_choice") {
-      if (item.options.length < 2 || item.unit !== null) return false;
+      if (item.options.length < 2) {
+        return `${path}.options necesita entre 2 y 5 alternativas para single_choice`;
+      }
+      if (item.unit !== null) return `${path}.unit debe ser null para single_choice`;
       const optionValues = new Set<string>();
-      for (const option of item.options) {
-        if (!option || typeof option !== "object" || Array.isArray(option)) return false;
+      for (let optionIndex = 0; optionIndex < item.options.length; optionIndex += 1) {
+        const option = item.options[optionIndex];
+        const optionPath = `${path}.options[${optionIndex}]`;
+        if (!option || typeof option !== "object" || Array.isArray(option)) {
+          return `${optionPath} debe ser un objeto`;
+        }
         const candidate = option as Record<string, unknown>;
+        if (!hasExactKeys(candidate, ["value", "label"])) {
+          return `${optionPath} debe contener sólo value y label`;
+        }
         if (
-          !hasExactKeys(candidate, ["value", "label"]) ||
           typeof candidate.value !== "string" ||
-          !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(candidate.value) ||
-          optionValues.has(candidate.value) || typeof candidate.label !== "string" ||
-          !candidate.label.trim() || utf8Bytes(candidate.label.trim()) > 160
-        ) return false;
+          !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(candidate.value)
+        ) {
+          return `${optionPath}.value debe usar sólo minúsculas, números, guion o guion bajo; deja medidas y texto visible en label`;
+        }
+        if (optionValues.has(candidate.value)) {
+          return `${optionPath}.value no puede repetirse`;
+        }
+        if (
+          typeof candidate.label !== "string" || !candidate.label.trim() ||
+          utf8Bytes(candidate.label.trim()) > 160
+        ) return `${optionPath}.label debe contener la alternativa visible`;
         optionValues.add(candidate.value);
       }
     } else if (item.options.length !== 0) {
-      return false;
+      return `${path}.options debe ser [] para ${String(item.inputKind)}`;
     } else if (item.inputKind !== "number" && item.unit !== null) {
-      return false;
+      return `${path}.unit debe ser null para text`;
     }
   }
-  return true;
+  return null;
 }
 
 function hasExactKeys(

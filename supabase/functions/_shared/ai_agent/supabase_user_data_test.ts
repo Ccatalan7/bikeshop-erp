@@ -1,4 +1,5 @@
 import {
+  canonicalJson,
   createSupabaseRuntimeStoreClient,
   createSupabaseUserDataClient,
   SupabaseUserDataError,
@@ -9,6 +10,24 @@ function assertEquals(actual: unknown, expected: unknown, message: string): void
     throw new Error(`${message}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
   }
 }
+
+Deno.test("attested canonical JSON carries fixed-point technical measurements", () => {
+  assertEquals(
+    canonicalJson({ width: 2.25, minimum: 0.001, wheel: 29, negativeZero: -0 }),
+    '{"minimum":0.001,"negativeZero":0,"wheel":29,"width":2.25}',
+    "technical decimals share one fixed-point representation",
+  );
+
+  for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, 0.0000001, 1e16]) {
+    let rejected = false;
+    try {
+      canonicalJson({ value: invalid });
+    } catch (error) {
+      rejected = error instanceof Error && error.message === "Attested JSON number is invalid";
+    }
+    assertEquals(rejected, true, `${String(invalid)} stays outside the attested numeric subset`);
+  }
+});
 
 Deno.test("caller data transport keeps publishable key and user JWT together", async () => {
   let headers: Headers | null = null;

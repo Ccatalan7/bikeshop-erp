@@ -131,8 +131,7 @@ class SupplierProfile {
   final String? salesRepEmail;
   final bool hasPortalAccount;
 
-  bool get canReceiveMessage =>
-      (salesRepPhone ?? '').trim().isNotEmpty;
+  bool get canReceiveMessage => (salesRepPhone ?? '').trim().isNotEmpty;
 
   /// «TE» — las mismas dos letras de la tabla, para que la ficha se reconozca
   /// como la fila de la que salió.
@@ -142,7 +141,8 @@ class SupplierProfile {
     final palabras =
         limpio.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
     if (palabras.length == 1) {
-      return palabras.first.substring(0, palabras.first.length >= 2 ? 2 : 1)
+      return palabras.first
+          .substring(0, palabras.first.length >= 2 ? 2 : 1)
           .toUpperCase();
     }
     return '${palabras[0][0]}${palabras[1][0]}'.toUpperCase();

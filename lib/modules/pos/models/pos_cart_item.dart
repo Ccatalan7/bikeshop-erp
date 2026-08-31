@@ -24,7 +24,7 @@ class POSCartItem {
 
   // Check if this is an ad-hoc item
   bool get isAdHoc => product == null;
-  
+
   // Get display name
   String get displayName => adHocDescription ?? product!.name;
 

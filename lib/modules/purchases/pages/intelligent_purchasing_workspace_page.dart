@@ -11,6 +11,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/return_navigation.dart';
+import '../../../shared/services/browser_supplier_credential_resolver.dart';
+import '../../../shared/services/current_user_profile_service.dart';
 import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/utils/responsive_breakpoints.dart';
@@ -19,6 +21,7 @@ import '../../../shared/widgets/product_autocomplete_field.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/services/supplier_availability_service.dart';
+import '../../../shared/services/supplier_need_portal_search.dart';
 import '../../../shared/services/supplier_portal_headless_runner.dart';
 import '../../../shared/widgets/vb_money_text.dart';
 import '../../../shared/widgets/vb_notice.dart';
@@ -26,14 +29,21 @@ import '../../ai_assistant/config/ai_assistant_runtime_config.dart';
 import '../../ai_assistant/models/ai_agent_gateway_contracts.dart';
 import '../../ai_assistant/models/ai_assistant_turn_contracts.dart';
 import '../../ai_assistant/services/ai_agent_gateway_client.dart';
+import '../../inventory/services/spec_engine_service.dart';
 import '../models/intelligent_purchasing_models.dart';
 import '../../../shared/models/product.dart';
 import '../models/purchase_invoice_draft_seed.dart';
 import '../services/intelligent_purchasing_service.dart';
+import '../services/supply_need_criteria_latch.dart';
+import '../services/supply_need_effective_criteria.dart';
+import '../services/supply_purchase_authorization.dart';
+import '../../../shared/services/supplier_spec_extraction.dart';
+import '../services/supplier_credential_service.dart';
 import '../widgets/purchase_composer.dart';
 import '../widgets/purchase_plan_close.dart';
 import '../widgets/purchase_priority_panel.dart';
 import '../widgets/purchase_visual_language.dart';
+import '../widgets/supply_need_refinement_editor.dart';
 import '../widgets/stock_candidates_table.dart';
 import '../widgets/supplier_concentration_table.dart';
 import 'package:printing/printing.dart';
@@ -55,6 +65,8 @@ import '../widgets/supplier_order_composer.dart';
 import 'intelligent_purchasing_decision_surfaces.dart';
 import 'intelligent_purchasing_surfaces.dart';
 
+enum _NeedEditorMode { none, need, criteria }
+
 class IntelligentPurchasingWorkspacePage extends StatefulWidget {
   const IntelligentPurchasingWorkspacePage({
     super.key,
@@ -64,6 +76,8 @@ class IntelligentPurchasingWorkspacePage extends StatefulWidget {
     this.initialOrderId,
     this.service,
     this.gatewayClient,
+    this.specExtractor,
+    this.templateLoader,
   });
 
   final String? initialNeedId;
@@ -75,6 +89,18 @@ class IntelligentPurchasingWorkspacePage extends StatefulWidget {
   final String? initialOrderId;
   final IntelligentPurchasingService? service;
   final AIAgentGatewayClient? gatewayClient;
+
+  /// El lector que señala dónde está escrito cada criterio en la petición. Se
+  /// inyecta en pruebas para ejercitar el cableado sin llamar a un modelo.
+  final SupplierSpecExtractor? specExtractor;
+
+  /// Cómo se consigue la plantilla de una categoría.
+  ///
+  /// `SpecEngineService.instance` es un singleton atado al cliente de Supabase,
+  /// así que sin este seam el cableado de la ficha sólo se podía ejercitar
+  /// contra una base real. La app usa el mismo camino de siempre; las pruebas
+  /// pasan el suyo.
+  final Future<SpecTemplate?> Function(String categoryId)? templateLoader;
 
   @override
   State<IntelligentPurchasingWorkspacePage> createState() =>
@@ -102,11 +128,14 @@ class _IntelligentPurchasingWorkspacePageState
   String? _criteriaLineRef;
   String? _editingPlanLineId;
   String? _planQuantityError;
-  bool _editingNeed = false;
+  _NeedEditorMode _needEditorMode = _NeedEditorMode.none;
   bool _composerExpanded = false;
   bool _showExamples = false;
   String? _inspectedCandidateId;
   double _inspectorWidth = PurchaseSurfaceGeometry.inspectorDefaultWidth;
+
+  bool get _editingNeed => _needEditorMode == _NeedEditorMode.need;
+  bool get _editingNeedCriteria => _needEditorMode == _NeedEditorMode.criteria;
 
   /// El `»` de los frames 04/05: el detalle cede ancho a la lista sin
   /// cerrarse. Colapsado es el mínimo del clamp, no cero: a cero sería
@@ -247,7 +276,23 @@ class _IntelligentPurchasingWorkspacePageState
   /// A quién le compramos esto, según las facturas. Se carga aparte y NUNCA
   /// bloquea: es una ayuda para decidir, no un requisito del paso.
   SupplierConcentrationReport? _supplierHistory;
-  String? _supplierHistoryNeedId;
+
+  /// **La pregunta que respondió el historial que está en pantalla**, y la que
+  /// está en vuelo.
+  ///
+  /// El id de la necesidad no alcanza para ninguna de las dos cosas que este
+  /// caché tiene que saber. No demuestra que sea **la misma pregunta**:
+  /// `rankSuppliers` consulta por la descripción, así que cambiar «Pastillas de
+  /// freno» por «Rodamientos para maza» conserva el id y deja la lista anterior
+  /// pegada a una necesidad que ya pregunta otra cosa. Y no demuestra que **ya
+  /// se leyó bien**: marcarlo antes del `await` daba por leído un intento que
+  /// falló, y `Reintentar` no lo volvía a pedir nunca.
+  ///
+  /// Por eso son dos campos y la clave es la pregunta: la resuelta se escribe
+  /// **sólo al éxito**, y la que está en vuelo evita que dos cargas seguidas
+  /// dupliquen la consulta sin llegar a mentir sobre lo que se leyó.
+  String? _supplierHistoryKey;
+  String? _supplierHistoryPending;
 
   /// Lectura stock-first de la fase B1. Es la autoridad de `needVersion` y
   /// `revisionNo`: `supply_needs` no guarda la revisión que gobierna, así que
@@ -310,9 +355,36 @@ class _IntelligentPurchasingWorkspacePageState
   PurchaseScenarioResult? _scenarioResult;
   PurchasePlanDraft? _plan;
 
-  /// Criterios de la necesidad abierta, y si su detalle está desplegado.
+  /// Criterios de la necesidad abierta.
   SupplyNeedCriteria _needCriteria = SupplyNeedCriteria.empty;
-  bool _showNeedCriteria = false;
+
+  /// La lectura de criterios en vuelo. Quien juzgue el feed guardado espera
+  /// ésta y no el campo de arriba, que entre precisar y repintar es la ficha
+  /// anterior.
+  final SupplyNeedCriteriaLatch _needCriteriaLatch = SupplyNeedCriteriaLatch();
+
+  /// La última lectura sin registrar por necesidad+proveedor, y qué cadenas de
+  /// reintento están vivas.
+  ///
+  /// **Una corrida nueva reemplaza a la anterior; nunca apila otra cadena.**
+  /// Lanzar un ciclo por cada fallo parecía inofensivo y no lo era: cada vuelta
+  /// pregunta por la clave, resuelve la sonda y vuelve a guardar, así que ocho
+  /// búsquedas dejaban ocho cadenas pidiendo conexiones a la vez. Medido el
+  /// 2026-08-30: con las cadenas vivas había 15 conexiones `authenticator`
+  /// activas —el techo del pool de PostgREST— y todo respondía `PGRST003`;
+  /// un hot restart que las mató las bajó a cero. El recibo no era la víctima
+  /// del pool saturado: lo estaba saturando.
+  final Map<String, SupplierNeedSearchNotPersisted> _unsavedReceipts =
+      <String, SupplierNeedSearchNotPersisted>{};
+  final Set<String> _receiptRetriesInFlight = <String>{};
+
+  /// La ficha técnica de la categoría abierta. Es lo que hace que «precisar»
+  /// muestre campos reales en vez de un formulario inventado por el módulo.
+  SpecTemplate? _needTemplate;
+
+  /// De qué categoría es la plantilla cargada. `SpecTemplate` no lo trae, y sin
+  /// eso no se puede saber si la que está en memoria sirve para esta consulta.
+  String? _needTemplateCategoryId;
   ProductSelection? _identitySelection;
   bool _loadingNeeds = true;
   bool _loadingDecision = false;
@@ -413,9 +485,18 @@ class _IntelligentPurchasingWorkspacePageState
   /// que un precio parezca mejor que otro por estar medido distinto.
   PurchaseCostBasis _costBasis = PurchaseCostBasis.sinFlete;
 
-  /// Lo último que contestó el portal de cada proveedor. Convive con el
-  /// historial de compras; no lo reemplaza.
-  final Map<String, SupplierConfirmedAvailability> _confirmed = {};
+  /// Lo último que contestó cada portal a la necesidad abierta. Es distinto
+  /// del chequeo por SKU y del barrido de reposición del proveedor.
+  final Map<String, SupplierNeedPortalSearchSnapshot> _needPortalSearches = {};
+
+  /// De qué necesidad son las lecturas que están en memoria.
+  ///
+  /// Sin esto, conservarlas al recargar habría dejado el feed de una necesidad
+  /// colgado de otra. Se mueve cuando se guarda una lectura, no cuando se
+  /// selecciona una fila.
+  String? _needPortalSearchesNeedId;
+  final Map<String, bool> _needSearchSupported = {};
+  String? _expandedNeedPortalSupplierId;
 
   StockCandidateReport? _stockCandidates;
   String? _stockCandidatesNeedId;
@@ -560,6 +641,14 @@ class _IntelligentPurchasingWorkspacePageState
 
   @override
   void dispose() {
+    // **Nadie sigue esperando esas respuestas.** Las lecturas con modelo tienen
+    // un plazo propio justamente para poder soltarlo: si la pantalla se va, el
+    // temporizador no puede seguir vivo veinte segundos por una respuesta que
+    // ya no tiene destino.
+    cancelSupplierModelReadDeadlines(owner: _lecturas);
+    // Cortar las cadenas de reintento: una lectura sin registrar deja de tener
+    // dónde mostrarse, y seguir pidiendo conexiones sólo agrava el pool.
+    _unsavedReceipts.clear();
     _supplierCatalogDebounce?.cancel();
     _supplierCatalogSearch.dispose();
     _orderMessageBody.dispose();
@@ -644,7 +733,7 @@ class _IntelligentPurchasingWorkspacePageState
       _focus = PurchaseNeedFocus(need.id);
       _inspectedCandidateId = null;
       _inspectorQuantity = null;
-      _editingNeed = false;
+      _needEditorMode = _NeedEditorMode.none;
       _identitySelection = null;
       _identityController.clear();
       _showStockRejection = false;
@@ -652,7 +741,8 @@ class _IntelligentPurchasingWorkspacePageState
       // Los criterios son de la necesidad que se abandona: se limpian ahora,
       // para que la barra no muestre los de la anterior mientras carga.
       _needCriteria = SupplyNeedCriteria.empty;
-      _showNeedCriteria = false;
+      _needTemplate = null;
+      _needTemplateCategoryId = null;
     });
     await _loadDecision(need);
   }
@@ -662,11 +752,102 @@ class _IntelligentPurchasingWorkspacePageState
   /// Van por su propio camino porque son una glosa: el stock, los candidatos y
   /// el plan no esperan por ellos, y si no llegan la barra se dibuja con el
   /// origen como siempre.
-  Future<void> _loadNeedCriteria(SupplyNeed need) async {
-    final criteria = await _service.fetchNeedCriteria(need.id);
-    if (!mounted || _selectedNeed?.id != need.id) return;
-    setState(() => _needCriteria = criteria);
+  /// La ficha con que se juzga, leída para **una** carga de decisión.
+  ///
+  /// **Ni el id ni las palabras alcanzan acá.** Cambiar sólo la cantidad sube
+  /// `version` y deja el id y el texto idénticos, así que una lectura de
+  /// criterios en vuelo volvía a pintar la ficha de la versión anterior encima
+  /// de la nueva sin que ninguna de las dos comprobaciones la viera. Y tampoco
+  /// sirve comparar versiones: un reintento conserva versión **y** palabras, y
+  /// su respuesta sí manda. Lo que decide es **cuál lectura de ficha** la
+  /// pidió: la última que empezó es la única que puede publicar, y ampliar el
+  /// corte de la comparación no empieza ninguna.
+  Future<void> _loadNeedCriteria(SupplyNeed need, int token) async {
+    final pending = _service.fetchNeedCriteria(need.id);
+    // Antes del primer `await`: `_loadDecision` la lanza y sigue de largo, y
+    // el juicio del feed corre en ese mismo tramo.
+    _needCriteriaLatch.publish(need.id, pending);
+    final criteria = await pending;
+    if (token != _needCriteriaToken || !_stillAsking(need)) return;
+    final categoryId = criteria.categoryId?.trim();
+    final template = categoryId == null || categoryId.isEmpty
+        ? null
+        : await _templateLoader(categoryId);
+    if (token != _needCriteriaToken || !_stillAsking(need)) return;
+    setState(() {
+      _needCriteria = criteria;
+      _needTemplate = template;
+      _needTemplateCategoryId = categoryId;
+    });
   }
+
+  /// Cuántas cargas de decisión se han iniciado.
+  ///
+  /// **La coherencia entre sobres no demuestra vigencia.** Tres respuestas
+  /// viejas concuerdan perfectamente entre sí porque salieron del mismo
+  /// momento; compararlas contra el `need` que capturó la consulta demuestra
+  /// que nadie escribió *durante* esa lectura, no que sigan describiendo la
+  /// decisión que está en pantalla. Y el id tampoco alcanza: editar las
+  /// palabras o la cantidad lo conserva.
+  ///
+  /// Lo que sí lo demuestra es si **empezó una lectura más nueva**. Cada carga
+  /// toma un número; al volver de sus `await`, la que ya no es la última se
+  /// descarta entera —ni publica ni limpia—, y la vigente sigue siendo la dueña
+  /// de `_loadingDecision` y del error visible.
+  /// El lector de textos contra una ficha. Se inyecta en las pruebas para
+  /// ejercitar el cableado real sin llamar a ningún modelo.
+  late final SupplierSpecExtractor _specExtractor =
+      widget.specExtractor ?? geminiSupplierSpecExtractor();
+
+  /// El dueño de las lecturas con modelo de **esta** pantalla. Con dos espacios
+  /// de compras abiertos, cerrar uno no puede soltarle el plazo al otro.
+  final SupplierModelReadOwner _lecturas = SupplierModelReadOwner();
+
+  late final Future<SpecTemplate?> Function(String categoryId) _templateLoader =
+      widget.templateLoader ??
+          SpecEngineService.instance.getTemplateForCategory;
+
+  /// Los tramos verificados de la petición, para las superficies que juzgan
+  /// **sin red**.
+  ///
+  /// La lectura es asíncrona y ocurre al armar la consulta del proveedor; el
+  /// catálogo interno y la previsualización de criterios juzgan de forma
+  /// síncrona y no pueden —ni deben— llamar al modelo: mover un criterio tiene
+  /// que responder al instante y sin salir a preguntar. Se conservan acá para
+  /// que las tres superficies juzguen el MISMO requisito, que es la coherencia
+  /// que se exige en lista, catálogo y previsualización.
+  /// **La pregunta que respondieron**, no la necesidad que los pidió. Editar la
+  /// descripción o mover un criterio conserva el `id`, así que guardarlo solo
+  /// dejaba una lectura anterior visible mientras se relee, y podía volver
+  /// fuera de orden y quedarse. La llave es texto + ficha + criterios, la misma
+  /// con que se decide si hay que releer.
+  List<String> _needCriteriaSpans = const <String>[];
+  List<SupplyNeedUnmodelledRequirement> _needDiscoveredRequirements =
+      const <SupplyNeedUnmodelledRequirement>[];
+  String? _needCriteriaSpansKey;
+
+  int _decisionLoadToken = 0;
+
+  /// Y cuántas veces se ha pedido **la ficha**.
+  ///
+  /// **La paginación no cancela una ficha que sigue en vuelo.** Con un solo
+  /// número, `Continuar análisis` —que es incremental y **no** vuelve a pedir
+  /// criterios— también lo subía, así que una lectura de ficha válida de la
+  /// misma necesidad se descartaba al volver y ninguna la reemplazaba: la
+  /// pantalla se quedaba sin ficha hasta cambiar de necesidad y volver. Cada
+  /// lectura lleva la cuenta de **su propia** vigencia; ampliar el corte no es
+  /// preguntar otra ficha.
+  int _needCriteriaToken = 0;
+
+  /// La bodega de esta necesidad **no se pudo leer**, así que nadie compromete
+  /// una compra. La regla y su porqué viven en
+  /// `supplyPurchaseAuthorized`; acá sólo se aplica.
+  bool get _stockUnread => !supplyPurchaseAuthorized(
+        hasSelectedNeed: _selectedNeed != null,
+        resolution: _stockResolution,
+      );
+
+  static const String _stockUnreadBlock = kSupplyStockUnreadBlockMessage;
 
   Future<void> _loadDecision(
     SupplyNeed need, {
@@ -689,7 +870,11 @@ class _IntelligentPurchasingWorkspacePageState
     // del primero dejaba la barra sin criterios justo al abrir el módulo, que
     // es la vez que más se mira. Una recarga incremental no la repite: el
     // operador pidió más resultados, no otra necesidad.
-    if (!incremental) unawaited(_loadNeedCriteria(need));
+    final token = ++_decisionLoadToken;
+    // El número de la ficha se toma sólo cuando de verdad se la pide, y es el
+    // suyo: una recarga incremental no la vuelve a leer, así que tampoco puede
+    // invalidar la que está en vuelo.
+    if (!incremental) unawaited(_loadNeedCriteria(need, ++_needCriteriaToken));
     if (incremental) {
       setState(() {
         _refreshingResults = true;
@@ -705,10 +890,29 @@ class _IntelligentPurchasingWorkspacePageState
         _ranking = null;
         _stockCandidates = null;
         _stockCandidatesNeedId = null;
-        _supplierHistory = null;
-        _supplierHistoryNeedId = null;
+        // **Precisar no borra el feed, y reintentar tampoco borra a quién le
+        // compramos.** Estas lecturas cuestan minutos de navegación real y se
+        // vuelven a juzgar sin red, así que sólo se tiran cuando se cambia de
+        // necesidad —donde sí serían de otra pregunta—. Vaciarlas de entrada
+        // hacía que un `Reintentar` con la bodega caída dejara la pantalla sin
+        // proveedores y sin el recibo ya guardado, que no dependen de ella.
+        // **Conservar lo recibido vale para la MISMA pregunta.** Cambiar la
+        // descripción no es reintentar: la lista anterior responde a otras
+        // palabras y quedarse pegada a la necesidad nueva sería afirmar algo
+        // que nadie consultó.
+        if (_supplierHistoryKey != _supplierHistoryQuestion(need)) {
+          _supplierHistory = null;
+          _supplierHistoryKey = null;
+          _supplierHistoryPending = null;
+        }
+        if (_needPortalSearchesNeedId != need.id) {
+          _needPortalSearches.clear();
+          _needSearchSupported.clear();
+          _expandedNeedPortalSupplierId = null;
+        }
         _stockResolution = null;
         _externalCandidates = null;
+        _externalCandidatesError = null;
         _commercialTarget = null;
         _stockFirstRequired = false;
         _needsReload = false;
@@ -726,6 +930,14 @@ class _IntelligentPurchasingWorkspacePageState
         }
       });
     }
+    // **La evidencia del proveedor no cuelga de la bodega.** `rankSuppliers` y
+    // el recibo ya guardado no le preguntan nada a `stockResolution`; colgarlos
+    // de que ésta terminara bien significaba que un `statement timeout` de la
+    // bodega —el 57014 real del 2026-08-31, con la sesión autenticada— borraba
+    // la lista de proveedores y dejaba el recibo del portal sin volver a juzgar
+    // con el lector nuevo. El fallo de una sección se dice en su sección; no
+    // apaga las otras. Va sin `await`: la bodega no espera por él.
+    unawaited(_loadSupplierHistory(need));
     try {
       // **El carril lo decide el servidor, no `hasConfirmedProduct`.** La
       // lectura de stock responde en los dos carriles y trae la versión y la
@@ -741,7 +953,19 @@ class _IntelligentPurchasingWorkspacePageState
         // que la resolución por familia no conoce.
         snapshot = await _service.inventorySnapshot(need.id);
       }
-      final target = await _service.commercialTarget(need.id);
+      // **El objetivo comercial merece el mismo cuidado que la comparación.**
+      // Si falla, la bodega ya leída sigue siendo cierta: se publica sin él y
+      // se dice qué falta, en vez de vaciar la pantalla.
+      SupplyCommercialTarget? target;
+      String? targetError;
+      try {
+        target = await _service.commercialTarget(need.id);
+      } on SupplyConcurrencyConflict {
+        rethrow;
+      } catch (error) {
+        if (incremental) rethrow;
+        targetError = _externalReadMessage(error);
+      }
 
       // **La lectura externa se llama siempre.** Condicionarla a `isOk` y a
       // `open` dejaba inalcanzables tres estados que sólo ella sabe nombrar
@@ -749,6 +973,7 @@ class _IntelligentPurchasingWorkspacePageState
       // interfaz decidía por su cuenta que no había nada que preguntar y el
       // operador se quedaba sin la causa ni la acción.
       SupplyExternalCandidates? candidates;
+      String? externalError;
       var stockFirst = false;
       try {
         candidates = await _service.externalCandidates(
@@ -758,6 +983,8 @@ class _IntelligentPurchasingWorkspacePageState
           unverifiedLimit: _unverifiedLimit,
           unverifiedOffset: _unverifiedOffset,
         );
+      } on SupplyConcurrencyConflict {
+        rethrow;
       } on SupplyStockFirstRequired {
         // **El P0001 tiene que cuadrar con la resolución que ya se leyó.**
         // El servidor lo levanta a partir de su propia evaluación; si la
@@ -772,13 +999,47 @@ class _IntelligentPurchasingWorkspacePageState
           throw SupplyConcurrencyConflict(need.id);
         }
         stockFirst = true;
+      } catch (error) {
+        // **Un fallo de la lectura externa no borra la bodega ya resuelta.**
+        // El 2026-08-31, con una necesidad real de pastillas,
+        // `get_supply_need_external_candidates_v1` murió por `statement
+        // timeout` y la pantalla escondió también el stock, que había
+        // respondido 200 con 49 candidatos: minutos de trabajo del servidor
+        // tirados por el fallo de OTRA sección.
+        //
+        // No es mezclar momentos: la resolución y el objetivo se leyeron para
+        // esta misma necesidad y versión, y lo que falta se dice en su lugar
+        // con su causa. Un conflicto de concurrencia sigue recargando —ése sí
+        // significa que las lecturas describen momentos distintos—.
+        //
+        // **Ampliar es otra cosa.** Ahí ya hay una comparación en pantalla y el
+        // contrato es conservarla y ofrecer reintentar; ese camino sigue
+        // subiendo el error tal cual.
+        if (incremental) rethrow;
+        candidates = null;
+        externalError = _externalReadMessage(error);
       }
-      if (!mounted || _selectedNeed?.id != need.id) return;
+      // Sin objetivo comercial no hay comparación que mostrar, pero sí bodega.
+      externalError ??= targetError;
+      // **Una respuesta de la petición anterior no se publica.** Comprobar sólo
+      // el id dejaba pasar la llegada tardía de la misma necesidad con otras
+      // palabras, que es el caso frecuente: se edita mientras la lectura está
+      // en vuelo.
+      // Una lectura más nueva ya manda: ésta llegó tarde y se descarta entera.
+      if (token != _decisionLoadToken || !_stillAsking(need)) return;
       // **Tres lecturas separadas pueden describir tres momentos distintos.**
       // Si alguien escribió entremedio, montarlas juntas produce una pantalla
       // que no existió nunca: stock de antes, objetivo de después y un ranking
       // calculado sobre otra revisión. No se presenta esa mezcla; se ofrece
       // releer, que es la única salida honesta.
+      // **Se comprueban TODOS los sobres que llegaron.** Colgar la
+      // comprobación entera de que el objetivo comercial existiera dejaba sin
+      // verificar la versión del stock y la de los candidatos justo cuando una
+      // lectura falló, que es cuando más fácil es estar mirando dos momentos
+      // distintos. Lo que no llegó no se compara; lo que llegó, sí.
+      // Vigencia y coherencia son dos preguntas distintas y tienen dos dueños:
+      // el token de arriba dice si esta lectura sigue siendo la que manda;
+      // esto dice si los sobres que llegaron describen un solo momento.
       if (!_envelopesAgree(need, resolution, target, candidates)) {
         throw SupplyConcurrencyConflict(need.id);
       }
@@ -787,6 +1048,7 @@ class _IntelligentPurchasingWorkspacePageState
         _inventorySnapshot = snapshot;
         _commercialTarget = target;
         _externalCandidates = candidates;
+        _externalCandidatesError = externalError;
         _stockFirstRequired = stockFirst;
         // La superficie ya refactorizada sigue consumiendo el ranking; sólo el
         // grupo accionable entra, porque los no verificados tienen su propio
@@ -798,12 +1060,11 @@ class _IntelligentPurchasingWorkspacePageState
         // El candidato abierto puede haber desaparecido del corte nuevo.
         if (_inspectedCandidate == null) _inspectedCandidateId = null;
       });
-      // Aparte y sin await: el paso ya está montado y utilizable. Si el
-      // historial tarda o falla, el operador no se entera.
-      unawaited(_loadSupplierHistory(need));
+      // Aparte y sin await: el paso ya está montado y utilizable. Los
+      // candidatos de bodega sí dependen de esta lectura, así que van acá.
       unawaited(_loadStockCandidates(need));
     } on SupplyConcurrencyConflict {
-      if (!mounted || _selectedNeed?.id != need.id) return;
+      if (token != _decisionLoadToken || !_stillAsking(need)) return;
       setState(() {
         _loadingDecision = false;
         _refreshingResults = false;
@@ -811,7 +1072,11 @@ class _IntelligentPurchasingWorkspacePageState
         _decisionError = _concurrencyMessage;
       });
     } catch (_) {
-      if (!mounted || _selectedNeed?.id != need.id) return;
+      // **El error de una consulta abandonada tampoco pinta.** Vaciar la
+      // decisión vigente por el fallo de una pregunta que ya nadie hace deja
+      // la pantalla en un estado de fallo sin que haya fallado nada de lo que
+      // se está mirando.
+      if (token != _decisionLoadToken || !_stillAsking(need)) return;
       setState(() {
         _loadingDecision = false;
         _refreshingResults = false;
@@ -828,8 +1093,10 @@ class _IntelligentPurchasingWorkspacePageState
                 ),
               );
         } else {
-          _decisionError =
-              'No se pudo completar el análisis. Puedes reintentar sin perder la necesidad.';
+          // Lo que falló se dice, y también lo que no se perdió: el operador
+          // acaba de ver desaparecer la pantalla entera por esto.
+          _decisionError = 'No se pudo leer la bodega. Los proveedores y lo '
+              'ya consultado siguen en pantalla; puedes reintentar.';
         }
       });
     }
@@ -844,19 +1111,25 @@ class _IntelligentPurchasingWorkspacePageState
   bool _envelopesAgree(
     SupplyNeed need,
     SupplyStockResolution resolution,
-    SupplyCommercialTarget target,
+    SupplyCommercialTarget? target,
     SupplyExternalCandidates? candidates,
   ) {
-    if (resolution.needId != need.id || target.needId != need.id) return false;
+    // El sobre que no llegó no se compara; el que llegó, siempre.
+    if (resolution.needId != need.id) return false;
     if (resolution.needVersion != need.version) return false;
-    if (target.needVersion != need.version) return false;
-    if (target.needSupplyState != need.supplyState) return false;
+    if (target != null) {
+      if (target.needId != need.id) return false;
+      if (target.needVersion != need.version) return false;
+      if (target.needSupplyState != need.supplyState) return false;
+    }
     if (candidates == null) return true;
     return candidates.needId == need.id &&
         candidates.needVersion == need.version &&
         candidates.needSupplyState == need.supplyState &&
         candidates.revisionNo == resolution.revisionNo &&
-        candidates.targetRevisionNo == target.targetRevisionNo;
+        // La revisión del objetivo sólo se cruza si el objetivo llegó.
+        (target == null ||
+            candidates.targetRevisionNo == target.targetRevisionNo);
   }
 
   Future<void> _askAssistant({
@@ -1784,12 +2057,17 @@ class _IntelligentPurchasingWorkspacePageState
       _showStockRejection = false;
       _stockReasonController.clear();
       _needCriteria = SupplyNeedCriteria.empty;
-      _showNeedCriteria = false;
     });
+    // Otra necesidad: lo pendiente de la anterior ya no se puede mostrar.
+    _unsavedReceipts.clear();
     await _loadDecision(need);
   }
 
   Future<void> _addCandidateToPlan(PurchaseCandidate candidate) async {
+    if (_stockUnread) {
+      setState(() => _decisionError = _stockUnreadBlock);
+      return;
+    }
     final need = _selectedNeed;
     if (need == null || _addingCandidateId != null) return;
     setState(() {
@@ -1822,6 +2100,10 @@ class _IntelligentPurchasingWorkspacePageState
   Future<void> _addProductQuoteToPlan(SupplyStockOption product) async {
     final need = _selectedNeed;
     if (need == null || _addingQuoteProductId != null) return;
+    if (_stockUnread) {
+      setState(() => _decisionError = _stockUnreadBlock);
+      return;
+    }
     setState(() {
       _addingQuoteProductId = product.productId;
       _decisionError = null;
@@ -2109,26 +2391,36 @@ class _IntelligentPurchasingWorkspacePageState
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildWorkspaceHeader(desktop: desktop),
-                if (_selectedNeed != null && _step != PurchaseStep.need)
-                  _buildNeedBar(),
+                // La edición breve conserva la barra inline histórica. La
+                // ficha técnica, en cambio, puede tener muchos criterios y
+                // pertenece al scroll de la superficie: anclarla aquí hace
+                // desbordar el shell en compacto y en categorías largas.
                 if (_selectedNeed != null &&
                     _step != PurchaseStep.need &&
-                    _showNeedCriteria)
-                  _buildNeedCriteriaDisclosure(),
+                    !_editingNeedCriteria)
+                  _buildNeedBar(),
                 Expanded(
-                  child: _wrapWithLocalPurchaseSheet(
-                    Padding(
-                      // `geometry_shell.content_padding` del handoff-t23.
-                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                      child: switch (_step) {
-                        PurchaseStep.need => _buildRequestWorkspace(),
-                        PurchaseStep.stock => _buildStockStep(),
-                        PurchaseStep.providers =>
-                          _buildResolveWorkspace(desktop: desktop),
-                        PurchaseStep.plan => _buildPlanStep(compact: !desktop),
-                      },
-                    ),
-                  ),
+                  child: _selectedNeed != null &&
+                          _step != PurchaseStep.need &&
+                          _editingNeedCriteria
+                      ? SingleChildScrollView(
+                          key: const ValueKey('need-criteria-editor-scroll'),
+                          child: _buildNeedBar(),
+                        )
+                      : _wrapWithLocalPurchaseSheet(
+                          Padding(
+                            // `geometry_shell.content_padding` del handoff-t23.
+                            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                            child: switch (_step) {
+                              PurchaseStep.need => _buildRequestWorkspace(),
+                              PurchaseStep.stock => _buildStockStep(),
+                              PurchaseStep.providers =>
+                                _buildResolveWorkspace(desktop: desktop),
+                              PurchaseStep.plan =>
+                                _buildPlanStep(compact: !desktop),
+                            },
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -2305,85 +2597,12 @@ class _IntelligentPurchasingWorkspacePageState
     );
   }
 
-  /// Lo que «Criterios» despliega: el resumen completo, sin el corte del «+N».
-  ///
-  /// Es una disclosure bajo la barra, no una superficie aparte, por la misma
-  /// razón que la del borrador: leer los criterios no puede sacar al operador
-  /// del paso en que está ni tapar la página. Copia la anatomía de
-  /// `_buildDraftLineCriteriaDisclosure` —panel `surfaceContainerLow` con
-  /// hairline izquierdo de 3 px— porque es el mismo objeto dicho dos veces en
-  /// el recorrido, y verlo distinto haría dudar de si es lo mismo.
-  Widget _buildNeedCriteriaDisclosure() {
-    final theme = Theme.of(context);
-    final tokens = PurchaseTokens.of(context);
-    final criteria = _needCriteria;
-    return Container(
-      key: const ValueKey('need-criteria-disclosure'),
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(14, 0, 14, 0),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        border: Border(
-          left: BorderSide(color: theme.colorScheme.outlineVariant, width: 3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Criterios interpretados',
-                  style: PurchaseType.panelTitle.copyWith(color: tokens.ink),
-                ),
-              ),
-              TextButton(
-                key: const ValueKey('need-criteria-close'),
-                onPressed: () => setState(() => _showNeedCriteria = false),
-                child: const Text('Ocultar'),
-              ),
-            ],
-          ),
-          if (criteria.categoryPath != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Categoría: ${criteria.categoryPath}',
-              style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
-            ),
-          ],
-          for (final predicate in criteria.predicates) ...[
-            const SizedBox(height: 6),
-            Text(
-              _criterionLabel(predicate),
-              style: PurchaseType.body.copyWith(color: tokens.ink),
-            ),
-          ],
-          if (criteria.commercialPreference?.trim().isNotEmpty ?? false) ...[
-            const SizedBox(height: 10),
-            Text(
-              criteria.commercialPreference!.trim(),
-              style: PurchaseType.body.copyWith(color: tokens.ink),
-            ),
-            const SizedBox(height: 2),
-            // Se dice, porque el operador lo escribió y merece verlo, pero
-            // sin dejar creer que ordena la lista: quedó demostrado que el
-            // texto libre no gobierna el ranking.
-            Text(
-              'Nota del operador. No ordena los proveedores.',
-              style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   /// Fila persistente de la necesidad. La edición ocurre aquí mismo: el owner
   /// rechazó explícitamente editarla en un diálogo centrado.
   Widget _buildNeedBar() {
     final need = _selectedNeed!;
+    // La misma ficha que abre el editor y que juzga el feed.
+    final efectiva = _effectiveNeedCriteria(need);
     return SupplyNeedBar(
       title: need.productName ?? need.description,
       // La barra pluralizaba a mano —«1 unidades» con una llanta suelta— y
@@ -2401,32 +2620,73 @@ class _IntelligentPurchasingWorkspacePageState
       // escrita a mano. Cuando hay criterios mandan ellos; cuando no —una
       // solicitud directa sin predicados— sigue el origen, que es lo único
       // cierto que queda por decir.
-      criteriaSummary: _needCriteria.isNotEmpty
-          ? _criteriaSummaryLine(_needCriteria)
+      // **Y son los criterios EFECTIVOS.** Decidirlo con la ficha guardada
+      // dejaba la barra diciendo «Solicitud directa» mientras el editor abría
+      // en `700c` y el feed filtraba por él: la ranura negaba lo que las otras
+      // dos superficies ya sabían. Un criterio que gobierna el listado se dice
+      // en la barra, venga de una revisión o de la propia petición.
+      criteriaSummary: efectiva.isNotEmpty
+          ? _criteriaSummaryLine(efectiva)
           : _needOrigin(need),
-      // La CTA que el contrato nombra existía en el widget y **nadie la
-      // pasaba**: era código muerto. Sólo se ofrece cuando hay algo que
-      // desplegar, porque un botón que abre una lista vacía miente.
-      onOpenCriteria: _needCriteria.isNotEmpty
-          ? () => setState(() => _showNeedCriteria = !_showNeedCriteria)
+      // «Criterios» ya no despliega una lectura ni comparte formulario con la
+      // petición: abre exclusivamente la ficha técnica de la categoría.
+      onOpenCriteria: efectiva.isNotEmpty || efectiva.canPrecise
+          ? () => setState(() {
+                _needEditorMode = _NeedEditorMode.criteria;
+                _decisionError = null;
+              })
           : null,
-      editing: _editingNeed,
+      editing: _needEditorMode != _NeedEditorMode.none,
       onEdit: () {
         _needDescriptionController.text = need.description;
         _needQuantityController.text = _formatSupplyQuantity(need.quantity);
-        setState(() => _editingNeed = true);
+        setState(() {
+          _needEditorMode = _NeedEditorMode.need;
+          _decisionError = null;
+        });
       },
-      onCancel: () => setState(() => _editingNeed = false),
+      onCancel: () => setState(() {
+        _needEditorMode = _NeedEditorMode.none;
+      }),
       editor: _buildNeedInlineEditor(need),
     );
   }
 
   Widget _buildNeedInlineEditor(SupplyNeed need) {
+    if (_editingNeed) return _buildOriginalNeedInlineEditor(need);
+
+    final categoryLabel = _needCategoryLabel();
+    return SupplyNeedRefinementEditor(
+      key: ValueKey('need-criteria-editor-${need.id}-${need.version}'),
+      template: _needCriteria.canPrecise ? _needTemplate : null,
+      title: 'Criterios de ${need.productName ?? need.description}',
+      categoryLabel: categoryLabel,
+      // **La misma ficha efectiva que juzga el feed.** Sembrar el formulario
+      // sólo con lo guardado dejaba «Tamaño de rueda: sin especificar» en una
+      // necesidad que se llama «Cámaras 700», y le pedía al operador que
+      // escribiera de nuevo lo que ya había escrito.
+      criteria: _effectiveNeedCriteria(need),
+      busy: _runningCommand,
+      preciseBlockedReason: _preciseBlockedReason(),
+      previewFor: _previewRefinement,
+      onSave: (predicates) =>
+          unawaited(_saveNeedCriteria(need, predicates: predicates)),
+      onCancel: () => setState(() {
+        _needEditorMode = _NeedEditorMode.none;
+      }),
+    );
+  }
+
+  /// El editor breve que existía antes de incorporar la ficha técnica.
+  /// Descripción y cantidad pertenecen a la petición original; no comparten
+  /// superficie con los criterios derivados de ella.
+  Widget _buildOriginalNeedInlineEditor(SupplyNeed need) {
     return Wrap(
+      key: const ValueKey('need-original-editor'),
       spacing: 11,
       runSpacing: 9,
       crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
+      children: <Widget>[
         SizedBox(
           width: 280,
           child: TextField(
@@ -2453,11 +2713,17 @@ class _IntelligentPurchasingWorkspacePageState
           ),
         ),
         FilledButton(
+          key: const ValueKey('need-inline-save'),
           onPressed: _runningCommand ? null : () => _saveNeedInline(need),
           child: const Text('Guardar'),
         ),
         TextButton(
-          onPressed: () => setState(() => _editingNeed = false),
+          // Histórico: `Cancelar` nunca estuvo deshabilitado, ni siquiera
+          // mientras guardaba. Se conserva tal cual — el contrato pide el
+          // comportamiento anterior exacto, no uno mejorado.
+          onPressed: () => setState(() {
+            _needEditorMode = _NeedEditorMode.none;
+          }),
           child: const Text('Cancelar'),
         ),
       ],
@@ -2480,20 +2746,316 @@ class _IntelligentPurchasingWorkspacePageState
       );
       if (!mounted) return;
       setState(() {
-        _editingNeed = false;
+        _needEditorMode = _NeedEditorMode.none;
+        _runningCommand = false;
+        _needs = _needs
+            .map((item) => item.id == updated.id ? updated : item)
+            .toList(growable: false);
+        if (description != need.description) {
+          _needPortalSearches.clear();
+          _needSearchSupported.clear();
+        }
+      });
+      await _loadDecision(updated);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _runningCommand = false;
+        _decisionError = _needEditErrorMessage(error);
+      });
+    }
+  }
+
+  /// El sustantivo con que el operador llama a lo que busca.
+  String _needCategoryLabel() {
+    final path = _needCriteria.categoryPath?.trim();
+    if (path == null || path.isEmpty) return 'producto';
+    final last = path.split('/').last.trim();
+    return last.isEmpty ? 'producto' : last.toLowerCase();
+  }
+
+  /// Por qué no se puede precisar, dicho sin jerga.
+  String? _preciseBlockedReason() {
+    if (_needCriteria.canPrecise && _needTemplate != null) return null;
+    if (!_needCriteria.canPrecise) {
+      return 'Falta identificar la categoría; cambia lo que estás buscando.';
+    }
+    return 'Esta categoría todavía no tiene una ficha técnica publicada; '
+        'cambia lo que estás buscando.';
+  }
+
+  /// Cuántas de las filas ya traídas del proveedor cumplirían con la ficha
+  /// propuesta. **Sin red**: las filas están en memoria y el calce es
+  /// determinista, así que la consecuencia se puede decir con números antes
+  /// de guardar en vez de enseñarle al operador una palabra nueva.
+  SupplyNeedEditPreview? _previewRefinement(
+    List<SupplyNeedPredicate> predicates,
+  ) {
+    final snapshots = _needPortalSearches.values
+        .where((snapshot) =>
+            snapshot.status == SupplierNeedPortalSearchStatus.completed)
+        .toList(growable: false);
+    if (snapshots.isEmpty) return null;
+
+    final searchPredicates = predicates
+        .map((predicate) => SupplierNeedSearchPredicate(
+              field: predicate.field,
+              operator: predicate.operator,
+              values: predicate.values,
+            ))
+        .toList(growable: false);
+    // Los MISMOS campos con que se arma la petición y la ficha efectiva: una
+    // previsualización calculada con otra traducción no describiría el feed.
+    final fields = supplyNeedSearchFieldsOf(_needTemplate);
+
+    var reviewed = 0;
+    var confirmed = 0;
+    var unverified = 0;
+    final rows = <SupplyNeedEditPreviewRow>[];
+    for (final entry in _needPortalSearchesBySupplier(snapshots)) {
+      final snapshot = entry.value;
+      reviewed += snapshot.matches.length;
+      // **El número y la lista salen del mismo juicio.** Contar por un lado y
+      // listar por otro es cómo «quedarían 3» termina sobre una lista de 4.
+      for (final verdict in judgeSupplierNeedMatchesUnder(
+        matches: snapshot.matches,
+        predicates: searchPredicates,
+        fields: fields,
+      )) {
+        if (verdict.isConfirmed) {
+          confirmed++;
+        } else {
+          unverified++;
+        }
+        final candidate = verdict.match.candidate;
+        rows.add(SupplyNeedEditPreviewRow(
+          supplierName: entry.key,
+          code: candidate.code,
+          name: candidate.name,
+          isConfirmed: verdict.isConfirmed,
+          brand: candidate.brand,
+          priceNet: candidate.priceNet,
+        ));
+      }
+    }
+    // Lo confirmado primero: es lo que el operador puede decidir sin ir a
+    // preguntarle nada a nadie.
+    rows.sort((a, b) {
+      if (a.isConfirmed != b.isConfirmed) return a.isConfirmed ? -1 : 1;
+      final supplier = a.supplierName.compareTo(b.supplierName);
+      return supplier != 0 ? supplier : a.name.compareTo(b.name);
+    });
+    return SupplyNeedEditPreview(
+      reviewed: reviewed,
+      confirmed: confirmed,
+      unverified: unverified,
+      rows: List<SupplyNeedEditPreviewRow>.unmodifiable(rows),
+    );
+  }
+
+  /// La ficha efectiva de la necesidad abierta.
+  ///
+  /// Una sola fuente para el formulario, la previsualización y el juicio del
+  /// feed: `_needSearchRequest` la arma con estos mismos campos y la misma
+  /// función, así que las tres superficies no pueden discrepar.
+  /// Por qué no se pudo leer la comparación externa, cuando el resto sí llegó.
+  String? _externalCandidatesError;
+
+  /// La causa dicha en palabras del negocio, sin perder qué falló.
+  String _externalReadMessage(Object error) {
+    final message = error is PostgrestException ? error.message.trim() : '';
+    if (message.toLowerCase().contains('timeout') ||
+        message.toLowerCase().contains('canceling statement')) {
+      return 'La comparación de proveedores tardó más de lo permitido. La '
+          'bodega de arriba sí se leyó.';
+    }
+    return 'No se pudo leer la comparación de proveedores. La bodega de '
+        'arriba sí se leyó.';
+  }
+
+  /// El plan con que se juzga el catálogo interno de un proveedor.
+  ///
+  /// Es el mismo que usa la lista: misma ficha efectiva, mismos campos, mismo
+  /// vocabulario de familia. Sin necesidad abierta o sin ficha no hay con qué
+  /// juzgar y manda lo que dijo el servidor.
+  /// Los tramos leídos **para esta misma pregunta**, o ninguno.
+  ///
+  /// Pertenecen a un texto, una ficha y unos criterios concretos: usarlos con
+  /// otra pregunta sería descargar una exigencia con la lectura de algo
+  /// distinto. Mientras la lectura nueva no llega, la respuesta correcta es que
+  /// no hay tramos —la exigencia se conserva—, no la lectura anterior.
+  List<String> _spansFor(String key) =>
+      _needCriteriaSpansKey == key ? _needCriteriaSpans : const <String>[];
+
+  List<SupplyNeedUnmodelledRequirement> _discoveredFor(String key) =>
+      _needCriteriaSpansKey == key
+          ? _needDiscoveredRequirements
+          : const <SupplyNeedUnmodelledRequirement>[];
+
+  SupplierNeedSearchPlan? get _needCatalogPlan {
+    final need = _selectedNeed;
+    if (need == null) return null;
+    // **Una categoría sin ficha también se juzga.** Exigir plantilla acá dejaba
+    // al catálogo interno sin el juicio compartido justo en las necesidades más
+    // pobres —«Accesorios / Puños» no tiene ficha—, que son las que más lo
+    // necesitan: sin él, «COINCIDE CON esta petición» vuelve a ser la
+    // coincidencia ancha del servidor.
+    final template = _needTemplate;
+    final fields = supplyNeedSearchFieldsOf(template);
+    final efectiva = effectiveSupplyNeedCriteria(
+      stored: _needCriteria,
+      texts: supplyNeedRequestTexts(need),
+      fields: fields,
+      templateTechnicalFamily: template?.technicalFamily,
+    );
+    final llaveCatalogo = supplyNeedCriteriaSpansKey(
+      supplyNeedRequestText(need),
+      <String, List<Object>>{
+        for (final predicate in efectiva.predicates)
+          if (predicate.field.trim().isNotEmpty && predicate.values.isNotEmpty)
+            predicate.field.trim(): predicate.values,
+      },
+      fields,
+    );
+    return buildSupplierNeedSearchPlan(
+      request: SupplierNeedSearchRequest(
+        needId: need.id,
+        description: supplyNeedRequestText(need),
+        categoryId: efectiva.categoryId,
+        categoryPath: efectiva.categoryPath,
+        technicalFamily: efectiva.technicalFamily ?? template?.technicalFamily,
+        fields: fields,
+        // **El mismo requisito en las tres superficies.** El catálogo interno
+        // armaba su consulta por su cuenta y sin los tramos, así que una
+        // exigencia ya remitida a su criterio volvía a exigirse literal sólo
+        // acá: la misma fila se destacaba distinto en la lista y en el
+        // catálogo. Se juzga sin red, con lo ya leído.
+        criteriaSpans: _spansFor(llaveCatalogo),
+        discoveredRequirements: _discoveredFor(llaveCatalogo),
+        predicates: efectiva.predicates
+            .map((predicate) => SupplierNeedSearchPredicate(
+                  field: predicate.field,
+                  operator: predicate.operator,
+                  values: predicate.values,
+                ))
+            .toList(growable: false),
+      ),
+      adapter: SupplierNeedPortalAdapter.fromJson(const <String, dynamic>{
+        'version': 1,
+        'generic_family_search': true,
+        'result_schema': <String, dynamic>{
+          'columns': <String, dynamic>{
+            'code': <String>['id'],
+            'name': <String>['nombre'],
+            'price': <String>['precio'],
+          },
+        },
+        'catalog_route': <String, dynamic>{
+          'url_template': 'http://catalogo/{node}/{page}/{page_size}',
+          'page_size': 50,
+        },
+      }),
+      maxLength: 20,
+    );
+  }
+
+  SupplyNeedCriteria _effectiveNeedCriteria(SupplyNeed need) =>
+      effectiveSupplyNeedCriteria(
+        stored: _needCriteria,
+        // **El nombre reconocido no reemplaza a la petición.** Con
+        // `productName ?? description`, todo lo que el operador escribió y no
+        // cabía en el nombre desaparecía antes de llegar a la ficha.
+        texts: supplyNeedRequestTexts(need),
+        fields: supplyNeedSearchFieldsOf(_needTemplate),
+        templateTechnicalFamily: _needTemplate?.technicalFamily,
+      );
+
+  /// Las lecturas con el nombre del proveedor al que pertenecen.
+  ///
+  /// El mapa está indexado por id, y un id no se le muestra a nadie. El nombre
+  /// sale del informe de concentración, que es quien lo conoce.
+  List<MapEntry<String, SupplierNeedPortalSearchSnapshot>>
+      _needPortalSearchesBySupplier(
+    List<SupplierNeedPortalSearchSnapshot> snapshots,
+  ) {
+    final byId = <String, String>{
+      for (final item
+          in _supplierHistory?.items ?? const <SupplierConcentration>[])
+        item.supplierId: item.supplierName,
+    };
+    final result = <MapEntry<String, SupplierNeedPortalSearchSnapshot>>[];
+    _needPortalSearches.forEach((supplierId, snapshot) {
+      if (!snapshots.contains(snapshot)) return;
+      result.add(MapEntry(byId[supplierId] ?? 'Proveedor', snapshot));
+    });
+    return result;
+  }
+
+  /// Guarda exclusivamente la ficha de la categoría reconocida. La petición
+  /// original y su cantidad no viajan por este comando.
+  Future<void> _saveNeedCriteria(
+    SupplyNeed need, {
+    required List<SupplyNeedPredicate> predicates,
+  }) async {
+    if (!_needCriteria.canPrecise) return;
+    setState(() => _runningCommand = true);
+    try {
+      final updated = await _service.refineNeed(
+        need: need,
+        expectedRevisionNo: _needCriteria.revisionNo!,
+        categoryId: _needCriteria.categoryId!,
+        technicalFamily: _needTemplate?.technicalFamily,
+        predicates: predicates,
+      );
+      if (!mounted) return;
+      setState(() {
+        _needEditorMode = _NeedEditorMode.none;
         _runningCommand = false;
         _needs = _needs
             .map((item) => item.id == updated.id ? updated : item)
             .toList(growable: false);
       });
       await _loadDecision(updated);
-    } catch (_) {
+      // **El historial no se recarga solo para la misma necesidad.**
+      // `_loadSupplierHistory` corta de entrada cuando ya lo trajo para este
+      // id, así que sin esto el feed guardado se quedaba con el veredicto de
+      // la ficha anterior hasta cambiar de necesidad y volver. Se reaprovecha
+      // el ranking ya cargado: cambió contra qué se juzga, no quién vende.
+      if (!mounted || _selectedNeed?.id != updated.id) return;
+      final report = _supplierHistory;
+      if (report != null) {
+        unawaited(_loadNeedPortalSearches(report, updated));
+      } else {
+        unawaited(_loadSupplierHistory(updated, force: true));
+      }
+    } catch (error) {
+      final message = _needEditErrorMessage(error);
+      SupplyNeed? reconciled;
+      try {
+        reconciled = await _service.fetchNeed(need.id);
+      } catch (_) {
+        // El error de escritura sigue siendo el mensaje visible.
+      }
       if (!mounted) return;
       setState(() {
         _runningCommand = false;
-        _decisionError = 'No se pudo guardar la necesidad. Intenta de nuevo.';
+        _decisionError = message;
+        if (reconciled != null) {
+          _needs = _needs
+              .map((item) => item.id == reconciled!.id ? reconciled : item)
+              .toList(growable: false);
+        }
       });
     }
+  }
+
+  /// El servidor ya explica en palabras del negocio cuándo alguien más movió
+  /// la necesidad o su ficha. Repetirlo acá con otras palabras haría que dos
+  /// pantallas contaran la misma carrera de forma distinta.
+  String _needEditErrorMessage(Object error) {
+    final message = error is PostgrestException ? error.message.trim() : '';
+    if (message.isNotEmpty) return message;
+    return 'No se pudo guardar la necesidad. Intenta de nuevo.';
   }
 
   /// Paso 2 — la bodega antes de cotizar.
@@ -4472,7 +5034,27 @@ class _IntelligentPurchasingWorkspacePageState
       'neq' => 'distinto de',
       _ => 'igual a',
     };
-    return '${predicate.field}: $comparison $values';
+    return '${_fieldLabel(predicate.field)}: $comparison $values';
+  }
+
+  /// El nombre con que la ficha llama a ese campo, o su clave si no lo conoce.
+  ///
+  /// **La barra dejó de ser un caso raro.** Antes de la ficha efectiva este
+  /// resumen sólo aparecía en las pocas necesidades con criterios guardados, y
+  /// `wheel_size: igual a 700c` pasaba inadvertido; ahora sale en cada
+  /// necesidad interpretada, así que el nombre técnico quedaría a la vista todo
+  /// el día. El rótulo lo tiene la propia ficha de la categoría: no hace falta
+  /// un diccionario nuevo, que además envejecería aparte.
+  String _fieldLabel(String field) {
+    final key = field.trim();
+    for (final templateField
+        in _needTemplate?.fields ?? const <SpecTemplateField>[]) {
+      final definition = templateField.definition;
+      if (definition == null || definition.key != key) continue;
+      final label = definition.label.trim();
+      if (label.isNotEmpty) return label;
+    }
+    return key;
   }
 
   /// Resumen compacto de una necesidad interpretada.
@@ -5130,6 +5712,15 @@ class _IntelligentPurchasingWorkspacePageState
     // pie de cada uno ofrece «Elegir producto», que es la misma decisión de
     // identidad, tomada con la evidencia a la vista.
     final external = _externalCandidates;
+    // **La sección que falló lo dice en su lugar, y no se lleva a la otra.**
+    // Antes, un `statement timeout` en la lectura externa escondía también la
+    // bodega ya resuelta; ahora el stock se muestra y acá va la causa.
+    if (external == null && _externalCandidatesError != null) {
+      return _buildCandidateSection(
+        phone: phone,
+        externalUnavailable: _externalCandidatesError,
+      );
+    }
     final hasChoosableCandidates =
         external != null && external.isSuccess && external.hasAnyCandidate;
     //
@@ -5283,14 +5874,6 @@ class _IntelligentPurchasingWorkspacePageState
       final report = await _service.stockCandidates(need.id);
       if (!mounted || _selectedNeed?.id != need.id) return;
       setState(() => _stockCandidates = report);
-      // El alcance de la fila recién existe ahora: los candidatos de bodega
-      // son los productos por los que se está preguntando. Sin esta segunda
-      // pasada, la celda se quedaría con el resultado de cuando no se sabía
-      // de qué productos hablábamos.
-      final history = _supplierHistory;
-      if (history != null && !history.isEmpty) {
-        unawaited(_loadConfirmedAvailability(history));
-      }
     } catch (_) {
       if (!mounted || _selectedNeed?.id != need.id) return;
       setState(() => _stockCandidates = null);
@@ -5320,125 +5903,235 @@ class _IntelligentPurchasingWorkspacePageState
   /// es lo que rompía el módulo.
   Future<void> _loadSupplierHistory(SupplyNeed need,
       {bool force = false}) async {
-    if (!force && _supplierHistoryNeedId == need.id) return;
-    _supplierHistoryNeedId = need.id;
+    final question = _supplierHistoryQuestion(need);
+    if (!force &&
+        (_supplierHistoryKey == question ||
+            _supplierHistoryPending == question)) {
+      return;
+    }
+    _supplierHistoryPending = question;
     try {
       final report = await _service.rankSuppliers(
         query: need.description.trim().isEmpty ? null : need.description.trim(),
       );
-      if (!mounted || _selectedNeed?.id != need.id) return;
-      setState(() => _supplierHistory = report);
-      // Lo confirmado se trae después y aparte: si el portal nunca se consultó,
-      // la fila igual muestra su historial.
-      unawaited(_loadConfirmedAvailability(report));
+      if (!_stillAsking(need)) return;
+      setState(() {
+        _supplierHistory = report;
+        // Recién ahora es cierto que esta pregunta está respondida.
+        _supplierHistoryKey = question;
+        _supplierHistoryPending = null;
+      });
+      // La búsqueda del portal tiene su propio historial, acotado por necesidad.
+      // El ranking se muestra aunque esa lectura falle o nunca haya corrido.
+      unawaited(_loadNeedPortalSearches(report, need));
     } catch (_) {
-      if (!mounted || _selectedNeed?.id != need.id) return;
-      setState(() => _supplierHistory = null);
+      if (!_stillAsking(need)) return;
+      setState(() {
+        _supplierHistory = null;
+        _supplierHistoryKey = null;
+        _supplierHistoryPending = null;
+      });
     }
   }
 
-  /// **Los productos de los que habla esta fila.**
+  /// Qué se le preguntó al historial: la necesidad **y sus palabras**.
+  String _supplierHistoryQuestion(SupplyNeed need) =>
+      '${need.id}\u0000${need.description.trim()}';
+
+  /// Si lo que acaba de llegar **sigue respondiendo lo que se está
+  /// preguntando**.
   ///
-  /// La columna «Confirmado» compara proveedores *para esta necesidad*, así que
-  /// tiene que contar lo confirmado de estos productos y de ningún otro. Sin
-  /// esto salía el barrido de reposición del proveedor entero: en RBX decía
-  /// «12 de 12» —cámaras de 16", 20", 24", 26" y hasta una biela— sobre una
-  /// necesidad de cámaras 29, y ese 12 no se podía relacionar con nada de la
-  /// pantalla.
-  List<String> _needProductScope() {
-    final scope = <String>{};
-    final confirmado = _selectedNeed?.productId;
-    if (confirmado != null && confirmado.isNotEmpty) scope.add(confirmado);
-    // Sin producto confirmado, lo que la fila compara son los candidatos: son
-    // exactamente los productos por los que se está preguntando.
-    for (final candidate in _ranking?.items ?? const []) {
-      if (candidate.productId.isNotEmpty) scope.add(candidate.productId);
-    }
-    for (final candidate in _stockCandidates?.items ?? const []) {
-      if (candidate.productId.isNotEmpty) scope.add(candidate.productId);
-    }
-    return scope.toList(growable: false);
+  /// **Una respuesta vieja no puede publicar ni limpiar el estado actual.**
+  /// Comprobar sólo `need.id` después del `await` alcanzaba para el cambio de
+  /// necesidad y no para el cambio de palabras, que es el mismo id: con la
+  /// consulta de «Pastillas de freno» en vuelo, editar a «Rodamientos para
+  /// maza» traía primero la lista correcta y después la vieja la pisaba. Y vale
+  /// en las dos direcciones —publicar un resultado y borrar por un fallo—:
+  /// nulear la lista por el error de una pregunta que ya nadie hace deja la
+  /// pantalla vacía sin que nada haya fallado.
+  bool _stillAsking(SupplyNeed need) {
+    final current = _selectedNeed;
+    return mounted &&
+        current != null &&
+        _supplierHistoryQuestion(current) == _supplierHistoryQuestion(need);
   }
 
-  /// Trae lo último que contestó cada portal. Sin bloquear: si falla, la fila
-  /// muestra su historial igual y no se pierde nada de lo que ya servía.
-  Future<void> _loadConfirmedAvailability(
+  /// Trae la última respuesta de cada portal a ESTA necesidad y, por separado,
+  /// si el proveedor tiene un buscador automático reconocido. Un portal que
+  /// sólo sabe resolver códigos no recibe una orden que no puede cumplir.
+  Future<void> _loadNeedPortalSearches(
     SupplierConcentrationReport report,
+    SupplyNeed need,
   ) async {
     if (report.isEmpty) return;
     final service = SupplierAvailabilityService(Supabase.instance.client);
-    final scope = _needProductScope();
+    final supported = <String, bool>{};
+    final snapshots = <String, SupplierNeedPortalSearchSnapshot>{};
+    // **Con la ficha vigente, no con la pintada.** Este camino corre sin await
+    // desde `_loadDecision`, así que tras precisar el campo puede seguir
+    // teniendo la ficha anterior; y como no estaba vacía, el atajo de pedirla
+    // sólo cuando falta tampoco la corregía.
+    final criteria = await _needCriteriaLatch.resolve(
+      needId: need.id,
+      painted: _needCriteria,
+      fetch: () => _service.fetchNeedCriteria(need.id),
+    );
+    if (!_stillAsking(need)) return;
+    final request = await _needSearchRequest(need, criteria);
+    // **Armar la consulta tarda: la plantilla y las dos lecturas con modelo.**
+    // Al volver de ese tramo la pregunta puede haber cambiado —o la pantalla
+    // haberse ido—, y seguir pidiéndole sondas a cada proveedor gastaría
+    // conexiones por una necesidad que ya nadie está mirando. La misma
+    // vigencia que se comprueba antes y al final vale también acá.
+    if (!_stillAsking(need)) return;
     for (final supplier in report.items) {
       try {
-        final raw = await service.lastAvailability(
-          supplier.supplierId,
-          productIds: scope,
+        final probe = await service.enabledProbe(supplier.supplierId);
+        final canSearch = probe?.canSearchNeed(request) == true;
+        supported[supplier.supplierId] = canSearch;
+        if (!canSearch) continue;
+        SupplierNeedPortalSearchSnapshot? stored;
+        try {
+          stored = await service.lastNeedSearch(
+            supplierId: supplier.supplierId,
+            needId: need.id,
+          );
+        } catch (_) {
+          // Que la lectura guardada no se pueda traer no borra la que está en
+          // memoria: se sigue con lo que hay.
+          stored = null;
+        }
+        // **La de memoria sostiene el feed cuando el recibo no llegó.** El
+        // recorrido existió; que su recibo muriera en el transporte no lo
+        // deshace.
+        final snapshot = carrySupplierNeedPortalSearch(
+          stored: stored,
+          inMemory: _needPortalSearches[supplier.supplierId],
+          plan: probe?.planForNeed(request),
+          currentRevisionNo: request.revisionNo,
         );
-        final confirmed = SupplierConfirmedAvailability.fromJson(raw);
-        if (!mounted) return;
-        // Se guarda aunque venga en cero: «se le consultó, pero de otra cosa»
-        // es distinto de «nunca se le consultó», y el detalle lo dice.
-        if (confirmed.isEmpty && confirmed.sweptProducts == 0) continue;
-        setState(() => _confirmed[supplier.supplierId] = confirmed);
+        if (snapshot != null) {
+          // **Precisar tiene que verse de inmediato, sin red.** El RPC ya
+          // decidió si esta lectura puede cruzar hacia la ficha vigente —sólo
+          // devuelve filas cuando el alcance calza y no hay un reemplazo en
+          // medio—, así que si llegó, sus filas crudas describen el mismo
+          // universo. Lo que no sirve es el veredicto guardado: se calculó
+          // contra la ficha anterior. Se vuelve a evaluar acá, contra el plan
+          // real del proveedor, y la lista, los conteos y la ausencia pasan a
+          // responder lo que se está preguntando ahora.
+          // **El veredicto guardado NUNCA se reusa.** Lo que la base conserva
+          // es evidencia —código, nombre y texto crudo de cada fila—; «cumple»
+          // es una conclusión, calculada con el lector que existía el día de
+          // la búsqueda. Reusarla dejaba en pantalla el juicio viejo aunque el
+          // lector ya supiera leer `V/DUNLOP` o `SCOOTER 8-1/2`. Volver a
+          // juzgar es una función pura sobre filas ya en memoria: sin red.
+          snapshots[supplier.supplierId] = snapshot;
+        }
       } catch (_) {
-        // Un proveedor sin confirmación no rompe la fila de los demás.
-        continue;
+        supported[supplier.supplierId] = false;
       }
     }
+    // El recibo del portal se leyó contra la petición de ESTAS palabras: si ya
+    // se está preguntando otra cosa, no se publica ni pisa lo vigente.
+    if (!_stillAsking(need)) return;
+    setState(() {
+      _needSearchSupported.addAll(supported);
+      _needPortalSearches.addAll(snapshots);
+      _needPortalSearchesNeedId = need.id;
+    });
   }
 
-  /// «12 confirmados hace 3 min · Cámara 29 +18,5% vs tu costo».
-  ///
-  /// Lo confirmado va con su ANTIGÜEDAD siempre: un dato de disponibilidad sin
-  /// hora es historia disfrazada de confirmación. Y lo que no concluyó se dice
-  /// aparte, porque una corrida con la sesión caída no es una corrida con
-  /// resultados.
-  String? _confirmedLabel(String supplierId) {
-    final confirmed = _confirmed[supplierId];
-    if (confirmed == null) return null;
-    // Se le consultó al portal, pero de otra cosa. Decir «sin consultar» acá
-    // empujaría a repetir un chequeo que no contesta esta pregunta.
-    if (confirmed.sweptButNotThis) {
-      return 'De esta línea no se le ha consultado nada. Aparte, '
-          '${confirmed.sweptProducts} productos suyos revisados para '
-          'reposición.';
-    }
-    if (confirmed.isEmpty) return null;
-    final partes = <String>[];
-    final edad = confirmed.ageLabel;
-    // **El número dice de qué es.** Antes decía «12 de 12» sobre una necesidad
-    // de cámaras 29, contando el barrido de reposición entero del proveedor.
-    partes.add(
-      '${confirmed.available} de ${confirmed.checked} '
-      '${confirmed.checked == 1 ? 'producto' : 'productos'} de esta línea, '
-      'disponibles${edad == null ? '' : ' $edad'}',
+  Future<SupplierNeedSearchRequest> _needSearchRequest(
+    SupplyNeed need,
+    SupplyNeedCriteria criteria,
+  ) async {
+    final categoryId = criteria.categoryId?.trim();
+    // **La plantilla ya cargada, cuando es la de esta categoría.** El editor de
+    // criterios la trae al abrir la necesidad; volver a pedirla acá era un
+    // viaje por algo que ya estaba en memoria, y además dejaba a las dos
+    // superficies pudiendo mirar plantillas distintas.
+    final cargada = _needTemplate;
+    final template = categoryId == null || categoryId.isEmpty
+        ? null
+        : (cargada != null && _needTemplateCategoryId == categoryId)
+            ? cargada
+            : await _templateLoader(categoryId);
+    // La misma petición completa que ve la ficha: identidad reconocida más lo
+    // que el operador escribió. De acá salen el plan del proveedor y el
+    // rejuicio del feed, así que las tres superficies leen lo mismo.
+    final description = supplyNeedRequestText(need);
+    // **La ficha efectiva se arma acá, que es por donde pasa todo.** El plan
+    // del proveedor, el rejuicio del feed y la previsualización salen de esta
+    // petición; derivarla sólo para el formulario habría arreglado el síntoma
+    // visible y dejado el feed juzgando «cualquier cámara».
+    final fields = supplyNeedSearchFieldsOf(template);
+    final effective = effectiveSupplyNeedCriteria(
+      stored: criteria,
+      texts: supplyNeedRequestTexts(need),
+      fields: fields,
+      templateTechnicalFamily: template?.technicalFamily,
     );
-    if (confirmed.outOfStock > 0) {
-      partes.add('${confirmed.outOfStock} sin stock');
+    // **Dónde está escrito cada criterio, preguntado una vez por petición.**
+    // Los criterios salen de este mismo texto, pero al guardarlos se pierde con
+    // qué palabras los escribió el operador; sin ese vínculo el juicio vuelve a
+    // exigir la palabra literal y cuenta dos veces el mismo requisito. La
+    // lectura es una mejora: si el modelo no está, se demora o contesta
+    // cualquier cosa, vuelven cero tramos y manda el vocabulario de la ficha.
+    final askedValues = <String, List<Object>>{
+      for (final predicate in effective.predicates)
+        if (predicate.field.trim().isNotEmpty && predicate.values.isNotEmpty)
+          predicate.field.trim(): predicate.values,
+    };
+    // Dos preguntas al mismo lector y sobre el mismo texto: dónde está escrito
+    // cada criterio, y qué exige la petición que la ficha no representa. Van en
+    // paralelo porque ninguna depende de la otra, y cada una degrada sola.
+    final (tramos, exigencias) = await (
+      readSupplyNeedCriteriaSpansWithModel(
+        requestText: description,
+        fields: fields,
+        askedValues: askedValues,
+        extractor: _specExtractor,
+        owner: _lecturas,
+      ),
+      readSupplyNeedRequirementsWithModel(
+        requestText: description,
+        fields: fields,
+        askedValues: askedValues,
+        extractor: _specExtractor,
+        owner: _lecturas,
+      ),
+    ).wait;
+    final llave = supplyNeedCriteriaSpansKey(description, askedValues, fields);
+    if (mounted && _stillAsking(need)) {
+      _needCriteriaSpans = tramos.spans;
+      _needDiscoveredRequirements = exigencias;
+      _needCriteriaSpansKey = llave;
     }
-    if (confirmed.notFound > 0) {
-      // «No apareció» y no «no lo vende»: son cosas distintas.
-      partes.add('${confirmed.notFound} no apareció');
-    }
-    if (confirmed.inconclusive > 0) {
-      partes.add('${confirmed.inconclusive} sin concluir');
-    }
-    if (confirmed.sweptProducts > confirmed.checked) {
-      // El barrido sigue siendo útil, pero con su nombre puesto: es otra
-      // pregunta, no un recuento mayor de ésta.
-      partes.add(
-        '${confirmed.sweptProducts} productos suyos revisados para reposición',
-      );
-    }
-    final drift = confirmed.sharpestDriftPercent;
-    if (drift != null && drift.abs() >= 5) {
-      final signo = drift > 0 ? '+' : '';
-      partes.add(
-        '${confirmed.sharpestDriftName ?? 'un producto'} '
-        '$signo${drift.toStringAsFixed(1).replaceAll('.', ',')}% vs tu costo',
-      );
-    }
-    return partes.join(' · ');
+    return SupplierNeedSearchRequest(
+      needId: need.id,
+      description: description,
+      categoryId: categoryId,
+      categoryPath: criteria.categoryPath,
+      criteriaSpans: tramos.spans,
+      discoveredRequirements: exigencias,
+      // La plantilla canónica manda cuando la columna nació nula.
+      technicalFamily: effective.technicalFamily ?? template?.technicalFamily,
+      // Una lectura recién hecha responde la ficha vigente por definición.
+      // Sin esto saldría rotulada «ficha anterior» apenas termina. Se captura
+      // ACÁ, al armar la consulta, no al guardarla: entre las dos cosas puede
+      // entrar una edición y esa lectura dejaría de responder lo que se
+      // preguntó.
+      revisionNo: criteria.revisionNo,
+      needVersion: need.version,
+      fields: fields,
+      predicates: effective.predicates
+          .map((predicate) => SupplierNeedSearchPredicate(
+                field: predicate.field,
+                operator: predicate.operator,
+                values: predicate.values,
+              ))
+          .toList(growable: false),
+    );
   }
 
   /// **Confirmar con el proveedor, sin abrir su portal.**
@@ -5447,9 +6140,10 @@ class _IntelligentPurchasingWorkspacePageState
   /// navegador sin ventana con la sesión que la app ya tiene: el operador
   /// aprieta una vez y sigue en lo suyo.
   ///
-  /// No inicia sesión por su cuenta —ese camino tiene sus propias
-  /// comprobaciones y no se duplica—, así que si no hay sesión lo dice y se
-  /// detiene en vez de anotar una fila falsa por cada producto.
+  /// Si la cookie venció, reutiliza una vez el límite de credenciales del
+  /// navegador y repite esta misma pregunta. Los portales con CAPTCHA, OTP o
+  /// formulario inseguro siguen pidiendo intervención en vez de degradar la
+  /// seguridad o anotar una fila falsa por cada producto.
   Future<void> _checkExactProductAvailability(
     SupplyStockOption product,
   ) async {
@@ -5487,7 +6181,7 @@ class _IntelligentPurchasingWorkspacePageState
         );
         return;
       }
-      final summary = await SupplierPortalHeadlessRunner(service).run(
+      final summary = await _supplierPortalRunner(service).run(
         supplierId: supplierId,
         probe: probe,
         targets: <SupplierAvailabilityTarget>[
@@ -5533,59 +6227,131 @@ class _IntelligentPurchasingWorkspacePageState
     }
   }
 
-  Future<void> _confirmAvailabilityWithSupplier(
+  Future<SupplierNeedPortalSearchStatus?> _confirmAvailabilityWithSupplier(
     String supplierId,
     String supplierName,
   ) async {
-    if (_checkingSupplierId != null) return;
+    if (_checkingSupplierId != null) return null;
+    final need = _selectedNeed;
+    if (need == null) return null;
     final service = SupplierAvailabilityService(Supabase.instance.client);
     setState(() {
       _checkingSupplierId = supplierId;
-      _checkProgress = 'Preparando la consulta…';
+      _checkProgress = 'Preparando la búsqueda…';
     });
     try {
       final probe = await service.enabledProbe(supplierId);
-      if (probe == null) {
-        _showCheckMessage(
-          '$supplierName todavía no tiene una consulta habilitada.',
-        );
-        return;
+      var criteria = _needCriteria;
+      if (criteria.predicates.isEmpty && criteria.categoryId == null) {
+        criteria = await _service.fetchNeedCriteria(need.id);
+        if (!mounted || _selectedNeed?.id != need.id) return null;
+        setState(() => _needCriteria = criteria);
       }
-      final targets = await service.targets(supplierId);
-      if (targets.isEmpty) {
+      final request = await _needSearchRequest(need, criteria);
+      if (probe == null || !probe.canSearchNeed(request)) {
         _showCheckMessage(
-          'No hay productos de $supplierName bajo su mínimo para confirmar.',
+          '$supplierName todavía no tiene búsqueda automática para esta familia de producto.',
         );
-        return;
+        return null;
       }
-      final summary = await SupplierPortalHeadlessRunner(service).run(
+      final snapshot = await _supplierPortalRunner(service).runNeedSearch(
         supplierId: supplierId,
         probe: probe,
-        targets: targets,
-        onProgress: (done, total, name) {
+        request: request,
+        onProgress: (message) {
           if (!mounted) return;
-          setState(() =>
-              _checkProgress = 'Consultando ${done + 1} de $total: $name');
+          setState(() => _checkProgress = message);
         },
       );
-      if (!mounted) return;
-      if (summary.needsLogin) {
+      if (!mounted || _selectedNeed?.id != need.id) return null;
+      setState(() {
+        _needSearchSupported[supplierId] = true;
+        _needPortalSearches[supplierId] = snapshot;
+        _needPortalSearchesNeedId = need.id;
+        // El resultado de una orden no termina en un contador críptico. Si el
+        // portal devolvió opciones, se muestran de inmediato; el operador
+        // puede plegarlas sin perderlas y volver a abrirlas desde la fila.
+        // Se abre por lo que el operador puede ELEGIR. Un resultado que sólo
+        // trae filas contradichas abriría un panel vacío.
+        _expandedNeedPortalSupplierId =
+            snapshot.relevantMatches.isEmpty ? null : supplierId;
+      });
+      if (snapshot.status == SupplierNeedPortalSearchStatus.sessionExpired) {
         // Decirlo así y no «sin stock» es la diferencia entre reintentar y
         // salir a comprar de más.
+        // **No prometer una recuperación que no puede ocurrir.** El portal de
+        // RBX publica su ingreso por HTTPS pero su formulario legacy envía por
+        // HTTP, y el preflight se niega por contrato a mandar el secreto en
+        // claro. Decir «no se pudo automáticamente» sugiere un reintento que
+        // nunca va a funcionar; lo honesto es que este portal pide una persona.
         _showCheckMessage(
-          'No hay sesión abierta con $supplierName. Entra a su portal una vez '
-          'desde «Entrar al portal» y vuelve a intentarlo.',
+          '$supplierName necesita que inicies sesión en su portal. '
+          'Te abro su ingreso.',
+        );
+      } else if (snapshot.status == SupplierNeedPortalSearchStatus.unreadable) {
+        _showCheckMessage(
+          'El portal de $supplierName respondió, pero el catálogo no se pudo leer.',
+        );
+      } else if (snapshot.status == SupplierNeedPortalSearchStatus.noMatches) {
+        _showCheckMessage(
+          '$supplierName no mostró productos para «${snapshot.query}».',
+        );
+      } else if (snapshot.exactCount > 0) {
+        _showCheckMessage(
+          '${snapshot.exactCount} ${snapshot.exactCount == 1 ? 'producto de $supplierName demuestra' : 'productos de $supplierName demuestran'} toda la ficha pedida.',
+        );
+      } else if (snapshot.possibleCount > 0) {
+        _showCheckMessage(
+          '$supplierName mostró ${snapshot.possibleCount} '
+          '${snapshot.possibleCount == 1 ? 'posible resultado' : 'posibles resultados'}, '
+          'pero el portal no publica toda la ficha para confirmarlos.',
         );
       } else {
         _showCheckMessage(
-          'Se registró la respuesta para ${summary.checked} productos de '
-          '$supplierName.',
+          '$supplierName mostró productos, pero sus datos contradicen la ficha pedida.',
         );
       }
-      await _loadSupplierHistory(_selectedNeed!, force: true);
-    } catch (error) {
-      if (!mounted) return;
-      _showCheckMessage('No se pudo confirmar con $supplierName.');
+      return snapshot.status;
+    } on SupplierNeedSearchNotPersisted catch (error) {
+      // **La lectura existe aunque no se haya guardado.** Se muestra igual y
+      // se dice qué pasó: tirarla obligaba a repetir minutos de navegación
+      // real por un fallo de transporte que no es del proveedor.
+      if (kDebugMode) {
+        debugPrint('🛒 Lectura de $supplierName sin registrar: ${error.cause}');
+      }
+      if (!mounted) return null;
+      setState(() {
+        _needPortalSearches[supplierId] = error.snapshot;
+        _needPortalSearchesNeedId = need.id;
+        _expandedNeedPortalSupplierId =
+            error.snapshot.relevantMatches.isEmpty ? null : supplierId;
+      });
+      // **La corrida se puede reintentar sin volver a navegar.** Lleva su
+      // clave de operación desde antes de abrir el portal, así que el
+      // reintento resuelve primero si ya quedó guardada y nunca duplica el
+      // recibo. Decirle al operador que busque de nuevo era falso y caro.
+      _showCheckMessage(
+        error.snapshot.operationKey == null
+            ? 'Se leyó el catálogo de $supplierName y sus resultados están '
+                'abajo, pero no se pudieron guardar.'
+            : 'Se leyó el catálogo de $supplierName y sus resultados están '
+                'abajo. No se pudieron guardar todavía; se reintenta sin '
+                'volver a consultar el portal.',
+      );
+      _scheduleReceiptRetry(supplierId, supplierName, error);
+      return error.snapshot.status;
+    } catch (error, stack) {
+      // **El operador ve una frase; el log tiene que ver la causa.** Sin esto,
+      // un fallo del guardado, del portal o del modelo se veían idénticos:
+      // «No se pudo buscar», y había que adivinar cuál de los tres.
+      if (kDebugMode) {
+        debugPrint('🛒 Búsqueda de necesidad fallida en $supplierName: '
+            '${error.runtimeType} — $error');
+        debugPrintStack(stackTrace: stack, maxFrames: 6);
+      }
+      if (!mounted) return null;
+      _showCheckMessage('No se pudo buscar esta necesidad en $supplierName.');
+      return null;
     } finally {
       if (mounted) {
         setState(() {
@@ -5593,6 +6359,201 @@ class _IntelligentPurchasingWorkspacePageState
           _checkProgress = null;
         });
       }
+    }
+  }
+
+  /// Reintenta guardar una corrida que ya se leyó, sin volver al portal.
+  ///
+  /// **Nunca vuelve a navegar ni a invocar al modelo**: el resultado ya está en
+  /// memoria y lleva su clave. Y **hay como máximo una cadena viva por
+  /// necesidad+proveedor**: si llega otra corrida mientras ésta espera, se
+  /// reemplaza la lectura pendiente y la cadena existente sigue con la más
+  /// nueva. Apilar cadenas fue lo que agotó el pool.
+  void _scheduleReceiptRetry(
+    String supplierId,
+    String supplierName,
+    SupplierNeedSearchNotPersisted failure,
+  ) {
+    final need = _selectedNeed;
+    if (failure.snapshot.operationKey == null || need == null) return;
+    final key = '${need.id}|$supplierId';
+    // La corrida nueva manda: la cadena que ya espera guardará ésta.
+    _unsavedReceipts[key] = failure;
+    if (_receiptRetriesInFlight.contains(key)) return;
+    _receiptRetriesInFlight.add(key);
+    unawaited(_runReceiptRetry(key, supplierId, supplierName, need.id));
+  }
+
+  Future<void> _runReceiptRetry(
+    String key,
+    String supplierId,
+    String supplierName,
+    String needId,
+  ) async {
+    // **La causa medida es un pool agotado, y eso dura.** `PGRST003` —«Timed
+    // out acquiring connection from connection pool»— es lo que hay detrás de
+    // cada `504`. Espera creciente para no agravarlo: cada intento pide otra
+    // conexión, así que apretar más rápido empeora justo lo que se espera.
+    const esperas = <int>[5, 15, 30, 60, 120];
+    // La corrida con la que esta cadena empezó: sirve para no reintentarla en
+    // bucle si al final sigue siendo la misma.
+    final inicial = _unsavedReceipts[key]?.snapshot.operationKey;
+    try {
+      final service = SupplierAvailabilityService(Supabase.instance.client);
+      for (final espera in esperas) {
+        await Future<void>.delayed(Duration(seconds: espera));
+        final pendiente = _unsavedReceipts[key];
+        if (!mounted || pendiente == null || _selectedNeed?.id != needId) {
+          return;
+        }
+        final operationKey = pendiente.snapshot.operationKey;
+        if (operationKey == null) return;
+
+        // **La pregunta que se guarda es la que se recorrió.** Si la ficha
+        // cambió mientras esperábamos, esta lectura ya no responde lo vigente:
+        // se suelta en vez de estamparla contra otra revisión.
+        final vigente = _needCriteria.revisionNo;
+        if (vigente != null && vigente != pendiente.request.revisionNo) {
+          _dropReceiptRetry(key, operationKey);
+          return;
+        }
+
+        try {
+          if (await service.needSearchWasRecorded(operationKey)) {
+            _finishReceiptRetry(key, operationKey, supplierName);
+            return;
+          }
+          if (!mounted || _selectedNeed?.id != needId) return;
+          final probe = await service.enabledProbe(supplierId);
+          if (probe?.canSearchNeed(pendiente.request) != true) return;
+          await service.recordNeedSearch(
+            supplierId: supplierId,
+            // La petición original, no una reconstruida con lo de ahora.
+            request: pendiente.request,
+            snapshot: pendiente.snapshot,
+            evidenceSample: '',
+          );
+          _finishReceiptRetry(key, operationKey, supplierName);
+          return;
+        } catch (error) {
+          // Sigue sin poder guardarse. La lectura no se pierde: está en
+          // pantalla y su clave impide que un reintento la duplique.
+          if (kDebugMode) {
+            debugPrint('📮 reintento de $supplierName sin éxito: $error');
+          }
+        }
+      }
+    } finally {
+      _receiptRetriesInFlight.remove(key);
+      // **Traspaso, no abandono.** Si mientras esta cadena esperaba llegó una
+      // corrida nueva, al terminar quedaría un pendiente sin nadie que lo
+      // reintente. Se arranca UNA cadena para ese pendiente nuevo — nunca para
+      // el mismo que esta cadena acaba de agotar, que sería un bucle.
+      final pendiente = _unsavedReceipts[key];
+      if (mounted &&
+          pendiente != null &&
+          _selectedNeed?.id == needId &&
+          pendiente.snapshot.operationKey != inicial) {
+        _receiptRetriesInFlight.add(key);
+        unawaited(_runReceiptRetry(key, supplierId, supplierName, needId));
+      }
+    }
+  }
+
+  /// Cierra el pendiente **sólo si es el que terminó**.
+  ///
+  /// Una corrida nueva puede haber reemplazado el pendiente mientras esta
+  /// cadena guardaba la vieja; borrar por llave a secas dejaría la nueva sin
+  /// reintento y sin quien la reclame.
+  void _finishReceiptRetry(String key, String operationKey, String supplier) {
+    final cerrado = _dropReceiptRetry(key, operationKey);
+    if (!mounted) return;
+    _showCheckMessage(
+      cerrado
+          ? 'La lectura de $supplier quedó guardada.'
+          : 'Se guardó una lectura anterior de $supplier; la última sigue '
+              'pendiente.',
+    );
+  }
+
+  bool _dropReceiptRetry(String key, String operationKey) {
+    if (_unsavedReceipts[key]?.snapshot.operationKey != operationKey) {
+      return false;
+    }
+    _unsavedReceipts.remove(key);
+    return true;
+  }
+
+  /// Una sesión vencida intenta primero el recuperador seguro. Sólo cuando
+  /// ese intento vuelve a demostrar `session_expired` se abre el navegador
+  /// visible para que el operador resuelva el paso que falta.
+  Future<void> _searchSupplierNeedOrOpenLogin(
+    SupplierConcentration supplier,
+  ) async {
+    final status = await _confirmAvailabilityWithSupplier(
+      supplier.supplierId,
+      supplier.supplierName,
+    );
+    if (!mounted || status != SupplierNeedPortalSearchStatus.sessionExpired) {
+      return;
+    }
+
+    String? loginUrl;
+    try {
+      final probe = await SupplierAvailabilityService(
+        Supabase.instance.client,
+      ).enabledProbe(supplier.supplierId);
+      loginUrl = probe?.sessionLoginUrl;
+    } catch (_) {
+      // La ruta visible conserva el fallback público del proveedor; nunca
+      // convierte un fallo de configuración en acceso a una credencial.
+    }
+    loginUrl ??= supplierNeedPortalLoginUrl(supplier.supplierWebsite);
+    if (!mounted) return;
+    if (loginUrl == null) {
+      _showCheckMessage(
+        '${supplier.supplierName} no tiene una dirección de ingreso configurada.',
+      );
+      return;
+    }
+    if (Uri.tryParse(loginUrl)?.host.endsWith('rburgos.cl') == true) {
+      _showCheckMessage(
+        'RBX abrirá su ingreso. El ERP completa los datos, pero su portal '
+        'antiguo todavía requiere enviar el formulario de forma visible.',
+      );
+    }
+    await _openSupplier(loginUrl, supplierName: supplier.supplierName);
+  }
+
+  SupplierPortalHeadlessRunner _supplierPortalRunner(
+    SupplierAvailabilityService service,
+  ) =>
+      SupplierPortalHeadlessRunner(
+        service,
+        credentialResolver: _resolveSupplierPortalCredential,
+      );
+
+  /// Revela una credencial administrada sólo para el origen HTTPS exacto que
+  /// el runner ya declaró seguro. El servicio vuelve a comprobar usuario,
+  /// tenant, permiso y unicidad antes y después de leer el secreto.
+  Future<BrowserSupplierCredential?> _resolveSupplierPortalCredential({
+    required String supplierId,
+    required String origin,
+  }) async {
+    if (!mounted) return null;
+    try {
+      final credential = await resolveSupplierCredentialForOrigin(
+        origin: origin,
+        revealCredential: (canonicalOrigin) => SupplierCredentialService(
+          profileService: context.read<CurrentUserProfileService>(),
+        ).revealPortalCredentialForOrigin(origin: canonicalOrigin),
+      );
+      if (!mounted || credential?.supplierId != supplierId) return null;
+      return credential;
+    } catch (_) {
+      // La recuperación es una mejora de disponibilidad, no un atajo de
+      // autoridad. Ante cualquier cambio de sesión o permiso, falla cerrada.
+      return null;
     }
   }
 
@@ -5870,6 +6831,10 @@ class _IntelligentPurchasingWorkspacePageState
   /// disparadores al pasar a `received`. Verificado contra producción — el
   /// borrador que ya existía tiene cero asientos.
   Future<void> _savePurchaseOrder(PurchaseOrderDraft draft) async {
+    if (_stockUnread) {
+      setState(() => _decisionError = _stockUnreadBlock);
+      return;
+    }
     if (draft.isEmpty || _orderBusy) return;
     setState(() => _orderBusy = true);
     try {
@@ -6052,6 +7017,10 @@ class _IntelligentPurchasingWorkspacePageState
     final message = _orderMessage;
     final orderId = _savedOrderId;
     if (message == null || orderId == null || _sendingOrder) return;
+    if (_stockUnread) {
+      setState(() => _decisionError = _stockUnreadBlock);
+      return;
+    }
     setState(() => _sendingOrder = true);
     try {
       final receipt = await WhatsAppService().sendMessage(
@@ -6395,25 +7364,31 @@ class _IntelligentPurchasingWorkspacePageState
         if (supplierId == null) return;
         unawaited(_openSupplierWorkspace(supplierId));
       },
-      // Un recuento y su antigüedad: «12 de 12» y «hace 7 min». Separados
-      // porque uno compara y el otro fecha.
-      confirmedDetailFor: _confirmedLabel,
+      // La respuesta es de esta necesidad y siempre viaja con su antigüedad.
+      confirmedDetailFor: (supplierId) =>
+          _needPortalSearches[supplierId]?.detailLabel,
       checkProgress: _checkProgress,
-      confirmedLabelFor: (supplierId) => _confirmed[supplierId]?.rowLabel,
-      confirmedAgeFor: (supplierId) {
-        final confirmed = _confirmed[supplierId];
-        if (confirmed == null) return null;
-        // «Sin consultar» acá empujaría a repetir un chequeo que ya corrió y
-        // que no contesta esta pregunta: apuntó a otros productos.
-        if (confirmed.sweptButNotThis) return 'nada de esta línea';
-        return confirmed.ageLabel;
-      },
+      confirmedLabelFor: (supplierId) =>
+          _needPortalSearches[supplierId]?.rowLabel,
+      confirmedAgeFor: (supplierId) =>
+          _needPortalSearches[supplierId]?.ageLabel,
+      portalSearchFor: (supplierId) => _needPortalSearches[supplierId],
+      expandedPortalSupplierId: _expandedNeedPortalSupplierId,
+      onTogglePortalResults: (supplier) => setState(() {
+        _expandedNeedPortalSupplierId =
+            _expandedNeedPortalSupplierId == supplier.supplierId
+                ? null
+                : supplier.supplierId;
+      }),
+      canSearchNeedFor: (supplierId) =>
+          _needSearchSupported[supplierId] == true,
+      needsLoginFor: (supplierId) =>
+          _needPortalSearches[supplierId]?.status ==
+          SupplierNeedPortalSearchStatus.sessionExpired,
       busySupplierId: _checkingSupplierId,
       expandedSupplierId: _evidenceSupplierId,
-      onConfirm: (supplier) => unawaited(_confirmAvailabilityWithSupplier(
-        supplier.supplierId,
-        supplier.supplierName,
-      )),
+      onConfirm: (supplier) =>
+          unawaited(_searchSupplierNeedOrOpenLogin(supplier)),
       onExplain: (supplier) {
         final need = _selectedNeed;
         if (need == null) return;
@@ -6478,6 +7453,11 @@ class _IntelligentPurchasingWorkspacePageState
     );
     final message = _orderMessage;
     return SupplierOrderComposer(
+      // El mismo juicio que la lista de proveedores decide qué se destaca.
+      highlightedProductIds: supplierCatalogHighlightedProductIds(
+        items: page.items,
+        plan: _needCatalogPlan,
+      ),
       key: ValueKey(_openSupplierId),
       page: page,
       document: document,
@@ -6555,11 +7535,48 @@ class _IntelligentPurchasingWorkspacePageState
   Widget _buildCandidateSection({
     required bool phone,
     Widget? identityFallback,
+
+    /// La comparación externa no se pudo leer. El stock de arriba sí, y por eso
+    /// esta sección degrada sola, con su causa, en vez de vaciar la pantalla.
+    String? externalUnavailable,
   }) {
     final ranking = _ranking;
     final need = _selectedNeed;
     final external = _externalCandidates;
     final resolution = _stockResolution;
+    // **Lo que falló se dice; lo que llegó se conserva.** Esta sección se
+    // devolvía entera como un mensaje de error, y con eso desaparecían el
+    // ranking y el recibo del portal que **sí** habían llegado: el 2026-08-31,
+    // con `get_supply_need_external_candidates_v1` en 500, la pantalla mostró
+    // sólo la causa mientras el log traía las diez filas de RBX recalculadas.
+    // Es el mismo defecto que ya se corrigió en la bodega: una lectura fallida
+    // no borra evidencia ajena, y tampoco autoriza a comprar —eso lo sigue
+    // decidiendo `supplyPurchaseAuthorized`—.
+    final avisoExterno = externalUnavailable == null
+        ? null
+        : <Widget>[
+            Text(
+              externalUnavailable,
+              key: const ValueKey('provider-results-external-error'),
+              style: PurchaseType.meta.copyWith(
+                color: PurchaseTokens.of(context).inkMuted,
+              ),
+            ),
+            const SizedBox(height: PurchaseMetrics.labelGap),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: PurchaseInlineAction(
+                key: const ValueKey('provider-results-external-retry'),
+                label: 'Reintentar la comparación',
+                onPressed: () {
+                  final abierta = _selectedNeed;
+                  if (abierta == null) return;
+                  unawaited(_loadDecision(abierta, resetRankingLimit: false));
+                },
+              ),
+            ),
+            const SizedBox(height: PurchaseMetrics.stageGap),
+          ];
     // **Bloqueo de stock significa stock, y nada más.** Antes esto era «no se
     // muestran candidatos», así que `needs_refinement`, `identity_unresolved`
     // y `supply_closed` se rotulaban como «el stock interno todavía puede
@@ -6589,6 +7606,23 @@ class _IntelligentPurchasingWorkspacePageState
       key: const ValueKey('provider-results'),
       padding: const EdgeInsets.only(top: 14),
       children: [
+        // La comparación externa falló: se dice acá, encabezando, y lo que sí
+        // llegó —proveedores y recibo del portal— sigue abajo, refinable.
+        ...?avisoExterno,
+        // **El fallo se ve ANTES de elegir.** Dejarlo al final lo empujaba
+        // debajo del feed expandido: en la captura real del 2026-08-31 se veía
+        // la tabla entera de RBX y ningún aviso de que la bodega no había
+        // respondido, y el propio texto de la superficie dice «los proveedores
+        // siguen abajo», que sólo es cierto si está arriba. Se conserva la
+        // tabla disponible —no reemplaza nada—, pero la causa y su reintento
+        // encabezan, que es donde se decide.
+        if (_showsLoadFailure) ...[
+          DecisionLoadFailedSurface(
+            busy: _loadingDecision,
+            onRetry: () => unawaited(_retryDecisionLoad()),
+          ),
+          const SizedBox(height: 12),
+        ],
         // El calce exacto manda sobre la historia parecida. Si el producto
         // existe pero no tiene compras en este ERP, se conserva arriba y la
         // evidencia histórica ampliada queda como contexto, no como sustituto.
@@ -6736,12 +7770,8 @@ class _IntelligentPurchasingWorkspacePageState
         // genérico trae su propia superficie con su reintento; el conflicto ya
         // se dijo arriba con «Recargar la necesidad» y no necesita una segunda
         // banda que repita el mismo problema.
-        if (_showsLoadFailure)
-          DecisionLoadFailedSurface(
-            busy: _loadingDecision,
-            onRetry: () => unawaited(_retryDecisionLoad()),
-          )
-        else if (_decisionUnavailable)
+        // Ya encabeza la lista; acá sólo se corta lo que no se puede concluir.
+        if (_decisionUnavailable)
           const SizedBox.shrink()
         // El servidor cerró el paso externo. Es un estado con su acción, no
         // «no se pudo completar el análisis».
@@ -6786,7 +7816,13 @@ class _IntelligentPurchasingWorkspacePageState
         // El vacío legado sólo aplica cuando **tampoco** hay sin verificar:
         // un conjunto que sólo trae opciones por verificar no es «no hay
         // compras comparables», y su grupo se dibuja más abajo.
-        else if ((ranking == null || ranking.items.isEmpty) &&
+        //
+        // **Y nunca sobre una lectura que falló.** «No hay compras
+        // comparables» es una conclusión sobre datos que no llegaron: con la
+        // comparación externa caída, lo que corresponde es decir qué falló
+        // —arriba— y mostrar lo que sí se tenga, no concluir en su nombre.
+        else if (externalUnavailable == null &&
+            (ranking == null || ranking.items.isEmpty) &&
             quoteProducts.isEmpty &&
             (external == null || external.unverifiedItems.isEmpty))
           // Superficie de decisión alineada a la izquierda, sin isla flotante.

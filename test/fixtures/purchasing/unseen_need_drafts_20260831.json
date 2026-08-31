@@ -1,0 +1,334 @@
+{
+  "provenance": "Three previously unprepared requests submitted through the canonical macOS app on 2026-08-31. Drafts and template definitions read back from production, read-only. Candidate rows in the associated tests are synthetic, not supplier search results.",
+  "cases": [
+    {
+      "runId": "4fcc3625-b1c6-4b4a-8fe6-158201179a80",
+      "input": "Necesito 5 discos de freno de 180 mm, de una sola pieza y con anclaje de seis pernos, no Center Lock.",
+      "draft": {
+        "unit": "unidad",
+        "lineRef": "line-1",
+        "quantity": 5,
+        "productId": null,
+        "categoryId": "5bbe2944-5355-40a5-a581-70790a525579",
+        "preference": null,
+        "productSku": null,
+        "description": "Discos de freno de 180 mm de una sola pieza con anclaje de 6 pernos (no Center Lock)",
+        "productName": null,
+        "categoryPath": "Componentes / Frenos / Rotores",
+        "clarification": "Se identificaron opciones en catálogo (como Shimano RT56 o SRAM de 180 mm), pero no hay stock suficiente para cubrir las 5 unidades solicitadas.",
+        "identityState": "unresolved",
+        "technicalFamily": "rotor",
+        "technicalPredicates": [
+          {
+            "field": "rotor_diameter_mm",
+            "values": [
+              "180"
+            ],
+            "operator": "eq"
+          },
+          {
+            "field": "rotor_mount_type",
+            "values": [
+              "6 pernos"
+            ],
+            "operator": "eq"
+          }
+        ],
+        "clarificationRequired": false
+      },
+      "fields": [
+        {
+          "key": "rotor",
+          "unit": null,
+          "field": "tool_size_mm",
+          "label": "Tamaño de Herramienta (mm)",
+          "data_type": "text",
+          "category_id": "5bbe2944-5355-40a5-a581-70790a525579",
+          "description": null,
+          "allowed_values": [],
+          "technical_family": "rotor"
+        },
+        {
+          "key": "rotor",
+          "unit": null,
+          "field": "rotor_material",
+          "label": "Material del Rotor",
+          "data_type": "single_select",
+          "category_id": "5bbe2944-5355-40a5-a581-70790a525579",
+          "description": null,
+          "allowed_values": [
+            "Acero Inoxidable",
+            "Acero",
+            "Aluminio (Pista Acerada)"
+          ],
+          "technical_family": "rotor"
+        },
+        {
+          "key": "rotor",
+          "unit": null,
+          "field": "rotor_diameter_mm",
+          "label": "Diámetro del Rotor (mm)",
+          "data_type": "single_select",
+          "category_id": "5bbe2944-5355-40a5-a581-70790a525579",
+          "description": null,
+          "allowed_values": [
+            "140",
+            "160",
+            "180",
+            "203",
+            "220",
+            "160/140",
+            "180/160",
+            "203/180"
+          ],
+          "technical_family": "rotor"
+        },
+        {
+          "key": "rotor",
+          "unit": null,
+          "field": "rotor_mount_type",
+          "label": "Montaje del Rotor",
+          "data_type": "single_select",
+          "category_id": "5bbe2944-5355-40a5-a581-70790a525579",
+          "description": null,
+          "allowed_values": [
+            "6 pernos",
+            "Centerlock"
+          ],
+          "technical_family": "rotor"
+        },
+        {
+          "key": "rotor",
+          "unit": null,
+          "field": "rotor_floating",
+          "label": "Rotor Flotante",
+          "data_type": "boolean",
+          "category_id": "5bbe2944-5355-40a5-a581-70790a525579",
+          "description": null,
+          "allowed_values": [],
+          "technical_family": "rotor"
+        },
+        {
+          "key": "rotor",
+          "unit": null,
+          "field": "brake_system",
+          "label": "Sistema de Freno",
+          "data_type": "single_select",
+          "category_id": "5bbe2944-5355-40a5-a581-70790a525579",
+          "description": null,
+          "allowed_values": [
+            "Shimano",
+            "SRAM",
+            "Magura",
+            "Tektro",
+            "Hayes",
+            "Bengal",
+            "TRP",
+            "Hope",
+            "Promax",
+            "Genérico"
+          ],
+          "technical_family": "rotor"
+        },
+        {
+          "key": "rotor",
+          "unit": null,
+          "field": "rotor_thickness_mm",
+          "label": "Espesor del Rotor (mm)",
+          "data_type": "number",
+          "category_id": "5bbe2944-5355-40a5-a581-70790a525579",
+          "description": null,
+          "allowed_values": [],
+          "technical_family": "rotor"
+        },
+        {
+          "key": "rotor",
+          "unit": null,
+          "field": "brake_position",
+          "label": "Posición",
+          "data_type": "single_select",
+          "category_id": "5bbe2944-5355-40a5-a581-70790a525579",
+          "description": null,
+          "allowed_values": [
+            "Delantero",
+            "Trasero",
+            "Universal"
+          ],
+          "technical_family": "rotor"
+        }
+      ]
+    },
+    {
+      "runId": "cb9aafd6-2e04-4c7e-a4b5-77e511084e7e",
+      "input": "Busco 3 juegos de puños con fijación por doble abrazadera, de goma y sin tapones.",
+      "draft": {
+        "unit": "juego",
+        "lineRef": "line-1",
+        "quantity": 3,
+        "productId": null,
+        "categoryId": "c5c50c6d-6fb0-4e29-a0ec-3cfb026cb487",
+        "preference": null,
+        "productSku": null,
+        "description": "Puños con fijación por doble abrazadera, de goma y sin tapones",
+        "productName": null,
+        "categoryPath": "Accesorios / Puños",
+        "clarification": "El catálogo no cuenta con fichas técnicas estructuradas para validar de forma automática el sistema de doble abrazadera ni la exclusión de tapones.",
+        "identityState": "unresolved",
+        "technicalFamily": null,
+        "technicalPredicates": [],
+        "clarificationRequired": false
+      },
+      "fields": []
+    },
+    {
+      "runId": "747d0284-965a-417a-8aac-a99d43a71ca6",
+      "input": "Necesito 4 piñones roscados de siete velocidades para cadena de 3/32; no cassette.",
+      "draft": {
+        "unit": "unidad",
+        "lineRef": "line-1",
+        "quantity": 4,
+        "productId": null,
+        "categoryId": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+        "preference": null,
+        "productSku": null,
+        "description": "Piñones roscados de 7 velocidades para cadena de 3/32 (no cassette)",
+        "productName": null,
+        "categoryPath": "Componentes / Transmisión / Piñones",
+        "clarification": "Existen 6 unidades en stock del modelo Falcon FW-734 (14-34T) y otras opciones de 14-28T agotadas en catálogo.",
+        "identityState": "unresolved",
+        "technicalFamily": "freewheel",
+        "technicalPredicates": [
+          {
+            "field": "drivetrain_speeds",
+            "values": [
+              "7"
+            ],
+            "operator": "eq"
+          }
+        ],
+        "clarificationRequired": false
+      },
+      "fields": [
+        {
+          "key": "freewheel",
+          "unit": null,
+          "field": "drivetrain_speeds",
+          "label": "Velocidades transmisión",
+          "data_type": "multi_select",
+          "category_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+          "description": "Velocidades traseras compatibles: cassette, piñón, cambio, shifter, volante o corona.",
+          "allowed_values": [
+            "1",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13"
+          ],
+          "technical_family": "freewheel"
+        },
+        {
+          "key": "freewheel",
+          "unit": "T",
+          "field": "smallest_cog_teeth",
+          "label": "Piñón menor",
+          "data_type": "number",
+          "category_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+          "description": "Cantidad de dientes del piñón más pequeño del cassette o rueda libre.",
+          "allowed_values": [
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "technical_family": "freewheel"
+        },
+        {
+          "key": "freewheel",
+          "unit": "T",
+          "field": "largest_cog_teeth",
+          "label": "Piñón mayor",
+          "data_type": "number",
+          "category_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+          "description": "Cantidad de dientes del piñón más grande del cassette o rueda libre.",
+          "allowed_values": [
+            "14",
+            "15",
+            "16",
+            "18",
+            "20",
+            "21",
+            "22",
+            "24",
+            "25",
+            "26",
+            "27",
+            "28",
+            "30",
+            "32",
+            "34",
+            "36",
+            "38",
+            "40",
+            "42",
+            "44",
+            "46",
+            "48",
+            "50",
+            "51",
+            "52",
+            "54",
+            "56",
+            "58",
+            "60"
+          ],
+          "technical_family": "freewheel"
+        },
+        {
+          "key": "freewheel",
+          "unit": null,
+          "field": "freehub_type",
+          "label": "Driver / Freehub",
+          "data_type": "single_select",
+          "category_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+          "description": "Familia de driver trasero: nucleo de cassette, XDR/XD, Micro Spline, rueda libre roscada, driver BMX, fijo o contrapedal.",
+          "allowed_values": [
+            "Shimano HG",
+            "Shimano HG Road 11",
+            "Micro Spline",
+            "SRAM XD",
+            "SRAM XDR",
+            "Campagnolo",
+            "Campagnolo N3W",
+            "Rueda libre roscada",
+            "Driver BMX",
+            "Rosca fija / contratuerca",
+            "Maza contrapedal",
+            "Desconocido / sin confirmar"
+          ],
+          "technical_family": "freewheel"
+        },
+        {
+          "key": "freewheel",
+          "unit": "T",
+          "field": "cassette_cog_sequence",
+          "label": "Secuencia pinones",
+          "data_type": "text",
+          "category_id": "4ddce44d-f508-41de-9325-b92b39f8eb64",
+          "description": "Secuencia de dientes del cassette o rueda libre, por ejemplo 11-13-15-18-21-24-28-32.",
+          "allowed_values": [],
+          "technical_family": "freewheel"
+        }
+      ]
+    }
+  ]
+}

@@ -301,7 +301,13 @@ class IntelligentPurchasingService {
     try {
       final revision = await _client
           .from('supply_need_interpretation_revisions')
-          .select('constraints, category_id')
+          // `revision_no` y `technical_family` NO son opcionales acá: sin la
+          // revisión no hay cerrojo que mandar al precisar y `canPrecise`
+          // queda en falso, así que la sección se deshabilita sola aunque la
+          // categoría esté resuelta.
+          .select(
+            'constraints, category_id, revision_no, technical_family',
+          )
           .eq('supply_need_id', needId)
           .order('revision_no', ascending: false)
           .limit(1)
@@ -323,7 +329,10 @@ class IntelligentPurchasingService {
       }
       return SupplyNeedCriteria.fromConstraints(
         row['constraints'],
+        categoryId: categoryId,
         categoryPath: categoryPath,
+        revisionNo: (row['revision_no'] as num?)?.round(),
+        technicalFamily: row['technical_family']?.toString(),
       );
     } catch (_) {
       return SupplyNeedCriteria.empty;
@@ -364,6 +373,95 @@ class IntelligentPurchasingService {
     );
     final updated = _needFromCommand(response);
     final enriched = await _enrichProducts([updated]);
+    return enriched.single;
+  }
+
+  /// Refines the technical sheet inside the category already resolved for the
+  /// need. The server revalidates every field/operator/value against that
+  /// category's active template and keeps the request identity intact.
+  /// Precisa la ficha dentro de la categoría ya reconocida.
+  ///
+  /// **La cantidad no viaja acá.** Pedir tres o cinco cámaras 700 le hace al
+  /// catálogo la misma pregunta; mezclarlas es lo que hacía que cambiar un
+  /// número borrara la ficha técnica.
+  ///
+  /// Van dos cerrojos porque son dos preguntas distintas: `version` dice que
+  /// la fila cambió y `revision_no` dice que la pregunta cambió. Precisar
+  /// sobre una ficha que otro ya reemplazó escribiría predicados de otra
+  /// categoría.
+  Future<SupplyNeed> refineNeed({
+    required SupplyNeed need,
+    required int expectedRevisionNo,
+    required String categoryId,
+    required String? technicalFamily,
+    required List<SupplyNeedPredicate> predicates,
+  }) async {
+    final response = await _client.rpc(
+      'refine_supply_need_v1',
+      params: <String, dynamic>{
+        'p_need_id': need.id,
+        'p_expected_version': need.version,
+        'p_expected_revision_no': expectedRevisionNo,
+        'p_category_id': categoryId,
+        'p_technical_family': technicalFamily,
+        'p_predicates': predicates
+            .map((predicate) => predicate.toJson())
+            .toList(growable: false),
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+    final updated = _needFromCommand(response);
+    final enriched = await _enrichProducts(<SupplyNeed>[updated]);
+    return enriched.single;
+  }
+
+  /// Cambia cuántas unidades se necesitan, y nada más.
+  ///
+  /// No crea revisión de interpretación: conserva identidad, categoría, ficha
+  /// y el rechazo de bodega, que fue un juicio sobre las piezas y no sobre el
+  /// número de unidades.
+  Future<SupplyNeed> setNeedQuantity({
+    required SupplyNeed need,
+    required double quantity,
+    String? unit,
+  }) async {
+    final response = await _client.rpc(
+      'set_supply_need_quantity_v1',
+      params: <String, dynamic>{
+        'p_need_id': need.id,
+        'p_expected_version': need.version,
+        'p_quantity': quantity,
+        'p_unit': unit ?? need.unit,
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+    final updated = _needFromCommand(response);
+    final enriched = await _enrichProducts(<SupplyNeed>[updated]);
+    return enriched.single;
+  }
+
+  /// Replaces the whole operator request. A rewritten description deliberately
+  /// drops the old product identity and lets the server rebuild category and
+  /// typed predicates; a quantity-only edit copies the interpretation forward.
+  Future<SupplyNeed> replaceNeed({
+    required SupplyNeed need,
+    required String description,
+    required double quantity,
+    String? unit,
+  }) async {
+    final response = await _client.rpc(
+      'replace_supply_need_v1',
+      params: <String, dynamic>{
+        'p_need_id': need.id,
+        'p_expected_version': need.version,
+        'p_description': description.trim(),
+        'p_quantity': quantity,
+        'p_unit': unit ?? need.unit,
+        'p_operation_key': const Uuid().v4(),
+      },
+    );
+    final updated = _needFromCommand(response);
+    final enriched = await _enrichProducts(<SupplyNeed>[updated]);
     return enriched.single;
   }
 

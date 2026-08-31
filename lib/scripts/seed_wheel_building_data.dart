@@ -4,46 +4,46 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// This bypasses RLS issues since it runs as an authenticated user
 Future<void> seedWheelBuildingData() async {
   final supabase = Supabase.instance.client;
-  
+
   print('🔧 Starting wheel building demo data seed...');
-  
+
   try {
     // Get current user's tenant_id
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
       throw Exception('No user logged in!');
     }
-    
+
     print('📋 Fetching tenant_id for user: $userId');
     final userProfile = await supabase
         .from('user_profiles')
         .select('tenant_id')
         .eq('user_id', userId)
         .single();
-    
+
     final tenantId = userProfile['tenant_id'] as String;
     print('✅ Found tenant_id: $tenantId');
-    
+
     // ============================================================================
     // 0. CLEANUP - Delete existing demo data to prevent duplicates
     // ============================================================================
-    
+
     print('🧹 Cleaning up existing demo data...');
-    
+
     // Delete in correct order (builds → spokes → rims → hubs)
     await supabase.from('wheel_builds').delete().eq('tenant_id', tenantId);
     await supabase.from('wheel_spokes').delete().eq('tenant_id', tenantId);
     await supabase.from('wheel_rims').delete().eq('tenant_id', tenantId);
     await supabase.from('wheel_hubs').delete().eq('tenant_id', tenantId);
-    
+
     print('✅ Cleanup complete');
-    
+
     // ============================================================================
     // 1. HUBS - Front and Rear for different standards
     // ============================================================================
-    
+
     print('📦 Adding hubs...');
-    
+
     final hubsData = [
       // Shimano Deore Front Hub - 32H (Disc brake = asymmetric!)
       {
@@ -226,7 +226,7 @@ Future<void> seedWheelBuildingData() async {
         'is_active': true,
       },
     ];
-    
+
     final hubIds = <String, String>{};
     for (final hub in hubsData) {
       final result = await supabase
@@ -237,13 +237,13 @@ Future<void> seedWheelBuildingData() async {
       hubIds[hub['name'] as String] = result['id'] as String;
       print('  ✓ ${hub['name']}');
     }
-    
+
     // ============================================================================
     // 2. RIMS - Various wheel sizes with accurate ERD values
     // ============================================================================
-    
+
     print('📦 Adding rims...');
-    
+
     final rimsData = [
       // 29" RIMS
       {
@@ -400,7 +400,7 @@ Future<void> seedWheelBuildingData() async {
         'is_active': true,
       },
     ];
-    
+
     final rimIds = <String, String>{};
     for (final rim in rimsData) {
       final result = await supabase
@@ -411,13 +411,13 @@ Future<void> seedWheelBuildingData() async {
       rimIds[rim['name'] as String] = result['id'] as String;
       print('  ✓ ${rim['name']}');
     }
-    
+
     // ============================================================================
     // 3. SPOKES - Common lengths with stock quantities
     // ============================================================================
-    
+
     print('📦 Adding spokes...');
-    
+
     final spokesData = [
       // DT Swiss Competition series (Butted 2.0/1.8mm)
       {
@@ -573,7 +573,7 @@ Future<void> seedWheelBuildingData() async {
         'is_active': true
       },
     ];
-    
+
     final spokeIds = <String, String>{};
     for (final spoke in spokesData) {
       final result = await supabase
@@ -584,13 +584,13 @@ Future<void> seedWheelBuildingData() async {
       spokeIds[spoke['name'] as String] = result['id'] as String;
       print('  ✓ ${spoke['name']}');
     }
-    
+
     // ============================================================================
     // 4. SAMPLE WHEEL BUILDS (Pre-calculated for reference)
     // ============================================================================
-    
+
     print('📦 Adding sample wheel builds...');
-    
+
     final buildsData = [
       // Sample Build 1: 29" MTB Front Wheel (Shimano + DT Swiss XM421)
       {
@@ -638,16 +638,16 @@ Future<void> seedWheelBuildingData() async {
             'High-quality 700c road rear wheel with DT Swiss 350 32H hub and R460 rim. Perfect for road bikes and gravel bikes. Recommended: 296mm left, 292mm right.',
       },
     ];
-    
+
     for (final build in buildsData) {
       await supabase.from('wheel_builds').insert(build);
       print('  ✓ ${build['build_name']}');
     }
-    
+
     // ============================================================================
     // SUCCESS MESSAGE
     // ============================================================================
-    
+
     print('');
     print('✅ Demo data seeded successfully!');
     print('');

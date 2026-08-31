@@ -217,11 +217,13 @@ abstract final class WorkspaceChromeTheme {
       menuButtonTheme: MenuButtonThemeData(
         style: ButtonStyle(
           foregroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.disabled)) return disabledForeground;
+            if (states.contains(WidgetState.disabled))
+              return disabledForeground;
             return chrome.foreground;
           }),
           iconColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.disabled)) return disabledForeground;
+            if (states.contains(WidgetState.disabled))
+              return disabledForeground;
             return chrome.mutedForeground;
           }),
           overlayColor: WidgetStateProperty.resolveWith((states) {

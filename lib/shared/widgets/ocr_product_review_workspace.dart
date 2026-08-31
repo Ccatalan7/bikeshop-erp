@@ -297,7 +297,6 @@ class OcrProductReviewProgress {
   final int pending;
   final int failed;
 
-
   bool get isComplete => total > 0 && pending == 0 && failed == 0;
 
   String get label {
@@ -1860,7 +1859,9 @@ class _DecisionCell extends StatelessWidget {
       // El código de modelo se compara normalizado en minúscula, pero se
       // MUESTRA como lo imprime el fabricante: «RT56», no «rt56». Es un
       // identificador que el mecánico busca en la caja.
-      final codes = candidate.matchedModelCodes.map((c) => c.toUpperCase()).toList()
+      final codes = candidate.matchedModelCodes
+          .map((c) => c.toUpperCase())
+          .toList()
         ..sort();
       out.add('mismo modelo ${codes.join('/')}');
     }
@@ -2726,8 +2727,8 @@ class _EvidencePresentation {
       // el badge E-01 dice el nivel de evidencia y NUNCA un porcentaje.
       // «Casi seguro» sonaba a medición sin serlo; «Muy parecido» describe lo
       // que el matcher realmente sabe.
-      ProductDuplicateMatchTier.exact =>
-        const _EvidencePresentation('La misma publicación', VbStatusTone.success),
+      ProductDuplicateMatchTier.exact => const _EvidencePresentation(
+          'La misma publicación', VbStatusTone.success),
       ProductDuplicateMatchTier.strong =>
         const _EvidencePresentation('Muy parecido', VbStatusTone.warning),
       ProductDuplicateMatchTier.possible =>

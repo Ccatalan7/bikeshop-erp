@@ -85,10 +85,9 @@ class PurchaseOrderDocument {
       buyerName: buyerName,
       buyerCity: buyerCity,
       supplierName: draft.supplier.name,
-      supplierLegalName:
-          draft.supplier.legalName == draft.supplier.name
-              ? null
-              : draft.supplier.legalName,
+      supplierLegalName: draft.supplier.legalName == draft.supplier.name
+          ? null
+          : draft.supplier.legalName,
       supplierRut: draft.supplier.rut,
       supplierContact: contacto.isEmpty ? null : contacto.join(' · '),
       paymentTerms: draft.supplier.paymentTerms,

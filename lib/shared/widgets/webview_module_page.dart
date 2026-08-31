@@ -34,6 +34,7 @@ import '../services/browser_credential_vault.dart';
 import '../services/browser_profile_service.dart';
 import '../services/browser_site_memory_service.dart';
 import '../services/browser_supplier_credential_resolver.dart';
+import '../services/supplier_legacy_login_policy.dart';
 import '../services/browser_supplier_portal_catalog.dart';
 import '../services/current_user_profile_service.dart';
 import '../services/document_relay_service.dart';
@@ -47,6 +48,7 @@ import '../utils/browser_user_agent.dart';
 import '../utils/responsive_viewport.dart';
 import 'browser_popup_window.dart';
 import '../utils/browser_credential_autofill.dart';
+import '../utils/browser_alert_policy.dart';
 import '../utils/file_download.dart';
 import 'vb_marked_date_picker.dart';
 import 'vb_notice.dart';
@@ -525,12 +527,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     _pageSiteName = declared.siteName;
     _pageFaviconUrl = declared.faviconUrl;
     if (kDebugMode) {
-      final faviconUri = Uri.tryParse(_pageFaviconUrl ?? '');
       debugPrint(
         '🌐 [BrowserIdentity] host='
         '${Uri.tryParse(requestedUrl)?.host ?? ''} '
         'site=${_pageSiteName ?? '-'} favicon='
-        '${faviconUri == null ? '-' : '${faviconUri.origin}${faviconUri.path}'}',
+        '${_pageFaviconUrl ?? '-'}',
       );
     }
     _publishBrowserWorkspaceState(url: _currentUrl, title: _pageTitle);
@@ -546,10 +547,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     if (!mounted || !_stillOwnsBrowserIdentity(requestedUrl)) return;
     _pageFaviconUrl = _bestBrowserFaviconUrl(favicons);
     if (kDebugMode) {
-      final faviconUri = Uri.tryParse(_pageFaviconUrl ?? '');
       debugPrint(
         '🌐 [BrowserIdentity] fallback favicon='
-        '${faviconUri == null ? '-' : '${faviconUri.origin}${faviconUri.path}'}',
+        '${_pageFaviconUrl ?? '-'}',
       );
     }
     _publishBrowserWorkspaceState(url: _currentUrl, title: _pageTitle);
@@ -4359,21 +4359,76 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
   }
 
+  /// Lee la declaración de transporte legacy de la sonda del proveedor.
+  ///
+  /// Una sola consulta acotada por el origen canónico candidato. Si el origen
+  /// no está registrado, o su sonda no declara el par, devuelve `null` y el
+  /// autofill sigue exigiendo HTTPS como siempre.
+  Future<SupplierLegacyLoginTransport?> _declaredLegacyLoginTransport(
+    String? loadedUrl,
+  ) async {
+    try {
+      return await findSupplierLegacyLoginTransport(
+        loadedUrl: loadedUrl,
+        readDeclaration: (canonicalOrigin) async {
+          // **Frontera sin secretos.** `supplier_credentials` tiene `revoke
+          // all` para `authenticated` y su relación con la sonda es entre
+          // hermanas, así que consultarla desde acá no funciona ni debe: caía
+          // al catch y devolvía `null` en silencio, que es por qué el autofill
+          // no se disparaba. Esta RPC entrega sólo el transporte del portal.
+          final raw = await Supabase.instance.client.rpc(
+            'supplier_legacy_transport_for_origin_v1',
+            params: <String, dynamic>{'p_canonical_origin': canonicalOrigin},
+          );
+          if (raw is! Map || raw['status'] != 'declared') return null;
+          final legacy = raw['legacy'];
+          return legacy is Map
+              ? legacy.map((key, value) => MapEntry('$key', value))
+              : null;
+        },
+      );
+    } catch (_) {
+      // Sin declaración legible no hay excepción: se sigue exigiendo HTTPS.
+      return null;
+    }
+  }
+
+  /// El origen canónico vigente para la URL que el WebView tiene ahora.
+  ///
+  /// **Con declaración manda la declaración.** Normalizar primero por origen
+  /// dejaba pasar cualquier otra página del mismo portal —misma `https://`,
+  /// otra ruta— y desde ahí se habría autorizado el destino legacy. La
+  /// declaración cubre URLs exactas, así que es ella la que decide.
+  String? _liveOriginUnder(
+    WebUri? liveUrl,
+    SupplierLegacyLoginTransport? legacy,
+  ) =>
+      legacy == null
+          ? normalizeSupplierBrowserOrigin(liveUrl?.toString())
+          : supplierLegacyLoginCanonicalOrigin(
+              loadedUrl: liveUrl?.toString(),
+              formAction: legacy.actionUrl,
+              transport: legacy,
+            );
+
   Future<void> _autofillSavedBrowserCredential(
     InAppWebViewController controller,
     WebUri? loadedUrl,
   ) async {
-    final origin = normalizeSupplierBrowserOrigin(
-      loadedUrl?.toString(),
-    );
+    // **El transporte legacy declarado también entra por acá.** `portal.
+    // rburgos.cl` degrada a `http://…/login/` al abrir su formulario, y el
+    // normalizador —que exige HTTPS— devolvía `null`: el autofill volvía antes
+    // de consultar la credencial administrada, así que un portal configurado
+    // para iniciar sesión solo no podía hacerlo. La excepción nace de la
+    // configuración de la sonda y sólo alcanza al par página+destino declarado.
+    final legacy = await _declaredLegacyLoginTransport(loadedUrl?.toString());
+    final origin = normalizeSupplierBrowserOrigin(loadedUrl?.toString()) ??
+        legacy?.canonicalOrigin;
     if (origin == null || !_credentialAutofillInFlight.add(origin)) return;
 
     try {
       final liveUrlBeforeDetection = await controller.getUrl();
-      if (normalizeSupplierBrowserOrigin(
-            liveUrlBeforeDetection?.toString(),
-          ) !=
-          origin) {
+      if (_liveOriginUnder(liveUrlBeforeDetection, legacy) != origin) {
         return;
       }
       final loginFormResult = await controller.evaluateJavascript(
@@ -4436,7 +4491,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       if (username == null || password == null) return;
 
       final liveUrl = await controller.getUrl();
-      if (normalizeSupplierBrowserOrigin(liveUrl?.toString()) != origin) {
+      if (_liveOriginUnder(liveUrl, legacy) != origin) {
         return;
       }
 
@@ -4447,7 +4502,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         username: username,
         password: password,
         autoSubmit: mayAutoSubmit,
-        allowInsecureSupplierOrigin: false,
+        // El bajón de esquema se acepta SÓLO con declaración, y el script
+        // comprueba además el destino real contra el declarado.
+        allowInsecureSupplierOrigin: legacy != null,
+        expectedInsecureAction: legacy?.actionUrl,
+        expectedDeclaredPageUrls: legacy?.pageUrls,
       );
       if (!authority.isCurrent(
         profile: profileService.profile,
@@ -4928,6 +4987,24 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                 unawaited(_installPageInteractionBridge(controller));
                 unawaited(_applyBrowserZoom(browserZoom));
                 unawaited(_refreshNavigationState());
+              },
+              onJsAlert: (_, request) async {
+                if (!shouldAutoConfirmBrowserAlert(
+                  pageUrl: _currentUrl,
+                  message: request.message,
+                )) {
+                  return JsAlertResponse(handledByClient: false);
+                }
+                if (kDebugMode) {
+                  debugPrint(
+                    '🌐 [BrowserAlert] RBX empty-result alert acknowledged '
+                    'inside its workspace.',
+                  );
+                }
+                return JsAlertResponse(
+                  handledByClient: true,
+                  action: JsAlertResponseAction.CONFIRM,
+                );
               },
               onWebContentProcessDidTerminate: (controller) {
                 // WebKit reinicia su proceso de contenido tras un crash u

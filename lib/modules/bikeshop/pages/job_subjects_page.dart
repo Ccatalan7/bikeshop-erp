@@ -610,8 +610,8 @@ class _SubjectDialogState extends State<_SubjectDialog> {
                       child: DropdownButtonFormField<String>(
                         initialValue:
                             widget.availableCategories.contains(_category)
-                            ? _category
-                            : null,
+                                ? _category
+                                : null,
                         decoration: const InputDecoration(
                           labelText: 'Categoría',
                           border: OutlineInputBorder(),

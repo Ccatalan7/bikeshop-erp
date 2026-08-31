@@ -329,8 +329,8 @@ class _PaymentFormState extends State<PaymentForm> {
                     // 20260819180000 that classification belongs to this
                     // payment, so deriving it here no longer reclassifies the
                     // whole invoice. The operator can still override it.
-                    _includesIva = value.defaultTaxTreatment ==
-                        TaxTreatment.taxIncluded;
+                    _includesIva =
+                        value.defaultTaxTreatment == TaxTreatment.taxIncluded;
                   });
                 }
               },

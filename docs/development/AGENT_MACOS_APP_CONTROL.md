@@ -488,6 +488,18 @@ abierto, y el paso siguiente habría sido «arreglar» código que ya funcionaba
 que devuelve la ventana que esté delante —y de paso captura lo que el dueño
 tenga abierto—, no la app.
 
+**Precisión 2026-08-30: recuperar un raster atrasado sin reiniciar.** En una
+prueba del Asistente de compras, enfocar la ventana debug y ejecutar su acción
+AX `Raise` no bastó: dos `shot` seguían mostrando el borrador anterior mientras
+`read` ya anunciaba el nuevo. Con la identidad y geometría de la ventana
+canónica comprobadas, cambiar temporalmente su ancho de 1455 a 1454 mediante
+`app_control.sh resize` produjo un frame actual; después se restauró 1455. Es
+un recurso acotado a ese síntoma, no un paso obligatorio de cada captura.
+Verifica visualmente el frame resultante contra la semántica y restaura la
+geometría; no aceptes las capturas atrasadas como evidencia ni recargues el
+estado de trabajo para resolver sólo el repintado. El costo observado fueron
+dos capturas inválidas, no una regresión del formulario.
+
 ### Two input backends — the default does not touch the owner's cursor
 
 `click`, `scroll` and `drag` are delivered **inside the app** by default, through

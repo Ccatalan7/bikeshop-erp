@@ -86,7 +86,7 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
         onSave: (hubData) async {
           try {
             final service = context.read<WheelBuildingService>();
-            
+
             // Convert map to WheelHub object
             final hubModel = WheelHub(
               id: hub?.id,
@@ -107,7 +107,7 @@ class _WheelHubsPageState extends State<WheelHubsPage> {
               axleType: hubData['axle_type'],
               isActive: hub?.isActive ?? true,
             );
-            
+
             if (hub == null) {
               await service.createHub(hubModel);
             } else {
@@ -389,7 +389,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
   late TextEditingController _rightFlangeController;
   late TextEditingController _centerToLeftController;
   late TextEditingController _centerToRightController;
-  
+
   String _hubType = 'front';
   int _spokeHoles = 32;
   String _brakeType = 'disc_6bolt';
@@ -414,7 +414,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
         text: hub?.centerToLeftFlangeMm.toString() ?? '30');
     _centerToRightController = TextEditingController(
         text: hub?.centerToRightFlangeMm.toString() ?? '30');
-    
+
     if (hub != null) {
       _hubType = hub.hubType;
       _spokeHoles = hub.spokeHoles;
@@ -487,7 +487,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       Row(
                         children: [
                           Expanded(
@@ -528,7 +528,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Technical specs
                       Row(
                         children: [
@@ -569,7 +569,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Flange measurements
                       Row(
                         children: [
@@ -603,7 +603,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       Row(
                         children: [
                           Expanded(
@@ -636,7 +636,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Compatibility
                       Row(
                         children: [
@@ -695,7 +695,7 @@ class _HubFormDialogState extends State<_HubFormDialog> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      
+
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(
                           labelText: 'Axle Type *',

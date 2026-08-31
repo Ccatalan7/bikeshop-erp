@@ -204,9 +204,15 @@ segunda respuesta ahora existe y **convive** con la primera, sin reemplazarla.
 - **Corre sin ventana y sin operador**, en un `HeadlessInAppWebView` que comparte
   cookies con la pestaña visible —en macOS el almacén es del proceso y la app no
   usa incógnito—. Medido: 12 productos de RBX en 31 segundos.
-- **No inicia sesión.** Ese camino tiene sus comprobaciones de autoridad y
-  duplicarlo crearía un segundo lugar donde se manejan credenciales. Sin sesión
-  se detiene y lo dice.
+- **La sesión se conserva y se recupera por el mismo límite de credenciales.**
+  Una consulta autenticada activa un GET liviano cada ocho minutos mientras la
+  app y el mismo usuario sigan activos, evitando el timeout por inactividad de
+  portales legacy. Si la cookie ya venció, el runner puede repetir una sola vez
+  la pregunta después de cargar la ruta de login configurada como dato y pasar
+  el preflight compartido: origen HTTPS exacto, una forma ordinaria, acción
+  HTTPS y sin CAPTCHA/OTP/campos pendientes. Recién entonces pide el secreto al
+  Vault. Un formulario inseguro o ambiguo no recibe bytes; queda
+  `session_expired` y pide intervención visible.
 - **Los cuatro estados no se mezclan nunca:** `available` · `out_of_stock` (un
   cero LEÍDO) · `not_found` (el portal no lo mostró) · `session_expired`. La
   base rechaza precio o cantidad en los tres últimos: un cero que nadie
@@ -228,6 +234,39 @@ Regla para agregar un proveedor: **reconocer primero, configurar después.** El
 modo `discover` de la sonda corre dentro de la sesión y reporta qué buscadores
 hay y qué se parece a un precio; con eso se escribe la fila. Configurar no es
 autorizar: la sonda nace apagada.
+
+### Buscar una necesidad técnica, no un SKU inventado (2026-08-28)
+
+La consulta por SKU y la consulta por necesidad son dos rutas. La segunda no
+vuelve a interpretar lenguaje natural dentro del portal: recibe el
+`category_id` y los predicados tipados de la revisión, resuelve el
+`SpecTemplate` autoritativo y conserva sus claves, tipos, unidades y valores.
+
+- `supplier_portal_probes.need_search_adapter` es el único dueño de la
+  taxonomía y anatomía del proveedor: término amplio, selects, aliases de
+  columnas, vocabulario y capturas compuestas. El runner no compara hostname y
+  el matcher no contiene una rama para «motor», «cámara» ni otra familia.
+- El matcher compartido usa el extractor de identidad canónico y luego evalúa
+  los operadores tipados. Primero elimina una contradicción; sólo llama
+  `exact` cuando demuestra todos los campos pedidos; lo no publicado queda
+  `possible` y jamás se rellena por IA o parecido.
+- Un portal habilitado para código no queda habilitado automáticamente para
+  necesidades. El adaptador puede declarar una ruta rica para una familia
+  observada o, si el portal realmente publica un buscador por palabra para todo
+  el catálogo, `generic_family_search`. Esa capacidad genérica exige categoría,
+  familia técnica y una familia reconocida por la taxonomía canónica; pregunta
+  primero por `familia + predicado de identidad compacto` y amplía a la familia
+  sola únicamente si la primera consulta no entrega un candidato no
+  contradictorio. Nunca usa nombre de producto ni SKU.
+- Agregar otra ruta rica o proveedor requiere reconocimiento y configuración,
+  no otro despliegue de Dart. Sin ruta de familia ni búsqueda genérica
+  certificada, o ante configuración rota/de versión desconocida, falla cerrada.
+  La UI ofrece la acción sólo si puede construir un plan completo con la ficha
+  real.
+- RBX expresa un resultado vacío mediante el `alert()` «No hay ningún producto
+  que mostrar…». Dentro del workspace del origen RBX sólo esa frase exacta se
+  confirma automáticamente y la búsqueda queda como `no_matches`; ningún otro
+  diálogo JavaScript se silencia.
 
 ### «No encontrado» nunca significa «no lo vende» (2026-08-23)
 

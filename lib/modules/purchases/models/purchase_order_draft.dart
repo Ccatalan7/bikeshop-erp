@@ -35,8 +35,8 @@ class PurchaseOrderDraft {
     return List.unmodifiable(list);
   }
 
-  double get netTotal => lines.values
-      .fold<double>(0, (total, line) => total + line.netAmount);
+  double get netTotal =>
+      lines.values.fold<double>(0, (total, line) => total + line.netAmount);
 
   double get ivaAmount => netTotal * ivaRate;
 
@@ -92,8 +92,7 @@ class PurchaseOrderDraftLine {
       brand: item.brand,
       quantity: 1,
       unitCostNet: item.suggestedUnitCostNet(withFreight: withFreight) ?? 0,
-      costIsFromCatalog:
-          item.suggestedCostIsCatalog(withFreight: withFreight),
+      costIsFromCatalog: item.suggestedCostIsCatalog(withFreight: withFreight),
       addedAt: DateTime.now(),
     );
   }
@@ -125,8 +124,7 @@ class PurchaseOrderDraftLine {
       unitCostNet: unitCostNet ?? this.unitCostNet,
       // Editar el costo a mano lo convierte en una decisión del operador, que
       // ya no es «de ficha»: la marca deja de aplicar.
-      costIsFromCatalog:
-          unitCostNet == null ? costIsFromCatalog : false,
+      costIsFromCatalog: unitCostNet == null ? costIsFromCatalog : false,
       addedAt: addedAt,
     );
   }

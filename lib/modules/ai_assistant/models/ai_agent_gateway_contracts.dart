@@ -455,8 +455,8 @@ AIAssistantActionCard _decodeCard(Map<String, Object?> json) {
     // cliente implica tarjeta de cliente»: apunta al cliente —de ahí sale su
     // teléfono al confirmar— pero abre la conversación, que es donde el
     // operador termina el trabajo.
-    final contactCard =
-        kind == 'customer_contact' && entityKind == AIAssistantEntityKind.customer;
+    final contactCard = kind == 'customer_contact' &&
+        entityKind == AIAssistantEntityKind.customer;
     if (entityKind == null ||
         (!contactCard && _cardKindForEntityKind[entityKind] != kind)) {
       _rejectCard('entidad_no_corresponde_al_tipo');

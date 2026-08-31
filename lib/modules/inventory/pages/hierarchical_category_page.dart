@@ -72,7 +72,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
     final startTime = DateTime.now();
     debugPrint(
         '⏱️ [LOAD] Starting _loadData for categoryId: ${widget.categoryId}');
-    
+
     setState(() => _isLoading = true);
     try {
       // Only load all categories if search is active
@@ -83,7 +83,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
         debugPrint(
             '⏱️ [LOAD] All categories loaded in ${DateTime.now().difference(searchStart).inMilliseconds}ms');
       }
-      
+
       if (widget.categoryId == null) {
         // Load root categories (no products at root level)
         final rootStart = DateTime.now();
@@ -103,14 +103,14 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
         ]);
         debugPrint(
             '⏱️ [LOAD] Parallel queries completed in ${DateTime.now().difference(parallelStart).inMilliseconds}ms');
-        
+
         _currentCategory = results[0] as Category?;
         _subcategories = results[1] as List<Category>;
         _products = results[2] as List<Map<String, dynamic>>;
-        
+
         debugPrint(
             '⏱️ [LOAD] Loaded: ${_subcategories.length} subcategories, ${_products.length} products');
-        
+
         if (_currentCategory != null) {
           _breadcrumbs = await _generateBreadcrumbs(_currentCategory!);
         }
@@ -119,7 +119,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-      
+
       debugPrint(
           '⏱️ [LOAD] TOTAL _loadData completed in ${DateTime.now().difference(startTime).inMilliseconds}ms');
     } catch (e) {
@@ -183,16 +183,16 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
     // Build breadcrumb path by traversing parent chain
     final path = <Category>[];
     Category? current = category;
-    
+
     // Traverse up the parent chain
     while (current != null) {
       path.insert(0, current); // Insert at beginning to maintain order
-      
+
       // Stop if we've reached a root category (no parent)
       if (current.parentId == null) {
         break;
       }
-      
+
       // Fetch parent category
       try {
         current = await _categoryService.getCategoryById(current.parentId!);
@@ -232,117 +232,117 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
   Widget build(BuildContext context) {
     final body = Column(
       children: [
-          // Header with breadcrumbs and actions
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Breadcrumb Navigation
-                _buildBreadcrumbs(),
-                const SizedBox(height: 16),
-                
-                // Action Bar
-                Row(
-                  children: [
-                    // Search
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Buscar categorías...',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+        // Header with breadcrumbs and actions
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Breadcrumb Navigation
+              _buildBreadcrumbs(),
+              const SizedBox(height: 16),
+
+              // Action Bar
+              Row(
+                children: [
+                  // Search
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar categorías...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
-                        ),
-                        onChanged: (value) async {
-                          setState(() => _searchTerm = value);
-                          // Load all categories when user starts searching
-                          if (value.isNotEmpty && _allCategories.isEmpty) {
-                            setState(() => _isLoading = true);
+                      ),
+                      onChanged: (value) async {
+                        setState(() => _searchTerm = value);
+                        // Load all categories when user starts searching
+                        if (value.isNotEmpty && _allCategories.isEmpty) {
+                          setState(() => _isLoading = true);
                           _allCategories = await _categoryService.getCategories(
                               activeOnly: true);
-                            _indexCategoryPaths();
-                            setState(() => _isLoading = false);
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    
-                    // View Toggle
-                    SegmentedButton<CategoryViewMode>(
-                      segments: const [
-                        ButtonSegment(
-                          value: CategoryViewMode.cards,
-                          icon: Icon(Icons.grid_view),
-                          tooltip: 'Vista de tarjetas',
-                        ),
-                        ButtonSegment(
-                          value: CategoryViewMode.list,
-                          icon: Icon(Icons.view_list),
-                          tooltip: 'Vista de lista',
-                        ),
-                      ],
-                      selected: {_viewMode},
-                      onSelectionChanged: (Set<CategoryViewMode> newSelection) {
-                        setState(() => _viewMode = newSelection.first);
+                          _indexCategoryPaths();
+                          setState(() => _isLoading = false);
+                        }
                       },
                     ),
-                    const SizedBox(width: 12),
-                    
-                    // Import Button
-                    AppButton(
-                      text: 'Importar',
-                      icon: Icons.upload_file,
-                      type: ButtonType.secondary,
-                      onPressed: _showImportDialog,
-                    ),
-                    const SizedBox(width: 8),
-                    
-                    // Create Button
-                    AppButton(
-                      text: 'Nueva Categoría',
-                      icon: Icons.add,
-                      type: ButtonType.primary,
-                      onPressed: () async {
-                        // Pass current category as parent context
-                        final parentId = widget.categoryId;
-                        if (parentId != null) {
+                  ),
+                  const SizedBox(width: 12),
+
+                  // View Toggle
+                  SegmentedButton<CategoryViewMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: CategoryViewMode.cards,
+                        icon: Icon(Icons.grid_view),
+                        tooltip: 'Vista de tarjetas',
+                      ),
+                      ButtonSegment(
+                        value: CategoryViewMode.list,
+                        icon: Icon(Icons.view_list),
+                        tooltip: 'Vista de lista',
+                      ),
+                    ],
+                    selected: {_viewMode},
+                    onSelectionChanged: (Set<CategoryViewMode> newSelection) {
+                      setState(() => _viewMode = newSelection.first);
+                    },
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Import Button
+                  AppButton(
+                    text: 'Importar',
+                    icon: Icons.upload_file,
+                    type: ButtonType.secondary,
+                    onPressed: _showImportDialog,
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Create Button
+                  AppButton(
+                    text: 'Nueva Categoría',
+                    icon: Icons.add,
+                    type: ButtonType.primary,
+                    onPressed: () async {
+                      // Pass current category as parent context
+                      final parentId = widget.categoryId;
+                      if (parentId != null) {
                         await context
                             .push('/inventory/categories/new?parent=$parentId');
-                        } else {
-                          await context.push('/inventory/categories/new');
-                        }
-                        // Reload after returning from form
-                        _loadData();
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                      } else {
+                        await context.push('/inventory/categories/new');
+                      }
+                      // Reload after returning from form
+                      _loadData();
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
+        ),
 
-          // Content
-          Expanded(
-            child: _isLoading
-                ? const Center(child: BrandedLoading())
-                : _buildContent(),
-          ),
+        // Content
+        Expanded(
+          child: _isLoading
+              ? const Center(child: BrandedLoading())
+              : _buildContent(),
+        ),
       ],
     );
 
@@ -395,7 +395,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
     if (_searchTerm.isNotEmpty) {
       final filteredCategories = _allCategories
           .where((cat) =>
-          cat.fullPath.toLowerCase().contains(_searchTerm.toLowerCase()) ||
+              cat.fullPath.toLowerCase().contains(_searchTerm.toLowerCase()) ||
               cat.name.toLowerCase().contains(_searchTerm.toLowerCase()))
           .toList();
 
@@ -565,7 +565,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
 
   Widget _buildCategoryCard(Category category) {
     final isSearchResult = _searchTerm.isNotEmpty;
-    
+
     return Card(
       elevation: 2,
       clipBehavior: Clip.antiAlias,
@@ -590,7 +590,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                           },
                         )
                       : _buildImagePlaceholder(),
-                  
+
                   // Three-dot menu button
                   Positioned(
                     top: 4,
@@ -638,7 +638,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                 ],
               ),
             ),
-            
+
             // Name section
             Expanded(
               flex: 1,
@@ -676,7 +676,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
 
   Widget _buildCategoryListTile(Category category) {
     final isSearchResult = _searchTerm.isNotEmpty;
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -849,7 +849,7 @@ class _HierarchicalCategoryPageState extends State<HierarchicalCategoryPage> {
                           Icon(Icons.image, size: 48, color: Colors.grey[400]),
                     ),
             ),
-            
+
             // Product info
             Expanded(
               flex: 2,

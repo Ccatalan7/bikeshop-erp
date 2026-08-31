@@ -16,9 +16,17 @@ import 'package:vinabike_erp/modules/purchases/models/intelligent_purchasing_mod
 
 void main() {
   test('los predicados técnicos son las entradas sin «kind»', () {
-    final criteria = SupplyNeedCriteria.fromConstraints(<Object?>[
-      {'field': 'chain_speeds', 'values': ['9'], 'operator': 'eq'},
-      {'field': 'tire_width', 'values': ['2.0'], 'operator': 'gt'},
+    final criteria = SupplyNeedCriteria.fromConstraints(const <Object?>[
+      {
+        'field': 'chain_speeds',
+        'values': ['9'],
+        'operator': 'eq'
+      },
+      {
+        'field': 'tire_width',
+        'values': ['2.0'],
+        'operator': 'gt'
+      },
     ]);
 
     expect(criteria.predicates.length, 2);
@@ -28,7 +36,7 @@ void main() {
   });
 
   test('el perfil de ranking no es un criterio: ya tiene su control', () {
-    final criteria = SupplyNeedCriteria.fromConstraints(<Object?>[
+    final criteria = SupplyNeedCriteria.fromConstraints(const <Object?>[
       {'kind': 'ranking_profile', 'value': 'balanced'},
     ]);
 
@@ -40,7 +48,7 @@ void main() {
   });
 
   test('la preferencia comercial viaja aparte, nunca como predicado', () {
-    final criteria = SupplyNeedCriteria.fromConstraints(<Object?>[
+    final criteria = SupplyNeedCriteria.fromConstraints(const <Object?>[
       {'kind': 'ranking_profile', 'value': 'profitability'},
       {
         'kind': 'commercial_preference',
@@ -55,9 +63,16 @@ void main() {
   });
 
   test('una entrada sin campo no se convierte en un criterio mudo', () {
-    final criteria = SupplyNeedCriteria.fromConstraints(<Object?>[
-      {'values': ['9'], 'operator': 'eq'},
-      {'field': '   ', 'values': ['9'], 'operator': 'eq'},
+    final criteria = SupplyNeedCriteria.fromConstraints(const <Object?>[
+      {
+        'values': ['9'],
+        'operator': 'eq'
+      },
+      {
+        'field': '   ',
+        'values': ['9'],
+        'operator': 'eq'
+      },
       'basura',
     ]);
 
@@ -68,28 +83,50 @@ void main() {
 
   test('un constraints ausente o roto no revienta la barra', () {
     expect(SupplyNeedCriteria.fromConstraints(null).isEmpty, isTrue);
-    expect(SupplyNeedCriteria.fromConstraints('no soy una lista').isEmpty,
-        isTrue);
+    expect(
+        SupplyNeedCriteria.fromConstraints('no soy una lista').isEmpty, isTrue);
   });
 
   test('la categoría viaja con los criterios cuando la interpretación la fijó',
       () {
     final criteria = SupplyNeedCriteria.fromConstraints(
-      <Object?>[
-        {'field': 'chain_speeds', 'values': ['9'], 'operator': 'eq'},
+      const <Object?>[
+        {
+          'field': 'chain_speeds',
+          'values': ['9'],
+          'operator': 'eq'
+        },
       ],
+      categoryId: 'category-chain',
       categoryPath: 'Transmisión / Cadenas',
     );
 
+    expect(criteria.categoryId, 'category-chain');
     expect(criteria.categoryPath, 'Transmisión / Cadenas');
   });
 
   test('la cuenta incluye la preferencia, que es lo que decide el «+N»', () {
-    final criteria = SupplyNeedCriteria.fromConstraints(<Object?>[
-      {'field': 'a', 'values': ['1'], 'operator': 'eq'},
-      {'field': 'b', 'values': ['2'], 'operator': 'eq'},
-      {'field': 'c', 'values': ['3'], 'operator': 'eq'},
-      {'field': 'd', 'values': ['4'], 'operator': 'eq'},
+    final criteria = SupplyNeedCriteria.fromConstraints(const <Object?>[
+      {
+        'field': 'a',
+        'values': ['1'],
+        'operator': 'eq'
+      },
+      {
+        'field': 'b',
+        'values': ['2'],
+        'operator': 'eq'
+      },
+      {
+        'field': 'c',
+        'values': ['3'],
+        'operator': 'eq'
+      },
+      {
+        'field': 'd',
+        'values': ['4'],
+        'operator': 'eq'
+      },
       {'kind': 'commercial_preference', 'value': 'buen margen'},
     ]);
 

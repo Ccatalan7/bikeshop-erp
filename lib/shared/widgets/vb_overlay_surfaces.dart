@@ -255,9 +255,7 @@ class _VbReasonPromptBodyState extends State<_VbReasonPromptBody> {
               ValueListenableBuilder<TextEditingValue>(
                 valueListenable: _controller,
                 builder: (context, value, _) => FilledButton(
-                  onPressed: value.text.trim().isEmpty
-                      ? null
-                      : _submit,
+                  onPressed: value.text.trim().isEmpty ? null : _submit,
                   child: Text(widget.confirmLabel),
                 ),
               ),

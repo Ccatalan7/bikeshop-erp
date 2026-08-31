@@ -30,6 +30,7 @@ class SupplierOrderComposer extends StatelessWidget {
     required this.loadingMore,
     required this.searchController,
     required this.addedProductIds,
+    this.highlightedProductIds,
     required this.onBack,
     required this.onSearch,
     required this.onLoadMore,
@@ -92,6 +93,10 @@ class SupplierOrderComposer extends StatelessWidget {
   final VoidCallback onSaveDraft;
   final VoidCallback onOpenPdf;
   final VoidCallback onSendToSupplier;
+
+  /// Los productos que el juicio compartido acepta destacar como coincidencia.
+  final Set<String>? highlightedProductIds;
+
   final VoidCallback onClosePreview;
 
   @override
@@ -101,6 +106,7 @@ class SupplierOrderComposer extends StatelessWidget {
       loadingMore: loadingMore,
       searchController: searchController,
       addedProductIds: addedProductIds,
+      highlightedProductIds: highlightedProductIds,
       onBack: onBack,
       onSearch: onSearch,
       onLoadMore: onLoadMore,

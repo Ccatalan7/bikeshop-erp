@@ -16,6 +16,7 @@ class WorkspaceShellScope extends InheritedWidget {
   });
 
   static const double workspaceBarHeight = 40;
+
   /// El riel muestra icono **y** rótulo, como el de Zoho Books: 56px daban
   /// para el icono solo, y un riel de iconos mudos obliga a pasar el cursor por
   /// cada uno para saber qué es.

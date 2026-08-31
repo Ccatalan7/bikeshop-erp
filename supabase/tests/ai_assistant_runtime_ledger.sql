@@ -229,6 +229,23 @@ select is(
   'database canonical JSON preserves Unicode and recursively sorts ASCII keys'
 );
 
+select is(
+  assistant_runtime.assistant_canonical_json_internal_v1(
+    '{"wheel":29,"width":2.25,"minimum":0.001}'::jsonb
+  ),
+  '{"minimum":0.001,"wheel":29,"width":2.25}',
+  'database canonical JSON preserves fixed-point technical measurements'
+);
+
+select throws_ok(
+  $$select assistant_runtime.assistant_canonical_json_internal_v1(
+    '{"value":0.0000001}'::jsonb
+  )$$,
+  '22023',
+  'Attested JSON number is invalid',
+  'database rejects values whose JavaScript representation would use an exponent'
+);
+
 create temp table runtime_attestation_fixture (
   envelope text not null,
   body text not null,

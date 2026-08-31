@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/services/supplier_need_portal_search.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../models/intelligent_purchasing_models.dart';
 import '../pages/intelligent_purchasing_surfaces.dart';
 import 'purchase_visual_language.dart';
@@ -34,6 +36,11 @@ class SupplierConcentrationTable extends StatelessWidget {
     required this.confirmedLabelFor,
     required this.confirmedAgeFor,
     required this.confirmedDetailFor,
+    required this.portalSearchFor,
+    required this.expandedPortalSupplierId,
+    required this.onTogglePortalResults,
+    required this.canSearchNeedFor,
+    required this.needsLoginFor,
     required this.checkProgress,
     required this.busySupplierId,
     required this.expandedSupplierId,
@@ -70,7 +77,23 @@ class SupplierConcentrationTable extends StatelessWidget {
   /// cabe en la celda pero el operador necesita para decidir si reintenta.
   final String? Function(String supplierId) confirmedDetailFor;
 
-  /// «Confirmando 3 de 12: CAMARA 29…» mientras la corrida avanza.
+  /// El snapshot completo detrás del contador («10 exactos»). El contador no
+  /// puede ser un callejón sin salida: sus productos se inspeccionan aquí,
+  /// todavía dentro de la fila y de la necesidad que originó la búsqueda.
+  final SupplierNeedPortalSearchSnapshot? Function(String supplierId)
+      portalSearchFor;
+  final String? expandedPortalSupplierId;
+  final void Function(SupplierConcentration supplier) onTogglePortalResults;
+
+  /// Sólo un portal cuyo buscador por palabra/categoría fue reconocido puede
+  /// responder por una necesidad sin SKU.
+  final bool Function(String supplierId) canSearchNeedFor;
+
+  /// Una sesión vencida cambia la siguiente acción: reintentar la misma
+  /// búsqueda no puede arreglarla; primero hay que entrar al portal.
+  final bool Function(String supplierId) needsLoginFor;
+
+  /// «Buscando «motor» en el portal…» mientras la consulta avanza.
   final String? checkProgress;
 
   final String? busySupplierId;
@@ -139,6 +162,59 @@ class SupplierConcentrationTable extends StatelessWidget {
               constraints.maxWidth,
               _labelledActionsWidth(context),
             );
+            final supplierRows = <Widget>[];
+            for (final supplier in report.items) {
+              final portalSearch = portalSearchFor(supplier.supplierId);
+              final portalResultsExpanded =
+                  expandedPortalSupplierId == supplier.supplierId;
+              supplierRows.addAll(<Widget>[
+                _SupplierRow(
+                  supplier: supplier,
+                  confirmed: confirmedLabelFor(supplier.supplierId),
+                  confirmedAge: confirmedAgeFor(supplier.supplierId),
+                  confirmedDetail: confirmedDetailFor(supplier.supplierId),
+                  canSearch: canSearchNeedFor(supplier.supplierId),
+                  needsLogin: needsLoginFor(supplier.supplierId),
+                  checkProgress: checkProgress,
+                  busy: busySupplierId == supplier.supplierId,
+                  anyBusy: busySupplierId != null,
+                  expanded: expandedSupplierId == supplier.supplierId,
+                  portalSearch: portalSearch,
+                  portalResultsExpanded: portalResultsExpanded,
+                  layout: layout,
+                  basis: basis,
+                  onConfirm: () => onConfirm(supplier),
+                  onExplain: () => onExplain(supplier),
+                  onOpenPortal: () => onOpenPortal(supplier),
+                  onOpenSupplier: () => onOpenSupplier(supplier),
+                  onTogglePortalResults: () => onTogglePortalResults(supplier),
+                ),
+                if (!layout.showAvailability &&
+                    portalSearch != null &&
+                    portalSearch.relevantMatches.isNotEmpty)
+                  _PortalResultsToggleStrip(
+                    supplier: supplier,
+                    snapshot: portalSearch,
+                    expanded: portalResultsExpanded,
+                    onToggle: () => onTogglePortalResults(supplier),
+                  ),
+                if (portalResultsExpanded &&
+                    portalSearch != null &&
+                    portalSearch.relevantMatches.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(11, 0, 11, 11),
+                    child: _SupplierPortalResultsDisclosure(
+                      supplierName: supplier.supplierName,
+                      snapshot: portalSearch,
+                    ),
+                  ),
+                if (expandedSupplierId == supplier.supplierId)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(11, 0, 11, 11),
+                    child: evidencePanelBuilder(context),
+                  ),
+              ]);
+            }
             return PurchasePanel(
               padded: false,
               child: Column(
@@ -175,7 +251,7 @@ class SupplierConcentrationTable extends StatelessWidget {
                         if (layout.showAvailability)
                           const _Head(
                             flex: 14,
-                            label: 'Disponible hoy',
+                            label: 'Resultado portal',
                             alignEnd: true,
                           ),
                         // Los números no tocan los botones: sin este respiro,
@@ -223,29 +299,7 @@ class SupplierConcentrationTable extends StatelessWidget {
                       count: report.items.length,
                     ),
                   ],
-                  for (final supplier in report.items) ...[
-                    _SupplierRow(
-                      supplier: supplier,
-                      confirmed: confirmedLabelFor(supplier.supplierId),
-                      confirmedAge: confirmedAgeFor(supplier.supplierId),
-                      confirmedDetail: confirmedDetailFor(supplier.supplierId),
-                      checkProgress: checkProgress,
-                      busy: busySupplierId == supplier.supplierId,
-                      anyBusy: busySupplierId != null,
-                      expanded: expandedSupplierId == supplier.supplierId,
-                      layout: layout,
-                      basis: basis,
-                      onConfirm: () => onConfirm(supplier),
-                      onExplain: () => onExplain(supplier),
-                      onOpenPortal: () => onOpenPortal(supplier),
-                      onOpenSupplier: () => onOpenSupplier(supplier),
-                    ),
-                    if (expandedSupplierId == supplier.supplierId)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(11, 0, 11, 11),
-                        child: evidencePanelBuilder(context),
-                      ),
-                  ],
+                  ...supplierRows,
                 ],
               ),
             );
@@ -259,8 +313,8 @@ class SupplierConcentrationTable extends StatelessWidget {
           // mientras se muestra el neto describiría otra tabla.
           '${report.isEmpty ? '' : '${basis.footnote} '}'
           'El costo de ficha es una referencia, no una factura. Llevar al plan '
-          'no compra ni reserva; la disponibilidad requiere una consulta '
-          'fechada al proveedor.',
+          'no compra ni reserva. El portal puede demostrar catálogo y precio; '
+          'si no publica unidades, no se afirma disponibilidad.',
           style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
         ),
       ],
@@ -295,6 +349,40 @@ class SupplierConcentrationTable extends StatelessWidget {
   }
 
   Widget _buildCompact(BuildContext context, {required bool relaxed}) {
+    final supplierRows = <Widget>[];
+    for (final supplier in report.items) {
+      final portalSearch = portalSearchFor(supplier.supplierId);
+      final portalResultsExpanded =
+          expandedPortalSupplierId == supplier.supplierId;
+      supplierRows.addAll(<Widget>[
+        _CompactHistoricalSupplierRow(
+          supplier: supplier,
+          confirmed: confirmedLabelFor(supplier.supplierId),
+          confirmedAge: confirmedAgeFor(supplier.supplierId),
+          portalSearch: portalSearch,
+          portalResultsExpanded: portalResultsExpanded,
+          canSearch: canSearchNeedFor(supplier.supplierId),
+          needsLogin: needsLoginFor(supplier.supplierId),
+          busy: busySupplierId == supplier.supplierId,
+          anyBusy: busySupplierId != null,
+          basis: basis,
+          onConfirm: () => onConfirm(supplier),
+          onExplain: () => onExplain(supplier),
+          onOpenSupplier: () => onOpenSupplier(supplier),
+          onTogglePortalResults: () => onTogglePortalResults(supplier),
+        ),
+        if (portalResultsExpanded &&
+            portalSearch != null &&
+            portalSearch.relevantMatches.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(11, 0, 11, 11),
+            child: _SupplierPortalResultsDisclosure(
+              supplierName: supplier.supplierName,
+              snapshot: portalSearch,
+            ),
+          ),
+      ]);
+    }
     return PurchasePanel(
       padded: false,
       child: Column(
@@ -331,18 +419,7 @@ class SupplierConcentrationTable extends StatelessWidget {
                   : 'Comprado antes · mismo alcance',
               count: report.items.length,
             ),
-            for (final supplier in report.items)
-              _CompactHistoricalSupplierRow(
-                supplier: supplier,
-                confirmed: confirmedLabelFor(supplier.supplierId),
-                confirmedAge: confirmedAgeFor(supplier.supplierId),
-                busy: busySupplierId == supplier.supplierId,
-                anyBusy: busySupplierId != null,
-                basis: basis,
-                onConfirm: () => onConfirm(supplier),
-                onExplain: () => onExplain(supplier),
-                onOpenSupplier: () => onOpenSupplier(supplier),
-              ),
+            ...supplierRows,
           ],
         ],
       ),
@@ -369,7 +446,7 @@ double _labelledActionsWidth(BuildContext context) {
   );
   final confirm = purchaseInlineActionWidth(
     context,
-    const ['Consultar producto', 'Consultando…'],
+    const ['Consultar producto', 'Buscar necesidad', 'Consultando…'],
   );
   final explain = purchaseInlineActionWidth(
     context,
@@ -806,23 +883,33 @@ class _CompactHistoricalSupplierRow extends StatelessWidget {
     required this.supplier,
     required this.confirmed,
     required this.confirmedAge,
+    required this.portalSearch,
+    required this.portalResultsExpanded,
+    required this.canSearch,
+    required this.needsLogin,
     required this.busy,
     required this.anyBusy,
     required this.basis,
     required this.onConfirm,
     required this.onExplain,
     required this.onOpenSupplier,
+    required this.onTogglePortalResults,
   });
 
   final SupplierConcentration supplier;
   final String? confirmed;
   final String? confirmedAge;
+  final SupplierNeedPortalSearchSnapshot? portalSearch;
+  final bool portalResultsExpanded;
+  final bool canSearch;
+  final bool needsLogin;
   final bool busy;
   final bool anyBusy;
   final PurchaseCostBasis basis;
   final VoidCallback onConfirm;
   final VoidCallback onExplain;
   final VoidCallback onOpenSupplier;
+  final VoidCallback onTogglePortalResults;
 
   @override
   Widget build(BuildContext context) {
@@ -854,7 +941,7 @@ class _CompactHistoricalSupplierRow extends StatelessWidget {
               if (supplier.lastPurchaseLabel != null)
                 'última compra ${supplier.lastPurchaseLabel}',
               confirmed == null
-                  ? 'disponibilidad sin consultar'
+                  ? 'necesidad sin buscar en el portal'
                   : '$confirmed${confirmedAge == null ? '' : ' · $confirmedAge'}',
             ].join(' · '),
             style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
@@ -864,15 +951,46 @@ class _CompactHistoricalSupplierRow extends StatelessWidget {
             spacing: 10,
             runSpacing: 6,
             children: [
-              PurchaseInlineAction(
-                label: busy ? 'Consultando…' : 'Consultar portal',
-                onPressed: anyBusy ? null : onConfirm,
+              Tooltip(
+                message: canSearch
+                    ? needsLogin
+                        ? 'Recuperar sesión en ${supplier.supplierName}'
+                        : 'Buscar esta necesidad en ${supplier.supplierName}'
+                    : '${supplier.supplierName} aún no tiene búsqueda automática por necesidad',
+                child: PurchaseInlineAction(
+                  label: busy
+                      ? 'Buscando…'
+                      : needsLogin
+                          ? 'Recuperar sesión'
+                          : 'Buscar necesidad',
+                  onPressed: anyBusy || !canSearch ? null : onConfirm,
+                ),
               ),
               PurchaseInlineAction(label: 'Por qué', onPressed: onExplain),
               PurchaseInlineAction(
                 label: 'Ver proveedor',
                 onPressed: onOpenSupplier,
               ),
+              if (portalSearch != null &&
+                  portalSearch!.relevantMatches.isNotEmpty)
+                Semantics(
+                  button: true,
+                  label: portalResultsExpanded
+                      ? 'Ocultar resultados del portal de ${supplier.supplierName}'
+                      : 'Ver ${portalSearch!.relevantCount} resultados del portal de ${supplier.supplierName}',
+                  onTap: onTogglePortalResults,
+                  child: ExcludeSemantics(
+                    child: PurchaseInlineAction(
+                      key: ValueKey(
+                        'portal-results-toggle-${supplier.supplierId}',
+                      ),
+                      label: portalResultsExpanded
+                          ? 'Ocultar opciones'
+                          : 'Ver ${portalSearch!.relevantCount} opciones',
+                      onPressed: onTogglePortalResults,
+                    ),
+                  ),
+                ),
             ],
           ),
         ],
@@ -881,38 +999,485 @@ class _CompactHistoricalSupplierRow extends StatelessWidget {
   }
 }
 
+/// El contador de una consulta es una entrada al resultado, no el resultado.
+/// En el tramo intermedio de la tabla la columna se oculta para preservar las
+/// comparaciones; este riel conserva la misma orden sin volver a apretar las
+/// acciones de la fila.
+class _PortalResultsToggleStrip extends StatelessWidget {
+  const _PortalResultsToggleStrip({
+    required this.supplier,
+    required this.snapshot,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final SupplierConcentration supplier;
+  final SupplierNeedPortalSearchSnapshot snapshot;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${snapshot.rowLabel}${snapshot.ageLabel == null ? '' : ' · ${snapshot.ageLabel}'}',
+              style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+            ),
+          ),
+          Semantics(
+            button: true,
+            label: expanded
+                ? 'Ocultar resultados del portal de ${supplier.supplierName}'
+                : 'Ver ${snapshot.relevantCount} resultados del portal de ${supplier.supplierName}',
+            onTap: onToggle,
+            child: ExcludeSemantics(
+              child: PurchaseInlineAction(
+                key: ValueKey(
+                  'portal-results-toggle-${supplier.supplierId}',
+                ),
+                label: expanded
+                    ? 'Ocultar opciones'
+                    : 'Ver ${snapshot.relevantCount} opciones',
+                onPressed: onToggle,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Resultado real de la búsqueda del portal, anclado al proveedor que lo
+/// produjo. No afirma stock: el portal sólo demostró catálogo y precio.
+class _SupplierPortalResultsDisclosure extends StatelessWidget {
+  const _SupplierPortalResultsDisclosure({
+    required this.supplierName,
+    required this.snapshot,
+  });
+
+  final String supplierName;
+  final SupplierNeedPortalSearchSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 600;
+        return Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: tokens.surface,
+            border: Border.all(color: tokens.border),
+            borderRadius: BorderRadius.circular(PurchaseMetrics.fieldRadius),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                color: tokens.sunken,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        'Resultados en $supplierName',
+                        style: PurchaseType.sectionTitle
+                            .copyWith(color: tokens.ink),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${snapshot.optionsSummaryLabel}'
+                      '${snapshot.ageLabel == null ? '' : ' · ${snapshot.ageLabel}'}',
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
+                  ],
+                ),
+              ),
+              if (!compact) const _PortalResultTableHead(),
+              for (final match in snapshot.relevantMatches)
+                compact
+                    ? _CompactPortalResultRow(match: match)
+                    : _PortalResultTableRow(match: match),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: tokens.hair)),
+                ),
+                child: Text(
+                  'El portal no publica unidades: estas opciones prueban catálogo y precio neto, no stock disponible.',
+                  style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PortalResultTableHead extends StatelessWidget {
+  const _PortalResultTableHead();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: const Row(
+        children: [
+          _Head(flex: 18, label: 'Producto'),
+          _Head(flex: 7, label: 'Marca'),
+          _Head(flex: 7, label: 'Precio neto', alignEnd: true),
+          _Head(flex: 8, label: 'Coincidencia', alignEnd: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _PortalResultTableRow extends StatelessWidget {
+  const _PortalResultTableRow({required this.match});
+
+  final SupplierNeedPortalMatch match;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final candidate = match.candidate;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      // **La lectura vale en los tres anchos.** Montarla sólo en la fila
+      // compacta la hacía desaparecer justo donde el operador compara de
+      // verdad: en escritorio y tablet. Va bajo la fila, a lo ancho, porque no
+      // es una columna más — es la explicación de por qué esa fila está donde
+      // está.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  candidate.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+                ),
+                if (candidate.code.isNotEmpty)
+                  Text(
+                    candidate.code,
+                    style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 7,
+            child: Text(
+              candidate.brand ?? '—',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: PurchaseType.body.copyWith(color: tokens.ink),
+            ),
+          ),
+          Expanded(
+            flex: 7,
+            child: Text(
+              PurchaseMoney.format(candidate.priceNet, 'CLP'),
+              textAlign: TextAlign.end,
+              style: PurchaseType.metricSmall.copyWith(
+                color: tokens.ink,
+                fontFeatures: PurchaseType.tabular,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 8,
+            child: Text(
+              _portalMatchLabel(match),
+              textAlign: TextAlign.end,
+              style: PurchaseType.body.copyWith(color: tokens.ink),
+            ),
+          ),
+        ],
+          ),
+          SupplierRequirementFindings(findings: match.requirementFindings),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactPortalResultRow extends StatelessWidget {
+  const _CompactPortalResultRow({required this.match});
+
+  final SupplierNeedPortalMatch match;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PurchaseTokens.of(context);
+    final candidate = match.candidate;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.hair)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            candidate.name,
+            style: PurchaseType.rowTitle.copyWith(color: tokens.ink),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            <String>[
+              if (candidate.code.isNotEmpty) candidate.code,
+              if (candidate.brand != null) candidate.brand!,
+            ].join(' · '),
+            style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _portalMatchLabel(match),
+                  style: PurchaseType.body.copyWith(color: tokens.ink),
+                ),
+              ),
+              Text(
+                '${PurchaseMoney.format(candidate.priceNet, 'CLP')} neto',
+                style: PurchaseType.metricSmall.copyWith(
+                  color: tokens.ink,
+                  fontFeatures: PurchaseType.tabular,
+                ),
+              ),
+            ],
+          ),
+          SupplierRequirementFindings(findings: match.requirementFindings),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lo que se sabe de las exigencias que la ficha no puede expresar.
+///
+/// **Es la mitad de la respuesta que faltaba.** «Falta confirmar» no dice qué
+/// falta: con «sellados» y «a ambos lados» fuera de toda plantilla, el operador
+/// tenía que abrir cada fila y leerla entera. Acá se separa por **cómo se
+/// sabe** —dicho por el proveedor, leído por la IA con su cita, o no consta—,
+/// que es la diferencia entre comparar y adivinar.
+///
+/// La lectura de la IA se muestra como lectura, con la cita que la sostiene y
+/// en su propio tono: nunca se dibuja como cumplimiento. Y una duda nunca
+/// esconde la fila, sólo la explica.
+class SupplierRequirementFindings extends StatefulWidget {
+  const SupplierRequirementFindings({super.key, required this.findings});
+
+  final List<SupplyRequirementFinding> findings;
+
+  @override
+  State<SupplierRequirementFindings> createState() =>
+      _SupplierRequirementFindingsState();
+}
+
+class _SupplierRequirementFindingsState
+    extends State<SupplierRequirementFindings> {
+  /// **La divulgación es la interacción canónica del módulo para esto.** La
+  /// cita del proveedor y la lista de lo que no consta no pueden vivir sólo en
+  /// `Semantics`: el operador que compara con los ojos las necesita, y un
+  /// número suelto —«no constan 2»— no dice cuáles. Se abren en su sitio, sin
+  /// diálogo y sin navegar, que es como se abre todo lo demás acá.
+  bool _abierto = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final findings = widget.findings;
+    if (findings.isEmpty) return const SizedBox.shrink();
+    final visibles = findings
+        .where((finding) => finding.status != SupplyRequirementStatus.unknown)
+        .toList(growable: false);
+    final pendientes = findings
+        .where((finding) => finding.status == SupplyRequirementStatus.unknown)
+        .toList(growable: false);
+    final conCita = visibles
+        .where((finding) => (finding.quote ?? '').trim().isNotEmpty)
+        .toList(growable: false);
+    final tokens = PurchaseTokens.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final hayDetalle = conCita.isNotEmpty || pendientes.isNotEmpty;
+    return Padding(
+      key: const ValueKey('portal-requirement-findings'),
+      padding: const EdgeInsets.only(top: PurchaseMetrics.labelGap),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Wrap(
+            spacing: 10,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              for (final finding in visibles)
+                Semantics(
+                  excludeSemantics: true,
+                  label: _findingSemantics(finding),
+                  child: Text(
+                    _findingLabel(finding),
+                    style: PurchaseType.meta.copyWith(
+                      color: switch (finding.status) {
+                        SupplyRequirementStatus.proven =>
+                          roles.success.onContainer,
+                        SupplyRequirementStatus.contradicted =>
+                          roles.danger.onContainer,
+                        _ => tokens.inkMuted,
+                      },
+                    ),
+                  ),
+                ),
+              if (pendientes.isNotEmpty)
+                Text(
+                  pendientes.length == 1
+                      ? 'no consta 1 exigencia'
+                      : 'no constan ${pendientes.length} exigencias',
+                  style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                ),
+              if (hayDetalle)
+                PurchaseInlineAction(
+                  key: const ValueKey('portal-requirement-findings-toggle'),
+                  label: _abierto ? 'Ocultar el detalle' : 'Ver el detalle',
+                  onPressed: () => setState(() => _abierto = !_abierto),
+                ),
+            ],
+          ),
+          if (_abierto && hayDetalle)
+            Padding(
+              key: const ValueKey('portal-requirement-findings-detail'),
+              padding: const EdgeInsets.only(top: PurchaseMetrics.labelGap),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  for (final finding in conCita)
+                    Text(
+                      '${finding.label}: «${finding.quote}»',
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
+                  for (final finding in pendientes)
+                    Text(
+                      _findingLabel(finding),
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+String _findingLabel(SupplyRequirementFinding finding) {
+  // **La frase del taller ya puede traer su negación.** El descubrimiento
+  // entrega la cita literal —«sin tapones»—, y anteponer otro `sin` mostraba
+  // «sin sin tapones». Se antepone sólo cuando la etiqueta no lo dice ya.
+  final etiqueta = finding.label.trim();
+  final yaNegada = RegExp(r'^(sin|no)\b', caseSensitive: false)
+      .hasMatch(etiqueta);
+  final palabra =
+      finding.affirmed || yaNegada ? etiqueta : 'sin $etiqueta';
+  return switch (finding.status) {
+    SupplyRequirementStatus.proven => '$palabra: lo dice el proveedor',
+    SupplyRequirementStatus.contradicted => '$palabra: el proveedor dice lo '
+        'contrario',
+    SupplyRequirementStatus.inferred => '$palabra: leído por IA, sin confirmar',
+    SupplyRequirementStatus.doubted => '$palabra: la IA lo duda',
+    SupplyRequirementStatus.unknown => '$palabra: no consta',
+  };
+}
+
+String _findingSemantics(SupplyRequirementFinding finding) {
+  final cita = finding.quote;
+  final base = _findingLabel(finding);
+  return cita == null || cita.isEmpty ? base : '$base. Cita: $cita';
+}
+
+String _portalMatchLabel(SupplierNeedPortalMatch match) =>
+    switch (match.state) {
+      SupplierNeedMatchState.exact => 'Cumple la ficha',
+      SupplierNeedMatchState.possible => 'Falta confirmar',
+      SupplierNeedMatchState.conflict => 'No cumple',
+    };
+
 class _SupplierRow extends StatelessWidget {
   const _SupplierRow({
     required this.supplier,
     required this.confirmed,
     required this.confirmedAge,
     required this.confirmedDetail,
+    required this.canSearch,
+    required this.needsLogin,
     required this.checkProgress,
     required this.busy,
     required this.anyBusy,
     required this.expanded,
+    required this.portalSearch,
+    required this.portalResultsExpanded,
     required this.layout,
     required this.basis,
     required this.onConfirm,
     required this.onExplain,
     required this.onOpenPortal,
     required this.onOpenSupplier,
+    required this.onTogglePortalResults,
   });
 
   final SupplierConcentration supplier;
   final String? confirmed;
   final String? confirmedAge;
   final String? confirmedDetail;
+  final bool canSearch;
+  final bool needsLogin;
   final String? checkProgress;
   final bool busy;
   final bool anyBusy;
   final bool expanded;
+  final SupplierNeedPortalSearchSnapshot? portalSearch;
+  final bool portalResultsExpanded;
   final _TableLayout layout;
   final PurchaseCostBasis basis;
   final VoidCallback onConfirm;
   final VoidCallback onExplain;
   final VoidCallback onOpenPortal;
   final VoidCallback onOpenSupplier;
+  final VoidCallback onTogglePortalResults;
 
   @override
   Widget build(BuildContext context) {
@@ -1009,10 +1574,32 @@ class _SupplierRow extends StatelessWidget {
               value: confirmed ?? '—',
               // Una consulta de 30 s con un spinner mudo se lee como colgada.
               caption: busy
-                  ? (checkProgress ?? 'consultando…')
+                  ? (checkProgress ?? 'buscando…')
                   : (confirmedAge ?? 'sin consultar'),
               emphasis: confirmed != null,
               detail: confirmedDetail,
+              actionKey:
+                  portalSearch == null || portalSearch!.relevantMatches.isEmpty
+                      ? null
+                      : ValueKey(
+                          'portal-results-toggle-${supplier.supplierId}',
+                        ),
+              actionLabel:
+                  portalSearch == null || portalSearch!.relevantMatches.isEmpty
+                      ? null
+                      : portalResultsExpanded
+                          ? 'Ocultar opciones'
+                          : 'Ver ${portalSearch!.relevantCount} opciones',
+              actionSemanticLabel: portalSearch == null ||
+                      portalSearch!.relevantMatches.isEmpty
+                  ? null
+                  : portalResultsExpanded
+                      ? 'Ocultar resultados del portal de ${supplier.supplierName}'
+                      : 'Ver ${portalSearch!.relevantCount} resultados del portal de ${supplier.supplierName}',
+              onAction:
+                  portalSearch == null || portalSearch!.relevantMatches.isEmpty
+                      ? null
+                      : onTogglePortalResults,
             ),
           const SizedBox(width: 28),
           SizedBox(
@@ -1026,7 +1613,7 @@ class _SupplierRow extends StatelessWidget {
                   // su sujeto ni para un lector de pantalla ni para una prueba.
                   IconButton(
                     key: ValueKey('confirm-supplier-${supplier.supplierId}'),
-                    onPressed: anyBusy ? null : onConfirm,
+                    onPressed: anyBusy || !canSearch ? null : onConfirm,
                     icon: busy
                         ? const SizedBox(
                             width: 14,
@@ -1035,7 +1622,11 @@ class _SupplierRow extends StatelessWidget {
                           )
                         : const Icon(Icons.fact_check_outlined, size: 16),
                     style: _kIconSlotStyle,
-                    tooltip: 'Consultar el portal de ${supplier.supplierName}',
+                    tooltip: canSearch
+                        ? needsLogin
+                            ? 'Recuperar sesión en ${supplier.supplierName}'
+                            : 'Buscar esta necesidad en ${supplier.supplierName}'
+                        : '${supplier.supplierName} aún no tiene búsqueda automática por necesidad',
                   ),
                   const SizedBox(width: 4),
                   IconButton(
@@ -1053,8 +1644,12 @@ class _SupplierRow extends StatelessWidget {
                 ] else ...[
                   PurchaseInlineAction(
                     key: ValueKey('confirm-supplier-${supplier.supplierId}'),
-                    label: busy ? 'Consultando…' : 'Consultar portal',
-                    onPressed: anyBusy ? null : onConfirm,
+                    label: busy
+                        ? 'Buscando…'
+                        : needsLogin
+                            ? 'Recuperar sesión'
+                            : 'Buscar necesidad',
+                    onPressed: anyBusy || !canSearch ? null : onConfirm,
                   ),
                   const SizedBox(width: 10),
                   PurchaseInlineAction(
@@ -1231,6 +1826,10 @@ class _Metric extends StatelessWidget {
     this.numeric = true,
     this.emphasis = false,
     this.detail,
+    this.actionKey,
+    this.actionLabel,
+    this.actionSemanticLabel,
+    this.onAction,
   });
 
   final int flex;
@@ -1238,6 +1837,10 @@ class _Metric extends StatelessWidget {
   final String caption;
   final bool numeric;
   final bool emphasis;
+  final Key? actionKey;
+  final String? actionLabel;
+  final String? actionSemanticLabel;
+  final VoidCallback? onAction;
 
   /// El desglose que no cabe en la celda —«2 sin stock · 1 no apareció»— sin
   /// convertir la fila en un párrafo. Se calculaba y no se mostraba en ninguna
@@ -1266,6 +1869,19 @@ class _Metric extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
         ),
+        if (actionLabel != null && onAction != null)
+          Semantics(
+            button: true,
+            label: actionSemanticLabel ?? actionLabel,
+            onTap: onAction,
+            child: ExcludeSemantics(
+              child: PurchaseInlineAction(
+                key: actionKey,
+                label: actionLabel!,
+                onPressed: onAction,
+              ),
+            ),
+          ),
       ],
     );
     return Expanded(

@@ -3743,10 +3743,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
     }
   }
 
-
   String _cleanPdfText(String text) {
     if (text.isEmpty) return text;
     return text.replaceAll(RegExp(r'[^\x20-\x7E\xA0-\xFF\r\n\t]'), ' ');
   }
-
 }
