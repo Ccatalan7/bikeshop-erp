@@ -904,7 +904,7 @@ SupplierNeedPortalSearchSnapshot _lecturaEfimera() {
     searchRevisionNo: 1,
     currentRevisionNo: 1,
     evaluatedRevisionNo: 1,
-    operationKey: 'corrida-20260830-rbx',
+    operationKey: 'test-run',
   );
 }
 
