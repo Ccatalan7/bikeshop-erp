@@ -61,10 +61,13 @@ class SupplierPortalProbe {
 
   /// El código va codificado: un código con espacios o `&` rompería la consulta
   /// y devolvería la página equivocada sin avisar.
-  String urlForCode(String code) => searchUrlTemplate.replaceAll(
-        '{code}',
-        Uri.encodeQueryComponent(code.trim()),
-      );
+  String urlForCode(String code) => fillCodeTemplate(searchUrlTemplate, code);
+
+  /// La misma sustitución para quien tiene sólo la plantilla (por ejemplo, el
+  /// enlace del código de proveedor en Inventario, que no necesita la sonda
+  /// completa ni que esté habilitada).
+  static String fillCodeTemplate(String template, String code) =>
+      template.replaceAll('{code}', Uri.encodeQueryComponent(code.trim()));
 
   /// **Una tienda con API no necesita una URL de buscador.** El requisito de
   /// `{query}` describe el camino por navegador: abrir el buscador del portal

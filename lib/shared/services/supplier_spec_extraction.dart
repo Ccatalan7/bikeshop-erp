@@ -478,7 +478,6 @@ Future<List<SupplierPortalCatalogCandidate>> readSupplierSpecsWithModel({
   SupplierModelReadOwner? owner,
 }) async {
   if (fields.isEmpty || candidates.isEmpty) return candidates;
-  if (owner?.isClosed ?? false) return candidates;
 
   final rows = <SupplierSpecExtractionRow>[
     for (final candidate in candidates)
@@ -492,6 +491,44 @@ Future<List<SupplierPortalCatalogCandidate>> readSupplierSpecsWithModel({
         ),
   ];
   if (rows.isEmpty) return candidates;
+
+  final result = await readSpecsFromRowsWithModel(
+    fields: fields,
+    rows: rows,
+    extractor: extractor,
+    requestedObject: requestedObject,
+    onRejected: onRejected,
+    deadline: deadline,
+    owner: owner,
+  );
+  if (result == null || result.readings.isEmpty) return candidates;
+  return _merge(candidates, result);
+}
+
+/// Lee fichas desde filas de texto sueltas, con las mismas garantías.
+///
+/// **Es el mismo lector, no otro motor.** El catálogo del taller también es
+/// texto —y, medido el 2026-08-31, en este taller es *sólo* texto: 45 de 1.613
+/// productos tienen descripción—, así que leerlo pide exactamente lo mismo que
+/// leerle al proveedor: una cita copiada del texto, un valor del dominio del
+/// campo, y la relectura determinista que decide si esa cita sostiene ese
+/// valor. Duplicar el circuito habría duplicado también las tres formas de
+/// equivocarse.
+///
+/// Devuelve `null` cuando no hubo lectura —sin modelo, caído, lento o
+/// ilegible—. Un `null` no es «no dice nada»: es «no se sabe», y quien llama
+/// tiene que tratarlo como silencio, nunca como una ficha vacía.
+Future<SupplierSpecExtractionResult?> readSpecsFromRowsWithModel({
+  required List<SupplierNeedSearchField> fields,
+  required List<SupplierSpecExtractionRow> rows,
+  required SupplierSpecExtractor extractor,
+  String requestedObject = '',
+  void Function(List<String> rejected)? onRejected,
+  Duration deadline = const Duration(seconds: 25),
+  SupplierModelReadOwner? owner,
+}) async {
+  if (fields.isEmpty || rows.isEmpty) return null;
+  if (owner?.isClosed ?? false) return null;
 
   final reloj = Stopwatch()..start();
   debugPrint('🧠 lectura de fichas: ${rows.length} filas, '
@@ -517,7 +554,7 @@ Future<List<SupplierPortalCatalogCandidate>> readSupplierSpecsWithModel({
   if (cached != null) {
     debugPrint('🧠 lectura de fichas: ${rows.length} filas ya leídas, '
         'se reusa la lectura');
-    return _merge(candidates, cached);
+    return cached;
   }
 
   Object? response;
@@ -528,7 +565,7 @@ Future<List<SupplierPortalCatalogCandidate>> readSupplierSpecsWithModel({
     // calce sepa leer solo. La lectura es una mejora, nunca un requisito.
     debugPrint('🧠 lectura de fichas: sin modelo tras '
         '${reloj.elapsedMilliseconds} ms ($error)');
-    return candidates;
+    return null;
   }
   debugPrint('🧠 lectura de fichas: el modelo respondió en '
       '${reloj.elapsedMilliseconds} ms');
@@ -539,11 +576,11 @@ Future<List<SupplierPortalCatalogCandidate>> readSupplierSpecsWithModel({
     response: response,
   );
   if (result.rejected.isNotEmpty) onRejected?.call(result.rejected);
-  if (result.readings.isEmpty) return candidates;
+  if (result.readings.isEmpty) return result;
 
   if (_readingsCache.length >= _readingsCacheMax) _readingsCache.clear();
   _readingsCache[key] = result;
-  return _merge(candidates, result);
+  return result;
 }
 
 String _readingKey(
@@ -994,28 +1031,52 @@ String? _valveMarkerWord(String word) {
 /// Es equivalencia de **valor**, no de familia ni de identidad: nunca decide
 /// qué pieza es una fila. La ficha sigue siendo la dueña de qué valores
 /// existen; esto sólo dice cuáles palabras nombran a cada uno.
-const Map<String, Set<String>> kSupplierSpecValueSynonyms = <String, Set<String>>{
+const Map<String, Set<String>> kSupplierSpecValueSynonyms =
+    <String, Set<String>>{
   // Compuesto de fricción de una pastilla o zapata.
   'compuesto:organico': <String>{
-    'organico', 'organica', 'organicos', 'organicas', 'organic',
-    'resina', 'resinas', 'resin',
+    'organico',
+    'organica',
+    'organicos',
+    'organicas',
+    'organic',
+    'resina',
+    'resinas',
+    'resin',
   },
   'compuesto:metalico': <String>{
-    'metalico', 'metalica', 'metalicos', 'metalicas', 'metallic',
-    'sinterizado', 'sinterizada', 'sinterizados', 'sinterizadas', 'sintered',
+    'metalico',
+    'metalica',
+    'metalicos',
+    'metalicas',
+    'metallic',
+    'sinterizado',
+    'sinterizada',
+    'sinterizados',
+    'sinterizadas',
+    'sintered',
   },
   'compuesto:semimetalico': <String>{
-    'semimetalico', 'semimetalica', 'semimetallic',
+    'semimetalico',
+    'semimetalica',
+    'semimetallic',
   },
   // Material de construcción, con las mismas palabras que ya reconoce el
   // lector de identidad canónico.
   'material:aluminio': <String>{
-    'aluminio', 'aluminum', 'aluminium', 'alu',
+    'aluminio',
+    'aluminum',
+    'aluminium',
+    'alu',
   },
   'material:acero': <String>{'acero', 'steel'},
   'material:carbono': <String>{'carbono', 'carbon'},
   'material:plastico': <String>{
-    'plastico', 'plastica', 'plastic', 'policarbonato', 'polycarbonate',
+    'plastico',
+    'plastica',
+    'plastic',
+    'policarbonato',
+    'polycarbonate',
   },
 };
 
@@ -1234,7 +1295,8 @@ String? _criteriaSpanRejection({
       !normalizedRequest.contains(' $normalizedQuote')) {
     return 'la cita no está en la petición';
   }
-  if (!pedidos.any((pedido) => _sameCriterionValue(pedido, value, definition))) {
+  if (!pedidos
+      .any((pedido) => _sameCriterionValue(pedido, value, definition))) {
     return 'el valor leído no es el que el operador pidió';
   }
   if (relation != 'same') {
@@ -1273,8 +1335,7 @@ bool _sameCriterionValue(
   if (pedido is num || leido is num) {
     final izquierda =
         pedido is num ? pedido.toDouble() : double.tryParse('$pedido');
-    final derecha =
-        leido is num ? leido.toDouble() : double.tryParse('$leido');
+    final derecha = leido is num ? leido.toDouble() : double.tryParse('$leido');
     return izquierda != null && derecha != null && izquierda == derecha;
   }
   return ProductIdentityExtractor.normalize('$pedido') ==
@@ -1559,8 +1620,9 @@ String supplyNeedCriteriaSpansKey(
 ) {
   final campos = askedValues.keys.toList(growable: false)..sort();
   final ficha = <Map<String, Object?>>[
-    for (final field in (fields.toList()
-      ..sort((left, right) => left.key.compareTo(right.key))))
+    for (final field
+        in (fields.toList()
+          ..sort((left, right) => left.key.compareTo(right.key))))
       <String, Object?>{
         'key': field.key,
         'label': field.label,
@@ -1707,7 +1769,6 @@ Map<String, Map<String, SupplierRequirementFinding>>
   }
   return lecturas;
 }
-
 
 /// Si las palabras citadas contradicen la exigencia, leídas por el código.
 ///

@@ -944,6 +944,21 @@ frase. Y la frase es además lo que el lector recibe y usa para interpretar, as�
 que es parte de la identidad de la pregunta, no un rótulo. Un recibo que no dice
 qué pregunta contestó no reclama ninguna: la exigencia queda desconocida.
 
+### Buscar no depende de la ficha ni de la categoría (2026-08-31)
+
+Tres necesidades reales de producción —«Motor Sellado 73x118mm», «Puños con
+gel», «Sellante tubeless»— quedaron con `identity_unresolved`, sin categoría y
+sin familia técnica, y con eso **no se podía ni preguntarle al proveedor**: el
+plan devolvía `null`. El extractor canónico sí reconoce `bottom_bracket`, `grip`
+y `sealant` en esas mismas palabras.
+
+La familia se deriva de la petición. La plantilla aporta los criterios y la
+categoría aporta su sustantivo **cuando existen**; ninguna de las dos es una
+precondición para buscar. Sin ficha no hay criterios que juzgar —y eso es lo
+honesto—: se busca por la palabra y la identidad se prueba con el vocabulario de
+la familia, que es exactamente lo que haría el operador. Una petición que no
+nombra ninguna familia sigue sin plan: ahí no hay palabra que preguntar.
+
 ### Un ancho es una medida, no una lista
 
 45 pares distintos de ancho en 120 cámaras, y crecen con cada compra. Pero la
@@ -966,3 +981,60 @@ La regla que decide si un default es legítimo:
 Y un producto que no entrega **ninguna** medida no recibe ficha: «Cámara nueva +
 servicio de cambio» es un servicio, y «Camara Para Carretilla 3.50 X 8» no es de
 bicicleta.
+
+## El nombre del producto como evidencia verificada
+
+**Medido el 2026-08-31 sobre el catálogo real:** 1.613 productos activos, y
+sólo 45 con descripción de más de veinte caracteres. La ficha del taller está
+casi vacía, y lo único escrito es el nombre. Antes de esto, un lector
+determinista sólo resolvía un campo cuando la palabra pedida aparecía literal,
+así que `METALICA` no contradecía `Orgánico` y familias enteras quedaban sin
+verificar por silencio en vez de por desacuerdo.
+
+Un modelo sí puede leer ese nombre. Lo que no puede es que se le crea, y el
+dueño de esa decisión es **el servidor**, no el cliente: el cliente es la parte
+que podría estar equivocada o mentir.
+
+- **La procedencia es `name_reading`**, un token propio. Cada consumidor que
+  pregunta `in ('product_spec', 'identity_fallback')` lo ignora hasta que se lo
+  habilita explícitamente. Habilitarlo es un acto auditable, no un efecto
+  colateral: `assistant_search_inventory_v*` sigue ignorándolo a propósito.
+- **La cita tiene que distinguir el valor, no repetir la etiqueta.** La
+  comprobación puntúa `(palabras cubiertas / palabras de la etiqueta, palabras
+  cubiertas)` y exige que el valor elegido le gane estrictamente a todos sus
+  hermanos. Sale de dos formas reales de etiqueta que la cobertura completa
+  rechazaba: `Ecosistema Shimano` trae una palabra clasificadora que ningún
+  proveedor escribe, y `SGS / larga` escribe dos formas de decir lo mismo. Con
+  cobertura completa, las siete lecturas honestas probadas contra el catálogo
+  real murieron junto con las falsas.
+- **Una palabra corta no tolera flexión.** Con dos o tres letras se exige
+  igualdad exacta: `SGS` no prueba `SS` ni `GS`, que es justo lo que hay que
+  distinguir. Con cuatro o más se compara por prefijo común, porque el español
+  flexiona el final: `METALICA` sí prueba `Metálico`.
+- **El booleano se lee, no se rechaza.** Un nombre que dice `SIN ALETAS` prueba
+  la ausencia tanto como `CON ALETAS` prueba la presencia; lo que no prueba nada
+  es un nombre que no la menciona. La regla es la que ya existía en
+  `supplierBooleanFromFieldVocabulary`, y el vocabulario sale de la etiqueta y
+  la descripción del propio campo.
+- **Una lista (`multi_select`) se rechaza entera.** Leída de un nombre es casi
+  siempre parcial: `RD-M2000 9-SPEED` declara el 9 y calla el 8, y con media
+  ficha un cassette de 8 pasaría a «no cumple» cuando la verdad es «el nombre no
+  lo dice». Media ficha fabrica contradicciones; ninguna sólo deja silencio.
+- **La evidencia caduca sola.** El recibo guarda el digest del texto leído y el
+  del vocabulario del campo —etiqueta, tipo, descripción y valores activos—.
+  Cambiar el nombre del producto, renombrar la etiqueta elegida o agregar un
+  valor hermano más específico invalidan la lectura sin que nadie tenga que
+  acordarse de borrarla.
+- **La persona gana de verdad.** Una lectura nunca pisa un dato de otra
+  procedencia, y el guardado manual recupera `source` y retira el recibo. Los
+  dos que escriben la ficha de un producto toman el mismo candado
+  —`pg_advisory_xact_lock` por producto, no por campo— y el manual lo toma
+  **antes** de vaciar los campos omitidos: si no, una lectura en vuelo
+  reinsertaba justo el criterio que la persona acababa de vaciar.
+
+Lo que esto **no** arregla: el techo sigue siendo lo que el nombre dice. En las
+49 pastillas del taller sólo 4 nombran el compuesto y 2 el disipador, así que
+esa necesidad sigue sin alternativas comprobadas — y eso es la respuesta
+correcta, no una falla. Su valor real ahí es convertir silencio en
+contradicción: una pastilla `METALICA CON DISIPADOR` deja de ser «no verificada»
+y pasa a decir por qué no sirve.

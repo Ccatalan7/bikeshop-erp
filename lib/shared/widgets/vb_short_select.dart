@@ -126,6 +126,33 @@ class VbShortSelect<T> extends StatefulWidget {
   /// [touchTargetHeight].
   static const double fieldHeight = 34;
 
+  /// El rótulo de S-05 sobre cualquier campo, no sólo sobre este control.
+  ///
+  /// **Se expone porque el rótulo es del componente, no del llamador.** En un
+  /// mismo bloque conviven este control y un campo de texto libre, y con dos
+  /// dueños del rótulo el texto libre terminaba mostrando el suyo dentro de la
+  /// caja mientras el de al lado lo llevaba encima: dos formas de nombrar lo
+  /// mismo, una al lado de la otra. Un `label` nulo devuelve el campo tal cual.
+  static Widget labelled(BuildContext context, String? label, Widget field) {
+    if (label == null) return field;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          label,
+          style: GoogleFonts.ibmPlexSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 5),
+        field,
+      ],
+    );
+  }
+
   /// Objetivo táctil bajo [ResponsiveBreakpoints.desktopMin].
   ///
   /// **`F-06` lo publica textualmente:** *«Bajo 900 px de ancho lógico la
@@ -327,25 +354,8 @@ class _VbShortSelectState<T> extends State<VbShortSelect<T>> {
   }
 
   /// El rótulo de S-05: `font:500 11px`, `margin-bottom:5px`.
-  Widget _withLabel(BuildContext context, Widget field) {
-    if (widget.label == null) return field;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          widget.label!,
-          style: GoogleFonts.ibmPlexSans(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 5),
-        field,
-      ],
-    );
-  }
+  Widget _withLabel(BuildContext context, Widget field) =>
+      VbShortSelect.labelled(context, widget.label, field);
 
   TextStyle _valueStyle(Color color) => GoogleFonts.ibmPlexSans(
         fontSize: 12,

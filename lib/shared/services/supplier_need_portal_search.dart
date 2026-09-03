@@ -396,16 +396,21 @@ class SupplierNeedPortalAdapter {
       final configured = families[technicalFamily];
       if (configured != null) return configured;
     }
-    // **Exigir `technicalFamily` dejaba mudas las categorías sin plantilla.**
-    // «Accesorios / Puños» tiene categoría reconocida y ninguna ficha, así que
-    // la familia técnica nace nula y acá se devolvía `null`: el plan no se
-    // podía armar y la necesidad ni siquiera permitía buscar. La familia se
-    // deriva de la propia petición, no de la plantilla; y si el extractor no
-    // reconoce ninguna, el sustantivo con que la categoría nombra al objeto es
-    // exactamente lo que el operador escribiría en el buscador del proveedor.
-    if (!genericFamilySearch || categoryId == null || categoryId.isEmpty) {
-      return null;
-    }
+    // **Ni la plantilla ni la categoría son requisitos para poder BUSCAR.**
+    // Exigir `technicalFamily` dejaba mudas las categorías sin ficha
+    // —«Accesorios / Puños»—, y exigir `categoryId` dejaba mudas las
+    // necesidades que la interpretación no alcanzó a categorizar. Medido en
+    // producción el 2026-08-31: «Motor Sellado 73x118mm», «Puños con gel» y
+    // «Sellante tubeless» quedaron con `identity_unresolved`, sin categoría y
+    // sin familia, y por eso ni siquiera permitían preguntarle al proveedor
+    // —aunque el extractor canónico reconoce `bottom_bracket`, `grip` y
+    // `sealant` en esas mismas palabras—.
+    //
+    // La familia se deriva de la petición; la categoría sólo aporta su
+    // sustantivo cuando existe. Sin ficha no hay criterios que juzgar, y eso
+    // es lo honesto: se busca por la palabra y la identidad se prueba con el
+    // vocabulario de la familia, que es exactamente lo que el operador haría.
+    if (!genericFamilySearch) return null;
 
     // A portal may expose one ordinary word-search for its whole catalogue.
     // In that case a new ficha family must not require a Dart release or a
@@ -1450,8 +1455,9 @@ List<SupplierNeedPortalMatch> matchSupplierNeedCandidates(
         affirmed: propiedad.affirmed,
         scope: propiedad.scope.toList(growable: false),
       ).signature;
-      final lectura =
-          registrada == null || registrada.signature != firma ? null : registrada;
+      final lectura = registrada == null || registrada.signature != firma
+          ? null
+          : registrada;
       findings.add(SupplyRequirementFinding(
         label: propiedad.label.isEmpty ? propiedad.stem : propiedad.label,
         affirmed: propiedad.affirmed,
@@ -3972,14 +3978,40 @@ class _RequestedProperty {
 
 /// Conectores y preposiciones: aparecen en cualquier fila y no prueban nada.
 const Set<String> kSupplyFunctionWords = <String>{
-  'con', 'sin', 'para', 'por', 'del', 'las', 'los', 'una', 'uno', 'unos',
-  'unas', 'que', 'este', 'esta', 'como', 'tipo', 'muy', 'mas', 'menos',
+  'con',
+  'sin',
+  'para',
+  'por',
+  'del',
+  'las',
+  'los',
+  'una',
+  'uno',
+  'unos',
+  'unas',
+  'que',
+  'este',
+  'esta',
+  'como',
+  'tipo',
+  'muy',
+  'mas',
+  'menos',
 };
 
 /// Palabras que **niegan** lo que viene después.
 const Set<String> _kPolarityNegators = <String>{
-  'sin', 'no', 'nunca', 'ningun', 'ninguna', 'ninguno', 'exento', 'exenta',
-  'carece', 'excluye', 'salvo',
+  'sin',
+  'no',
+  'nunca',
+  'ningun',
+  'ninguna',
+  'ninguno',
+  'exento',
+  'exenta',
+  'carece',
+  'excluye',
+  'salvo',
 };
 
 /// Palabras que **cierran** una negación y devuelven el texto a lo afirmado.
@@ -3987,8 +4019,21 @@ const Set<String> _kPolarityNegators = <String>{
 /// El normalizador canónico ya convierte coma y punto en `~`, así que el
 /// límite de cláusula llega hasta acá como un token propio.
 const Set<String> _kPolarityResets = <String>{
-  'con', 'y', 'e', 'o', 'u', '~', '+', 'pero', 'mas', 'ademas', 'tambien',
-  'incluye', 'incluyen', 'trae', 'para',
+  'con',
+  'y',
+  'e',
+  'o',
+  'u',
+  '~',
+  '+',
+  'pero',
+  'mas',
+  'ademas',
+  'tambien',
+  'incluye',
+  'incluyen',
+  'trae',
+  'para',
 };
 
 /// Las palabras de **cantidad o alcance** que acompañan a una propiedad.
@@ -3996,8 +4041,20 @@ const Set<String> _kScopeWords = kSupplyScopeWords;
 
 /// Las palabras de **cantidad o alcance** que acompañan a una propiedad.
 const Set<String> kSupplyScopeWords = <String>{
-  'ambos', 'ambas', 'lados', 'lado', 'caras', 'cara', 'solo', 'sola',
-  'unico', 'unica', 'doble', 'simple', 'completo', 'completa',
+  'ambos',
+  'ambas',
+  'lados',
+  'lado',
+  'caras',
+  'cara',
+  'solo',
+  'sola',
+  'unico',
+  'unica',
+  'doble',
+  'simple',
+  'completo',
+  'completa',
 };
 
 /// Para cada token, si aparece **afirmado**.
@@ -4092,8 +4149,7 @@ _PredicateEvidence _propertyEvidence(String rowText, _RequestedProperty prop) {
     // dicen con todas las letras.
     final cerca = <String>{
       for (var salto = 1; salto <= 6; salto += 1) ...<String>[
-        if (index + salto < tokens.length)
-          _propertyStem(tokens[index + salto]),
+        if (index + salto < tokens.length) _propertyStem(tokens[index + salto]),
         if (index - salto >= 0) _propertyStem(tokens[index - salto]),
       ],
     };
@@ -4186,8 +4242,8 @@ Set<_RequestedProperty> _requestedProperties(SupplierNeedSearchPlan plan) {
     final concepto = canonicalSupplierSpecConcept(palabra);
     var visto = false;
     for (final entry in vocabularioDe.entries) {
-      final porConcepto =
-          concepto != null && (conceptosDe[entry.key]?.contains(concepto) ?? false);
+      final porConcepto = concepto != null &&
+          (conceptosDe[entry.key]?.contains(concepto) ?? false);
       if (!porConcepto &&
           !entry.value.any(
             (word) => word.startsWith(stem) || stem.startsWith(word),
@@ -4269,7 +4325,8 @@ Set<_RequestedProperty> _requestedProperties(SupplierNeedSearchPlan plan) {
     // que declara `6 PERNOS` con todas las letras. Es la regla del sintagma
     // mirando hacia adelante: si lo que sigue es el valor de un criterio, esto
     // era su rótulo.
-    if (!excluida && _introducesCoveredValue(tokens, index, enlaces, cubierta)) {
+    if (!excluida &&
+        _introducesCoveredValue(tokens, index, enlaces, cubierta)) {
       ancla = true;
       continue;
     }
@@ -4303,7 +4360,8 @@ Set<_RequestedProperty> _requestedProperties(SupplierNeedSearchPlan plan) {
     final stem = encontrada.term.trim();
     if (stem.isEmpty) continue;
     final existente = propiedades[stem];
-    if (existente != null && existente.scope.length >= encontrada.scope.length) {
+    if (existente != null &&
+        existente.scope.length >= encontrada.scope.length) {
       continue;
     }
     propiedades[stem] = _RequestedProperty(
@@ -4495,8 +4553,16 @@ bool _valueIsOnlyBrand(String text, String value, String? brand) {
   final tokens = text.split(' ');
   final marca = _normalize(brand ?? '');
   const fitment = <String>{
-    'para', 'compatible', 'compatibles', 'calza', 'calzan', 'sirve', 'sirven',
-    'apto', 'apta', 'uso',
+    'para',
+    'compatible',
+    'compatibles',
+    'calza',
+    'calzan',
+    'sirve',
+    'sirven',
+    'apto',
+    'apta',
+    'uso',
   };
   var vistas = 0;
   var soloMarca = true;

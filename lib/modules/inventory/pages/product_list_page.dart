@@ -7,16 +7,20 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../public_store/utils/product_url.dart';
 import '../../../shared/models/supplier.dart';
+import '../../../shared/services/supplier_availability_service.dart';
+import '../../../shared/services/supplier_portal_reading.dart';
+import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/barcode_scanner_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/responsive_viewport.dart';
-import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 
 import '../../purchases/services/purchase_service.dart';
+import '../../website/services/website_service.dart';
 import '../models/brand_models.dart';
 import '../models/bulk_product_edit_models.dart';
 import '../models/category_models.dart';
@@ -24,9 +28,11 @@ import '../models/inventory_models.dart';
 import '../services/brand_service.dart';
 import '../services/category_service.dart';
 import '../services/inventory_service.dart' as inventory_services;
+import '../utils/product_margin.dart';
 import '../utils/product_set_inventory_projection.dart';
 import '../widgets/bulk_product_create_dialog.dart';
 import '../widgets/bulk_product_edit_dialog.dart';
+import '../widgets/product_detail_pane.dart';
 import '../widgets/product_list_compact_surface.dart';
 import '../widgets/product_movements_tab.dart';
 
@@ -193,6 +199,16 @@ class _ProductListPageState extends State<ProductListPage> {
 
   ProductViewMode _viewMode = ProductViewMode.table;
   Product? _selectedProduct; // For split-pane detail view
+  // Fila completa del producto seleccionado (especificaciones, etiquetas,
+  // imágenes adicionales…): la lista trae una proyección corta y el panel de
+  // detalle la hidrata una vez por producto.
+  final Map<String, Product> _fullProductById = {};
+  final Set<String> _fullProductLoading = {};
+  // Plantilla de URL por código del portal de cada proveedor: con ella el
+  // código de proveedor abre la ficha del producto en el navegador del ERP.
+  // `null` guardado significa «este proveedor no tiene plantilla».
+  final Map<String, String?> _supplierProductTemplateById = {};
+  final Set<String> _supplierProbeLoading = {};
   final Set<String> _expandedSets = {}; // Track which sets are expanded
 
   // Column visibility (table view)
@@ -905,9 +921,17 @@ class _ProductListPageState extends State<ProductListPage> {
       // Update data
       setState(() {
         _products = products;
+        if (forceRefresh) _fullProductById.clear();
+        _refreshSelectedProduct(products);
         _applyFilters(resetPagination: !preserveState);
         _isLoading = false;
       });
+      final selected = _selectedProduct;
+      if (selected != null) {
+        unawaited(_ensureFullProduct(selected));
+        _ensureStoreSettings(selected);
+        _ensureSupplierProbe(selected);
+      }
 
       if (!_isServicesScope) {
         unawaited(_loadSetCompositionQuantities());
@@ -1344,6 +1368,7 @@ class _ProductListPageState extends State<ProductListPage> {
                           .withValues(alpha: 0.5)),
                 ),
                 child: TextField(
+                  key: const ValueKey('inventory-search-field'),
                   controller: _searchController,
                   onChanged: _onSearchChanged,
                   textAlignVertical: TextAlignVertical.center,
@@ -3792,6 +3817,11 @@ class _ProductListPageState extends State<ProductListPage> {
                 }
               }
             });
+            if (!isSelected) {
+              _ensureFullProduct(product);
+              _ensureStoreSettings(product);
+              _ensureSupplierProbe(product);
+            }
           },
           child: Container(
             decoration: BoxDecoration(
@@ -4415,16 +4445,16 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildMarginCell(ThemeData theme, Product product) {
-    // Calculamos el margen con IVA incluido. El neto se divide por 1.19.
-    final netPrice = product.price / 1.19;
-    final margin = netPrice - product.cost;
-    final marginPct = product.cost > 0 ? margin / product.cost : null;
+    // La misma cuenta que el panel de detalle: precio menos costo con IVA.
+    final productMargin = ProductMargin.of(product);
+    final margin = productMargin.amount;
+    final marginPct = productMargin.percentOverCost;
     final isNegative = margin < 0;
 
     return Tooltip(
       message: marginPct == null
-          ? 'Sin margen'
-          : 'Margen ${(marginPct * 100).toStringAsFixed(1)}%',
+          ? 'Sin costo registrado'
+          : 'Margen ${_ProductListPageState._formatMarginPercent(marginPct)}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
@@ -4441,7 +4471,7 @@ class _ProductListPageState extends State<ProductListPage> {
           ),
           if (marginPct != null)
             Text(
-              '${(marginPct * 100).toStringAsFixed(1)}%',
+              _ProductListPageState._formatMarginPercent(marginPct),
               style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -4450,6 +4480,10 @@ class _ProductListPageState extends State<ProductListPage> {
       ),
     );
   }
+
+  /// Un decimal y coma decimal, igual que el panel de detalle.
+  static String _formatMarginPercent(double percent) =>
+      '${percent.toStringAsFixed(1).replaceAll('.', ',')}%';
 
   Future<void> _handleProductAction(String action, Product product) async {
     if (action == 'edit') {
@@ -4817,212 +4851,185 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildDetailPane(ThemeData theme) {
-    if (_selectedProduct == null) return const SizedBox.shrink();
-    final hasMovementsTab = !_selectedProduct!.isService;
-
-    return Container(
-      decoration: BoxDecoration(
-        border:
-            Border(left: BorderSide(color: theme.colorScheme.outlineVariant)),
-        color: theme.colorScheme.surface,
-      ),
-      child: DefaultTabController(
-        length: hasMovementsTab ? 2 : 1,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header with Tabs and Close Button
-            Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+    final product = _selectedProduct;
+    if (product == null) return const SizedBox.shrink();
+    final id = product.id;
+    final storeBaseUrl = _storeBaseUrl();
+    final storeProductUri = product.isPublished && storeBaseUrl != null
+        ? Uri.tryParse(
+            storeBaseUrl +
+                buildPublicProductPath(
+                  name: product.name,
+                  sku: product.sku,
+                  fallbackProductId: id,
                 ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TabBar(
-                      labelColor: theme.colorScheme.primary,
-                      unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-                      indicatorColor: theme.colorScheme.primary,
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      labelStyle: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                      tabs: [
-                        const Tab(text: 'Detalles'),
-                        if (hasMovementsTab) const Tab(text: 'Movimientos'),
-                      ],
-                    ),
-                  ),
-                  const VerticalDivider(width: 1),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Cerrar panel',
-                    onPressed: () => setState(() => _selectedProduct = null),
-                  ),
-                ],
-              ),
-            ),
+          )
+        : null;
 
-            // Tab Content
-            Expanded(
-              child: TabBarView(
-                children: [
-                  // Tab 1: Details (Existing Content)
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_selectedProduct!.imageUrl != null)
-                          AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                color: Colors.white,
-                                child: Image.network(
-                                    _selectedProduct!.imageUrl!,
-                                    fit: BoxFit.contain),
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 24),
+    final supplierId = product.supplierId;
+    final supplierCode = (product.supplierCode ?? '').trim();
+    final template =
+        supplierId == null ? null : _supplierProductTemplateById[supplierId];
+    final supplierProductUri = template == null || supplierCode.isEmpty
+        ? null
+        : Uri.tryParse(
+            SupplierPortalProbe.fillCodeTemplate(template, supplierCode),
+          );
 
-                        // Header Info
-                        Text(_selectedProduct!.name,
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            )),
-                        const SizedBox(height: 8),
-                        InkWell(
-                          onTap: () {
-                            Clipboard.setData(
-                                ClipboardData(text: _selectedProduct!.sku));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('SKU copiado')));
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'SKU: ${_selectedProduct!.sku}',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontFamily: 'monospace',
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                        ),
+    return ProductDetailPane(
+      key: ValueKey<String>('product-detail-pane-${id ?? product.sku}'),
+      product: product,
+      fullRecord: id == null ? null : _fullProductById[id],
+      isLoadingFullRecord: id != null && _fullProductLoading.contains(id),
+      isServicesScope: _isServicesScope,
+      effectiveStock: _effectiveInventoryQty(product),
+      setAvailability: product.isSet ? _setAvailability(product) : null,
+      quantityInSetByComponentId: _quantityInSetByComponentId,
+      storeProductUri: storeProductUri,
+      // Todo HTTP(S) se abre en el navegador del ERP, nunca en el externo.
+      onOpenUri: (uri) => _openInErpBrowser(uri, title: 'Tienda web'),
+      supplierProductUri: supplierProductUri,
+      onOpenSupplierProduct: (uri) => _openInErpBrowser(
+        uri,
+        title: (product.supplierName ?? '').trim().isEmpty
+            ? null
+            : product.supplierName!.trim(),
+      ),
+      onClose: () => setState(() => _selectedProduct = null),
+      onEdit: () => _openEditor(product),
+      onFilterByCategory: (categoryId) => setState(() {
+        _selectedCategoryId = categoryId;
+        _applyFilters();
+      }),
+      onFilterByBrand: (brandId) => setState(() {
+        _selectedBrandId = brandId;
+        _applyFilters();
+      }),
+      onFilterBySupplier: (supplierId) => setState(() {
+        _selectedSupplierId = supplierId;
+        _applyFilters();
+      }),
+      movementsBuilder: product.isService
+          ? null
+          : (context) => id != null
+              ? ProductMovementsTab(productId: id)
+              : const Center(child: Text('Guarde el producto primero')),
+    );
+  }
 
-                        const SizedBox(height: 32),
+  /// Dirección pública de la tienda (`store_url`), sin la barra final; `null`
+  /// si no está configurada o el servicio no está montado.
+  String? _storeBaseUrl() {
+    final String raw;
+    try {
+      raw = context.read<WebsiteService>().getSetting('store_url', '').trim();
+    } on ProviderNotFoundException {
+      return null;
+    }
+    if (raw.isEmpty) return null;
+    return raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
+  }
 
-                        _buildDetailSection(theme, title: 'Precios', children: [
-                          _buildDetailRow(
-                              theme,
-                              'Precio Venta',
-                              ChileanUtils.formatCurrency(
-                                  _selectedProduct!.price),
-                              isHighlight: true),
-                          _buildDetailRow(
-                              theme,
-                              'Costo',
-                              ChileanUtils.formatCurrency(
-                                  _selectedProduct!.cost)),
-                        ]),
+  /// El ERP no carga la configuración del sitio hasta abrir su módulo. Para
+  /// ofrecer «Abrir en la tienda» sobre un producto publicado, se pide una vez
+  /// por página; si no hay dirección configurada, el enlace simplemente no
+  /// aparece.
+  bool _websiteSettingsRequested = false;
+  void _ensureStoreSettings(Product product) {
+    if (!product.isPublished || _websiteSettingsRequested) return;
+    final WebsiteService website;
+    try {
+      website = context.read<WebsiteService>();
+    } on ProviderNotFoundException {
+      return;
+    }
+    if (website.settings.isNotEmpty || website.isLoading) return;
+    _websiteSettingsRequested = true;
+    unawaited(
+      website.loadSettings().then((_) {
+        if (mounted && _selectedProduct != null) setState(() {});
+      }),
+    );
+  }
 
-                        const SizedBox(height: 24),
-
-                        if (!_selectedProduct!.isService)
-                          _buildDetailSection(theme,
-                              title: 'Inventario',
-                              children: [
-                                _buildDetailRow(
-                                    theme,
-                                    _selectedProduct!.isSet
-                                        ? 'Juegos completos'
-                                        : 'Stock Actual',
-                                    '${_effectiveInventoryQty(_selectedProduct!)}',
-                                    isHighlight: true),
-                                if (_selectedProduct!.isSet)
-                                  _buildDetailRow(
-                                    theme,
-                                    'Cálculo',
-                                    'Desde componentes',
-                                  ),
-                                if (_selectedProduct!.warehouseLocation != null)
-                                  _buildDetailRow(theme, 'Ubicación',
-                                      _selectedProduct!.warehouseLocation!),
-                              ]),
-
-                        const SizedBox(height: 32),
-
-                        SizedBox(
-                          width: double.infinity,
-                          child: AppButton(
-                            text: _isServicesScope
-                                ? 'Editar Servicio'
-                                : 'Editar Producto',
-                            icon: Icons.edit_outlined,
-                            onPressed: () => _openEditor(_selectedProduct!),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  if (hasMovementsTab)
-                    _selectedProduct!.id != null
-                        ? ProductMovementsTab(productId: _selectedProduct!.id!)
-                        : const Center(
-                            child: Text('Guarde el producto primero'),
-                          ),
-                ],
-              ),
-            ),
-          ],
+  /// Abre una página en una pestaña nueva del navegador del ERP, que entra
+  /// solo a los portales con credencial guardada si la sesión venció.
+  void _openInErpBrowser(Uri uri, {String? title}) {
+    final workspaceId = context
+        .read<WorkspaceManager>()
+        .openBrowserWorkspace(uri.toString(), title: title);
+    if (workspaceId == null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo abrir otra pestaña: cierra alguna e '
+              'inténtalo de nuevo.'),
         ),
-      ),
-    );
+      );
+    }
   }
 
-  Widget _buildDetailRow(ThemeData theme, String label, String value,
-      {bool isHighlight = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          Text(value,
-              style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
-                  color: isHighlight
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface)),
-        ],
-      ),
-    );
+  /// La plantilla de URL por código del proveedor, una vez por proveedor.
+  /// Sólo con ella se sabe armar la ficha del producto en su sitio.
+  Future<void> _ensureSupplierProbe(Product product) async {
+    final supplierId = product.supplierId;
+    if (supplierId == null || supplierId.isEmpty) return;
+    if ((product.supplierCode ?? '').trim().isEmpty) return;
+    if (_supplierProductTemplateById.containsKey(supplierId) ||
+        _supplierProbeLoading.contains(supplierId)) {
+      return;
+    }
+    _supplierProbeLoading.add(supplierId);
+    try {
+      final template = await SupplierAvailabilityService(
+        Supabase.instance.client,
+      ).productUrlTemplate(supplierId);
+      if (!mounted) return;
+      setState(() {
+        _supplierProductTemplateById[supplierId] = template;
+        _supplierProbeLoading.remove(supplierId);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Sin plantilla legible el código sigue siendo sólo copiable.
+      setState(() => _supplierProbeLoading.remove(supplierId));
+    }
   }
 
-  Widget _buildDetailSection(ThemeData theme,
-      {required String title, required List<Widget> children}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-        const SizedBox(height: 8),
-        ...children,
-      ],
-    );
+  /// Tras recargar la lista, la selección sigue apuntando a la fila nueva.
+  void _refreshSelectedProduct(List<Product> products) {
+    final selectedId = _selectedProduct?.id;
+    if (selectedId == null) return;
+    for (final product in products) {
+      if (product.id == selectedId) {
+        _selectedProduct = product;
+        return;
+      }
+    }
+  }
+
+  /// La lista trae una proyección corta; el panel de detalle necesita la fila
+  /// completa (especificaciones, etiquetas, atributos, imágenes adicionales).
+  /// Se pide una vez por producto y se conserva hasta la siguiente recarga
+  /// forzada.
+  Future<void> _ensureFullProduct(Product product) async {
+    final id = product.id;
+    if (id == null) return;
+    if (_fullProductById.containsKey(id) || _fullProductLoading.contains(id)) {
+      return;
+    }
+    setState(() => _fullProductLoading.add(id));
+    try {
+      final full = await _inventoryService.getProductById(id);
+      if (!mounted) return;
+      setState(() {
+        if (full != null) _fullProductById[id] = full;
+        _fullProductLoading.remove(id);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Sin la fila completa el panel muestra lo que la lista ya trae.
+      setState(() => _fullProductLoading.remove(id));
+    }
   }
 
   void _showMobileFilters(ThemeData theme) {

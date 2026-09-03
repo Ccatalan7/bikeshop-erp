@@ -424,6 +424,19 @@ ese valor es `Oscuro`, y una versión anterior de esta línea decía `Claro`, qu
 contradecía al handoff y hacía que cada ronda lo dejara distinto. Comprueba el
 check en su sitio antes de cerrar.
 
+**El camino corto es el popover «Apariencia» del sidebar (2026-09-02).** El
+botón `Apariencia` al pie del menú lateral abre un popover con los segmentos
+`Sistema · Claro · Oscuro`, cuyos textos llevan clave: `theme-mode-light` y
+`theme-mode-dark`. Se cambia con `tap --key theme-mode-dark` y se vuelve con
+`tap --key theme-mode-light`; espera ~3 s antes de capturar, porque el frame
+siguiente al toque todavía puede traer el tema anterior. Dos trampas que
+costaron una ronda: **mientras el popover está abierto, su velo se traga todo
+`tap --label` del resto de la app** («sin coincidencias: nada que controlar»
+sobre el sidebar, la búsqueda y el panel, aunque `read` los liste), y **no se
+cierra por identidad**: se cierra con un `click X Y` sobre el velo, tomado del
+`shot` actual, lejos del popover. Confirma el estado final con el `shot` del
+popover reabierto —el segmento activo se ve resaltado— y ciérralo otra vez.
+
 **Si el toggle se resiste, no insistas a ciegas.** El pase oscuro también se
 verifica sin la UI: `payroll_redesign_dark_host_test.dart` monta las superficies
 en 6 presets × 2 modos y `payroll_visual_tokens_test.dart` verifica capas,
@@ -1232,6 +1245,33 @@ Quedaba una conversión viva en un módulo declarado al 100 %.
 > **La regla:** para contar usos de un miembro encadenado, el patrón cruza
 > saltos de línea — `textTheme\s*\.\s*\n?\s*[a-zA-Z]` — o se cuenta con el
 > analizador, no con `grep -c`.
+
+### La celda que ninguna prueba montó es la que explota en la app
+
+**2026-09-03, rediseño de la ficha del proveedor.** La batería de la ficha
+estaba verde —once pruebas, claves auditadas, retorno— y la app real abría la
+ficha en blanco: `BoxConstraints forces an infinite height` en la fila de
+bloques de cifra. Las pruebas montaban la ficha a 390 (donde esa fila envuelve
+y nunca es una `Row`) y a 1100 sólo con fixtures **sin actividad económica**
+(donde la fila no existe). La combinación escritorio × datos reales no tenía
+prueba, y era la única que el dueño iba a mirar.
+
+> **La regla:** antes de dar por verde una superficie, cruza el fixture con
+> el host. Cada rama de `LayoutBuilder` necesita al menos una prueba con los
+> datos que la hacen aparecer, en el ancho que la elige. Y una `Row` con
+> `CrossAxisAlignment.stretch` dentro de una `Column` sin alto acotado pide
+> alto infinito: va dentro de `IntrinsicHeight` o no lleva `stretch`.
+
+### El segmento del popover se toca por su botón, no por su texto
+
+**2026-09-03.** `tap --key theme-mode-dark` resolvía el `Text` del segmento
+(39×16), imprimía la fila como si hubiera tocado, y el tema no cambiaba; el
+`click` de cierre sobre el velo tampoco cerraba, y cuatro capturas «oscuras»
+salieron en claro con el popover encima. Lo que sí cambia el tema es tocar el
+**botón** (`tap --label "Oscuro"`, que `read` lista como `[botón] · 106x32`),
+y el popover se cierra volviendo a tocar `Apariencia`. Comprueba con
+`find --label "Oscuro"`: si sigue encontrándolo, el popover sigue abierto y
+todo `tap` sobre el resto de la app se pierde.
 
 ---
 

@@ -432,12 +432,30 @@ select is(
   true,
   'a full strong candidate blocks the external step'
 );
+-- **Contrato corregido, 2026-08-31.** `eligible` cuenta lo COMPROBADO; el
+-- universo revisado viaja aparte en `reviewed`. Contarlos juntos hacía que una
+-- necesidad real anunciara «49 alternativas» donde 47 no tenían un solo
+-- criterio establecido.
 select is(
   (public.get_supply_need_stock_resolution_v1(
     '99d40000-0000-4000-8000-000000000081'
   ) -> 'counts' ->> 'eligible')::integer,
+  1,
+  'eligible counts what was checked, not what survived the category'
+);
+select is(
+  (public.get_supply_need_stock_resolution_v1(
+    '99d40000-0000-4000-8000-000000000081'
+  ) -> 'counts' ->> 'reviewed')::integer,
   2,
-  'counts describe the whole eligible set, not the page'
+  'and reviewed still describes the whole set, not the page'
+);
+select is(
+  (public.get_supply_need_stock_resolution_v1(
+    '99d40000-0000-4000-8000-000000000081'
+  ) -> 'counts' ->> 'unverified')::integer,
+  1,
+  'with the unverified one accounted for, not hidden'
 );
 select is(
   (public.get_supply_need_stock_resolution_v1(
@@ -584,13 +602,51 @@ select throws_ok(
   'another shop product is unreachable through convergence'
 );
 
--- Elegir el `unverified` es legítimo: la decisión es de una persona.
+-- **Corrección del contrato, 2026-08-31.** Hasta hoy esta prueba afirmaba que
+-- elegir el `unverified` era legítimo «porque la decisión es de una persona».
+-- La prueba real lo desmintió: la pantalla presentaba 49 alternativas donde 47
+-- no tenían un solo criterio establecido, y `Elegir producto` convertía una
+-- coincidencia de categoría en la identidad de la necesidad. La categoría dice
+-- qué revisar; la compatibilidad la prueban la identidad y los criterios.
+-- Mirar una fila sin verificar sigue siendo legítimo; declararla la respuesta
+-- del taller con un botón, no.
+select throws_ok(
+  $$select public.confirm_supply_need_family_choice_v1(
+      '99d40000-0000-4000-8000-000000000081', 2, 1,
+      '99d40000-0000-4000-8000-000000000063', 'b1-confirm-unverified'
+    )$$,
+  '23514',
+  'El producto no está comprobado contra los criterios de la necesidad.',
+  'an unverified alternative cannot be confirmed: nothing was established'
+);
+
+-- Y el rechazo no escribe: la necesidad sigue sin identidad y sin recibo.
+select is(
+  (
+    select need.identity_state
+    from public.supply_needs need
+    where need.id = '99d40000-0000-4000-8000-000000000081'
+  ),
+  'unresolved',
+  'a rejected confirmation leaves the need exactly as it was'
+);
+select is(
+  (
+    select count(*)::int
+    from public.supply_need_events event
+    where event.operation_key = 'b1-confirm-unverified'
+  ),
+  0,
+  'and it writes no receipt: there is nothing to replay'
+);
+
+-- Lo comprobado sí converge.
 select lives_ok(
   $$select public.confirm_supply_need_family_choice_v1(
       '99d40000-0000-4000-8000-000000000081', 2, 1,
-      '99d40000-0000-4000-8000-000000000063', 'b1-confirm'
+      '99d40000-0000-4000-8000-000000000061', 'b1-confirm'
     )$$,
-  'an explicit choice of an unverified alternative is allowed'
+  'a checked alternative is what converges the need'
 );
 
 select is(
@@ -599,7 +655,7 @@ select is(
     from public.supply_needs need
     where need.id = '99d40000-0000-4000-8000-000000000081'
   ),
-  'confirmed:99d40000-0000-4000-8000-000000000063',
+  'confirmed:99d40000-0000-4000-8000-000000000061',
   'the need converges to an exact product'
 );
 
@@ -644,7 +700,7 @@ select is(
     order by revision.revision_no desc
     limit 1
   ),
-  'unverified',
+  'strong',
   'the evidence records why the product was eligible, honestly'
 );
 select ok(
@@ -693,7 +749,7 @@ select is(
   (
     (public.confirm_supply_need_family_choice_v1(
       '99d40000-0000-4000-8000-000000000081', 2, 1,
-      '99d40000-0000-4000-8000-000000000063', 'b1-confirm'
+      '99d40000-0000-4000-8000-000000000061', 'b1-confirm'
     ) ->> 'replay')::boolean
   ),
   true,
@@ -709,16 +765,117 @@ select is(
   'replay created no second interpretation'
 );
 
+-- **Confirmar exige evidencia COMPLETA, no «algo coincide».** El producto 61
+-- prueba su criterio por ficha; uno que sólo tuviera parte establecida y el
+-- resto sin resolver no puede convergir la necesidad, que es el caso real de
+-- las pastillas con disipador.
+select is(
+  public.supply_need_evidence_is_complete_internal_v1(
+    '[{"field":"a","source":"product_spec"},{"field":"b","source":"unresolved"}]'::jsonb
+  ),
+  false,
+  'a criterion nobody could read leaves the evidence incomplete'
+);
+select is(
+  public.supply_need_evidence_is_complete_internal_v1(
+    '[{"field":"a","source":"product_spec"},{"field":"b","source":"identity_fallback"}]'::jsonb
+  ),
+  true,
+  'ficha and curated name both count as established'
+);
+
+-- ───────── el plan también revalida: la UI no es la compuerta ──────────────
+--
+-- **Una identidad fijada antes puede dejar de estar comprobada.** Un cliente
+-- publicado anterior —o el propio taller antes de precisar los criterios— pudo
+-- confirmar un producto que hoy el juicio no sostiene. Los dos caminos del plan
+-- lo revalidan bajo el mismo lock que ya toman, y rechazan **sin escribir**.
+update public.supply_needs
+set product_id = '99d40000-0000-4000-8000-000000000063',
+    identity_state = 'confirmed',
+    internal_stock_rejection_reason = 'Motivo.'
+where id = '99d40000-0000-4000-8000-000000000081';
+
+create temporary table plan_baseline_b1 as
+select
+  (select count(*) from public.purchase_plans) as planes,
+  (select count(*) from public.purchase_plan_lines) as lineas,
+  (select count(*) from public.supply_need_events) as eventos;
+
+select throws_ok(
+  format(
+    $$select public.prepare_purchase_plan_product_v1(
+        null, null, %L, %L, 1, 'balanced', 'b1-plan-product-unverified')$$,
+    '99d40000-0000-4000-8000-000000000081',
+    '99d40000-0000-4000-8000-000000000063'
+  ),
+  '23514',
+  'El producto no está comprobado contra los criterios de la necesidad.',
+  'quoting an unverified product into the plan is refused'
+);
+
+select throws_ok(
+  format(
+    $$select public.prepare_purchase_plan_line_v1(
+        null, null, %L, %L, 1, 'balanced', 'b1-plan-line-unverified')$$,
+    '99d40000-0000-4000-8000-000000000081',
+    '99d40000-0000-4000-8000-000000000061'
+  ),
+  '23514',
+  'El producto no está comprobado contra los criterios de la necesidad.',
+  'and so is planning an external candidate over that same identity'
+);
+
+-- **Rechazar no escribe.** Ni plan, ni línea, ni recibo que después se replique.
+select is(
+  (
+    select (select count(*) from public.purchase_plans) - planes
+         + (select count(*) from public.purchase_plan_lines) - lineas
+         + (select count(*) from public.supply_need_events) - eventos
+    from plan_baseline_b1
+  ),
+  0::bigint,
+  'a refused plan write leaves no plan, no line and no receipt behind'
+);
+
+-- Devuelto a la identidad comprobada, el plan vuelve a ser posible.
+update public.supply_needs
+set product_id = '99d40000-0000-4000-8000-000000000061'
+where id = '99d40000-0000-4000-8000-000000000081';
+select lives_ok(
+  format(
+    $$select public.prepare_purchase_plan_product_v1(
+        null, null, %L, %L, 1, 'balanced', 'b1-plan-product-checked')$$,
+    '99d40000-0000-4000-8000-000000000081',
+    '99d40000-0000-4000-8000-000000000061'
+  ),
+  'a checked identity still reaches the plan: the guard is evidence, not a wall'
+);
+
 -- El replay feliz no basta: lo que hay que impedir es que la misma clave sirva
 -- para una petición distinta. Debe fallar **antes** de tocar estado.
 select throws_ok(
   $$select public.confirm_supply_need_family_choice_v1(
       '99d40000-0000-4000-8000-000000000081', 2, 1,
-      '99d40000-0000-4000-8000-000000000061', 'b1-confirm'
+      '99d40000-0000-4000-8000-000000000063', 'b1-confirm'
     )$$,
   '23505',
   'La clave de operación pertenece a otra confirmación.',
   'the same operation key with a different product is refused'
+);
+
+-- **El replay manda sobre la regla nueva.** Una escritura ya hecha se devuelve
+-- igual que siempre: reintentarla no puede fallar por un criterio que no
+-- existía cuando se escribió. Por eso la revalidación va después del recibo.
+select is(
+  (
+    (public.confirm_supply_need_family_choice_v1(
+      '99d40000-0000-4000-8000-000000000081', 2, 1,
+      '99d40000-0000-4000-8000-000000000061', 'b1-confirm'
+    ) ->> 'replay')::boolean
+  ),
+  true,
+  'an already recorded confirmation keeps replaying, rule or no rule'
 );
 select is(
   (
@@ -726,7 +883,7 @@ select is(
     from public.supply_needs need
     where need.id = '99d40000-0000-4000-8000-000000000081'
   ),
-  '99d40000-0000-4000-8000-000000000063'::uuid,
+  '99d40000-0000-4000-8000-000000000061'::uuid,
   'and the refusal left the confirmed product untouched'
 );
 select is(

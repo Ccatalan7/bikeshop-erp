@@ -623,63 +623,118 @@ class SupplyNeedBar extends StatelessWidget {
           bottom: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
       ),
-      child: editing
-          ? editor
-          : Wrap(
-              spacing: 11,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(title, style: PurchaseType.sectionTitle),
+      child: editing ? editor : _resumen(context),
+    );
+  }
+
+  /// El resumen y sus dos acciones.
+  ///
+  /// **Las acciones son un grupo, no dos hermanos sueltos.** Estaban los cinco
+  /// hijos en un mismo `Wrap`, y con el resumen largo la primera línea se
+  /// llenaba justo después de «Editar necesidad»: «Criterios» caía sola a la
+  /// línea siguiente, pegada al margen izquierdo, mientras su pareja quedaba
+  /// arriba a la derecha. Dos acciones sobre el mismo objeto en esquinas
+  /// opuestas. Ahora viajan juntas: envueltas se envuelven las dos.
+  Widget _resumen(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final acciones = _acciones(context);
+        final descripcion = _descripcion(context);
+        // En una barra ancha manda la disposición de siempre: lo descriptivo a
+        // la izquierda y el grupo de acciones al extremo derecho. Estrecha, se
+        // apilan — que es lo que ya hacían bien el tablet y el teléfono.
+        if (constraints.maxWidth >= 700) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Expanded(child: descripcion),
+              const SizedBox(width: 11),
+              acciones,
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            descripcion,
+            const SizedBox(height: 8),
+            acciones,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _acciones(BuildContext context) {
+    return Wrap(
+      spacing: 11,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        OutlinedButton(
+          key: const ValueKey('edit-supply-need-inline'),
+          onPressed: onEdit,
+          child: const Text('Editar necesidad'),
+        ),
+        if (onOpenCriteria != null)
+          TextButton(
+            key: const ValueKey('open-need-criteria'),
+            onPressed: onOpenCriteria,
+            // Frames 01/02/14/15/16/19/26: la etiqueta es «Criterios».
+            child: const Text('Criterios'),
+          ),
+      ],
+    );
+  }
+
+  Widget _descripcion(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 11,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        Text(title, style: PurchaseType.sectionTitle),
+        // **La cantidad, el separador y el resumen son UNA celda.** El
+        // contrato pide «cantidad + separador `|` + resumen» (NOTES §44-45), y
+        // con la cantidad como hermano suelto el `|` encabezaba la línea
+        // envuelta: un glifo colgando de nada al margen izquierdo. Juntos no se
+        // pueden separar, y el separador siempre queda entre las dos cosas que
+        // separa.
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                quantityLabel,
+                style: PurchaseType.metaNumeric.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (criteriaSummary.isNotEmpty) ...<Widget>[
+                const SizedBox(width: 11),
                 Text(
-                  quantityLabel,
-                  style: PurchaseType.metaNumeric.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  '|',
+                  style: PurchaseType.meta.copyWith(
+                    color: PurchaseTokens.of(context).hair,
                   ),
                 ),
-                if (criteriaSummary.isNotEmpty)
-                  // El contrato pide «cantidad + separador `|` + resumen»
-                  // (NOTES §44-45). El separador viaja **dentro** de esta
-                  // celda y no como hermano del `Wrap`: suelto podía quedar
-                  // como primer carácter de la línea siguiente, colgando de
-                  // nada.
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '|',
-                          style: PurchaseType.meta.copyWith(
-                            color: PurchaseTokens.of(context).hair,
-                          ),
-                        ),
-                        const SizedBox(width: 11),
-                        Flexible(
-                          child: Text(
-                            criteriaSummary,
-                            style: PurchaseType.meta.copyWith(
-                              color: PurchaseTokens.of(context).inkMuted,
-                            ),
-                          ),
-                        ),
-                      ],
+                const SizedBox(width: 11),
+                Flexible(
+                  child: Text(
+                    criteriaSummary,
+                    style: PurchaseType.meta.copyWith(
+                      color: PurchaseTokens.of(context).inkMuted,
                     ),
                   ),
-                OutlinedButton(
-                  key: const ValueKey('edit-supply-need-inline'),
-                  onPressed: onEdit,
-                  child: const Text('Editar necesidad'),
                 ),
-                if (onOpenCriteria != null)
-                  TextButton(
-                    key: const ValueKey('open-need-criteria'),
-                    onPressed: onOpenCriteria,
-                    // Frames 01/02/14/15/16/19/26: la etiqueta es «Criterios».
-                    child: const Text('Criterios'),
-                  ),
               ],
-            ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

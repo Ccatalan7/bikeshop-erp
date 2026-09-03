@@ -2188,6 +2188,22 @@ class _FakeSupplierEditorDataSource implements SupplierEditorDataSource {
   }
 
   @override
+  Future<SupplierSalesRepCommandResult> updateSalesRep(
+    UpdateSupplierSalesRepCommand command,
+  ) async {
+    return SupplierSalesRepCommandResult(
+      operationId: command.operationId,
+      tenantId: 'tenant-1',
+      supplierId: command.supplierId,
+      name: command.name,
+      phone: command.phone,
+      email: command.email,
+      updatedAt: DateTime.now(),
+      idempotentReplay: false,
+    );
+  }
+
+  @override
   Future<SupplierEngagementCommandResult> createEngagement(
     CreateSupplierEngagementCommand command,
   ) async {

@@ -263,7 +263,8 @@ class _ConversationTileState extends State<ConversationTile> {
     Color accentColor,
     bool hasUnread,
   ) {
-    final initials = _initialsFor(title);
+    // «Empresa · persona» sigue siendo la empresa en el avatar.
+    final initials = _initialsFor(title.split(' · ').first);
     final avatarUrl = conv.contextHint?.customerImageUrl?.trim();
     final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
     final fallbackAvatar = _buildInitialsAvatar(

@@ -250,6 +250,65 @@
           ]
         },
         {
+          "source": "/app/open",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-store, max-age=0"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "no-referrer"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            }
+          ]
+        },
+        {
+          "source": "/app-open.html",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "text/html; charset=utf-8"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-store, max-age=0"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "no-referrer"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            }
+          ]
+        },
+        {
+          "source": "/.well-known/assetlinks.json",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=0, must-revalidate"
+            }
+          ]
+        },
+        {
           "source": "/productos",
           "headers": [
             {
@@ -611,6 +670,10 @@
         }
       ],
       "rewrites": [
+        {
+          "source": "/app/open",
+          "destination": "/app-open.html"
+        },
         {
           "source": "**",
           "destination": "/index.html"

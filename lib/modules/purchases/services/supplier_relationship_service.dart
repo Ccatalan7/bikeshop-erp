@@ -172,6 +172,205 @@ class UpdateSupplierOcrTemplateCommand {
   final SupplierOcrTemplate template;
 }
 
+/// El vendedor del proveedor: la persona a la que el ERP le escribe por
+/// WhatsApp. Comando estrecho e idempotente, calcado del de la plantilla OCR,
+/// porque el perfil (`save_supplier_relationship_profile`) no lo acepta.
+class UpdateSupplierSalesRepCommand {
+  UpdateSupplierSalesRepCommand({
+    required this.operationId,
+    required this.supplierId,
+    required this.expectedUpdatedAt,
+    this.name,
+    this.phone,
+    this.email,
+  }) {
+    _validateOperationId(operationId);
+    if (supplierId.trim().isEmpty) {
+      throw ArgumentError.value(
+        supplierId,
+        'supplierId',
+        'A durable supplier id is required',
+      );
+    }
+  }
+
+  final String operationId;
+  final String supplierId;
+  final DateTime expectedUpdatedAt;
+  final String? name;
+  final String? phone;
+  final String? email;
+
+  /// Un espacio en blanco es «sin dato», no un dato.
+  Map<String, dynamic> toJson() => {
+        'name': _blankToNull(name),
+        'phone': _blankToNull(phone),
+        'email': _blankToNull(email),
+      };
+
+  static String? _blankToNull(String? value) {
+    final trimmed = value?.trim() ?? '';
+    return trimmed.isEmpty ? null : trimmed;
+  }
+}
+
+@immutable
+class SupplierSalesRepCommandResult {
+  const SupplierSalesRepCommandResult({
+    required this.operationId,
+    required this.tenantId,
+    required this.supplierId,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.updatedAt,
+    required this.idempotentReplay,
+  });
+
+  factory SupplierSalesRepCommandResult.fromJson(Map<String, dynamic> json) {
+    final salesRep = json['sales_rep'];
+    final rep = salesRep is Map
+        ? Map<String, dynamic>.from(salesRep)
+        : const <String, dynamic>{};
+    return SupplierSalesRepCommandResult(
+      operationId: _requiredRowText(json, 'operation_id'),
+      tenantId: _requiredRowText(json, 'tenant_id'),
+      supplierId: _requiredRowText(json, 'supplier_id'),
+      name: _nullableRowText(rep, 'name'),
+      phone: _nullableRowText(rep, 'phone'),
+      email: _nullableRowText(rep, 'email'),
+      updatedAt: DateTime.parse(_requiredRowText(json, 'updated_at')).toUtc(),
+      idempotentReplay: json['idempotent_replay'] as bool? ?? false,
+    );
+  }
+
+  final String operationId;
+  final String tenantId;
+  final String supplierId;
+  final String? name;
+  final String? phone;
+  final String? email;
+  final DateTime updatedAt;
+  final bool idempotentReplay;
+
+  static String? _nullableRowText(Map<String, dynamic> row, String key) {
+    final value = row[key]?.toString().trim() ?? '';
+    return value.isEmpty ? null : value;
+  }
+}
+
+/// Crea (sin `contactId`) o edita una persona del proveedor. `isPrimary`
+/// verdadero la vuelve el destino del ERP y baja a la anterior.
+class SaveSupplierContactCommand {
+  SaveSupplierContactCommand({
+    required this.operationId,
+    required this.supplierId,
+    required this.name,
+    this.contactId,
+    this.expectedUpdatedAt,
+    this.role,
+    this.phone,
+    this.email,
+    this.notes,
+    this.isPrimary,
+  }) {
+    _validateOperationId(operationId);
+    if (supplierId.trim().isEmpty) {
+      throw ArgumentError.value(
+        supplierId,
+        'supplierId',
+        'A durable supplier id is required',
+      );
+    }
+    if (name.trim().isEmpty) {
+      throw ArgumentError.value(name, 'name', 'A contact needs a name');
+    }
+    if (contactId != null && expectedUpdatedAt == null) {
+      throw ArgumentError.value(
+        expectedUpdatedAt,
+        'expectedUpdatedAt',
+        'Editing a contact requires its expected updated_at',
+      );
+    }
+  }
+
+  final String operationId;
+  final String supplierId;
+  final String? contactId;
+  final DateTime? expectedUpdatedAt;
+  final String name;
+  final String? role;
+  final String? phone;
+  final String? email;
+  final String? notes;
+
+  /// `null` deja la marca como está; `true`/`false` la cambian.
+  final bool? isPrimary;
+
+  Map<String, dynamic> toJson() => {
+        'name': name.trim(),
+        'role': UpdateSupplierSalesRepCommand._blankToNull(role),
+        'phone': UpdateSupplierSalesRepCommand._blankToNull(phone),
+        'email': UpdateSupplierSalesRepCommand._blankToNull(email),
+        'notes': UpdateSupplierSalesRepCommand._blankToNull(notes),
+        if (isPrimary != null) 'is_primary': isPrimary,
+      };
+}
+
+/// Desactiva (conserva hilos y archivos, deja de ser principal) o reactiva.
+class SetSupplierContactStatusCommand {
+  SetSupplierContactStatusCommand({
+    required this.operationId,
+    required this.supplierId,
+    required this.contactId,
+    required this.expectedUpdatedAt,
+    required this.isActive,
+  }) {
+    _validateOperationId(operationId);
+    if (supplierId.trim().isEmpty || contactId.trim().isEmpty) {
+      throw ArgumentError('A durable supplier and contact id are required');
+    }
+  }
+
+  final String operationId;
+  final String supplierId;
+  final String contactId;
+  final DateTime expectedUpdatedAt;
+  final bool isActive;
+}
+
+@immutable
+class SupplierContactCommandResult {
+  const SupplierContactCommandResult({
+    required this.operationId,
+    required this.tenantId,
+    required this.supplierId,
+    required this.contact,
+    required this.idempotentReplay,
+  });
+
+  factory SupplierContactCommandResult.fromJson(Map<String, dynamic> json) {
+    final contactJson = json['contact'];
+    return SupplierContactCommandResult(
+      operationId: _requiredRowText(json, 'operation_id'),
+      tenantId: _requiredRowText(json, 'tenant_id'),
+      supplierId: _requiredRowText(json, 'supplier_id'),
+      contact: SupplierContact.fromJson(
+        contactJson is Map
+            ? Map<String, dynamic>.from(contactJson)
+            : const <String, dynamic>{},
+      ),
+      idempotentReplay: json['idempotent_replay'] as bool? ?? false,
+    );
+  }
+
+  final String operationId;
+  final String tenantId;
+  final String supplierId;
+  final SupplierContact contact;
+  final bool idempotentReplay;
+}
+
 @immutable
 class SupplierOcrTemplateCommandResult {
   const SupplierOcrTemplateCommandResult({
@@ -253,6 +452,10 @@ abstract interface class SupplierRelationshipRepository {
   });
 
   Future<List<Map<String, dynamic>>> fetchTagRows({
+    required String tenantId,
+    required String supplierId,
+  });
+  Future<List<Map<String, dynamic>>> fetchContactRows({
     required String tenantId,
     required String supplierId,
   });
@@ -1028,6 +1231,24 @@ abstract interface class SupplierRelationshipCommandGateway {
     required UpdateSupplierOcrTemplateCommand command,
   });
 
+  Future<Map<String, dynamic>> updateSalesRep({
+    required String tenantId,
+    required UpdateSupplierSalesRepCommand command,
+  });
+  Future<Map<String, dynamic>> saveContact({
+    required String tenantId,
+    required SaveSupplierContactCommand command,
+  });
+  Future<Map<String, dynamic>> setContactStatus({
+    required String tenantId,
+    required SetSupplierContactStatusCommand command,
+  });
+  Future<Map<String, dynamic>> updateImageUrl({
+    required String tenantId,
+    required String supplierId,
+    required String? imageUrl,
+  });
+
   Future<Map<String, dynamic>> createEngagement({
     required String tenantId,
     required CreateSupplierEngagementCommand command,
@@ -1125,6 +1346,84 @@ class SupabaseSupplierRelationshipCommandGateway
       },
     );
     return _responseMap(response, 'update_supplier_ocr_template');
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateSalesRep({
+    required String tenantId,
+    required UpdateSupplierSalesRepCommand command,
+  }) async {
+    final response = await _client.rpc(
+      'update_supplier_sales_rep',
+      params: {
+        'p_tenant_id': tenantId,
+        'p_supplier_id': command.supplierId,
+        'p_expected_updated_at':
+            command.expectedUpdatedAt.toUtc().toIso8601String(),
+        'p_operation_id': command.operationId,
+        'p_sales_rep': command.toJson(),
+      },
+    );
+    return _responseMap(response, 'update_supplier_sales_rep');
+  }
+
+  @override
+  Future<Map<String, dynamic>> saveContact({
+    required String tenantId,
+    required SaveSupplierContactCommand command,
+  }) async {
+    final response = await _client.rpc(
+      'save_supplier_contact',
+      params: {
+        'p_tenant_id': tenantId,
+        'p_supplier_id': command.supplierId,
+        'p_contact_id': command.contactId,
+        'p_expected_updated_at':
+            command.expectedUpdatedAt?.toUtc().toIso8601String(),
+        'p_operation_id': command.operationId,
+        'p_contact': command.toJson(),
+      },
+    );
+    return _responseMap(response, 'save_supplier_contact');
+  }
+
+  @override
+  Future<Map<String, dynamic>> setContactStatus({
+    required String tenantId,
+    required SetSupplierContactStatusCommand command,
+  }) async {
+    final response = await _client.rpc(
+      'set_supplier_contact_status',
+      params: {
+        'p_tenant_id': tenantId,
+        'p_supplier_id': command.supplierId,
+        'p_contact_id': command.contactId,
+        'p_expected_updated_at':
+            command.expectedUpdatedAt.toUtc().toIso8601String(),
+        'p_operation_id': command.operationId,
+        'p_is_active': command.isActive,
+      },
+    );
+    return _responseMap(response, 'set_supplier_contact_status');
+  }
+
+  /// La imagen del proveedor es una columna simple de `suppliers` cubierta
+  /// por la política de tenant: se escribe directo, sin recibo, porque
+  /// reemplazarla dos veces deja el mismo estado.
+  @override
+  Future<Map<String, dynamic>> updateImageUrl({
+    required String tenantId,
+    required String supplierId,
+    required String? imageUrl,
+  }) async {
+    final response = await _client
+        .from('suppliers')
+        .update({'image_url': imageUrl})
+        .eq('tenant_id', tenantId)
+        .eq('id', supplierId)
+        .select('id, tenant_id, image_url')
+        .single();
+    return _responseMap(response, 'update_supplier_image');
   }
 
   @override
@@ -1608,6 +1907,28 @@ class SupabaseSupplierRelationshipRepository
   }
 
   @override
+  Future<List<Map<String, dynamic>>> fetchContactRows({
+    required String tenantId,
+    required String supplierId,
+  }) {
+    return _fetchAll(
+      (from, to) => _client
+          .from('supplier_contacts')
+          .select(
+            'id, tenant_id, supplier_id, name, role, phone, email, notes, '
+            'is_primary, is_active, deactivated_at, source, updated_at',
+          )
+          .eq('tenant_id', tenantId)
+          .eq('supplier_id', supplierId)
+          .order('is_primary', ascending: false)
+          .order('is_active', ascending: false)
+          .order('name')
+          .order('id')
+          .range(from, to),
+    );
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> fetchTagRows({
     required String tenantId,
     required String supplierId,
@@ -1854,6 +2175,11 @@ class SupplierRelationshipService {
   static const maximumPageSize = 500;
   static const recentEvidenceLimit = 100;
 
+  /// Sube en uno cada vez que un comando de proveedor confirma en el
+  /// servidor. Quien cachea proveedores (`PurchaseService`) lo escucha para
+  /// invalidar: así la ficha no necesita conocer a sus lectores.
+  final ValueNotifier<int> supplierCommandRevision = ValueNotifier<int>(0);
+
   final TenantService _tenantService;
   final SupplierRelationshipRepository _repository;
   final LegacySupplierReadRepository _legacyRepository;
@@ -1907,6 +2233,104 @@ class SupplierRelationshipService {
     if (result.tenantId != lease.scope.tenantId ||
         result.supplierId != command.supplierId ||
         result.operationId != command.operationId) {
+      throw const AuthorityScopeChangedException();
+    }
+    return result;
+  }
+
+  Future<SupplierSalesRepCommandResult> updateSalesRep(
+    UpdateSupplierSalesRepCommand command,
+  ) async {
+    final lease = await _requireLease();
+    final response = await _runCommand(
+      lease,
+      (gateway) => gateway.updateSalesRep(
+        tenantId: lease.scope.tenantId,
+        command: command,
+      ),
+    );
+    final result = SupplierSalesRepCommandResult.fromJson(response);
+    if (result.tenantId != lease.scope.tenantId ||
+        result.supplierId != command.supplierId ||
+        result.operationId != command.operationId) {
+      throw const AuthorityScopeChangedException();
+    }
+    return result;
+  }
+
+  /// Las personas de un proveedor, principal primero, activas antes que
+  /// desactivadas.
+  Future<List<SupplierContact>> listSupplierContacts(String supplierId) async {
+    _requireId(supplierId, 'supplierId');
+    final lease = await _requireLease();
+    final rows = await _repository.fetchContactRows(
+      tenantId: lease.scope.tenantId,
+      supplierId: supplierId,
+    );
+    await _verifyLease(lease);
+    _verifyRows(rows, lease.scope.tenantId);
+    return rows.map(SupplierContact.fromJson).toList(growable: false);
+  }
+
+  Future<SupplierContactCommandResult> saveSupplierContact(
+    SaveSupplierContactCommand command,
+  ) async {
+    final lease = await _requireLease();
+    final response = await _runCommand(
+      lease,
+      (gateway) => gateway.saveContact(
+        tenantId: lease.scope.tenantId,
+        command: command,
+      ),
+    );
+    return _verifiedContactResult(
+        response, lease, command.supplierId, command.operationId);
+  }
+
+  Future<SupplierContactCommandResult> setSupplierContactStatus(
+    SetSupplierContactStatusCommand command,
+  ) async {
+    final lease = await _requireLease();
+    final response = await _runCommand(
+      lease,
+      (gateway) => gateway.setContactStatus(
+        tenantId: lease.scope.tenantId,
+        command: command,
+      ),
+    );
+    return _verifiedContactResult(
+        response, lease, command.supplierId, command.operationId);
+  }
+
+  /// Cambia o quita la imagen del proveedor. Sube la revisión de comandos
+  /// como cualquier otra escritura, para que las cachés relean.
+  Future<void> updateSupplierImage(String supplierId, String? imageUrl) async {
+    _requireId(supplierId, 'supplierId');
+    final lease = await _requireLease();
+    final response = await _runCommand(
+      lease,
+      (gateway) => gateway.updateImageUrl(
+        tenantId: lease.scope.tenantId,
+        supplierId: supplierId,
+        imageUrl: imageUrl,
+      ),
+    );
+    if (response['tenant_id']?.toString() != lease.scope.tenantId ||
+        response['id']?.toString() != supplierId) {
+      throw const AuthorityScopeChangedException();
+    }
+  }
+
+  SupplierContactCommandResult _verifiedContactResult(
+    Map<String, dynamic> response,
+    AuthorityCacheLease lease,
+    String supplierId,
+    String operationId,
+  ) {
+    final result = SupplierContactCommandResult.fromJson(response);
+    if (result.tenantId != lease.scope.tenantId ||
+        result.supplierId != supplierId ||
+        result.operationId != operationId) {
       throw const AuthorityScopeChangedException();
     }
     return result;
@@ -2155,6 +2579,8 @@ class SupplierRelationshipService {
           _commandGateway ??= SupabaseSupplierRelationshipCommandGateway();
       final response = await operation(gateway);
       await _verifyLease(lease);
+      // Confirmó en el servidor: quien cachee proveedores debe releer.
+      supplierCommandRevision.value++;
       return response;
     } catch (error) {
       if (_isFoundationUnavailable(error)) {
@@ -2470,6 +2896,30 @@ class SupplierRelationshipService {
     }
   }
 
+  /// Las tres columnas del vendedor como claves del perfil, o `null` si la
+  /// fila no se pudo leer: la ficha sigue mostrándose sin vendedor antes que
+  /// no mostrarse.
+  Future<Map<String, dynamic>?> _legacySalesRepRow(
+    String tenantId,
+    String supplierId,
+  ) async {
+    try {
+      final supplier = await _legacyRepository.fetchOne(
+        tenantId: tenantId,
+        supplierId: supplierId,
+      );
+      if (supplier == null || supplier.tenantId != tenantId) return null;
+      return <String, dynamic>{
+        'sales_rep_name': supplier.salesRepName,
+        'sales_rep_phone': supplier.salesRepPhone,
+        'sales_rep_email': supplier.salesRepEmail,
+        'image_url': supplier.imageUrl,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<SupplierProfile?> _getFoundationProfile(
     AuthorityCacheLease lease,
     String supplierId,
@@ -2490,6 +2940,10 @@ class SupplierRelationshipService {
       tenantId: tenantId,
       partyId: partyId,
     );
+    // El vendedor (`sales_rep_*`) no está en la vista de perfil y no vale
+    // rehacer sus 1.600 líneas por tres columnas: se lee de la fila del
+    // proveedor, que ya expone el select sin secretos.
+    final salesRepFuture = _legacySalesRepRow(tenantId, supplierId);
     final firstResultsFuture = Future.wait([
       _repository.fetchIdentifierRows(tenantId: tenantId, partyId: partyId),
       _repository.fetchRoleRows(tenantId: tenantId, supplierId: supplierId),
@@ -2601,7 +3055,11 @@ class SupplierRelationshipService {
       supplierId,
     );
 
-    final summary = SupplierProfile.fromJson(base);
+    final salesRep = await salesRepFuture;
+    final summary = SupplierProfile.fromJson({
+      ...base,
+      if (salesRep != null) ...salesRep,
+    });
     final party = ExternalParty.fromJson({
       ...(externalPartyRow ?? base),
       'id': partyId,

@@ -313,3 +313,32 @@ The `Novedades` button can only appear before restart once the currently
 installed app already contains this UI. The first update that introduces the
 feature bootstraps that capability; subsequent prepared updates can show their
 notes in the ready prompt.
+
+## Shared page links open through a static bridge (2026-09-02)
+
+`Copiar enlace de página` produces `https://vinabike.cl/app/open?route=…`,
+because WhatsApp and mail clients only make HTTPS links tappable. On macOS the
+browser step cannot be skipped: opening the app directly from an HTTPS link
+requires Apple Universal Links, i.e. a Developer ID-signed app with the
+`com.apple.developer.associated-domains` entitlement (`applinks:vinabike.cl`)
+and the matching provisioning profile. This channel ships an ad-hoc-signed
+bundle (`Signature=adhoc`, no team), so the OS never associates the domain with
+the app, even though `/.well-known/apple-app-site-association` is already
+published for team `FTKGRTMZG5`. That association starts working the day the
+bundle is signed with the team certificate; nothing else on the web side is
+missing.
+
+What was fixed instead: `/app/open` on `vinabike.cl` no longer boots the full
+Flutter storefront. Firebase rewrites it to `web/app-open.html`, a few-KB
+static page that hands the route to the app through `vinabike://app/open`
+the moment its body is parsed, and keeps `Abrir en la app` / `Abrir en el
+navegador` visible for the case where the handoff is blocked. The handoff must
+fire from the end of the body, not from `<head>`: navigating to a custom scheme
+from `<head>` makes Chromium cancel the rest of the document, and the fallback
+buttons never render.
+
+Android is the platform that can go straight to the app: `AndroidManifest.xml`
+declares an `autoVerify` intent filter for `https://vinabike.cl/app/open`, and
+`web/.well-known/assetlinks.json` publishes the release certificate SHA-256
+from `docs/ANDROID_DIRECT_DISTRIBUTION.md`. It takes effect for phones once an
+APK built with that manifest is installed.

@@ -45,6 +45,11 @@ class VbNotice extends StatelessWidget {
   final String? glyph;
 
   /// Acción opcional al final — «Abrir Asistencias ↗» en el ejemplo de la guía.
+  ///
+  /// Va en la misma fila que el texto, así que en una columna angosta (el
+  /// panel de chat mide ~340 px) un botón de 200 px deja el texto a una
+  /// letra por línea (2026-09-02). Ahí la acción se pone como botón debajo
+  /// del aviso, no aquí.
   final Widget? action;
 
   VinabikeSemanticTone _tone(VinabikeThemeRoles roles) {

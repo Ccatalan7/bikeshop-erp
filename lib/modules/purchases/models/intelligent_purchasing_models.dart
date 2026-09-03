@@ -1215,6 +1215,7 @@ class SupplyStockOption {
     required this.availableToPromise,
     required this.coverage,
     required this.matchState,
+    this.evidenceComplete,
     required this.blocksExternal,
     this.sku,
     this.media = ProductMedia.empty,
@@ -1292,8 +1293,25 @@ class SupplyStockOption {
         'no_erp_history',
       }.contains(evidenceState);
 
+  /// **Comprobado es COMPLETO, y lo decide el servidor.** `weak` significaba
+  /// «algo se estableció y nada contradijo» con el resto sin resolver: dos
+  /// pastillas `METALICA CON DISIPADOR` contaban como alternativas de una
+  /// necesidad de compuesto orgánico y sin aletas porque sólo el sistema de
+  /// freno estaba establecido. La completitud se calcula sobre el detalle
+  /// entero y viaja por fila; acá no se reconstruye.
+  final bool? evidenceComplete;
+
+  /// Respaldo para un servidor anterior que no publica `evidenceComplete`:
+  /// sólo `strong` prueba todos los criterios por ficha. `weak` no, y ése es
+  /// justamente el caso que se corrigió.
+  static const Set<String> checkedMatchStates = <String>{'strong'};
+
+  /// Si todos los criterios pedidos quedaron probados.
+  bool get isChecked =>
+      evidenceComplete ?? checkedMatchStates.contains(matchState);
+
   /// «No lo sé» no es «no cumple»: se muestra rotulado, nunca oculto.
-  bool get isUnverified => matchState == 'unverified';
+  bool get isUnverified => !isChecked;
 
   factory SupplyStockOption.fromJson(Map<String, dynamic> json) {
     final rawDetail = json['matchDetail'];
@@ -1305,6 +1323,9 @@ class SupplyStockOption {
       availableToPromise: _asInt(json['atp']),
       coverage: json['coverage']?.toString() ?? 'none',
       matchState: json['matchState']?.toString() ?? 'no_criteria',
+      evidenceComplete: json['evidenceComplete'] is bool
+          ? json['evidenceComplete'] as bool
+          : null,
       matchDetail: rawDetail is List
           ? rawDetail
               .whereType<Map>()
@@ -1343,29 +1364,55 @@ class SupplyStockOption {
   }
 }
 
-/// Conteos del conjunto elegible completo.
+/// Conteos del paso de bodega.
+///
+/// **Elegible y revisado son dos cosas distintas.** La categoría define el
+/// universo que hay que mirar; que una fila sobreviva a él no la convierte en
+/// una alternativa. Contarlas juntas hacía que una necesidad de pastillas
+/// anunciara «49 alternativas internas elegibles» cuando 47 no tenían un solo
+/// criterio establecido.
 class SupplyStockCounts {
   const SupplyStockCounts({
     this.eligible = 0,
+    this.reviewed = 0,
     this.full = 0,
     this.partial = 0,
     this.none = 0,
     this.unverified = 0,
   });
 
+  /// Lo **comprobado**: algún criterio se estableció y ninguno se contradijo.
   final int eligible;
+
+  /// El universo revisado, comprobado o no. Saber cuánto del catálogo está sin
+  /// fichar es información real y por eso no se esconde.
+  final int reviewed;
+
   final int full;
   final int partial;
   final int none;
   final int unverified;
 
   factory SupplyStockCounts.fromJson(Map<String, dynamic> json) {
+    final publicado = _asInt(json['eligible']);
+    final unverified = _asInt(json['unverified']);
+    // **Un servidor anterior llamaba `eligible` a TODO lo revisado**, sin
+    // verificar incluido. Sumarle los no verificados los contaba dos veces; y
+    // dejar ese número como «comprobadas» reproduciría la cifra que engañaba.
+    // La traducción honesta es la inversa: lo que ese contrato publicaba es lo
+    // revisado, y lo comprobado es lo que queda al descontar lo no verificado.
+    final servidorAnterior = json['reviewed'] == null;
+    final reviewed = servidorAnterior ? publicado : _asInt(json['reviewed']);
+    final eligible = servidorAnterior
+        ? (publicado - unverified).clamp(0, publicado)
+        : publicado;
     return SupplyStockCounts(
-      eligible: _asInt(json['eligible']),
+      eligible: eligible,
+      reviewed: reviewed,
       full: _asInt(json['full']),
       partial: _asInt(json['partial']),
       none: _asInt(json['none']),
-      unverified: _asInt(json['unverified']),
+      unverified: unverified,
     );
   }
 }

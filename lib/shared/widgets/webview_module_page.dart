@@ -47,6 +47,8 @@ import '../utils/browser_omnibox.dart';
 import '../utils/browser_user_agent.dart';
 import '../utils/responsive_viewport.dart';
 import 'browser_popup_window.dart';
+import '../services/browser_automatic_login_policy.dart';
+import '../services/supplier_portal_session_keeper.dart';
 import '../utils/browser_credential_autofill.dart';
 import '../utils/browser_alert_policy.dart';
 import '../utils/file_download.dart';
@@ -163,7 +165,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   List<_BrowserAddressSuggestion> _visibleSuggestions = const [];
   bool _showFavoritesBar = true;
   static const _favoritesBarPrefsKey = 'vinabike_browser_favorites_bar_v1';
-  final Set<String> _automaticCredentialSubmitAttempts = {};
+  // Cuándo el portal entra solo: cada vez que vuelve el formulario, salvo
+  // que el envío anterior haya sido rechazado. Reemplaza el «una vez por
+  // origen y pestaña» que dejaba al operador un clic por cada sesión vencida.
+  final BrowserAutomaticLoginPolicy _automaticLoginPolicy =
+      BrowserAutomaticLoginPolicy();
+  // Proveedor cuya credencial administrada rellenó cada origen: sólo el id,
+  // nunca el secreto. Sirve para mantener viva la sesión que acaba de entrar.
+  final Map<String, String> _supplierIdByLoginOrigin = <String, String>{};
   final Set<String> _credentialAutofillInFlight = {};
   final Set<String> _credentialSavedFeedbackOrigins = {};
   String? _registeredScreenshotWorkspaceId;
@@ -342,6 +351,9 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     unawaited(_loadDocumentRelayAvailability());
     unawaited(_prepareBrowser());
     unawaited(_restoreAliExpressOrderDates());
+    // La página que esta pestaña venía a abrir: si un portal la desvía a su
+    // login y el navegador entra solo, después vuelve a ella.
+    _automaticLoginPolicy.setIntendedDestination(widget.url);
   }
 
   @override
@@ -4310,6 +4322,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         password.length > 4096) {
       return false;
     }
+    // Un envío hecho a mano cuenta igual que uno automático: si el portal lo
+    // devuelve enseguida, tampoco se insiste solo.
+    _automaticLoginPolicy.recordManualSubmit(
+      origin,
+      actionUrl: payload['action']?.toString(),
+    );
 
     try {
       final localCredential = await _localCredentialForOrigin(origin);
@@ -4411,6 +4429,107 @@ class _WebViewModulePageState extends State<WebViewModulePage>
               transport: legacy,
             );
 
+  /// La página que siguió a un envío respondió sin formulario: la sesión está
+  /// abierta. Se mantiene viva con el mismo keeper del chequeo headless (misma
+  /// cookie jar en WebKit) para que el portal no la cierre por inactividad
+  /// mientras la app siga abierta. Sólo para credenciales administradas: el
+  /// id del proveedor es lo único que se recuerda, nunca el secreto.
+  void _keepSupplierSessionAlive(String origin, String? loadedUrl) {
+    final supplierId = _supplierIdByLoginOrigin[origin];
+    if (supplierId == null || loadedUrl == null) return;
+    // La política salta la respuesta al POST del ingreso (RBX:
+    // `valida_ingreso.asp`) y entrega la primera página real que la sigue.
+    final target = _automaticLoginPolicy.keepAliveTargetAfterLoad(
+      origin,
+      loadedUrl,
+    );
+    if (target == null) return;
+    SupplierPortalSessionKeeper.shared.activate(
+      supplierId: supplierId,
+      url: target,
+    );
+    if (kDebugMode) {
+      debugPrint(
+        '🌐 Sesión de proveedor abierta en $origin; keep-alive sobre $target',
+      );
+    }
+  }
+
+  /// Si esta pestaña venía a abrir una página concreta y el portal la desvió a
+  /// su ingreso, después de entrar vuelve a ella una sola vez.
+  void _resumeIntendedDestination(
+    String origin,
+    String? loadedUrl, {
+    required bool afterLogin,
+  }) {
+    if (loadedUrl == null) return;
+    final destination = _automaticLoginPolicy.consumeIntendedDestination(
+      origin: origin,
+      loadedUrl: loadedUrl,
+      afterLogin: afterLogin,
+    );
+    if (destination == null) return;
+    final uri = Uri.tryParse(destination);
+    if (uri == null) return;
+    if (kDebugMode) {
+      debugPrint('🌐 Tras entrar en $origin, se vuelve a $destination');
+    }
+    unawaited(_loadUri(uri));
+  }
+
+  /// Cierra el desenlace de un envío pendiente cuando la carga siguiente cae
+  /// fuera del origen administrado pero dentro del mismo sitio del proveedor.
+  /// Un formulario de ingreso en esa carga no dice nada del envío; una página
+  /// de otro sitio tampoco.
+  Future<void> _observeForeignLoadAfterSubmit(
+    InAppWebViewController controller,
+    WebUri? loadedUrl,
+  ) async {
+    final loaded = loadedUrl?.toString();
+    if (loaded == null) return;
+    bool sameSite(String origin) =>
+        browserAddressesShareSupplierSite(origin, loaded);
+    final pending = _automaticLoginPolicy.originsAwaitingOutcome
+        .where(sameSite)
+        .toList(growable: false);
+    final wanted = _automaticLoginPolicy.originsWantingKeepAlive
+        .where(sameSite)
+        .toList(growable: false);
+    if (pending.isEmpty && wanted.isEmpty) return;
+    try {
+      final result = await controller.evaluateJavascript(
+        source: browserLoginFormDetectionScript,
+      );
+      final hasLoginForm =
+          result == true || result?.toString().toLowerCase() == 'true';
+      if (hasLoginForm) return;
+      final succeeded = <String>{};
+      for (final origin in pending) {
+        final observation = _automaticLoginPolicy.observeLoad(
+          origin,
+          hasLoginForm: false,
+        );
+        if (observation == BrowserAutomaticLoginObservation.loginSucceeded) {
+          succeeded.add(origin);
+        }
+      }
+      for (final origin in {...pending, ...wanted}) {
+        _keepSupplierSessionAlive(origin, loaded);
+      }
+      for (final origin in {...pending, ...wanted}) {
+        _resumeIntendedDestination(
+          origin,
+          loaded,
+          afterLogin: succeeded.contains(origin),
+        );
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('🌐 Browser login outcome skipped: ${error.runtimeType}');
+      }
+    }
+  }
+
   Future<void> _autofillSavedBrowserCredential(
     InAppWebViewController controller,
     WebUri? loadedUrl,
@@ -4424,7 +4543,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     final legacy = await _declaredLegacyLoginTransport(loadedUrl?.toString());
     final origin = normalizeSupplierBrowserOrigin(loadedUrl?.toString()) ??
         legacy?.canonicalOrigin;
-    if (origin == null || !_credentialAutofillInFlight.add(origin)) return;
+    if (origin == null) {
+      // Una página que no es un origen administrado igual puede ser la que
+      // sigue a un ingreso: RBX entra por `portal.rburgos.cl` y aterriza en
+      // `www.rburgos.cl` por HTTP. Se mira sólo para cerrar ese desenlace.
+      await _observeForeignLoadAfterSubmit(controller, loadedUrl);
+      return;
+    }
+    if (!_credentialAutofillInFlight.add(origin)) return;
 
     try {
       final liveUrlBeforeDetection = await controller.getUrl();
@@ -4436,6 +4562,26 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       );
       final hasLoginForm = loginFormResult == true ||
           loginFormResult?.toString().toLowerCase() == 'true';
+      final observation = _automaticLoginPolicy.observeLoad(
+        origin,
+        hasLoginForm: hasLoginForm,
+      );
+      if (!hasLoginForm) {
+        final loaded = liveUrlBeforeDetection?.toString();
+        _keepSupplierSessionAlive(origin, loaded);
+        _resumeIntendedDestination(
+          origin,
+          loaded,
+          afterLogin:
+              observation == BrowserAutomaticLoginObservation.loginSucceeded,
+        );
+      }
+      if (kDebugMode && hasLoginForm) {
+        debugPrint(
+          '🌐 Browser login form on $origin: $observation → '
+          '${_automaticLoginPolicy.decide(origin)}',
+        );
+      }
       if (!hasLoginForm) return;
 
       final secureOrigin = BrowserCredentialVault.normalizeOrigin(origin);
@@ -4478,6 +4624,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       // credential is only a fallback after a confirmed protected no-match.
       BrowserSavedCredential? vaultCredential;
       if (supplierCredential != null) {
+        _supplierIdByLoginOrigin[origin] = supplierCredential.supplierId;
         await _deleteLocalCredential(secureOrigin);
       } else if (supplierLookup.status ==
           BrowserSupplierCredentialLookupStatus.noMatch) {
@@ -4495,8 +4642,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         return;
       }
 
-      final mayAutoSubmit =
-          !_automaticCredentialSubmitAttempts.contains(origin);
+      final mayAutoSubmit = _automaticLoginPolicy.decide(origin) ==
+          BrowserAutomaticLoginDecision.submit;
       final fillSource = browserCredentialFillScript(
         expectedOrigin: origin,
         username: username,
@@ -4519,9 +4666,14 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       final result = await controller.evaluateJavascript(
         source: fillSource,
       );
-      if (mayAutoSubmit &&
-          result?.toString().contains('filled-and-submitted') == true) {
-        _automaticCredentialSubmitAttempts.add(origin);
+      final resultText = result?.toString() ?? '';
+      if (mayAutoSubmit && resultText.contains('filled-and-submitted')) {
+        final separator = resultText.indexOf('|');
+        _automaticLoginPolicy.recordAutomaticSubmit(
+          origin,
+          actionUrl: legacy?.actionUrl ??
+              (separator >= 0 ? resultText.substring(separator + 1) : null),
+        );
       }
     } catch (error) {
       if (kDebugMode) {
@@ -4743,7 +4895,8 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       _showBrowserSnack('No pude acceder al llavero del sistema.');
       return;
     }
-    _automaticCredentialSubmitAttempts.remove(origin);
+    _automaticLoginPolicy.forget(origin);
+    _supplierIdByLoginOrigin.remove(origin);
     _credentialSavedFeedbackOrigins.remove(origin);
     _showBrowserSnack('Credenciales de $host eliminadas.');
   }

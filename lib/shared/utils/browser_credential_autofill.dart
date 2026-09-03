@@ -82,6 +82,9 @@ const browserCredentialCaptureUserScript = r'''
       origin: location.origin,
       username,
       password,
+      // El destino del formulario: la página que responde a ese POST no se
+      // usa para mantener viva la sesión.
+      action: action.toString(),
     });
   }, true);
 })();
@@ -363,7 +366,10 @@ String browserCredentialFillScript({
         );
         if (submit) submit.click();
       }, 80);
-      return 'filled-and-submitted';
+      // El destino va después del separador: la página que responde a ese
+      // POST no es una página para repetir por GET, y quien mantiene viva la
+      // sesión necesita saber cuál es para no usarla.
+      return 'filled-and-submitted|' + action.toString();
     }
 
     // Un formulario que no calificó nunca llega acá: el `continue` de arriba lo

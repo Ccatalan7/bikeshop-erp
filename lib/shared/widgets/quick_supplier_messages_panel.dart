@@ -12,6 +12,7 @@ import '../../modules/messaging/widgets/conversation_tile.dart';
 import '../../modules/purchases/models/purchase_invoice.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../models/supplier.dart' as shared_supplier;
+import '../utils/supplier_whatsapp_phone.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import 'conversation_inbox_host.dart';
@@ -858,12 +859,19 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
     final invoice = entry.relevantInvoice(showOnlyActiveChats);
 
     if (conversation != null) {
+      final contactPerson = conversation.contextHint?.contactPersonName;
+      final formerContact =
+          conversation.contextHint?.contactPersonIsActive == false;
       return ConversationTile(
         key: ValueKey(conversation.id),
         conversation: conversation,
         isActive: isSelected,
         isMobile: false,
-        titleOverride: entry.supplier.name,
+        titleOverride: contactPerson == null
+            ? entry.supplier.name
+            : formerContact
+                ? '${entry.supplier.name} · $contactPerson (anterior)'
+                : '${entry.supplier.name} · $contactPerson',
         subtitle: '${entry.phone} · Proveedor WhatsApp',
         operationalStatusLabel:
             invoice == null ? null : _invoiceOperationalLabel(invoice),
@@ -1176,6 +1184,12 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
 
     for (final conversation in supplierConversations) {
       if (usedConversationIds.contains(conversation.id)) continue;
+      // El hilo de un contacto desactivado vive en Historial: se conserva,
+      // pero ya no es un chat en el que se trabaja.
+      if (!includeInactive &&
+          conversation.contextHint?.contactPersonIsActive == false) {
+        continue;
+      }
       final phone = conversation.contextHint?.supplierPhone ??
           conversation.contextHint?.phone ??
           '';
@@ -1299,13 +1313,14 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
         );
   }
 
-  String? _supplierChatPhone(shared_supplier.Supplier supplier) {
-    final salesRepPhone = supplier.salesRepPhone?.trim();
-    if (_hasWhatsAppPhone(salesRepPhone)) return salesRepPhone;
-    final phone = supplier.phone?.trim();
-    if (_hasWhatsAppPhone(phone)) return phone;
-    return null;
-  }
+  /// El Teléfono de la ficha manda cuando sirve para WhatsApp; el vendedor
+  /// sólo lo reemplaza si la ficha tiene un fijo o nada. Regla compartida en
+  /// `supplierWhatsAppPhone`.
+  String? _supplierChatPhone(shared_supplier.Supplier supplier) =>
+      supplierWhatsAppPhone(
+        phone: supplier.phone,
+        salesRepPhone: supplier.salesRepPhone,
+      );
 
   Set<String> _phoneCandidates(String? phone) {
     final digits = _normalizedPhone(phone);

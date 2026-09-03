@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/models/supplier.dart' as shared_supplier;
+import '../../../shared/utils/supplier_whatsapp_phone.dart';
 import '../../messaging/models/conversation.dart';
 import '../../messaging/providers/chat_provider.dart';
 import '../../messaging/widgets/chat_window.dart';
@@ -1466,13 +1467,14 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
     );
   }
 
-  String? _supplierChatPhone(shared_supplier.Supplier supplier) {
-    final salesRepPhone = supplier.salesRepPhone?.trim();
-    if (_hasWhatsAppLikePhone(salesRepPhone)) return salesRepPhone;
-    final phone = supplier.phone?.trim();
-    if (_hasWhatsAppLikePhone(phone)) return phone;
-    return null;
-  }
+  /// La misma regla que el panel rápido de proveedores: el Teléfono de la
+  /// ficha manda cuando sirve para WhatsApp; el vendedor sólo si la ficha
+  /// tiene un fijo o nada.
+  String? _supplierChatPhone(shared_supplier.Supplier supplier) =>
+      supplierWhatsAppPhone(
+        phone: supplier.phone,
+        salesRepPhone: supplier.salesRepPhone,
+      );
 
   bool _hasWhatsAppLikePhone(String? phone) {
     return _normalizedPhone(phone).length >= 8;

@@ -59,7 +59,15 @@ class PurchaseService extends ChangeNotifier {
   })  : _financialProjectionRefresh = financialProjectionRefresh ??
             FinancialProjectionRefreshCoordinator.fallback,
         _supplierRelationshipService = supplierRelationshipService ??
-            SupplierRelationshipService(tenantService: _tenantService);
+            SupplierRelationshipService(tenantService: _tenantService) {
+    // Toda escritura de proveedor pasa por el servicio de relaciones, pero
+    // los lectores (panel de WhatsApp de proveedores, chat, listas) leen esta
+    // caché de cinco minutos. Sin esto, un teléfono recién guardado desde la
+    // ficha no aparecía ni recargando el panel.
+    _supplierRelationshipService.supplierCommandRevision.addListener(
+      _handleSupplierCommandCommitted,
+    );
+  }
 
   final DatabaseService _db;
   final TenantService _tenantService;
@@ -136,6 +144,11 @@ class PurchaseService extends ChangeNotifier {
   }
 
   /// Invalidate supplier cache (call after create/update/delete)
+  void _handleSupplierCommandCommitted() {
+    invalidateSuppliersCache();
+    notifyListeners();
+  }
+
   void invalidateSuppliersCache() {
     _supplierCacheScope.invalidate();
     _suppliersLoad.detach();
@@ -1594,6 +1607,9 @@ class PurchaseService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _supplierRelationshipService.supplierCommandRevision.removeListener(
+      _handleSupplierCommandCommitted,
+    );
     _purchaseInvoicesChannel?.unsubscribe();
     _purchasePaymentsChannel?.unsubscribe();
     _purchaseReceivingChannel?.unsubscribe();

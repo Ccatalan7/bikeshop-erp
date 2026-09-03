@@ -801,48 +801,69 @@ class _SupplyNeedRefinementEditorState
     required bool showLabel,
   }) {
     final between = draft.operator == 'between';
-    return Row(
+    // **Una columna, una altura — pero sólo donde hay columna.** El campo
+    // libre crecía por su cuenta y las filas «Código de Forma» y
+    // «Compatibilidad de Pastilla» quedaban más altas que sus vecinas: la
+    // tabla dejaba de leerse como filas. Se fija al alto del control cerrado
+    // del módulo. En compacto no hay nada que alinear y el campo lleva su
+    // etiqueta dentro, que en 34 px no cabría: ahí se lo deja crecer.
+    final alto = showLabel ? null : VbShortSelect.fieldHeight;
+    // **El rótulo lo pone el dueño del control, no cada campo.** En compacto
+    // el select de al lado lleva su «Valor» encima, con el rótulo de S-05, y
+    // el campo de texto lo llevaba dentro de la caja: dos formas de nombrar lo
+    // mismo, una al lado de la otra en el mismo bloque. Se usa el mismo
+    // rótulo, y la decoración del campo se queda sin `labelText`.
+    final campos = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Expanded(
-          child: TextField(
-            key: ValueKey('need-refinement-value-${definition.key}-0'),
-            controller: _controller(definition.key, 0),
-            enabled: !widget.busy,
-            keyboardType: _isNumeric(definition.dataType)
-                ? const TextInputType.numberWithOptions(decimal: true)
-                : TextInputType.text,
-            onChanged: (_) => setState(() => _error = null),
-            decoration: InputDecoration(
-              labelText: showLabel ? (between ? 'Desde' : 'Valor') : null,
-              hintText: showLabel ? null : (between ? 'Desde' : 'Valor'),
-              suffixText: definition.unit,
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-        ),
-        if (between) ...<Widget>[
-          const SizedBox(width: PurchaseMetrics.stageGap),
-          Expanded(
+          child: SizedBox(
+            height: alto,
             child: TextField(
-              key: ValueKey('need-refinement-value-${definition.key}-1'),
-              controller: _controller(definition.key, 1),
+              key: ValueKey('need-refinement-value-${definition.key}-0'),
+              controller: _controller(definition.key, 0),
               enabled: !widget.busy,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: _isNumeric(definition.dataType)
+                  ? const TextInputType.numberWithOptions(decimal: true)
+                  : TextInputType.text,
               onChanged: (_) => setState(() => _error = null),
               decoration: InputDecoration(
-                labelText: showLabel ? 'Hasta' : null,
-                hintText: showLabel ? null : 'Hasta',
+                hintText: showLabel ? null : (between ? 'Desde' : 'Valor'),
                 suffixText: definition.unit,
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
             ),
           ),
+        ),
+        if (between) ...<Widget>[
+          const SizedBox(width: PurchaseMetrics.stageGap),
+          Expanded(
+            child: SizedBox(
+              height: alto,
+              child: TextField(
+                key: ValueKey('need-refinement-value-${definition.key}-1'),
+                controller: _controller(definition.key, 1),
+                enabled: !widget.busy,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setState(() => _error = null),
+                decoration: InputDecoration(
+                  hintText: showLabel ? null : 'Hasta',
+                  suffixText: definition.unit,
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+          ),
         ],
       ],
+    );
+    return VbShortSelect.labelled(
+      context,
+      showLabel ? (between ? 'Desde y hasta' : 'Valor') : null,
+      campos,
     );
   }
 

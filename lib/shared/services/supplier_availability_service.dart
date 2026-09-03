@@ -29,6 +29,24 @@ class SupplierAvailabilityService {
 
   final SupabaseClient _client;
 
+  /// La plantilla de URL por código del portal, esté o no habilitada la sonda.
+  ///
+  /// Abrirle al operador la ficha de un producto en el sitio del proveedor no
+  /// es consultar ese portal en segundo plano: basta con saber cómo se busca
+  /// un código ahí. Por eso un proveedor puede tener plantilla sin tener la
+  /// lectura automática habilitada. `null` cuando no hay plantilla usable.
+  Future<String?> productUrlTemplate(String supplierId) async {
+    final rows = await _client
+        .from('supplier_portal_probes')
+        .select('search_url_template')
+        .eq('supplier_id', supplierId)
+        .limit(1);
+    if (rows.isEmpty) return null;
+    final template = rows.first['search_url_template']?.toString().trim();
+    if (template == null || !template.contains('{code}')) return null;
+    return template;
+  }
+
   /// La sonda del proveedor, sólo si está habilitada. Configurar un portal no
   /// autoriza a consultarlo: son dos decisiones distintas.
   Future<SupplierPortalProbe?> enabledProbe(String supplierId) async {

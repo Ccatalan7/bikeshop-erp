@@ -70,6 +70,12 @@ abstract interface class SupplierEditorDataSource {
     SaveSupplierRelationshipProfileCommand command,
   );
 
+  /// El vendedor (WhatsApp) va en su propio comando estrecho: el perfil no
+  /// lo acepta.
+  Future<SupplierSalesRepCommandResult> updateSalesRep(
+    UpdateSupplierSalesRepCommand command,
+  );
+
   Future<SupplierEngagementCommandResult> createEngagement(
     CreateSupplierEngagementCommand command,
   );
@@ -147,6 +153,12 @@ class CanonicalSupplierEditorDataSource implements SupplierEditorDataSource {
     SaveSupplierRelationshipProfileCommand command,
   ) =>
       _relationshipService.saveProfile(command);
+
+  @override
+  Future<SupplierSalesRepCommandResult> updateSalesRep(
+    UpdateSupplierSalesRepCommand command,
+  ) =>
+      _relationshipService.updateSalesRep(command);
 
   @override
   Future<SupplierEngagementCommandResult> createEngagement(
@@ -266,6 +278,13 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
   final _aliases = TextEditingController();
   final _taxIdentifier = TextEditingController();
   final _contactPerson = TextEditingController();
+  // El vendedor: a quien se le escribe por WhatsApp. No viaja en el comando
+  // de perfil; se guarda con su propio comando estrecho después del perfil.
+  final _salesRepName = TextEditingController();
+  final _salesRepPhone = TextEditingController();
+  final _salesRepEmail = TextEditingController();
+  ({String? name, String? phone, String? email}) _salesRepOriginal =
+      (name: null, phone: null, email: null);
   final _email = TextEditingController();
   final _phone = TextEditingController();
   final _website = TextEditingController();
@@ -572,6 +591,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       _contactPerson,
       _email,
       _phone,
+      _salesRepName,
+      _salesRepPhone,
+      _salesRepEmail,
       _website,
       _address,
       _comuna,
@@ -634,6 +656,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       _contactPerson,
       _email,
       _phone,
+      _salesRepName,
+      _salesRepPhone,
+      _salesRepEmail,
       _website,
       _address,
       _comuna,
@@ -897,6 +922,15 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
     _contactPerson.text = relationship.contactPerson ?? '';
     _email.text = relationship.email ?? '';
     _phone.text = relationship.phone ?? '';
+    final legacy = profile.legacyDetails;
+    _salesRepName.text = legacy.salesRepName ?? '';
+    _salesRepPhone.text = legacy.salesRepPhone ?? '';
+    _salesRepEmail.text = legacy.salesRepEmail ?? '';
+    _salesRepOriginal = (
+      name: legacy.salesRepName,
+      phone: legacy.salesRepPhone,
+      email: legacy.salesRepEmail,
+    );
     _website.text = relationship.website ?? '';
     _address.text = profile.legacyDetails.address ?? '';
     _comuna.text = profile.legacyDetails.comuna ?? '';
@@ -1016,6 +1050,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
         'contact_person': _contactPerson.text.trim(),
         'email': _email.text.trim(),
         'phone': _phone.text.trim(),
+        'sales_rep_name': _salesRepName.text.trim(),
+        'sales_rep_phone': _salesRepPhone.text.trim(),
+        'sales_rep_email': _salesRepEmail.text.trim(),
         'website': _website.text.trim(),
         'address': _address.text.trim(),
         'comuna': _comuna.text.trim(),
@@ -1028,6 +1065,77 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
         'capability_definition_ids': _selectedCapabilityIds.toList()..sort(),
         'tag_definition_ids': _selectedTagIds.toList()..sort(),
       });
+
+  bool get _salesRepChanged =>
+      _optional(_salesRepName) != _salesRepOriginal.name ||
+      _optional(_salesRepPhone) != _salesRepOriginal.phone ||
+      _optional(_salesRepEmail) != _salesRepOriginal.email;
+
+  /// El vendedor no viaja en el comando de perfil: va en su propio comando
+  /// estrecho, después del perfil y sólo si cambió. Devuelve `false` cuando
+  /// falló: la ficha ya quedó guardada y el aviso dice qué reintentar.
+  Future<bool> _saveSalesRepIfChanged(SupplierProfile profile) async {
+    if (!_salesRepChanged) return true;
+    final expectedUpdatedAt = profile.relationship.updatedAt;
+    if (expectedUpdatedAt == null) {
+      _showNotice(
+        'La ficha se guardó, pero el vendedor no',
+        'No se pudo leer la versión del proveedor recién guardado. Abre la '
+            'ficha de nuevo y vuelve a guardar el vendedor.',
+        VbNoticeTone.danger,
+      );
+      return false;
+    }
+    try {
+      final result = await _source.updateSalesRep(
+        UpdateSupplierSalesRepCommand(
+          operationId: _operationIdForSalesRep(expectedUpdatedAt),
+          supplierId: profile.relationship.id,
+          expectedUpdatedAt: expectedUpdatedAt,
+          name: _optional(_salesRepName),
+          phone: _optional(_salesRepPhone),
+          email: _optional(_salesRepEmail),
+        ),
+      );
+      _salesRepOperationId = null;
+      _salesRepOriginal = (
+        name: result.name,
+        phone: result.phone,
+        email: result.email,
+      );
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      _showNotice(
+        'La ficha se guardó, pero el vendedor no',
+        'Revisa el nombre, el WhatsApp (al menos 8 dígitos) y el correo del '
+            'vendedor, y pulsa Guardar cambios otra vez. $error',
+        VbNoticeTone.danger,
+      );
+      return false;
+    }
+  }
+
+  String? _salesRepOperationId;
+  String? _salesRepOperationFingerprint;
+
+  /// Un mismo intento (mismos valores sobre la misma versión) reutiliza su
+  /// operation id, así un reintento tras un corte se replica en vez de
+  /// duplicarse; cualquier cambio de contenido estrena uno.
+  String _operationIdForSalesRep(DateTime expectedUpdatedAt) {
+    final fingerprint = jsonEncode({
+      'expected_updated_at': expectedUpdatedAt.toUtc().toIso8601String(),
+      'name': _optional(_salesRepName),
+      'phone': _optional(_salesRepPhone),
+      'email': _optional(_salesRepEmail),
+    });
+    if (_salesRepOperationId == null ||
+        _salesRepOperationFingerprint != fingerprint) {
+      _salesRepOperationId = _uuid.v4();
+      _salesRepOperationFingerprint = fingerprint;
+    }
+    return _salesRepOperationId!;
+  }
 
   String _operationIdForProfile() {
     final fingerprint = _profileFingerprint();
@@ -1159,6 +1267,11 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
       _profileSnapshotNeedsRefresh = false;
       _concurrentProfileSnapshot = null;
       _profile = result.profile;
+      // El vendedor va después del perfil, en su propio comando. La caché de
+      // proveedores del módulo de compras se invalida sola: escucha las
+      // confirmaciones del servicio de relaciones.
+      final salesRepSaved = await _saveSalesRepIfChanged(result.profile);
+      if (!mounted || !salesRepSaved) return;
       _close(saved: true);
     } on SupplierFoundationUnavailable {
       _showNotice(
@@ -1320,6 +1433,9 @@ class _SupplierFormPageState extends State<SupplierFormPage> {
                             contactPerson: _contactPerson,
                             email: _email,
                             phone: _phone,
+                            salesRepName: _salesRepName,
+                            salesRepPhone: _salesRepPhone,
+                            salesRepEmail: _salesRepEmail,
                             website: _website,
                             address: _address,
                             comuna: _comuna,
@@ -2636,6 +2752,9 @@ class _ContactSection extends StatelessWidget {
       required this.contactPerson,
       required this.email,
       required this.phone,
+      required this.salesRepName,
+      required this.salesRepPhone,
+      required this.salesRepEmail,
       required this.website,
       required this.address,
       required this.comuna,
@@ -2646,6 +2765,9 @@ class _ContactSection extends StatelessWidget {
   final TextEditingController contactPerson;
   final TextEditingController email;
   final TextEditingController phone;
+  final TextEditingController salesRepName;
+  final TextEditingController salesRepPhone;
+  final TextEditingController salesRepEmail;
   final TextEditingController website;
   final TextEditingController address;
   final TextEditingController comuna;
@@ -2666,7 +2788,36 @@ class _ContactSection extends StatelessWidget {
               compact,
               _field(phone, 'Teléfono', keyboardType: TextInputType.phone),
               _field(website, 'Sitio web')),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Vendedor',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'A esta persona se le escribe por WhatsApp desde el ERP. Sin '
+              'número aquí, se usa el Teléfono de arriba.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
           const SizedBox(height: 12),
+          _responsivePair(
+              compact,
+              _field(salesRepName, 'Nombre del vendedor',
+                  key: const ValueKey('supplier-sales-rep-name')),
+              _field(salesRepPhone, 'WhatsApp del vendedor',
+                  key: const ValueKey('supplier-sales-rep-phone'),
+                  keyboardType: TextInputType.phone)),
+          const SizedBox(height: 12),
+          _field(salesRepEmail, 'Correo del vendedor',
+              key: const ValueKey('supplier-sales-rep-email'),
+              keyboardType: TextInputType.emailAddress),
+          const SizedBox(height: 16),
           _field(address, 'Dirección'),
           const SizedBox(height: 12),
           _responsivePair(

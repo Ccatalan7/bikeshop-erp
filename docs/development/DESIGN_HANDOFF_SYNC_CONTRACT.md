@@ -92,6 +92,33 @@ Rutas que se usan casi siempre —el listado completo sale de `list_files`—:
 | `handoff-t<N>/spec.json` | tablas de medidas del turno |
 | `handoff-t<N>/frames/…` | los frames, con `-dark`, `-phone`, `-tablet` |
 
+### Sesión no interactiva: `DesignSync` pide `/design-login` y no lo puede correr (2026-09-02)
+
+Distinto del `[]` de `list_projects`. En una sesión headless (la app de
+escritorio en modo Code, SDK, `-p`) **todo** método de `DesignSync` —incluido
+`get_project`— devuelve «needs design-system authorization, and /design-login
+cannot run in this non-interactive session». Eso sí es un bloqueo del API, y
+sólo lo levanta el dueño corriendo `/design-login` una vez desde un `claude`
+interactivo en esta máquina; las sesiones headless reutilizan esa autorización.
+
+**No es un bloqueo de la tarea.** Cada `get_file` anterior sobre la guía quedó
+guardado íntegro (los 262 144 bytes del cap) en los resultados de herramienta
+de esa sesión, y se recupera sin red:
+
+```bash
+# El JSON guardado tiene {"method":"get_file","path":…,"content":…}
+f=$(find ~/.claude/projects/-Users-Claudio-Dev-bikeshop-erp -path "*tool-results*" \
+      -type f -size +200k | xargs grep -l "E-01 Status badge" | head -1)
+python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['content'])" "$f" \
+  > "$SCRATCH/guia.html"
+```
+
+Sobre ese archivo aplican las mismas recetas de grep de abajo. El 2026-09-02 el
+panel de detalle de Productos se hizo entero con esa copia (A-02, T-05, F-02,
+F-04, E-01, O-04) mientras el API estaba cerrado; ni un valor salió de una
+captura. Lo que **no** trae la copia es lo que tampoco trae el API: lo que
+cae después del cap de 256 KiB.
+
 ### Reading a large page without burning context
 
 A `get_file` result above roughly 50 KB is written to a file on disk and only a

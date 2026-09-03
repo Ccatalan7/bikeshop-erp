@@ -398,6 +398,12 @@ Three properties that matter:
   `tap` refuses and lists them. `--index N` is a zero-based integer into that
   list; a missing index for multiple matches, non-integer, negative, or
   out-of-range value is rejected before any pointer event is sent.
+  **Read that list before choosing the index (2026-09-02).** `tap --label
+  Archivos --index 0` hit the sidebar module «Archivos» and replaced the
+  owner's workspace tab; the chat-panel tab I wanted was not in the list at
+  all, because its text carries a count badge. `--index 0` is not "the one I
+  mean", it is "the first thing that matched". When the target is missing
+  from the list, use `click X Y` from the current frame instead.
 - **The target must be live and usable now.** Its chosen point must be inside
   the current logical viewport and its branch must win the live hit test.
   Offstage, ignored, absorbed, semantics-disabled, disabled-button, covered,
@@ -443,6 +449,14 @@ object. If adding a non-null instance field produces an otherwise impossible
 and hot restart the **same canonical session** once before diagnosing app
 logic. Do not launch a second Flutter session; verify the restarted isolate is
 clean and continue from there.
+
+If restoring the current route can trigger production writes, arm and verify
+the repository's no-write seam **before** any hot restart. A restart rebuilds
+the isolate and may restore the routed workspace immediately, before an agent
+can navigate it somewhere harmless; parking the old frame is not protection
+against that restoration. After the restart, prove the seam is active before
+opening the write-capable surface and read the affected production invariant
+back again when the visual round ends.
 
 Do not treat a changed AX value as evidence. Completion evidence is the same
 text in a fresh rendered frame/semantics read and the expected result after the

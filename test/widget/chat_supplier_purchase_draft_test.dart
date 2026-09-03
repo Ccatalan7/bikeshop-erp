@@ -16,8 +16,8 @@ import 'package:vinabike_erp/shared/services/database_service.dart';
 import 'package:vinabike_erp/shared/services/tenant_service.dart';
 
 /// The supplier chat offers the same purchase document the operator would have
-/// sent from «Documentos de compra», and offers only the drafts: anything the
-/// supplier already received is not a candidate for sending again.
+/// sent from «Documentos de compra». Draft and sent documents can be dispatched;
+/// later workflow states are not candidates for sending from the composer.
 void main() {
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
@@ -60,7 +60,7 @@ void main() {
   }
 
   testWidgets(
-    'supplier chat offers only the draft purchase documents of that supplier',
+    'supplier chat offers draft and sent purchase documents of that supplier',
     (tester) async {
       final purchaseService = _SupplierDraftsPurchaseService([
         _invoice(id: 'inv-draft', number: '141500'),
@@ -68,6 +68,11 @@ void main() {
           id: 'inv-sent',
           number: '141498',
           status: PurchaseInvoiceStatus.sent,
+        ),
+        _invoice(
+          id: 'inv-confirmed',
+          number: '141497',
+          status: PurchaseInvoiceStatus.confirmed,
         ),
       ]);
 
@@ -87,7 +92,9 @@ void main() {
 
       expect(purchaseService.requestedSupplierIds, ['sup-1']);
       expect(find.text('N° 141500'), findsOneWidget);
-      expect(find.text('N° 141498'), findsNothing);
+      expect(find.text('N° 141498'), findsOneWidget);
+      expect(find.textContaining('Enviada ·'), findsOneWidget);
+      expect(find.text('N° 141497'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -124,7 +131,7 @@ void main() {
   );
 
   testWidgets(
-    'supplier chat without drafts says so instead of offering an empty list',
+    'supplier chat without draft or sent documents shows an empty state',
     (tester) async {
       await pumpChat(
         tester,
@@ -144,7 +151,9 @@ void main() {
       await settle(tester);
 
       expect(
-        find.text('Este proveedor no tiene documentos de compra en borrador.'),
+        find.text(
+          'Este proveedor no tiene documentos de compra en borrador ni enviados.',
+        ),
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);

@@ -277,7 +277,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             service: service,
             gatewayClient: AIAgentGatewayClient(
               transport: _NeverGatewayTransport(),
@@ -368,7 +368,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
           ),
@@ -438,7 +438,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(transport: transport),
           ),
@@ -506,7 +506,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
               transport: _ActionCardGatewayTransport(),
@@ -603,7 +603,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             service: service,
             gatewayClient: AIAgentGatewayClient(transport: transport),
           ),
@@ -784,7 +784,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
@@ -908,7 +908,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
               transport: _NeverGatewayTransport(),
@@ -1002,7 +1002,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
@@ -1183,7 +1183,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
@@ -1265,7 +1265,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             service: service,
             gatewayClient: AIAgentGatewayClient(
               transport: _NeverGatewayTransport(),
@@ -1376,7 +1376,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _SupplierFichaService(),
             gatewayClient: AIAgentGatewayClient(
@@ -1475,7 +1475,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(
@@ -1565,7 +1565,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             service: _BasketPrecisionService(),
             gatewayClient: AIAgentGatewayClient(
               transport: _NeverGatewayTransport(),
@@ -1666,7 +1666,7 @@ void main() {
             brightness: Brightness.light,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             service: _FakeIntelligentPurchasingService(),
             gatewayClient: AIAgentGatewayClient(transport: transport),
           ),
@@ -2334,7 +2334,7 @@ void main() {
             brightness: brightness,
           ),
           home: IntelligentPurchasingWorkspacePage(
-              specExtractor: _lectorInerte,
+            specExtractor: _lectorInerte,
             initialNeedId: _FakeIntelligentPurchasingService.need.id,
             service: _FakeIntelligentPurchasingService(),
           ),
@@ -3100,6 +3100,12 @@ void main() {
               'atp': 0,
               'coverage': 'none',
               'matchState': 'strong',
+              // La procedencia viaja en `matchDetail` y es de ahí de donde la
+              // pantalla saca la frase: una fila comprobada por el nombre no
+              // puede decir «según la ficha».
+              'matchDetail': const [
+                {'field': 'valve_type', 'source': 'product_spec'},
+              ],
               'blocksExternal': false,
               'evidenceState': 'catalog_assignment',
               'supplierId': 'supplier-derman',
@@ -3423,6 +3429,9 @@ void main() {
               'atp': 1,
               'coverage': 'partial',
               'matchState': 'strong',
+              'matchDetail': const [
+                {'field': 'chain_speeds', 'source': 'product_spec'},
+              ],
               'blocksExternal': false,
             },
           ],
@@ -3714,6 +3723,9 @@ void main() {
             ..._FakeIntelligentPurchasingService.baseCandidateForTests,
             'matchState': 'strong',
             'group': 'actionable',
+            'matchDetail': const [
+              {'field': 'valve_type', 'source': 'product_spec'},
+            ],
             // Evidencia económica débil: no debe cambiar el veredicto técnico.
             'evidenceQuality': 'weak',
           },
@@ -4122,7 +4134,7 @@ void main() {
         await _goToStep(tester, 'Stock interno');
 
         expect(
-          find.textContaining('Mostrando 12 de 30 alternativas en bodega'),
+          find.textContaining('Mostrando 12 de 30 productos revisados'),
           findsOneWidget,
         );
         _FakeIntelligentPurchasingService.commands.clear();
@@ -5848,7 +5860,9 @@ class _FakeIntelligentPurchasingService extends IntelligentPurchasingService {
     int offset = 0,
   }) async {
     commands.add('stock:$limit');
-    if (failStock) throw StateError('canceling statement due to statement timeout');
+    if (failStock) {
+      throw StateError('canceling statement due to statement timeout');
+    }
     return SupplyStockResolution.fromJson(
       overrideStockResolution ??
           <String, dynamic>{

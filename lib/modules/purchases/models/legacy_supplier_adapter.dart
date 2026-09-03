@@ -73,6 +73,9 @@ abstract final class LegacySupplierAdapter {
         city: supplier.city,
         region: supplier.region,
         comuna: supplier.comuna,
+        salesRepName: supplier.salesRepName,
+        salesRepPhone: supplier.salesRepPhone,
+        salesRepEmail: supplier.salesRepEmail,
         type: supplier.type,
         paymentTerms: supplier.paymentTerms,
         defaultTaxTreatment: supplier.defaultTaxTreatment,
@@ -125,9 +128,12 @@ abstract final class LegacySupplierAdapter {
       ),
       defaultTaxTreatment: profile.legacyDetails.defaultTaxTreatment,
       imageUrl: previous?.imageUrl,
-      salesRepName: previous?.salesRepName,
-      salesRepPhone: previous?.salesRepPhone,
-      salesRepEmail: previous?.salesRepEmail,
+      salesRepName:
+          profile.legacyDetails.salesRepName ?? previous?.salesRepName,
+      salesRepPhone:
+          profile.legacyDetails.salesRepPhone ?? previous?.salesRepPhone,
+      salesRepEmail:
+          profile.legacyDetails.salesRepEmail ?? previous?.salesRepEmail,
       purchaseInstructions: previous?.purchaseInstructions,
       ocrTemplate: previous?.ocrTemplate ?? const SupplierOcrTemplate(),
       notes: relationship.notes,

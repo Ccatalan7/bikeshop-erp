@@ -37,6 +37,8 @@ import '../services/intelligent_purchasing_service.dart';
 import '../services/supply_need_criteria_latch.dart';
 import '../services/supply_need_effective_criteria.dart';
 import '../services/supply_purchase_authorization.dart';
+import '../services/catalog_reading_ledger.dart';
+import '../../../shared/services/catalog_name_reading.dart';
 import '../../../shared/services/supplier_spec_extraction.dart';
 import '../services/supplier_credential_service.dart';
 import '../widgets/purchase_composer.dart';
@@ -875,6 +877,11 @@ class _IntelligentPurchasingWorkspacePageState
     // suyo: una recarga incremental no la vuelve a leer, así que tampoco puede
     // invalidar la que está en vuelo.
     if (!incremental) unawaited(_loadNeedCriteria(need, ++_needCriteriaToken));
+    // **Entrar de verdad repone el presupuesto de lectura.** Una carga no
+    // incremental es abrir la necesidad o reabrirla; una incremental es la
+    // continuación automática o pedir más resultados, y ésa no puede reponerlo
+    // o el tope dejaría de serlo.
+    if (!incremental) _catalogo.enter(need.id);
     if (incremental) {
       setState(() {
         _refreshingResults = true;
@@ -1063,6 +1070,10 @@ class _IntelligentPurchasingWorkspacePageState
       // Aparte y sin await: el paso ya está montado y utilizable. Los
       // candidatos de bodega sí dependen de esta lectura, así que van acá.
       unawaited(_loadStockCandidates(need));
+      // Y aparte también: leerle el nombre al catálogo para llenar lo que la
+      // ficha del taller nunca tuvo. No bloquea la pantalla, y si no consigue
+      // nada la pantalla que ya está montada sigue siendo la correcta.
+      unawaited(_leerElCatalogo(need, resolution, token));
     } on SupplyConcurrencyConflict {
       if (token != _decisionLoadToken || !_stillAsking(need)) return;
       setState(() {
@@ -3679,6 +3690,16 @@ class _IntelligentPurchasingWorkspacePageState
     );
   }
 
+  /// Si el candidato abierto es de los que **nada pudo comprobar**.
+  ///
+  /// El servidor ya los devuelve en su propio grupo; el inspector no lo sabía y
+  /// les ofrecía `Agregar al plan` y `Elegir producto` igual que a los
+  /// comprobados. Mirar una fila sin verificar es legítimo —para eso está—;
+  /// declararla la respuesta del taller con un botón, no.
+  bool _isUnverifiedCandidate(PurchaseCandidate candidate) =>
+      (_externalCandidates?.unverifiedItems ?? const <PurchaseCandidate>[])
+          .any((item) => item.candidateId == candidate.candidateId);
+
   Widget _buildInspector(
     PurchaseCandidate candidate, {
     /// Sólo el split pane de escritorio ofrece `»`: es el único sitio donde
@@ -3712,11 +3733,16 @@ class _IntelligentPurchasingWorkspacePageState
       adding: _addingCandidateId == candidate.candidateId,
       alreadyInPlan: plannedLine?.candidateId == candidate.candidateId,
       onClose: () => setState(() => _inspectedCandidateId = null),
-      onAddToPlan: () => _addCandidateToPlan(candidate),
+      // Sin comprobar no hay atajo: la fila se mira, no se compromete.
+      onAddToPlan: _isUnverifiedCandidate(candidate)
+          ? null
+          : () => _addCandidateToPlan(candidate),
       // Carril familia: la necesidad no tiene identidad, así que el pie ofrece
       // «Elegir producto». «Agregar al plan» aparece recién después de
       // confirmar y releer, porque son dos escrituras distintas.
-      onChooseProduct: need != null && !need.hasConfirmedProduct
+      onChooseProduct: need != null &&
+              !need.hasConfirmedProduct &&
+              !_isUnverifiedCandidate(candidate)
           ? () => unawaited(_chooseFamilyProduct(candidate))
           : null,
       onOpenSupplier: candidate.supplierWebsite == null
@@ -5866,6 +5892,109 @@ class _IntelligentPurchasingWorkspacePageState
   /// Sólo cuando la necesidad NO tiene producto confirmado: con producto exacto
   /// la bodega la publica su lectura dueña, y dos verdades sobre el mismo stock
   /// son peor que una.
+
+  /// La contabilidad de qué se puede volver a leer y con cuánto presupuesto.
+  /// Vive aparte porque su parte difícil se prueba simulando idas y vueltas
+  /// del operador, no montando el módulo entero.
+  final CatalogReadingLedger _catalogo = CatalogReadingLedger();
+
+  /// Llena la ficha del catálogo leyéndole el nombre a los productos que la
+  /// necesidad está mirando.
+  ///
+  /// Sólo pregunta por los campos que esa fila tiene en silencio: una ficha
+  /// que ya existe manda sobre cualquier lectura, así que preguntar por ella
+  /// gastaría la llamada en algo que el servidor va a descartar.
+  Future<void> _leerElCatalogo(
+    SupplyNeed need,
+    SupplyStockResolution resolution,
+    int token,
+  ) async {
+    if (_lecturas.isClosed) return;
+    final campos = supplyNeedSearchFieldsOf(_needTemplate);
+    if (campos.isEmpty) return;
+
+    final filas = <CatalogRowToRead>[];
+    for (final option in resolution.items) {
+      if (option.isChecked) continue;
+      if (option.productId.isEmpty || option.name.trim().isEmpty) continue;
+      final faltan = <String>{
+        for (final detalle in option.matchDetail)
+          if (detalle['source']?.toString() == 'unresolved')
+            detalle['field']?.toString() ?? '',
+      }..removeWhere((field) => field.isEmpty);
+      if (faltan.isEmpty) continue;
+      filas.add(CatalogRowToRead(
+        productId: option.productId,
+        text: option.name.trim(),
+        missingFields: faltan,
+      ));
+    }
+    if (filas.isEmpty) return;
+
+    final ofrecidos = _catalogo.offeredFor(need.id);
+    final llave = _catalogo.claim(need.id, <String>[
+      for (final fila in filas)
+        for (final campo in fila.missingFields)
+          if (!ofrecidos.contains('${fila.productId}|$campo'))
+            '${fila.productId}|$campo',
+    ]);
+    if (llave == null) return;
+
+    final resultado = await readCatalogNamesIntoFicha(
+      alreadyOffered: ofrecidos,
+      // Lo que queda de la cadena, no un tope nuevo por vuelta.
+      recordCap: _catalogo.budgetFor(need.id),
+      // El ensayo recorre el circuito entero sin escribir: es lo que permite
+      // verificar esta pantalla en la app real sin dejar hechos de prueba.
+      dryRun: catalogNameReadingDryRun,
+      fields: campos,
+      rows: filas,
+      extractor: _specExtractor,
+      owner: _lecturas,
+      requestedObject: need.description,
+      // El dueño sólo se cierra en el `dispose`: si el operador cambia de
+      // necesidad mientras el modelo responde, la pantalla sigue viva y las
+      // escrituras de la pregunta anterior saldrían igual. Esto se comprueba
+      // pegado a cada escritura, no una vez al empezar.
+      stillCurrent: () =>
+          mounted && token == _decisionLoadToken && _stillAsking(need),
+      recorder: ({
+        required String productId,
+        required String fieldKey,
+        required Object value,
+        required String quote,
+      }) =>
+          _service.recordProductSpecReading(
+        productId: productId,
+        fieldKey: fieldKey,
+        value: value,
+        quote: quote,
+      ),
+    );
+    // Un fallo transitorio —o una pregunta que cambió a mitad de camino— no
+    // bloquea este conjunto ni le quita presupuesto: no hubo veredicto, así
+    // que al volver a esta necesidad se puede preguntar otra vez.
+    _catalogo.settle(need.id, llave, resultado);
+    if (!mounted || token != _decisionLoadToken || !_stillAsking(need)) return;
+
+    // **El corte tiene continuidad, y una sola vía.** Si la pasada guardó
+    // algo, la recarga ES la pasada siguiente: encadenar además la
+    // continuación recursiva dispararía dos lecturas del mismo conjunto
+    // compitiendo entre sí. Si no guardó nada —sesenta rechazos seguidos, o un
+    // lote que se cortó antes de llegar a la fila 41— nadie iba a recargar, y
+    // ahí sí hay que seguir a mano por donde quedó. Lo ya preguntado se salta,
+    // así que cada vuelta avanza y el conjunto se agota; y el presupuesto de
+    // la cadena le pone un final pase lo que pase.
+    if (resultado.changedSomething) {
+      unawaited(
+          _loadDecision(need, incremental: true, resetRankingLimit: false));
+      return;
+    }
+    if (_catalogo.canContinue(need.id, resultado)) {
+      unawaited(_leerElCatalogo(need, resolution, token));
+    }
+  }
+
   Future<void> _loadStockCandidates(SupplyNeed need) async {
     if (need.hasConfirmedProduct) return;
     if (_stockCandidatesNeedId == need.id) return;

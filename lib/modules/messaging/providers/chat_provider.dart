@@ -994,7 +994,16 @@ class ChatProvider extends ChangeNotifier {
       if (c.isSupplierConversation &&
           hintedSupplier != null &&
           hintedSupplier.isNotEmpty) {
-        return hintedSupplier;
+        // La empresa y, cuando se sabe, la persona: dos hilos del mismo
+        // proveedor con distinto vendedor se veían idénticos en la bandeja.
+        final person = c.contextHint?.contactPersonName?.trim();
+        if (person == null || person.isEmpty) return hintedSupplier;
+        // Un contacto desactivado conserva su hilo, pero ya no es a quien se
+        // le escribe: la bandeja lo dice en el título.
+        final former = c.contextHint?.contactPersonIsActive == false;
+        return former
+            ? '$hintedSupplier · $person (anterior)'
+            : '$hintedSupplier · $person';
       }
       if (c.creatorName != null && c.creatorName!.isNotEmpty) {
         return c.creatorName ?? 'Cliente';

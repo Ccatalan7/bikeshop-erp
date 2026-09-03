@@ -10,6 +10,7 @@ import '../utils/whatsapp_message_filters.dart';
 import 'messaging_attachment_service.dart';
 import 'messaging_command_idempotency_store.dart';
 import 'whatsapp_cloud_service.dart';
+import '../../../shared/utils/supplier_whatsapp_phone.dart';
 // For VoidCallback
 
 class MessageReceiptRealtimeUpdate {
@@ -314,6 +315,8 @@ class MessagingService {
     final contextIdByConversation = <String, String?>{};
     final customerIdByConversation = <String, String>{};
     final contactNameByConversation = <String, String>{};
+    final supplierContactIdByConversation = <String, String>{};
+    final supplierContactRowsById = <String, Map<String, dynamic>>{};
     final phoneByConversation = <String, String>{};
     final explicitJobIds = <String>{};
     final explicitInvoiceIds = <String>{};
@@ -387,7 +390,7 @@ class MessagingService {
       final bindings = await _client
           .from('whatsapp_conversation_bindings')
           .select(
-            'conversation_id, customer_id, contact_name, external_phone_number',
+            'conversation_id, customer_id, contact_name, external_phone_number, supplier_contact_id',
           )
           .inFilter('conversation_id', ids);
 
@@ -407,6 +410,10 @@ class MessagingService {
         if (contactName != null) {
           contactNameByConversation[conversationId] = contactName;
         }
+        final supplierContactId = _text(binding['supplier_contact_id']);
+        if (supplierContactId != null) {
+          supplierContactIdByConversation[conversationId] = supplierContactId;
+        }
 
         final phone = _text(binding['external_phone_number']);
         if (phone != null) {
@@ -414,6 +421,23 @@ class MessagingService {
           final candidates = _phoneLookupCandidates(phone);
           phoneCandidatesByConversation[conversationId] = candidates;
           allPhoneCandidates.addAll(candidates);
+        }
+      }
+
+      // La persona del hilo, cuando el vínculo la conoce: manda sobre
+      // cualquier deducción por número o nombre de perfil.
+      if (supplierContactIdByConversation.isNotEmpty) {
+        final contactRows = await _client
+            .from('supplier_contacts')
+            .select('id, name, role, is_primary, is_active')
+            .inFilter(
+              'id',
+              supplierContactIdByConversation.values.toSet().toList(),
+            );
+        for (final rawContact in contactRows as List) {
+          final contact = _rowMap(rawContact);
+          final contactId = _text(contact['id']);
+          if (contactId != null) supplierContactRowsById[contactId] = contact;
         }
       }
 
@@ -449,7 +473,7 @@ class MessagingService {
     final supplierPhoneCandidatesById = <String, Set<String>>{};
     try {
       dynamic query = _client.from('suppliers').select(
-            'id, name, phone, sales_rep_phone, is_active',
+            'id, name, phone, sales_rep_phone, sales_rep_name, is_active',
           );
       if (tenantId != null && tenantId.isNotEmpty) {
         query = query.eq('tenant_id', tenantId);
@@ -867,6 +891,10 @@ class MessagingService {
           ? null
           : bikeNameByJobId[jobId] ?? _bikeNameFromRow(bikeRowsById[bikeId]);
 
+      final linkedContactId = supplierContactIdByConversation[conversationId];
+      final linkedContact = linkedContactId == null
+          ? null
+          : supplierContactRowsById[linkedContactId];
       final hint = ConversationContextHint(
         customerId: customerId,
         customerName: _text(customer == null ? null : customer['name']) ??
@@ -907,6 +935,28 @@ class MessagingService {
             _text(supplier == null ? null : supplier['sales_rep_phone']) ??
                 _text(supplier == null ? null : supplier['phone']) ??
                 phoneByConversation[conversationId],
+        contactPersonName:
+            (linkedContact == null ? null : _text(linkedContact['name'])) ??
+                (supplier == null
+                    ? null
+                    : supplierContactPersonName(
+                        supplierName: _text(supplier['name']),
+                        bindingContactName:
+                            contactNameByConversation[conversationId],
+                        threadPhone: phoneByConversation[conversationId],
+                        salesRepName: _text(supplier['sales_rep_name']),
+                        salesRepPhone: _text(supplier['sales_rep_phone']),
+                      )),
+        contactPersonId:
+            linkedContact == null ? null : _text(linkedContact['id']),
+        contactPersonRole:
+            linkedContact == null ? null : _text(linkedContact['role']),
+        contactPersonIsActive:
+            linkedContact == null ? null : linkedContact['is_active'] != false,
+        contactPersonIsPrimary:
+            linkedContact == null ? null : linkedContact['is_primary'] == true,
+        supplierPrimaryContactName:
+            supplier == null ? null : _text(supplier['sales_rep_name']),
         purchaseInvoiceId:
             purchaseInvoice == null ? null : _text(purchaseInvoice['id']),
         purchaseInvoiceNumber: purchaseInvoice == null

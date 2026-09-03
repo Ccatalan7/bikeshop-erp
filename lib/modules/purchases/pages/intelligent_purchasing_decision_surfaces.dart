@@ -52,6 +52,37 @@ enum CandidateCompliance {
   unevaluated,
 }
 
+/// De dónde salió la evidencia que da por cumplidos los criterios.
+///
+/// **La procedencia tiene que llegar hasta la palabra.** Desde que una lectura
+/// del nombre —verificada por el servidor contra el vocabulario de la ficha—
+/// cuenta como prueba, una fila puede estar completa sin que exista ninguna
+/// ficha, y decir «según la ficha» sería falso justo en el caso nuevo. El
+/// rótulo se arma con lo que dice `matchDetail`, que es el único lugar donde
+/// consta de dónde salió cada campo.
+String? supplyEvidenceProvenanceLabel(List<Map<String, dynamic>> matchDetail) {
+  final fuentes = <String>{
+    for (final entry in matchDetail)
+      if (entry['source'] != null) entry['source'].toString(),
+  }..removeWhere((fuente) =>
+      fuente != 'product_spec' &&
+      fuente != 'name_reading' &&
+      fuente != 'identity_fallback');
+  if (fuentes.isEmpty) return null;
+  if (fuentes.length > 1) return 'según la evidencia comprobada';
+  switch (fuentes.single) {
+    case 'product_spec':
+      return 'según la ficha';
+    case 'name_reading':
+      // No es la ficha del taller: es el nombre del producto, leído y
+      // comprobado contra el vocabulario que la ficha declara.
+      return 'según el nombre del producto, comprobado';
+    case 'identity_fallback':
+      return 'según la identidad del producto';
+  }
+  return null;
+}
+
 CandidateCompliance complianceOf(PurchaseCandidate candidate) {
   // El candidato de la fase B2 sabe cómo calzó con la petición; el histórico
   // no, y conserva su lectura de siempre.
@@ -696,7 +727,7 @@ class CandidateInspectorPanel extends StatelessWidget {
     required this.quantity,
     required this.unitLabel,
     required this.onClose,
-    required this.onAddToPlan,
+    this.onAddToPlan,
     required this.onOpenSupplier,
     required this.adding,
     required this.alreadyInPlan,
@@ -715,7 +746,9 @@ class CandidateInspectorPanel extends StatelessWidget {
   /// pares no se lee «2 U.».
   final String unitLabel;
   final VoidCallback onClose;
-  final VoidCallback onAddToPlan;
+
+  /// Nulo cuando la fila no está comprobada: se puede mirar, no comprometer.
+  final VoidCallback? onAddToPlan;
   final VoidCallback? onOpenSupplier;
 
   /// Carril familia: la necesidad todavía no tiene producto confirmado, así
@@ -895,7 +928,14 @@ class CandidateInspectorPanel extends StatelessWidget {
                     _InspectorRow(
                       label: 'Cumple los criterios de la petición',
                       value: switch (compliance) {
-                        CandidateCompliance.meets => 'sí, según la ficha',
+                        CandidateCompliance.meets => 'sí, '
+                            '${supplyEvidenceProvenanceLabel(
+                                  switch (candidate) {
+                                    final SupplyExternalCandidate external =>
+                                      external.matchDetail,
+                                    _ => const <Map<String, dynamic>>[],
+                                  },
+                                ) ?? 'según la evidencia comprobada'}',
                         CandidateCompliance.meetsByName =>
                           'coincide por el nombre, no por la ficha',
                         CandidateCompliance.noCriteria =>
@@ -1052,7 +1092,7 @@ class _InspectorFooter extends StatelessWidget {
     required this.currency,
     required this.adding,
     required this.alreadyInPlan,
-    required this.onAddToPlan,
+    this.onAddToPlan,
     required this.onOpenSupplier,
     this.onChooseProduct,
     this.onQuantityChanged,
@@ -1064,7 +1104,9 @@ class _InspectorFooter extends StatelessWidget {
   final String currency;
   final bool adding;
   final bool alreadyInPlan;
-  final VoidCallback onAddToPlan;
+
+  /// Nulo cuando la fila no está comprobada: se puede mirar, no comprometer.
+  final VoidCallback? onAddToPlan;
   final VoidCallback? onOpenSupplier;
   final VoidCallback? onChooseProduct;
 
@@ -1173,11 +1215,22 @@ class _InspectorFooter extends StatelessWidget {
                   label: 'Elegir producto',
                   onPressed: adding ? null : onChooseProduct,
                 )
-              else
+              else if (onAddToPlan != null)
                 PurchasePrimaryButton(
                   key: const ValueKey('add-candidate-to-plan'),
                   label: alreadyInPlan ? 'En el plan' : 'Agregar al plan',
                   onPressed: adding || alreadyInPlan ? null : onAddToPlan,
+                )
+              else
+                // **Sin comprobar no hay atajo, y se dice por qué.** Un botón
+                // ausente sin explicación se lee como un defecto; esto se lee
+                // como lo que es: falta evidencia, no falta la función.
+                Text(
+                  'Sin verificar contra los criterios',
+                  key: const ValueKey('candidate-unverified-note'),
+                  style: PurchaseType.meta.copyWith(
+                    color: PurchaseTokens.of(context).inkMuted,
+                  ),
                 ),
             ],
           ),
@@ -4057,21 +4110,56 @@ class FamilyStockOptions extends StatelessWidget {
   /// —por ficha o por el nombre curado— y ninguno se contradijo. `no_criteria`
   /// también entra: sin criterios no hay nada que comprobar y esconderla sería
   /// castigarla por una pregunta que nadie hizo.
-  static bool _isChecked(SupplyStockOption option) =>
-      option.matchState != 'unverified';
+  /// Qué se revisó y qué quedó sin comprobar, dicho en el mismo lugar.
+  ///
+  /// Callar lo revisado escondería que el catálogo está sin fichar, que es la
+  /// razón real de que haya tan pocas alternativas; decirlo como «alternativas»
+  /// sería volver al número que engañaba.
+  static String _stockSubtitle(SupplyStockResolution resolution) {
+    final counts = resolution.counts;
+    const base =
+        'Elegir una fija qué producto es la necesidad. Sumar varias no '
+        'demuestra cobertura: cada alternativa se evalúa por separado.';
+    if (counts.unverified == 0) return base;
+    final revisadas = counts.reviewed == 1
+        ? 'Se revisó 1 producto de la categoría'
+        : 'Se revisaron ${counts.reviewed} productos de la categoría';
+    final sinFicha = counts.unverified == 1
+        ? '1 quedó sin verificar contra los criterios'
+        : '${counts.unverified} quedaron sin verificar contra los criterios';
+    return '$revisadas y $sinFicha. $base';
+  }
 
-  /// «Sin verificar contra los criterios · 121». El número va porque el
-  /// tamaño del grupo es la información: dice cuánto del catálogo está sin
-  /// fichar, que es la razón real de que estén ahí abajo.
-  static String _uncheckedBandLabel(List<SupplyStockOption> unchecked) =>
-      'SIN VERIFICAR CONTRA LOS CRITERIOS · ${unchecked.length}';
+  /// La misma lista positiva que exige el servidor: un estado futuro que nadie
+  /// conoce cae del lado de lo no comprobado, que es el lado seguro.
+  static bool _isChecked(SupplyStockOption option) => option.isChecked;
 
-  static String _matchLabel(String matchState) {
+  /// «Sin verificar contra los criterios · 47». El número va porque el tamaño
+  /// del grupo es la información: dice cuánto del catálogo está sin fichar, que
+  /// es la razón real de que estén ahí abajo.
+  ///
+  /// **Es el total del grupo, no lo que trajo esta página.** Contando las filas
+  /// recibidas, la banda decía 11 y pasaba a 22 al pulsar `Ver más` sobre un
+  /// grupo que en realidad tiene 47: el número parecía crecer con el scroll y
+  /// no describía nada.
+  static String _uncheckedBandLabel(SupplyStockResolution resolution) =>
+      'POR CONFIRMAR CONTRA LOS CRITERIOS · ${resolution.counts.unverified}';
+
+  static String _matchLabel(String matchState,
+      [List<Map<String, dynamic>> matchDetail =
+          const <Map<String, dynamic>>[]]) {
     switch (matchState) {
       case 'strong':
-        return 'cumple los criterios según la ficha';
+        // La procedencia va en la frase: una fila puede estar comprobada por
+        // la ficha, por el nombre leído o por la identidad curada, y decir
+        // «según la ficha» en los dos últimos casos sería mentira.
+        return 'cumple los criterios '
+            '${supplyEvidenceProvenanceLabel(matchDetail) ?? 'con la evidencia comprobada'}';
       case 'weak':
-        return 'coincide por el nombre, no por la ficha';
+        // **«Coincide por el nombre» no es «cumple».** Este rótulo convivía con
+        // un botón `Elegir producto`, y con dos de tres criterios sin resolver
+        // eso se leía como cumplimiento. La frase dice ahora lo que falta.
+        return 'algo coincide; faltan criterios por comprobar';
       case 'no_criteria':
         return 'sin criterios técnicos que comparar';
       default:
@@ -4095,17 +4183,22 @@ class FamilyStockOptions extends StatelessWidget {
       Text(
         // La identidad de la superficie, no un encabezado de bloque: es el
         // rol `surface_title` que el spec reserva para Stock interno.
+        //
+        // **Lo comprobado, no lo revisado.** Este título decía «49 alternativas
+        // internas elegibles» sobre un conjunto donde 47 filas no tenían un
+        // solo criterio establecido —patines V-Brake, pastillas Avid— porque
+        // contaba el universo de la categoría. La categoría dice qué hay que
+        // mirar; la compatibilidad la prueban la identidad y los criterios.
         resolution.counts.eligible == 1
-            ? '1 alternativa interna elegible'
-            : '${resolution.counts.eligible} alternativas internas elegibles',
+            ? '1 alternativa interna comprobada'
+            : '${resolution.counts.eligible} alternativas internas comprobadas',
         style: PurchaseType.surfaceTitle.copyWith(color: tokens.ink),
       ),
       const SizedBox(height: 3),
       Text(
         // El agregado de familia no prueba cobertura: sumar dos variantes
         // distintas es una decisión del taller, no una propiedad del stock.
-        'Elegir una fija qué producto es la necesidad. Sumar varias no '
-        'demuestra cobertura: cada alternativa se evalúa por separado.',
+        _stockSubtitle(resolution),
         style: PurchaseType.meta
             .copyWith(color: theme.colorScheme.onSurfaceVariant),
       ),
@@ -4145,7 +4238,7 @@ class FamilyStockOptions extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8, left: 2),
                     child: Text(
-                      _uncheckedBandLabel(unchecked),
+                      _uncheckedBandLabel(resolution),
                       style:
                           PurchaseType.label.copyWith(color: tokens.inkFaint),
                     ),
@@ -4181,7 +4274,7 @@ class FamilyStockOptions extends StatelessWidget {
                     // La banda sólo existe cuando hay dos grupos que separar.
                     // Con uno solo sería un rótulo sobre nada.
                     if (checked.isNotEmpty && unchecked.isNotEmpty)
-                      _StockGroupBand(label: _uncheckedBandLabel(unchecked)),
+                      _StockGroupBand(label: _uncheckedBandLabel(resolution)),
                     for (final option in unchecked)
                       _FamilyStockRow(
                         option: option,
@@ -4195,8 +4288,12 @@ class FamilyStockOptions extends StatelessWidget {
             if (resolution.page.hasMore) ...[
               const SizedBox(height: PurchaseMetrics.stageGap),
               Text(
+                // **Lo paginado son productos revisados, no alternativas.** La
+                // página entrega el conjunto entero —comprobado y no—, así que
+                // llamarlo «alternativas» volvía a mezclar los dos conceptos
+                // justo debajo de un título que ya los separaba.
                 'Mostrando ${resolution.page.returned} de '
-                '${resolution.page.total} alternativas en bodega.',
+                '${resolution.page.total} productos revisados.',
                 style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
               ),
               Align(
@@ -4280,7 +4377,8 @@ class _FamilyStockRow extends StatelessWidget {
                     if (option.sku != null) option.sku!,
                     FamilyStockOptions._coverageLabel(option, requested),
                     // «No lo sé» no es «no cumple»: se rotula y se sigue.
-                    FamilyStockOptions._matchLabel(option.matchState),
+                    FamilyStockOptions._matchLabel(
+                        option.matchState, option.matchDetail),
                   ].join(' · '),
                   style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
                 ),
@@ -4315,11 +4413,23 @@ class _FamilyStockRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          OutlinedButton(
-            key: ValueKey('choose-stock-product-${option.productId}'),
-            onPressed: busy ? null : onChoose,
-            child: const Text('Elegir producto'),
-          ),
+          // **Elegir fija la identidad de la necesidad: exige prueba.** Sobre
+          // una fila que nadie pudo verificar, «Elegir producto» convertía una
+          // coincidencia de categoría en la respuesta del taller. Se conserva
+          // visible —el operador puede mirarla y decidir con sus ojos— pero sin
+          // el atajo que la declara compatible.
+          if (option.isUnverified)
+            Text(
+              'sin verificar',
+              key: ValueKey('unverified-stock-note-${option.productId}'),
+              style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
+            )
+          else
+            OutlinedButton(
+              key: ValueKey('choose-stock-product-${option.productId}'),
+              onPressed: busy ? null : onChoose,
+              child: const Text('Elegir producto'),
+            ),
         ],
       ),
     );
@@ -4374,10 +4484,23 @@ class _FamilyStockCard extends StatelessWidget {
                     '${FamilyStockOptions._coverageLabel(option, requested)}',
                     style: PurchaseType.meta,
                   ),
-                  Text(
-                    FamilyStockOptions._matchLabel(option.matchState),
-                    style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
-                  ),
+                  // **El mismo veredicto no se dice dos veces.** En una fila
+                  // sin verificar, esta línea y la nota que reemplaza al botón
+                  // decían lo mismo con distintas palabras, una encima de la
+                  // otra. La nota se queda —está donde estaría el CTA y
+                  // explica por qué no hay— y acá se calla lo que ya se dijo.
+                  // En las demás filas sí aporta: es la única que nombra de
+                  // dónde salió la evidencia, y ésas sí llevan botón.
+                  if (!option.isUnverified)
+                    Text(
+                      // La procedencia también en el teléfono: sin
+                      // `matchDetail` la tarjeta compacta decía «según la
+                      // ficha» de una fila comprobada por su nombre, que es la
+                      // misma mentira con menos ancho.
+                      FamilyStockOptions._matchLabel(
+                          option.matchState, option.matchDetail),
+                      style: PurchaseType.meta.copyWith(color: tokens.inkMuted),
+                    ),
                   if (option.evidenceState != 'unknown')
                     Text(
                       supplySourcingLabel(option),
@@ -4389,14 +4512,26 @@ class _FamilyStockCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 9),
-        SizedBox(
-          height: PurchaseMetrics.touchTarget,
-          child: OutlinedButton(
-            key: ValueKey('choose-stock-product-${option.productId}'),
-            onPressed: busy ? null : onChoose,
-            child: const Text('Elegir producto'),
+        // **Elegir fija la identidad de la necesidad: exige prueba.** Sobre
+        // una fila que nadie pudo verificar, «Elegir producto» convertía una
+        // coincidencia de categoría en la respuesta del taller. Se conserva
+        // visible —el operador puede mirarla y decidir con sus ojos— pero sin
+        // el atajo que la declara compatible.
+        if (option.isUnverified)
+          Text(
+            'no se pudo verificar contra los criterios',
+            key: ValueKey('unverified-stock-note-${option.productId}'),
+            style: PurchaseType.meta.copyWith(color: tokens.inkFaint),
+          )
+        else
+          SizedBox(
+            height: PurchaseMetrics.touchTarget,
+            child: OutlinedButton(
+              key: ValueKey('choose-stock-product-${option.productId}'),
+              onPressed: busy ? null : onChoose,
+              child: const Text('Elegir producto'),
+            ),
           ),
-        ),
       ],
     );
   }

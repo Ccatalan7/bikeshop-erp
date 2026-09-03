@@ -11,6 +11,33 @@ class IntelligentPurchasingService {
 
   final SupabaseClient _client;
 
+  /// Guarda un hecho leído del nombre de un producto, con su cita.
+  ///
+  /// El servidor vuelve a comprobarlo todo: que la cita esté en el texto
+  /// vigente, que sostenga ese valor y no otro del mismo campo, y que no haya
+  /// ya un dato de una persona. Devuelve su veredicto — `recorded`,
+  /// `kept_existing` o `rejected` con la razón — y **nunca lanza por un
+  /// rechazo**: que una lectura no entre es un resultado normal, no un fallo.
+  Future<Map<String, Object?>> recordProductSpecReading({
+    required String productId,
+    required String fieldKey,
+    required Object value,
+    required String quote,
+    String model = 'gemini',
+  }) async {
+    final response = await _client.rpc(
+      'record_product_spec_reading_v1',
+      params: {
+        'p_product_id': productId,
+        'p_field_key': fieldKey,
+        'p_value': value,
+        'p_quote': quote,
+        'p_model': model,
+      },
+    );
+    return _map(response);
+  }
+
   Future<Map<String, JobSupplyAttention>> fetchJobSupplyAttention(
     Iterable<String> jobIds,
   ) async {

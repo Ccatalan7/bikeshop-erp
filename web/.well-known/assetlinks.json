@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.vinabike.erp",
+      "sha256_cert_fingerprints": [
+        "7E:65:1E:B2:98:9B:22:A9:D9:26:2F:91:F0:65:7E:3A:51:21:34:AC:76:75:71:5F:ED:14:42:73:AD:2A:89:7C"
+      ]
+    }
+  }
+]

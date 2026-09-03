@@ -645,3 +645,37 @@ el flete se come.
 Antes de agregar por una dimensión, comprueba la granularidad real con
 `count(*)` contra `count(distinct <dimensión>)`. El nombre de la vista no la
 declara.
+
+### Un forward que agrega una clave ajena tiene que poder volver a correr
+
+Una `foreign key` compuesta cuelga del índice único al que apunta, así que un
+`drop constraint if exists` sobre ese índice falla mientras la clave ajena
+exista. Si el forward crea las dos, retira **primero** la clave ajena y después
+el índice; si no, el archivo se aplica una vez y falla en el segundo intento
+—que es exactamente lo que pasa al probarlo en local antes de desplegarlo—.
+Costó dos vueltas el 2026-08-31.
+
+## Producción tiene un arreglo a mano que el repositorio no tiene (2026-09-02)
+
+`public.auto_update_purchase_list_on_invoice_status()` difiere entre producción
+y lo que generan las migraciones: producción envuelve el `product_id` con
+`nullif(…, '')::uuid` dentro de un `begin … exception` y las migraciones
+siguen con el cast directo. La batería local completa (`just db-gate`, 173
+archivos) muere por eso en `supplier_relationship_foundation.sql`, prueba 38
+(`invalid input syntax for type uuid: ""`), **antes** de llegar a cualquier
+bloque que se agregue al final de ese archivo. Un bloque nuevo ahí no se
+ejecuta y su verde es mentira.
+
+Mientras el arreglo no vuelva al repositorio como migración, un comando nuevo
+se prueba en **su propio archivo pgTAP** con sus propias fixtures y
+`request.jwt.claims` en `service_role` (ver
+`supabase/tests/supplier_sales_rep_command.sql`), y se corre solo con
+`just db-test <archivo>`. Ojo: `db-gate` reconstruye local desde las
+migraciones pero no siempre deja aplicada la última recién escrita (dijo
+«historical fixture hash unchanged» y la función no existía); comprobar con
+`to_regprocedure` y, si falta, aplicarla en local con `query.sh local --write
+--file`.
+
+Quien tome el arreglo del trigger: escribir la migración con la versión de
+producción (`pg_get_functiondef` en `production` es la fuente), no la copia
+local.

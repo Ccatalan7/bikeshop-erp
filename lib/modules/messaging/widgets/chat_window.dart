@@ -48,6 +48,9 @@ import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/file_download.dart';
 import '../../../shared/utils/purchase_document_pdf_generator.dart';
 import '../models/conversation_context_hint.dart';
+import '../../../shared/utils/supplier_whatsapp_phone.dart';
+import '../../../shared/widgets/vb_status_badge.dart';
+import '../../../shared/widgets/vb_surface_icon_button.dart';
 
 class _EmojiGroup {
   final String label;
@@ -112,6 +115,18 @@ class _ChatAttachment {
   });
 }
 
+/// Un hilo de proveedor que corre por otro número que el registrado en su
+/// ficha (el vendedor, o el Teléfono si no hay vendedor con número).
+class _SupplierPhoneMismatch {
+  const _SupplierPhoneMismatch({
+    required this.threadPhone,
+    required this.registeredPhone,
+  });
+
+  final String threadPhone;
+  final String registeredPhone;
+}
+
 class _PendingChatAttachment {
   final String id;
   final String fileName;
@@ -124,8 +139,8 @@ class _PendingChatAttachment {
   final bool canRetrySafely;
   final String? replayCaption;
 
-  /// Purchase document this attachment carries, when it was generated from a
-  /// draft. A confirmed send is what moves that draft to «Enviada», so the
+  /// Purchase document this attachment carries. A confirmed send moves a
+  /// draft to «Enviada» and leaves an already-sent document there, so the
   /// identity has to survive every retry the composer allows.
   final String? purchaseInvoiceId;
   final String? purchaseInvoiceNumber;
@@ -474,6 +489,8 @@ class _ChatWindowState extends State<ChatWindow> {
   String? _whatsAppContactFutureConversationId;
   Future<Map<String, dynamic>?>? _conversationContactFuture;
   String? _conversationContactFutureConversationId;
+  Future<_SupplierPhoneMismatch?>? _supplierPhoneMismatchFuture;
+  String? _supplierPhoneMismatchConversationId;
 
   // Cache futures so FutureBuilder doesn't re-fire on every rebuild.
   final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
@@ -750,6 +767,108 @@ class _ChatWindowState extends State<ChatWindow> {
     _whatsAppContactFutureConversationId = null;
     _conversationContactFuture = null;
     _conversationContactFutureConversationId = null;
+    _supplierPhoneMismatchFuture = null;
+    _supplierPhoneMismatchConversationId = null;
+  }
+
+  Future<_SupplierPhoneMismatch?> _getSupplierPhoneMismatchFuture() {
+    if (_supplierPhoneMismatchConversationId != widget.conversation.id) {
+      _supplierPhoneMismatchConversationId = widget.conversation.id;
+      _supplierPhoneMismatchFuture = _resolveSupplierPhoneMismatch();
+    }
+    return _supplierPhoneMismatchFuture ??= _resolveSupplierPhoneMismatch();
+  }
+
+  /// El número registrado viene en el hint (vendedor, o el Teléfono de la
+  /// ficha); el del hilo lo dice el vínculo WhatsApp. Cuando el vendedor
+  /// cambia, el hilo viejo sigue abierto con sus mensajes y el ERP le escribe
+  /// al nuevo: el panel lo declara en vez de mostrar dos números sin explicar.
+  Future<_SupplierPhoneMismatch?> _resolveSupplierPhoneMismatch() async {
+    if (!widget.conversation.isSupplierConversation ||
+        !_isWhatsAppConversation) {
+      return null;
+    }
+    final registered = widget.conversation.contextHint?.supplierPhone?.trim();
+    if (!supplierPhoneIsUsable(registered)) return null;
+    Map<String, dynamic>? contact;
+    try {
+      contact = await _getConversationContactFuture();
+    } catch (_) {
+      return null;
+    }
+    final threadPhone = contact?['phone']?.toString().trim();
+    if (!supplierThreadPhoneDiffers(
+      threadPhone: threadPhone,
+      registeredPhone: registered,
+    )) {
+      return null;
+    }
+    return _SupplierPhoneMismatch(
+      threadPhone: threadPhone!,
+      registeredPhone: registered!,
+    );
+  }
+
+  /// Abre —o crea— el hilo con el número registrado del proveedor y lo deja
+  /// activo en la bandeja de proveedores. El hilo viejo no se toca: queda en
+  /// el historial con sus mensajes.
+  Future<void> _openRegisteredSupplierChat(
+    _SupplierPhoneMismatch mismatch,
+  ) async {
+    if (_isSendingMessage) return;
+    final provider = context.read<ChatProvider>();
+    final toolbar = context.read<RightToolbarService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final hint = widget.conversation.contextHint;
+    final supplierId = hint?.supplierId ??
+        (_effectiveContextType == 'supplier' ? _effectiveContextId : null);
+    final supplierName = hint?.supplierName?.trim();
+    setState(() => _isSendingMessage = true);
+    try {
+      await provider.openWhatsAppCustomerChat(
+        phoneNumber: mismatch.registeredPhone,
+        contactName: supplierName != null && supplierName.isNotEmpty
+            ? supplierName
+            : widget.conversation.title ?? 'Proveedor',
+        contextType: supplierId == null ? null : 'supplier',
+        contextId: supplierId,
+      );
+      if (!mounted) return;
+      final conversationId = provider.activeConversationId;
+      if (conversationId != null && conversationId != widget.conversation.id) {
+        toolbar.openConversation(
+          tool: ToolbarTool.supplierMessages,
+          conversationId: conversationId,
+        );
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Chat abierto con ${_formatContactPhone(mismatch.registeredPhone)}.',
+          ),
+          backgroundColor: roles.success.accent,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo abrir el chat: $e'),
+          backgroundColor: roles.danger.accent,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSendingMessage = false);
+    }
+  }
+
+  Future<void> _copyPanelValue(String value, {required String label}) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label copiado')),
+    );
   }
 
   Future<Map<String, dynamic>?> _getWhatsAppContactFuture() {
@@ -4200,7 +4319,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 _buildChatInfoNavItem(
                   section: _ChatInfoSection.media,
                   icon: Icons.perm_media_outlined,
-                  label: 'Multimedia y docs',
+                  label: 'Archivos',
                   badge: '${mediaCount + fileCount}',
                 ),
                 _buildChatInfoNavItem(
@@ -4413,6 +4532,9 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  /// Info responde «¿con quién hablo y sobre qué?». Los contadores de
+  /// mensajes cargados eran diagnóstico, no información; el nombre ya está en
+  /// la cabecera; y las acciones viven en Gestión.
   Widget _buildChatInfoOverview({
     required ThemeData theme,
     required String title,
@@ -4420,61 +4542,57 @@ class _ChatWindowState extends State<ChatWindow> {
     required List<Message> messages,
     required List<_ChatAttachment> attachments,
   }) {
-    final inboundCount = messages.where((message) => !message.isMe).length;
-    final outboundCount = messages.where((message) => message.isMe).length;
+    final conversation = widget.conversation;
+    final contactHint = conversation.contextHint;
+    final contactPerson = contactHint?.contactPersonName?.trim();
+    final contactPersonLine = contactPerson == null || contactPerson.isEmpty
+        ? null
+        : [
+            contactPerson,
+            if (contactHint?.contactPersonRole?.trim().isNotEmpty == true)
+              contactHint!.contactPersonRole!.trim(),
+            if (contactHint?.contactPersonIsActive == false)
+              'contacto anterior',
+          ].join(' · ');
     final lastMessageAt = messages.isEmpty ? null : messages.last.createdAt;
+    final hasContext = conversation.hasLinkedContext ||
+        conversation.contextHint?.hasOperationalContext == true;
+    final canLinkContext = conversation.isSupport &&
+        !conversation.isSupplierConversation &&
+        !conversation.isTaskThread;
 
     return _buildChatInfoContentShell(
       theme: theme,
       title: 'Info',
       subtitle: title,
       children: [
-        Wrap(
-          spacing: 18,
-          runSpacing: 9,
-          children: [
-            _buildChatStat(
-              Icons.forum_outlined,
-              '${messages.length} mensajes cargados',
-            ),
-            _buildChatStat(
-              Icons.call_received_outlined,
-              '$inboundCount entrantes cargados',
-            ),
-            _buildChatStat(
-              Icons.call_made_outlined,
-              '$outboundCount salientes cargados',
-            ),
-            _buildChatStat(
-              Icons.attach_file,
-              '${attachments.length} archivos cargados',
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
+        _buildPanelSectionTitle(theme, 'Conversación'),
+        const SizedBox(height: 10),
         _buildPanelBlock(
           theme: theme,
           children: [
-            _buildInfoRowTile(
-              icon: Icons.badge_outlined,
-              title: 'Nombre',
-              value: title,
-            ),
-            if (widget.conversation.isSupport) _buildContactPhoneInfoRow(),
+            if (conversation.isSupport)
+              _buildContactPhoneInfoRow(
+                title: _isWhatsAppConversation ? 'Número' : 'Teléfono',
+              ),
+            if (contactPersonLine != null)
+              _buildInfoRowTile(
+                icon: Icons.person_outline,
+                title: 'Contacto',
+                value: contactPersonLine,
+              ),
             _buildInfoRowTile(
               icon: Icons.route_outlined,
               title: 'Canal',
-              value: widget.conversation.channelLabel,
+              value: conversation.channelLabel,
             ),
             _buildInfoRowTile(
               icon: Icons.flag_outlined,
               title: 'Estado',
-              value: _statusLabel(widget.conversation.status),
-            ),
-            _buildInfoRowTile(
-              icon: _contextIcon(_effectiveContextType),
-              title: 'Contexto',
-              value: _contextLabel(_effectiveContextType) ?? 'Sin contexto',
+              trailing: VbStatusBadge(
+                label: _statusLabel(conversation.status),
+                tone: _statusTone(conversation.status),
+              ),
             ),
             _buildInfoRowTile(
               icon: Icons.schedule_outlined,
@@ -4485,17 +4603,34 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
           ],
         ),
-        if (widget.conversation.contextHint?.hasOperationalContext == true) ...[
+        if (hasContext) ...[
           const SizedBox(height: 18),
-          _buildOperationalContextCard(theme),
-        ],
-        const SizedBox(height: 14),
-        Text(
-          '$subtitle · Las acciones están ordenadas en Gestión.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+          _buildPanelSectionTitle(
+            theme,
+            conversation.hasLinkedContext
+                ? 'Vinculado a'
+                : 'Contexto detectado',
           ),
-        ),
+          const SizedBox(height: 10),
+          _buildOperationalContextCard(theme),
+        ] else if (canLinkContext) ...[
+          const SizedBox(height: 18),
+          _buildPanelSectionTitle(theme, 'Vinculado a'),
+          const SizedBox(height: 10),
+          _buildPanelBlock(
+            theme: theme,
+            children: [
+              _buildManagementActionTile(
+                icon: Icons.link,
+                color: theme.colorScheme.primary,
+                title: 'Vincular contexto',
+                subtitle:
+                    'Este chat no está unido a un cliente, trabajo, venta o pedido',
+                onTap: () => _showAssignContextDialog(context),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -4509,8 +4644,10 @@ class _ChatWindowState extends State<ChatWindow> {
 
     return _buildChatInfoContentShell(
       theme: theme,
-      title: 'Multimedia y documentos',
-      subtitle: '${attachments.length} elementos en los mensajes cargados',
+      title: 'Archivos',
+      subtitle: attachments.length == 1
+          ? '1 archivo en esta conversación'
+          : '${attachments.length} archivos en esta conversación',
       trailing: FilledButton.icon(
         onPressed: () => _pickAndSendFile('file'),
         icon: const Icon(Icons.add, size: 18),
@@ -4526,7 +4663,7 @@ class _ChatWindowState extends State<ChatWindow> {
           )
         else ...[
           if (media.isNotEmpty) ...[
-            _buildPanelSectionTitle(theme, 'Multimedia'),
+            _buildPanelSectionTitle(theme, 'Fotos'),
             const SizedBox(height: 10),
             GridView.builder(
               shrinkWrap: true,
@@ -4602,9 +4739,7 @@ class _ChatWindowState extends State<ChatWindow> {
           if (hint?.purchaseInvoiceBalance != null)
             'Saldo ${_formatPanelCurrency(hint!.purchaseInvoiceBalance)}',
         ].join(' · '),
-      'supplier' => hint?.supplierPhone?.trim().isNotEmpty == true
-          ? hint!.supplierPhone!.trim()
-          : 'Ficha y abastecimiento del proveedor',
+      'supplier' => 'Ficha, compras y portal del proveedor',
       'task' => 'Ver asignación, trabajo, servicios y ciclo de la tarea',
       _ => 'Abrir sus datos sin abandonar la conversación',
     };
@@ -4618,67 +4753,85 @@ class _ChatWindowState extends State<ChatWindow> {
     return _buildChatInfoContentShell(
       theme: theme,
       title: 'Gestión',
-      subtitle: 'Estado, vínculo ERP y acciones operativas',
+      subtitle: 'Acciones sobre esta conversación',
       children: [
-        _buildPanelBlock(
-          theme: theme,
-          children: [
-            if (!widget.conversation.isSupplierConversation &&
-                !widget.conversation.isTaskThread)
-              _buildManagementActionTile(
-                icon: Icons.link,
-                color: theme.colorScheme.primary,
-                title: widget.conversation.hasLinkedContext
-                    ? 'Cambiar contexto'
-                    : widget.conversation.hasDetectedContext
-                        ? 'Confirmar contexto detectado'
-                        : 'Vincular contexto',
-                subtitle: _contextLabel(contextType) ??
-                    'Conecta este chat con cliente, trabajo, factura o pedido',
-                onTap: () => _showAssignContextDialog(context),
-              ),
-            if (hasSupportedContextPanel && _canOpenCurrentContext)
-              _buildManagementActionTile(
-                icon: _contextIcon(contextType),
-                color: theme.colorScheme.primary,
-                title: contextActionTitle,
-                subtitle: contextActionSubtitle.isEmpty
-                    ? 'Abrir sus datos sin abandonar la conversación'
-                    : contextActionSubtitle,
-                onTap: _openCurrentContext,
-              ),
-            if (canSendOperationalActions)
-              _buildManagementActionTile(
-                icon: Icons.flash_on,
-                color: theme.colorScheme.tertiary,
-                title: smartActions.hasInteractiveActions
-                    ? 'Preparar solicitud al cliente'
-                    : 'Mensajes para el cliente',
-                subtitle: smartActions.hasInteractiveActions
-                    ? 'Solo muestra acciones válidas para el contexto actual'
-                    : smartActions.explanation ??
-                        'Mensajes preparados con contexto del ERP',
-                onTap: () => _showSmartActions(context),
-              ),
-            if (_canStartWhatsAppFromConversation)
-              _buildManagementActionTile(
-                icon: Icons.phone_in_talk_outlined,
-                color: const Color(0xFF059669),
-                title: 'Abrir WhatsApp',
-                subtitle: 'Crea o recupera el hilo WhatsApp de este cliente',
-                onTap: () => _openWhatsAppConversationForCurrentContext(
-                  context,
-                ),
-              ),
-            if (canResolve)
-              _buildManagementActionTile(
-                icon: Icons.check_circle_outline,
-                color: const Color(0xFF0F766E),
-                title: 'Marcar como resuelto',
-                subtitle: 'Cierra la conversación en la bandeja de clientes',
-                onTap: _resolveCurrentConversation,
-              ),
-          ],
+        FutureBuilder<_SupplierPhoneMismatch?>(
+          future: _getSupplierPhoneMismatchFuture(),
+          builder: (context, snapshot) {
+            final mismatch = snapshot.data;
+            return _buildPanelBlock(
+              theme: theme,
+              children: [
+                if (mismatch != null)
+                  _buildManagementActionTile(
+                    icon: Icons.swap_horiz,
+                    color: theme.colorScheme.primary,
+                    title: _writeToPrimaryContactLabel,
+                    subtitle:
+                        '${_formatContactPhone(mismatch.registeredPhone)} · este hilo es con ${widget.conversation.contextHint?.contactPersonName ?? _formatContactPhone(mismatch.threadPhone)}',
+                    onTap: () => _openRegisteredSupplierChat(mismatch),
+                  ),
+                if (!widget.conversation.isSupplierConversation &&
+                    !widget.conversation.isTaskThread)
+                  _buildManagementActionTile(
+                    icon: Icons.link,
+                    color: theme.colorScheme.primary,
+                    title: widget.conversation.hasLinkedContext
+                        ? 'Cambiar contexto'
+                        : widget.conversation.hasDetectedContext
+                            ? 'Confirmar contexto detectado'
+                            : 'Vincular contexto',
+                    subtitle: _contextLabel(contextType) ??
+                        'Conecta este chat con cliente, trabajo, factura o pedido',
+                    onTap: () => _showAssignContextDialog(context),
+                  ),
+                if (hasSupportedContextPanel && _canOpenCurrentContext)
+                  _buildManagementActionTile(
+                    icon: _contextIcon(contextType),
+                    color: theme.colorScheme.primary,
+                    title: contextActionTitle,
+                    subtitle: contextActionSubtitle.isEmpty
+                        ? 'Abrir sus datos sin abandonar la conversación'
+                        : contextActionSubtitle,
+                    onTap: _openCurrentContext,
+                  ),
+                if (canSendOperationalActions)
+                  _buildManagementActionTile(
+                    icon: Icons.flash_on,
+                    color: theme.colorScheme.tertiary,
+                    title: smartActions.hasInteractiveActions
+                        ? 'Preparar solicitud al cliente'
+                        : 'Mensajes para el cliente',
+                    subtitle: smartActions.hasInteractiveActions
+                        ? 'Solo muestra acciones válidas para el contexto actual'
+                        : smartActions.explanation ??
+                            'Mensajes preparados con contexto del ERP',
+                    onTap: () => _showSmartActions(context),
+                  ),
+                if (_canStartWhatsAppFromConversation)
+                  _buildManagementActionTile(
+                    icon: Icons.phone_in_talk_outlined,
+                    color: const Color(0xFF059669),
+                    title: 'Abrir WhatsApp',
+                    subtitle:
+                        'Crea o recupera el hilo WhatsApp de este cliente',
+                    onTap: () => _openWhatsAppConversationForCurrentContext(
+                      context,
+                    ),
+                  ),
+                if (canResolve)
+                  _buildManagementActionTile(
+                    icon: Icons.check_circle_outline,
+                    color: const Color(0xFF0F766E),
+                    title: 'Marcar como resuelto',
+                    subtitle: widget.conversation.isSupplierConversation
+                        ? 'Cierra la conversación en la bandeja de proveedores'
+                        : 'Cierra la conversación en la bandeja de clientes',
+                    onTap: _resolveCurrentConversation,
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -4692,25 +4845,20 @@ class _ChatWindowState extends State<ChatWindow> {
     return _buildChatInfoContentShell(
       theme: theme,
       title: 'Respaldo',
-      subtitle: 'Exportación auditada de esta conversación',
+      subtitle: 'Descarga esta conversación como archivo',
       children: [
         _buildPanelBlock(
           theme: theme,
           children: [
             _buildInfoRowTile(
+              icon: Icons.description_outlined,
+              title: 'Formato',
+              value: 'JSON',
+            ),
+            _buildInfoRowTile(
               icon: Icons.forum_outlined,
-              title: 'Mensajes cargados',
-              value: '${messages.length}',
-            ),
-            _buildInfoRowTile(
-              icon: Icons.attach_file,
-              title: 'Archivos referenciados',
-              value: '${attachments.length}',
-            ),
-            _buildInfoRowTile(
-              icon: Icons.cloud_done_outlined,
-              title: 'Respaldo general',
-              value: 'Incluye chats y WhatsApp',
+              title: 'Contenido',
+              value: 'Mensajes, vínculos ERP y archivos',
             ),
           ],
         ),
@@ -4733,7 +4881,7 @@ class _ChatWindowState extends State<ChatWindow> {
         ),
         const SizedBox(height: 14),
         Text(
-          'El archivo JSON conserva conversación, participantes, vínculos ERP, mensajes, metadatos externos, estados WhatsApp y referencias a archivos.',
+          'El archivo se genera desde el servidor con todos los mensajes, no sólo los cargados en pantalla: participantes, vínculos con el ERP, estados de entrega de WhatsApp y referencias a los archivos.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             height: 1.35,
@@ -4828,24 +4976,119 @@ class _ChatWindowState extends State<ChatWindow> {
 
   String _formatPanelCurrency(double? amount) {
     if (amount == null) return '-';
-    return NumberFormat.currency(
-      locale: 'es_CL',
-      symbol: r'$',
-      decimalDigits: 0,
-    ).format(amount);
+    return ChileanUtils.formatCurrency(amount);
   }
 
+  /// Lo que el chat tiene detrás: proveedor o cliente, trabajo, venta o
+  /// compra, y el botón que abre cada cosa por su nombre. En un chat de
+  /// proveedor el «cliente» es la ficha técnica que WhatsApp crea por número:
+  /// no es información, no se muestra.
   Widget _buildOperationalContextCard(ThemeData theme) {
-    final hint = widget.conversation.contextHint;
-    if (hint == null || !hint.hasOperationalContext) {
+    final conversation = widget.conversation;
+    final hint = conversation.contextHint;
+    final hasHint = hint != null && hint.hasOperationalContext;
+    if (!hasHint && !conversation.hasLinkedContext) {
       return const SizedBox.shrink();
     }
 
     final colorScheme = theme.colorScheme;
-    final statusColor = _colorFromHex(
-      hint.jobStatusColor,
-      colorScheme.primary,
+    final isSupplierChat = conversation.isSupplierConversation;
+
+    return FutureBuilder<_SupplierPhoneMismatch?>(
+      future: _getSupplierPhoneMismatchFuture(),
+      builder: (context, snapshot) {
+        final mismatch = snapshot.data;
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: colorScheme.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (hint != null && hasHint)
+                ..._buildOperationalContextRows(theme, hint)
+              else
+                _buildOperationalContextRow(
+                  icon: _contextIcon(_effectiveContextType),
+                  title: _contextLabel(_effectiveContextType) ??
+                      'Registro vinculado',
+                  value: '',
+                ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  // Este hilo no es con el contacto principal: la salida es
+                  // una sola, escribirle a quien corresponde hoy.
+                  if (mismatch != null)
+                    FilledButton.icon(
+                      onPressed: _isSendingMessage
+                          ? null
+                          : () => _openRegisteredSupplierChat(mismatch),
+                      icon: const Icon(Icons.swap_horiz, size: 16),
+                      label: Text(_writeToPrimaryContactLabel),
+                    ),
+                  if (_canOpenCurrentContext)
+                    if (mismatch != null)
+                      OutlinedButton.icon(
+                        onPressed: _openCurrentContext,
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: Text(_openContextActionLabel),
+                      )
+                    else
+                      FilledButton.icon(
+                        onPressed: _openCurrentContext,
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: Text(_openContextActionLabel),
+                      ),
+                  if (hint != null &&
+                      hint.hasPurchaseInvoice &&
+                      _effectiveContextType != 'purchase_invoice')
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          context.read<WorkspaceManager>().openRouteInWorkspace(
+                                '/purchases/${hint.purchaseInvoiceId!}',
+                              ),
+                      icon: const Icon(Icons.inventory_2_outlined, size: 16),
+                      label: const Text('Abrir compra'),
+                    ),
+                  if (hint != null &&
+                      hint.hasSupplier &&
+                      _effectiveContextType != 'supplier')
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          context.read<WorkspaceManager>().openRouteInWorkspace(
+                                '/purchases/suppliers/${hint.supplierId!}',
+                              ),
+                      icon: const Icon(Icons.storefront_outlined, size: 16),
+                      label: const Text('Abrir proveedor'),
+                    ),
+                  if (!isSupplierChat && !conversation.hasLinkedContext)
+                    OutlinedButton.icon(
+                      onPressed: () => _showAssignContextDialog(context),
+                      icon: const Icon(Icons.link, size: 16),
+                      label: const Text('Vincular contexto'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  List<Widget> _buildOperationalContextRows(
+    ThemeData theme,
+    ConversationContextHint hint,
+  ) {
+    final colorScheme = theme.colorScheme;
+    final statusColor = _colorFromHex(hint.jobStatusColor, colorScheme.primary);
+    final isSupplierChat = widget.conversation.isSupplierConversation;
     final invoiceSummary = [
       if (hint.invoiceStatus != null) hint.invoiceStatus!,
       if (hint.invoiceBalance != null)
@@ -4857,152 +5100,79 @@ class _ChatWindowState extends State<ChatWindow> {
         'Saldo ${_formatPanelCurrency(hint.purchaseInvoiceBalance)}',
     ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  _contextIcon(_effectiveContextType),
-                  color: statusColor,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.conversation.hasLinkedContext
-                          ? 'Contexto operativo'
-                          : 'Contexto detectado',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      widget.conversation.hasLinkedContext
-                          ? 'Vinculado al chat'
-                          : 'Resuelto desde cliente, WhatsApp y trabajos activos',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (hint.customerLabel != null)
-            _buildOperationalContextRow(
-              icon: Icons.person_outline,
-              title: 'Cliente',
-              value: hint.customerLabel!,
-            ),
-          if (hint.hasSupplier)
-            _buildOperationalContextRow(
-              icon: Icons.storefront_outlined,
-              title: 'Proveedor',
-              value: [
-                if (hint.supplierLabel != null) hint.supplierLabel!,
-                if (hint.supplierPhone?.trim().isNotEmpty == true)
-                  hint.supplierPhone!.trim(),
-              ].join(' · '),
-            ),
-          if (hint.hasJob)
-            _buildOperationalContextRow(
-              icon: Icons.build_outlined,
-              title: hint.jobLabel ?? 'Trabajo activo',
-              value: [
-                if (hint.jobStatus != null) hint.jobStatus!,
-                if (hint.bikeName != null) hint.bikeName!,
-              ].join(' · '),
-              color: statusColor,
-            ),
-          if (hint.hasInvoice)
-            _buildOperationalContextRow(
-              icon: Icons.receipt_long_outlined,
-              title: hint.invoiceLabel ?? 'Factura vinculada',
-              value: invoiceSummary.isEmpty
-                  ? _formatPanelCurrency(hint.invoiceTotal)
-                  : invoiceSummary,
-            ),
-          if (hint.hasPurchaseInvoice)
-            _buildOperationalContextRow(
-              icon: Icons.inventory_2_outlined,
-              title: hint.purchaseInvoiceLabel ?? 'Compra vinculada',
-              value: purchaseInvoiceSummary.isEmpty
-                  ? _formatPanelCurrency(hint.purchaseInvoiceTotal)
-                  : purchaseInvoiceSummary,
-              color: _purchaseInvoiceStatusColor(
-                hint.purchaseInvoiceStatus,
-              ),
-            ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (_canOpenCurrentContext)
-                FilledButton.icon(
-                  onPressed: _openCurrentContext,
-                  icon: const Icon(Icons.open_in_new, size: 16),
-                  label: Text(
-                    widget.onShowContextPanel != null
-                        ? 'Abrir panel'
-                        : 'Abrir registro',
-                  ),
-                ),
-              if (hint.hasPurchaseInvoice &&
-                  _effectiveContextType != 'purchase_invoice')
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      context.read<WorkspaceManager>().openRouteInWorkspace(
-                            '/purchases/${hint.purchaseInvoiceId!}',
-                          ),
-                  icon: const Icon(Icons.inventory_2_outlined, size: 16),
-                  label: const Text('Abrir compra'),
-                ),
-              if (hint.hasSupplier && _effectiveContextType != 'supplier')
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      context.read<WorkspaceManager>().openRouteInWorkspace(
-                            '/purchases/suppliers/${hint.supplierId!}',
-                          ),
-                  icon: const Icon(Icons.storefront_outlined, size: 16),
-                  label: const Text('Abrir proveedor'),
-                ),
-              if (!widget.conversation.isSupplierConversation &&
-                  !widget.conversation.hasLinkedContext)
-                OutlinedButton.icon(
-                  onPressed: () => _showAssignContextDialog(context),
-                  icon: const Icon(Icons.link, size: 16),
-                  label: const Text('Fijar contexto'),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
+    return [
+      if (!isSupplierChat && hint.customerLabel != null)
+        _buildOperationalContextRow(
+          icon: Icons.person_outline,
+          title: 'Cliente',
+          value: hint.customerLabel!,
+        ),
+      if (hint.hasSupplier)
+        _buildOperationalContextRow(
+          icon: Icons.storefront_outlined,
+          title: 'Proveedor',
+          value: hint.supplierLabel ?? '',
+        ),
+      if (hint.hasJob)
+        _buildOperationalContextRow(
+          icon: Icons.build_outlined,
+          title: hint.jobLabel ?? 'Trabajo activo',
+          value: [
+            if (hint.jobStatus != null) hint.jobStatus!,
+            if (hint.bikeName != null) hint.bikeName!,
+          ].join(' · '),
+          color: statusColor,
+        ),
+      if (hint.hasInvoice)
+        _buildOperationalContextRow(
+          icon: Icons.receipt_long_outlined,
+          title: hint.invoiceLabel ?? 'Factura vinculada',
+          value: invoiceSummary.isEmpty
+              ? _formatPanelCurrency(hint.invoiceTotal)
+              : invoiceSummary,
+        ),
+      if (hint.hasPurchaseInvoice)
+        _buildOperationalContextRow(
+          icon: Icons.inventory_2_outlined,
+          title: hint.purchaseInvoiceLabel ?? 'Compra vinculada',
+          value: purchaseInvoiceSummary.isEmpty
+              ? _formatPanelCurrency(hint.purchaseInvoiceTotal)
+              : purchaseInvoiceSummary,
+          color: _purchaseInvoiceStatusColor(hint.purchaseInvoiceStatus),
+        ),
+    ];
   }
+
+  /// «Escribir al contacto actual: Víctor», o sólo «Escribir al contacto
+  /// actual» cuando la ficha no tiene nombre para el principal.
+  String get _writeToPrimaryContactLabel {
+    final primary =
+        widget.conversation.contextHint?.supplierPrimaryContactName?.trim();
+    return primary == null || primary.isEmpty
+        ? 'Escribir al contacto actual'
+        : 'Escribir al contacto actual: $primary';
+  }
+
+  /// El botón dice qué abre; «Abrir panel» y «Abrir registro» no decían nada.
+  String get _openContextActionLabel => switch (_effectiveContextType) {
+        'supplier' => 'Abrir ficha del proveedor',
+        'customer' => 'Abrir ficha del cliente',
+        'job' => 'Abrir trabajo',
+        'bike' => 'Abrir bicicleta',
+        'invoice' => 'Abrir venta',
+        'purchase_invoice' => 'Abrir compra',
+        'order' || 'online_order' => 'Abrir pedido',
+        'task' => 'Abrir tarea',
+        'product' => 'Abrir producto',
+        _ => 'Abrir registro',
+      };
+
+  VbStatusTone _statusTone(String status) => switch (status) {
+        'active' => VbStatusTone.success,
+        'pending' => VbStatusTone.warning,
+        'rejected' => VbStatusTone.danger,
+        _ => VbStatusTone.neutral,
+      };
 
   Widget _buildOperationalContextRow({
     required IconData icon,
@@ -5052,26 +5222,7 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Widget _buildChatStat(IconData icon, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            color: colorScheme.onSurface,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContactPhoneInfoRow() {
+  Widget _buildContactPhoneInfoRow({required String title}) {
     return FutureBuilder<Map<String, dynamic>?>(
       future: _getConversationContactFuture(),
       builder: (context, snapshot) {
@@ -5081,12 +5232,15 @@ class _ChatWindowState extends State<ChatWindow> {
 
         return _buildInfoRowTile(
           icon: Icons.phone_iphone_outlined,
-          title: 'Teléfono',
+          title: title,
           value: hasPhone
               ? _formatContactPhone(rawPhone)
               : isLoading
                   ? 'Buscando...'
                   : 'Sin teléfono registrado',
+          onCopy: hasPhone
+              ? () => _copyPanelValue(rawPhone, label: 'Número')
+              : null,
         );
       },
     );
@@ -5095,8 +5249,11 @@ class _ChatWindowState extends State<ChatWindow> {
   Widget _buildInfoRowTile({
     required IconData icon,
     required String title,
-    required String value,
+    String? value,
+    Widget? trailing,
+    VoidCallback? onCopy,
   }) {
+    assert(value != null || trailing != null);
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -5114,18 +5271,29 @@ class _ChatWindowState extends State<ChatWindow> {
             ),
           ),
           const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+          if (trailing != null)
+            Flexible(child: trailing)
+          else
+            Flexible(
+              child: Text(
+                value!,
+                textAlign: TextAlign.right,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
+          if (onCopy != null) ...[
+            const SizedBox(width: 6),
+            VbSurfaceIconButton(
+              icon: Icons.copy_outlined,
+              tooltip: 'Copiar',
+              onPressed: onCopy,
+            ),
+          ],
         ],
       ),
     );
@@ -8679,8 +8847,8 @@ class _ChatWindowState extends State<ChatWindow> {
               icon: Icons.receipt_long_outlined,
               color: _purchaseDocumentAccent,
               title: 'Documento de compra',
-              subtitle: 'Envía un borrador y queda como enviada',
-              onTap: () => _showPurchaseDraftPicker(
+              subtitle: 'Envía un borrador o reenvía uno enviado',
+              onTap: () => _showPurchaseDocumentPicker(
                 supplierId: purchaseSupplierId,
                 anchorKey: _composerActionsButtonKey,
               ),
@@ -8740,24 +8908,24 @@ class _ChatWindowState extends State<ChatWindow> {
     return null;
   }
 
-  void _showPurchaseDraftPicker({
+  void _showPurchaseDocumentPicker({
     required String supplierId,
     GlobalKey? anchorKey,
   }) {
-    final draftsFuture = _loadSupplierDraftDocuments(supplierId);
+    final documentsFuture = _loadSupplierSendableDocuments(supplierId);
     _toggleComposerMenu(
-      name: 'purchase_drafts',
+      name: 'purchase_documents',
       anchorKey: anchorKey ?? _composerActionsButtonKey,
       width: 400,
       estimatedHeight: 330,
-      panelBuilder: (overlayContext) => _buildPurchaseDraftPanel(
+      panelBuilder: (overlayContext) => _buildPurchaseDocumentPanel(
         overlayContext,
-        draftsFuture: draftsFuture,
+        documentsFuture: documentsFuture,
       ),
     );
   }
 
-  Future<List<PurchaseInvoice>> _loadSupplierDraftDocuments(
+  Future<List<PurchaseInvoice>> _loadSupplierSendableDocuments(
     String supplierId,
   ) async {
     final purchaseService = context.read<PurchaseService>();
@@ -8766,23 +8934,24 @@ class _ChatWindowState extends State<ChatWindow> {
         .where(
           (invoice) =>
               invoice.id != null &&
-              invoice.status == PurchaseInvoiceStatus.draft,
+              (invoice.status == PurchaseInvoiceStatus.draft ||
+                  invoice.status == PurchaseInvoiceStatus.sent),
         )
         .toList();
   }
 
-  Widget _buildPurchaseDraftPanel(
+  Widget _buildPurchaseDocumentPanel(
     BuildContext overlayContext, {
-    required Future<List<PurchaseInvoice>> draftsFuture,
+    required Future<List<PurchaseInvoice>> documentsFuture,
   }) {
     return _buildComposerPopoverPanel(
       context: overlayContext,
       icon: Icons.receipt_long_outlined,
       iconColor: _purchaseDocumentAccent,
-      title: 'Documentos en borrador',
+      title: 'Borradores y enviados',
       children: [
         FutureBuilder<List<PurchaseInvoice>>(
-          future: draftsFuture,
+          future: documentsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Padding(
@@ -8791,16 +8960,16 @@ class _ChatWindowState extends State<ChatWindow> {
               );
             }
             if (snapshot.hasError) {
-              return _buildPurchaseDraftNotice(
+              return _buildPurchaseDocumentNotice(
                 context,
                 'No se pudieron cargar los documentos de este proveedor.',
               );
             }
-            final drafts = snapshot.data ?? const <PurchaseInvoice>[];
-            if (drafts.isEmpty) {
-              return _buildPurchaseDraftNotice(
+            final documents = snapshot.data ?? const <PurchaseInvoice>[];
+            if (documents.isEmpty) {
+              return _buildPurchaseDocumentNotice(
                 context,
-                'Este proveedor no tiene documentos de compra en borrador.',
+                'Este proveedor no tiene documentos de compra en borrador ni enviados.',
               );
             }
             return ConstrainedBox(
@@ -8808,10 +8977,10 @@ class _ChatWindowState extends State<ChatWindow> {
               child: ListView.builder(
                 shrinkWrap: true,
                 padding: EdgeInsets.zero,
-                itemCount: drafts.length,
-                itemBuilder: (context, index) => _buildPurchaseDraftOption(
+                itemCount: documents.length,
+                itemBuilder: (context, index) => _buildPurchaseDocumentOption(
                   context,
-                  drafts[index],
+                  documents[index],
                 ),
               ),
             );
@@ -8821,7 +8990,7 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Widget _buildPurchaseDraftNotice(BuildContext context, String message) {
+  Widget _buildPurchaseDocumentNotice(BuildContext context, String message) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -8834,7 +9003,7 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Widget _buildPurchaseDraftOption(
+  Widget _buildPurchaseDocumentOption(
     BuildContext context,
     PurchaseInvoice invoice,
   ) {
@@ -8874,6 +9043,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   ),
                   const SizedBox(height: 2),
                   Text(
+                    '${invoice.status.displayName} · '
                     '${ChileanUtils.formatDate(invoice.date)} · '
                     '$lineCount ${lineCount == 1 ? 'línea' : 'líneas'} · '
                     '${ChileanUtils.formatCurrency(invoice.total)}',
@@ -8938,8 +9108,7 @@ class _ChatWindowState extends State<ChatWindow> {
         ..showSnackBar(
           SnackBar(
             content: Text(
-              'Documento N° ${invoice.invoiceNumber} listo. Al enviarlo queda '
-              'como enviada.',
+              'Documento N° ${invoice.invoiceNumber} listo para enviar.',
             ),
           ),
         );
@@ -9006,10 +9175,10 @@ class _ChatWindowState extends State<ChatWindow> {
       );
   }
 
-  /// Move every confirmed purchase document from «Borrador» to «Enviada».
+  /// Move each confirmed draft from «Borrador» to «Enviada».
   ///
-  /// A document someone else already advanced is left alone: the chat send is
-  /// not allowed to walk the purchase workflow backwards.
+  /// A document already sent or advanced is left alone: the chat send is not
+  /// allowed to walk the purchase workflow backwards.
   Future<void> _markPurchaseDocumentsAsSent(
     List<_PendingChatAttachment> attachments,
   ) async {
