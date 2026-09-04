@@ -23,21 +23,32 @@ typedef HtmlPrintablePreparer = Future<String> Function(
 
 /// Converts the shared browser HTML document into PDF bytes.
 ///
-/// macOS deliberately uses an app-owned native renderer. `printing`'s
-/// deprecated HTML converter creates a detached, zero-sized WKWebView and
-/// asks WebKit for a PDF after a fixed one-second delay. Whether that succeeds
-/// varies by WebKit version and machine. The app-owned host instead attaches a
-/// letter-sized WKWebView, waits for the document, fonts, images, and the
-/// renderer's explicit ready flag, and only then captures the PDF.
+/// macOS and Android deliberately use an app-owned native renderer, and for
+/// the same reason on each side: the `printing` plugin's deprecated HTML
+/// converter is not reliable enough to file an invoice with.
+///
+/// * On macOS it builds a detached, zero-sized WKWebView and asks WebKit for a
+///   PDF after a fixed one-second delay. Whether that succeeds varies by
+///   WebKit version and machine.
+/// * On Android it holds no reference to the WebView it converts with, and its
+///   PDF helper overrides neither `onLayoutFailed` nor `onWriteFailed`, so a
+///   conversion that is collected or that fails never calls back and the
+///   future is never completed. Measured 2026-09-04: the same document in the
+///   same process returned 200 kB in 2.2 s on one run and hung on the next.
+///
+/// The app-owned hosts keep the job alive, wait for the document, images and
+/// the renderer's explicit ready flag, and always answer.
 class HtmlPdfRendererService {
   HtmlPdfRendererService({
     MethodChannel? channel,
-    bool? useNativeMacOSOverride,
+    bool? useNativeHostOverride,
+    bool? preRenderBeforeConversionOverride,
     HtmlPdfFallbackRenderer? fallbackRenderer,
     HtmlPrintablePreparer? printablePreparer,
     Duration nativeTimeout = const Duration(seconds: 30),
   })  : _channel = channel ?? const MethodChannel(channelName),
-        _useNativeMacOSOverride = useNativeMacOSOverride,
+        _useNativeHostOverride = useNativeHostOverride,
+        _preRenderBeforeConversionOverride = preRenderBeforeConversionOverride,
         _fallbackRenderer = fallbackRenderer ?? _renderWithPrinting,
         _printablePreparer = printablePreparer ?? prepareWithHeadlessWebView,
         _nativeTimeout = nativeTimeout;
@@ -46,14 +57,26 @@ class HtmlPdfRendererService {
   static const renderMethod = 'renderHtml';
 
   final MethodChannel _channel;
-  final bool? _useNativeMacOSOverride;
+  final bool? _useNativeHostOverride;
+  final bool? _preRenderBeforeConversionOverride;
   final HtmlPdfFallbackRenderer _fallbackRenderer;
   final HtmlPrintablePreparer _printablePreparer;
   final Duration _nativeTimeout;
 
-  bool get _useNativeMacOS =>
-      _useNativeMacOSOverride ??
-      (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS);
+  bool get _useNativeHost =>
+      _useNativeHostOverride ??
+      (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.macOS ||
+              defaultTargetPlatform == TargetPlatform.android));
+
+  /// macOS runs the template inside its own renderer, so it prints the live
+  /// document. Every other target draws the template in a headless view first
+  /// and prints the finished, script-free copy: the phone's print pipeline
+  /// lays the page out itself, and a static document removes the question of
+  /// whether it ran the script at all.
+  bool get _preRendersBeforeConversion =>
+      _preRenderBeforeConversionOverride ??
+      (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS);
 
   Future<Uint8List> render({
     required String html,
@@ -65,56 +88,54 @@ class HtmlPdfRendererService {
       throw ArgumentError.value(html, 'html', 'El documento está vacío.');
     }
 
-    final Uint8List bytes;
-    if (_useNativeMacOS) {
-      try {
-        final rendered = await _channel.invokeMethod<Uint8List>(
-          renderMethod,
-          <String, Object?>{
-            'html': html,
-            'viewportWidth': format.width,
-            'viewportHeight': format.height,
-            'readySelector': readySelector,
-            'readyFlag': readyFlag,
-          },
-        ).timeout(_nativeTimeout);
-        if (rendered == null) {
-          throw StateError('El renderizador nativo no devolvió un PDF.');
-        }
-        bytes = rendered;
-      } on MissingPluginException {
-        throw StateError(
-          'El renderizador PDF de macOS no está disponible en esta versión '
-          'de la aplicación.',
-        );
-      } on TimeoutException {
-        throw TimeoutException(
-          'macOS tardó demasiado en preparar la plantilla para PDF.',
-          _nativeTimeout,
-        );
-      }
-    } else {
-      // The platform converter prints a plain WebView with JavaScript OFF on
-      // Android, and this template draws its whole body from JavaScript, so
-      // the phone filed an empty page as the invoice (owner, 2026-09-03; the
-      // OCR review still looked right because the handoff also carries the
-      // parsed data). Run the template first, print the finished document.
-      final String printable;
+    final preRender = _preRendersBeforeConversion;
+    // The platform converter prints a plain WebView with JavaScript OFF on
+    // Android, and this template draws its whole body from JavaScript, so the
+    // phone filed an empty page as the invoice (owner, 2026-09-03; the OCR
+    // review still looked right because the handoff also carries the parsed
+    // data). Run the template first, print the finished document.
+    final String printable;
+    if (preRender) {
       try {
         printable = await _printablePreparer(
           html,
           readySelector: readySelector,
           readyFlag: readyFlag,
           timeout: _nativeTimeout,
-        );
+        ).timeout(_nativeTimeout * 2);
       } catch (error) {
         throw StateError(
           'No se pudo preparar la plantilla antes de convertirla a PDF. '
           'Detalle: $error',
         );
       }
-      bytes = await _fallbackRenderer(printable, format);
+    } else {
+      printable = html;
     }
+
+    debugPrint(
+      '🖨️ [HtmlPdfRenderer] converting ${printable.length} chars to PDF on '
+      '${kIsWeb ? 'web' : defaultTargetPlatform.name} '
+      '(${_useNativeHost ? 'app host' : 'platform converter'}, '
+      'pre-rendered: $preRender)',
+    );
+
+    final Uint8List bytes;
+    if (_useNativeHost) {
+      bytes = await _renderOnNativeHost(
+        printable,
+        format,
+        // A pre-rendered document has no scripts left to set the flag; the
+        // filled element is what proves it is the drawn invoice and not the
+        // empty shell.
+        readySelector: readySelector,
+        readyFlag: preRender ? null : readyFlag,
+      );
+    } else {
+      bytes = await _fallbackRenderer(printable, format)
+          .timeout(_nativeTimeout * 2);
+    }
+    debugPrint('🖨️ [HtmlPdfRenderer] converted ${bytes.length} bytes');
 
     if (!hasPdfHeader(bytes)) {
       throw const FormatException(
@@ -122,6 +143,43 @@ class HtmlPdfRendererService {
       );
     }
     return bytes;
+  }
+
+  Future<Uint8List> _renderOnNativeHost(
+    String html,
+    PdfPageFormat format, {
+    String? readySelector,
+    String? readyFlag,
+  }) async {
+    try {
+      final rendered = await _channel.invokeMethod<Uint8List>(
+        renderMethod,
+        <String, Object?>{
+          'html': html,
+          'viewportWidth': format.width,
+          'viewportHeight': format.height,
+          'readySelector': readySelector,
+          'readyFlag': readyFlag,
+          'timeoutMillis': _nativeTimeout.inMilliseconds,
+        },
+        // The host carries the same deadline and answers with the stage it
+        // was stuck on; give it room to do that before giving up blind.
+      ).timeout(_nativeTimeout + const Duration(seconds: 5));
+      if (rendered == null) {
+        throw StateError('El renderizador nativo no devolvió un PDF.');
+      }
+      return rendered;
+    } on MissingPluginException {
+      throw StateError(
+        'El renderizador PDF de esta aplicación no está disponible en esta '
+        'versión instalada.',
+      );
+    } on TimeoutException {
+      throw TimeoutException(
+        'El equipo tardó demasiado en preparar la plantilla para PDF.',
+        _nativeTimeout,
+      );
+    }
   }
 
   @visibleForTesting
@@ -146,9 +204,19 @@ class HtmlPdfRendererService {
     String? readyFlag,
     Duration timeout = const Duration(seconds: 30),
   }) async {
+    final startedAt = DateTime.now();
+    void trace(String phase, [Object? detail]) {
+      debugPrint(
+        '🖨️ [HtmlPdfRenderer] $phase '
+        '+${DateTime.now().difference(startedAt).inMilliseconds}ms'
+        '${detail == null ? '' : ' $detail'}',
+      );
+    }
+
     final loaded = Completer<void>();
     HeadlessInAppWebView? webView;
     try {
+      trace('headless.create');
       webView = HeadlessInAppWebView(
         initialSize: const Size(816, 1056), // Letter at 96 dpi.
         initialSettings: InAppWebViewSettings(
@@ -172,8 +240,15 @@ class HtmlPdfRendererService {
           if (!loaded.isCompleted) loaded.complete();
         },
       );
-      await webView.run();
+      // Every await here talks to a platform view. A call that never answers
+      // used to hang the whole invoice with the progress dialog spinning
+      // forever (owner, 2026-09-04), so each one carries its own deadline and
+      // the caller wraps the lot in a hard timeout.
+      trace('headless.run');
+      await webView.run().timeout(timeout);
+      trace('headless.awaiting-load');
       await loaded.future.timeout(timeout);
+      trace('headless.loaded');
       final controller = webView.webViewController;
       if (controller == null) {
         throw StateError('El renderizador oculto no expuso su controlador.');
@@ -184,8 +259,12 @@ class HtmlPdfRendererService {
         readyFlag: readyFlag,
       );
       final deadline = DateTime.now().add(timeout);
+      var polls = 0;
       while (true) {
-        final ready = await controller.evaluateJavascript(source: probe);
+        polls++;
+        final ready = await controller
+            .evaluateJavascript(source: probe)
+            .timeout(const Duration(seconds: 5));
         if (ready == true || ready == 1 || ready.toString() == 'true') break;
         if (!DateTime.now().isBefore(deadline)) {
           throw TimeoutException(
@@ -195,17 +274,28 @@ class HtmlPdfRendererService {
         }
         await Future<void>.delayed(const Duration(milliseconds: 120));
       }
+      trace('headless.ready', 'polls=$polls');
 
-      final serialized = await controller.evaluateJavascript(
-        source: serializeDocumentSource,
-      );
+      final serialized = await controller
+          .evaluateJavascript(source: serializeDocumentSource)
+          .timeout(const Duration(seconds: 10));
       final printable = serialized?.toString().trim() ?? '';
       if (printable.isEmpty) {
         throw StateError('El renderizador oculto devolvió un documento vacío.');
       }
+      trace('headless.serialized', 'chars=${printable.length}');
       return printable;
     } finally {
-      await webView?.dispose();
+      // Never awaited: on Android tearing the offscreen view down can outlive
+      // the work it was created for, and the finished document must not wait
+      // for it.
+      final disposing = webView?.dispose();
+      if (disposing != null) {
+        unawaited(disposing.catchError((Object error) {
+          debugPrint('🖨️ [HtmlPdfRenderer] headless.dispose failed: $error');
+        }));
+      }
+      trace('headless.released');
     }
   }
 

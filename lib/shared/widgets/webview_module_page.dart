@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
+    show TargetPlatform, compute, defaultTargetPlatform, kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
@@ -13,6 +13,7 @@ import 'package:flutter/services.dart'
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../utils/browser_passkey_policy.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
@@ -2660,10 +2661,33 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           mimeType.startsWith('image/') &&
           response.bodyBytes.isNotEmpty &&
           response.bodyBytes.length <= 8 * 1024 * 1024) {
-        final dataUri =
-            'data:$mimeType;base64,${base64Encode(response.bodyBytes)}';
-        _aliExpressInvoiceImageDataCache[value] = dataUri;
-        return dataUri;
+        // A product photo arrives at full size but prints inside an 84 px
+        // box. Embedding the originals made the document 1.3 MB and Android's
+        // HTML-to-PDF converter never returned; at thumbnail size the same
+        // invoice converts in ~3 s (measured on Android, 2026-09-04).
+        final thumbnail = await compute(
+          shrinkInvoiceThumbnail,
+          response.bodyBytes,
+        );
+        if (thumbnail != null) {
+          final dataUri = 'data:image/jpeg;base64,${base64Encode(thumbnail)}';
+          _aliExpressInvoiceImageDataCache[value] = dataUri;
+          return dataUri;
+        }
+        if (response.bodyBytes.length <= _invoiceThumbnailByteBudget) {
+          final dataUri =
+              'data:$mimeType;base64,${base64Encode(response.bodyBytes)}';
+          _aliExpressInvoiceImageDataCache[value] = dataUri;
+          return dataUri;
+        }
+        // Undecodable and too heavy to embed: the document has to stay
+        // printable, so this line keeps its text and loses the photo.
+        debugPrint(
+          '🖼️ [AliExpressInvoice] dropped an unreadable ${response.bodyBytes.length}'
+          ' byte photo to keep the PDF printable',
+        );
+        _aliExpressInvoiceImageDataCache[value] = '';
+        return '';
       }
     } catch (_) {
       // The canonical renderer keeps the trusted remote URL as a last resort;
@@ -7241,4 +7265,32 @@ class _NativeBrowserZoomBoundary extends StatelessWidget {
       },
     );
   }
+}
+
+/// Widest edge kept for an invoice thumbnail. The printed box is 84 px at
+/// most, so this still oversamples for a crisp print while keeping the
+/// document small enough for the platform converters.
+const int invoiceThumbnailMaxEdge = 220;
+
+/// Largest original that may be embedded untouched when it cannot be decoded.
+const int _invoiceThumbnailByteBudget = 48 * 1024;
+
+/// Decodes, shrinks and re-encodes a product photo, off the UI isolate.
+/// Returns null when the bytes are not a decodable image.
+Uint8List? shrinkInvoiceThumbnail(Uint8List bytes) {
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) return null;
+  final longestEdge =
+      decoded.width > decoded.height ? decoded.width : decoded.height;
+  final resized = longestEdge <= invoiceThumbnailMaxEdge
+      ? decoded
+      : img.copyResize(
+          decoded,
+          width:
+              decoded.width >= decoded.height ? invoiceThumbnailMaxEdge : null,
+          height:
+              decoded.height > decoded.width ? invoiceThumbnailMaxEdge : null,
+          interpolation: img.Interpolation.average,
+        );
+  return Uint8List.fromList(img.encodeJpg(resized, quality: 82));
 }

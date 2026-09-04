@@ -26,7 +26,8 @@ void main() {
     });
     final renderer = HtmlPdfRendererService(
       channel: channel,
-      useNativeMacOSOverride: true,
+      useNativeHostOverride: true,
+      preRenderBeforeConversionOverride: false,
     );
 
     final bytes = await renderer.render(
@@ -44,13 +45,15 @@ void main() {
       'viewportHeight': PdfPageFormat.letter.height,
       'readySelector': '#invoiceRoot',
       'readyFlag': '__ALIEXPRESS_INVOICE_READY__',
+      'timeoutMillis': 30000,
     });
   });
 
   test('macOS renderer rejects missing or malformed native output', () async {
     final renderer = HtmlPdfRendererService(
       channel: channel,
-      useNativeMacOSOverride: true,
+      useNativeHostOverride: true,
+      preRenderBeforeConversionOverride: false,
     );
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -74,7 +77,8 @@ void main() {
   test('other platforms keep the injected platform fallback', () async {
     var called = false;
     final renderer = HtmlPdfRendererService(
-      useNativeMacOSOverride: false,
+      useNativeHostOverride: false,
+      preRenderBeforeConversionOverride: true,
       printablePreparer: (html,
               {readySelector,
               readyFlag,
@@ -105,7 +109,8 @@ void main() {
     // platform (this test) the attempt itself surfaces the honest error.
     TestWidgetsFlutterBinding.ensureInitialized();
     final renderer = HtmlPdfRendererService(
-      useNativeMacOSOverride: false,
+      useNativeHostOverride: false,
+      preRenderBeforeConversionOverride: true,
       printablePreparer: (html,
               {readySelector,
               readyFlag,
@@ -141,7 +146,8 @@ void main() {
     String? seenFlag;
     String? convertedHtml;
     final renderer = HtmlPdfRendererService(
-      useNativeMacOSOverride: false,
+      useNativeHostOverride: false,
+      preRenderBeforeConversionOverride: true,
       printablePreparer: (html,
           {readySelector,
           readyFlag,
@@ -175,7 +181,8 @@ void main() {
       () async {
     var converterCalls = 0;
     final renderer = HtmlPdfRendererService(
-      useNativeMacOSOverride: false,
+      useNativeHostOverride: false,
+      preRenderBeforeConversionOverride: true,
       printablePreparer: (html,
               {readySelector,
               readyFlag,
@@ -213,5 +220,92 @@ void main() {
     expect(HtmlPdfRendererService.serializeDocumentSource,
         contains("clone.querySelectorAll('script')"),
         reason: 'the printed copy runs nothing of its own');
+  });
+
+  test('Android converts through the app host, with the drawn document',
+      () async {
+    // `printing` starts the WebView load before it installs the listener, so a
+    // warm provider finishes first and onPageFinished never arrives: the first
+    // invoice of a session converted in 2.2 s and every later one hung
+    // (measured on Android, 2026-09-04).
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return Uint8List.fromList('%PDF-android'.codeUnits);
+    });
+    var fallbackCalls = 0;
+    final renderer = HtmlPdfRendererService(
+      channel: channel,
+      useNativeHostOverride: true,
+      preRenderBeforeConversionOverride: true,
+      printablePreparer: (html,
+              {readySelector,
+              readyFlag,
+              timeout = const Duration(seconds: 30)}) async =>
+          '<!doctype html><html><body><main id="invoiceRoot">'
+          '<p>Pedido</p></main></body></html>',
+      fallbackRenderer: (html, format) async {
+        fallbackCalls++;
+        return Uint8List.fromList('%PDF-plugin'.codeUnits);
+      },
+    );
+
+    final bytes = await renderer.render(
+      html: '<html><body><main id="invoiceRoot"></main></body></html>',
+      format: PdfPageFormat.letter,
+      readySelector: '#invoiceRoot',
+      readyFlag: '__ALIEXPRESS_INVOICE_READY__',
+    );
+
+    expect(String.fromCharCodes(bytes), '%PDF-android');
+    expect(fallbackCalls, 0, reason: 'the plugin converter is not used');
+    expect(calls, hasLength(1));
+    final arguments = calls.single.arguments as Map<Object?, Object?>;
+    expect(arguments['html'], contains('<p>Pedido</p>'),
+        reason: 'the host prints the finished document');
+    expect(arguments['readySelector'], '#invoiceRoot');
+    expect(arguments['readyFlag'], isNull,
+        reason: 'a pre-rendered copy has no script left to set the flag');
+    expect(arguments['timeoutMillis'], 30000,
+        reason: 'the host must answer before the Dart deadline');
+  });
+
+  test('the Android host keeps its job alive and answers every outcome', () {
+    final renderer = File(
+      'android/app/src/main/kotlin/com/vinabike/erp/HtmlPdfRenderer.kt',
+    ).readAsStringSync();
+    expect(renderer, contains('activeJobs.add(job)'),
+        reason: 'the plugin let its WebView be collected mid-conversion');
+    expect(
+      renderer.indexOf('view.webViewClient = object : WebViewClient()'),
+      lessThan(renderer.indexOf('view.loadDataWithBaseURL(')),
+      reason: 'the listener has to exist before the load starts',
+    );
+    expect(renderer, contains('javaScriptEnabled = true'),
+        reason: 'the template draws its own body');
+    expect(renderer, contains('handler.postDelayed(timeoutRunnable'),
+        reason: 'a job that never finishes still answers');
+    expect(renderer, contains('if (answered) {'),
+        reason: 'a MethodChannel result may only be delivered once');
+
+    final helper = File(
+      'android/app/src/main/java/android/print/VinabikeHtmlPdf.java',
+    ).readAsStringSync();
+    for (final callback in <String>[
+      'onLayoutFailed',
+      'onLayoutCancelled',
+      'onWriteFailed',
+      'onWriteCancelled',
+    ]) {
+      expect(helper, contains(callback),
+          reason: 'the plugin helper drops $callback and hangs');
+    }
+
+    final activity = File(
+      'android/app/src/main/kotlin/com/vinabike/erp/MainActivity.kt',
+    ).readAsStringSync();
+    expect(activity, contains('"com.vinabike.erp/html_pdf_renderer"'),
+        reason: 'the channel Dart calls must exist on Android');
   });
 }
