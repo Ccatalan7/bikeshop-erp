@@ -1490,6 +1490,14 @@ On a same-commit retry, Android evidence must match the exact prepared
 success. A schema-v3 state is the qualified form of the same schema-v2 handoff,
 so exact-SHA/base validation must accept both forms.
 
+2026-09-04 correction: an older Android manifest may still carry the legacy
+plain-text `release_notes` value. Never index `.release_notes.from_commit`
+before checking that `release_notes` is an object: `jq` otherwise aborts before
+the workflow can print the actual compatibility failure. A legacy same-commit
+manifest cannot satisfy the current structured evidence contract and must be
+replaced by a higher forward build with structured notes; do not rewrite its
+immutable versioned manifest in place.
+
 2026-07-31 correction: a paired release must not call the complete integrity
 workflow once per platform in addition to the push gate. The only valid order
 is Prepare -> Qualify once -> parallel platform publishers. A completed

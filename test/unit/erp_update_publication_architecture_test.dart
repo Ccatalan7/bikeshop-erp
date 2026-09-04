@@ -273,6 +273,12 @@ void main() {
       androidWorkflowPublisher,
       contains('state.releaseNotesFromCommit'),
     );
+    expect(
+      androidWorkflow,
+      contains('if (.release_notes | type) == "object" then'),
+      reason: 'a legacy plain-text manifest must fail closed cleanly instead '
+          'of crashing jq while resolving a same-commit retry',
+    );
     for (final workflow in [macosWorkflow, androidWorkflow]) {
       expect(workflow, contains('actions: read'));
       expect(workflow, contains('integrity_run_id:'));

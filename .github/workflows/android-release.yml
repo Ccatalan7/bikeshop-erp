@@ -240,7 +240,13 @@ jobs:
 
           if [[ "$android_commit" == "$GITHUB_SHA" ]]; then
             existing_notes_base="$(
-              jq -r '.release_notes.from_commit // empty' <<< "$latest_json"
+              jq -r '
+                if (.release_notes | type) == "object" then
+                  (.release_notes.from_commit // empty)
+                else
+                  empty
+                end
+              ' <<< "$latest_json"
             )"
             if [[ ! "$existing_notes_base" =~ ^[0-9a-f]{40}$ ]]; then
               echo 'The existing same-commit Android notes base is invalid.' >&2

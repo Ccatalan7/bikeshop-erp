@@ -381,8 +381,8 @@ void main() {
     final browser =
         File('lib/shared/widgets/webview_module_page.dart').readAsStringSync();
     expect(browser, contains('pagesBuilder: (context, pages) =>'));
-    expect(browser, contains('class _InvoicePreviewPages'));
-    expect(browser, contains('onTap: () => _openInvoicePageZoom('));
+    expect(browser, contains('class InvoicePreviewPages'));
+    expect(browser, contains('onTap: () => openInvoicePageZoom('));
     expect(browser, contains('InteractiveViewer('));
     expect(browser, contains('maxScale: 8,'));
     expect(browser, contains('Toca una página para ampliarla.'),
