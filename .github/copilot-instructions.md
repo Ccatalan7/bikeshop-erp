@@ -1442,6 +1442,16 @@ mandatory local npm/Flutter/analyzer/test/web-build preflight into this task.
 GitHub Actions owns the complete integrity gate and clean native build; the
 developer helper owns dispatch, observation, and exact publication evidence.
 
+2026-09-04 correction: the AliExpress files in `assets/browser/` are packaged
+mirrors, not independent sources. The originals are `content.js`, `invoice.js`,
+and `invoice.css` under `tools/chrome-extensions/aliexpress-invoice-generator/`;
+keep each matching `aliexpress_invoice*` asset byte-identical. Editing only the
+packaged invoice passed the renderer/browser focused tests but cost a full CI
+round when the mirror guard failed. For changes to either copy, include
+`fvm flutter test --no-pub test/unit/aliexpress_asset_mirror_test.dart` in the
+focused checks before preparation. Do not remove the guard or package `tools/`
+directly: the separate asset location preserves macOS DevFS hot reload.
+
 The paired ERP update tasks are deliberately one user action with two separate
 platform publishers:
 
