@@ -345,4 +345,47 @@ void main() {
     );
     expect(AliExpressDailyInvoiceService.isOrdersListUri(null), isFalse);
   });
+
+  test('the invoice fits one page when shrinking the thumbnail saves a page',
+      () {
+    // Measured 2026-09-04: a 7-line invoice was 1119 px against a 1056 px
+    // Letter page, so the totals block (which never splits) landed alone on a
+    // second, almost empty page. The template measures itself and steps the
+    // thumbnail down only while that removes a page.
+    final js = File('assets/browser/aliexpress_invoice.js').readAsStringSync();
+    final css =
+        File('assets/browser/aliexpress_invoice.css').readAsStringSync();
+
+    expect(js, contains('const PRINTED_PAGE_HEIGHT_PX = 1056;'));
+    expect(
+        js,
+        contains(
+            "const COMPACT_STEPS = ['compact-1', 'compact-2', 'compact-3'];"));
+    expect(js, contains('fitToPrintedPages();'));
+    expect(js, contains('if (naturalPages <= 1) return;'),
+        reason: 'an invoice that already fits is never compacted');
+    expect(js, contains('if (printedPageCount() < naturalPages) return;'),
+        reason: 'a step is kept only when it actually removes a page');
+
+    // The constants have to be initialised before loadInvoice() runs at the
+    // top of the file, or the whole template dies in the temporal dead zone.
+    expect(js.indexOf('const PRINTED_PAGE_HEIGHT_PX'),
+        lessThan(js.indexOf('    loadInvoice();')));
+
+    for (final step in ['compact-1', 'compact-2', 'compact-3']) {
+      expect(css, contains('.paper.$step .item-image,'));
+    }
+  });
+
+  test('an invoice page opens on a single tap and zooms', () {
+    final browser =
+        File('lib/shared/widgets/webview_module_page.dart').readAsStringSync();
+    expect(browser, contains('pagesBuilder: (context, pages) =>'));
+    expect(browser, contains('class _InvoicePreviewPages'));
+    expect(browser, contains('onTap: () => _openInvoicePageZoom('));
+    expect(browser, contains('InteractiveViewer('));
+    expect(browser, contains('maxScale: 8,'));
+    expect(browser, contains('Toca una página para ampliarla.'),
+        reason: 'the affordance has to be visible, not guessed');
+  });
 }

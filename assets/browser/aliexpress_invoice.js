@@ -2,6 +2,11 @@
   'use strict';
 
   const STORAGE_PREFIX = 'aliexpressInvoiceDraft:';
+  // Carta a 96 dpi. La hoja se dibuja con el mismo ancho (216 mm) y el mismo
+  // relleno (14 mm) en pantalla y al imprimir, así que medirla acá dice
+  // exactamente en cuántas páginas va a salir.
+  const PRINTED_PAGE_HEIGHT_PX = 1056;
+  const COMPACT_STEPS = ['compact-1', 'compact-2', 'compact-3'];
   const hasDocument = typeof document !== 'undefined';
   const root = hasDocument ? document.getElementById('invoiceRoot') : null;
   const toolbarMeta = hasDocument ? document.getElementById('toolbarMeta') : null;
@@ -60,6 +65,27 @@
     if (!root) return;
     root.innerHTML = buildInvoiceMarkup(invoice);
     wireImageFallbacks();
+    fitToPrintedPages();
+  }
+
+  function printedPageCount() {
+    return Math.ceil(root.getBoundingClientRect().height / PRINTED_PAGE_HEIGHT_PX);
+  }
+
+  function fitToPrintedPages() {
+    if (!root) return;
+    root.classList.remove(...COMPACT_STEPS);
+    const naturalPages = printedPageCount();
+    if (naturalPages <= 1) return;
+
+    for (const step of COMPACT_STEPS) {
+      root.classList.remove(...COMPACT_STEPS);
+      root.classList.add(step);
+      if (printedPageCount() < naturalPages) return;
+    }
+    // Encoger no ahorró ninguna página: la factura es larga de verdad y se
+    // imprime con su tamaño normal.
+    root.classList.remove(...COMPACT_STEPS);
   }
 
   function buildInvoiceMarkup(invoice) {

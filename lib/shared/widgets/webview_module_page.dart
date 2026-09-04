@@ -6746,15 +6746,12 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
             ),
             Divider(height: 1, color: theme.dividerColor),
             Expanded(
-              child: PdfPreview(
+              // `PdfPreview` only zooms on a double tap, which nobody finds on
+              // a phone, and pinch does nothing there (owner, 2026-09-04).
+              // Same rasteriser, own page layout: one tap opens the page.
+              child: PdfPreviewCustom(
                 build: (_) async => bytes,
-                useActions: false,
-                allowPrinting: false,
-                allowSharing: false,
-                canChangeOrientation: false,
-                canChangePageFormat: false,
-                canDebug: false,
-                pdfFileName: fileName,
+                pageFormat: PdfPageFormat.letter,
                 maxPageWidth: 1500,
                 scrollViewDecoration: const BoxDecoration(
                   color: Color(0xFFE5E7EB),
@@ -6762,6 +6759,8 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
                 loadingWidget: const Center(
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
+                pagesBuilder: (context, pages) =>
+                    _InvoicePreviewPages(pages: pages),
               ),
             ),
             Divider(height: 1, color: theme.dividerColor),
@@ -6788,6 +6787,7 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
                     ],
                   );
                   final status = Text(
+                    'Toca una página para ampliarla. '
                     'Solo se enviará al OCR cuando lo confirmes.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -6818,6 +6818,110 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The invoice pages, each one openable. Tapping a page is the affordance the
+/// package hides behind a double tap.
+class _InvoicePreviewPages extends StatelessWidget {
+  const _InvoicePreviewPages({required this.pages});
+
+  final List<PdfPreviewPageData> pages;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      itemCount: pages.length,
+      itemBuilder: (context, index) {
+        final page = pages[index];
+        return Semantics(
+          button: true,
+          label: 'Ampliar página ${index + 1} de ${pages.length}',
+          child: GestureDetector(
+            onTap: () => _openInvoicePageZoom(
+              context,
+              page: page,
+              pageNumber: index + 1,
+              pageCount: pages.length,
+            ),
+            child: Container(
+              margin: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: AspectRatio(
+                aspectRatio: page.width / page.height,
+                child: Image(image: page.image, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// One page, pinch-zoomable and pannable, with a double tap back to fit.
+Future<void> _openInvoicePageZoom(
+  BuildContext context, {
+  required PdfPreviewPageData page,
+  required int pageNumber,
+  required int pageCount,
+}) {
+  return showDialog<void>(
+    context: context,
+    useRootNavigator: false,
+    barrierColor: Colors.black87,
+    builder: (dialogContext) {
+      final controller = TransformationController();
+      return Dialog.fullscreen(
+        backgroundColor: Colors.black87,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Página $pageNumber de $pageCount',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onDoubleTap: () => controller.value = Matrix4.identity(),
+                  child: InteractiveViewer(
+                    transformationController: controller,
+                    minScale: 1,
+                    maxScale: 8,
+                    child: Center(child: Image(image: page.image)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _BrowserHistoryEntry {
