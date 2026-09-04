@@ -100,19 +100,46 @@ class HtmlPdfRendererService {
       bytes[3] == 0x46 &&
       bytes[4] == 0x2D;
 
+  /// Android and iOS convert through the platform WebView print pipeline.
+  ///
+  /// `Printing.info().canConvertHtml` is not the gate: the Android plugin
+  /// implements `convertHtml` but never reports that key, so the flag read as
+  /// `false` on every phone and the owner saw «Este equipo no puede convertir
+  /// la plantilla» on a device that could (2026-09-03). The attempt itself is
+  /// the capability check; only a missing implementation is "cannot".
   static Future<Uint8List> _renderWithPrinting(
     String html,
     PdfPageFormat format,
   ) async {
-    final printingInfo = await Printing.info();
-    if (!printingInfo.canConvertHtml) {
+    try {
+      // Non-macOS targets keep their platform implementation. macOS never
+      // reaches this deprecated API.
+      // The template carries its own page padding and the macOS host prints
+      // it edge to edge; printer margins on top would shrink the phone copy.
+      final edgeToEdge = format.copyWith(
+        marginLeft: 0,
+        marginTop: 0,
+        marginRight: 0,
+        marginBottom: 0,
+      );
+      // ignore: deprecated_member_use
+      return await Printing.convertHtml(html: html, format: edgeToEdge);
+    } on MissingPluginException {
       throw UnsupportedError(
         'Este equipo no puede convertir la plantilla HTML de AliExpress.',
       );
+    } on UnimplementedError {
+      throw UnsupportedError(
+        'Este equipo no puede convertir la plantilla HTML de AliExpress.',
+      );
+    } on PlatformException catch (error) {
+      if (error.code.toLowerCase().contains('unimplemented') ||
+          error.code.toLowerCase().contains('unsupported')) {
+        throw UnsupportedError(
+          'Este equipo no puede convertir la plantilla HTML de AliExpress.',
+        );
+      }
+      rethrow;
     }
-    // Non-macOS targets keep their existing platform implementation. macOS
-    // never reaches this deprecated API.
-    // ignore: deprecated_member_use
-    return Printing.convertHtml(html: html, format: format);
   }
 }

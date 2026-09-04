@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/pdf.dart';
@@ -87,5 +89,31 @@ void main() {
 
     expect(called, isTrue);
     expect(String.fromCharCodes(bytes), '%PDF-fallback');
+  });
+
+  test(
+      'the default fallback attempts the platform converter and reports '
+      '"cannot" only when the implementation is missing', () async {
+    // The Android plugin converts HTML but never reports canConvertHtml, so
+    // gating on that flag rejected every phone (owner, 2026-09-03). Without a
+    // platform (this test) the attempt itself surfaces the honest error.
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final renderer = HtmlPdfRendererService(useNativeMacOSOverride: false);
+    await expectLater(
+      renderer.render(html: '<html><body>x</body></html>'),
+      throwsA(isA<UnsupportedError>().having(
+        (error) => error.message,
+        'message',
+        contains('no puede convertir la plantilla HTML'),
+      )),
+    );
+    final source = File('lib/shared/services/html_pdf_renderer_service.dart')
+        .readAsStringSync();
+    expect(source, isNot(contains('if (!printingInfo.canConvertHtml)')),
+        reason: 'the capability flag is not reported by Android');
+    expect(source,
+        contains('await Printing.convertHtml(html: html, format: edgeToEdge)'));
+    expect(source, contains('marginLeft: 0,'),
+        reason: 'the template owns its page padding, like the macOS host');
   });
 }
