@@ -566,24 +566,31 @@ class MessagingAttachmentService {
     required ReservedMessagingAttachment reservation,
     String? caption,
     String? threadRootMessageId,
+    String? replyToMessageId,
   }) async {
     final request = MessagingAttachmentPublishRequest(
       attachmentId: reservation.id,
       caption: caption,
     );
     final coordinator = MessagingAttachmentPublishCoordinator(
-      send: (params) => threadRootMessageId == null
-          ? _client.rpc(
-              'publish_messaging_attachment',
-              params: params,
-            )
-          : _client.rpc(
-              'publish_messaging_attachment_in_thread_v1',
-              params: {
-                ...params,
-                'p_thread_root_message_id': threadRootMessageId,
-              },
-            ),
+      send: (params) => replyToMessageId != null
+          ? _client.rpc('publish_messaging_attachment_reply_v1', params: {
+              ...params,
+              'p_reply_to_message_id': replyToMessageId,
+              'p_thread_root_message_id': threadRootMessageId,
+            })
+          : threadRootMessageId == null
+              ? _client.rpc(
+                  'publish_messaging_attachment',
+                  params: params,
+                )
+              : _client.rpc(
+                  'publish_messaging_attachment_in_thread_v1',
+                  params: {
+                    ...params,
+                    'p_thread_root_message_id': threadRootMessageId,
+                  },
+                ),
       readback: (attachmentId) => _client
           .from('messaging_attachments')
           .select('id, status, message_id, failure_code')

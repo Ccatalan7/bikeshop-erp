@@ -51,7 +51,7 @@ void main() {
     expect(
       methodBody(
         'void _addPendingAttachments(',
-        '_PendingChatAttachment _buildPendingAttachment(',
+        'PendingChatAttachment _buildPendingAttachment(',
       ),
       contains('if (_guardPendingAttachmentMutation()) return;'),
     );

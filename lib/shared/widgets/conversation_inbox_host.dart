@@ -71,6 +71,10 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
   RightToolbarService? toolbarService;
   ErpAuthorityScopeKey? _scope;
 
+  /// Una carga del panel sólo puede publicar para el usuario y tenant que la
+  /// iniciaron, aunque la sesión cambie mientras espera datos.
+  ErpAuthorityScopeKey? get inboxAuthorityScope => _currentScope();
+
   /// Bajo qué llave guarda su sesión esta bandeja.
   ToolbarTool get inboxTool;
 

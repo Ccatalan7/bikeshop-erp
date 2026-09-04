@@ -32,6 +32,8 @@ import 'chat_audio_message.dart';
 import 'chat_voice_recorder.dart';
 import '../services/meta_messaging_service.dart';
 import '../models/message.dart';
+import '../models/message_reply.dart';
+import '../models/chat_attachment_draft.dart';
 import '../models/message_delivery_state.dart';
 import '../models/autocomplete_suggestion.dart';
 import 'parsed_message_text.dart';
@@ -54,6 +56,7 @@ import '../../../shared/utils/purchase_document_pdf_generator.dart';
 import '../models/conversation_context_hint.dart';
 import '../../../shared/utils/supplier_whatsapp_phone.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
+import '../../../shared/widgets/vb_notice.dart';
 import '../../../shared/widgets/vb_surface_icon_button.dart';
 import '../../../shared/services/supabase_functions_region.dart';
 
@@ -138,129 +141,6 @@ class _SupplierPhoneMismatch {
   final String registeredPhone;
 }
 
-class _PendingChatAttachment {
-  final String id;
-  final String fileName;
-  final Uint8List bytes;
-  final String extension;
-  final bool isImage;
-  final bool outcomeUnknown;
-  final ReservedMessagingAttachment? reservation;
-  final bool retryUpload;
-  final bool canRetrySafely;
-  final String? replayCaption;
-
-  /// Purchase document this attachment carries. A confirmed send moves a
-  /// draft to «Enviada» and leaves an already-sent document there, so the
-  /// identity has to survive every retry the composer allows.
-  final String? purchaseInvoiceId;
-  final String? purchaseInvoiceNumber;
-
-  /// Length of a voice note, shown on its bubble before the player knows it.
-  final int? durationSeconds;
-
-  const _PendingChatAttachment({
-    required this.id,
-    required this.fileName,
-    required this.bytes,
-    required this.extension,
-    required this.isImage,
-    this.outcomeUnknown = false,
-    this.reservation,
-    this.retryUpload = false,
-    this.canRetrySafely = false,
-    this.replayCaption,
-    this.purchaseInvoiceId,
-    this.purchaseInvoiceNumber,
-    this.durationSeconds,
-  });
-
-  _PendingChatAttachment markOutcomeUnknown(
-    _AttachmentDispatchResult result,
-  ) =>
-      _PendingChatAttachment(
-        id: id,
-        fileName: fileName,
-        bytes: bytes,
-        extension: extension,
-        isImage: isImage,
-        outcomeUnknown: true,
-        reservation: result.reservation,
-        retryUpload: result.retryUpload,
-        canRetrySafely: result.canRetrySafely,
-        replayCaption: result.replayCaption,
-        purchaseInvoiceId: purchaseInvoiceId,
-        purchaseInvoiceNumber: purchaseInvoiceNumber,
-        durationSeconds: durationSeconds,
-      );
-
-  /// Replace the file with the freshly saved document, keeping the row's place
-  /// in the composer. Only a row without a reservation can take a revision: a
-  /// reserved upload is bound to the exact bytes it announced.
-  _PendingChatAttachment withRevision({
-    required Uint8List bytes,
-    required String fileName,
-    required String invoiceNumber,
-  }) =>
-      _PendingChatAttachment(
-        id: id,
-        fileName: fileName,
-        bytes: bytes,
-        extension: extension,
-        isImage: isImage,
-        purchaseInvoiceId: purchaseInvoiceId,
-        purchaseInvoiceNumber: invoiceNumber,
-      );
-
-  _PendingChatAttachment resetForNewAttempt() => _PendingChatAttachment(
-        id: id,
-        fileName: fileName,
-        bytes: bytes,
-        extension: extension,
-        isImage: isImage,
-        purchaseInvoiceId: purchaseInvoiceId,
-        purchaseInvoiceNumber: purchaseInvoiceNumber,
-        durationSeconds: durationSeconds,
-      );
-}
-
-enum _AttachmentDispatchOutcome { confirmed, rejected, outcomeUnknown }
-
-class _AttachmentDispatchResult {
-  const _AttachmentDispatchResult._({
-    required this.outcome,
-    this.reservation,
-    this.retryUpload = false,
-    this.canRetrySafely = false,
-    this.replayCaption,
-  });
-
-  const _AttachmentDispatchResult.confirmed()
-      : this._(outcome: _AttachmentDispatchOutcome.confirmed);
-
-  const _AttachmentDispatchResult.rejected()
-      : this._(outcome: _AttachmentDispatchOutcome.rejected);
-
-  const _AttachmentDispatchResult.outcomeUnknown({
-    required ReservedMessagingAttachment reservation,
-    required bool retryUpload,
-    required bool canRetrySafely,
-    String? replayCaption,
-  }) : this._(
-          outcome: _AttachmentDispatchOutcome.outcomeUnknown,
-          reservation: reservation,
-          retryUpload: retryUpload,
-          canRetrySafely: canRetrySafely,
-          replayCaption: replayCaption,
-        );
-
-  final _AttachmentDispatchOutcome outcome;
-  final ReservedMessagingAttachment? reservation;
-  final bool retryUpload;
-  final bool canRetrySafely;
-  final String? replayCaption;
-}
-
 class _RouteSharePreview {
   final AppRouteLinkSegment link;
   final String title;
@@ -282,6 +162,8 @@ class ChatWindow extends StatefulWidget {
   final VoidCallback? onShowContextPanel;
   final List<Widget> headerActions;
   final bool compact;
+  @visibleForTesting
+  final MessagingAttachmentService? attachmentService;
   final String? initialThreadRootMessageId;
 
   /// Test seam for the local preview read. Production always resolves the
@@ -298,6 +180,7 @@ class ChatWindow extends StatefulWidget {
     this.onShowContextPanel,
     this.headerActions = const [],
     this.compact = false,
+    this.attachmentService,
     this.initialThreadRootMessageId,
     this.whatsAppTemplatePreviewLoader,
   });
@@ -451,6 +334,7 @@ class _ChatWindowState extends State<ChatWindow> {
   ];
 
   final TextEditingController _messageController = TextEditingController();
+  MessageReply? _replyToMessage;
   final ScrollController _scrollController = ScrollController();
   final ScrollController _threadScrollController = ScrollController();
   final ScrollController _emojiScrollController = ScrollController();
@@ -461,6 +345,8 @@ class _ChatWindowState extends State<ChatWindow> {
   final MetaMessagingService _metaMessagingService = MetaMessagingService();
   final Object _conversationViewOwner = Object();
   ChatProvider? _chatProvider;
+  int? _composerSession;
+  Timer? _composerFocusTimer;
   String? _reportedConversationId;
   String? _taskContextConversationIdLoaded;
   bool? _reportedConversationVisibility;
@@ -507,9 +393,7 @@ class _ChatWindowState extends State<ChatWindow> {
   bool _pendingAttachmentReconciliationScheduled = false;
   bool _showJumpToLatest = false;
   bool _historyAutoLoadScheduled = false;
-  final List<_PendingChatAttachment> _pendingAttachments = [];
-  final Map<String, List<_PendingChatAttachment>>
-      _pendingAttachmentDraftsByConversation = {};
+  final List<PendingChatAttachment> _pendingAttachments = [];
   int _pendingAttachmentSerial = 0;
 
   /// Voice notes. The bar replaces the text field while recording; the
@@ -550,7 +434,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _pendingAttachmentSerial += 1;
     setState(() {
       _pendingAttachments.add(
-        _PendingChatAttachment(
+        PendingChatAttachment(
           id: 'voice-${DateTime.now().microsecondsSinceEpoch}-$_pendingAttachmentSerial',
           fileName: note.fileName,
           bytes: note.bytes,
@@ -576,8 +460,10 @@ class _ChatWindowState extends State<ChatWindow> {
   // Cache futures so FutureBuilder doesn't re-fire on every rebuild.
   final Map<String, Future<Map<String, dynamic>?>> _senderInfoFutureCache = {};
   final Map<String, Future<String?>> _whatsAppMediaFutureCache = {};
-  final MessagingAttachmentService _messagingAttachmentService =
+  final MessagingAttachmentService _defaultAttachmentService =
       MessagingAttachmentService();
+  MessagingAttachmentService get _messagingAttachmentService =>
+      widget.attachmentService ?? _defaultAttachmentService;
 
   bool get _isWhatsAppConversation => widget.conversation.isWhatsApp;
   bool get _isMetaConversation => widget.conversation.isMetaMessaging;
@@ -1013,6 +899,19 @@ class _ChatWindowState extends State<ChatWindow> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _chatProvider = context.read<ChatProvider>();
+    final session = _chatProvider!.composerSession;
+    if (_composerSession != null && _composerSession != session) {
+      _replyToMessage = null;
+      _messageController.removeListener(_onTextChanged);
+      _messageController.clear();
+      _messageController.addListener(_onTextChanged);
+      _pendingAttachments.clear();
+    }
+    if (_composerSession == null) {
+      _pendingAttachments.addAll(
+          _chatProvider!.getComposerAttachments(widget.conversation.id));
+    }
+    _composerSession = session;
     _loadTaskChannelContext();
   }
 
@@ -1029,22 +928,20 @@ class _ChatWindowState extends State<ChatWindow> {
   void didUpdateWidget(covariant ChatWindow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversation.id != widget.conversation.id) {
-      // Attachment reservations are conversation-scoped. Never carry a
-      // pending or outcome-unknown reservation into another chat.
-      if (_pendingAttachments.isEmpty) {
-        _pendingAttachmentDraftsByConversation.remove(
-          oldWidget.conversation.id,
-        );
-      } else {
-        _pendingAttachmentDraftsByConversation[oldWidget.conversation.id] =
-            List<_PendingChatAttachment>.from(_pendingAttachments);
-      }
-      final nextAttachmentDraft = _pendingAttachmentDraftsByConversation.remove(
-        widget.conversation.id,
-      );
+      _composerFocusTimer?.cancel();
+      _saveComposerDraft(oldWidget.conversation.id);
+      _messageController.removeListener(_onTextChanged);
+      final draft = _chatProvider?.getComposerDraft(widget.conversation.id);
+      _replyToMessage = draft?.reply;
+      _messageController.text = draft?.text ?? '';
+      _messageController.addListener(_onTextChanged);
+      _isSendingMessage = false;
+      _saveAttachmentDraft(oldWidget.conversation.id);
+      final nextAttachmentDraft =
+          _chatProvider?.getComposerAttachments(widget.conversation.id);
       _pendingAttachments
         ..clear()
-        ..addAll(nextAttachmentDraft ?? const <_PendingChatAttachment>[]);
+        ..addAll(nextAttachmentDraft ?? const <PendingChatAttachment>[]);
       _isSendingPendingAttachments = false;
       _senderInfoFutureCache.clear();
       _whatsAppMediaFutureCache.clear();
@@ -1092,6 +989,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
   @override
   void dispose() {
+    _composerFocusTimer?.cancel();
+    _saveComposerDraft(widget.conversation.id);
+    _saveAttachmentDraft(widget.conversation.id);
     _chatProvider?.detachConversationView(_conversationViewOwner);
     _removeEmojiOverlay();
     _removeComposerMenuOverlay(notify: false);
@@ -1115,6 +1015,7 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   void _onTextChanged() {
+    _saveComposerDraft(widget.conversation.id);
     _debounce?.cancel();
 
     final text = _messageController.text;
@@ -1864,14 +1765,99 @@ class _ChatWindowState extends State<ChatWindow> {
     return !message.isMe && message.type != 'system';
   }
 
-  void _applyPendingDraft() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _messageController.text.trim().isNotEmpty) return;
+  bool _isCurrentComposer(String conversationId, int? session) =>
+      mounted &&
+      widget.conversation.id == conversationId &&
+      _chatProvider?.composerSession == session;
 
-      final draft = context
-          .read<ChatProvider>()
-          .getConversationDraft(widget.conversation.id)
-          ?.body;
+  void _saveAttachmentDraft(String conversationId) {
+    if (_composerSession == null) return;
+    _chatProvider?.saveComposerAttachments(conversationId, _pendingAttachments,
+        session: _composerSession!);
+  }
+
+  void _saveComposerDraft(String conversationId) {
+    if (_composerSession == null) return;
+    _chatProvider?.saveComposerDraft(
+        conversationId,
+        ChatComposerDraft(
+            text: _messageController.text, reply: _replyToMessage),
+        session: _composerSession!);
+  }
+
+  void _restoreFailedDraft(ChatProvider provider, String conversationId,
+      String text, MessageReply? reply, int session) {
+    if (provider.composerSession != session) return;
+    final existing = provider.getComposerDraft(conversationId);
+    if (existing?.text.isNotEmpty == true || existing?.reply != null) return;
+    provider.saveComposerDraft(
+        conversationId, ChatComposerDraft(text: text, reply: reply),
+        session: session);
+    if (!mounted || widget.conversation.id != conversationId) return;
+    setState(() => _replyToMessage = reply);
+    _messageController.value = TextEditingValue(
+        text: text, selection: TextSelection.collapsed(offset: text.length));
+  }
+
+  bool _canQuoteMessage(Message message) =>
+      message.conversationId == widget.conversation.id &&
+      message.type != 'system' &&
+      !message.id.startsWith('temp-') &&
+      message.metadata['pending'] != true &&
+      (widget.conversation.isInternal ||
+          (_isWhatsAppConversation &&
+              message.metadata['external_message_id']?.toString().isNotEmpty ==
+                  true));
+
+  void _selectReply(Message message) {
+    if (!_canQuoteMessage(message)) return;
+    setState(() => _replyToMessage = MessageReply.fromMessage(message));
+    _saveComposerDraft(widget.conversation.id);
+    _restoreComposerFocus();
+  }
+
+  Widget _buildMessageQuote(MessageReply reply, {bool composing = false}) {
+    final author = reply.senderId != null &&
+            reply.senderId == _messagingService.currentUserId
+        ? 'Tú'
+        : reply.senderName?.trim().isNotEmpty == true
+            ? reply.senderName!
+            : reply.direction == 'inbound'
+                ? widget.conversation.title ?? 'Contacto'
+                : 'Mensaje';
+    return VbNotice(
+      key: composing ? const ValueKey('chat-reply-preview') : null,
+      tone: VbNoticeTone.neutral,
+      glyph: '↩',
+      title: composing ? 'Responder a $author' : author,
+      body: reply.preview,
+      bodyMaxLines: 2,
+      action: composing
+          ? IconButton(
+              tooltip: 'Cancelar respuesta',
+              onPressed: () {
+                setState(() => _replyToMessage = null);
+                _saveComposerDraft(widget.conversation.id);
+              },
+              icon: const Icon(Icons.close),
+            )
+          : null,
+    );
+  }
+
+  void _applyPendingDraft() {
+    final conversationId = widget.conversation.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          widget.conversation.id != conversationId ||
+          _messageController.text.isNotEmpty) return;
+
+      final provider = context.read<ChatProvider>();
+      final composer = provider.getComposerDraft(conversationId);
+      final draft =
+          composer?.text ?? provider.getConversationDraft(conversationId)?.body;
+      if (composer?.reply != null)
+        setState(() => _replyToMessage = composer!.reply);
       if (draft == null || draft.trim().isEmpty) return;
 
       _messageController.value = TextEditingValue(
@@ -1888,10 +1874,14 @@ class _ChatWindowState extends State<ChatWindow> {
       return;
     }
     final chatProvider = context.read<ChatProvider>();
+    final composerSession = chatProvider.composerSession;
+    final conversationId = widget.conversation.id;
+    final reply = _replyToMessage;
     final pendingText = text;
     final threadRootMessageId = _activeThreadRootMessageId;
     final messageMetadata = <String, dynamic>{
       ...?metadata,
+      if (reply != null) 'reply_to': reply.toJson(),
       if (threadRootMessageId != null)
         'thread_root_message_id': threadRootMessageId,
       if (threadRootMessageId != null && _alsoSendThreadReplyToChannel)
@@ -1937,6 +1927,7 @@ class _ChatWindowState extends State<ChatWindow> {
       }
     }
 
+    _replyToMessage = null;
     _messageController.clear();
     _restoreComposerFocus();
     setState(() {
@@ -1948,10 +1939,11 @@ class _ChatWindowState extends State<ChatWindow> {
       if (!_isWhatsAppConversation && !_isMetaConversation) {
         await chatProvider.sendMessage(
           pendingText,
+          conversationId: conversationId,
           metadata: messageMetadata.isEmpty ? null : messageMetadata,
           threadRootMessageId: threadRootMessageId,
         );
-        if (!mounted) {
+        if (!mounted || widget.conversation.id != conversationId) {
           return;
         }
         if (threadRootMessageId != null && _alsoSendThreadReplyToChannel) {
@@ -1988,6 +1980,7 @@ class _ChatWindowState extends State<ChatWindow> {
         unawaited(
           _dispatchMetaSend(
             chatProvider: chatProvider,
+            composerSession: composerSession,
             optimisticMessageId: optimisticMessageId,
             pendingText: pendingText,
             messageMetadata: messageMetadata,
@@ -1999,7 +1992,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
       final sendStartedAt = DateTime.now();
       final optimisticMessageId =
-          'temp-wa-${sendStartedAt.millisecondsSinceEpoch}';
+          'temp-wa-${sendStartedAt.microsecondsSinceEpoch}';
       chatProvider.addOptimisticMessage(
         Message(
           id: optimisticMessageId,
@@ -2043,9 +2036,11 @@ class _ChatWindowState extends State<ChatWindow> {
       );
       unawaited(_dispatchWhatsAppSend(
         chatProvider: chatProvider,
+        composerSession: composerSession,
         optimisticMessageId: optimisticMessageId,
         pendingText: pendingText,
         messageMetadata: messageMetadata,
+        reply: reply,
         sendStartedAt: sendStartedAt,
         fallbackContext: dispatchContext,
         conversationId: dispatchConversationId,
@@ -2057,19 +2052,15 @@ class _ChatWindowState extends State<ChatWindow> {
       ));
       return;
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
-      if (_messageController.text.trim().isEmpty) {
-        _messageController.text = pendingText;
-        _messageController.selection = TextSelection.collapsed(
-          offset: _messageController.text.length,
-        );
-      }
+      _restoreFailedDraft(
+          chatProvider, conversationId, pendingText, reply, composerSession);
+      if (!mounted || widget.conversation.id != conversationId) return;
       _restoreComposerFocus();
       _showErrorSnackBar(context, 'No se pudo enviar el mensaje: $e');
     } finally {
-      if (mounted && _isSendingMessage) {
+      if (mounted &&
+          widget.conversation.id == conversationId &&
+          _isSendingMessage) {
         setState(() => _isSendingMessage = false);
       }
     }
@@ -2085,6 +2076,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _dispatchMetaSend({
     required ChatProvider chatProvider,
+    required int composerSession,
     required String optimisticMessageId,
     required String pendingText,
     required Map<String, dynamic> messageMetadata,
@@ -2156,13 +2148,9 @@ class _ChatWindowState extends State<ChatWindow> {
             'external_error_message': errorMessage,
           },
         );
+        _restoreFailedDraft(
+            chatProvider, conversationId, pendingText, null, composerSession);
         if (mounted && widget.conversation.id == conversationId) {
-          if (_messageController.text.trim().isEmpty) {
-            _messageController.text = pendingText;
-            _messageController.selection = TextSelection.collapsed(
-              offset: _messageController.text.length,
-            );
-          }
           _restoreComposerFocus();
           _showErrorSnackBar(context, errorMessage);
         }
@@ -2172,9 +2160,11 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _dispatchWhatsAppSend({
     required ChatProvider chatProvider,
+    required int composerSession,
     required String optimisticMessageId,
     required String pendingText,
     required Map<String, dynamic> messageMetadata,
+    required MessageReply? reply,
     required DateTime sendStartedAt,
     required BuildContext fallbackContext,
     required String conversationId,
@@ -2211,7 +2201,9 @@ class _ChatWindowState extends State<ChatWindow> {
           sendStartedAt,
         );
         chatProvider.removeMessageById(optimisticMessageId);
-        if (mounted) {
+        _restoreFailedDraft(
+            chatProvider, conversationId, pendingText, reply, composerSession);
+        if (mounted && widget.conversation.id == conversationId) {
           _showErrorSnackBar(
             context,
             'La conversación de WhatsApp no tiene un teléfono asociado.',
@@ -2242,6 +2234,7 @@ class _ChatWindowState extends State<ChatWindow> {
         lastInboundAt: lastInboundAt,
         clientMessageId: optimisticMessageId,
         metadata: messageMetadata,
+        replyToMessageId: reply?.externalMessageId,
       );
       _debugLogWhatsAppSend(
         optimisticMessageId,
@@ -2274,7 +2267,7 @@ class _ChatWindowState extends State<ChatWindow> {
           );
           // Keep the optimistic row: the active realtime subscription can
           // still reconcile a late durable/provider receipt.
-          if (mounted) {
+          if (mounted && widget.conversation.id == conversationId) {
             _showErrorSnackBar(
               context,
               'Resultado incierto: verifica la conversación antes de reenviar.',
@@ -2312,13 +2305,9 @@ class _ChatWindowState extends State<ChatWindow> {
             },
           },
         );
-        if (mounted) {
-          if (_messageController.text.trim().isEmpty) {
-            _messageController.text = pendingText;
-            _messageController.selection = TextSelection.collapsed(
-              offset: _messageController.text.length,
-            );
-          }
+        _restoreFailedDraft(
+            chatProvider, conversationId, pendingText, reply, composerSession);
+        if (mounted && widget.conversation.id == conversationId) {
           final errorMessage = receipt.errorRequiresServerFix
               ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
               : 'No se pudo enviar el mensaje por WhatsApp';
@@ -2329,6 +2318,8 @@ class _ChatWindowState extends State<ChatWindow> {
 
       if (receipt.deliveryMethod == WhatsAppDeliveryMethod.cloudApi) {
         if (receipt.usedFirstContactTemplate) {
+          _restoreFailedDraft(chatProvider, conversationId, pendingText, reply,
+              composerSession);
           chatProvider.setConversationDraft(
             conversationId,
             pendingText,
@@ -2364,7 +2355,9 @@ class _ChatWindowState extends State<ChatWindow> {
           },
         );
 
-        if (receipt.usedFirstContactTemplate && mounted) {
+        if (receipt.usedFirstContactTemplate &&
+            mounted &&
+            widget.conversation.id == conversationId) {
           _showWhatsAppResultSnackbar(
             context: context,
             deliveryMethod: receipt.deliveryMethod,
@@ -2376,10 +2369,9 @@ class _ChatWindowState extends State<ChatWindow> {
       } else if (receipt.deliveryMethod ==
           WhatsAppDeliveryMethod.manualFallback) {
         chatProvider.removeMessageById(optimisticMessageId);
-        if (mounted) {
-          if (_messageController.text.isEmpty) {
-            _messageController.text = pendingText;
-          }
+        _restoreFailedDraft(
+            chatProvider, conversationId, pendingText, reply, composerSession);
+        if (mounted && widget.conversation.id == conversationId) {
           _showWhatsAppResultSnackbar(
             context: context,
             deliveryMethod: receipt.deliveryMethod,
@@ -2390,13 +2382,9 @@ class _ChatWindowState extends State<ChatWindow> {
       }
     } catch (e) {
       chatProvider.removeMessageById(optimisticMessageId);
-      if (mounted) {
-        if (_messageController.text.trim().isEmpty) {
-          _messageController.text = pendingText;
-          _messageController.selection = TextSelection.collapsed(
-            offset: _messageController.text.length,
-          );
-        }
+      _restoreFailedDraft(
+          chatProvider, conversationId, pendingText, reply, composerSession);
+      if (mounted && widget.conversation.id == conversationId) {
         _showErrorSnackBar(context, 'No se pudo enviar el mensaje: $e');
       }
     }
@@ -2405,8 +2393,10 @@ class _ChatWindowState extends State<ChatWindow> {
   void _restoreComposerFocus({TextSelection? selection}) {
     // On Web, post-frame callback isn't always enough due to engine/DOM sync.
     // A small delay ensures the focus request happens after the UI settles.
-    Future.delayed(const Duration(milliseconds: 50), () {
-      if (mounted) {
+    final conversationId = widget.conversation.id;
+    _composerFocusTimer?.cancel();
+    _composerFocusTimer = Timer(const Duration(milliseconds: 50), () {
+      if (mounted && widget.conversation.id == conversationId) {
         FocusScope.of(context).requestFocus(_focusNode);
         if (selection != null) {
           final textLength = _messageController.text.length;
@@ -2560,6 +2550,8 @@ class _ChatWindowState extends State<ChatWindow> {
   Future<void> _pickAndSendFile(String choice) async {
     if (!mounted) return;
     if (_guardPendingAttachmentMutation()) return;
+    final conversationId = widget.conversation.id;
+    final session = _composerSession;
 
     try {
       if (choice == 'camera') {
@@ -2567,12 +2559,18 @@ class _ChatWindowState extends State<ChatWindow> {
         final XFile? pickedFile = await picker.pickImage(
           source: ImageSource.camera,
         );
-        if (pickedFile == null) return;
+        if (pickedFile == null ||
+            !_isCurrentComposer(conversationId, session)) {
+          return;
+        }
         await _queueXFiles([pickedFile]);
       } else if (choice == 'gallery') {
         final picker = ImagePicker();
         final pickedFiles = await picker.pickMultiImage();
-        if (pickedFiles.isEmpty) return;
+        if (pickedFiles.isEmpty ||
+            !_isCurrentComposer(conversationId, session)) {
+          return;
+        }
         await _queueXFiles(pickedFiles);
       } else {
         final result = await FilePicker.platform.pickFiles(
@@ -2599,8 +2597,10 @@ class _ChatWindowState extends State<ChatWindow> {
           ],
           withData: true,
         );
-        if (result == null || result.files.isEmpty) return;
-        final attachments = <_PendingChatAttachment>[];
+        if (result == null ||
+            result.files.isEmpty ||
+            !_isCurrentComposer(conversationId, session)) return;
+        final attachments = <PendingChatAttachment>[];
         for (final file in result.files.take(
           MessagingAttachmentService.maxAttachmentsPerBatch,
         )) {
@@ -2620,7 +2620,7 @@ class _ChatWindowState extends State<ChatWindow> {
         _addPendingAttachments(attachments);
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!_isCurrentComposer(conversationId, session)) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2643,7 +2643,9 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Future<void> _queueXFiles(List<XFile> files) async {
     if (_guardPendingAttachmentMutation()) return;
-    final attachments = <_PendingChatAttachment>[];
+    final conversationId = widget.conversation.id;
+    final session = _composerSession;
+    final attachments = <PendingChatAttachment>[];
     for (final file in files.take(
       MessagingAttachmentService.maxAttachmentsPerBatch,
     )) {
@@ -2655,7 +2657,7 @@ class _ChatWindowState extends State<ChatWindow> {
           sizeBytes: sizeBytes,
         );
         final bytes = await file.readAsBytes();
-        if (!mounted) return;
+        if (!_isCurrentComposer(conversationId, session)) return;
         if (bytes.isEmpty) continue;
         attachments.add(
           _buildPendingAttachment(
@@ -2664,7 +2666,7 @@ class _ChatWindowState extends State<ChatWindow> {
           ),
         );
       } catch (e) {
-        if (!mounted) return;
+        if (!_isCurrentComposer(conversationId, session)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('No se pudo preparar ${_droppedFileName(file)}: $e'),
@@ -2677,7 +2679,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _addPendingAttachments(attachments);
   }
 
-  void _addPendingAttachments(List<_PendingChatAttachment> attachments) {
+  void _addPendingAttachments(List<PendingChatAttachment> attachments) {
     if (attachments.isEmpty || !mounted) return;
     if (_guardPendingAttachmentMutation()) return;
     final available = MessagingAttachmentService.maxAttachmentsPerBatch -
@@ -2696,7 +2698,7 @@ class _ChatWindowState extends State<ChatWindow> {
     _restoreComposerFocus();
   }
 
-  _PendingChatAttachment _buildPendingAttachment({
+  PendingChatAttachment _buildPendingAttachment({
     required String fileName,
     required Uint8List bytes,
     String? purchaseInvoiceId,
@@ -2709,7 +2711,7 @@ class _ChatWindowState extends State<ChatWindow> {
     final ext = validation.extension;
     final isImage = validation.contentType.startsWith('image/');
     _pendingAttachmentSerial += 1;
-    return _PendingChatAttachment(
+    return PendingChatAttachment(
       id: 'pending-${DateTime.now().microsecondsSinceEpoch}-$_pendingAttachmentSerial',
       fileName: fileName.trim().isEmpty ? 'archivo' : fileName.trim(),
       bytes: bytes,
@@ -2722,7 +2724,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   void _removePendingAttachment(String id) {
     final attachment =
-        _pendingAttachments.cast<_PendingChatAttachment?>().firstWhere(
+        _pendingAttachments.cast<PendingChatAttachment?>().firstWhere(
               (item) => item?.id == id,
               orElse: () => null,
             );
@@ -2767,8 +2769,17 @@ class _ChatWindowState extends State<ChatWindow> {
     if (_guardPendingAttachmentMutation()) return;
 
     final caption = _messageController.text.trim();
-    final attachments = List<_PendingChatAttachment>.from(_pendingAttachments);
+    final conversationId = widget.conversation.id;
+    final reply = _replyToMessage;
+    final attachments = List<PendingChatAttachment>.from(_pendingAttachments);
+    if (reply != null && !attachments.first.outcomeUnknown) {
+      attachments[0] = attachments.first.withReply(reply);
+    }
     final chatProvider = context.read<ChatProvider>();
+    final composerSession = chatProvider.composerSession;
+    final purchaseService = attachments.any((a) => a.purchaseInvoiceId != null)
+        ? context.read<PurchaseService>()
+        : null;
 
     // Like WhatsApp: the composer is free the moment «enviar» is pressed and
     // every file is already a bubble, drawn from the bytes on this device.
@@ -2777,10 +2788,12 @@ class _ChatWindowState extends State<ChatWindow> {
     setState(() {
       _isSendingPendingAttachments = true;
       _pendingAttachments.clear();
+      _replyToMessage = null;
       _messageController.clear();
     });
     _restoreComposerFocus();
 
+    _saveAttachmentDraft(conversationId);
     final optimisticIds = <String, String>{};
     for (var i = 0; i < attachments.length; i += 1) {
       final attachment = attachments[i];
@@ -2796,14 +2809,25 @@ class _ChatWindowState extends State<ChatWindow> {
       if (optimisticId != null) optimisticIds[attachment.id] = optimisticId;
     }
 
-    final unresolved = <_PendingChatAttachment>[];
-    final confirmedPurchaseDocuments = <_PendingChatAttachment>[];
+    final unresolved = <PendingChatAttachment>[];
+    final confirmedPurchaseDocuments = <PendingChatAttachment>[];
     var rejectedCount = 0;
     var unknownCount = 0;
     var confirmedCount = 0;
     for (var i = 0; i < attachments.length; i += 1) {
       final attachment = attachments[i];
       final optimisticId = optimisticIds[attachment.id];
+      // Navigation never retargets the rest of a batch to the new recipient.
+      if (!mounted ||
+          widget.conversation.id != conversationId ||
+          chatProvider.composerSession != composerSession) {
+        for (final skipped in attachments.skip(i)) {
+          final skippedId = optimisticIds[skipped.id];
+          if (skippedId != null) chatProvider.removeMessageById(skippedId);
+          unresolved.add(skipped);
+        }
+        break;
+      }
       final result = await _sendAttachmentBytes(
         fileName: attachment.fileName,
         bytes: attachment.bytes,
@@ -2818,15 +2842,16 @@ class _ChatWindowState extends State<ChatWindow> {
         optimisticMessageId: optimisticId,
         localMediaKey: attachment.id,
         durationSeconds: attachment.durationSeconds,
+        reply: attachment.reply,
       );
       switch (result.outcome) {
-        case _AttachmentDispatchOutcome.confirmed:
+        case AttachmentDispatchOutcome.confirmed:
           confirmedCount += 1;
           if (attachment.purchaseInvoiceId != null) {
             confirmedPurchaseDocuments.add(attachment);
           }
           break;
-        case _AttachmentDispatchOutcome.rejected:
+        case AttachmentDispatchOutcome.rejected:
           // A confirmed rejection can start over with a fresh reservation on
           // the next explicit user attempt. Never reuse the failed row.
           if (optimisticId != null)
@@ -2834,7 +2859,7 @@ class _ChatWindowState extends State<ChatWindow> {
           unresolved.add(attachment.resetForNewAttempt());
           rejectedCount += 1;
           break;
-        case _AttachmentDispatchOutcome.outcomeUnknown:
+        case AttachmentDispatchOutcome.outcomeUnknown:
           if (optimisticId != null) {
             chatProvider.updateMessageMetadataById(optimisticId, {
               'pending': false,
@@ -2854,16 +2879,37 @@ class _ChatWindowState extends State<ChatWindow> {
           unknownCount += 1;
           break;
       }
-      if (!mounted) return;
-      if (result.outcome == _AttachmentDispatchOutcome.outcomeUnknown) break;
+      if (result.outcome == AttachmentDispatchOutcome.outcomeUnknown) break;
     }
 
-    if (!mounted) return;
+    if (purchaseService != null) {
+      await _markPurchaseDocumentsAsSent(confirmedPurchaseDocuments,
+          purchaseService: purchaseService, conversationId: conversationId);
+    }
+    if (chatProvider.composerSession != composerSession) return;
+    if (!mounted || widget.conversation.id != conversationId) {
+      if (unresolved.isNotEmpty) {
+        chatProvider.saveComposerAttachments(
+            conversationId,
+            [
+              ...chatProvider.getComposerAttachments(conversationId),
+              ...unresolved
+            ],
+            session: composerSession);
+        if (confirmedCount == 0)
+          _restoreFailedDraft(
+              chatProvider, conversationId, caption, reply, composerSession);
+      }
+      return;
+    }
     setState(() {
       _isSendingPendingAttachments = false;
-      _pendingAttachments
-        ..clear()
-        ..addAll(unresolved);
+      _pendingAttachments.addAll(unresolved);
+      if (unresolved.isNotEmpty &&
+          confirmedCount == 0 &&
+          _replyToMessage == null) {
+        _replyToMessage = reply;
+      }
       if (unresolved.isNotEmpty &&
           confirmedCount == 0 &&
           caption.isNotEmpty &&
@@ -2891,8 +2937,6 @@ class _ChatWindowState extends State<ChatWindow> {
         ),
       );
     }
-
-    await _markPurchaseDocumentsAsSent(confirmedPurchaseDocuments);
   }
 
   /// The bubble a file gets before anything has been uploaded. Its bytes go
@@ -2902,7 +2946,7 @@ class _ChatWindowState extends State<ChatWindow> {
   /// reports the reason).
   String? _seedOptimisticAttachment(
     ChatProvider chatProvider,
-    _PendingChatAttachment attachment, {
+    PendingChatAttachment attachment, {
     String? caption,
   }) {
     if (attachment.outcomeUnknown) return null;
@@ -2943,6 +2987,7 @@ class _ChatWindowState extends State<ChatWindow> {
                 : 'file',
         metadata: {
           'pending': true,
+          if (attachment.reply != null) 'reply_to': attachment.reply!.toJson(),
           'client_message_id': optimisticId,
           'local_media_key': attachment.id,
           'filename': attachment.fileName,
@@ -2974,7 +3019,7 @@ class _ChatWindowState extends State<ChatWindow> {
     return 'archivo';
   }
 
-  Future<_AttachmentDispatchResult> _sendAttachmentBytes({
+  Future<AttachmentDispatchResult> _sendAttachmentBytes({
     required String fileName,
     required Uint8List bytes,
     bool showUploadingSnackBar = true,
@@ -2984,20 +3029,22 @@ class _ChatWindowState extends State<ChatWindow> {
     String? optimisticMessageId,
     String? localMediaKey,
     int? durationSeconds,
+    MessageReply? reply,
   }) async {
     if (!mounted || bytes.isEmpty) {
-      return const _AttachmentDispatchResult.rejected();
+      return const AttachmentDispatchResult.rejected();
     }
     if (!_supportsOutgoingAttachments) {
       _showErrorSnackBar(
         context,
         'Los adjuntos aún no están habilitados para ${widget.conversation.shortChannelLabel}.',
       );
-      return const _AttachmentDispatchResult.rejected();
+      return const AttachmentDispatchResult.rejected();
     }
 
     final fallbackContext = context;
     final conversationId = widget.conversation.id;
+    final threadRootMessageId = _activeThreadRootMessageId;
     final isWhatsAppConversation = _isWhatsAppConversation;
     final chatProvider = context.read<ChatProvider>();
     final contextType = _effectiveContextType;
@@ -3013,7 +3060,7 @@ class _ChatWindowState extends State<ChatWindow> {
       );
     } catch (error) {
       _showErrorSnackBar(context, 'No se puede adjuntar el archivo: $error');
-      return const _AttachmentDispatchResult.rejected();
+      return const AttachmentDispatchResult.rejected();
     }
 
     if (showUploadingSnackBar) {
@@ -3047,7 +3094,7 @@ class _ChatWindowState extends State<ChatWindow> {
           context,
           'La reserva del adjunto ya no coincide con esta conversación.',
         );
-        return const _AttachmentDispatchResult.rejected();
+        return const AttachmentDispatchResult.rejected();
       }
       reservation = existingReservation;
     } else {
@@ -3061,13 +3108,13 @@ class _ChatWindowState extends State<ChatWindow> {
         if (showUploadingSnackBar && fallbackContext.mounted) {
           ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
         }
-        if (mounted) {
+        if (mounted && widget.conversation.id == conversationId) {
           _showErrorSnackBar(
             context,
             'No se pudo reservar el adjunto: $error',
           );
         }
-        return const _AttachmentDispatchResult.rejected();
+        return const AttachmentDispatchResult.rejected();
       }
     }
 
@@ -3102,13 +3149,13 @@ class _ChatWindowState extends State<ChatWindow> {
           ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
         }
         if (MessagingAttachmentService.isUploadOutcomeAmbiguous(error)) {
-          if (mounted) {
+          if (mounted && widget.conversation.id == conversationId) {
             _showErrorSnackBar(
               context,
               'No llegó la confirmación de carga. Se conserva la misma reserva para un reintento seguro.',
             );
           }
-          return _AttachmentDispatchResult.outcomeUnknown(
+          return AttachmentDispatchResult.outcomeUnknown(
             reservation: reservation,
             retryUpload: true,
             canRetrySafely: !isWhatsAppConversation,
@@ -3119,10 +3166,10 @@ class _ChatWindowState extends State<ChatWindow> {
           reservation,
           code: 'flutter_upload_rejected',
         );
-        if (mounted) {
+        if (mounted && widget.conversation.id == conversationId) {
           _showErrorSnackBar(context, 'La carga del adjunto fue rechazada.');
         }
-        return const _AttachmentDispatchResult.rejected();
+        return const AttachmentDispatchResult.rejected();
       }
     }
 
@@ -3137,6 +3184,7 @@ class _ChatWindowState extends State<ChatWindow> {
             : 'file';
     final metadata = {
       ...reservation.messageMetadata,
+      if (reply != null) 'reply_to': reply.toJson(),
       if (cleanCaption != null && cleanCaption.isNotEmpty)
         'caption': cleanCaption,
       if (durationSeconds != null) 'duration_seconds': durationSeconds,
@@ -3158,12 +3206,12 @@ class _ChatWindowState extends State<ChatWindow> {
         contactFuture: contactFuture!,
       );
       switch (outcome) {
-        case _AttachmentDispatchOutcome.confirmed:
-          return const _AttachmentDispatchResult.confirmed();
-        case _AttachmentDispatchOutcome.rejected:
-          return const _AttachmentDispatchResult.rejected();
-        case _AttachmentDispatchOutcome.outcomeUnknown:
-          return _AttachmentDispatchResult.outcomeUnknown(
+        case AttachmentDispatchOutcome.confirmed:
+          return const AttachmentDispatchResult.confirmed();
+        case AttachmentDispatchOutcome.rejected:
+          return const AttachmentDispatchResult.rejected();
+        case AttachmentDispatchOutcome.outcomeUnknown:
+          return AttachmentDispatchResult.outcomeUnknown(
             reservation: reservation,
             retryUpload: false,
             canRetrySafely: false,
@@ -3176,7 +3224,8 @@ class _ChatWindowState extends State<ChatWindow> {
       await _messagingAttachmentService.publish(
         reservation: reservation,
         caption: cleanCaption,
-        threadRootMessageId: _activeThreadRootMessageId,
+        threadRootMessageId: threadRootMessageId,
+        replyToMessageId: reply?.messageId,
       );
       if (optimisticMessageId != null) {
         // The database wrote the row; realtime prunes the bubble by
@@ -3186,15 +3235,15 @@ class _ChatWindowState extends State<ChatWindow> {
           'server_ack_durable': true,
         });
       }
-      return const _AttachmentDispatchResult.confirmed();
+      return const AttachmentDispatchResult.confirmed();
     } on MessagingAttachmentPublishOutcomeUnknown {
-      if (mounted) {
+      if (mounted && widget.conversation.id == conversationId) {
         _showErrorSnackBar(
           context,
           'No llegó la confirmación de envío. El adjunto conserva su reserva y puede reintentarse sin duplicarlo.',
         );
       }
-      return _AttachmentDispatchResult.outcomeUnknown(
+      return AttachmentDispatchResult.outcomeUnknown(
         reservation: reservation,
         retryUpload: false,
         canRetrySafely: true,
@@ -3205,15 +3254,15 @@ class _ChatWindowState extends State<ChatWindow> {
         reservation,
         code: error.failureCode,
       );
-      if (mounted) {
+      if (mounted && widget.conversation.id == conversationId) {
         _showErrorSnackBar(context, 'El envío del adjunto fue rechazado.');
       }
-      return const _AttachmentDispatchResult.rejected();
+      return const AttachmentDispatchResult.rejected();
     } catch (_) {
       // A non-contract exception after publish started is never evidence that
       // the transaction rolled back. Preserve the reservation for read-back
       // or exact replay instead of failing/deleting it.
-      return _AttachmentDispatchResult.outcomeUnknown(
+      return AttachmentDispatchResult.outcomeUnknown(
         reservation: reservation,
         retryUpload: false,
         canRetrySafely: true,
@@ -3222,7 +3271,7 @@ class _ChatWindowState extends State<ChatWindow> {
     }
   }
 
-  Future<_AttachmentDispatchOutcome> _sendWhatsAppAttachment({
+  Future<AttachmentDispatchOutcome> _sendWhatsAppAttachment({
     required ChatProvider chatProvider,
     required ReservedMessagingAttachment reservation,
     required String fileName,
@@ -3237,7 +3286,7 @@ class _ChatWindowState extends State<ChatWindow> {
     String? existingOptimisticMessageId,
   }) {
     final optimisticMessageId = existingOptimisticMessageId ??
-        'temp-wa-file-${DateTime.now().millisecondsSinceEpoch}';
+        'temp-wa-file-${DateTime.now().microsecondsSinceEpoch}';
     final sendMetadata = {
       ...metadata,
       'channel': 'whatsapp',
@@ -3257,7 +3306,7 @@ class _ChatWindowState extends State<ChatWindow> {
       chatProvider.addOptimisticMessage(
         Message(
           id: optimisticMessageId,
-          conversationId: widget.conversation.id,
+          conversationId: conversationId,
           senderId: _messagingService.currentUserId,
           content:
               caption?.trim().isNotEmpty == true ? caption!.trim() : fileName,
@@ -3284,7 +3333,7 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Future<_AttachmentDispatchOutcome> _dispatchWhatsAppAttachment({
+  Future<AttachmentDispatchOutcome> _dispatchWhatsAppAttachment({
     required ChatProvider chatProvider,
     required String optimisticMessageId,
     required ReservedMessagingAttachment reservation,
@@ -3315,7 +3364,7 @@ class _ChatWindowState extends State<ChatWindow> {
             'La conversación de WhatsApp no tiene un teléfono asociado.',
           );
         }
-        return _AttachmentDispatchOutcome.rejected;
+        return AttachmentDispatchOutcome.rejected;
       }
 
       final receipt = await whatsappService.sendAttachment(
@@ -3357,7 +3406,7 @@ class _ChatWindowState extends State<ChatWindow> {
               'Resultado incierto: verifica la conversación antes de reenviar el archivo.',
             );
           }
-          return _AttachmentDispatchOutcome.outcomeUnknown;
+          return AttachmentDispatchOutcome.outcomeUnknown;
         }
         await _messagingAttachmentService.fail(
           reservation,
@@ -3372,7 +3421,7 @@ class _ChatWindowState extends State<ChatWindow> {
                   : 'No se pudo enviar el archivo por WhatsApp';
           _showErrorSnackBar(context, errorMessage);
         }
-        return _AttachmentDispatchOutcome.rejected;
+        return AttachmentDispatchOutcome.rejected;
       }
 
       if (receipt.deliveryMethod == WhatsAppDeliveryMethod.cloudApi) {
@@ -3399,7 +3448,7 @@ class _ChatWindowState extends State<ChatWindow> {
           );
         }
       }
-      return _AttachmentDispatchOutcome.confirmed;
+      return AttachmentDispatchOutcome.confirmed;
     } catch (e) {
       await _messagingAttachmentService.fail(
         reservation,
@@ -3409,7 +3458,7 @@ class _ChatWindowState extends State<ChatWindow> {
       if (mounted) {
         _showErrorSnackBar(context, 'No se pudo enviar el archivo: $e');
       }
-      return _AttachmentDispatchOutcome.rejected;
+      return AttachmentDispatchOutcome.rejected;
     }
   }
 
@@ -9164,6 +9213,8 @@ class _ChatWindowState extends State<ChatWindow> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (_replyToMessage != null)
+          _buildMessageQuote(_replyToMessage!, composing: true),
         if (_isWhatsAppConversation) ...[
           _buildWhatsAppServiceWindowGauge(context),
           const SizedBox(height: 8),
@@ -9605,6 +9656,8 @@ class _ChatWindowState extends State<ChatWindow> {
     if (invoiceId == null || _isPreparingPurchaseDocument) return;
     _removeComposerMenuOverlay(notify: true);
     if (_guardPendingAttachmentMutation()) return;
+    final conversationId = widget.conversation.id;
+    final session = _composerSession;
 
     final appearanceService = context.read<AppearanceService>();
     final inventoryService = context.read<InventoryService>();
@@ -9617,7 +9670,7 @@ class _ChatWindowState extends State<ChatWindow> {
         appearanceService: appearanceService,
         inventoryService: inventoryService,
       );
-      if (!mounted) return;
+      if (!_isCurrentComposer(conversationId, session)) return;
       _addPendingAttachments([
         _buildPendingAttachment(
           fileName: PurchaseDocumentPdfGenerator.fileNameFor(
@@ -9663,7 +9716,7 @@ class _ChatWindowState extends State<ChatWindow> {
   /// the chat is rebuilt from the stored document rather than from the copy
   /// generated when it was queued.
   Future<void> _openPurchaseDocumentPreview(
-    _PendingChatAttachment attachment,
+    PendingChatAttachment attachment,
   ) async {
     final invoiceId = attachment.purchaseInvoiceId;
     if (invoiceId == null) return;
@@ -9709,12 +9762,13 @@ class _ChatWindowState extends State<ChatWindow> {
   /// A document already sent or advanced is left alone: the chat send is not
   /// allowed to walk the purchase workflow backwards.
   Future<void> _markPurchaseDocumentsAsSent(
-    List<_PendingChatAttachment> attachments,
-  ) async {
-    if (attachments.isEmpty || !mounted) return;
+    List<PendingChatAttachment> attachments, {
+    required PurchaseService purchaseService,
+    required String conversationId,
+  }) async {
+    if (attachments.isEmpty) return;
 
-    final purchaseService = context.read<PurchaseService>();
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = mounted ? ScaffoldMessenger.maybeOf(context) : null;
     final marked = <String>[];
     final failed = <String>[];
 
@@ -9741,7 +9795,9 @@ class _ChatWindowState extends State<ChatWindow> {
       }
     }
 
-    if (!mounted) return;
+    if (!mounted ||
+        widget.conversation.id != conversationId ||
+        messenger == null) return;
     if (failed.isNotEmpty) {
       messenger.showSnackBar(
         SnackBar(
@@ -9901,7 +9957,7 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Widget _buildPendingAttachmentTile(
     BuildContext context,
-    _PendingChatAttachment attachment,
+    PendingChatAttachment attachment,
   ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -10825,6 +10881,15 @@ class _ChatWindowState extends State<ChatWindow> {
                   _buildRouteShareMessage(context, msg, contentIsMe);
             }
 
+            final quote = MessageReply.fromMetadata(msg, messages);
+            if (quote != null) {
+              contentWidget = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [_buildMessageQuote(quote), contentWidget],
+              );
+            }
+
             // Timestamp
             final timeStr = DateFormat('HH:mm').format(msg.createdAt);
 
@@ -10932,12 +10997,12 @@ class _ChatWindowState extends State<ChatWindow> {
                             Builder(
                               builder: (bubbleContext) => GestureDetector(
                                 behavior: HitTestBehavior.opaque,
-                                onLongPress: () => _showReactionPicker(
+                                onLongPress: () => _showMessageActions(
                                   bubbleContext,
                                   msg,
                                   isMe: false,
                                 ),
-                                onSecondaryTap: () => _showReactionPicker(
+                                onSecondaryTap: () => _showMessageActions(
                                   bubbleContext,
                                   msg,
                                   isMe: false,
@@ -11019,12 +11084,12 @@ class _ChatWindowState extends State<ChatWindow> {
                           Builder(
                             builder: (bubbleContext) => GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onLongPress: () => _showReactionPicker(
+                              onLongPress: () => _showMessageActions(
                                 bubbleContext,
                                 msg,
                                 isMe: true,
                               ),
-                              onSecondaryTap: () => _showReactionPicker(
+                              onSecondaryTap: () => _showMessageActions(
                                 bubbleContext,
                                 msg,
                                 isMe: true,
@@ -11129,12 +11194,12 @@ class _ChatWindowState extends State<ChatWindow> {
                 child: Builder(
                   builder: (replyContext) => GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onLongPress: () => _showReactionPicker(
+                    onLongPress: () => _showMessageActions(
                       replyContext,
                       message,
                       isMe: false,
                     ),
-                    onSecondaryTap: () => _showReactionPicker(
+                    onSecondaryTap: () => _showMessageActions(
                       replyContext,
                       message,
                       isMe: false,
@@ -11333,7 +11398,7 @@ class _ChatWindowState extends State<ChatWindow> {
   /// Se usa `useRootNavigator` porque el menú, en el navegador anidado, se
   /// acomoda dentro del overlay del área de contenido —que no incluye el rail
   /// derecho— y terminaba dibujado sobre el dashboard.
-  Future<void> _showReactionPicker(
+  Future<void> _showMessageActions(
     BuildContext context,
     Message msg, {
     required bool isMe,
@@ -11383,33 +11448,44 @@ class _ChatWindowState extends State<ChatWindow> {
       ),
       constraints: BoxConstraints(minWidth: barWidth, maxWidth: barWidth),
       items: [
-        PopupMenuItem<String>(
-          enabled: false,
+        if (_canQuoteMessage(msg))
+          const PopupMenuItem<String>(value: 'reply', child: Text('Responder')),
+        if (msg.content.isNotEmpty)
+          const PopupMenuItem<String>(
+              value: 'copy', child: Text('Copiar mensaje')),
+        _MessageReactionsMenuEntry(
           height: barHeight,
-          padding: EdgeInsets.zero,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               for (final emoji in _quickReactionEmojis)
-                InkWell(
-                  borderRadius: BorderRadius.circular(15),
-                  onTap: () =>
-                      Navigator.of(context, rootNavigator: true).pop(emoji),
-                  child: Container(
-                    width: emojiSlot,
-                    height: emojiSlot,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      // El que ya pusiste se ve elegido; tocarlo lo retira.
-                      color: emoji == mine
-                          ? theme.colorScheme.primaryContainer
-                          : Colors.transparent,
-                    ),
-                    child: Text(emoji, style: const TextStyle(fontSize: 17)),
-                  ),
-                ),
+                Semantics(
+                    container: true,
+                    button: true,
+                    label: 'Reaccionar con $emoji',
+                    onTap: () =>
+                        Navigator.of(context, rootNavigator: true).pop(emoji),
+                    child: ExcludeSemantics(
+                        child: InkWell(
+                      borderRadius: BorderRadius.circular(15),
+                      onTap: () =>
+                          Navigator.of(context, rootNavigator: true).pop(emoji),
+                      child: Container(
+                        width: emojiSlot,
+                        height: emojiSlot,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          // El que ya pusiste se ve elegido; tocarlo lo retira.
+                          color: emoji == mine
+                              ? theme.colorScheme.primaryContainer
+                              : Colors.transparent,
+                        ),
+                        child:
+                            Text(emoji, style: const TextStyle(fontSize: 17)),
+                      ),
+                    ))),
               InkWell(
                 borderRadius: BorderRadius.circular(15),
                 onTap: () => Navigator.of(context, rootNavigator: true)
@@ -11435,7 +11511,17 @@ class _ChatWindowState extends State<ChatWindow> {
       ],
     );
 
-    if (selected == null) return;
+    if (selected == null ||
+        !mounted ||
+        msg.conversationId != widget.conversation.id) return;
+    if (selected == 'reply') {
+      _selectReply(msg);
+      return;
+    }
+    if (selected == 'copy') {
+      await Clipboard.setData(ClipboardData(text: msg.content));
+      return;
+    }
     if (selected == _moreReactionsSentinel) {
       if (!mounted) return;
       _openEmojiPickerForReaction(msg);
@@ -11864,4 +11950,28 @@ class _ChatWindowState extends State<ChatWindow> {
       ],
     );
   }
+}
+
+/// A row of independent actions must not inherit PopupMenuItem's
+/// MergeSemantics, which turns every emoji into one inaccessible action.
+class _MessageReactionsMenuEntry extends PopupMenuEntry<String> {
+  const _MessageReactionsMenuEntry({required this.height, required this.child});
+
+  @override
+  final double height;
+  final Widget child;
+
+  @override
+  bool represents(String? value) => false;
+
+  @override
+  State<_MessageReactionsMenuEntry> createState() =>
+      _MessageReactionsMenuEntryState();
+}
+
+class _MessageReactionsMenuEntryState
+    extends State<_MessageReactionsMenuEntry> {
+  @override
+  Widget build(BuildContext context) =>
+      SizedBox(height: widget.height, child: widget.child);
 }

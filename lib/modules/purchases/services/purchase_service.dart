@@ -87,7 +87,10 @@ class PurchaseService extends ChangeNotifier {
   bool _suppliersLoaded = false;
   bool _invoicesLoaded = false;
   bool _paymentsLoaded = false;
-  bool _isLoadingListInvoices = false;
+  Future<List<PurchaseInvoice>>? _listInvoicesLoad;
+  ErpAuthorityScopeKey? _listInvoicesLoadScope;
+  ErpAuthorityScopeKey? _listInvoicesCacheScope;
+  bool _disposed = false;
   final AuthorityCacheScope _supplierCacheScope = AuthorityCacheScope();
   final SupplierCommandRetryLedger _supplierCreateRetries =
       SupplierCommandRetryLedger();
@@ -118,7 +121,13 @@ class PurchaseService extends ChangeNotifier {
   bool get hasInvoicesCache =>
       _invoiceCache.isNotEmpty && _invoicesCacheTime != null;
   bool get hasListInvoicesCache =>
-      _listInvoiceCache.isNotEmpty && _listInvoicesCacheTime != null;
+      _listInvoicesCacheTime != null &&
+      _listInvoicesCacheScope == _currentListInvoicesScope;
+  ErpAuthorityScopeKey? get _currentListInvoicesScope =>
+      ErpAuthorityScopeKey.from(
+        userId: _tenantService.currentAuthUserId,
+        tenantId: _tenantService.currentTenantId,
+      );
   bool get hasPaymentsCache =>
       _paymentCache.isNotEmpty && _paymentsCacheTime != null;
   ErpAuthorityScopeKey? get supplierAuthorityScope => _supplierCacheScope.key;
@@ -356,7 +365,7 @@ class PurchaseService extends ChangeNotifier {
       UnmodifiableListView(_invoiceCache);
   UnmodifiableListView<PurchaseInvoice> get listInvoices =>
       UnmodifiableListView(_listInvoiceCache);
-  bool get isLoadingListInvoices => _isLoadingListInvoices;
+  bool get isLoadingListInvoices => _listInvoicesLoad != null;
 
   static void setAccountingService(AccountingService accountingService) {
     _accountingService = accountingService;
@@ -638,42 +647,66 @@ class PurchaseService extends ChangeNotifier {
   }
 
   Future<List<PurchaseInvoice>> getPurchaseInvoicesForList(
-      {bool forceRefresh = false}) async {
+      {bool forceRefresh = false}) {
+    final scope = _currentListInvoicesScope;
+    final pending = _listInvoicesLoad;
+    // Un consumidor que llega durante la carga espera su resultado. Devolver
+    // aquí la caché vacía publicaba «sin compras» como una lectura completa.
+    if (pending != null && _listInvoicesLoadScope == scope) return pending;
     if (!forceRefresh &&
-        _isCacheValid(_listInvoicesCacheTime) &&
-        _listInvoiceCache.isNotEmpty) {
+        hasListInvoicesCache &&
+        _isCacheValid(_listInvoicesCacheTime)) {
       debugPrint(
           '📦 [PurchaseService] Using cached purchase invoice list preview (${_listInvoiceCache.length} items)');
-      return _listInvoiceCache;
+      return Future.value(_listInvoiceCache);
     }
 
-    if (_isLoadingListInvoices) {
-      return _listInvoiceCache;
-    }
-
-    _isLoadingListInvoices = true;
+    final completion = Completer<List<PurchaseInvoice>>();
+    _listInvoicesLoad = completion.future;
+    _listInvoicesLoadScope = scope;
     notifyListeners();
+    unawaited(_readPurchaseInvoiceList(completion, scope));
+    return completion.future;
+  }
 
+  Future<void> _readPurchaseInvoiceList(
+    Completer<List<PurchaseInvoice>> completion,
+    ErpAuthorityScopeKey? scope,
+  ) async {
     try {
       final data = await _db.select(
         'purchase_invoice_list_read_model_v2',
         selectColumns: PurchaseInvoice.listReadModelSelect,
         fetchAll: true,
       );
+      if (_disposed ||
+          scope != _currentListInvoicesScope ||
+          !identical(_listInvoicesLoad, completion.future)) {
+        throw const AuthorityScopeChangedException();
+      }
       _listInvoiceCache = data
           .map((row) => PurchaseInvoice.fromJson(row))
           .toList()
         ..sort((a, b) => b.date.compareTo(a.date));
       _listInvoicesCacheTime = DateTime.now();
+      _listInvoicesCacheScope = scope;
       debugPrint(
           '✅ [PurchaseService] Cached ${_listInvoiceCache.length} purchase invoice list preview rows');
       _setupPurchaseRealtime();
-      return _listInvoiceCache;
-    } catch (e) {
-      throw Exception('No se pudieron cargar los documentos de compra: $e');
+      completion.complete(_listInvoiceCache);
+    } catch (error, stack) {
+      completion.completeError(
+        error is AuthorityScopeChangedException
+            ? error
+            : Exception(
+                'No se pudieron cargar los documentos de compra: $error'),
+        stack,
+      );
     } finally {
-      _isLoadingListInvoices = false;
-      notifyListeners();
+      if (identical(_listInvoicesLoad, completion.future)) {
+        _listInvoicesLoad = null;
+        if (!_disposed) notifyListeners();
+      }
     }
   }
 
@@ -1714,6 +1747,7 @@ class PurchaseService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _supplierRelationshipService.supplierCommandRevision.removeListener(
       _handleSupplierCommandCommitted,
     );

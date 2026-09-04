@@ -266,7 +266,7 @@ class _WarmPurchaseService extends PurchaseService {
   List<Supplier> get cachedSuppliers => List.unmodifiable(_suppliers);
 
   @override
-  bool get hasListInvoicesCache => false;
+  bool get hasListInvoicesCache => true;
 
   @override
   List<PurchaseInvoice> get cachedListInvoices => const [];
@@ -286,5 +286,3 @@ class _WarmPurchaseService extends PurchaseService {
     return const [];
   }
 }
-
-

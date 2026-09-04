@@ -346,6 +346,43 @@ fallback impide que el polling de varios dispositivos lo prolongue. Gmail
 conserva además la respuesta diferida retrocompatible para las versiones ya
 instaladas.
 
+### 6.3 Una bandeja parcial no tiene un filtro definitivo
+
+**Diagnóstico y corrección comprobados el 2026-09-04.** En
+`QuickSupplierMessagesPanel`, los hints del `ChatProvider` pueden mostrar ya
+el documento y su estado mientras `_invoicesBySupplierId` sigue vacío. Los
+hints se restauran de una caché persistente; el índice de compras depende de
+otra carga y de la caché en memoria de `PurchaseService`. Un hot restart vuelve
+a exponer esa diferencia de disponibilidad.
+
+El vacío inicial se entrega a `ConversationActivity.hasActiveSupplierWork`
+como si significara «no tiene compras»: un hilo abierto pasa el filtro Activos.
+Cuando llegan las compras, un vínculo sin mensajes y con compras solamente
+recibidas deja de pasar. Además, `_buildSupplierResult` publica el teléfono
+cuando todavía no encuentra una compra relevante y lo reemplaza por el monto
+al encontrarla. El resultado observado fue **8 → 6 filas y teléfono → monto**,
+reproducido con compras diferidas en la misma instancia del panel. No requiere
+un cambio en el hint ni desmontar la bandeja.
+
+La caché de proveedores por sí sola no certifica que el índice de compras esté
+listo. `_isLoadingSuppliers` tampoco lo representa: se activa sólo cuando no
+hay proveedores. Un filtro cuyo resultado depende de compras debe distinguir
+**pendiente, cargado vacío y cargado con datos**, y la publicación inicial debe
+usar un conjunto coherente para identidad, pertenencia, contador y metadata.
+
+La regresión mínima debe dejar pendiente la lectura de compras, inspeccionar
+el primer frame y luego completarla, con hilos vacíos, compras abiertas y
+compras recibidas con mensajes. Una prueba que empieza con ambas cachés llenas
+o inspecciona sólo después de completar todos los futures no detecta el salto.
+
+La implementación publica proveedores y compras juntos, comparte la lectura en
+curso de `PurchaseService` por autoridad y reconoce una caché vacía completa.
+La apertura con caché completa sigue siendo inmediata; una carga inicial fallida
+ofrece reintento y un refresh fallido conserva el último conjunto. Tanto el panel
+rápido como `/chat` omiten contadores provisionales. Guardas:
+`quick_supplier_messages_panel_loading_test.dart` y
+`purchase_invoice_list_loading_test.dart`.
+
 ## 7. Antipatrones que una revisión debe rechazar
 
 - dos `initState`/listener/post-frame callbacks que llaman la misma carga sin

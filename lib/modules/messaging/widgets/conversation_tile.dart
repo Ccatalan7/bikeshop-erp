@@ -401,9 +401,11 @@ class _ConversationTileState extends State<ConversationTile> {
     return Row(
       children: [
         if (hasStatus)
-          _buildOperationalStatus(
-            label: statusLabel,
-            color: statusColor ?? colorScheme.primary,
+          Flexible(
+            child: _buildOperationalStatus(
+              label: statusLabel,
+              color: statusColor ?? colorScheme.primary,
+            ),
           ),
         if (hasStatus && hasSecondary) const SizedBox(width: 7),
         if (hasSecondary)

@@ -16,6 +16,8 @@ import '../services/messaging_service.dart';
 import '../utils/message_receipt_projection.dart';
 import '../utils/message_receipt_refresh_coalescer.dart';
 import '../utils/message_timeline_merge.dart';
+import '../models/message_reply.dart';
+import '../models/chat_attachment_draft.dart';
 import '../../../shared/services/notification_service.dart';
 
 class ConversationDraft {
@@ -105,6 +107,8 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, Message> _optimisticMessages = {};
   final Map<String, Map<String, dynamic>> _userCache = {}; // id -> user data
   final Map<String, ConversationDraft> _conversationDrafts = {};
+  final Map<String, ChatComposerDraft> _composerDrafts = {};
+  final Map<String, List<PendingChatAttachment>> _composerAttachments = {};
   final Map<String, MetaConversationTransport> _metaConversationTransports = {};
   final Set<String> _metaOutboundReceiptSnapshots = {};
   final Set<String> _metaConversationTransportSnapshots = {};
@@ -488,6 +492,8 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _invalidateSessionState({required String? nextUserId}) {
+    _composerDrafts.clear();
+    _composerAttachments.clear();
     _sessionEpoch += 1;
     _sessionReady = false;
     _sessionUserId = nextUserId;
@@ -1153,6 +1159,36 @@ class ChatProvider extends ChangeNotifier {
 
   ConversationDraft? getConversationDraft(String conversationId) {
     return _conversationDrafts[conversationId];
+  }
+
+  int get composerSession => _sessionEpoch;
+
+  List<PendingChatAttachment> getComposerAttachments(String conversationId) =>
+      List.unmodifiable(_composerAttachments[conversationId] ?? const []);
+
+  void saveComposerAttachments(
+      String conversationId, List<PendingChatAttachment> attachments,
+      {required int session}) {
+    if (_disposed || session != _sessionEpoch) return;
+    if (attachments.isEmpty) {
+      _composerAttachments.remove(conversationId);
+    } else {
+      _composerAttachments[conversationId] = List.of(attachments);
+    }
+  }
+
+  ChatComposerDraft? getComposerDraft(String conversationId) =>
+      _composerDrafts[conversationId];
+
+  /// Storage only: typing and disposal must not rebuild the provider's tree.
+  void saveComposerDraft(String conversationId, ChatComposerDraft draft,
+      {required int session}) {
+    if (_disposed || session != _sessionEpoch) return;
+    if (draft.text.isEmpty && draft.reply == null) {
+      _composerDrafts.remove(conversationId);
+    } else {
+      _composerDrafts[conversationId] = draft;
+    }
   }
 
   int takeOpeningUnreadCount(String conversationId, {int fallback = 0}) {
@@ -2991,7 +3027,7 @@ class ChatProvider extends ChangeNotifier {
     }
     final sendStartedAt = DateTime.now();
 
-    final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
+    final tempId = 'temp-${DateTime.now().microsecondsSinceEpoch}';
     final messageMetadata = <String, dynamic>{
       ...?metadata,
       'client_message_id': tempId,

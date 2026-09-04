@@ -31,6 +31,7 @@ class VbNotice extends StatelessWidget {
     this.tone = VbNoticeTone.info,
     this.glyph,
     this.action,
+    this.bodyMaxLines,
   });
 
   /// Primera línea: qué pasa. Una frase, sin punto final.
@@ -51,6 +52,7 @@ class VbNotice extends StatelessWidget {
   /// letra por línea (2026-09-02). Ahí la acción se pone como botón debajo
   /// del aviso, no aquí.
   final Widget? action;
+  final int? bodyMaxLines;
 
   VinabikeSemanticTone _tone(VinabikeThemeRoles roles) {
     switch (tone) {
@@ -153,6 +155,9 @@ class VbNotice extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       body!,
+                      maxLines: bodyMaxLines,
+                      overflow:
+                          bodyMaxLines == null ? null : TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w400,

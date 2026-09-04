@@ -1199,6 +1199,7 @@ Viña Bike
     String? contextId,
     DateTime? lastInboundAt,
     String? clientMessageId,
+    String? replyToMessageId,
     Map<String, dynamic>? metadata,
   }) async {
     final normalizedTemplateContact = templateContactName?.trim();
@@ -1240,6 +1241,7 @@ Viña Bike
       'contextId': contextId,
       'type': 'text',
       'text': message,
+      if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
       'metadata': {
         'source': 'flutter_erp',
         ...?metadata,
@@ -1451,6 +1453,9 @@ Viña Bike
                 ? 'image'
                 : 'document',
         'attachmentId': attachmentId,
+        if (metadata?['reply_to'] is Map &&
+            metadata!['reply_to']['external_message_id'] != null)
+          'replyToMessageId': metadata['reply_to']['external_message_id'],
         if (!isImage && !isAudio) 'documentFilename': filename,
         if (contentType != null && contentType.isNotEmpty)
           'contentType': contentType,

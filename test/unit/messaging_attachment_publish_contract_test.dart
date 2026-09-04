@@ -11,8 +11,10 @@ void main() {
       'lib/modules/messaging/services/messaging_attachment_service.dart',
     ).readAsStringSync();
     chatWindowSource = File(
-      'lib/modules/messaging/widgets/chat_window.dart',
-    ).readAsStringSync();
+          'lib/modules/messaging/widgets/chat_window.dart',
+        ).readAsStringSync() +
+        File('lib/modules/messaging/models/chat_attachment_draft.dart')
+            .readAsStringSync();
   });
 
   test('publish loss is reconciled before one exact attachment-id replay', () {

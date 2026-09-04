@@ -13,9 +13,11 @@ import '../../modules/purchases/models/purchase_invoice.dart';
 import '../../modules/purchases/services/purchase_service.dart';
 import '../models/supplier.dart' as shared_supplier;
 import '../utils/supplier_whatsapp_phone.dart';
+import '../services/authority_scoped_cache.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import 'conversation_inbox_host.dart';
+import 'vb_notice.dart';
 
 enum _SupplierMessageFilter { all, unread }
 
@@ -63,7 +65,10 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
   String? _openingSupplierId;
   List<shared_supplier.Supplier> _suppliers = [];
   Map<String, List<PurchaseInvoice>> _invoicesBySupplierId = const {};
-  bool _isLoadingSuppliers = false;
+  bool _hasLoadedSupplierData = false;
+  Future<void>? _supplierDataLoad;
+  Object? _supplierLoadError;
+  ErpAuthorityScopeKey? _supplierDataScope;
 
   @override
   void onConversationVisibilityChanged(bool visible) {
@@ -84,6 +89,7 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
   @override
   void initState() {
     super.initState();
+    _supplierDataScope = inboxAuthorityScope;
     initInboxHost();
   }
 
@@ -95,15 +101,15 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
   /// tenant, así que esto no introduce una segunda copia ni cruza inquilinos.
   @override
   void seedFromWarmCache() {
-    if (_suppliers.isNotEmpty) return;
+    if (_hasLoadedSupplierData) return;
     // `read` no registra dependencia, así que es seguro desde initState.
     final purchaseService = context.read<PurchaseService>();
-    if (!purchaseService.hasSuppliersCache) return;
+    if (!purchaseService.hasSuppliersCache ||
+        !purchaseService.hasListInvoicesCache) return;
     _suppliers = _visibleSuppliers(purchaseService.cachedSuppliers);
-    if (purchaseService.hasListInvoicesCache) {
-      _invoicesBySupplierId =
-          _indexInvoicesBySupplier(purchaseService.cachedListInvoices);
-    }
+    _invoicesBySupplierId =
+        _indexInvoicesBySupplier(purchaseService.cachedListInvoices);
+    _hasLoadedSupplierData = true;
   }
 
   List<shared_supplier.Supplier> _visibleSuppliers(
@@ -120,6 +126,17 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
   void didChangeDependencies() {
     super.didChangeDependencies();
     didChangeInboxDependencies();
+    final scope = inboxAuthorityScope;
+    if (_supplierDataScope == scope) return;
+    _supplierDataScope = scope;
+    _supplierDataLoad = null;
+    _suppliers = [];
+    _invoicesBySupplierId = const {};
+    _hasLoadedSupplierData = false;
+    _supplierLoadError = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_loadSupplierData());
+    });
   }
 
   @override
@@ -128,31 +145,49 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
     super.dispose();
   }
 
-  Future<void> _loadSupplierData() async {
-    if (_isLoadingSuppliers) return;
-    // El indicador sólo aparece cuando no hay nada que mostrar. Con la lista ya
-    // en pantalla, la relectura ocurre en silencio y reemplaza el contenido al
-    // llegar: eso es lo que separa «se actualiza» de «se reinicia».
-    final showIndicator = _suppliers.isEmpty;
-    if (showIndicator) {
-      setState(() => _isLoadingSuppliers = true);
-    }
+  Future<void> _loadSupplierData() {
+    final pending = _supplierDataLoad;
+    if (pending != null) return pending;
+    final completion = Completer<void>();
+    _supplierDataLoad = completion.future;
+    setState(() => _supplierLoadError = null);
+    unawaited(_readSupplierData(completion));
+    return completion.future;
+  }
+
+  Future<void> _readSupplierData(Completer<void> completion) async {
+    final scope = inboxAuthorityScope;
     try {
       final purchaseService = context.read<PurchaseService>();
-      final suppliers = await purchaseService.getSuppliers(activeOnly: true);
-      final invoices = await purchaseService.getPurchaseInvoicesForList();
+      // Los dos conjuntos deciden la pertenencia y la metadata de cada fila.
+      // Publicarlos juntos evita tratar «todavía no cargado» como «vacío».
+      final data = await Future.wait<Object>([
+        purchaseService.getSuppliers(activeOnly: true),
+        purchaseService.getPurchaseInvoicesForList(),
+      ]).timeout(const Duration(seconds: 30));
 
-      if (!mounted) return;
+      if (!mounted ||
+          scope != inboxAuthorityScope ||
+          !identical(_supplierDataLoad, completion.future)) return;
       setState(() {
-        _suppliers = _visibleSuppliers(suppliers);
-        _invoicesBySupplierId = _indexInvoicesBySupplier(invoices);
-        _isLoadingSuppliers = false;
+        _suppliers =
+            _visibleSuppliers(data[0] as List<shared_supplier.Supplier>);
+        _invoicesBySupplierId =
+            _indexInvoicesBySupplier(data[1] as List<PurchaseInvoice>);
+        _hasLoadedSupplierData = true;
       });
     } catch (error) {
       debugPrint('Error loading supplier chats in quick panel: $error');
-      if (mounted) {
-        setState(() => _isLoadingSuppliers = false);
+      if (mounted &&
+          scope == inboxAuthorityScope &&
+          identical(_supplierDataLoad, completion.future)) {
+        setState(() => _supplierLoadError = error);
       }
+    } finally {
+      if (identical(_supplierDataLoad, completion.future)) {
+        _supplierDataLoad = null;
+      }
+      completion.complete();
     }
   }
 
@@ -214,6 +249,19 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
         _buildActionBar(),
         _buildSearchField(),
         _buildListToolbar(provider),
+        if (_supplierLoadError != null)
+          VbNotice(
+            title: 'No se pudieron cargar los chats de proveedores',
+            body: _hasLoadedSupplierData
+                ? 'Se conserva la última información cargada.'
+                : 'Reintenta para cargar los proveedores y sus compras.',
+            tone: VbNoticeTone.danger,
+            action: IconButton(
+              tooltip: 'Reintentar',
+              onPressed: _loadSupplierData,
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
         Expanded(child: _buildSupplierList(provider)),
       ],
     );
@@ -388,61 +436,63 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
               bottom: BorderSide(color: theme.dividerColor),
             ),
           ),
-          child: isCompact
-              ? Row(
-                  key: const ValueKey('supplier_toolbar_compact'),
-                  children: [
-                    Flexible(
-                      child: _buildCompactToolbarMenu(
-                        counts: counts,
-                        activeCount: activeCount,
-                        historyCount: historyCount,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Semantics(
-                      label:
-                          '${entries.length} ${entries.length == 1 ? 'resultado' : 'resultados'}',
-                      child: Text(
-                        '${entries.length}',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0,
+          child: !_hasLoadedSupplierData
+              ? null
+              : isCompact
+                  ? Row(
+                      key: const ValueKey('supplier_toolbar_compact'),
+                      children: [
+                        Flexible(
+                          child: _buildCompactToolbarMenu(
+                            counts: counts,
+                            activeCount: activeCount,
+                            historyCount: historyCount,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Semantics(
+                          label:
+                              '${entries.length} ${entries.length == 1 ? 'resultado' : 'resultados'}',
+                          child: Text(
+                            '${entries.length}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      key: const ValueKey('supplier_toolbar_regular'),
+                      children: [
+                        _buildMessageFilterMenu(counts),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 18,
+                          child: VerticalDivider(
+                            width: 1,
+                            thickness: 1,
+                            color: colorScheme.outlineVariant,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildActivityScopeMenu(
+                          activeCount: activeCount,
+                          historyCount: historyCount,
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${entries.length} ${entries.length == 1 ? 'resultado' : 'resultados'}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                )
-              : Row(
-                  key: const ValueKey('supplier_toolbar_regular'),
-                  children: [
-                    _buildMessageFilterMenu(counts),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      height: 18,
-                      child: VerticalDivider(
-                        width: 1,
-                        thickness: 1,
-                        color: colorScheme.outlineVariant,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildActivityScopeMenu(
-                      activeCount: activeCount,
-                      historyCount: historyCount,
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${entries.length} ${entries.length == 1 ? 'resultado' : 'resultados'}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ],
-                ),
         );
       },
     );
@@ -804,9 +854,18 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
   }
 
   Widget _buildSupplierList(ChatProvider provider) {
+    if (!_hasLoadedSupplierData) {
+      if (_supplierLoadError != null) return const SizedBox.shrink();
+      return const Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          semanticsLabel: 'Cargando chats de proveedores',
+        ),
+      );
+    }
     final entries = _filteredSupplierEntries(provider);
 
-    if (entries.isEmpty && !_isLoadingSuppliers) {
+    if (entries.isEmpty) {
       return _buildEmptyState(
         isTotallyEmpty: _supplierEntries(provider).isEmpty,
         activeModeEmpty: showOnlyActiveChats &&
@@ -822,16 +881,9 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
         key: const PageStorageKey<String>('quick-supplier-messages-list'),
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 16),
-        itemCount: entries.length + (_isLoadingSuppliers ? 1 : 0),
+        itemCount: entries.length,
         itemBuilder: (context, index) {
-          if (_isLoadingSuppliers && index == 0) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            );
-          }
-          final entryIndex = index - (_isLoadingSuppliers ? 1 : 0);
-          final entry = entries[entryIndex];
+          final entry = entries[index];
           return Column(
             key: ValueKey(
               entry.conversation?.id ?? 'supplier-${entry.supplier.id}',
@@ -1132,6 +1184,7 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
     ChatProvider provider, {
     bool? includeInactive,
   }) {
+    if (!_hasLoadedSupplierData) return const [];
     final supplierConversations = provider.conversations
         .where((conversation) => conversation.isSupplierConversation)
         .toList();

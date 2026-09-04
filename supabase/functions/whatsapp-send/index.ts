@@ -983,6 +983,28 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
     return jsonResponse({ error: "Attachment does not belong to this conversation" }, 409);
   }
 
+  // The Graph context must identify a real message of this bound recipient.
+  // Validate before the provider side effect, including direct (non-outbox)
+  // requests; the database independently constructs the durable quote preview.
+  const replyExternalId = stringValue(requestBody.replyToMessageId)?.trim();
+  if (replyExternalId) {
+    const { data: replyTarget, error: replyError } = await adminClient
+      .from("messages")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("conversation_id", boundConversationId)
+      .eq("external_provider", "whatsapp")
+      .eq("external_message_id", replyExternalId)
+      .maybeSingle();
+    if (replyError) {
+      return jsonResponse({ error: "Unable to validate reply target" }, 503);
+    }
+    if (!replyTarget) {
+      return jsonResponse({ error: "Reply target must belong to this conversation" }, 400);
+    }
+    requestBody.replyToMessageId = replyExternalId;
+  }
+
   let verifiedActionJobId: string | null = null;
   if (requestedJobTarget) {
     if (!visibleConversation || !boundCustomerId) {
@@ -1111,11 +1133,14 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
           "outcome_unknown",
           "retry_disabled",
           "pending",
+          "reply_to",
+          "reply_to_external_message_id",
         ].includes(key)
       ),
     ),
     channel: "whatsapp",
     provider: "whatsapp",
+    ...(replyExternalId ? { reply_to_external_message_id: replyExternalId } : {}),
     phone_number_id: channel.phone_number_id,
     display_phone_number: channel.display_phone_number,
     external_wa_id: normalizedPhone,
