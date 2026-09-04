@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
+import '../../../shared/services/supabase_functions_region.dart';
 
 class WhatsAppCloudService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -15,6 +16,7 @@ class WhatsAppCloudService {
     try {
       final response = await _client.functions.invoke(
         'whatsapp-send',
+        headers: kSupabaseFunctionsRegionHeaders,
         body: {
           'type': 'text',
           'text': text,
@@ -53,6 +55,7 @@ class WhatsAppCloudService {
     try {
       final response = await _client.functions.invoke(
         'whatsapp-send',
+        headers: kSupabaseFunctionsRegionHeaders,
         body: {
           'type': 'reaction',
           'phoneNumber': phoneNumber,

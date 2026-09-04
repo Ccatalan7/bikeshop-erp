@@ -9,6 +9,7 @@ import '../../modules/bikeshop/models/bikeshop_models.dart';
 import '../services/tenant_service.dart';
 import '../services/whatsapp_send_receipt.dart';
 import '../widgets/whatsapp_web_viewer.dart';
+import 'supabase_functions_region.dart';
 
 export '../services/whatsapp_send_receipt.dart';
 
@@ -450,6 +451,7 @@ class WhatsAppService {
       })> syncApprovedTemplateBodies() async {
     final response = await _client.functions.invoke(
       'whatsapp-template-manager',
+      headers: kSupabaseFunctionsRegionHeaders,
       body: const {'action': 'sync_bodies'},
     );
     final data = response.data;
@@ -470,6 +472,7 @@ class WhatsAppService {
       getSupplierTemplateReviewStatuses() async {
     final response = await _client.functions.invoke(
       'whatsapp-template-manager',
+      headers: kSupabaseFunctionsRegionHeaders,
       body: const {'action': 'list'},
     );
     if (response.status < 200 || response.status >= 300) {
@@ -581,11 +584,27 @@ class WhatsAppService {
   /// envío, y ese valor lo resuelve este servicio.
   Future<String> resolveBusinessNameForPreview() => _resolveBusinessName();
 
+  static const Duration _sendSettingsCacheTtl = Duration(minutes: 10);
+  static String? _cachedBusinessName;
+  static DateTime? _cachedBusinessNameAt;
+  static final Map<String, ({String templateName, String templateLanguage})>
+      _cachedTemplateSettings = {};
+  static final Map<String, DateTime> _cachedTemplateSettingsAt = {};
+
   Future<String> _resolveBusinessName() async {
+    final cached = _cachedBusinessName;
+    final cachedAt = _cachedBusinessNameAt;
+    if (cached != null &&
+        cachedAt != null &&
+        DateTime.now().difference(cachedAt) < _sendSettingsCacheTtl) {
+      return cached;
+    }
     try {
       final tenant = await TenantService().getCurrentTenant();
       final shopName = tenant?['shop_name']?.toString().trim();
       if (shopName != null && shopName.isNotEmpty) {
+        _cachedBusinessName = shopName;
+        _cachedBusinessNameAt = DateTime.now();
         return shopName;
       }
     } catch (error) {
@@ -701,6 +720,14 @@ class WhatsAppService {
           templateLanguage: option.defaultLanguage,
         );
       }
+      final cacheKey = '$tenantId::${option.key}';
+      final cachedAt = _cachedTemplateSettingsAt[cacheKey];
+      final cachedSettings = _cachedTemplateSettings[cacheKey];
+      if (cachedSettings != null &&
+          cachedAt != null &&
+          DateTime.now().difference(cachedAt) < _sendSettingsCacheTtl) {
+        return cachedSettings;
+      }
 
       final rows = await _client
           .from('company_settings')
@@ -728,10 +755,13 @@ class WhatsAppService {
         }
       }
 
-      return (
+      final settings = (
         templateName: templateName,
         templateLanguage: templateLanguage,
       );
+      _cachedTemplateSettings[cacheKey] = settings;
+      _cachedTemplateSettingsAt[cacheKey] = DateTime.now();
+      return settings;
     } catch (error) {
       debugPrint(
         '⚠️ [WhatsAppService] Falling back to default WhatsApp template settings: $error',
@@ -756,8 +786,29 @@ class WhatsAppService {
     );
 
     try {
+      // The database owns the accepted intent. No Edge cold start or Meta
+      // response is on the first-check path; old/non-chat callers keep their
+      // existing synchronous contract (including reactions).
+      if (body['conversationId'] != null &&
+          clientMessageId?.isNotEmpty == true &&
+          body['type'] != 'reaction') {
+        final data = await _client.rpc(
+          'enqueue_whatsapp_message_v1',
+          params: {'p_request': body},
+        );
+        final receipt = parseDurableWhatsAppSendReceipt(
+          data,
+          resolvedMessageText: resolvedMessageText,
+        );
+        stopwatch.stop();
+        debugPrint(
+          '✅ [WhatsAppService] outbox_accepted elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId message=${receipt.messageId}',
+        );
+        return receipt;
+      }
       final response = await _client.functions.invoke(
         'whatsapp-send',
+        headers: kSupabaseFunctionsRegionHeaders,
         body: body,
       );
       stopwatch.stop();
@@ -784,6 +835,13 @@ class WhatsAppService {
         debugPrint(
           '✅ [WhatsAppService] cloud_invoke_done status=$status elapsed=${stopwatch.elapsedMilliseconds}ms client=$clientMessageId external=${receipt.externalMessageId}',
         );
+        // The function reports where its own time went; without the
+        // dashboard this log is the only place that breakdown can be read.
+        final serverTimings =
+            response.data is Map ? (response.data as Map)['timings'] : null;
+        if (serverTimings != null) {
+          debugPrint('⏱️ [WhatsAppService] server_timings $serverTimings');
+        }
         return receipt;
       }
 
@@ -801,6 +859,14 @@ class WhatsAppService {
         messageId: _extractMessageId(response.data),
         externalMessageId: externalMessageId,
         unsafeToFallback: unsafeToFallback,
+      );
+    } on PostgrestException catch (error) {
+      // A database rejection is atomic. Unknown transport failures take the
+      // generic branch below and must not launch a second/manual send.
+      debugPrint('❌ [WhatsAppService] outbox_rejected code=${error.code}');
+      return WhatsAppSendReceipt(
+        deliveryMethod: WhatsAppDeliveryMethod.failed,
+        resolvedMessageText: resolvedMessageText,
       );
     } on FunctionException catch (error) {
       stopwatch.stop();
@@ -1279,11 +1345,16 @@ Viña Bike
     String? contextId,
     String? clientMessageId,
   }) async {
-    final templateSettings =
+    // Two independent reads, asked for together; both are cached for a
+    // while because a template's name and the shop's name do not change
+    // between two sends.
+    final settingsFuture =
         option.purpose == WhatsAppTemplatePurpose.firstContact
-            ? await _loadFirstContactTemplateSettings()
-            : await _loadTemplateSettings(option);
-    final businessName = await _resolveBusinessName();
+            ? _loadFirstContactTemplateSettings()
+            : _loadTemplateSettings(option);
+    final businessNameFuture = _resolveBusinessName();
+    final templateSettings = await settingsFuture;
+    final businessName = await businessNameFuture;
     final renderedMessage = buildTemplatePreviewText(
       option: option,
       customerName: customerName,
@@ -1353,6 +1424,7 @@ Viña Bike
     Map<String, dynamic>? metadata,
   }) async {
     final isImage = messageType == 'image';
+    final isAudio = messageType == 'audio';
     final resolvedCaption = caption?.trim();
     final contentType = metadata?['contentType']?.toString() ??
         metadata?['content_type']?.toString();
@@ -1373,9 +1445,13 @@ Viña Bike
         'contactName': contactName,
         'contextType': contextType,
         'contextId': contextId,
-        'type': isImage ? 'image' : 'document',
+        'type': isAudio
+            ? 'audio'
+            : isImage
+                ? 'image'
+                : 'document',
         'attachmentId': attachmentId,
-        if (!isImage) 'documentFilename': filename,
+        if (!isImage && !isAudio) 'documentFilename': filename,
         if (contentType != null && contentType.isNotEmpty)
           'contentType': contentType,
         if (resolvedCaption != null && resolvedCaption.isNotEmpty)

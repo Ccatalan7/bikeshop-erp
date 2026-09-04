@@ -74,6 +74,27 @@ void main() {
       }
     });
 
+    test('yesterday is the complete prior business day in Chile', () {
+      // 16:00 UTC on 25 July is 12:00 in Santiago; yesterday is the 24th,
+      // from Chile midnight to Chile midnight (UTC-4 in July).
+      final window = NotificationDigestWindow.resolve(
+        period: NotificationDigestPeriod.yesterday,
+        now: DateTime.utc(2026, 7, 25, 16),
+      );
+
+      _expectDates(window, DateTime(2026, 7, 24), DateTime(2026, 7, 24));
+      expect(window.startsAt, DateTime.utc(2026, 7, 24, 4));
+      expect(window.endsAt, DateTime.utc(2026, 7, 25, 4));
+    });
+
+    test('yesterday crosses the month boundary', () {
+      final window = NotificationDigestWindow.resolve(
+        period: NotificationDigestPeriod.yesterday,
+        now: DateTime.utc(2026, 8, 1, 16),
+      );
+      _expectDates(window, DateTime(2026, 7, 31), DateTime(2026, 7, 31));
+    });
+
     test('previous week is the complete prior Monday through Sunday', () {
       final window = NotificationDigestWindow.resolve(
         period: NotificationDigestPeriod.previousWeek,

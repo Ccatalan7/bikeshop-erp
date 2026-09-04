@@ -2,6 +2,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/shared/services/whatsapp_send_receipt.dart';
 
 void main() {
+  test('explicit database acceptance is durable without a Meta identifier', () {
+    final receipt = parseDurableWhatsAppSendReceipt({
+      'ok': true,
+      'accepted': true,
+      'queued': true,
+      'message_id': 'database-message',
+      'external_status': 'queued',
+    });
+    expect(receipt.isDurable, isTrue);
+    expect(receipt.isQueued, isTrue);
+    expect(receipt.externalStatus, 'queued');
+    expect(receipt.externalMessageId, isNull);
+    expect(receipt.unsafeToFallback, isTrue);
+    expect(receipt.copyWith(resolvedMessageText: 'Hola').isQueued, isTrue);
+    expect(
+        isDurableWhatsAppSendPayload({
+          'ok': true,
+          'accepted': true,
+          'queued': true,
+          'message_id': 'database-message',
+        }),
+        isFalse);
+  });
   test('2xx contract needs explicit acceptance and both durable identifiers',
       () {
     expect(isDurableWhatsAppSendPayload(null), isFalse);

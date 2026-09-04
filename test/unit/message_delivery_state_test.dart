@@ -21,6 +21,26 @@ void main() {
   }
 
   group('MessageDeliveryState', () {
+    test('database receipt is a first check, never provider delivery', () {
+      final state = MessageDeliveryState.fromMessage(
+        whatsappMessage(metadata: const {'external_status': 'queued'}),
+      );
+      expect(state.stage, MessageDeliveryStage.queued);
+    });
+    test('queued receipt never hides a later failure or unknown outcome', () {
+      for (final status in ['failed', 'outcome_unknown']) {
+        final state = MessageDeliveryState.fromValues(
+          metadata: {'whatsapp_status': status},
+          explicitStatus: 'queued',
+          isExternalTransport: true,
+        );
+        expect(
+            state.stage,
+            status == 'failed'
+                ? MessageDeliveryStage.failed
+                : MessageDeliveryStage.outcomeUnknown);
+      }
+    });
     test('keeps an optimistic WhatsApp message pending', () {
       final state = MessageDeliveryState.fromMessage(
         whatsappMessage(metadata: const {'pending': true}),

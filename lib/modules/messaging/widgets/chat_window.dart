@@ -26,6 +26,10 @@ import '../models/conversation.dart';
 import '../models/conversation_smart_action_capabilities.dart';
 import '../services/messaging_service.dart';
 import '../services/messaging_attachment_service.dart';
+import '../services/chat_media_cache.dart';
+import 'chat_media_thumbnail.dart';
+import 'chat_audio_message.dart';
+import 'chat_voice_recorder.dart';
 import '../services/meta_messaging_service.dart';
 import '../models/message.dart';
 import '../models/message_delivery_state.dart';
@@ -51,6 +55,7 @@ import '../models/conversation_context_hint.dart';
 import '../../../shared/utils/supplier_whatsapp_phone.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
 import '../../../shared/widgets/vb_surface_icon_button.dart';
+import '../../../shared/services/supabase_functions_region.dart';
 
 class _EmojiGroup {
   final String label;
@@ -145,6 +150,9 @@ class _PendingChatAttachment {
   final String? purchaseInvoiceId;
   final String? purchaseInvoiceNumber;
 
+  /// Length of a voice note, shown on its bubble before the player knows it.
+  final int? durationSeconds;
+
   const _PendingChatAttachment({
     required this.id,
     required this.fileName,
@@ -158,6 +166,7 @@ class _PendingChatAttachment {
     this.replayCaption,
     this.purchaseInvoiceId,
     this.purchaseInvoiceNumber,
+    this.durationSeconds,
   });
 
   _PendingChatAttachment markOutcomeUnknown(
@@ -176,6 +185,7 @@ class _PendingChatAttachment {
         replayCaption: result.replayCaption,
         purchaseInvoiceId: purchaseInvoiceId,
         purchaseInvoiceNumber: purchaseInvoiceNumber,
+        durationSeconds: durationSeconds,
       );
 
   /// Replace the file with the freshly saved document, keeping the row's place
@@ -204,6 +214,7 @@ class _PendingChatAttachment {
         isImage: isImage,
         purchaseInvoiceId: purchaseInvoiceId,
         purchaseInvoiceNumber: purchaseInvoiceNumber,
+        durationSeconds: durationSeconds,
       );
 }
 
@@ -482,6 +493,58 @@ class _ChatWindowState extends State<ChatWindow> {
   final Map<String, List<_PendingChatAttachment>>
       _pendingAttachmentDraftsByConversation = {};
   int _pendingAttachmentSerial = 0;
+
+  /// Voice notes. The bar replaces the text field while recording; the
+  /// finished note goes through the same pipeline as any attachment.
+  late final ChatVoiceRecorderController _voiceRecorder =
+      ChatVoiceRecorderController()..addListener(_onVoiceRecorderChanged);
+
+  void _onVoiceRecorderChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _showsVoiceButton =>
+      _supportsOutgoingAttachments &&
+      !_voiceRecorder.isRecording &&
+      _messageController.text.trim().isEmpty &&
+      _pendingAttachments.isEmpty &&
+      !_isSendingPendingAttachments;
+
+  Future<void> _startVoiceNote() async {
+    _removeComposerMenuOverlay(notify: false);
+    final started = await _voiceRecorder.start();
+    if (!started && mounted) {
+      final reason = _voiceRecorder.error ?? 'No se pudo grabar.';
+      _showErrorSnackBar(context, reason);
+      await _voiceRecorder.cancel();
+    }
+  }
+
+  Future<void> _cancelVoiceNote() => _voiceRecorder.cancel();
+
+  Future<void> _finishVoiceNote() async {
+    final note = await _voiceRecorder.stop();
+    if (!mounted) return;
+    if (note == null) {
+      _showErrorSnackBar(context, 'La nota quedó demasiado corta.');
+      return;
+    }
+    _pendingAttachmentSerial += 1;
+    setState(() {
+      _pendingAttachments.add(
+        _PendingChatAttachment(
+          id: 'voice-${DateTime.now().microsecondsSinceEpoch}-$_pendingAttachmentSerial',
+          fileName: note.fileName,
+          bytes: note.bytes,
+          extension: 'm4a',
+          isImage: false,
+          durationSeconds: note.duration.inSeconds,
+        ),
+      );
+    });
+    await _sendPendingAttachments();
+  }
+
   _ChatInfoSection _selectedChatInfoSection = _ChatInfoSection.info;
   final GlobalKey _composerActionsButtonKey = GlobalKey();
   Timer? _serviceWindowTicker;
@@ -1019,6 +1082,9 @@ class _ChatWindowState extends State<ChatWindow> {
     _debounce?.cancel();
     _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
+    _voiceRecorder
+      ..removeListener(_onVoiceRecorderChanged)
+      ..dispose();
     _historyRequestDebounce?.cancel();
     _scrollController.removeListener(_handleTimelineScroll);
     _scrollController.dispose();
@@ -2240,7 +2306,7 @@ class _ChatWindowState extends State<ChatWindow> {
             pendingText,
             title: 'Mensaje pendiente de ventana WhatsApp',
             subtitle:
-                'Se envió el mensaje autorizado. Cuando el ${isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto libre.',
+                'El mensaje autorizado quedó registrado. Cuando el ${isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto libre.',
           );
         } else {
           chatProvider.clearConversationDraft(conversationId);
@@ -2249,12 +2315,11 @@ class _ChatWindowState extends State<ChatWindow> {
           optimisticMessageId,
           content: receipt.resolvedMessageText ?? pendingText,
           metadataUpdates: {
-            // A 2xx is returned only after Meta supplied an external id and
-            // the ERP message was durably persisted.
+            // Database acceptance and provider acceptance are distinct receipts.
             'pending': false,
             'server_ack_durable': true,
             'server_message_id': receipt.messageId,
-            'external_status': 'accepted',
+            'external_status': receipt.externalStatus,
             'external_message_id': receipt.externalMessageId,
             if (receipt.deliveryStrategy != null)
               'delivery_strategy': receipt.deliveryStrategy,
@@ -2276,7 +2341,7 @@ class _ChatWindowState extends State<ChatWindow> {
             context: context,
             deliveryMethod: receipt.deliveryMethod,
             successMessage:
-                'Se envió el mensaje autorizado para abrir o reabrir WhatsApp.',
+                'Mensaje autorizado registrado para abrir o reabrir WhatsApp.',
             fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
           );
         }
@@ -2675,34 +2740,42 @@ class _ChatWindowState extends State<ChatWindow> {
 
     final caption = _messageController.text.trim();
     final attachments = List<_PendingChatAttachment>.from(_pendingAttachments);
-    setState(() => _isSendingPendingAttachments = true);
+    final chatProvider = context.read<ChatProvider>();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(children: [
-          const SizedBox(
-            width: 20,
-            height: 20,
-            child:
-                CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            attachments.length == 1
-                ? 'Subiendo adjunto...'
-                : 'Subiendo ${attachments.length} adjuntos...',
-          ),
-        ]),
-        duration: const Duration(seconds: 60),
-      ),
-    );
+    // Like WhatsApp: the composer is free the moment «enviar» is pressed and
+    // every file is already a bubble, drawn from the bytes on this device.
+    // The upload and the provider's answer update that bubble; a rejection
+    // brings the file back into the composer with its reason.
+    setState(() {
+      _isSendingPendingAttachments = true;
+      _pendingAttachments.clear();
+      _messageController.clear();
+    });
+    _restoreComposerFocus();
+
+    final optimisticIds = <String, String>{};
+    for (var i = 0; i < attachments.length; i += 1) {
+      final attachment = attachments[i];
+      final optimisticId = _seedOptimisticAttachment(
+        chatProvider,
+        attachment,
+        caption: attachment.outcomeUnknown
+            ? attachment.replayCaption
+            : i == 0 && caption.isNotEmpty
+                ? caption
+                : null,
+      );
+      if (optimisticId != null) optimisticIds[attachment.id] = optimisticId;
+    }
 
     final unresolved = <_PendingChatAttachment>[];
     final confirmedPurchaseDocuments = <_PendingChatAttachment>[];
     var rejectedCount = 0;
     var unknownCount = 0;
+    var confirmedCount = 0;
     for (var i = 0; i < attachments.length; i += 1) {
       final attachment = attachments[i];
+      final optimisticId = optimisticIds[attachment.id];
       final result = await _sendAttachmentBytes(
         fileName: attachment.fileName,
         bytes: attachment.bytes,
@@ -2714,9 +2787,13 @@ class _ChatWindowState extends State<ChatWindow> {
                 : null,
         existingReservation: attachment.reservation,
         retryUpload: attachment.retryUpload,
+        optimisticMessageId: optimisticId,
+        localMediaKey: attachment.id,
+        durationSeconds: attachment.durationSeconds,
       );
       switch (result.outcome) {
         case _AttachmentDispatchOutcome.confirmed:
+          confirmedCount += 1;
           if (attachment.purchaseInvoiceId != null) {
             confirmedPurchaseDocuments.add(attachment);
           }
@@ -2724,16 +2801,28 @@ class _ChatWindowState extends State<ChatWindow> {
         case _AttachmentDispatchOutcome.rejected:
           // A confirmed rejection can start over with a fresh reservation on
           // the next explicit user attempt. Never reuse the failed row.
+          if (optimisticId != null)
+            chatProvider.removeMessageById(optimisticId);
           unresolved.add(attachment.resetForNewAttempt());
           rejectedCount += 1;
           break;
         case _AttachmentDispatchOutcome.outcomeUnknown:
+          if (optimisticId != null) {
+            chatProvider.updateMessageMetadataById(optimisticId, {
+              'pending': false,
+              'outcome_unknown': true,
+            });
+          }
           unresolved.add(attachment.markOutcomeUnknown(result));
           // Stop the batch after an ambiguous provider result. The remaining
           // files were never attempted and stay in the composer. A native
           // attachment keeps its exact reservation for an idempotent replay;
           // provider sends remain blocked from blind retries.
-          unresolved.addAll(attachments.skip(i + 1));
+          for (final skipped in attachments.skip(i + 1)) {
+            final skippedId = optimisticIds[skipped.id];
+            if (skippedId != null) chatProvider.removeMessageById(skippedId);
+            unresolved.add(skipped);
+          }
           unknownCount += 1;
           break;
       }
@@ -2742,20 +2831,20 @@ class _ChatWindowState extends State<ChatWindow> {
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() {
       _isSendingPendingAttachments = false;
       _pendingAttachments
         ..clear()
         ..addAll(unresolved);
-      if (unresolved.isEmpty) {
-        _messageController.clear();
+      if (unresolved.isNotEmpty &&
+          confirmedCount == 0 &&
+          caption.isNotEmpty &&
+          _messageController.text.trim().isEmpty) {
+        _messageController.text = caption;
       }
     });
 
-    if (unresolved.isEmpty) {
-      _restoreComposerFocus();
-    } else {
+    if (unresolved.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(unknownCount > 0
@@ -2778,6 +2867,77 @@ class _ChatWindowState extends State<ChatWindow> {
     await _markPurchaseDocumentsAsSent(confirmedPurchaseDocuments);
   }
 
+  /// The bubble a file gets before anything has been uploaded. Its bytes go
+  /// into the device cache under the composer's key, so the thumbnail is
+  /// full on the first frame and the same bytes serve the server row later.
+  /// Returns `null` when the file cannot be sent at all (the send path then
+  /// reports the reason).
+  String? _seedOptimisticAttachment(
+    ChatProvider chatProvider,
+    _PendingChatAttachment attachment, {
+    String? caption,
+  }) {
+    if (attachment.outcomeUnknown) return null;
+    final MessagingAttachmentValidation validation;
+    try {
+      validation = MessagingAttachmentService.validateBeforeRead(
+        fileName: attachment.fileName,
+        sizeBytes: attachment.bytes.length,
+      );
+    } catch (_) {
+      return null;
+    }
+    _pendingAttachmentSerial += 1;
+    final optimisticId =
+        'temp-file-${DateTime.now().microsecondsSinceEpoch}-$_pendingAttachmentSerial';
+    final isImage = validation.contentType.startsWith('image/');
+    final isAudio = validation.contentType.startsWith('audio/');
+    final cleanCaption = caption?.trim();
+    unawaited(
+      ChatMediaCache.instance.put(
+        'local:${attachment.id}',
+        attachment.bytes,
+        fileExtension: attachment.extension,
+      ),
+    );
+    chatProvider.addOptimisticMessage(
+      Message(
+        id: optimisticId,
+        conversationId: widget.conversation.id,
+        senderId: _messagingService.currentUserId,
+        content: cleanCaption?.isNotEmpty == true
+            ? cleanCaption!
+            : attachment.fileName,
+        type: isAudio
+            ? 'audio'
+            : isImage
+                ? 'image'
+                : 'file',
+        metadata: {
+          'pending': true,
+          'client_message_id': optimisticId,
+          'local_media_key': attachment.id,
+          'filename': attachment.fileName,
+          'extension': attachment.extension,
+          'content_type': validation.contentType,
+          if (attachment.durationSeconds != null)
+            'duration_seconds': attachment.durationSeconds,
+          if (cleanCaption != null && cleanCaption.isNotEmpty)
+            'caption': cleanCaption,
+          if (_isWhatsAppConversation) ...{
+            'channel': 'whatsapp',
+            'provider': 'whatsapp',
+          },
+          if (_activeThreadRootMessageId != null)
+            'thread_root_message_id': _activeThreadRootMessageId,
+        },
+        createdAt: DateTime.now(),
+        isMe: true,
+      ),
+    );
+    return optimisticId;
+  }
+
   String _droppedFileName(XFile file) {
     final rawName = file.name.trim();
     if (rawName.isNotEmpty) return rawName;
@@ -2793,6 +2953,9 @@ class _ChatWindowState extends State<ChatWindow> {
     String? caption,
     ReservedMessagingAttachment? existingReservation,
     bool retryUpload = false,
+    String? optimisticMessageId,
+    String? localMediaKey,
+    int? durationSeconds,
   }) async {
     if (!mounted || bytes.isEmpty) {
       return const _AttachmentDispatchResult.rejected();
@@ -2880,6 +3043,25 @@ class _ChatWindowState extends State<ChatWindow> {
       }
     }
 
+    // The bytes this device is about to upload are the bytes it will be
+    // asked to show under the server's path: keep them, never re-download.
+    unawaited(
+      ChatMediaCache.instance.put(
+        'path:${reservation.path}',
+        bytes,
+        fileExtension: reservation.extension,
+      ),
+    );
+    if (optimisticMessageId != null) {
+      chatProvider.updateMessageMetadataById(
+        optimisticMessageId,
+        {
+          ...reservation.messageMetadata,
+          if (localMediaKey != null) 'local_media_key': localMediaKey,
+        },
+      );
+    }
+
     if (existingReservation == null || retryUpload) {
       try {
         await _messagingAttachmentService.upload(
@@ -2920,12 +3102,16 @@ class _ChatWindowState extends State<ChatWindow> {
       ScaffoldMessenger.of(fallbackContext).hideCurrentSnackBar();
     }
 
-    final msgType =
-        validation.contentType.startsWith('image/') ? 'image' : 'file';
+    final msgType = validation.contentType.startsWith('image/')
+        ? 'image'
+        : validation.contentType.startsWith('audio/')
+            ? 'audio'
+            : 'file';
     final metadata = {
       ...reservation.messageMetadata,
       if (cleanCaption != null && cleanCaption.isNotEmpty)
         'caption': cleanCaption,
+      if (durationSeconds != null) 'duration_seconds': durationSeconds,
     };
 
     if (isWhatsAppConversation) {
@@ -2936,6 +3122,7 @@ class _ChatWindowState extends State<ChatWindow> {
         messageType: msgType,
         metadata: metadata,
         caption: cleanCaption,
+        existingOptimisticMessageId: optimisticMessageId,
         fallbackContext: fallbackContext.mounted ? fallbackContext : null,
         conversationId: conversationId,
         contextType: contextType,
@@ -2963,6 +3150,14 @@ class _ChatWindowState extends State<ChatWindow> {
         caption: cleanCaption,
         threadRootMessageId: _activeThreadRootMessageId,
       );
+      if (optimisticMessageId != null) {
+        // The database wrote the row; realtime prunes the bubble by
+        // attachment id when it arrives.
+        chatProvider.updateMessageMetadataById(optimisticMessageId, {
+          'pending': false,
+          'server_ack_durable': true,
+        });
+      }
       return const _AttachmentDispatchResult.confirmed();
     } on MessagingAttachmentPublishOutcomeUnknown {
       if (mounted) {
@@ -3011,8 +3206,9 @@ class _ChatWindowState extends State<ChatWindow> {
     required String? contextType,
     required String? contextId,
     required Future<Map<String, dynamic>?> contactFuture,
+    String? existingOptimisticMessageId,
   }) {
-    final optimisticMessageId =
+    final optimisticMessageId = existingOptimisticMessageId ??
         'temp-wa-file-${DateTime.now().millisecondsSinceEpoch}';
     final sendMetadata = {
       ...metadata,
@@ -3024,21 +3220,26 @@ class _ChatWindowState extends State<ChatWindow> {
       ...sendMetadata,
       'pending': true,
     };
-
-    chatProvider.addOptimisticMessage(
-      Message(
-        id: optimisticMessageId,
-        conversationId: widget.conversation.id,
-        senderId: _messagingService.currentUserId,
-        content:
-            caption?.trim().isNotEmpty == true ? caption!.trim() : fileName,
-        type: messageType,
-        metadata: optimisticMetadata,
-        createdAt: DateTime.now(),
-        isMe: true,
-      ),
-    );
-
+    if (existingOptimisticMessageId != null) {
+      chatProvider.updateMessageMetadataById(
+        optimisticMessageId,
+        optimisticMetadata,
+      );
+    } else {
+      chatProvider.addOptimisticMessage(
+        Message(
+          id: optimisticMessageId,
+          conversationId: widget.conversation.id,
+          senderId: _messagingService.currentUserId,
+          content:
+              caption?.trim().isNotEmpty == true ? caption!.trim() : fileName,
+          type: messageType,
+          metadata: optimisticMetadata,
+          createdAt: DateTime.now(),
+          isMe: true,
+        ),
+      );
+    }
     return _dispatchWhatsAppAttachment(
       chatProvider: chatProvider,
       optimisticMessageId: optimisticMessageId,
@@ -3150,11 +3351,11 @@ class _ChatWindowState extends State<ChatWindow> {
         chatProvider.updateMessageById(
           optimisticMessageId,
           metadataUpdates: {
-            // A 2xx includes the durable ERP and Meta receipts.
+            // The durable queue can acknowledge before Meta receives the file.
             'pending': false,
             'server_ack_durable': true,
             'server_message_id': receipt.messageId,
-            'external_status': 'accepted',
+            'external_status': receipt.externalStatus,
             'external_message_id': receipt.externalMessageId,
           },
         );
@@ -5406,29 +5607,10 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Widget _buildMediaTile(_ChatAttachment attachment) {
     final colorScheme = Theme.of(context).colorScheme;
-    Widget buildPreview(String? url) {
-      if (url == null || url.isEmpty) {
-        return Container(
+    Widget placeholder(IconData icon) => Container(
           color: colorScheme.surfaceContainerHighest,
-          child: Icon(
-            attachment.isExternal
-                ? Icons.link_outlined
-                : Icons.image_not_supported_outlined,
-          ),
+          child: Icon(icon, color: colorScheme.onSurfaceVariant),
         );
-      }
-      return Image.network(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
-          color: colorScheme.surfaceContainerHighest,
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
 
     return InkWell(
       borderRadius: BorderRadius.circular(8),
@@ -5438,15 +5620,21 @@ class _ChatWindowState extends State<ChatWindow> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (attachment.url != null || attachment.isExternal)
-              buildPreview(attachment.url)
+            if (attachment.isExternal)
+              placeholder(Icons.link_outlined)
+            else if (ChatMediaCache.keyFor(attachment.message) == null &&
+                (attachment.url == null || attachment.url!.isEmpty))
+              placeholder(Icons.image_not_supported_outlined)
             else
-              FutureBuilder<String?>(
-                future: _whatsAppMediaFutureCache.putIfAbsent(
-                  attachment.message.id,
-                  () => _resolveWhatsAppMediaUrl(attachment.message),
+              LayoutBuilder(
+                builder: (context, constraints) => ChatMediaThumbnail(
+                  message: attachment.message,
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  borderRadius: 0,
+                  resolveUrl: () => _resolveAttachmentUrl(attachment),
+                  unavailable: (_) => placeholder(Icons.broken_image_outlined),
                 ),
-                builder: (_, snapshot) => buildPreview(snapshot.data),
               ),
             Positioned(
               left: 0,
@@ -5666,9 +5854,20 @@ class _ChatWindowState extends State<ChatWindow> {
     return null;
   }
 
-  Future<String?> _resolveWhatsAppMediaUrl(Message message) async {
+  Future<String?> _resolveWhatsAppMediaUrl(
+    Message message, {
+    bool playback = false,
+  }) async {
     try {
       if (MessagingAttachmentService.hasPrivateReference(message)) {
+        final playbackPath = playback
+            ? MessagingAttachmentService.playbackStoragePath(message)
+            : null;
+        if (playbackPath != null) {
+          return _messagingAttachmentService.createSignedUrlForPath(
+            playbackPath,
+          );
+        }
         return _messagingAttachmentService.createCachedPreviewSignedUrl(
           message,
         );
@@ -5676,7 +5875,11 @@ class _ChatWindowState extends State<ChatWindow> {
 
       final response = await Supabase.instance.client.functions.invoke(
         'whatsapp-media',
-        body: {'messageId': message.id},
+        headers: kSupabaseFunctionsRegionHeaders,
+        body: {
+          'messageId': message.id,
+          if (playback) 'variant': 'playback',
+        },
       );
 
       if (response.status < 200 || response.status >= 300) {
@@ -5712,56 +5915,32 @@ class _ChatWindowState extends State<ChatWindow> {
 
   Widget _buildImageMessage(
     BuildContext context,
-    Message message,
-    String url,
-  ) {
+    Message message, {
+    String? url,
+  }) {
     final caption = _messageImageCaption(message);
 
     return GestureDetector(
       onTap: () {
-        _openMessageAttachmentViewer(message, url);
+        _openMessageAttachmentViewer(message, url ?? '');
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Alto FIJO, no libre. Una foto vertical —un comprobante— se
-          // renderizaba a su proporción natural y ocupaba 900px entre mensajes
-          // de una línea. Esa disparidad es lo que hace oscilar la estimación
-          // de largo del ListView y produce el «se pega y vibra»; además el
-          // placeholder medía 160 y la real 900, así que al cargar pegaba otro
-          // salto. Con una miniatura de tamaño conocido el item deja de ser un
-          // problema de estimación, y tocarla sigue abriendo el visor completo.
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              url,
-              width: 220,
-              height: 220,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  // Mismo tamaño que la miniatura final: si difieren, la
-                  // extensión salta cuando la imagen termina de cargar.
-                  width: 220,
-                  height: 220,
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                  child: const Center(
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) =>
-                  _buildImageUnavailableMessage(
-                title: 'No se pudo cargar la imagen',
-                subtitle: 'Toca para intentar abrirla.',
-                onTap: () => _openMessageAttachmentViewer(message, url),
-              ),
+          // Alto FIJO, no libre: una miniatura de tamaño conocido no hace
+          // oscilar la estimación de largo del ListView. Los bytes vienen de
+          // este equipo (memoria, disco o la copia del compositor de un
+          // archivo recién enviado); la red se toca una vez por adjunto por
+          // equipo, nunca en cada reapertura.
+          ChatMediaThumbnail(
+            message: message,
+            resolveUrl: () => _resolveWhatsAppMediaUrl(message),
+            placeholderColor: Theme.of(context).colorScheme.outlineVariant,
+            unavailable: (retry) => _buildImageUnavailableMessage(
+              title: 'No se pudo cargar la imagen',
+              subtitle: 'Toca para intentar de nuevo.',
+              onTap: retry,
             ),
           ),
           if (caption != null) ...[
@@ -5784,35 +5963,9 @@ class _ChatWindowState extends State<ChatWindow> {
     BuildContext context,
     Message message,
   ) {
-    final future = _whatsAppMediaFutureCache.putIfAbsent(
-      message.id,
-      () => _resolveWhatsAppMediaUrl(message),
-    );
-
-    return FutureBuilder<String?>(
-      future: future,
-      builder: (context, snapshot) {
-        final resolvedUrl = snapshot.data;
-        if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
-          return _buildImageMessage(context, message, resolvedUrl);
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildImageLoadingMessage();
-        }
-
-        return _buildImageUnavailableMessage(
-          title: 'Imagen pendiente',
-          subtitle:
-              'No se pudo descargar desde WhatsApp. Toca para reintentar.',
-          onTap: () {
-            setState(() {
-              _whatsAppMediaFutureCache.remove(message.id);
-            });
-          },
-        );
-      },
-    );
+    // The thumbnail resolves the WhatsApp media only when this device has
+    // never stored it; a URL is minted on tap, for the viewer.
+    return _buildImageMessage(context, message);
   }
 
   Widget _buildImageLoadingMessage() {
@@ -5950,11 +6103,14 @@ class _ChatWindowState extends State<ChatWindow> {
           _openMessageAttachmentViewer(message, fileUrl);
           return;
         }
-
         if (failed) {
           setState(() {
             _whatsAppMediaFutureCache.remove(message.id);
           });
+          return;
+        }
+        if (ChatMediaCache.keyFor(message) != null) {
+          _openMessageAttachmentViewer(message, '');
         }
       },
       child: Container(
@@ -6029,38 +6185,9 @@ class _ChatWindowState extends State<ChatWindow> {
     Message message,
     bool isMe,
   ) {
-    final future = _whatsAppMediaFutureCache.putIfAbsent(
-      message.id,
-      () => _resolveWhatsAppMediaUrl(message),
-    );
-
-    return FutureBuilder<String?>(
-      future: future,
-      builder: (context, snapshot) {
-        final resolvedUrl = snapshot.data;
-        if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
-          return _buildFileMessage(context, message, resolvedUrl, isMe);
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildFileMessage(
-            context,
-            message,
-            null,
-            isMe,
-            isLoading: true,
-          );
-        }
-
-        return _buildFileMessage(
-          context,
-          message,
-          null,
-          isMe,
-          failed: true,
-        );
-      },
-    );
+    // A document tile needs its name and kind, both in the row already. The
+    // bytes are fetched — or served from this device — when it is opened.
+    return _buildFileMessage(context, message, null, isMe);
   }
 
   String _messageAttachmentName(Message message, String extension) {
@@ -6156,35 +6283,84 @@ class _ChatWindowState extends State<ChatWindow> {
       await _openExternalAttachmentLink(attachment.message);
       return;
     }
-    // Signed URLs last only a few minutes. Always mint a fresh one for a
-    // private object when the user opens it; preview futures are not authority.
-    final resolvedUrl =
-        MessagingAttachmentService.hasPrivateReference(attachment.message)
-            ? await _resolveWhatsAppMediaUrl(attachment.message)
-            : attachment.url ??
-                await _whatsAppMediaFutureCache.putIfAbsent(
-                  attachment.message.id,
-                  () => _resolveWhatsAppMediaUrl(attachment.message),
-                );
+    await _openViewerForMessage(
+      attachment.message,
+      knownUrl: attachment.url,
+      fileName: attachment.name,
+      extension: attachment.extension,
+      isImage: attachment.isImage,
+    );
+  }
+
+  /// One URL for an attachment the panel lists: its legacy public URL when
+  /// it has one, otherwise a fresh authorisation.
+  Future<String?> _resolveAttachmentUrl(_ChatAttachment attachment) {
+    final url = attachment.url;
+    if (url != null && url.isNotEmpty) return Future.value(url);
+    return _resolveWhatsAppMediaUrl(attachment.message);
+  }
+
+  /// Opens the viewer on the bytes this device already holds. Signed URLs
+  /// last minutes, so one is never reused — but one is also never requested
+  /// for a file that is already here.
+  Future<void> _openViewerForMessage(
+    Message message, {
+    required String? knownUrl,
+    required String fileName,
+    required String extension,
+    required bool isImage,
+  }) async {
+    final cache = ChatMediaCache.instance;
+    final key = ChatMediaCache.keyFor(message);
+    final cachedBytes = key == null ? null : await cache.read(key);
     if (!mounted) return;
-    if (resolvedUrl == null || resolvedUrl.isEmpty) {
-      _showErrorSnackBar(context, 'No se pudo autorizar este adjunto.');
-      return;
+
+    String? url;
+    if (cachedBytes == null) {
+      url = MessagingAttachmentService.hasPrivateReference(message)
+          ? await _resolveWhatsAppMediaUrl(message)
+          : (knownUrl != null && knownUrl.isNotEmpty)
+              ? knownUrl
+              : await _whatsAppMediaFutureCache.putIfAbsent(
+                  message.id,
+                  () => _resolveWhatsAppMediaUrl(message),
+                );
+      if (!mounted) return;
+      if (url == null || url.isEmpty) {
+        _whatsAppMediaFutureCache.remove(message.id);
+        _showErrorSnackBar(context, 'No se pudo autorizar este adjunto.');
+        return;
+      }
+    } else {
+      url = (knownUrl != null && knownUrl.isNotEmpty)
+          ? knownUrl
+          : 'cache://${Uri.encodeComponent(key!)}';
     }
+    final contentType = _messageAttachmentContentType(message);
+    final resolvedUrl = url;
     ChatAttachmentViewer.show(
       context,
       url: resolvedUrl,
-      fileName: attachment.name,
-      extension: attachment.extension,
-      contentType: _messageAttachmentContentType(attachment.message),
-      isImage: attachment.isImage,
+      fileName: fileName,
+      extension: extension,
+      contentType: contentType,
+      isImage: isImage,
+      loadBytes: () async {
+        if (cachedBytes != null) return cachedBytes;
+        if (key == null) return null;
+        return cache.fetch(
+          key,
+          resolveUrl: () async => resolvedUrl,
+          fileExtension: extension,
+        );
+      },
       fileContext: _attachmentFileContext(
-        attachment.message,
+        message,
         url: resolvedUrl,
-        fileName: attachment.name,
-        extension: attachment.extension,
-        contentType: _messageAttachmentContentType(attachment.message),
-        isImage: attachment.isImage,
+        fileName: fileName,
+        extension: extension,
+        contentType: contentType,
+        isImage: isImage,
       ),
     );
   }
@@ -6194,39 +6370,18 @@ class _ChatWindowState extends State<ChatWindow> {
     String url,
   ) async {
     if (!mounted) return;
-
-    final resolvedUrl = MessagingAttachmentService.hasPrivateReference(message)
-        ? await _resolveWhatsAppMediaUrl(message)
-        : url;
-    if (!mounted) return;
-    if (resolvedUrl == null || resolvedUrl.isEmpty) {
-      _whatsAppMediaFutureCache.remove(message.id);
-      _showErrorSnackBar(context, 'No se pudo renovar el acceso al adjunto.');
-      return;
-    }
-
     final contentType = _messageAttachmentContentType(message);
-    final extension =
-        _messageAttachmentExtension(message, resolvedUrl, contentType);
+    final extension = _messageAttachmentExtension(message, url, contentType);
     final isImage = message.type == 'image' ||
         contentType.toLowerCase().startsWith('image/') ||
         ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension);
-
-    ChatAttachmentViewer.show(
-      context,
-      url: resolvedUrl,
+    await _openViewerForMessage(
+      message,
+      knownUrl:
+          MessagingAttachmentService.hasPrivateReference(message) ? null : url,
       fileName: _messageAttachmentName(message, extension),
       extension: extension,
-      contentType: contentType,
       isImage: isImage,
-      fileContext: _attachmentFileContext(
-        message,
-        url: resolvedUrl,
-        fileName: _messageAttachmentName(message, extension),
-        extension: extension,
-        contentType: contentType,
-        isImage: isImage,
-      ),
     );
   }
 
@@ -8497,6 +8652,7 @@ class _ChatWindowState extends State<ChatWindow> {
                         _composerMenuOverlayEntry?.markNeedsBuild();
                       },
                       onSend: () {
+                        final reviewedText = _reviewingTemplateText;
                         setState(() {
                           _reviewingTemplate = null;
                           _reviewingTemplateText = null;
@@ -8504,6 +8660,7 @@ class _ChatWindowState extends State<ChatWindow> {
                         _sendSelectedWhatsAppTemplate(
                           option,
                           pendingText: pendingText,
+                          previewText: reviewedText,
                         );
                       },
                     ),
@@ -8516,6 +8673,7 @@ class _ChatWindowState extends State<ChatWindow> {
   Future<void> _sendSelectedWhatsAppTemplate(
     WhatsAppTemplateOption option, {
     String? pendingText,
+    String? previewText,
   }) async {
     if (_isSendingMessage) return;
 
@@ -8526,13 +8684,95 @@ class _ChatWindowState extends State<ChatWindow> {
     final contextType = _effectiveContextType;
     final contextId = _effectiveContextId;
     final contactFuture = _getWhatsAppContactFuture();
-    setState(() => _isSendingMessage = true);
+    final currentUserId = _messagingService.currentUserId;
+    final needsAgent = option.parameterLayout ==
+        WhatsAppTemplateParameterLayout.contactAndAgent;
+    // Everything the send needs is asked for at once, not one after the
+    // other: the contact, the agent's name and (inside the service) the
+    // template settings and the business name.
+    final senderInfoFuture = needsAgent && currentUserId != null
+        ? _getSenderInfo(currentUserId)
+        : Future<Map<String, dynamic>?>.value(null);
 
+    // The bubble goes up now, with the text the operator just reviewed; the
+    // provider's answer updates it. This is what a text message already did.
+    final sendStartedAt = DateTime.now();
+    final optimisticMessageId =
+        'temp-wa-template-${sendStartedAt.microsecondsSinceEpoch}';
+    final bubbleText = (previewText?.trim().isNotEmpty ?? false)
+        ? previewText!.trim()
+        : option.label;
+    chatProvider.addOptimisticMessage(
+      Message(
+        id: optimisticMessageId,
+        conversationId: conversationId,
+        senderId: currentUserId,
+        content: bubbleText,
+        type: 'text',
+        metadata: {
+          'channel': 'whatsapp',
+          'provider': 'whatsapp',
+          'external_provider': 'whatsapp',
+          'pending': true,
+          'client_message_id': optimisticMessageId,
+          'template_purpose': option.key,
+          'template_name': option.defaultTemplateName,
+          'message_category': option.category.name,
+        },
+        createdAt: sendStartedAt,
+        isMe: true,
+      ),
+    );
+
+    final pending = pendingText?.trim();
+    if (mounted && _messageController.text.trim() == pending) {
+      _messageController.clear();
+    }
+    // The composer is free from here; the dispatch continues behind it.
+    unawaited(
+      _dispatchWhatsAppTemplate(
+        chatProvider: chatProvider,
+        whatsappService: whatsappService,
+        option: option,
+        optimisticMessageId: optimisticMessageId,
+        contactFuture: contactFuture,
+        senderInfoFuture: senderInfoFuture,
+        conversationId: conversationId,
+        contextType: contextType,
+        contextId: contextId,
+        pendingText: pending,
+      ),
+    );
+  }
+
+  Future<void> _dispatchWhatsAppTemplate({
+    required ChatProvider chatProvider,
+    required WhatsAppService whatsappService,
+    required WhatsAppTemplateOption option,
+    required String optimisticMessageId,
+    required Future<Map<String, dynamic>?> contactFuture,
+    required Future<Map<String, dynamic>?> senderInfoFuture,
+    required String conversationId,
+    required String? contextType,
+    required String? contextId,
+    required String? pendingText,
+  }) async {
     try {
+      final reviewFuture = option.isSupplier &&
+              option.category != WhatsAppMessageCategory.utility
+          ? whatsappService.getSupplierTemplateReviewStatuses()
+          : Future<Map<String, WhatsAppTemplateReviewStatus>>.value(const {});
+      final results = await Future.wait<Object?>([
+        contactFuture,
+        senderInfoFuture,
+        reviewFuture,
+      ]);
+      final contact = results[0] as Map<String, dynamic>?;
+      final senderInfo = results[1] as Map<String, dynamic>?;
+      final statuses = results[2] as Map<String, WhatsAppTemplateReviewStatus>;
+
       if (option.isSupplier &&
           option.category != WhatsAppMessageCategory.utility) {
-        final statuses =
-            await whatsappService.getSupplierTemplateReviewStatuses();
         final review = statuses[option.defaultTemplateName];
         if (review?.isApproved != true) {
           throw Exception(
@@ -8543,7 +8783,6 @@ class _ChatWindowState extends State<ChatWindow> {
         }
       }
 
-      final contact = await contactFuture;
       final phone = contact?['phone']?.toString();
       final bindingContactName = contact?['name']?.toString().trim();
       final supplierTemplateContactName =
@@ -8565,9 +8804,6 @@ class _ChatWindowState extends State<ChatWindow> {
       String? agentName;
       if (option.parameterLayout ==
           WhatsAppTemplateParameterLayout.contactAndAgent) {
-        final currentUserId = _messagingService.currentUserId;
-        final senderInfo =
-            currentUserId == null ? null : await _getSenderInfo(currentUserId);
         agentName = senderInfo?['name']?.toString().trim();
         if (option.requiresAgentName &&
             (agentName == null || agentName.isEmpty)) {
@@ -8586,17 +8822,56 @@ class _ChatWindowState extends State<ChatWindow> {
         conversationId: conversationId,
         contextType: contextType,
         contextId: contextId,
+        clientMessageId: optimisticMessageId,
       );
 
       if (!receipt.isSuccess) {
+        if (receipt.unsafeToFallback) {
+          chatProvider.updateMessageMetadataById(optimisticMessageId, {
+            'pending': false,
+            'external_status': 'outcome_unknown',
+            'outcome_unknown': true,
+            'retry_disabled': true,
+            if (receipt.messageId != null)
+              'server_message_id': receipt.messageId,
+            if (receipt.externalMessageId != null)
+              'external_message_id': receipt.externalMessageId,
+          });
+          if (mounted) {
+            _showErrorSnackBar(
+              context,
+              'Resultado incierto: verifica la conversación antes de reenviar.',
+            );
+          }
+          return;
+        }
         throw Exception('Meta rechazó el mensaje seleccionado.');
       }
 
-      final pending = pendingText?.trim();
-      if (pending != null && pending.isNotEmpty) {
+      if (receipt.deliveryMethod == WhatsAppDeliveryMethod.cloudApi) {
+        chatProvider.updateMessageById(
+          optimisticMessageId,
+          content: receipt.resolvedMessageText?.trim().isNotEmpty == true
+              ? receipt.resolvedMessageText!.trim()
+              : null,
+          metadataUpdates: {
+            'pending': false,
+            'server_ack_durable': true,
+            'server_message_id': receipt.messageId,
+            'external_status': receipt.externalStatus,
+            'external_message_id': receipt.externalMessageId,
+          },
+        );
+      } else {
+        // The manual fallback opened WhatsApp outside the ERP; nothing was
+        // recorded here, so nothing stays in the timeline.
+        chatProvider.removeMessageById(optimisticMessageId);
+      }
+
+      if (pendingText != null && pendingText.isNotEmpty) {
         chatProvider.setConversationDraft(
           conversationId,
-          pending,
+          pendingText,
           title: 'Mensaje pendiente de ventana WhatsApp',
           subtitle:
               'Se envió "${option.label}". Cuando el ${widget.conversation.isSupplierConversation ? 'proveedor' : 'cliente'} responda, puedes enviar este texto libre.',
@@ -8604,10 +8879,6 @@ class _ChatWindowState extends State<ChatWindow> {
       }
 
       if (!mounted) return;
-      if (_messageController.text.trim() == pending) {
-        _messageController.clear();
-      }
-
       _showWhatsAppResultSnackbar(
         context: context,
         deliveryMethod: receipt.deliveryMethod,
@@ -8615,10 +8886,14 @@ class _ChatWindowState extends State<ChatWindow> {
         fallbackMessage: 'WhatsApp abierto con el mensaje prellenado',
       );
     } catch (e) {
+      chatProvider.removeMessageById(optimisticMessageId);
       if (!mounted) return;
+      if (pendingText != null &&
+          pendingText.isNotEmpty &&
+          _messageController.text.trim().isEmpty) {
+        _messageController.text = pendingText;
+      }
       _showErrorSnackBar(context, 'No se pudo enviar el mensaje: $e');
-    } finally {
-      if (mounted) setState(() => _isSendingMessage = false);
     }
   }
 
@@ -8684,131 +8959,163 @@ class _ChatWindowState extends State<ChatWindow> {
           _buildPendingAttachmentTray(context),
           const SizedBox(height: 8),
         ],
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            KeyedSubtree(
-              key: _composerActionsButtonKey,
-              child: IconButton(
-                tooltip: hasBlockingOutcomeUnknownAttachment
-                    ? 'Esperando confirmación del adjunto'
-                    : !composerEnabled
-                        ? 'Ventana de respuesta no disponible'
-                        : 'Agregar al mensaje',
-                onPressed:
-                    hasBlockingOutcomeUnknownAttachment || !composerEnabled
-                        ? null
-                        : () => _showComposerActionsMenu(
-                              context,
-                              showSmartActions: showSmartActions,
-                            ),
-                style: IconButton.styleFrom(
-                  foregroundColor: colorScheme.onSurfaceVariant,
-                  backgroundColor: colorScheme.surfaceContainerHighest,
-                  // 44 = alto natural del campo con una línea, para que la
-                  // fila quede a ras.
-                  minimumSize: const Size.square(44),
-                ),
-                icon: AnimatedRotation(
-                  turns: _activeComposerMenuName == 'composer_actions' ||
-                          _isEmojiPickerOpen
-                      ? 0.125
-                      : 0,
-                  duration: const Duration(milliseconds: 150),
-                  child: const Icon(Icons.add_rounded),
+        if (_voiceRecorder.isRecording)
+          ChatVoiceRecordingBar(
+            controller: _voiceRecorder,
+            onCancel: _cancelVoiceNote,
+            onSend: _finishVoiceNote,
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              KeyedSubtree(
+                key: _composerActionsButtonKey,
+                child: IconButton(
+                  tooltip: hasBlockingOutcomeUnknownAttachment
+                      ? 'Esperando confirmación del adjunto'
+                      : !composerEnabled
+                          ? 'Ventana de respuesta no disponible'
+                          : 'Agregar al mensaje',
+                  onPressed:
+                      hasBlockingOutcomeUnknownAttachment || !composerEnabled
+                          ? null
+                          : () => _showComposerActionsMenu(
+                                context,
+                                showSmartActions: showSmartActions,
+                              ),
+                  style: IconButton.styleFrom(
+                    foregroundColor: colorScheme.onSurfaceVariant,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                    // 44 = alto natural del campo con una línea, para que la
+                    // fila quede a ras.
+                    minimumSize: const Size.square(44),
+                  ),
+                  icon: AnimatedRotation(
+                    turns: _activeComposerMenuName == 'composer_actions' ||
+                            _isEmojiPickerOpen
+                        ? 0.125
+                        : 0,
+                    duration: const Duration(milliseconds: 150),
+                    child: const Icon(Icons.add_rounded),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: CompositedTransformTarget(
-                link: _layerLink,
-                child: CallbackShortcuts(
-                  bindings: {
-                    const SingleActivator(LogicalKeyboardKey.enter): () =>
-                        unawaited(_sendComposer()),
-                    const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
-                        unawaited(_sendComposer()),
-                  },
-                  child: TextField(
-                    key: const ValueKey<String>('chat-message-composer'),
-                    controller: _messageController,
-                    focusNode: _focusNode,
-                    enabled: composerEnabled,
-                    minLines: 1,
-                    maxLines: 5,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: _activeThreadRootMessageId != null
-                          ? 'Agregar una respuesta…'
-                          : _isMetaConversation && !composerEnabled
-                              ? metaStateError != null
-                                  ? 'Verificación de Meta pendiente'
-                                  : isCheckingMetaWindow
-                                      ? 'Verificando ventana de respuesta...'
-                                      : 'Espera un nuevo mensaje del cliente'
-                              : 'Escribe un mensaje... (# para ref)',
-                      filled: true,
-                      fillColor: colorScheme.surfaceContainerLowest,
-                      // El texto de ayuda NO envuelve. En un teléfono angosto
-                      // «Escribe un mensaje... (# para ref)» se partía en dos
-                      // líneas y el campo vacío medía 66 px contra 44 de los
-                      // botones: por eso se veía descuadrado. El campo sigue
-                      // creciendo con texto real, hasta cinco líneas.
-                      hintMaxLines: 1,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 11,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(11),
-                        borderSide:
-                            BorderSide(color: colorScheme.outlineVariant),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(11),
-                        borderSide:
-                            BorderSide(color: colorScheme.outlineVariant),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(11),
-                        borderSide: BorderSide(
-                          color: colorScheme.primary,
-                          width: 1.4,
+              const SizedBox(width: 8),
+              Expanded(
+                child: CompositedTransformTarget(
+                  link: _layerLink,
+                  child: CallbackShortcuts(
+                    bindings: {
+                      const SingleActivator(LogicalKeyboardKey.enter): () =>
+                          unawaited(_sendComposer()),
+                      const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                          () => unawaited(_sendComposer()),
+                    },
+                    child: TextField(
+                      key: const ValueKey<String>('chat-message-composer'),
+                      controller: _messageController,
+                      focusNode: _focusNode,
+                      enabled: composerEnabled,
+                      minLines: 1,
+                      maxLines: 5,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: _activeThreadRootMessageId != null
+                            ? 'Agregar una respuesta…'
+                            : _isMetaConversation && !composerEnabled
+                                ? metaStateError != null
+                                    ? 'Verificación de Meta pendiente'
+                                    : isCheckingMetaWindow
+                                        ? 'Verificando ventana de respuesta...'
+                                        : 'Espera un nuevo mensaje del cliente'
+                                : 'Escribe un mensaje... (# para ref)',
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerLowest,
+                        // El texto de ayuda NO envuelve. En un teléfono angosto
+                        // «Escribe un mensaje... (# para ref)» se partía en dos
+                        // líneas y el campo vacío medía 66 px contra 44 de los
+                        // botones: por eso se veía descuadrado. El campo sigue
+                        // creciendo con texto real, hasta cinco líneas.
+                        hintMaxLines: 1,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 11,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(11),
+                          borderSide:
+                              BorderSide(color: colorScheme.outlineVariant),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(11),
+                          borderSide:
+                              BorderSide(color: colorScheme.outlineVariant),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(11),
+                          borderSide: BorderSide(
+                            color: colorScheme.primary,
+                            width: 1.4,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton(
-              key: const ValueKey<String>('chat-message-send'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.square(44),
-                maximumSize: const Size.square(44),
-                padding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(11),
-                ),
+              const SizedBox(width: 8),
+              // The field's own listenable decides between microphone and
+              // send, so typing never rebuilds the whole window.
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _messageController,
+                builder: (context, _, __) {
+                  if (_showsVoiceButton) {
+                    return FilledButton(
+                      key: const ValueKey<String>('chat-voice-record'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.square(44),
+                        maximumSize: const Size.square(44),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                      ),
+                      onPressed: hasBlockingOutcomeUnknownAttachment ||
+                              !composerEnabled
+                          ? null
+                          : _startVoiceNote,
+                      child: const Icon(Icons.mic_rounded, size: 20),
+                    );
+                  }
+                  return FilledButton(
+                    key: const ValueKey<String>('chat-message-send'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.square(44),
+                      maximumSize: const Size.square(44),
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                    ),
+                    onPressed: _isSendingPendingAttachments ||
+                            hasBlockingOutcomeUnknownAttachment ||
+                            !composerEnabled
+                        ? null
+                        : () => _sendComposer(),
+                    child: _isSendingPendingAttachments
+                        ? const SizedBox.square(
+                            dimension: 17,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded, size: 19),
+                  );
+                },
               ),
-              onPressed: _isSendingPendingAttachments ||
-                      hasBlockingOutcomeUnknownAttachment ||
-                      !composerEnabled
-                  ? null
-                  : () => _sendComposer(),
-              child: _isSendingPendingAttachments
-                  ? const SizedBox.square(
-                      dimension: 17,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_rounded, size: 19),
-            ),
-          ],
-        ),
+            ],
+          ),
       ],
     );
   }
@@ -10226,7 +10533,7 @@ class _ChatWindowState extends State<ChatWindow> {
             if (msg.type == 'image') {
               final mediaUrl = _messageAttachmentUrl(msg);
               if (mediaUrl != null) {
-                contentWidget = _buildImageMessage(context, msg, mediaUrl);
+                contentWidget = _buildImageMessage(context, msg, url: mediaUrl);
               } else if (MessagingAttachmentService.hasPrivateReference(msg) ||
                   _messageHasRemoteWhatsAppMedia(msg)) {
                 contentWidget = _buildDeferredWhatsAppImageMessage(
@@ -10237,6 +10544,10 @@ class _ChatWindowState extends State<ChatWindow> {
                       .externalUrlCandidate(msg) !=
                   null) {
                 contentWidget = _buildExternalAttachmentMessage(msg);
+              } else if (ChatMediaCache.keyFor(msg) != null) {
+                // A file this device holds — the composer's own copy of a
+                // photo just sent — before the server has named it.
+                contentWidget = _buildImageMessage(context, msg);
               } else {
                 contentWidget = _buildImageUnavailableMessage(
                   title: 'Imagen sin archivo',
@@ -10245,13 +10556,24 @@ class _ChatWindowState extends State<ChatWindow> {
               }
             } else if (msg.metadata['type'] == 'quote_request') {
               contentWidget = _buildQuoteCard(context, msg, contentIsMe);
+            } else if (msg.type == 'audio' ||
+                _messageAttachmentContentType(msg)
+                    .toLowerCase()
+                    .startsWith('audio/')) {
+              contentWidget = ChatAudioMessage(
+                key: ValueKey('audio-${msg.id}'),
+                message: msg,
+                isMe: contentIsMe,
+                resolveUrl: () => _resolveWhatsAppMediaUrl(msg, playback: true),
+              );
             } else if (msg.type == 'file') {
               final fileUrl = _messageAttachmentUrl(msg);
               if (fileUrl != null) {
                 contentWidget =
                     _buildFileMessage(context, msg, fileUrl, contentIsMe);
               } else if (MessagingAttachmentService.hasPrivateReference(msg) ||
-                  _messageHasRemoteWhatsAppMedia(msg)) {
+                  _messageHasRemoteWhatsAppMedia(msg) ||
+                  ChatMediaCache.keyFor(msg) != null) {
                 contentWidget = _buildDeferredWhatsAppFileMessage(
                   context,
                   msg,

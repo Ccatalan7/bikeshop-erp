@@ -1136,6 +1136,18 @@ Required pattern for native WebViews inside the zoomed app:
 - Any feature that maps user selection rectangles, screenshots, overlays, or hit-test bounds over a native WebView must keep coordinates in one space. When building a global viewport rect, transform both corners with `localToGlobal`; do not combine a transformed origin with raw `box.size`, because that mixes scaled and unscaled coordinates at 80% zoom.
 - Verify native WebView interactions at both `100%` and the default `80%` app zoom before calling the fix complete.
 
+### El navegador integrado no puede hacer passkeys (2026-09-03)
+
+WKWebView expone `PublicKeyCredential` y `navigator.credentials`, así que un
+sitio cree que hay passkeys y manda el desafío (Google: «Use your passkey to
+confirm it's really you»); dentro de una app el diálogo de Touch ID nunca
+aparece y la página queda cargando. `browserPasskeyUnavailableUserScript()`
+(`lib/shared/utils/browser_passkey_policy.dart`) borra esa superficie en
+`AT_DOCUMENT_START`, en todos los frames, y va en la lista de scripts
+iniciales de pestañas y popups; los sitios ofrecen contraseña. La lista es un
+campo `final` del State: un hot reload no la cambia, hace falta hot restart.
+Costó una sesión de login del dueño atascada.
+
 Current reference implementations:
 
 - Browser workspaces: `lib/shared/widgets/webview_module_page.dart`

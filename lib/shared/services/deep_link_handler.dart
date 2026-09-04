@@ -1,8 +1,31 @@
 import 'dart:async';
+import 'dart:io' as io;
+
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'route_share_service.dart';
+
+/// Preference key holding `<process id>|<link>` for the launch link this
+/// process has already acted on.
+const String deepLinkInitialLinkConsumedKey = 'deep_link.initial_link_consumed';
+
+/// The marker that says "this process already acted on this launch link".
+String deepLinkInitialLinkMarker(int processId, Uri uri) => '$processId|$uri';
+
+/// The operating system hands the launch link back on every query, and a hot
+/// restart runs `initialize()` again inside the same process, so the app kept
+/// jumping to the last shared link on every restart (owner report,
+/// 2026-09-03). A launch link is acted on once per process: a cold start has
+/// a new process id and honours it again.
+bool deepLinkInitialLinkAlreadyConsumed({
+  required String? storedMarker,
+  required int processId,
+  required Uri uri,
+}) =>
+    storedMarker != null &&
+    storedMarker == deepLinkInitialLinkMarker(processId, uri);
 
 /// Handles deep links for OAuth callbacks and other app-specific URLs.
 /// Listens for `vinabike://` scheme links and processes them accordingly.
@@ -39,8 +62,15 @@ class DeepLinkHandler extends ChangeNotifier {
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) {
-        debugPrint('🔗 [DeepLink] Initial link: $initialUri');
-        _handleDeepLink(initialUri);
+        if (await _consumeInitialLinkOnce(initialUri)) {
+          debugPrint('🔗 [DeepLink] Initial link: $initialUri');
+          _handleDeepLink(initialUri);
+        } else {
+          debugPrint(
+            '🔗 [DeepLink] Launch link already handled by this process '
+            '(hot restart); ignoring: $initialUri',
+          );
+        }
       }
     } catch (e) {
       debugPrint('🔗 [DeepLink] Error getting initial link: $e');
@@ -56,6 +86,28 @@ class DeepLinkHandler extends ChangeNotifier {
         debugPrint('🔗 [DeepLink] Stream error: $error');
       },
     );
+  }
+
+  /// True the first time this process sees the launch link; false on a hot
+  /// restart of the same process. Fails open: if the marker cannot be read or
+  /// written, the link is honoured as before.
+  Future<bool> _consumeInitialLinkOnce(Uri uri) async {
+    if (kIsWeb) return true;
+    try {
+      final marker = deepLinkInitialLinkMarker(io.pid, uri);
+      final prefs = await SharedPreferences.getInstance();
+      if (deepLinkInitialLinkAlreadyConsumed(
+        storedMarker: prefs.getString(deepLinkInitialLinkConsumedKey),
+        processId: io.pid,
+        uri: uri,
+      )) {
+        return false;
+      }
+      await prefs.setString(deepLinkInitialLinkConsumedKey, marker);
+    } catch (error) {
+      debugPrint('🔗 [DeepLink] Could not record the launch link: $error');
+    }
+    return true;
   }
 
   bool get hasPendingOAuthCallback =>

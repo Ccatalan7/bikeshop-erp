@@ -103,6 +103,9 @@ dependencies:
   speech_to_text: ^7.0.0
 
   supabase: any
+  flutter_cache_manager: ^3.4.2
+  record: ^6.2.1
+  file: ^7.0.1
 dependency_overrides:
   # Security-patched Android WebView bridge. Returning false from
   # onConsoleMessage makes Chromium mirror console source URLs (including

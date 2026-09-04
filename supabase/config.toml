@@ -535,6 +535,11 @@ verify_jwt = false
 # an extra Auth API round trip on every message send.
 verify_jwt = true
 
+[functions.whatsapp-deliver]
+# DB-generated, hashed, single-use dispatch capability is verified by the
+# service-only claim RPC. User JWTs cannot claim or finish arbitrary jobs.
+verify_jwt = false
+
 [functions.whatsapp-webhook]
 # Meta cannot attach a Supabase JWT. Authenticity is enforced with the raw-body
 # x-hub-signature-256 HMAC before any payload is processed.

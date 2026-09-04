@@ -26,6 +26,19 @@ class Message {
   bool get isThreadReply => threadRootMessageId != null;
   bool get isTopLevelMessage => threadRootMessageId == null;
 
+  /// Row shape [Message.fromJson] reads back, for the on-device history.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'conversation_id': conversationId,
+        'sender_id': senderId,
+        'content': content,
+        'type': type,
+        'metadata': metadata,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'message_sequence': messageSequence,
+        'thread_root_message_id': threadRootMessageId,
+      };
+
   factory Message.fromJson(Map<String, dynamic> json, {String? currentUserId}) {
     final metadata = Map<String, dynamic>.from(
       (json['metadata'] as Map?)?.cast<String, dynamic>() ?? const {},

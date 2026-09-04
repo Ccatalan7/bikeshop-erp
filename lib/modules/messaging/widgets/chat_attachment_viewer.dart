@@ -21,6 +21,11 @@ class ChatAttachmentViewer extends StatefulWidget {
   final bool isImage;
   final AppFileContext? fileContext;
 
+  /// Bytes the host already holds (the chat media cache). When it yields
+  /// them the viewer never touches the network; when it yields `null` the
+  /// viewer falls back to [url].
+  final Future<Uint8List?> Function()? loadBytes;
+
   const ChatAttachmentViewer({
     super.key,
     required this.url,
@@ -29,6 +34,7 @@ class ChatAttachmentViewer extends StatefulWidget {
     required this.contentType,
     required this.isImage,
     this.fileContext,
+    this.loadBytes,
   });
 
   static Future<void> show(
@@ -39,6 +45,7 @@ class ChatAttachmentViewer extends StatefulWidget {
     required String contentType,
     required bool isImage,
     AppFileContext? fileContext,
+    Future<Uint8List?> Function()? loadBytes,
   }) {
     return showDialog<void>(
       context: context,
@@ -49,6 +56,7 @@ class ChatAttachmentViewer extends StatefulWidget {
         contentType: contentType,
         isImage: isImage,
         fileContext: fileContext,
+        loadBytes: loadBytes,
       ),
     );
   }
@@ -97,6 +105,16 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
   Future<_AttachmentPayload> _loadPayload() async {
     if (widget.url.startsWith('data:')) {
       return _decodeDataUrl(widget.url);
+    }
+
+    final cachedBytes = await widget.loadBytes?.call();
+    if (cachedBytes != null) {
+      return _AttachmentPayload(
+        bytes: cachedBytes,
+        contentType: widget.contentType.isNotEmpty
+            ? widget.contentType
+            : _fallbackMimeType(_normalizedExtension),
+      );
     }
 
     final uri = Uri.tryParse(widget.url);
@@ -196,7 +214,18 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
 
   Future<void> _openExternal() async {
     final uri = Uri.tryParse(widget.url);
-    if (uri == null || !await canLaunchUrl(uri)) {
+    // A file served from the device cache has no web address to hand to
+    // another app; Descargar is the way out of the ERP for it.
+    if (uri == null || !uri.hasScheme || !uri.scheme.startsWith('http')) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este archivo ya está en el equipo: usa Descargar.'),
+        ),
+      );
+      return;
+    }
+    if (!await canLaunchUrl(uri)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo abrir el archivo externo.')),

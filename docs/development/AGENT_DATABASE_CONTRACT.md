@@ -24,6 +24,21 @@ The CLI is control-plane/metadata only — projects, secrets, Edge Functions,
 backups, and post-verification migration-history registration — and is invoked
 through `scripts/supabase_cli.sh`, never as the bare binary.
 
+`functions delete` cuenta como cambio destructivo del plano de control: el
+wrapper lo rechaza salvo que `VINABIKE_SUPABASE_DESTRUCTIVE_CONFIRM` sea el
+project ref revisado (verificado 2026-09-03 al borrar una función de prueba
+propia). Un deploy no lo necesita.
+
+**Medir una función en producción sin dejar rastro (2026-09-03):** un archivo
+`begin; set local track_functions = 'all'; …; select * from
+pg_stat_xact_user_functions order by total_time desc; rollback;` corrido con
+`scripts/db/query.sh production --write --file` (el rechazo de `begin`/`end`
+aplica a las lecturas remotas, no a `--write`) devuelve el tiempo de cada
+función y trigger anidado con datos reales y no commitea nada; `explain
+(analyze)` sobre el insert reparte el costo por trigger. `\timing` incluye
+~200 ms de viaje por sentencia. Así se vio que el insert de `messages` cuesta
+2 ms y el upkeep del binding 150–350 ms.
+
 These are not agent SQL paths, in any environment, for any reason: any
 `supabase db …` subcommand, ad hoc hosted `psql`, and the hosted SQL Editor.
 They bypass the read-only transaction,

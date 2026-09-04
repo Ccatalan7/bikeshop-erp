@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import '../utils/browser_passkey_policy.dart';
 
 /// Calidad de las señales que entrega la plataforma para una ventana nueva.
 ///
@@ -324,6 +325,7 @@ class BrowserPopupWindow extends StatefulWidget {
 class _BrowserPopupWindowState extends State<BrowserPopupWindow> {
   static final _popupInitialUserScripts = UnmodifiableListView<UserScript>([
     browserPopupOpenCaptureUserScript(),
+    browserPasskeyUnavailableUserScript(),
   ]);
 
   late String _host = widget.initialHost ?? '';

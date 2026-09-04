@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -343,6 +344,12 @@ class PurchaseService extends ChangeNotifier {
   RealtimeChannel? _purchaseInvoicesChannel;
   RealtimeChannel? _purchasePaymentsChannel;
   RealtimeChannel? _purchaseReceivingChannel;
+
+  /// Tenant the live channels are bound to. Every list load used to tear the
+  /// three channels down and rebuild them; two loads in flight left one set
+  /// orphaned and the events of the gap were lost, which is why a saved
+  /// document sometimes never reached the list.
+  String? _realtimeTenantId;
 
   // Public getters for reactive UI
   UnmodifiableListView<PurchaseInvoice> get purchaseInvoices =>
@@ -755,7 +762,9 @@ class PurchaseService extends ChangeNotifier {
         final payload = invoice.toJson();
         payload.remove('created_at');
         await _db.update('purchase_invoices', invoice.id!, payload);
-        final refreshed = await getPurchaseInvoice(invoice.id!);
+        // Without `refresh` this handed back the cached pre-edit row, so the
+        // form and the list kept showing the document as it was before saving.
+        final refreshed = await getPurchaseInvoice(invoice.id!, refresh: true);
         saved = refreshed ?? invoice;
       }
 
@@ -764,8 +773,20 @@ class PurchaseService extends ChangeNotifier {
         entityId: saved.id,
         tenantId: saved.tenantId,
       );
-      invalidateInvoicesCache();
-      await getPurchaseInvoices(forceRefresh: true);
+      _upsertInvoice(saved);
+      // The full cache stays complete — the saved row was just patched into
+      // it — so it is only marked stale for the next explicit load. Flagging
+      // it as unloaded made the next save's duplicate-number check reload the
+      // whole table, items included, before the operator could continue.
+      _invoicesCacheTime = null;
+      _listInvoicesCacheTime = null;
+      // The list rows come from the read model (derived columns live server
+      // side), so the list is re-read here instead of waiting for realtime to
+      // notice our own write. It runs in the background: the edited row was
+      // already patched in place above and the caller can navigate at once.
+      if (_listInvoicesCacheTime != null || _listInvoiceCache.isNotEmpty) {
+        unawaited(_refreshListInvoicesQuietly());
+      }
       // NOTE: Accounting entries are now created automatically by database triggers
       // when invoice status changes to 'received'. No need to call _postAccountingEntry here.
       // await _postAccountingEntry(saved);
@@ -847,6 +868,7 @@ class PurchaseService extends ChangeNotifier {
           break;
       }
 
+      final previous = _findCachedInvoice(invoiceId);
       final result = await _db.update('purchase_invoices', invoiceId, payload);
       final updated = PurchaseInvoice.fromJson(result);
 
@@ -857,18 +879,23 @@ class PurchaseService extends ChangeNotifier {
         tenantId: updated.tenantId,
       );
 
-      // Refresh accounting if service available
-      if (_accountingService != null) {
-        await _accountingService!.initialize();
-        await _accountingService!.journalEntries.loadJournalEntries();
+      // The triggers post or delete the journal entry only when the document
+      // enters or leaves confirmed/received/paid. Draft ↔ sent touches no
+      // accounting, yet every transition waited here for the chart of
+      // accounts and a page of journal entries — two round trips that made
+      // «Volver a borrador» feel heavy. When the journal did change, the
+      // reload runs in the background: nothing on the document page reads
+      // it before the next frame.
+      if (_accountingService != null &&
+          (_postsAccounting(status) ||
+              previous == null ||
+              _postsAccounting(previous.status))) {
+        unawaited(_refreshAccountingProjection());
       }
 
-      // Fetch fresh data from database
+      // Read the row back: AFTER triggers recalculate balances the RETURNING
+      // row does not carry yet.
       final refreshed = await getPurchaseInvoice(invoiceId, refresh: true);
-
-      if (refreshed != null) {
-        _upsertInvoice(refreshed);
-      }
 
       notifyListeners();
       return refreshed ?? updated;
@@ -876,6 +903,86 @@ class PurchaseService extends ChangeNotifier {
       debugPrint('PurchaseService.updateInvoiceStatus error: $e');
       rethrow;
     }
+  }
+
+  static bool _postsAccounting(PurchaseInvoiceStatus status) =>
+      status == PurchaseInvoiceStatus.confirmed ||
+      status == PurchaseInvoiceStatus.received ||
+      status == PurchaseInvoiceStatus.paid;
+
+  PurchaseInvoice? _findCachedInvoice(String id) {
+    for (final invoice in _invoiceCache) {
+      if (invoice.id == id) return invoice;
+    }
+    for (final invoice in _listInvoiceCache) {
+      if (invoice.id == id) return invoice;
+    }
+    return null;
+  }
+
+  Future<void> _refreshAccountingProjection() async {
+    final accounting = _accountingService;
+    if (accounting == null) return;
+    try {
+      await accounting.initialize();
+      await accounting.journalEntries.loadJournalEntries();
+    } catch (e) {
+      debugPrint('PurchaseService: no se pudo refrescar el libro diario: $e');
+    }
+  }
+
+  Future<void> _refreshPaymentsQuietly() async {
+    try {
+      await getPurchasePayments(forceRefresh: true);
+    } catch (e) {
+      debugPrint('PurchaseService: no se pudo refrescar los pagos: $e');
+    }
+  }
+
+  Future<void> _refreshListInvoicesQuietly() async {
+    try {
+      await getPurchaseInvoicesForList(forceRefresh: true);
+    } catch (e) {
+      debugPrint('PurchaseService: no se pudo refrescar la lista: $e');
+    }
+  }
+
+  void _removeInvoiceFromCaches(String id) {
+    _invoiceCache = _invoiceCache.where((invoice) => invoice.id != id).toList();
+    _listInvoiceCache =
+        _listInvoiceCache.where((invoice) => invoice.id != id).toList();
+  }
+
+  /// One changed row refreshes one row. Reloading the whole
+  /// `purchase_invoices` table — items included — after every status click
+  /// was most of what made a simple transition feel heavy. The list read
+  /// model is still re-read because its derived columns live server side.
+  Future<void> _handleInvoiceRealtimeChange(
+    PostgresChangePayload payload,
+  ) async {
+    if (!kReleaseMode) {
+      debugPrint(
+        '🔔 [PurchaseService] Purchase invoice changed: ${payload.eventType}',
+      );
+    }
+    final hadFullCache = _invoicesCacheTime != null || _invoiceCache.isNotEmpty;
+    final hadListCache =
+        _listInvoicesCacheTime != null || _listInvoiceCache.isNotEmpty;
+    if (payload.eventType == PostgresChangeEvent.delete) {
+      final id = payload.oldRecord['id']?.toString() ?? '';
+      if (id.isNotEmpty) _removeInvoiceFromCaches(id);
+    } else if (hadFullCache) {
+      final id = payload.newRecord['id']?.toString() ?? '';
+      if (id.isNotEmpty) {
+        try {
+          await getPurchaseInvoice(id, refresh: true);
+        } catch (e) {
+          debugPrint('PurchaseService: no se pudo releer $id: $e');
+        }
+      }
+    }
+    if (hadListCache) unawaited(_refreshListInvoicesQuietly());
+    notifyListeners();
   }
 
   /// Moves a document that was just dispatched to the supplier from
@@ -1124,18 +1231,17 @@ class PurchaseService extends ChangeNotifier {
     // an unsafe second correction.
     try {
       await getPurchaseInvoice(result.payment.invoiceId, refresh: true);
-      await getPurchasePayments(forceRefresh: true);
-      await getPurchaseInvoices(forceRefresh: true);
-      if (_accountingService != null) {
-        await _accountingService!.initialize();
-        await _accountingService!.journalEntries.loadJournalEntries();
-      }
     } catch (error) {
       debugPrint(
         'PurchaseService.correctPurchasePayment post-commit refresh failed: '
         '$error',
       );
     }
+    unawaited(_refreshPaymentsQuietly());
+    if (_listInvoicesCacheTime != null || _listInvoiceCache.isNotEmpty) {
+      unawaited(_refreshListInvoicesQuietly());
+    }
+    unawaited(_refreshAccountingProjection());
     return result;
   }
 
@@ -1216,10 +1322,16 @@ class PurchaseService extends ChangeNotifier {
   }
 
   Future<void> _refreshAfterPayment(String invoiceId) async {
-    await getPurchasePayments(forceRefresh: true);
-    await getPurchaseInvoices(forceRefresh: true);
-
-    final updatedInvoice = await getPurchaseInvoice(invoiceId);
+    // The payment is committed. The invoice row is read back because its
+    // balance decides whether the document is now paid; the payments list
+    // and the list read model are projections and refresh in the background
+    // instead of holding the payment screen (the old path reloaded the whole
+    // invoices table, items included, before returning).
+    final updatedInvoice = await getPurchaseInvoice(invoiceId, refresh: true);
+    unawaited(_refreshPaymentsQuietly());
+    if (_listInvoicesCacheTime != null || _listInvoiceCache.isNotEmpty) {
+      unawaited(_refreshListInvoicesQuietly());
+    }
     final balance = updatedInvoice == null
         ? 0.0
         : (updatedInvoice.balance.abs() < 1 ? 0.0 : updatedInvoice.balance);
@@ -1499,6 +1611,11 @@ class PurchaseService extends ChangeNotifier {
         return;
       }
 
+      if (_realtimeTenantId == tenantId && _purchaseInvoicesChannel != null) {
+        return;
+      }
+      _realtimeTenantId = tenantId;
+
       await _purchaseInvoicesChannel?.unsubscribe();
       await _purchasePaymentsChannel?.unsubscribe();
       await _purchaseReceivingChannel?.unsubscribe();
@@ -1514,17 +1631,7 @@ class PurchaseService extends ChangeNotifier {
               column: 'tenant_id',
               value: tenantId,
             ),
-            callback: (payload) {
-              debugPrint(
-                  '🔔 [PurchaseService] Purchase invoice changed: ${payload.eventType}');
-              if (_invoicesCacheTime != null || _invoiceCache.isNotEmpty) {
-                getPurchaseInvoices(forceRefresh: true);
-              }
-              if (_listInvoicesCacheTime != null ||
-                  _listInvoiceCache.isNotEmpty) {
-                getPurchaseInvoicesForList(forceRefresh: true);
-              }
-            },
+            callback: _handleInvoiceRealtimeChange,
           )
           .subscribe();
 
@@ -1613,6 +1720,7 @@ class PurchaseService extends ChangeNotifier {
     _purchaseInvoicesChannel?.unsubscribe();
     _purchasePaymentsChannel?.unsubscribe();
     _purchaseReceivingChannel?.unsubscribe();
+    _realtimeTenantId = null;
     super.dispose();
   }
 }

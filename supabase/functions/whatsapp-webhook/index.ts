@@ -911,6 +911,55 @@ function parseActionTarget(message: JsonRecord): WhatsAppActionTarget | null {
   );
 }
 
+const DATABASE_REGION = "sa-east-1";
+const REGION_HOP_HEADER = "x-vinabike-region-hop";
+
+/** Meta calls the edge region nearest to its own servers (a US region), while
+ * the database lives in São Paulo, so every hop of the status and inbound
+ * pipeline paid a transcontinental round trip: a delivered status took 1-3 s
+ * to reach the row (measured 2026-09-03). One forward to the database region
+ * replaces three to five of those hops. The signature is verified here on the
+ * raw bytes and again on arrival. A forward that cannot be reached falls back
+ * to local processing, so nothing is ever dropped. */
+async function forwardToDatabaseRegion(
+  req: Request,
+  rawBody: string,
+): Promise<Response | null> {
+  const region = Deno.env.get("SB_REGION");
+  if (!region || region === DATABASE_REGION || req.headers.get(REGION_HOP_HEADER)) {
+    return null;
+  }
+  const startedAt = Date.now();
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-webhook`, {
+      method: "POST",
+      headers: {
+        "Content-Type": req.headers.get("content-type") ?? "application/json",
+        "x-hub-signature-256": req.headers.get("x-hub-signature-256") ?? "",
+        "x-region": DATABASE_REGION,
+        [REGION_HOP_HEADER]: region,
+      },
+      body: rawBody,
+      signal: AbortSignal.timeout(20_000),
+    });
+    const body = await response.text();
+    console.log(
+      "⏱️ [WHATSAPP-WEBHOOK] forwarded to database region",
+      JSON.stringify({ from: region, status: response.status, elapsed_ms: Date.now() - startedAt }),
+    );
+    return new Response(body, {
+      status: response.status,
+      headers: { "Content-Type": response.headers.get("content-type") ?? "application/json" },
+    });
+  } catch (error) {
+    console.error(
+      "❌ [WHATSAPP-WEBHOOK] forward to database region failed; processing here",
+      String(error),
+    );
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method === "GET") {
@@ -941,9 +990,14 @@ serve(async (req) => {
   }
 
   const rawBody = await req.text();
+  // Stamped into each status payload: where it was processed and when it
+  // arrived, so webhook latency can be read from the row afterwards.
+  const receivedAtIso = new Date().toISOString();
   if (!await verifyMetaSignature(req, rawBody)) {
     return jsonResponse({ error: "Invalid Meta signature" }, 401);
   }
+  const forwarded = await forwardToDatabaseRegion(req, rawBody);
+  if (forwarded) return forwarded;
   let payload: JsonRecord;
   try {
     payload = JSON.parse(rawBody) as JsonRecord;
@@ -1012,7 +1066,11 @@ serve(async (req) => {
             p_phone_number_id: phoneNumberId,
             p_external_message_id: externalMessageId,
             p_status: statusValue,
-            p_payload: status,
+            p_payload: {
+              ...status,
+              vinabike_edge_region: Deno.env.get("SB_REGION") ?? null,
+              vinabike_received_at: receivedAtIso,
+            },
           });
           if (error) throw error;
           processedStatuses.push(data);

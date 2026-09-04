@@ -29,10 +29,12 @@ class MessageDeliveryIndicator extends StatelessWidget {
           state.failureMessage ??
               'Resultado incierto: verifica antes de reenviar',
         ),
-      MessageDeliveryStage.accepted => (
+      MessageDeliveryStage.queued || MessageDeliveryStage.accepted => (
           Icons.done_rounded,
           colorScheme.onSurfaceVariant.withValues(alpha: 0.72),
-          'Aceptado por $provider',
+          state.stage == MessageDeliveryStage.queued
+              ? 'Recibido por Viñabike; pendiente de envío a $provider'
+              : 'Aceptado por $provider',
         ),
       MessageDeliveryStage.sent => (
           Icons.done_rounded,
@@ -65,6 +67,7 @@ class MessageDeliveryIndicator extends StatelessWidget {
 
     return Tooltip(
       message: label,
+      excludeFromSemantics: true,
       waitDuration: const Duration(milliseconds: 450),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 170),
@@ -82,6 +85,7 @@ class MessageDeliveryIndicator extends StatelessWidget {
           key: ValueKey(state.stage),
           size: size,
           color: color,
+          semanticLabel: label,
         ),
       ),
     );

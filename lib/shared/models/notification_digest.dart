@@ -3,6 +3,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 enum NotificationDigestPeriod {
   today,
+  yesterday,
   thisWeek,
   previousWeek,
   thisMonth,
@@ -40,6 +41,9 @@ class NotificationDigestWindow {
       case NotificationDigestPeriod.today:
         startDate = today;
         endDate = today;
+      case NotificationDigestPeriod.yesterday:
+        startDate = _calendarDate(today.year, today.month, today.day - 1);
+        endDate = startDate;
       case NotificationDigestPeriod.thisWeek:
         startDate = _calendarDate(
           today.year,

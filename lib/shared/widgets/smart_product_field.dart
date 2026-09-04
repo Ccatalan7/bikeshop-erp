@@ -55,6 +55,10 @@ class SmartProductField extends StatefulWidget {
   /// Callback for showing product details pane
   final Function(Product)? onShowProductDetails;
 
+  /// Offered on a line that carries only text (OCR, ad-hoc): create the
+  /// catalog product this line describes and link the line to it.
+  final VoidCallback? onCreateCatalogProduct;
+
   /// Hint text for the search field
   final String hintText;
 
@@ -84,6 +88,7 @@ class SmartProductField extends StatefulWidget {
     this.onAutoAddLine,
     this.onEditProduct,
     this.onShowProductDetails,
+    this.onCreateCatalogProduct,
     this.hintText = 'Buscar producto o escribir nombre...',
     this.autoFocus =
         false, // Default to false - only auto-focus on newly added lines
@@ -154,6 +159,37 @@ class _SmartProductFieldState extends State<SmartProductField> {
   }
 
   @override
+  void didUpdateWidget(covariant SmartProductField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The host rebuilds this widget when it links the line to a product it
+    // just created or edited. The State survives (same key), so the identity
+    // has to be re-read here or the card keeps showing the old text.
+    final data = widget.initialData;
+    final previous = oldWidget.initialData;
+    if (data == null || identical(data, previous)) return;
+    final sameIdentity = data.product?.id == previous?.product?.id &&
+        data.productName == previous?.productName &&
+        data.productSku == previous?.productSku &&
+        data.isCatalogProduct == (previous?.isCatalogProduct ?? true);
+    if (sameIdentity) {
+      // Same product, fresher object (the host re-read it after an edit):
+      // keep the card's text, take the new image and stock.
+      final product = data.product;
+      if (product != null && !identical(product, previous?.product)) {
+        _product = product;
+      }
+      return;
+    }
+    _product = data.product;
+    _productName = data.productName;
+    _productSku = data.productSku;
+    _isCatalogProduct = data.isCatalogProduct;
+    if (_ownsProductNameController) {
+      _productNameController.text = _productName ?? '';
+    }
+  }
+
+  @override
   void dispose() {
     if (_ownsProductNameController) {
       _productNameController.dispose();
@@ -168,6 +204,31 @@ class _SmartProductFieldState extends State<SmartProductField> {
   }
 
   bool get _hasProduct => _productName?.isNotEmpty ?? false;
+
+  /// A line is linked when a catalog product with a real id stands behind it.
+  /// A stub built from the line's text has an empty id and no product page.
+  bool get _isLinkedCatalogProduct =>
+      _isCatalogProduct && (_product?.id?.trim().isNotEmpty ?? false);
+
+  bool get _showsRowMenu {
+    if (_isLinkedCatalogProduct) {
+      return widget.onEditProduct != null ||
+          widget.onShowProductDetails != null;
+    }
+    return widget.enabled && widget.onCreateCatalogProduct != null;
+  }
+
+  void _handleRowMenuAction(String value) {
+    final product = _product;
+    switch (value) {
+      case 'edit':
+        if (product != null) widget.onEditProduct?.call(product);
+      case 'details':
+        if (product != null) widget.onShowProductDetails?.call(product);
+      case 'create':
+        widget.onCreateCatalogProduct?.call();
+    }
+  }
 
   void _clearProduct() {
     if (!widget.enabled || !widget.canChangeProduct) return;
@@ -446,11 +507,15 @@ class _SmartProductFieldState extends State<SmartProductField> {
                         ),
                       ],
                       const SizedBox(width: 4),
-                      // 3-dot menu button (only for catalog products)
-                      if (_product != null &&
-                          (widget.onEditProduct != null ||
-                              widget.onShowProductDetails != null))
+                      // Row menu. A linked line edits or inspects its product;
+                      // a text-only line has no product behind it, so the only
+                      // honest action is to create one — opening the editor
+                      // with an empty id rendered «Nuevo producto» over a load
+                      // error.
+                      if (_showsRowMenu)
                         PopupMenuButton<String>(
+                          key: const Key('smart-product-row-menu'),
+                          tooltip: 'Acciones del artículo',
                           icon: Icon(
                             Icons.more_horiz,
                             size: 20,
@@ -459,17 +524,10 @@ class _SmartProductFieldState extends State<SmartProductField> {
                           ),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(minWidth: 200),
-                          onSelected: (value) {
-                            if (value == 'edit' &&
-                                widget.onEditProduct != null) {
-                              widget.onEditProduct!(_product!);
-                            } else if (value == 'details' &&
-                                widget.onShowProductDetails != null) {
-                              widget.onShowProductDetails!(_product!);
-                            }
-                          },
+                          onSelected: _handleRowMenuAction,
                           itemBuilder: (context) => [
-                            if (widget.onEditProduct != null)
+                            if (_isLinkedCatalogProduct &&
+                                widget.onEditProduct != null)
                               PopupMenuItem(
                                 value: 'edit',
                                 child: Row(
@@ -484,7 +542,8 @@ class _SmartProductFieldState extends State<SmartProductField> {
                                   ],
                                 ),
                               ),
-                            if (widget.onShowProductDetails != null)
+                            if (_isLinkedCatalogProduct &&
+                                widget.onShowProductDetails != null)
                               PopupMenuItem(
                                 value: 'details',
                                 child: Row(
@@ -496,6 +555,22 @@ class _SmartProductFieldState extends State<SmartProductField> {
                                     ),
                                     const SizedBox(width: 12),
                                     const Text('Ver detalles del artículo'),
+                                  ],
+                                ),
+                              ),
+                            if (!_isLinkedCatalogProduct &&
+                                widget.onCreateCatalogProduct != null)
+                              PopupMenuItem(
+                                value: 'create',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.add_box_outlined,
+                                      size: 18,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text('Crear en el catálogo'),
                                   ],
                                 ),
                               ),

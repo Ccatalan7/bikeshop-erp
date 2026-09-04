@@ -1142,7 +1142,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             onTap: () {
               if (MediaQuery.of(context).size.width < 800) {
                 // Mobile: Navigate to details (using same route as edit/view)
-                context.push('/purchases/${invoice.id}');
+                _openDocumentPage(invoice);
               } else {
                 _handleInvoiceSelection(invoice, isSelected: isSelected);
               }
@@ -1584,15 +1584,30 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
   void _handleRowAction(String action, PurchaseInvoice invoice) async {
     switch (action) {
       case 'view':
-        context.push('/purchases/${invoice.id}');
+        await _openDocumentPage(invoice);
         break;
       case 'edit':
-        context.push('/purchases/${invoice.id}');
+        await _openDocumentPage(invoice, edit: true);
         break;
       case 'delete':
         await _confirmDeleteInvoice(invoice);
         break;
     }
+  }
+
+  /// Opens the document page and, on return, re-reads what the operator may
+  /// have changed there. The service refreshes the list rows itself; the
+  /// selected invoice is page state and kept showing the pre-edit document
+  /// until a manual reload.
+  Future<void> _openDocumentPage(
+    PurchaseInvoice invoice, {
+    bool edit = false,
+  }) async {
+    final id = invoice.id;
+    if (id == null || id.isEmpty) return;
+    await context.push('/purchases/$id${edit ? '?edit=true' : ''}');
+    if (!mounted || _selectedInvoice?.id != id) return;
+    await _refreshSelectedInvoiceResolutionContext();
   }
 
   Future<void> _confirmDeleteInvoice(PurchaseInvoice invoice) async {
@@ -3246,7 +3261,8 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
               children: [
                 // Editar button
                 TextButton.icon(
-                  onPressed: () => context.push('/purchases/${invoice.id}'),
+                  key: const Key('purchase-preview-edit'),
+                  onPressed: () => _openDocumentPage(invoice, edit: true),
                   icon: const Icon(Icons.edit_outlined, size: 16),
                   label: const Text('Editar'),
                   style: TextButton.styleFrom(
@@ -3419,14 +3435,7 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'VIÑABIKE',
-                style: TextStyle(
-                  fontSize: companyNameSize,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[800],
-                ),
-              ),
+              _buildPreviewBrand(companyNameSize, scale),
               // Invoice number and balance in top right
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -3619,6 +3628,32 @@ class _PurchaseInvoiceListPageState extends State<PurchaseInvoiceListPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// The preview mirrors the PDF: the company logo the generator prints, at
+  /// the generator's 120×40 box, and the same text fallback when the tenant
+  /// has no logo. The preview used to print the fallback unconditionally, so
+  /// what the operator saw and what the supplier received disagreed.
+  Widget _buildPreviewBrand(double companyNameSize, double scale) {
+    final fallback = Text(
+      'VIÑABIKE',
+      style: TextStyle(
+        fontSize: companyNameSize,
+        fontWeight: FontWeight.bold,
+        color: Colors.blue[800],
+      ),
+    );
+    final logoUrl = context.read<AppearanceService>().companyLogoUrl;
+    if (logoUrl == null || logoUrl.isEmpty) return fallback;
+    return Image.network(
+      logoUrl,
+      key: const Key('purchase-preview-logo'),
+      width: 120 * scale,
+      height: 40 * scale,
+      fit: BoxFit.contain,
+      alignment: Alignment.centerLeft,
+      errorBuilder: (context, error, stackTrace) => fallback,
     );
   }
 

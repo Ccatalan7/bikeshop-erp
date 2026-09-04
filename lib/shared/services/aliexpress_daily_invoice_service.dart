@@ -905,6 +905,10 @@ class AliExpressDailyInvoiceService {
   static bool _isOrdersList(Uri uri) =>
       uri.path.toLowerCase().contains('/p/order/index.html');
 
+  /// The order history page: the only page whose own listing request the
+  /// bridge can borrow to read the order calendar.
+  static bool isOrdersListUri(Uri? uri) => uri != null && _isOrdersList(uri);
+
   static bool _looksLikeOrderDetail(Uri? uri) {
     if (uri == null) return false;
     final path = uri.path.toLowerCase();

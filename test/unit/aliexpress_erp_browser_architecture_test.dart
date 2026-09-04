@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/shared/services/aliexpress_daily_invoice_service.dart';
 
 void main() {
   test('embedded browser previews or hands off AliExpress in a fresh tab', () {
@@ -127,7 +128,7 @@ void main() {
     expect(pickerEnd, greaterThan(pickerStart));
     final picker = browser.substring(pickerStart, pickerEnd);
 
-    expect(picker, contains('_refreshAliExpressOrderDateIndex()'));
+    expect(picker, contains('_refreshAliExpressOrderDateIndex('));
     expect(picker, contains('showVbMarkedDatePicker('));
     expect(picker, contains('markers: _aliExpressDateMarkers()'));
     expect(
@@ -312,5 +313,36 @@ void main() {
         'readOnly: _creatingProducts || _readOnlyEvaluationBlocksMutations',
       ),
     );
+  });
+
+  test('Compras del día opens the order history before building the calendar',
+      () {
+    // The calendar borrows the listing request only the order history page
+    // makes; opened from the home page it used to give up (2026-09-03).
+    final browser =
+        File('lib/shared/widgets/webview_module_page.dart').readAsStringSync();
+    final refresh = browser.substring(
+      browser.indexOf(
+          'Future<_AliExpressDateIndexRefresh> _refreshAliExpressOrderDateIndex('),
+      browser.indexOf('/// Días ya anunciados, para no repetir el aviso'),
+    );
+    expect(refresh, contains('isOrdersListUri('));
+    expect(
+        refresh,
+        contains(
+            '_navigateAliExpressAndWait(\n          Uri.parse(AliExpressDailyInvoiceService.ordersUri),'));
+    expect(refresh,
+        contains("onPhase?.call('Abriendo el historial de pedidos…')"));
+    expect(
+      AliExpressDailyInvoiceService.isOrdersListUri(
+          Uri.parse('https://www.aliexpress.com/p/order/index.html')),
+      isTrue,
+    );
+    expect(
+      AliExpressDailyInvoiceService.isOrdersListUri(
+          Uri.parse('https://es.aliexpress.com/?gatewayAdapt=usa2esp')),
+      isFalse,
+    );
+    expect(AliExpressDailyInvoiceService.isOrdersListUri(null), isFalse);
   });
 }

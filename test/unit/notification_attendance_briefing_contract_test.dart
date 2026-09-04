@@ -41,7 +41,7 @@ void main() {
     expect(projection, isNot(contains('planned_shifts')));
     expect(projection, isNot(contains('get_checked_in_employees')));
 
-    expect(panel, contains("title: 'Ahora en el local'"));
+    expect(panel, contains("'Ahora en el local'"));
     expect(panel, contains("'Jornada en curso'"));
     expect(panel, contains("'Revisar marcación'"));
     expect(panel, contains("'Turnos finalizados hoy'"));
@@ -53,8 +53,26 @@ void main() {
       panel,
       contains('period: NotificationDigestPeriod.today'),
     );
-    expect(panel, contains('startsAt: todayWindow.startsAt'));
-    expect(panel, contains('endsAt: todayWindow.endsAt'));
+    // Live presence belongs to any period that reaches today; a period that
+    // ended before today lists the shifts that closed inside it instead.
+    expect(
+      panel,
+      contains(
+        'final live = !selectedWindow.endDate.isBefore(todayWindow.startDate);',
+      ),
+    );
+    expect(
+        panel, contains('final window = live ? todayWindow : selectedWindow;'));
+    expect(panel, contains('startsAt: window.startsAt'));
+    expect(panel, contains('endsAt: window.endsAt'));
+    expect(panel,
+        contains(".where((entry) => live && entry.attendance.isOngoing)"));
+    expect(
+        panel,
+        contains(
+            "title: live ? 'Ahora en el local' : _attendancePeriodTitle(period)"));
+    expect(panel, contains("return 'Asistencia de ayer';"));
+    expect(panel, contains("'Nadie marcó asistencia en este período.'"));
     expect(panel, contains("query['attendanceId'] = attendanceId"));
     expect(panel, contains("'employeeId': attendance.employeeId"));
     expect(

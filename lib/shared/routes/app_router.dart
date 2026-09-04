@@ -2411,6 +2411,9 @@ class AppRouter {
               () => erp.PurchaseInvoiceFormPage(
                 invoiceId: id,
                 referrer: referrer,
+                // `?edit=true`: the list's «Editar» already said what the
+                // operator wants; the form must not ask a second time.
+                startInEditMode: state.uri.queryParameters['edit'] == 'true',
                 exitGuardScope: purchaseInvoiceExitKey(state),
               ),
             );

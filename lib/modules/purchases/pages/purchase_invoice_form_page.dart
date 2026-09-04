@@ -32,7 +32,8 @@ import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/search_bar_widget.dart';
 import '../../../shared/widgets/line_row_wrapper.dart';
 import '../../../shared/widgets/ocr_upload_widget.dart';
-import '../../inventory/pages/product_form_page.dart';
+import '../../inventory/widgets/product_detail_sheet.dart';
+import '../../inventory/widgets/product_editor_dialog.dart';
 import '../../bikeshop/widgets/task_form_dialog.dart';
 import '../models/purchase_invoice.dart';
 import '../models/purchase_invoice_draft_seed.dart';
@@ -568,8 +569,15 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
   bool get _isEmbedded => widget.onEmbeddedFinished != null;
 
   // Can edit fields only when status is draft AND in editing mode
-  bool get _canEditFields =>
-      _status == PurchaseInvoiceStatus.draft && _isEditing;
+  /// Draft and sent documents are still the buyer's own text: nothing has
+  /// been posted, no stock has moved and the supplier has not confirmed.
+  /// A document the supplier already confirmed is corrected by walking it
+  /// back, never by typing over it.
+  bool get _statusAllowsEditing =>
+      _status == PurchaseInvoiceStatus.draft ||
+      _status == PurchaseInvoiceStatus.sent;
+
+  bool get _canEditFields => _statusAllowsEditing && _isEditing;
 
   double get _effectiveInvoiceBalance {
     final loadedInvoice = _loadedInvoice;
@@ -1072,7 +1080,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     if (!_canEditFields) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No se puede escanear un documento ya enviado'),
+          content: Text('No se puede escanear un documento ya confirmado'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -1262,7 +1270,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     if (!_canEditFields) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No se puede escanear un documento ya enviado'),
+          content: Text('No se puede escanear un documento ya confirmado'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -2730,6 +2738,17 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
       items: items,
       // Use the form's payment model state
       prepaymentModel: _isPrepaymentModel,
+      // The form edits the buyer's text. The workflow dates, the supplier's
+      // folio and what was paid are evidence the document already carries;
+      // a sent document saved without them would forget it was ever sent.
+      sentDate: _loadedInvoice?.sentDate,
+      confirmedDate: _loadedInvoice?.confirmedDate,
+      receivedDate: _loadedInvoice?.receivedDate,
+      paidDate: _loadedInvoice?.paidDate,
+      supplierInvoiceNumber: _loadedInvoice?.supplierInvoiceNumber,
+      supplierInvoiceDate: _loadedInvoice?.supplierInvoiceDate,
+      paidAmount: _loadedInvoice?.paidAmount ?? 0,
+      additionalCosts: _loadedInvoice?.additionalCosts ?? const [],
     );
 
     debugPrint('🔍 Save: prepaymentModel = ${invoice.prepaymentModel}');
@@ -2778,7 +2797,7 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
     setState(() => _isUpdatingStatus = true);
 
     try {
-      if (_status == PurchaseInvoiceStatus.draft && _isEditing) {
+      if (_statusAllowsEditing && _isEditing) {
         final didPersist = await _persistDraftChangesBeforeStatusTransition();
         if (!didPersist || !mounted) {
           return;
@@ -3459,7 +3478,18 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
             ),
           );
         } else if (_status == PurchaseInvoiceStatus.sent) {
-          // Sent: Can revert to draft or confirm
+          // Sent: still editable text, revert to draft, or confirm
+          if (!_isEditing) {
+            actionButtons.add(
+              OutlinedButton.icon(
+                key: const Key('purchase-invoice-edit-sent'),
+                onPressed: () => setState(() => _isEditing = true),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Editar'),
+              ),
+            );
+            actionButtons.add(const SizedBox(width: 8));
+          }
           actionButtons.add(
             OutlinedButton.icon(
               onPressed: _isUpdatingStatus
@@ -4629,6 +4659,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                         canEditStructure,
                         () {},
                         () => _autoAddEmptyLineIfNeeded(),
+                        onLineChanged: () => setState(() {}),
+                        supplierId: _selectedSupplier?.id,
                       ),
                       const SizedBox(height: 8),
                       _buildPurchaseTreatmentControl(theme, entry),
@@ -4874,6 +4906,8 @@ class _PurchaseInvoiceFormPageState extends State<PurchaseInvoiceFormPage> {
                 canEditStructure,
                 () {},
                 () => _autoAddEmptyLineIfNeeded(),
+                onLineChanged: () => setState(() {}),
+                supplierId: _selectedSupplier?.id,
               ),
               const SizedBox(height: 8),
               _buildPurchaseTreatmentControl(theme, entry),
@@ -5471,14 +5505,26 @@ class _PurchaseLineEntry {
   /// Build the SmartProductField for this line entry
   /// This method lives on the entry (not the row widget state) to prevent
   /// row hover state changes from rebuilding the field
+  /// Host context, rebuild hook and supplier from the latest build. The field
+  /// below is cached across hover rebuilds, so a closure captured at first
+  /// build would hold a context that may already be gone.
+  BuildContext? _hostContext;
+  VoidCallback? _onLineChanged;
+  String? _hostSupplierId;
+
   Widget buildSmartProductField(
     BuildContext context,
     ThemeData theme,
     bool canEdit,
     bool canChangeProduct,
     VoidCallback onUpdate,
-    VoidCallback onAutoAdd,
-  ) {
+    VoidCallback onAutoAdd, {
+    VoidCallback? onLineChanged,
+    String? supplierId,
+  }) {
+    _hostContext = context;
+    _onLineChanged = onLineChanged;
+    _hostSupplierId = supplierId;
     // Return cached widget if nothing meaningful changed
     // Only rebuild if canEdit changes (not on hover which doesn't change canEdit)
     if (_cachedSmartProductField != null &&
@@ -5507,8 +5553,9 @@ class _PurchaseLineEntry {
       focusNode: productNameFocusNode,
       descriptionController: descriptionController,
       onAutoAddLine: onAutoAdd,
-      onEditProduct: (p) => _showEditProductDialog(context, p),
-      onShowProductDetails: (p) => _showProductDetailsPane(context, p, theme),
+      onEditProduct: _editCatalogProduct,
+      onShowProductDetails: _showProductDetails,
+      onCreateCatalogProduct: _createCatalogProduct,
       onProductChanged: (selection) {
         if (isSupplierResolutionLocked) return;
         if (selection == null) {
@@ -5548,107 +5595,77 @@ class _PurchaseLineEntry {
     return _cachedSmartProductField!;
   }
 
-  void _showEditProductDialog(BuildContext context, Product product) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 700),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: ProductFormPage(productId: product.id, showInDialog: true),
-          ),
-        ),
-      ),
+  /// Points the line at [catalogProduct]: identity, treatment and the text
+  /// shown on the card. Cost stays: it is the document's price, not the
+  /// catalog's.
+  void _linkCatalogProduct(Product catalogProduct) {
+    product = catalogProduct;
+    productNameController.text = catalogProduct.name;
+    productSkuController.text = catalogProduct.sku;
+    line = line.copyWith(
+      productId: catalogProduct.id ?? '',
+      productName: catalogProduct.name,
+      productSku: catalogProduct.sku,
+      purchaseTreatment: catalogProduct.purchaseTreatment,
     );
+    invalidateSmartProductFieldCache();
+    _onLineChanged?.call();
   }
 
-  void _showProductDetailsPane(
-      BuildContext context, Product product, ThemeData theme) {
-    showGeneralDialog(
+  Future<void> _editCatalogProduct(Product catalogProduct) async {
+    final context = _hostContext;
+    final id = catalogProduct.id?.trim() ?? '';
+    if (context == null || id.isEmpty) return;
+    final inventory = context.read<InventoryService>();
+    final saved = await showProductEditorDialog(
       context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Product Details',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return Align(
-          alignment: Alignment.centerRight,
-          child: Material(
-            child: Container(
-              width: 400,
-              height: double.infinity,
-              color: theme.scaffoldBackgroundColor,
-              child: Column(
-                children: [
-                  // Header
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: theme.dividerColor),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Detalles del Producto',
-                            style: theme.textTheme.titleMedium,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Content
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (product.imageUrl != null)
-                            Center(
-                              child: Image.network(
-                                product.imageUrl!,
-                                height: 200,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          const SizedBox(height: 16),
-                          Text(product.name, style: theme.textTheme.titleLarge),
-                          const SizedBox(height: 8),
-                          Text('SKU: ${product.sku}'),
-                          Text('Costo: \$${product.cost.toStringAsFixed(0)}'),
-                          Text('Precio: \$${product.price.toStringAsFixed(0)}'),
-                          Text('Stock: ${product.availableStockQuantity}'),
-                          if (product.description != null) ...[
-                            const SizedBox(height: 16),
-                            Text('Descripción:',
-                                style: theme.textTheme.titleSmall),
-                            Text(product.description!),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+      productId: id,
+    );
+    if (saved != true) return;
+    // Re-read the product so the card shows the name and SKU just saved.
+    final refreshed = await inventory.getProductById(id, forceRefresh: true);
+    if (refreshed != null) _linkCatalogProduct(refreshed);
+  }
+
+  /// OCR writes the supplier's code as «SKU: 23310» in the description. That
+  /// is the supplier's code, not our internal SKU, and it seeds that field.
+  String? _supplierCodeFromLine() {
+    final match = RegExp(r'SKU:\s*(\S+)', caseSensitive: false)
+        .firstMatch(descriptionController.text);
+    return match?.group(1);
+  }
+
+  Future<void> _createCatalogProduct() async {
+    final context = _hostContext;
+    if (context == null) return;
+    final inventory = context.read<InventoryService>();
+    String? createdId;
+    await showProductEditorDialog(
+      context: context,
+      initialName: line.productName?.trim(),
+      initialSupplierCode: _supplierCodeFromLine(),
+      initialCost: line.unitCost,
+      initialSupplierId: _hostSupplierId,
+      onSaved: (saved) => createdId = saved.id,
+    );
+    final id = createdId?.trim() ?? '';
+    if (id.isEmpty) return;
+    // The editor hands back the inventory module's record; the line works
+    // with the shared preview model, so the catalog is read once more.
+    final catalogProduct =
+        await inventory.getProductById(id, forceRefresh: true);
+    if (catalogProduct != null) _linkCatalogProduct(catalogProduct);
+  }
+
+  Future<void> _showProductDetails(Product catalogProduct) async {
+    final context = _hostContext;
+    if (context == null) return;
+    final id = catalogProduct.id?.trim() ?? '';
+    if (id.isEmpty) return;
+    await showProductDetailSheet(
+      context: context,
+      productId: id,
+      onEdit: () => _editCatalogProduct(catalogProduct),
     );
   }
 }

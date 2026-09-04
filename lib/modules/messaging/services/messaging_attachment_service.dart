@@ -661,6 +661,19 @@ class MessagingAttachmentService {
     }
   }
 
+  /// Path of the playback twin a voice note carries (a WAV the media
+  /// function stored next to the OGG/Opus original), or `null`.
+  static String? playbackStoragePath(Message message) =>
+      _nonEmpty(message.metadata['playback_storage_path']);
+
+  /// Fresh authorisation for one private object by path.
+  Future<String?> createSignedUrlForPath(String path) {
+    return _client.storage.from(bucketName).createSignedUrl(
+          path,
+          signedUrlLifetimeSeconds,
+        );
+  }
+
   Future<String?> createRuntimeSignedUrl(Message message) async {
     if (!hasPrivateReference(message)) return null;
     final path = storagePath(message)!;

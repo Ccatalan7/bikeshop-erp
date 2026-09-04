@@ -150,13 +150,26 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
 
   NotificationDigestPeriod _period = NotificationDigestPeriod.today;
   DateTimeRange? _customDateRange;
+
+  /// Whether the attendance block describes the shop right now (the selected
+  /// period reaches today) or a closed period (it ended before today).
+  bool _attendanceLive = true;
+
+  /// Business dates the attendance block was loaded for.
+  NotificationDigestWindow? _attendanceWindow;
   _ActivityFilter _activityFilter = _ActivityFilter.all;
   List<Map<String, dynamic>> _periodNotifications = const [];
   List<AppStoredFile> _files = const [];
   List<DailyAttendanceBriefingEntry> _dailyAttendances = const [];
   StreamSubscription<AppStoredFile>? _savedFileSubscription;
   Timer? _briefingClock;
-  final GlobalKey _activitySectionKey = GlobalKey();
+
+  /// Renewed on every period change. The body sits inside an
+  /// `AnimatedSwitcher` keyed by period, so during the 260 ms transition the
+  /// outgoing body and the incoming one are both in the tree; one shared
+  /// GlobalKey on the activity section was then «Duplicate GlobalKey» on every
+  /// switch. The outgoing body keeps its old key; scroll-to reads the current.
+  GlobalKey _activitySectionKey = GlobalKey();
   final GlobalKey _periodMenuAnchorKey = GlobalKey();
   int _periodLoadEpoch = 0;
   int _filesLoadEpoch = 0;
@@ -302,15 +315,28 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
         period: NotificationDigestPeriod.today,
         now: referenceNow,
       );
+      // «Ahora en el local» is a live fact: it belongs to any period that
+      // reaches today. A period that ended before today gets the shifts that
+      // closed inside it instead — yesterday's people, not today's.
+      final selectedWindow = NotificationDigestWindow.resolve(
+        period: _period,
+        now: referenceNow,
+        customStartDate: _customDateRange?.start,
+        customEndDate: _customDateRange?.end,
+      );
+      final live = !selectedWindow.endDate.isBefore(todayWindow.startDate);
+      final window = live ? todayWindow : selectedWindow;
       final entries =
           await context.read<HRService>().getDailyAttendanceBriefing(
-                startsAt: todayWindow.startsAt,
-                endsAt: todayWindow.endsAt,
+                startsAt: window.startsAt,
+                endsAt: window.endsAt,
               );
       if (!mounted || loadEpoch != _attendanceLoadEpoch) return;
       setState(() {
         _dailyAttendances = entries;
         _briefingNow = referenceNow;
+        _attendanceLive = live;
+        _attendanceWindow = window;
         _loadingAttendances = false;
         _attendancesError = null;
       });
@@ -402,10 +428,12 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
     setState(() {
       _period = nextPeriod;
       _customDateRange = nextCustomRange;
+      _activitySectionKey = GlobalKey();
     });
     await Future.wait([
       _loadPeriodNotifications(),
       _loadFiles(),
+      _loadAttendances(),
     ]);
   }
 
@@ -570,11 +598,18 @@ class _NotificationBriefingState extends State<_NotificationBriefing> {
                             child: _AttendanceNowSection(
                               entries: _dailyAttendances,
                               now: _briefingNow,
+                              live: _attendanceLive,
+                              period: _period,
                               loading: _loadingAttendances,
                               hasError: _attendancesError != null,
                               onRetry: _loadAttendances,
                               onOpenAll: () => widget.onNavigate(
-                                _attendanceDayRoute(_briefingNow),
+                                _attendanceLive
+                                    ? _attendanceDayRoute(_briefingNow)
+                                    : _attendanceDateRoute(
+                                        _attendanceWindow?.endDate ??
+                                            _briefingNow,
+                                      ),
                               ),
                               onOpenEntry: (entry) => widget.onNavigate(
                                 _attendanceEntryRoute(entry),
@@ -1379,6 +1414,7 @@ class _DigestPeriodMenu extends StatelessWidget {
   final Future<void> Function(NotificationDigestPeriod) onSelected;
 
   static const _presets = <NotificationDigestPeriod>[
+    NotificationDigestPeriod.yesterday,
     NotificationDigestPeriod.thisWeek,
     NotificationDigestPeriod.previousWeek,
     NotificationDigestPeriod.thisMonth,
@@ -2483,6 +2519,8 @@ class _AttendanceNowSection extends StatelessWidget {
   const _AttendanceNowSection({
     required this.entries,
     required this.now,
+    required this.live,
+    required this.period,
     required this.loading,
     required this.hasError,
     required this.onRetry,
@@ -2492,6 +2530,12 @@ class _AttendanceNowSection extends StatelessWidget {
 
   final List<DailyAttendanceBriefingEntry> entries;
   final DateTime now;
+
+  /// `true` when the block describes the shop right now; `false` when the
+  /// selected period ended before today and the block lists its closed
+  /// shifts.
+  final bool live;
+  final NotificationDigestPeriod period;
   final bool loading;
   final bool hasError;
   final Future<void> Function() onRetry;
@@ -2500,8 +2544,9 @@ class _AttendanceNowSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A shift still open today is not part of a period that already ended.
     final currentEntries = entries
-        .where((entry) => entry.attendance.isOngoing)
+        .where((entry) => live && entry.attendance.isOngoing)
         .toList(growable: false)
       ..sort(
         (first, second) {
@@ -2536,12 +2581,16 @@ class _AttendanceNowSection extends StatelessWidget {
         completedEntries.length -
         visibleCurrentEntries.length -
         visibleCompletedEntries.length;
-    final peopleLabel = currentEntries.length == 1
-        ? '1 persona'
-        : '${currentEntries.length} personas';
+    final peopleLabel = live
+        ? (currentEntries.length == 1
+            ? '1 persona'
+            : '${currentEntries.length} personas')
+        : (completedEntries.length == 1
+            ? '1 turno'
+            : '${completedEntries.length} turnos');
 
     return _OpenSection(
-      title: 'Ahora en el local',
+      title: live ? 'Ahora en el local' : _attendancePeriodTitle(period),
       trailing: peopleLabel,
       trailingWidget: _AttendanceSectionLink(
         label: loading ? 'Actualizando' : peopleLabel,
@@ -2561,7 +2610,32 @@ class _AttendanceNowSection extends StatelessWidget {
                 )
               : Column(
                   children: [
-                    if (visibleCurrentEntries.isEmpty)
+                    if (!live && completedEntries.isEmpty)
+                      const _QuietState(
+                        icon: Icons.person_off_outlined,
+                        text: 'Nadie marcó asistencia en este período.',
+                        accent: _attendanceAccent,
+                      )
+                    else if (!live)
+                      for (var index = 0;
+                          index < visibleCompletedEntries.length;
+                          index++) ...[
+                        _AttendanceNowRow(
+                          entry: visibleCompletedEntries[index],
+                          now: now,
+                          onTap: () =>
+                              onOpenEntry(visibleCompletedEntries[index]),
+                        ),
+                        if (index < visibleCompletedEntries.length - 1)
+                          Divider(
+                            height: 1,
+                            indent: 40,
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withValues(alpha: 0.45),
+                          ),
+                      ]
+                    else if (visibleCurrentEntries.isEmpty)
                       _QuietState(
                         icon: Icons.person_off_outlined,
                         text: completedEntries.isEmpty
@@ -2588,7 +2662,7 @@ class _AttendanceNowSection extends StatelessWidget {
                                 .withValues(alpha: 0.45),
                           ),
                       ],
-                    if (visibleCompletedEntries.isNotEmpty) ...[
+                    if (live && visibleCompletedEntries.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Divider(
                         height: 1,
@@ -4007,6 +4081,8 @@ String _periodPresetLabel(NotificationDigestPeriod period) {
   switch (period) {
     case NotificationDigestPeriod.today:
       return 'Hoy';
+    case NotificationDigestPeriod.yesterday:
+      return 'Ayer';
     case NotificationDigestPeriod.thisWeek:
       return 'Esta semana';
     case NotificationDigestPeriod.previousWeek:
@@ -4053,6 +4129,8 @@ String _periodHeroTitle(NotificationDigestPeriod period) {
   switch (period) {
     case NotificationDigestPeriod.today:
       return 'Hoy en Viñabike';
+    case NotificationDigestPeriod.yesterday:
+      return 'Ayer en Viñabike';
     case NotificationDigestPeriod.thisWeek:
       return 'Esta semana en Viñabike';
     case NotificationDigestPeriod.previousWeek:
@@ -4072,6 +4150,8 @@ String _filesPeriodTitle(NotificationDigestPeriod period) {
   switch (period) {
     case NotificationDigestPeriod.today:
       return 'Archivos de hoy';
+    case NotificationDigestPeriod.yesterday:
+      return 'Archivos de ayer';
     case NotificationDigestPeriod.thisWeek:
       return 'Archivos de esta semana';
     case NotificationDigestPeriod.previousWeek:
@@ -4517,6 +4597,36 @@ String _employeeInitials(Employee employee) {
   ].where((part) => part.isNotEmpty).toList(growable: false);
   if (parts.isEmpty) return '—';
   return parts.take(2).map((part) => part[0].toUpperCase()).join();
+}
+
+String _attendancePeriodTitle(NotificationDigestPeriod period) {
+  switch (period) {
+    case NotificationDigestPeriod.yesterday:
+      return 'Asistencia de ayer';
+    case NotificationDigestPeriod.previousWeek:
+      return 'Asistencia de la semana anterior';
+    case NotificationDigestPeriod.previousMonth:
+      return 'Asistencia del mes anterior';
+    case NotificationDigestPeriod.today:
+    case NotificationDigestPeriod.thisWeek:
+    case NotificationDigestPeriod.thisMonth:
+    case NotificationDigestPeriod.thisYear:
+    case NotificationDigestPeriod.custom:
+      return 'Asistencia del período';
+  }
+}
+
+/// Route for a business date that is already a Chile calendar date (a
+/// digest window boundary), so it must not go through the clock conversion
+/// an instant needs.
+String _attendanceDateRoute(DateTime date) {
+  final value = '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+  return Uri(
+    path: '/hr/attendances',
+    queryParameters: {'view': 'day', 'date': value},
+  ).toString();
 }
 
 String _attendanceDayRoute(DateTime value) {

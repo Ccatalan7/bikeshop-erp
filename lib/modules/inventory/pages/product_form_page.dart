@@ -57,6 +57,18 @@ class ProductFormPage extends StatefulWidget {
   final bool lockProductType;
   final ProductFormSection initialSection;
 
+  /// Seed for a product created from another document — a purchase line that
+  /// only carries text. Ignored when [productId] is set.
+  final String? initialName;
+  final String? initialSku;
+  final String? initialSupplierCode;
+  final double? initialCost;
+  final String? initialSupplierId;
+
+  /// Receives the saved product before the form closes, so a host that
+  /// created it can link its own line without re-reading the catalog.
+  final ValueChanged<Product>? onSaved;
+
   const ProductFormPage({
     super.key,
     this.productId,
@@ -64,6 +76,12 @@ class ProductFormPage extends StatefulWidget {
     this.initialProductType = ProductType.product,
     this.lockProductType = false,
     this.initialSection = ProductFormSection.general,
+    this.initialName,
+    this.initialSku,
+    this.initialSupplierCode,
+    this.initialCost,
+    this.initialSupplierId,
+    this.onSaved,
   });
 
   @override
@@ -410,6 +428,7 @@ class _ProductFormPageState extends State<ProductFormPage>
 
     _priceController.addListener(_onPricingChanged);
     _costController.addListener(_onPricingChanged);
+    if (widget.productId == null) _applySeed();
 
     _loadBrands();
     _loadCategories();
@@ -679,6 +698,32 @@ class _ProductFormPageState extends State<ProductFormPage>
           _loadSpecTemplate(categoryId, productId: _existingProduct?.id),
         );
       }
+    }
+  }
+
+  /// A product created from a purchase line starts with what the line already
+  /// knows. The supplier is seeded only when the service has it cached: the
+  /// dropdown fixes its value on first build, so a supplier that arrived
+  /// later would be saved without ever being shown.
+  void _applySeed() {
+    final name = widget.initialName?.trim() ?? '';
+    if (name.isNotEmpty) _nameController.text = name;
+    final sku = widget.initialSku?.trim() ?? '';
+    if (sku.isNotEmpty) _skuController.text = sku;
+    final code = widget.initialSupplierCode?.trim() ?? '';
+    if (code.isNotEmpty) _supplierCodeController.text = code;
+    final cost = widget.initialCost;
+    if (cost != null && cost > 0) {
+      _costController.text = cost.toStringAsFixed(0);
+    }
+    final supplierId = widget.initialSupplierId?.trim() ?? '';
+    if (supplierId.isEmpty) return;
+    final cached = _purchaseService.cachedSuppliers
+        .where((supplier) => supplier.isActive)
+        .toList(growable: false);
+    if (cached.any((supplier) => supplier.id == supplierId)) {
+      _suppliers = cached;
+      _selectedSupplierId = supplierId;
     }
   }
 
@@ -5209,6 +5254,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         ),
       );
 
+      widget.onSaved?.call(savedProduct);
       // Use Navigator.pop() instead of context.pop() to work in dialogs
       Navigator.of(context).pop(true);
     } catch (e, stackTrace) {

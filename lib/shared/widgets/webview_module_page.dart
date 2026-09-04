@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show KeyDownEvent, KeyRepeatEvent, LogicalKeyboardKey, rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import '../utils/browser_passkey_policy.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
@@ -97,6 +98,7 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   final List<UserScript> _browserInitialUserScriptEntries = <UserScript>[
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
       browserPopupOpenCaptureUserScript(),
+    browserPasskeyUnavailableUserScript(),
     UserScript(
       groupName: 'VinabikeCredentialCapture',
       source: browserCredentialCaptureUserScript,
@@ -1113,9 +1115,11 @@ class _WebViewModulePageState extends State<WebViewModulePage>
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
 
-  Future<_AliExpressDateIndexRefresh> _refreshAliExpressOrderDateIndex() async {
+  Future<_AliExpressDateIndexRefresh> _refreshAliExpressOrderDateIndex({
+    void Function(String phase)? onPhase,
+  }) async {
     final controller = _controller;
-    final openingUrl = _currentUrl;
+    var openingUrl = _currentUrl;
     if (controller == null ||
         !AliExpressDailyInvoiceService.isTrustedUri(
           Uri.tryParse(openingUrl),
@@ -1126,6 +1130,26 @@ class _WebViewModulePageState extends State<WebViewModulePage>
     }
 
     try {
+      // The calendar borrows the listing request that the order history page
+      // makes for itself; no other AliExpress page ever makes it. Opened from
+      // the home page, the dialog used to give up with "sin plantilla de
+      // petición capturada" (owner, 2026-09-03). Now it goes there first,
+      // like "Preparar factura" already did.
+      if (!AliExpressDailyInvoiceService.isOrdersListUri(
+        Uri.tryParse(openingUrl),
+      )) {
+        onPhase?.call('Abriendo el historial de pedidos…');
+        await _navigateAliExpressAndWait(
+          Uri.parse(AliExpressDailyInvoiceService.ordersUri),
+        );
+        if (!identical(controller, _controller) || !mounted) {
+          return const _AliExpressDateIndexRefresh.unavailable(
+            'La página cambió mientras se abría el historial de pedidos.',
+          );
+        }
+        openingUrl = _currentUrl;
+      }
+      onPhase?.call('Buscando días con compras…');
       await _installAliExpressBridge(controller);
       await _runAliExpressBridge(
         controller,
@@ -1144,6 +1168,17 @@ class _WebViewModulePageState extends State<WebViewModulePage>
           );
 
       var result = await collectDates();
+      // The page issues its listing request a moment after it finishes
+      // loading; give the capture a few seconds before falling back.
+      for (var attempt = 0;
+          attempt < 4 &&
+              result['ok'] != true &&
+              result['reason']?.toString().contains('plantilla') == true;
+          attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
+        if (!identical(controller, _controller) || !mounted) break;
+        result = await collectDates();
+      }
       if (result['ok'] != true &&
           result['reason']?.toString().contains('plantilla') == true) {
         // Compatibilidad con la página que ya estaba abierta antes de que el
@@ -1181,6 +1216,12 @@ class _WebViewModulePageState extends State<WebViewModulePage>
         _rememberAliExpressOrderDates(dates);
       }
       await _refreshAliExpressInvoicedDates();
+      _aliExpressDebug('orders.date-index.ready', <String, dynamic>{
+        'datesFound': dates.length,
+        'known': _aliExpressOrderDates.length,
+        'coverageComplete': result['coverageComplete'] == true,
+        'navigated': openingUrl != _currentUrl ? 'changed' : 'same',
+      });
       return _AliExpressDateIndexRefresh.ready(
         datesFound: dates.length,
         coverageComplete: result['coverageComplete'] == true,
@@ -1287,11 +1328,17 @@ class _WebViewModulePageState extends State<WebViewModulePage>
   Future<_AliExpressImportRequest?> _pickAliExpressImportRequest() async {
     var selectedDate = DateTime.now();
     var isRefreshingDateIndex = true;
+    var refreshPhase = 'Buscando días con compras…';
     _AliExpressDateIndexRefresh? dateIndexRefresh;
     StateSetter? rebuildDialog;
     var dialogIsOpen = true;
     unawaited(
-      _refreshAliExpressOrderDateIndex().then((result) {
+      _refreshAliExpressOrderDateIndex(
+        onPhase: (phase) {
+          refreshPhase = phase;
+          if (dialogIsOpen) rebuildDialog?.call(() {});
+        },
+      ).then((result) {
         dateIndexRefresh = result;
         isRefreshingDateIndex = false;
         if (dialogIsOpen) rebuildDialog?.call(() {});
@@ -1367,15 +1414,15 @@ class _WebViewModulePageState extends State<WebViewModulePage>
                       const SizedBox(height: 10),
                       Semantics(
                         liveRegion: true,
-                        label: 'Buscando días con compras en AliExpress',
-                        child: const Row(
+                        label: refreshPhase,
+                        child: Row(
                           children: [
-                            SizedBox.square(
+                            const SizedBox.square(
                               dimension: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                            SizedBox(width: 10),
-                            Expanded(child: Text('Buscando días con compras…')),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(refreshPhase)),
                           ],
                         ),
                       ),
