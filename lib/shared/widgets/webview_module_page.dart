@@ -5,7 +5,13 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, compute, defaultTargetPlatform, kDebugMode, kIsWeb;
+    show
+        TargetPlatform,
+        compute,
+        defaultTargetPlatform,
+        kDebugMode,
+        kIsWeb,
+        visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
@@ -6784,7 +6790,7 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 pagesBuilder: (context, pages) =>
-                    _InvoicePreviewPages(pages: pages),
+                    InvoicePreviewPages(pages: pages),
               ),
             ),
             Divider(height: 1, color: theme.dividerColor),
@@ -6846,8 +6852,13 @@ class _AliExpressInvoicePreviewDialog extends StatelessWidget {
 
 /// The invoice pages, each one openable. Tapping a page is the affordance the
 /// package hides behind a double tap.
-class _InvoicePreviewPages extends StatelessWidget {
-  const _InvoicePreviewPages({required this.pages});
+/// The scrollable invoice preview: one tappable page per sheet.
+///
+/// Public so a widget test can mount it and prove the tap really opens the
+/// zoom. Asserting the source text instead only proves the code was typed.
+@visibleForTesting
+class InvoicePreviewPages extends StatelessWidget {
+  const InvoicePreviewPages({super.key, required this.pages});
 
   final List<PdfPreviewPageData> pages;
 
@@ -6862,7 +6873,7 @@ class _InvoicePreviewPages extends StatelessWidget {
           button: true,
           label: 'Ampliar página ${index + 1} de ${pages.length}',
           child: GestureDetector(
-            onTap: () => _openInvoicePageZoom(
+            onTap: () => openInvoicePageZoom(
               context,
               page: page,
               pageNumber: index + 1,
@@ -6896,7 +6907,8 @@ class _InvoicePreviewPages extends StatelessWidget {
 }
 
 /// One page, pinch-zoomable and pannable, with a double tap back to fit.
-Future<void> _openInvoicePageZoom(
+@visibleForTesting
+Future<void> openInvoicePageZoom(
   BuildContext context, {
   required PdfPreviewPageData page,
   required int pageNumber,
