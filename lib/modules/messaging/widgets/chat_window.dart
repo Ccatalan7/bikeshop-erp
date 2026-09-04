@@ -5931,6 +5931,26 @@ class _ChatWindowState extends State<ChatWindow> {
     return null;
   }
 
+  String? _messageFileCaption(Message message) {
+    final explicit = message.metadata['caption']?.toString().trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    final raw = message.metadata['raw_payload'];
+    final inbound = raw is Map ? raw['message'] : null;
+    final document = inbound is Map ? inbound['document'] : null;
+    final original =
+        document is Map ? document['caption']?.toString().trim() : null;
+    if (original != null && original.isNotEmpty) return original;
+    final content = message.content.trim();
+    final fileName = _messageAttachmentName(message, '').trim();
+    if (content.isEmpty ||
+        content == fileName ||
+        content == 'Archivo: $fileName' ||
+        content == 'Documento recibido' ||
+        content == 'Archivo recibido' ||
+        content == _messageAttachmentUrl(message)) return null;
+    return content;
+  }
+
   Future<String?> _resolveWhatsAppMediaUrl(
     Message message, {
     bool playback = false,
@@ -10879,6 +10899,24 @@ class _ChatWindowState extends State<ChatWindow> {
               // Text Message
               contentWidget =
                   _buildRouteShareMessage(context, msg, contentIsMe);
+            }
+
+            final fileCaption =
+                msg.type == 'file' ? _messageFileCaption(msg) : null;
+            if (fileCaption != null) {
+              contentWidget = Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  contentWidget,
+                  const SizedBox(height: 6),
+                  Text(fileCaption,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: 13,
+                          height: 1.25)),
+                ],
+              );
             }
 
             final quote = MessageReply.fromMetadata(msg, messages);

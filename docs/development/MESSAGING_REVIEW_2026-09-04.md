@@ -25,6 +25,9 @@ solicitada por el dueño y gestionada por el flujo preparado de release. Checkou
 - Una selección de archivo o generación de PDF que termina tras cambiar de
   conversación no puede adjuntarse al destinatario nuevo. El hilo de tareas se
   captura antes de subir y el destino optimista no depende del widget posterior.
+- Los archivos mostraban sólo su ficha y ocultaban el texto que sí se enviaba
+  a WhatsApp. Ahora la burbuja muestra su caption, incluyendo mensajes ya
+  guardados, sin repetir el nombre cuando no existe texto adicional.
 - El chip de documento respeta el ancho disponible en bandejas angostas. Las
   citas están limitadas visualmente en claro/oscuro y el foco diferido se cancela
   al navegar. Las reacciones rápidas exponen acciones accesibles individuales.
@@ -34,7 +37,7 @@ solicitada por el dueño y gestionada por el flujo preparado de release. Checkou
 - 305 pruebas de mensajería pasaron: carga, caché, filtros/búsqueda, historial,
   recibos, ventanas/plantillas, reacciones, adjuntos, errores y aislamiento entre
   conversaciones; la prueba adicional de accesibilidad vive en la misma suite
-  de respuestas/borradores. Análisis `lib test` sin errores (avisos preexistentes).
+  de respuestas/borradores, junto con la regresión de caption de archivos. Análisis `lib test` sin errores (avisos preexistentes).
 - 14 aserciones pgTAP de citas pasaron, incluyendo adjunto privado, replay
   idempotente, hilo de tareas y rechazo de referencia a otro chat. El conjunto
   SQL relacionado pasó además sus 98 aserciones previas.
@@ -53,7 +56,8 @@ solicitada por el dueño y gestionada por el flujo preparado de release. Checkou
 
 La evidencia local queda en `.tmp/supplier-inbox-diagnosis/`; las regresiones
 están versionadas. La prueba de contexto de audio es automática, no una grabación
-real. No se recibió aún una respuesta citada nueva desde el teléfono del dueño;
+real. El archivo se abrió y su contenido se leyó en el visor real; la cita también
+se verificó en un host compacto macOS de 430 px. No se recibió aún una respuesta citada nueva desde el teléfono del dueño;
 la recepción se valida en SQL/modelo. Los borradores se conservan durante la
 sesión, no se promete persistencia al cerrar la aplicación. Instagram/Messenger
 conservan sus capacidades vigentes; esta revisión no promete paridad con todas

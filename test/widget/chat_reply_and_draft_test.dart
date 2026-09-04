@@ -99,6 +99,35 @@ void main() {
 
   final composer = find.byKey(const ValueKey('chat-message-composer'));
 
+  testWidgets('file captions remain visible without duplicating bare filenames',
+      (tester) async {
+    final chats = _Chats();
+    final selected = ValueNotifier('chat-a');
+    chats.history = [
+      Message(
+          id: 'file-caption',
+          conversationId: 'chat-a',
+          content: 'Texto que acompaña al archivo',
+          type: 'file',
+          metadata: const {'filename': 'prueba.txt'},
+          createdAt: DateTime(2026, 9, 4),
+          isMe: true),
+      Message(
+          id: 'file-bare',
+          conversationId: 'chat-a',
+          content: 'sin-texto.txt',
+          type: 'file',
+          metadata: const {'filename': 'sin-texto.txt'},
+          createdAt: DateTime(2026, 9, 4),
+          isMe: false),
+    ];
+    await pump(tester, chats, selected, width: 272);
+    expect(find.text('Texto que acompaña al archivo'), findsOneWidget);
+    expect(find.text('prueba.txt'), findsOneWidget);
+    expect(find.text('sin-texto.txt'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('each quick reaction exposes its own accessible tap action',
       (tester) async {
     final semantics = tester.ensureSemantics();
