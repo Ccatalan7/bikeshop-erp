@@ -43,6 +43,9 @@ the new acceptance route requires the updated Flutter client.
   normal acceptance, rejection, ambiguity, stale worker and private audio.
 - Dart receipt/state tests and `message_delivery_indicator_test.dart`: honest
   first check and accessible tooltip across light/dark and compact/desktop.
+- Sequence-preservation guards cover the four direct client copies and the
+  realtime existing-or-server fallback separately. Match complete expressions:
+  a prefix-only count mistakes the additional safe fallback for a regression.
 - Hosted rollout must use `deploy_migration.sh` with
   `verify_whatsapp_durable_outbox.sql`, then verify the active worker and cron.
 
