@@ -1336,12 +1336,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       if (conversation != null) usedConversationIds.add(conversation.id);
 
       final invoices = _supplierInvoices(supplier.id);
-      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
-      final hasStandaloneActiveConversation = invoices.isEmpty &&
-          conversation != null &&
-          ConversationActivity.isActiveConversation(conversation);
-      final hasActiveWork =
-          hasActiveInvoices || hasStandaloneActiveConversation;
+      final hasActiveWork = ConversationActivity.hasActiveSupplierWork(
+        conversation: conversation,
+        purchaseInvoiceStatuses: invoices.map((invoice) => invoice.status.name),
+      );
       if (!includeInactive && !hasActiveWork) continue;
 
       entries.add(
@@ -1364,10 +1362,10 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       final invoices = supplier.id.isEmpty
           ? <PurchaseInvoice>[]
           : _supplierInvoices(supplier.id);
-      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
-      final hasActiveWork = hasActiveInvoices ||
-          (invoices.isEmpty &&
-              ConversationActivity.isActiveConversation(conversation));
+      final hasActiveWork = ConversationActivity.hasActiveSupplierWork(
+        conversation: conversation,
+        purchaseInvoiceStatuses: invoices.map((invoice) => invoice.status.name),
+      );
       if (!includeInactive && !hasActiveWork) continue;
 
       entries.add(
@@ -1459,12 +1457,6 @@ class _EmployeeChatPageState extends State<EmployeeChatPage>
       supplierInvoices.sort((a, b) => b.date.compareTo(a.date));
     }
     return index;
-  }
-
-  bool _isActivePurchaseInvoice(PurchaseInvoice invoice) {
-    return ConversationActivity.isActivePurchaseInvoiceStatus(
-      invoice.status.name,
-    );
   }
 
   /// La misma regla que el panel rápido de proveedores: el Teléfono de la

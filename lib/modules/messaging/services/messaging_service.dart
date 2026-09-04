@@ -2607,6 +2607,7 @@ class MessagingService {
   Future<String?> getSupplierTemplateContactName({
     required String conversationId,
     String? supplierId,
+    bool rethrowOnError = false,
   }) async {
     try {
       final tenantId = (await TenantService().getTenantId())?.trim();
@@ -2655,6 +2656,7 @@ class MessagingService {
       debugPrint(
         '⚠️ Error resolving supplier WhatsApp template contact: $error',
       );
+      if (rethrowOnError) rethrow;
       return null;
     }
   }
@@ -2664,8 +2666,9 @@ class MessagingService {
   /// Prefers an existing WhatsApp binding and falls back to the customer
   /// participant linked through `customers.auth_user_id`.
   Future<Map<String, dynamic>?> getSupportConversationContact(
-    String conversationId,
-  ) async {
+    String conversationId, {
+    bool rethrowOnError = false,
+  }) async {
     try {
       Future<Map<String, dynamic>?> loadCustomerById(String? customerId) async {
         if (customerId == null || customerId.isEmpty) {
@@ -2935,6 +2938,7 @@ class MessagingService {
       return null;
     } catch (e) {
       debugPrint('⚠️ Error resolving support conversation contact: $e');
+      if (rethrowOnError) rethrow;
       return null;
     }
   }

@@ -99,6 +99,12 @@ varios triggers pueden repetir la misma consulta sin aportar frescura.
     nueva publicó antes del callback. La regresión mínima desmonta el publisher
     real bajo el provider y prueba tanto ausencia de excepción como protección
     contra un clear obsoleto.
+16. **Un payload nullable no es un estado de carga.** `null` puede ser un dato
+    ausente o un fallo cerrado legítimo; no puede significar también «el request
+    sigue vivo». Loading, dato listo y error tienen discriminadores separados,
+    y toda espera externa posee un límite que desemboca en error visible y
+    retry. La regresión completa primero un request con `null` y deja otro sin
+    completar hasta el timeout: ninguno puede conservar un spinner perpetuo.
 
 ## 4. Flujo de referencia
 

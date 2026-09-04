@@ -1162,13 +1162,11 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
       if (conversation != null) usedConversationIds.add(conversation.id);
 
       final invoices = _supplierInvoices(supplier.id);
-      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
-      final hasStandaloneActiveConversation = invoices.isEmpty &&
-          conversation != null &&
-          ConversationActivity.isActiveConversation(conversation);
-      if (!includeInactive &&
-          !hasActiveInvoices &&
-          !hasStandaloneActiveConversation) {
+      final hasActiveWork = ConversationActivity.hasActiveSupplierWork(
+        conversation: conversation,
+        purchaseInvoiceStatuses: invoices.map((invoice) => invoice.status.name),
+      );
+      if (!includeInactive && !hasActiveWork) {
         continue;
       }
 
@@ -1198,10 +1196,10 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
       final invoices = supplier.id.isEmpty
           ? <PurchaseInvoice>[]
           : _supplierInvoices(supplier.id);
-      final hasActiveInvoices = invoices.any(_isActivePurchaseInvoice);
-      final hasActiveWork = hasActiveInvoices ||
-          (invoices.isEmpty &&
-              ConversationActivity.isActiveConversation(conversation));
+      final hasActiveWork = ConversationActivity.hasActiveSupplierWork(
+        conversation: conversation,
+        purchaseInvoiceStatuses: invoices.map((invoice) => invoice.status.name),
+      );
       if (!includeInactive && !hasActiveWork) continue;
 
       entries.add(
@@ -1253,12 +1251,6 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
       supplierInvoices.sort((a, b) => b.date.compareTo(a.date));
     }
     return index;
-  }
-
-  bool _isActivePurchaseInvoice(PurchaseInvoice invoice) {
-    return ConversationActivity.isActivePurchaseInvoiceStatus(
-      invoice.status.name,
-    );
   }
 
   bool _matchesFilter(_QuickSupplierChatEntry entry) {

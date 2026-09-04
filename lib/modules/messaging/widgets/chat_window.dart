@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
@@ -98,6 +98,12 @@ class _MessageGrouping {
     this.withPrevious = false,
     this.withNext = false,
   });
+}
+
+class _WhatsAppTemplatePreviewFailure implements Exception {
+  const _WhatsAppTemplatePreviewFailure(this.message);
+
+  final String message;
 }
 
 enum _ChatInfoSection { info, media, workflow, backup }
@@ -278,6 +284,12 @@ class ChatWindow extends StatefulWidget {
   final bool compact;
   final String? initialThreadRootMessageId;
 
+  /// Test seam for the local preview read. Production always resolves the
+  /// exact contact/business values through the canonical services below.
+  @visibleForTesting
+  final Future<String?> Function(WhatsAppTemplateOption option)?
+      whatsAppTemplatePreviewLoader;
+
   const ChatWindow({
     super.key,
     required this.conversation,
@@ -287,6 +299,7 @@ class ChatWindow extends StatefulWidget {
     this.headerActions = const [],
     this.compact = false,
     this.initialThreadRootMessageId,
+    this.whatsAppTemplatePreviewLoader,
   });
 
   @override
@@ -295,6 +308,7 @@ class ChatWindow extends StatefulWidget {
 
 class _ChatWindowState extends State<ChatWindow> {
   static const Color _accentBlue = Color(0xFF093357);
+  static const Duration _whatsAppTemplatePreviewTimeout = Duration(seconds: 8);
 
   /// Same sky the purchase list paints on «Enviada», so the composer entry
   /// reads as the step that produces that state.
@@ -477,6 +491,10 @@ class _ChatWindowState extends State<ChatWindow> {
   /// que recibirá el contacto. Tocar una plantilla ya no envía: abre esto.
   WhatsAppTemplateOption? _reviewingTemplate;
   String? _reviewingTemplateText;
+  String? _reviewingTemplateError;
+  bool _isReviewingTemplateLoading = false;
+  bool _reviewingTemplateNeedsSupplierContact = false;
+  int _reviewingTemplateGeneration = 0;
   String? _activeComposerMenuName;
   bool _showAutomaticMessagesPanel = false;
   bool _showChatInfoPanel = false;
@@ -1361,8 +1379,18 @@ class _ChatWindowState extends State<ChatWindow> {
     _composerMenuOverlayEntry = null;
     _activeComposerMenuName = null;
     _showAutomaticMessagesPanel = false;
+    _resetWhatsAppTemplatePreview();
     if (notify && mounted) setState(() {});
     if (restoreComposerFocus) _restoreComposerFocus();
+  }
+
+  void _resetWhatsAppTemplatePreview() {
+    _reviewingTemplateGeneration += 1;
+    _reviewingTemplate = null;
+    _reviewingTemplateText = null;
+    _reviewingTemplateError = null;
+    _isReviewingTemplateLoading = false;
+    _reviewingTemplateNeedsSupplierContact = false;
   }
 
   Widget _buildAnchoredComposerOverlay({
@@ -7973,22 +8001,29 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
-  Future<Map<String, dynamic>?> _resolveConversationWhatsAppContact() async {
-    if (!_isWhatsAppConversation) {
+  Future<Map<String, dynamic>?> _resolveConversationWhatsAppContact({
+    bool rethrowOnError = false,
+  }) async {
+    final conversation = widget.conversation;
+    if (!conversation.isWhatsApp) {
       return null;
     }
 
     final contact = await _messagingService.getSupportConversationContact(
-      widget.conversation.id,
+      conversation.id,
+      rethrowOnError: rethrowOnError,
     );
-    if (!widget.conversation.isSupplierConversation) return contact;
+    if (!conversation.isSupplierConversation) return contact;
 
-    final supplierId = widget.conversation.contextHint?.supplierId ??
-        (_effectiveContextType == 'supplier' ? _effectiveContextId : null);
+    final supplierId = conversation.contextHint?.supplierId ??
+        (conversation.effectiveContextType == 'supplier'
+            ? conversation.effectiveContextId
+            : null);
     final templateContactName =
         await _messagingService.getSupplierTemplateContactName(
-      conversationId: widget.conversation.id,
+      conversationId: conversation.id,
       supplierId: supplierId,
+      rethrowOnError: rethrowOnError,
     );
     return <String, dynamic>{
       ...?contact,
@@ -8364,51 +8399,151 @@ class _ChatWindowState extends State<ChatWindow> {
   /// distinto de lo que el operador creía.
   Future<void> _reviewWhatsAppTemplate(WhatsAppTemplateOption option) async {
     final yaAbierta = _reviewingTemplate?.key == option.key;
+    if (yaAbierta) {
+      setState(_resetWhatsAppTemplatePreview);
+      _composerMenuOverlayEntry?.markNeedsBuild();
+      return;
+    }
+    await _loadWhatsAppTemplatePreview(option);
+  }
+
+  Future<void> _loadWhatsAppTemplatePreview(
+    WhatsAppTemplateOption option, {
+    bool refreshContact = false,
+  }) async {
+    if (refreshContact && widget.whatsAppTemplatePreviewLoader == null) {
+      _clearWhatsAppContactCache();
+    }
+
+    final generation = ++_reviewingTemplateGeneration;
     setState(() {
-      _reviewingTemplate = yaAbierta ? null : option;
+      _reviewingTemplate = option;
       _reviewingTemplateText = null;
+      _reviewingTemplateError = null;
+      _isReviewingTemplateLoading = true;
+      _reviewingTemplateNeedsSupplierContact = false;
     });
     _composerMenuOverlayEntry?.markNeedsBuild();
-    if (yaAbierta) return;
-    final text = await _resolveWhatsAppTemplatePreview(option);
-    if (!mounted || _reviewingTemplate?.key != option.key) return;
-    setState(() => _reviewingTemplateText = text);
+
+    try {
+      final loader = widget.whatsAppTemplatePreviewLoader;
+      final text = await (loader == null
+              ? _resolveWhatsAppTemplatePreview(option)
+              : loader(option))
+          .timeout(_whatsAppTemplatePreviewTimeout);
+      if (!_ownsWhatsAppTemplatePreview(option, generation)) return;
+
+      final normalized = text?.trim();
+      if (normalized == null || normalized.isEmpty) {
+        setState(() {
+          _reviewingTemplateError = widget.conversation.isSupplierConversation
+              ? 'Falta el nombre del contacto o vendedor en el perfil del proveedor.'
+              : 'La conversación no tiene un nombre de contacto asociado.';
+          _reviewingTemplateNeedsSupplierContact =
+              widget.conversation.isSupplierConversation;
+          _isReviewingTemplateLoading = false;
+        });
+      } else {
+        setState(() {
+          _reviewingTemplateText = normalized;
+          _isReviewingTemplateLoading = false;
+        });
+      }
+    } on _WhatsAppTemplatePreviewFailure catch (error) {
+      if (!_ownsWhatsAppTemplatePreview(option, generation)) return;
+      setState(() {
+        _reviewingTemplateError = error.message;
+        _isReviewingTemplateLoading = false;
+      });
+    } on TimeoutException {
+      if (!_ownsWhatsAppTemplatePreview(option, generation)) return;
+      setState(() {
+        _reviewingTemplateError =
+            'La vista previa tardó demasiado en cargar. Vuelve a intentarlo.';
+        _isReviewingTemplateLoading = false;
+      });
+    } catch (error) {
+      debugPrint('⚠️ No se pudo previsualizar la plantilla: $error');
+      if (!_ownsWhatsAppTemplatePreview(option, generation)) return;
+      setState(() {
+        _reviewingTemplateError =
+            'No se pudo cargar la vista previa. Vuelve a intentarlo.';
+        _isReviewingTemplateLoading = false;
+      });
+    }
     _composerMenuOverlayEntry?.markNeedsBuild();
   }
 
+  bool _ownsWhatsAppTemplatePreview(
+    WhatsAppTemplateOption option,
+    int generation,
+  ) =>
+      mounted &&
+      _reviewingTemplate?.key == option.key &&
+      _reviewingTemplateGeneration == generation;
+
+  String? get _supplierProfileRouteForTemplatePreview {
+    final supplierId = widget.conversation.contextHint?.supplierId?.trim() ??
+        (_effectiveContextType == 'supplier'
+            ? _effectiveContextId?.trim()
+            : null);
+    return supplierId == null || supplierId.isEmpty
+        ? null
+        : '/purchases/suppliers/$supplierId';
+  }
+
+  void _openSupplierProfileFromTemplatePreview() {
+    final route = _supplierProfileRouteForTemplatePreview;
+    if (route == null) return;
+    _removeComposerMenuOverlay(notify: true);
+    context.read<WorkspaceManager>().openRouteInWorkspace(route);
+  }
+
   /// El texto exacto que recibirá el contacto con esta plantilla, resuelto con
-  /// los mismos valores que usará el envío. Devuelve null si falta un dato:
-  /// preferimos no mostrar nada antes que mostrar algo que no es.
+  /// los mismos valores que usará el envío. Un dato faltante se conserva como
+  /// ausencia para que el owner visible lo convierta en una corrección precisa,
+  /// nunca en un estado de carga perpetuo.
   Future<String?> _resolveWhatsAppTemplatePreview(
     WhatsAppTemplateOption option,
   ) async {
-    try {
-      final contact = await _getWhatsAppContactFuture();
-      // La clave se elige antes de indexar: `cond ? mapa?[a] : mapa?[b]`
-      // confunde al parser de Dart, que lee el `?[` como otro condicional.
-      final contactKey = widget.conversation.isSupplierConversation
-          ? 'template_contact_name'
-          : 'name';
-      final recipientName = contact?[contactKey]?.toString().trim();
-      if (recipientName == null || recipientName.isEmpty) return null;
-      String? agentName;
-      if (option.parameterLayout ==
-          WhatsAppTemplateParameterLayout.contactAndAgent) {
-        final currentUserId = _messagingService.currentUserId;
-        final senderInfo =
-            currentUserId == null ? null : await _getSenderInfo(currentUserId);
-        agentName = senderInfo?['name']?.toString().trim();
-      }
-      return WhatsAppService().buildTemplatePreviewText(
-        option: option,
-        customerName: recipientName,
-        businessName: await WhatsAppService().resolveBusinessNameForPreview(),
-        agentName: agentName,
-      );
-    } catch (error) {
-      debugPrint('⚠️ No se pudo previsualizar la plantilla: $error');
-      return null;
+    final conversationId = widget.conversation.id;
+    final contact = await _resolveConversationWhatsAppContact(
+      rethrowOnError: true,
+    );
+    // The exact successful preview read is also the contact snapshot the
+    // subsequent send should reuse. A late result from another chat cannot
+    // enter this cache.
+    if (widget.conversation.id == conversationId) {
+      _whatsAppContactFutureConversationId = conversationId;
+      _whatsAppContactFuture = Future.value(contact);
     }
+    // La clave se elige antes de indexar: `cond ? mapa?[a] : mapa?[b]`
+    // confunde al parser de Dart, que lee el `?[` como otro condicional.
+    final contactKey = widget.conversation.isSupplierConversation
+        ? 'template_contact_name'
+        : 'name';
+    final recipientName = contact?[contactKey]?.toString().trim();
+    if (recipientName == null || recipientName.isEmpty) return null;
+    String? agentName;
+    if (option.parameterLayout ==
+        WhatsAppTemplateParameterLayout.contactAndAgent) {
+      final currentUserId = _messagingService.currentUserId;
+      final senderInfo =
+          currentUserId == null ? null : await _getSenderInfo(currentUserId);
+      agentName = senderInfo?['name']?.toString().trim();
+      if (option.requiresAgentName &&
+          (agentName == null || agentName.isEmpty)) {
+        throw const _WhatsAppTemplatePreviewFailure(
+          'No pudimos resolver el nombre del usuario que inició sesión.',
+        );
+      }
+    }
+    return WhatsAppService().buildTemplatePreviewText(
+      option: option,
+      customerName: recipientName,
+      businessName: await WhatsAppService().resolveBusinessNameForPreview(),
+      agentName: agentName,
+    );
   }
 
   Widget _buildWhatsAppTemplatePanel(
@@ -8627,46 +8762,133 @@ class _ChatWindowState extends State<ChatWindow> {
           if (_reviewingTemplate?.key == option.key)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: _reviewingTemplateText == null
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    )
-                  : WhatsAppOutgoingPreview(
-                      key: const Key('whatsapp-template-preview'),
-                      text: _reviewingTemplateText!,
-                      disabledReason: isEnabled
-                          ? null
-                          : 'No se puede enviar: ${availabilityLabel ?? 'sin aprobación de Meta'}.',
-                      onCancel: () {
-                        setState(() {
-                          _reviewingTemplate = null;
-                          _reviewingTemplateText = null;
-                        });
-                        _composerMenuOverlayEntry?.markNeedsBuild();
-                      },
-                      onSend: () {
-                        final reviewedText = _reviewingTemplateText;
-                        setState(() {
-                          _reviewingTemplate = null;
-                          _reviewingTemplateText = null;
-                        });
-                        _sendSelectedWhatsAppTemplate(
-                          option,
-                          pendingText: pendingText,
-                          previewText: reviewedText,
-                        );
-                      },
-                    ),
+              child: _buildWhatsAppTemplatePreviewState(
+                context,
+                option,
+                isEnabled: isEnabled,
+                availabilityLabel: availabilityLabel,
+                pendingText: pendingText,
+              ),
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildWhatsAppTemplatePreviewState(
+    BuildContext context,
+    WhatsAppTemplateOption option, {
+    required bool isEnabled,
+    required String? availabilityLabel,
+    required String? pendingText,
+  }) {
+    if (_isReviewingTemplateLoading) {
+      return Semantics(
+        label: 'Cargando vista previa del mensaje',
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(
+              key: Key('whatsapp-template-preview-loading'),
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final error = _reviewingTemplateError;
+    if (error != null) {
+      final colorScheme = Theme.of(context).colorScheme;
+      final profileRoute = _supplierProfileRouteForTemplatePreview;
+      return Semantics(
+        liveRegion: true,
+        child: Container(
+          key: const Key('whatsapp-template-preview-error'),
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
+          decoration: BoxDecoration(
+            color: colorScheme.errorContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: colorScheme.onErrorContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      error,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onErrorContainer,
+                            height: 1.35,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  if (_reviewingTemplateNeedsSupplierContact &&
+                      profileRoute != null)
+                    TextButton.icon(
+                      key: const Key('whatsapp-template-open-supplier'),
+                      onPressed: _openSupplierProfileFromTemplatePreview,
+                      icon: const Icon(Icons.storefront_outlined, size: 17),
+                      label: const Text('Abrir ficha'),
+                    ),
+                  TextButton.icon(
+                    key: const Key('whatsapp-template-preview-retry'),
+                    onPressed: () => unawaited(
+                      _loadWhatsAppTemplatePreview(
+                        option,
+                        refreshContact: true,
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 17),
+                    label: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final reviewedText = _reviewingTemplateText;
+    if (reviewedText == null) return const SizedBox.shrink();
+    return WhatsAppOutgoingPreview(
+      key: const Key('whatsapp-template-preview'),
+      text: reviewedText,
+      disabledReason: isEnabled
+          ? null
+          : 'No se puede enviar: ${availabilityLabel ?? 'sin aprobación de Meta'}.',
+      onCancel: () {
+        setState(_resetWhatsAppTemplatePreview);
+        _composerMenuOverlayEntry?.markNeedsBuild();
+      },
+      onSend: () {
+        final textToSend = _reviewingTemplateText;
+        setState(_resetWhatsAppTemplatePreview);
+        _sendSelectedWhatsAppTemplate(
+          option,
+          pendingText: pendingText,
+          previewText: textToSend,
+        );
+      },
     );
   }
 
